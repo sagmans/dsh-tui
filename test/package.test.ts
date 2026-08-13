@@ -78,6 +78,7 @@ test('publishes only built entrypoints and the profile patch', () => {
   assert.deepEqual(Object.keys(metadata?.exports ?? {}), [
     '.',
     './startup',
+    './service/client',
     './feature/shell',
     './cordis.patch.yml',
     './package.json',

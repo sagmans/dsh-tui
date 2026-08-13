@@ -10,11 +10,13 @@ import * as startupPlugin from '../src/startup.js'
 
 const ORIGINAL_INTERNALS = { ...internals }
 const STARTUP_SERVICE = 'tuiStartup'
+const CLIENT_SERVICE = 'tuiClient'
 const KERNEL_SERVICE = 'tuiKernel'
 const NODE_FFI_SPECIFIER = 'node:ffi'
 const SUPPORTED_NODE_VERSION = '26.4.0'
 const LOADER_TEST_LABEL = 'dsh-tui Loader test'
 const STARTUP_PLUGIN_NAME = '@sagmans/dsh-tui/startup'
+const CLIENT_PLUGIN_NAME = '@sagmans/dsh-tui/service/client'
 const KERNEL_PLUGIN_NAME = '@sagmans/dsh-tui'
 const SHELL_PLUGIN_NAME = '@sagmans/dsh-tui/feature/shell'
 const RUNTIME_DESCRIPTOR_ERROR = 'Node runtime descriptors unavailable'
@@ -70,8 +72,15 @@ function installSupportedRuntime(): () => void {
 }
 
 function installPluginModules(ctx: Context): void {
+  const clientPlugin = {
+    name: 'tui-client-fixture',
+    apply(clientContext: Context): void {
+      clientContext.provide(CLIENT_SERVICE, Object.freeze({ ready: true }))
+    },
+  }
   const modules = new Map<string, unknown>([
     [STARTUP_PLUGIN_NAME, startupPlugin],
+    [CLIENT_PLUGIN_NAME, clientPlugin],
     [KERNEL_PLUGIN_NAME, kernelPlugin],
     [SHELL_PLUGIN_NAME, shellPlugin],
   ])
@@ -109,28 +118,35 @@ test('rejects unsupported TUI arguments before activation', () => {
   assert.deepEqual(result.exits, [1])
 })
 
-test('settles keyless startup, kernel, and shell Loader rows without browser services', async () => {
+test('settles keyless startup, client, kernel, and shell Loader rows without browser services', async () => {
   const restoreRuntime = installSupportedRuntime()
   const ctx = new Context()
   try {
     await ctx.plugin(Loader)
     provideCmdline(ctx, { args: [], exit: () => {} })
     installPluginModules(ctx)
+    ctx.provide('apiProxy', {})
+    ctx.provide('typertGateway', {})
 
     await ctx.loader.create({ name: SHELL_PLUGIN_NAME, inject: [KERNEL_SERVICE] })
-    await ctx.loader.create({ name: KERNEL_PLUGIN_NAME, inject: [STARTUP_SERVICE] })
+    await ctx.loader.create({ name: KERNEL_PLUGIN_NAME, inject: [STARTUP_SERVICE, CLIENT_SERVICE] })
+    await ctx.loader.create({
+      name: CLIENT_PLUGIN_NAME,
+      inject: [STARTUP_SERVICE, 'apiProxy', 'typertGateway'],
+    })
     await ctx.loader.create({ name: STARTUP_PLUGIN_NAME })
     await ctx.loader.await()
     await assertEntriesActivated(ctx, LOADER_TEST_LABEL)
 
     assert.deepEqual(ctx.get(STARTUP_SERVICE), { zen: true })
+    assert.deepEqual(ctx.get(CLIENT_SERVICE), { ready: true })
     assert.deepEqual(ctx.get(KERNEL_SERVICE), { ready: true })
     assert.equal(ctx.get('webStartup'), undefined)
     assert.equal(ctx.get('webServer'), undefined)
     assert.equal(ctx.get('clientRuntime'), undefined)
     assert.deepEqual(
       [...ctx.loader.entries()].map(entry => entry.options.name).toSorted(),
-      [KERNEL_PLUGIN_NAME, SHELL_PLUGIN_NAME, STARTUP_PLUGIN_NAME].toSorted(),
+      [CLIENT_PLUGIN_NAME, KERNEL_PLUGIN_NAME, SHELL_PLUGIN_NAME, STARTUP_PLUGIN_NAME].toSorted(),
     )
   } finally {
     restoreRuntime()

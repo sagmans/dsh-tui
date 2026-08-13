@@ -35,6 +35,7 @@ const EXPECTED_HOST_ROWS = new Map<string, string>([
   ['api-gateway', '@deepseek-ai/dsh-host-apiproxy'],
   ['cordis-host-runner', '@deepseek-ai/dsh-cordis-host-runner'],
   ['tui-startup', '@sagmans/dsh-tui/startup'],
+  ['tui-client', '@sagmans/dsh-tui/service/client'],
   ['tui-kernel', '@sagmans/dsh-tui'],
   ['tui-shell', '@sagmans/dsh-tui/feature/shell'],
 ])

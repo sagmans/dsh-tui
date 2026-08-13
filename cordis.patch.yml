@@ -70,9 +70,13 @@
     - id: tui-startup
       name: '@sagmans/dsh-tui/startup'
 
+    - id: tui-client
+      name: '@sagmans/dsh-tui/service/client'
+      inject: [tuiStartup, apiProxy, typertGateway]
+
     - id: tui-kernel
       name: '@sagmans/dsh-tui'
-      inject: [tuiStartup]
+      inject: [tuiStartup, tuiClient]
 
     - id: tui-shell
       name: '@sagmans/dsh-tui/feature/shell'
