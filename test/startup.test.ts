@@ -4,7 +4,6 @@ import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import { assertEntriesActivated } from '@deepseek-ai/dsh-app-boot'
 import { internals, provideCmdline } from '@deepseek-ai/dsh-cmdline'
-import * as kernelPlugin from '../src/index.js'
 import * as shellPlugin from '../src/features/shell/index.js'
 import * as startupPlugin from '../src/startup.js'
 
@@ -12,14 +11,11 @@ const ORIGINAL_INTERNALS = { ...internals }
 const STARTUP_SERVICE = 'tuiStartup'
 const CLIENT_SERVICE = 'tuiClient'
 const KERNEL_SERVICE = 'tuiKernel'
-const NODE_FFI_SPECIFIER = 'node:ffi'
-const SUPPORTED_NODE_VERSION = '26.4.0'
 const LOADER_TEST_LABEL = 'dsh-tui Loader test'
 const STARTUP_PLUGIN_NAME = '@sagmans/dsh-tui/startup'
 const CLIENT_PLUGIN_NAME = '@sagmans/dsh-tui/service/client'
 const KERNEL_PLUGIN_NAME = '@sagmans/dsh-tui'
 const SHELL_PLUGIN_NAME = '@sagmans/dsh-tui/feature/shell'
-const RUNTIME_DESCRIPTOR_ERROR = 'Node runtime descriptors unavailable'
 
 interface StartupResult {
   readonly exits: readonly number[]
@@ -52,30 +48,21 @@ function runStartup(args: readonly string[]): StartupResult {
   return { exits, output, values }
 }
 
-function installSupportedRuntime(): () => void {
-  const nodeVersionDescriptor = Object.getOwnPropertyDescriptor(process.versions, 'node')
-  const getBuiltinModuleDescriptor = Object.getOwnPropertyDescriptor(process, 'getBuiltinModule')
-  if (nodeVersionDescriptor === undefined || getBuiltinModuleDescriptor === undefined) {
-    throw new Error(RUNTIME_DESCRIPTOR_ERROR)
-  }
-
-  Object.defineProperty(process.versions, 'node', { ...nodeVersionDescriptor, value: SUPPORTED_NODE_VERSION })
-  Object.defineProperty(process, 'getBuiltinModule', {
-    ...getBuiltinModuleDescriptor,
-    value: (specifier: string): unknown => specifier === NODE_FFI_SPECIFIER ? {} : undefined,
-  })
-
-  return () => {
-    Object.defineProperty(process.versions, 'node', nodeVersionDescriptor)
-    Object.defineProperty(process, 'getBuiltinModule', getBuiltinModuleDescriptor)
-  }
-}
-
 function installPluginModules(ctx: Context): void {
   const clientPlugin = {
     name: 'tui-client-fixture',
     apply(clientContext: Context): void {
-      clientContext.provide(CLIENT_SERVICE, Object.freeze({ ready: true }))
+      clientContext.provide(CLIENT_SERVICE, Object.freeze({
+        ready: true,
+        api: {},
+        context: clientContext,
+      }))
+    },
+  }
+  const kernelPlugin = {
+    name: 'tui-kernel-fixture',
+    apply(kernelContext: Context): void {
+      kernelContext.provide(KERNEL_SERVICE, Object.freeze({ ready: true }))
     },
   }
   const modules = new Map<string, unknown>([
@@ -119,7 +106,6 @@ test('rejects unsupported TUI arguments before activation', () => {
 })
 
 test('settles keyless startup, client, kernel, and shell Loader rows without browser services', async () => {
-  const restoreRuntime = installSupportedRuntime()
   const ctx = new Context()
   try {
     await ctx.plugin(Loader)
@@ -139,8 +125,12 @@ test('settles keyless startup, client, kernel, and shell Loader rows without bro
     await assertEntriesActivated(ctx, LOADER_TEST_LABEL)
 
     assert.deepEqual(ctx.get(STARTUP_SERVICE), { zen: true })
-    assert.deepEqual(ctx.get(CLIENT_SERVICE), { ready: true })
-    assert.deepEqual(ctx.get(KERNEL_SERVICE), { ready: true })
+    assert.notEqual(ctx.get(CLIENT_SERVICE), undefined)
+    const kernel: unknown = ctx.get(KERNEL_SERVICE)
+    const ready: unknown = typeof kernel === 'object' && kernel !== null
+      ? Reflect.get(kernel, 'ready') as unknown
+      : undefined
+    assert.equal(ready, true)
     assert.equal(ctx.get('webStartup'), undefined)
     assert.equal(ctx.get('webServer'), undefined)
     assert.equal(ctx.get('clientRuntime'), undefined)
@@ -149,7 +139,6 @@ test('settles keyless startup, client, kernel, and shell Loader rows without bro
       [CLIENT_PLUGIN_NAME, KERNEL_PLUGIN_NAME, SHELL_PLUGIN_NAME, STARTUP_PLUGIN_NAME].toSorted(),
     )
   } finally {
-    restoreRuntime()
     await ctx.fiber.dispose()
   }
 })

@@ -35,6 +35,14 @@
       "types": "./lib/features/shell/index.d.ts",
       "default": "./lib/features/shell/index.js"
     },
+    "./contracts": {
+      "types": "./lib/contracts/index.d.ts",
+      "default": "./lib/contracts/index.js"
+    },
+    "./testing": {
+      "types": "./lib/testing/index.d.ts",
+      "default": "./lib/testing/index.js"
+    },
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },

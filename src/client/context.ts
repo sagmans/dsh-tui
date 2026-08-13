@@ -25,6 +25,12 @@ export interface TuiClientFacade {
   readonly workspaces: IWorkspaces
 }
 
+declare module '@deepseek-ai/cordis' {
+  interface Context {
+    readonly tuiClient: TuiClientFacade
+  }
+}
+
 export interface ClientPlaneMount {
   readonly api: IApiClient
   readonly ready: Promise<void>

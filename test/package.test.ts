@@ -80,6 +80,8 @@ test('publishes only built entrypoints and the profile patch', () => {
     './startup',
     './service/client',
     './feature/shell',
+    './contracts',
+    './testing',
     './cordis.patch.yml',
     './package.json',
   ])

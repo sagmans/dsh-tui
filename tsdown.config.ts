@@ -1,7 +1,14 @@
 import { defineConfig } from 'tsdown'
 
 export default defineConfig({
-  entry: ['src/index.ts', 'src/startup.ts', 'src/services/client.ts', 'src/features/shell/index.ts'],
+  entry: [
+    'src/index.ts',
+    'src/startup.ts',
+    'src/services/client.ts',
+    'src/features/shell/index.ts',
+    'src/contracts/index.ts',
+    'src/testing/index.ts',
+  ],
   outDir: 'lib',
   format: ['esm'],
   platform: 'node',

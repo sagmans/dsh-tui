@@ -1,4 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis'
+import { mountKernel } from './kernel/lifecycle.js'
 
 const MINIMUM_NODE_VERSION = [26, 4, 0] as const
 const NODE_FFI_SPECIFIER = 'node:ffi'
@@ -50,7 +51,8 @@ export function assertSupportedRuntime(probe?: RuntimeProbe): void {
   }
 }
 
-export function apply(ctx: Context): void {
+export async function apply(ctx: Context): Promise<void> {
   assertSupportedRuntime()
-  ctx.provide('tuiKernel', Object.freeze({ ready: true }))
+  const resources = await mountKernel(ctx, undefined, ctx.tuiClient)
+  ctx.provide('tuiKernel', Object.freeze({ ready: true as const, resources }))
 }
