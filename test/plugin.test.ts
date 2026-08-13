@@ -11,7 +11,7 @@ const FFI_ERROR = /--experimental-ffi/u
 
 test('exports the Cordis plugin contract', () => {
   assert.equal(plugin.name, EXPECTED_PLUGIN_NAME)
-  assert.deepEqual(plugin.inject, [])
+  assert.deepEqual(plugin.inject, ['tuiStartup'])
   assert.equal(typeof plugin.apply, 'function')
 })
 

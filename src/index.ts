@@ -12,7 +12,7 @@ export interface RuntimeProbe {
 }
 
 export const name = 'dsh-tui'
-export const inject: readonly string[] = []
+export const inject: readonly string[] = ['tuiStartup']
 
 export function assertSupportedRuntime(probe?: RuntimeProbe): void {
   let runtime = probe
@@ -50,4 +50,7 @@ export function assertSupportedRuntime(probe?: RuntimeProbe): void {
   }
 }
 
-export function apply(_ctx: Readonly<Context>): void {}
+export function apply(ctx: Context): void {
+  assertSupportedRuntime()
+  ctx.provide('tuiKernel', Object.freeze({ ready: true }))
+}

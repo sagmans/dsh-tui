@@ -74,8 +74,14 @@ test('resolves the audited Markdown fix under the supply-chain policy', () => {
 test('publishes only built entrypoints and the profile patch', () => {
   const metadata = readMetadata()
 
-  assert.deepEqual(metadata?.files, ['lib', 'cordis.patch.yml', 'README.md', 'LICENSE'])
-  assert.deepEqual(Object.keys(metadata?.exports ?? {}), ['.', './cordis.patch.yml', './package.json'])
+  assert.deepEqual(metadata?.files, ['lib', 'cordis.patch.yml', 'docs', 'README.md', 'LICENSE'])
+  assert.deepEqual(Object.keys(metadata?.exports ?? {}), [
+    '.',
+    './startup',
+    './feature/shell',
+    './cordis.patch.yml',
+    './package.json',
+  ])
   assert.equal(metadata?.scripts?.test, 'vitest run')
   assert.equal(
     metadata?.scripts?.check,
