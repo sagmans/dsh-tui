@@ -1,0 +1,3 @@
+# Profile composition lands in Unit 2. Keeping the bundle patch explicit lets
+# `dsh plugin --profile tui add .` validate package shape from Unit 1 onward.
+[]

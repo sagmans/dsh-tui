@@ -1,0 +1,60 @@
+{
+  "name": "@sagmans/dsh-tui",
+  "version": "0.1.0",
+  "description": "OpenTUI profile bundle for DeepSeek Harness",
+  "license": "MIT",
+  "type": "module",
+  "packageManager": "pnpm@11.7.0",
+  "engines": {
+    "node": ">=26.4.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sagmans/dsh-tui.git"
+  },
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint --type-aware .",
+    "test": "vitest run",
+    "check": "corepack pnpm run typecheck && corepack pnpm run lint && corepack pnpm run test && corepack pnpm run build"
+  },
+  "dependencies": {
+    "@deepseek-ai/cordis": "4.0.1",
+    "@opentui/core": "0.5.1",
+    "@opentui/keymap": "0.5.1"
+  },
+  "devDependencies": {
+    "@types/node": "26.0.0",
+    "oxlint": "1.76.0",
+    "oxlint-tsgolint": "7.0.2001",
+    "tsdown": "0.22.2",
+    "typescript": "5.9.3",
+    "vitest": "4.1.8"
+  }
+}
