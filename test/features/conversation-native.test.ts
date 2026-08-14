@@ -129,6 +129,7 @@ test.skipIf(!NATIVE_RENDERER_AVAILABLE)('drives multiline composer and mouse act
         cancel: () => { cancels += 1; return Promise.resolve() },
         command: () => Promise.resolve(false),
         loadOlder: () => { historyLoads += 1; return Promise.resolve() },
+        projection: () => source(undefined),
         prompt: (content, mode) => { prompts.push({ content, mode }); return Promise.resolve() },
         updateQueue: () => Promise.resolve({ ok: true, value: { accepted: true } }),
       }),

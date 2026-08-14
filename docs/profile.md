@@ -56,6 +56,7 @@ loads older events.
 - `Meta+Enter`: submit with the saved busy behavior; idle sessions always queue
 - `Ctrl+Enter`: submit with the opposite queue/steer behavior while running
 - `Meta+B`: switch the Host-backed busy behavior between queue and steer
+- `Meta+I`: open whole-log statistics; traverse Stats, Context, and Work tabs
 - `Ctrl+X`: stop the running turn
 - `/`: open grouped fuzzy command and prefix-matched skill candidates
 - `@`: open running direct-child subagent references
@@ -68,9 +69,14 @@ loads older events.
 - `Ctrl+E`: export the current session to a new absolute `.zip` path
 - `Ctrl+Delete`: clear staged images
 
-Dynamic `QUEUE`/`STEER`, `ENTER QUEUE`/`ENTER STEER`, `STOP`, `OLDER`,
-`MODEL`, `ATTACH`, `EXPORT`, `CLEAR`, and `+` actions provide mouse and
-focus/Enter equivalents. Each queued occurrence has focusable `EDIT`, `REMOVE`,
+Dynamic `STATS`, `CTX`, `PLAN`/`GOAL`/`TODO`, `QUEUE`/`STEER`,
+`ENTER QUEUE`/`ENTER STEER`, `STOP`, `OLDER`, `MODEL`, `ATTACH`, `EXPORT`,
+`CLEAR`, and `+` actions provide mouse and focus/Enter equivalents. Stats use
+Host whole-log projections; Context uses projected pressure/capacity plus the
+heuristic system/tool/message breakdown. Their inspector preserves loaded
+compaction/retry details and exposes `COMPACT`; Work preserves projected plan,
+goal, and full todo state and exposes `EXIT PLAN` when applicable. Each queued
+occurrence has focusable `EDIT`, `REMOVE`,
 and strict `STEER` actions; `STEER ALL` processes the visible FIFO until Host
 state converges. Queue editing uses mouse-accessible Save/Cancel controls.
 Trigger candidates and the dismissal row are also clickable. Model and

@@ -16,6 +16,10 @@ import { imageFallback } from '../../features/attachments/presentation.js'
 import { createFocusableAction } from '../action.js'
 import { createInputTriggerView } from '../input-trigger/root.js'
 import { createComposer, createConversationActions, createConversationInput } from './composer.js'
+import {
+  createConversationInformation,
+  createConversationInformationDock,
+} from './information.js'
 import { createConversationQueue, type ConversationQueueDock } from './queue.js'
 
 const HEADER_HEIGHT = 1
@@ -213,6 +217,8 @@ function createFrame(
       selectable: false,
     }))
   }
+  const informationDock = createConversationInformationDock(renderer, theme, controller, snapshot)
+  if (informationDock !== undefined) frame.add(informationDock)
   const queueDock: ConversationQueueDock | undefined = createConversationQueue(
     renderer,
     theme,
@@ -241,6 +247,8 @@ function createFrame(
   }
   const input = createConversationInput(renderer, theme, controller, snapshot)
   if (input !== undefined) frame.add(input)
+  const information = createConversationInformation(renderer, theme, controller, snapshot)
+  if (information !== undefined) frame.add(information)
   return frame
 }
 

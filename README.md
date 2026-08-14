@@ -8,7 +8,8 @@ structured tool inspection, path-only image staging, private session export,
 confirmed produced-file opening, fail-closed human interaction overlays,
 session-scoped operational actions, grouped command/skill/subagent discovery,
 occurrence-addressed queued prompts with persisted busy-submit behavior,
-shared model/reasoning selection, provider management, and redacted
+whole-log statistics/context and plan/goal/todo seats, shared model/reasoning
+selection, provider management, and redacted
 configuration/plugin control.
 
 See [`docs/profile.md`](docs/profile.md) for installation and controls, and

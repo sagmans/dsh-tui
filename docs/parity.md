@@ -20,7 +20,7 @@ _None._
 | `runtime.browser-surface` — React client halves, browser server, transport, modules, client runner, and HMR | web-only | excluded | Excluded by cordis.patch.yml surface policy |
 | `conversation.feedback` — Per-message useful/not-useful feedback and note lifecycle | parity | partial | src/features/operations; src/views/operations/root.ts |
 | `conversation.export` — Session and descendant log export | terminal-alternative | partial | src/features/export; src/views/conversation |
-| `conversation.statistics` — Whole-log turn, step, token, tool, timing, and context statistics | parity | missing | planned: src/features/conversation; src/views/conversation/root.ts |
+| `conversation.statistics` — Whole-log turn, step, token, tool, timing, and context statistics | parity | partial | src/features/conversation; src/views/conversation/information.ts |
 | `workspace.directory-selection` — Workspace directory selection | terminal-alternative | partial | src/features/sessions; src/views/sessions/root.ts |
 | `settings.plugin-inventory` — Installed plugin inventory and extension lifecycle | parity | partial | src/features/settings; src/views/settings/root.ts |
 | `theme.terminal` — Light, dark, and system theme preference | parity | missing | planned: src/services/theme.ts; src/features/settings |
@@ -43,9 +43,9 @@ _None._
 | `model.selection` — Session model/reasoning choice, composer seat, /model, and unroutable blocking | parity | partial | src/features/model-selection; src/views/model-selection/root.ts |
 | `permissions.presets` — Current-session access and future-session default permission | parity | partial | src/features/settings; src/views/conversation/composer.ts |
 | `agent.presets` — Per-session agent preset composition, defaults, staging, and management | parity | partial | cordis.patch.yml; src/features/settings; src/views/conversation/composer.ts |
-| `plans.session` — Plan state, composer control, review, and command lifecycle | parity | partial | src/features/operations; src/features/interactions; planned conversation seat |
-| `conversation.compaction` — Context meter, compaction command, and tool-result pruning detail | parity | partial | src/features/conversation; planned conversation statistics/detail |
-| `todos.session` — Session todo state and model-facing todo capability | parity | missing | planned: src/features/conversation; src/views/conversation/root.ts |
+| `plans.session` — Plan state, composer control, review, and command lifecycle | parity | partial | src/features/operations; src/features/interactions; src/features/conversation |
+| `conversation.compaction` — Context meter, compaction command, and tool-result pruning detail | parity | partial | src/features/conversation; src/views/conversation/information.ts |
+| `todos.session` — Session todo state and model-facing todo capability | parity | partial | src/features/conversation; src/views/conversation/information.ts |
 | `interactions.questions` — Questions, options, custom answers, recommendations, and approvals | parity | partial | src/features/interactions; src/views/interactions/root.ts |
 | `trajectory.ledger` — Turn/step ledger, search, folding, totals, details, timing, and pagination | parity | partial | planned: src/features/trajectory; src/views/trajectory/root.ts |
 | `attachments.images` — Image attachment admission, removal, metadata, and history access | terminal-alternative | partial | src/features/attachments; src/features/conversation/media.ts; src/views/conversation |

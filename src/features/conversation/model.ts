@@ -7,14 +7,21 @@ import type {
 import type {
   ConversationController,
   ConversationControllerOptions,
+  ConversationInformationSection,
   ConversationModelSelectionEntry,
   ConversationPreferenceSection,
+  ConversationProjectionKey,
+  ConversationProjectionValues,
   ConversationSendMode,
   ConversationSubmitGesture,
   ConversationSessionBinding,
   ConversationSnapshotView,
 } from './contracts.js'
 import { ConversationMediaState } from './media.js'
+import {
+  CONVERSATION_PROJECTION_KEYS,
+  projectConversationInformation,
+} from './information.js'
 import { sanitizeConversationText } from './projection.js'
 import type { InputTriggerMutation, InputTriggerSource } from '../input-trigger/contracts.js'
 import {
@@ -30,6 +37,10 @@ export type * from './contracts.js'
 const EMPTY_TITLE = 'NO SESSION'
 const COMMAND_PREFIX = '/'
 const MODEL_COMMAND = '/model'
+const COMPACT_COMMAND = '/compact'
+const PLAN_OFF_COMMAND = '/plan off'
+const COMPACT_UNAVAILABLE_ERROR = 'Compaction command is unavailable.'
+const PLAN_OFF_UNAVAILABLE_ERROR = 'Plan exit command is unavailable.'
 const MODEL_UNROUTABLE_ERROR = 'No provider can route the current model. Open model selection to configure a provider.'
 const TRIGGER_COMMAND_MISS_ERROR = 'Selected command is no longer available.'
 const QUEUE_EDIT_TITLE = 'EDIT QUEUED PROMPT'
@@ -84,6 +95,9 @@ class ConversationControllerService implements ConversationController {
   private busyEnterRevision: number | undefined
   private bindingDispose: (() => void) | undefined
   private boundSessionId: SessionId | undefined
+  private informationSection: ConversationInformationSection | undefined
+  private projectionDisposes: Array<() => void> = []
+  private projectionFaces = new Map<ConversationProjectionKey, ReturnType<ConversationSessionBinding['projection']>>()
   private completionRevision = 0
   private disposed = false
   private error: string | undefined
@@ -195,6 +209,8 @@ class ConversationControllerService implements ConversationController {
     this.triggers?.dismiss()
     this.bindingDispose?.()
     this.bindingDispose = undefined
+    for (const dispose of this.projectionDisposes.splice(0).toReversed()) dispose()
+    this.projectionFaces.clear()
     for (const dispose of this.resources.splice(0).toReversed()) dispose()
     this.listeners.clear()
   }
@@ -204,6 +220,10 @@ class ConversationControllerService implements ConversationController {
     const sessionId = list.current
     const snapshot = this.binding?.getSnapshot()
     const phase = conversationPhase(snapshot)
+    const information = projectConversationInformation(
+      this.projectionValues(),
+      snapshot?.nodes ?? [],
+    )
     const summary = sessionId === undefined ? undefined : list.byId[sessionId]
     const model = this.models?.getSnapshot()
     const modelAvailable = sessionId !== undefined && model?.available === true
@@ -229,6 +249,10 @@ class ConversationControllerService implements ConversationController {
       draft: this.currentDraft(),
       error: this.error ?? conversationError(snapshot),
       hasMore: snapshot?.hasMore ?? false,
+      informationSection: this.informationSection,
+      context: information.context,
+      goal: information.goal,
+      lifecycle: information.lifecycle,
       input: this.queueEdit === undefined
         ? this.mediaState.input()
         : {
@@ -249,11 +273,28 @@ class ConversationControllerService implements ConversationController {
       queueMutable: snapshot !== undefined && !snapshot.removed && snapshot.subagent === null,
       running: snapshot?.running ?? false,
       sessionId,
+      statistics: information.statistics,
       status: this.notice ?? conversationStatus(snapshot, this.busyEnter),
       suggestions: this.suggestions,
+      plan: information.plan,
       title,
+      todos: information.todos,
       trigger: sessionId === undefined ? undefined : this.triggers?.getSnapshot(),
     })
+  }
+
+  closeInformation(): void {
+    if (this.informationSection === undefined) return
+    this.informationSection = undefined
+    this.schedulePublish()
+  }
+
+  compact(): Promise<boolean> {
+    return this.executeCommand(COMPACT_COMMAND, COMPACT_UNAVAILABLE_ERROR)
+  }
+
+  exitPlanMode(): Promise<boolean> {
+    return this.executeCommand(PLAN_OFF_COMMAND, PLAN_OFF_UNAVAILABLE_ERROR)
   }
 
   launchTrigger(): void {
@@ -272,6 +313,15 @@ class ConversationControllerService implements ConversationController {
 
   moveTrigger(delta: number): void {
     this.triggers?.move(delta)
+  }
+
+  openInformation(section: ConversationInformationSection): void {
+    if (this.sessions.list.getSnapshot().current === undefined) return
+    this.informationSection = section
+    this.triggers?.dismiss()
+    this.mediaState.cancelInput()
+    this.queueEdit = undefined
+    this.schedulePublish()
   }
 
   openModelSelection(entry: ConversationModelSelectionEntry): void {
@@ -503,19 +553,41 @@ class ConversationControllerService implements ConversationController {
     this.mediaState.resetTransient()
     this.queueEdit = undefined
     this.queueBusy = undefined
+    this.informationSection = undefined
     this.triggers?.dismiss()
     this.bindingDispose?.()
+    for (const dispose of this.projectionDisposes.splice(0).toReversed()) dispose()
+    this.projectionFaces.clear()
     this.binding = current === undefined ? undefined : this.sessions.binding(current)
     this.bindingDispose = this.binding?.subscribe(() => {
       this.syncQueueState()
       this.schedulePublish()
     })
+    if (this.binding !== undefined) {
+      for (const key of CONVERSATION_PROJECTION_KEYS) {
+        const face = this.binding.projection(key)
+        this.projectionFaces.set(key, face)
+        this.projectionDisposes.push(face.subscribe(() => { this.schedulePublish() }))
+      }
+    }
     this.error = undefined
     this.notice = undefined
     this.offset = 0
     this.suggestions = []
     this.completionRevision++
     if (publish) this.schedulePublish()
+  }
+
+  private projectionValues(): ConversationProjectionValues {
+    return Object.fromEntries([...this.projectionFaces].map(([key, face]) => [key, face.getSnapshot()]))
+  }
+
+  private executeCommand(command: string, unavailable: string): Promise<boolean> {
+    const binding = this.binding
+    if (binding === undefined) return Promise.resolve(false)
+    return this.runAction(async () => {
+      if (!await binding.command(command)) throw new Error(unavailable)
+    })
   }
 
   private syncQueueState(): void {

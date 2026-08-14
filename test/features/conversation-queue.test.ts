@@ -153,6 +153,7 @@ function fixture(input: {
     cancel: () => Promise.resolve(),
     command: () => Promise.resolve(false),
     loadOlder: () => Promise.resolve(),
+    projection: () => source(undefined),
     prompt: (content, mode) => {
       control.prompts.push({ content, mode })
       return Promise.resolve()

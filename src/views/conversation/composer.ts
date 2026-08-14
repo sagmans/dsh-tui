@@ -37,9 +37,10 @@ const ACCESS_KEY = 'a'
 const MODEL_KEY = 'm'
 const PRESET_KEY = 'p'
 const BUSY_ENTER_KEY = 'b'
+const INFORMATION_KEY = 'i'
 const QUEUE_KEY = 'q'
 const TRIGGER_LAUNCH_KEY = '/'
-const COMPOSER_HINT = 'M+Enter primary · C+Enter alternate · M+Q queue · M+B switch · M+/ menu · M+M model · M+A access · M+P preset'
+const COMPOSER_HINT = 'M+Enter primary · C+Enter alternate · M+I info · M+Q queue · M+B switch · M+/ menu · M+M model · M+A access · M+P preset'
 const QUEUE_ACTION = ' QUEUE '
 const STEER_ACTION = ' STEER '
 const STOP_ACTION = ' STOP '
@@ -135,6 +136,12 @@ function handleKey(
     key.preventDefault()
     key.stopPropagation()
     submit(() => controller.sendAlternateDraft())
+    return
+  }
+  if (key.meta && key.name === INFORMATION_KEY) {
+    key.preventDefault()
+    key.stopPropagation()
+    controller.openInformation('statistics')
     return
   }
   if (key.meta && key.name === QUEUE_KEY && focusQueue()) {

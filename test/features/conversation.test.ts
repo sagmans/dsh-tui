@@ -145,6 +145,7 @@ function fixture(options: Pick<ConversationControllerOptions, 'completion' | 'me
     cancel: () => { control.cancels.push(1); return Promise.resolve() },
     command: (line) => { control.commands.push(line); return Promise.resolve(line === '/compact') },
     loadOlder: () => { control.historyLoads.push(1); return Promise.resolve() },
+    projection: () => source(undefined),
     prompt: (content, mode) => {
       control.prompts.push({ content, mode })
       const text = content.find(part => part.type === 'text')?.text

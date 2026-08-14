@@ -122,6 +122,7 @@ test.skipIf(!NATIVE_RENDERER_AVAILABLE)('drives queue occurrence actions by keyb
         cancel: () => Promise.resolve(),
         command: () => Promise.resolve(false),
         loadOlder: () => Promise.resolve(),
+        projection: () => source(undefined),
         prompt: () => Promise.resolve(),
         updateQueue: (id, action) => {
           updates.push({ action, id })

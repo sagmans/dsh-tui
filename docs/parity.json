@@ -74,13 +74,13 @@
       "webPackages": ["@deepseek-ai/dsh-session-stats", "@deepseek-ai/dsh-client-ui-conversation"],
       "evidence": ["deepseek-harness/packages/client/ui-conversation/README.md", "deepseek-harness/packages/bundle/web-app/cordis.patch.yml"],
       "classification": "parity",
-      "owner": "planned: src/features/conversation; src/views/conversation/root.ts",
-      "keyboard": "Conversation stats seat; focus and open detail",
-      "mouse": "Click stats/context seat and detail tabs",
-      "automatedProof": ["planned:test/features/conversation-stats.test.ts", "planned:test/features/conversation-seats-native.test.ts"],
+      "owner": "src/features/conversation; src/views/conversation/information.ts",
+      "keyboard": "Meta+I; traverse Stats, Context, and Work detail tabs",
+      "mouse": "Click stats/context/work seats and detail tabs",
+      "automatedProof": ["test/features/conversation-stats.test.ts", "test/features/conversation-seats-native.test.ts"],
       "dogfoodProof": "pending: Task 17 compare projected totals with active session",
-      "status": "missing",
-      "notes": "Host stats row is composed, but aggregate/context UI parity is absent."
+      "status": "partial",
+      "notes": "Host whole-log stats, token usage, projected context pressure, heuristic breakdown, and loaded compaction/retry detail drive dense dual-input seats; real-profile dogfood remains."
     },
     {
       "id": "workspace.directory-selection",
@@ -212,10 +212,10 @@
       "owner": "src/features/conversation; src/client/conversation; src/views/conversation",
       "keyboard": "Conversation route; compose, choose primary/alternate busy delivery, edit/remove/steer queued occurrences, page history, retry, and cancel",
       "mouse": "Click composer delivery preference, queue occurrence controls, messages, details, history, retry, and cancel controls",
-      "automatedProof": ["test/features/conversation.test.ts", "test/features/conversation-native.test.ts", "test/features/conversation-queue.test.ts", "test/features/conversation-queue-native.test.ts", "test/features/conversation-submission.test.ts", "planned:test/features/conversation-seats-native.test.ts"],
+      "automatedProof": ["test/features/conversation.test.ts", "test/features/conversation-native.test.ts", "test/features/conversation-queue.test.ts", "test/features/conversation-queue-native.test.ts", "test/features/conversation-submission.test.ts", "test/features/conversation-stats.test.ts", "test/features/conversation-seats-native.test.ts"],
       "dogfoodProof": "pending: Task 17 run complete conversation lifecycle",
       "status": "partial",
-      "notes": "Core conversation, Host-backed busy-submit preference, and occurrence-addressed FIFO queue controls are proven; seats, statistics, and full detail parity remain."
+      "notes": "Core conversation, Host-backed busy-submit preference, occurrence-addressed FIFO queue controls, information seats, and cancellation controls are proven; real-profile dogfood and later domain details remain."
     },
     {
       "id": "tools.inspection",
@@ -362,10 +362,10 @@
       "owner": "src/features/operations; src/views/catalog/root.ts",
       "keyboard": "Goal seat or Operations > Goal; create/edit/pause/resume/clear",
       "mouse": "Click goal seat, fields, and exact lifecycle action",
-      "automatedProof": ["test/features/operations.test.ts", "test/features/action-parity.test.ts", "test/features/action-parity-native.test.ts", "test/features/overlay-actions-native.test.ts", "planned:test/features/operations-parity.test.ts"],
+      "automatedProof": ["test/features/operations.test.ts", "test/features/action-parity.test.ts", "test/features/action-parity-native.test.ts", "test/features/overlay-actions-native.test.ts", "test/features/conversation-stats.test.ts", "test/features/conversation-seats-native.test.ts", "planned:test/features/operations-parity.test.ts"],
       "dogfoodProof": "pending: Task 17 exercise complete disposable goal lifecycle",
       "status": "partial",
-      "notes": "Operations provides dual-input lifecycle controls; inline goal seat and dogfood remain."
+      "notes": "Conversation exposes sanitized projected goal phase/objective/round state; Operations provides dual-input lifecycle controls; real-profile dogfood remains."
     },
     {
       "id": "model.selection",
@@ -419,13 +419,13 @@
       "webPackages": ["@deepseek-ai/dsh-client-ui-plan"],
       "evidence": ["deepseek-harness/packages/client/ui-plan/README.md", "src/features/operations/projection.ts"],
       "classification": "parity",
-      "owner": "src/features/operations; src/features/interactions; planned conversation seat",
-      "keyboard": "Composer plan seat or Operations; enter/review/exit plan flow",
-      "mouse": "Click plan seat, review controls, and lifecycle actions",
-      "automatedProof": ["test/features/operations.test.ts", "test/features/interactions.test.ts", "planned:test/features/conversation-seats-native.test.ts"],
+      "owner": "src/features/operations; src/features/interactions; src/features/conversation",
+      "keyboard": "Meta+I > Work or Operations; enter/review/exit plan flow",
+      "mouse": "Click Work seat, Exit Plan, review controls, and lifecycle actions",
+      "automatedProof": ["test/features/operations.test.ts", "test/features/interactions.test.ts", "test/features/conversation-stats.test.ts", "test/features/conversation-seats-native.test.ts"],
       "dogfoodProof": "pending: Task 17 exercise plan lifecycle and review",
       "status": "partial",
-      "notes": "Operational and review paths exist; composer seat and exhaustive flow parity remain."
+      "notes": "Host-projected effective and pending plan state, composer Work seat, /plan off action, Operations, and review paths exist; real-profile dogfood remains."
     },
     {
       "id": "conversation.compaction",
@@ -434,13 +434,13 @@
       "webPackages": ["@deepseek-ai/dsh-client-ui-conversation"],
       "evidence": ["deepseek-harness/packages/client/ui-conversation/README.md", "deepseek-harness/packages/bundle/web-app/cordis.patch.yml"],
       "classification": "parity",
-      "owner": "src/features/conversation; planned conversation statistics/detail",
-      "keyboard": "Open context seat; inspect pressure and invoke supported compaction command",
-      "mouse": "Click context seat, details, and compaction action",
-      "automatedProof": ["test/features/conversation.test.ts", "planned:test/features/conversation-stats.test.ts"],
+      "owner": "src/features/conversation; src/views/conversation/information.ts",
+      "keyboard": "Meta+I > Context; inspect pressure and invoke Compact",
+      "mouse": "Click context seat, details, and Compact action",
+      "automatedProof": ["test/features/conversation.test.ts", "test/features/conversation-stats.test.ts", "test/features/conversation-seats-native.test.ts"],
       "dogfoodProof": "pending: Task 17 inspect and invoke compaction in disposable session",
       "status": "partial",
-      "notes": "Compaction events render, but context pressure and detailed lifecycle are incomplete."
+      "notes": "Projected context occupancy/breakdown, loaded checkpoint/retry details, and dual-input /compact invocation exist; tool-result pruning detail and real-profile dogfood remain."
     },
     {
       "id": "todos.session",
@@ -449,13 +449,13 @@
       "webPackages": ["@deepseek-ai/dsh-client-ui-conversation"],
       "evidence": ["deepseek-harness/packages/client/ui-conversation/README.md", "deepseek-harness/packages/bundle/web-app/cordis.patch.yml"],
       "classification": "parity",
-      "owner": "planned: src/features/conversation; src/views/conversation/root.ts",
-      "keyboard": "Focus todo dock; traverse items and inspect state",
-      "mouse": "Click todo dock and item details",
-      "automatedProof": ["planned:test/features/conversation-seats-native.test.ts"],
+      "owner": "src/features/conversation; src/views/conversation/information.ts",
+      "keyboard": "Meta+I > Work; inspect projected todo status and text",
+      "mouse": "Click Work seat and Work detail tab",
+      "automatedProof": ["test/features/conversation-stats.test.ts", "test/features/conversation-seats-native.test.ts"],
       "dogfoodProof": "pending: Task 17 create/update todos through agent and inspect",
-      "status": "missing",
-      "notes": "Operations do not currently provide the inline todo visibility exposed by Web."
+      "status": "partial",
+      "notes": "Host-projected standing todos render in a compact status seat with full inspectable text; real-profile dogfood remains."
     },
     {
       "id": "interactions.questions",

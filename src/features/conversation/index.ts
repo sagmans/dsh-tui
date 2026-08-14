@@ -68,6 +68,7 @@ function sessionBinding(ctx: Context, id: SessionId): ConversationSessionBinding
         return result.value.matched
       },
       loadOlder: () => requireSession(ctx, id).loadOlder(),
+      projection: key => requireSession(ctx, id).projections.faceOf(key),
       prompt: async (content, mode) => {
         const result = await requireSession(ctx, id).prompt([...content], mode)
         if (!result.ok) throw new Error(`send failed: ${result.error.code}: ${result.error.message}`)

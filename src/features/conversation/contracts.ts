@@ -7,6 +7,16 @@ import type {
 } from '@deepseek-ai/dsh-api-remotes/client'
 import type { ToolPresentation } from '../tools/contracts.js'
 import type {
+  ConversationContextView,
+  ConversationGoalView,
+  ConversationInformationSection,
+  ConversationLifecycleView,
+  ConversationPlanView,
+  ConversationProjectionKey,
+  ConversationStatisticsView,
+  ConversationTodoView,
+} from './information-contracts.js'
+import type {
   InputTriggerController,
   InputTriggerSnapshotView,
   InputTriggerSource,
@@ -18,6 +28,8 @@ import type {
   PartialAssistant,
   RunningToolCall,
 } from '@deepseek-ai/dsh-client-runtime/client'
+export type * from './information-contracts.js'
+
 export type ConversationPhase = 'empty' | 'error' | 'loading' | 'ready'
 export type ConversationLineKind = 'assistant' | 'command' | 'context' | 'error' | 'system' | 'tool' | 'user'
 export type ConversationSendMode = 'queue' | 'steer'
@@ -101,8 +113,12 @@ export interface ConversationSnapshotView {
   readonly draft: string
   readonly error: string | undefined
   readonly hasMore: boolean
+  readonly informationSection: ConversationInformationSection | undefined
   readonly lines: readonly ConversationLine[]
   readonly input: ConversationInputView | undefined
+  readonly context: ConversationContextView | undefined
+  readonly goal: ConversationGoalView | undefined
+  readonly lifecycle: readonly ConversationLifecycleView[]
   readonly loadingOlder: boolean
   readonly modelAvailable: boolean
   readonly modelEffort: string | undefined
@@ -114,9 +130,12 @@ export interface ConversationSnapshotView {
   readonly queueMutable: boolean
   readonly running: boolean
   readonly sessionId: SessionId | undefined
+  readonly statistics: ConversationStatisticsView | undefined
   readonly status: string
   readonly suggestions: readonly string[]
+  readonly plan: ConversationPlanView | undefined
   readonly title: string
+  readonly todos: readonly ConversationTodoView[]
   readonly trigger: InputTriggerSnapshotView | undefined
 }
 
@@ -126,6 +145,7 @@ export interface ConversationSessionBinding {
   cancel(): Promise<void>
   command(line: string): Promise<boolean>
   loadOlder(): Promise<void>
+  projection(key: ConversationProjectionKey): ObservableSnapshot<unknown>
   prompt(content: readonly PromptContentPart[], mode: ConversationSendMode): Promise<void>
   updateQueue(itemId: MessageId, action: QueueAction): Promise<RpcResult<{ accepted: true }>>
 }
@@ -191,6 +211,8 @@ export interface ConversationController {
   beginQueueEdit(itemId: MessageId): void
   cancel(): Promise<void>
   cancelInput(): void
+  closeInformation(): void
+  compact(): Promise<boolean>
   clearAttachments(): void
   complete(): Promise<void>
   dismissTrigger(): void
@@ -199,6 +221,7 @@ export interface ConversationController {
   launchTrigger(): void
   loadOlder(): Promise<void>
   moveTrigger(delta: number): void
+  openInformation(section: ConversationInformationSection): void
   openModelSelection(entry: ConversationModelSelectionEntry): void
   openPreferences(section: ConversationPreferenceSection): void
   pickTrigger(source: InputTriggerSource, index: number): void
@@ -210,6 +233,7 @@ export interface ConversationController {
   send(text: string, mode?: ConversationSendMode): Promise<boolean>
   sendAlternateDraft(): Promise<boolean>
   sendDraft(mode?: ConversationSendMode): Promise<boolean>
+  exitPlanMode(): Promise<boolean>
   setDraft(text: string, caret?: number): void
   setInput(value: string): void
   steerQueue(itemId: MessageId): Promise<boolean>
