@@ -34,15 +34,23 @@ Open Sessions with `gs` or the mouse tab. Default actions:
 
 - `j`/`k`, arrows, or `Ctrl+N`/`Ctrl+P`: move selection
 - `Enter`: open a session or fold a workspace
+- `g`: switch Workspace groups and one flat session list
+- `s`: switch Manual and Last-updated ordering
+- `u`: move to the next unread completion
 - `n`, `/`, `r`, `f`, `x`: new, search, rename, fork, archive
 - `c`, `h`: close current view, load older selected-session history
 - `a`, `Delete`: register or remove a workspace
 - `Shift+Up`/`Shift+Down`: reorder the selected workspace or session
 
-Footer actions provide mouse equivalents. Session titles, search excerpts, and
-runtime errors have terminal control sequences removed before rendering.
-Workspace removal unregisters only the workspace; it does not delete its path or
-sessions.
+A compact mode row exposes `GROUP`, `SORT`, and `UNREAD` mouse/focus actions.
+Last-updated mode initially sorts each account by recency and promotes later
+activity once; Manual preserves user order and writes real-Workspace moves to
+Host order. Flat and Ungrouped moves remain local. Search merges recency-ranked
+title/Workspace matches with Host content snippets, caps wire input safely, and
+keeps unread completion visible as a green status. Footer actions provide mouse
+equivalents. Session titles, search excerpts, and runtime errors have terminal
+control sequences removed before rendering. Workspace removal unregisters only
+the workspace; it does not delete its path or sessions.
 
 ## Conversation and composer
 

@@ -17,6 +17,30 @@ const SESSIONS_CONFIRM_LAYER_ID = 'dsh-tui-sessions-confirm'
 const SESSIONS_COMMAND_PRIORITY = 300
 const SESSIONS_CONFIRM_PRIORITY = 400
 const SESSION_BINDING_ERROR = 'selected session is not locally addressable'
+const SESSIONS_BINDINGS: TuiCommandLayer['bindings'] = Object.freeze([
+  { key: 'j', command: 'sessions.next' },
+  { key: 'down', command: 'sessions.next' },
+  { key: 'ctrl+n', command: 'sessions.next' },
+  { key: 'k', command: 'sessions.previous' },
+  { key: 'up', command: 'sessions.previous' },
+  { key: 'ctrl+p', command: 'sessions.previous' },
+  { key: 'return', command: 'sessions.accept' },
+  { key: 'g', command: 'sessions.group-mode' },
+  { key: 's', command: 'sessions.order-mode' },
+  { key: 'u', command: 'sessions.unread' },
+  { key: 'n', command: 'sessions.new' },
+  { key: '/', command: 'sessions.search' },
+  { key: 'r', command: 'sessions.rename' },
+  { key: 'f', command: 'sessions.fork' },
+  { key: 'x', command: 'sessions.archive' },
+  { key: 'c', command: 'sessions.close' },
+  { key: 'h', command: 'sessions.load-older' },
+  { key: 'shift+up', command: 'sessions.move-up' },
+  { key: 'shift+down', command: 'sessions.move-down' },
+  { key: 'a', command: 'sessions.add-workspace' },
+  { key: 'delete', command: 'sessions.delete-workspace' },
+  { key: 'escape', command: 'sessions.escape' },
+])
 
 export const name = 'tui-sessions'
 export const inject: readonly string[] = ['tuiKernel', 'tuiClient']
@@ -79,6 +103,14 @@ function command(
   return { name: commandName, description, run }
 }
 
+function toggleGroupMode(controller: SessionsController): void {
+  controller.setGroupMode(controller.getSnapshot().groupMode === 'workspace' ? 'flat' : 'workspace')
+}
+
+function toggleOrderMode(controller: SessionsController): void {
+  controller.setOrderMode(controller.getSnapshot().orderMode === 'updated' ? 'manual' : 'updated')
+}
+
 function confirmationLayer(controller: SessionsController, active: () => boolean): TuiCommandLayer {
   return {
     id: SESSIONS_CONFIRM_LAYER_ID,
@@ -104,6 +136,9 @@ function commandLayer(controller: SessionsController, active: () => boolean): Tu
       command('sessions.next', 'Select next row', () => { controller.move(1) }),
       command('sessions.previous', 'Select previous row', () => { controller.move(-1) }),
       command('sessions.accept', 'Open or toggle selected row', () => { controller.accept() }),
+      command('sessions.group-mode', 'Toggle grouped or flat sessions', () => { toggleGroupMode(controller) }),
+      command('sessions.order-mode', 'Toggle manual or last-updated ordering', () => { toggleOrderMode(controller) }),
+      command('sessions.unread', 'Select next unread session', () => { controller.moveUnread(1) }),
       command('sessions.new', 'Start session', () => { controller.startSession() }),
       command('sessions.search', 'Search sessions', () => { controller.openInput('search') }),
       command('sessions.rename', 'Rename selected row', () => { controller.openInput('rename') }),
@@ -117,27 +152,7 @@ function commandLayer(controller: SessionsController, active: () => boolean): Tu
       command('sessions.delete-workspace', 'Remove workspace registration', () => { controller.requestDelete() }),
       command('sessions.escape', 'Close input or return to chat', () => { controller.cancel() }),
     ],
-    bindings: [
-      { key: 'j', command: 'sessions.next' },
-      { key: 'down', command: 'sessions.next' },
-      { key: 'ctrl+n', command: 'sessions.next' },
-      { key: 'k', command: 'sessions.previous' },
-      { key: 'up', command: 'sessions.previous' },
-      { key: 'ctrl+p', command: 'sessions.previous' },
-      { key: 'return', command: 'sessions.accept' },
-      { key: 'n', command: 'sessions.new' },
-      { key: '/', command: 'sessions.search' },
-      { key: 'r', command: 'sessions.rename' },
-      { key: 'f', command: 'sessions.fork' },
-      { key: 'x', command: 'sessions.archive' },
-      { key: 'c', command: 'sessions.close' },
-      { key: 'h', command: 'sessions.load-older' },
-      { key: 'shift+up', command: 'sessions.move-up' },
-      { key: 'shift+down', command: 'sessions.move-down' },
-      { key: 'a', command: 'sessions.add-workspace' },
-      { key: 'delete', command: 'sessions.delete-workspace' },
-      { key: 'escape', command: 'sessions.escape' },
-    ],
+    bindings: SESSIONS_BINDINGS,
   }
 }
 

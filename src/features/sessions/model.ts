@@ -1,9 +1,12 @@
+import type { SessionId } from '@deepseek-ai/dsh-api-remotes/client'
 import type { SessionSearchResultItem, WorkspaceListState } from '@deepseek-ai/dsh-client-runtime/client'
 import type {
   SessionsController,
   SessionsControllerOptions,
+  SessionsGroupMode,
   SessionsInputKind,
   SessionsInputState,
+  SessionsOrderMode,
   SessionsPhase,
   SessionsRow,
   SessionsSnapshot,
@@ -11,15 +14,23 @@ import type {
   WorkspacesSource,
 } from './contracts.js'
 import {
-  initialExpanded,
-  projectRows,
-  projectSearchRows,
-  sanitizeText,
+  compareSessionRecency,
+  FLAT_ID,
+  reconcileSessionOrder,
+  sessionOrderAccounts,
   UNGROUPED_ID,
+} from './ordering.js'
+import {
+  initialExpanded,
+  normalizeSessionSearchQuery,
+  projectRows,
+  projectSearch,
+  sanitizeText,
+  type SessionsSearchProjection,
 } from './projection.js'
 
 export type * from './contracts.js'
-export { sanitizeText } from './projection.js'
+export { normalizeSessionSearchQuery, sanitizeText } from './projection.js'
 
 const SEARCH_TITLE = 'SEARCH SESSIONS'
 const RENAME_SESSION_TITLE = 'RENAME SESSION'
@@ -28,6 +39,8 @@ const ADD_WORKSPACE_TITLE = 'ADD WORKSPACE'
 const DIRECTORY_PLACEHOLDER = 'Existing directory path'
 const INPUT_PLACEHOLDER = 'Type and press Enter'
 const CHAT_ROUTE = 'chat'
+const DEFAULT_GROUP_MODE: SessionsGroupMode = 'workspace'
+const DEFAULT_ORDER_MODE: SessionsOrderMode = 'updated'
 
 function resolvePhase(workspaces: WorkspaceListState, sessionsPending: boolean): SessionsPhase {
   if (workspaces.state === 'error') return 'error'
@@ -54,10 +67,14 @@ class SessionsControllerService implements SessionsController {
   private readonly workspaces: WorkspacesSource
   private readonly resources: Array<() => void>
   private readonly expanded: Set<string>
+  private readonly sessionOrders = new Map<string, SessionId[]>()
+  private readonly sessionUpdatedAt = new Map<string, Map<SessionId, number>>()
   private activeRowKey: string | undefined
   private deleteWorkspaceId: SessionsRow['workspaceId']
   private error: string | undefined
+  private groupMode: SessionsGroupMode = DEFAULT_GROUP_MODE
   private input: SessionsInputState | undefined
+  private orderMode: SessionsOrderMode = DEFAULT_ORDER_MODE
   private searchAbort: AbortController | undefined
   private searchHasMore = false
   private searchItems: readonly SessionSearchResultItem[] = []
@@ -156,15 +173,19 @@ class SessionsControllerService implements SessionsController {
     const workspaces = this.workspaces.list.getSnapshot()
     const sessions = this.sessions.list.getSnapshot()
     const error = this.error ?? workspaces.error?.message
+    const rows = Object.freeze(this.rows())
     return Object.freeze({
       activeRowKey: this.activeRowKey,
       confirmDelete: this.deleteWorkspaceId !== undefined,
       error: error === undefined ? undefined : sanitizeText(error),
+      groupMode: this.groupMode,
       input: this.input,
+      orderMode: this.orderMode,
       phase: resolvePhase(workspaces, sessions.phase === 'pending'),
-      rows: Object.freeze(this.rows()),
-      searchHasMore: this.searchHasMore,
+      rows,
+      searchHasMore: this.searchProjection().hasMore,
       searchQuery: this.searchQuery,
+      unreadCount: this.flatRows().filter(row => row.unread).length,
     })
   }
 
@@ -187,30 +208,55 @@ class SessionsControllerService implements SessionsController {
   }
 
   async moveSelected(offset: number): Promise<void> {
-    if (this.interactionBlocked()) return
+    if (this.interactionBlocked() || this.searchQuery !== '' || offset === 0) return
     const row = this.currentRow()
-    const workspaceId = row?.workspaceId
-    if (row === undefined || workspaceId === undefined || offset === 0) return
+    if (row === undefined) return
+    const delta = offset < 0 ? -1 : 1
     const workspaces = this.workspaces.list.getSnapshot().items
     if (row.kind === 'workspace') {
+      const workspaceId = row.workspaceId
+      if (workspaceId === undefined) return
       const index = workspaces.findIndex(item => item.workspaceId === workspaceId)
-      if (!this.canMove(index, workspaces.length, offset)) return
-      const before = offset < 0 ? workspaces[index - 1]?.workspaceId : workspaces[index + 2]?.workspaceId
+      if (!this.canMove(index, workspaces.length, delta)) return
+      const before = delta < 0 ? workspaces[index - 1]?.workspaceId : workspaces[index + 2]?.workspaceId
       await this.runAction(() => this.workspaces.insertBefore(workspaceId, before))
       return
     }
     const sessionId = row.sessionId
     if (sessionId === undefined) return
-    const workspace = workspaces.find(item => item.workspaceId === workspaceId)
-    if (workspace === undefined) return
-    const index = workspace.sessionIds.indexOf(sessionId)
-    if (!this.canMove(index, workspace.sessionIds.length, offset)) return
-    const before = offset < 0 ? workspace.sessionIds[index - 1] : workspace.sessionIds[index + 2]
+    const siblings = this.rows().filter((candidate) => {
+      return candidate.kind === 'session'
+        && (this.groupMode === 'flat' || candidate.workspaceId === row.workspaceId)
+    })
+    const index = siblings.findIndex(candidate => candidate.sessionId === sessionId)
+    if (!this.canMove(index, siblings.length, delta)) return
+    const before = delta < 0
+      ? siblings[index - 1]?.sessionId
+      : siblings[index + 2]?.sessionId
+    const account = this.groupMode === 'flat' ? FLAT_ID : row.workspaceId ?? UNGROUPED_ID
+    this.moveSessionOrder(account, sessionId, before)
+    this.publish()
+    const workspaceId = row.workspaceId
+    if (this.groupMode !== 'workspace' || this.orderMode !== 'manual' || workspaceId === undefined) return
     await this.runAction(() => this.workspaces.insertSessionBefore(
-      workspace.workspaceId,
+      workspaceId,
       sessionId,
       before,
     ).then(() => {}))
+  }
+
+  moveUnread(offset: number): void {
+    if (this.interactionBlocked() || offset === 0) return
+    const unread = this.flatRows().filter(row => row.unread)
+    if (unread.length === 0) return
+    const currentIndex = unread.findIndex(row => row.key === this.activeRowKey)
+    const start = currentIndex === -1 ? (offset < 0 ? 0 : -1) : currentIndex
+    const next = (start + offset % unread.length + unread.length) % unread.length
+    const target = unread[next]
+    if (target === undefined) return
+    if (this.groupMode === 'workspace') this.expanded.add(target.workspaceId ?? UNGROUPED_ID)
+    this.activeRowKey = target.key
+    this.publish()
   }
 
   openInput(kind: SessionsInputKind): void {
@@ -247,6 +293,19 @@ class SessionsControllerService implements SessionsController {
     this.publish()
   }
 
+  setGroupMode(mode: SessionsGroupMode): void {
+    if (this.interactionBlocked() || mode === this.groupMode) return
+    this.groupMode = mode
+    this.reconcile()
+  }
+
+  setOrderMode(mode: SessionsOrderMode): void {
+    if (this.interactionBlocked() || mode === this.orderMode) return
+    this.orderMode = mode
+    this.syncSessionOrders(mode === 'updated')
+    this.reconcile()
+  }
+
   startSession(): void {
     if (this.interactionBlocked()) return
     this.workspaces.startSession(this.currentRow()?.workspaceId)
@@ -255,7 +314,9 @@ class SessionsControllerService implements SessionsController {
   async submitInput(value: string): Promise<void> {
     const input = this.input
     if (input === undefined) return
-    const normalized = sanitizeText(value).trim()
+    const normalized = (input.kind === 'search'
+      ? normalizeSessionSearchQuery(value)
+      : sanitizeText(value)).trim()
     if (normalized.length === 0) return
     this.input = undefined
     this.publish()
@@ -294,6 +355,65 @@ class SessionsControllerService implements SessionsController {
     return index >= 0 && (offset < 0 ? index > 0 : index < length - 1)
   }
 
+  private flatRows(): SessionsRow[] {
+    return projectRows(
+      this.sessions.list.getSnapshot(),
+      this.workspaces.list.getSnapshot(),
+      this.expanded,
+      { groupMode: 'flat', orders: this.sessionOrders },
+    )
+  }
+
+  private moveSessionOrder(accountKey: string, sessionId: SessionId, before: SessionId | undefined): void {
+    const account = sessionOrderAccounts(
+      this.sessions.list.getSnapshot(),
+      this.workspaces.list.getSnapshot(),
+    ).find(candidate => candidate.key === accountKey)
+    if (account === undefined) return
+    const order = reconcileSessionOrder(account.ids, this.sessionOrders.get(accountKey))
+      .filter(id => id !== sessionId)
+    const target = before === undefined ? order.length : order.indexOf(before)
+    order.splice(target === -1 ? order.length : target, 0, sessionId)
+    this.sessionOrders.set(accountKey, order)
+  }
+
+  private syncSessionOrders(forceRecency = false): void {
+    const sessions = this.sessions.list.getSnapshot()
+    const accounts = sessionOrderAccounts(sessions, this.workspaces.list.getSnapshot())
+    const live = new Set(accounts.map(account => account.key))
+    for (const account of accounts) {
+      const previousOrder = this.sessionOrders.get(account.key)
+      const previousUpdatedAt = this.sessionUpdatedAt.get(account.key) ?? new Map<SessionId, number>()
+      let order = reconcileSessionOrder(account.ids, previousOrder)
+      if (this.orderMode === 'updated' && (forceRecency || previousOrder === undefined)) {
+        order = order.toSorted((left, right) => compareSessionRecency(left, right, sessions.byId))
+      } else if (this.orderMode === 'updated') {
+        const promoted = account.ids.filter((id) => {
+          const updatedAt = sessions.byId[id]?.updatedAt
+          const previous = previousUpdatedAt.get(id)
+          return updatedAt !== undefined && (previous === undefined || updatedAt > previous)
+        }).toSorted((left, right) => compareSessionRecency(left, right, sessions.byId))
+        if (promoted.length > 0) {
+          const promotedIds = new Set(promoted)
+          order = [...promoted, ...order.filter(id => !promotedIds.has(id))]
+        }
+      }
+      this.sessionOrders.set(account.key, order)
+      const updatedAtById = new Map<SessionId, number>()
+      for (const id of account.ids) {
+        const updatedAt = sessions.byId[id]?.updatedAt
+        if (updatedAt !== undefined) updatedAtById.set(id, updatedAt)
+      }
+      this.sessionUpdatedAt.set(account.key, updatedAtById)
+    }
+    for (const key of this.sessionOrders.keys()) {
+      if (!live.has(key)) this.sessionOrders.delete(key)
+    }
+    for (const key of this.sessionUpdatedAt.keys()) {
+      if (!live.has(key)) this.sessionUpdatedAt.delete(key)
+    }
+  }
+
   private currentRow(): SessionsRow | undefined {
     return this.rows().find(row => row.key === this.activeRowKey)
   }
@@ -317,6 +437,7 @@ class SessionsControllerService implements SessionsController {
   }
 
   private reconcile(publish = true): void {
+    this.syncSessionOrders()
     this.pruneExpanded(this.workspaces.list.getSnapshot())
     const rows = this.rows()
     if (this.activeRowKey === undefined || !rows.some(row => row.key === this.activeRowKey)) {
@@ -339,8 +460,21 @@ class SessionsControllerService implements SessionsController {
     const sessions = this.sessions.list.getSnapshot()
     const workspaces = this.workspaces.list.getSnapshot()
     return this.searchQuery === ''
-      ? projectRows(sessions, workspaces, this.expanded)
-      : projectSearchRows(sessions, workspaces, this.searchQuery, this.searchItems)
+      ? projectRows(sessions, workspaces, this.expanded, {
+          groupMode: this.groupMode,
+          orders: this.sessionOrders,
+        })
+      : [...this.searchProjection().rows]
+  }
+
+  private searchProjection(): SessionsSearchProjection {
+    return projectSearch(
+      this.sessions.list.getSnapshot(),
+      this.workspaces.list.getSnapshot(),
+      this.searchQuery,
+      this.searchItems,
+      this.searchHasMore,
+    )
   }
 
   private async search(query: string): Promise<void> {

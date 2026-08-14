@@ -130,6 +130,7 @@ function fixture(): {
   readonly controller: ReturnType<typeof createSessionsController>
   readonly navigation: ReturnType<typeof createNavigationStore>
   readonly sessions: MutableSource<SessionListState>
+  readonly workspaces: MutableSource<WorkspaceListState>
 } {
   const control: FixtureControl = {
     archives: [],
@@ -184,7 +185,7 @@ function fixture(): {
       archiveSession: id => { control.archives.push(id); return Promise.resolve() },
     },
   }
-  return { control, controller: createSessionsController(options), navigation, sessions }
+  return { control, controller: createSessionsController(options), navigation, sessions, workspaces }
 }
 
 test('derives workspace groups while hiding archived and inactive blank sessions', () => {
@@ -306,18 +307,27 @@ test('routes create, rename, fork, archive, and delete through shared services',
 })
 
 test('routes workspace and session reorder through shared runtime', async () => {
-  const { control, controller } = fixture()
+  const { control, controller, workspaces } = fixture()
 
   controller.select('workspace:workspace-two')
   await controller.moveSelected(-1)
+  const next = workspaceState()
+  workspaces.publish({
+    ...next,
+    items: [
+      workspace(FIRST_WORKSPACE, 'Harness', [FIRST_SESSION, SECOND_SESSION, BLANK_SESSION]),
+      workspace(SECOND_WORKSPACE, 'Plugin', []),
+    ],
+  })
+  controller.setOrderMode('manual')
   controller.select('session:session-one')
-  await controller.moveSelected(1)
+  await controller.moveSelected(-1)
 
   assert.deepEqual(control.reorderWorkspace, { id: SECOND_WORKSPACE, before: FIRST_WORKSPACE })
   assert.deepEqual(control.reorderSession, {
     workspaceId: FIRST_WORKSPACE,
     id: FIRST_SESSION,
-    before: undefined,
+    before: SECOND_SESSION,
   })
 })
 

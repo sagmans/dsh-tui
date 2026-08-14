@@ -18,7 +18,7 @@ const NATIVE_RENDERER_AVAILABLE = process.versions.bun !== undefined
 const WIDTH = 64
 const HEIGHT = 18
 const SESSION_ROW_X = 4
-const SESSION_ROW_Y = 2
+const SESSION_ROW_Y = 3
 const SEARCH_ACTION_X = 8
 const ACTION_ROW_Y = HEIGHT - 2
 // Static fixture identities cross only the Harness brand boundary.

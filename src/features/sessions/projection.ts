@@ -6,9 +6,19 @@ import type {
   SessionSummary,
   WorkspaceListState,
 } from '@deepseek-ai/dsh-client-runtime/client'
-import type { SessionsRow } from './contracts.js'
+import type { SessionsGroupMode, SessionsRow } from './contracts.js'
+import {
+  compareSummaryRecency,
+  FLAT_ID,
+  flatSummaries,
+  reconcileSessionOrder,
+  UNGROUPED_ID,
+  visibleSession,
+} from './ordering.js'
 
-export const UNGROUPED_ID = 'ungrouped'
+export { FLAT_ID, UNGROUPED_ID } from './ordering.js'
+export const SESSION_SEARCH_QUERY_LIMIT = 500
+export const SESSION_SEARCH_RESULT_LIMIT = 20
 const UNGROUPED_TITLE = 'Ungrouped'
 const SESSION_KEY_PREFIX = 'session:'
 const WORKSPACE_KEY_PREFIX = 'workspace:'
@@ -30,6 +40,11 @@ const DIRECTIONAL_EMBEDDING_START = 8_234
 const DIRECTIONAL_EMBEDDING_END = 8_238
 const DIRECTIONAL_ISOLATE_START = 8_294
 const DIRECTIONAL_ISOLATE_END = 8_297
+
+export interface SessionsProjectionOptions {
+  readonly groupMode: SessionsGroupMode
+  readonly orders: ReadonlyMap<string, readonly SessionId[]>
+}
 
 function bidiFormatting(code: number): boolean {
   return code === ARABIC_LETTER_MARK_CODE
@@ -77,14 +92,12 @@ export function sanitizeText(value: string): string {
   return sanitized
 }
 
-function visibleSession(
-  summary: SessionSummary,
-  current: SessionId | undefined,
-  archived: ReadonlySet<SessionId>,
-): boolean {
-  return summary.origin !== 'subagent'
-    && !archived.has(summary.id)
-    && (!summary.blank || summary.id === current)
+export function normalizeSessionSearchQuery(value: string): string {
+  const sanitized = sanitizeText(value)
+  if (sanitized.length <= SESSION_SEARCH_QUERY_LIMIT) return sanitized
+  let end = SESSION_SEARCH_QUERY_LIMIT
+  if ((sanitized.codePointAt(end - 1) ?? 0) > BMP_END) end -= 1
+  return sanitized.slice(0, end)
 }
 
 function statsDetail(stats: SessionStatsProjection | undefined): string {
@@ -103,16 +116,19 @@ function createSessionRow(
   summary: SessionSummary,
   workspaceId: WorkspaceId | undefined,
   current: SessionId | undefined,
+  depth: number,
+  detail = sessionDetail(summary),
 ): SessionsRow {
   return Object.freeze({
     key: `${SESSION_KEY_PREFIX}${summary.id}`,
     kind: 'session',
     title: sanitizeText(summary.blank ? 'New Session' : summary.displayTitle),
-    detail: sessionDetail(summary),
-    depth: 1,
+    detail: sanitizeText(detail),
+    depth,
     selected: summary.id === current,
     running: summary.running,
     pending: summary.pendingInteraction !== undefined,
+    unread: summary.completed === true,
     expanded: undefined,
     sessionId: summary.id,
     workspaceId,
@@ -134,6 +150,7 @@ function createWorkspaceRow(
     selected: false,
     running: false,
     pending: false,
+    unread: false,
     expanded,
     sessionId: undefined,
     workspaceId,
@@ -144,10 +161,32 @@ export function initialExpanded(workspaces: WorkspaceListState): Set<string> {
   return new Set([...workspaces.items.map(item => item.workspaceId as string), UNGROUPED_ID])
 }
 
-export function projectRows(
+function orderedSummaries(
+  members: readonly SessionSummary[],
+  order: readonly SessionId[] | undefined,
+): SessionSummary[] {
+  const byId = new Map(members.map(summary => [summary.id, summary]))
+  return reconcileSessionOrder(members.map(summary => summary.id), order).flatMap((id) => {
+    const summary = byId.get(id)
+    return summary === undefined ? [] : [summary]
+  })
+}
+
+function workspaceBySession(workspaces: readonly WorkspaceView[]): Map<SessionId, WorkspaceView> {
+  const result = new Map<SessionId, WorkspaceView>()
+  for (const workspace of workspaces) {
+    for (const id of workspace.sessionIds) {
+      if (!result.has(id)) result.set(id, workspace)
+    }
+  }
+  return result
+}
+
+function groupedRows(
   sessions: SessionListState,
   workspaces: WorkspaceListState,
   expandedIds: ReadonlySet<string>,
+  orders: ReadonlyMap<string, readonly SessionId[]>,
 ): SessionsRow[] {
   const archived = new Set(workspaces.archivedSessionIds)
   const rows: SessionsRow[] = []
@@ -159,9 +198,12 @@ export function projectRows(
       accounted.add(id)
       return visibleSession(summary, sessions.current, archived) ? [summary] : []
     })
+    const ordered = orderedSummaries(members, orders.get(workspace.workspaceId))
     const expanded = expandedIds.has(workspace.workspaceId)
-    rows.push(createWorkspaceRow(workspace, expanded, members.length))
-    if (expanded) rows.push(...members.map(summary => createSessionRow(summary, workspace.workspaceId, sessions.current)))
+    rows.push(createWorkspaceRow(workspace, expanded, ordered.length))
+    if (expanded) {
+      rows.push(...ordered.map(summary => createSessionRow(summary, workspace.workspaceId, sessions.current, 1)))
+    }
   }
   const ungrouped = sessions.ids.flatMap((id) => {
     const summary = sessions.byId[id]
@@ -169,33 +211,87 @@ export function projectRows(
     return [summary]
   })
   if (ungrouped.length > 0) {
+    const ordered = orderedSummaries(ungrouped, orders.get(UNGROUPED_ID))
     const expanded = expandedIds.has(UNGROUPED_ID)
-    rows.push(createWorkspaceRow(undefined, expanded, ungrouped.length))
-    if (expanded) rows.push(...ungrouped.map(summary => createSessionRow(summary, undefined, sessions.current)))
+    rows.push(createWorkspaceRow(undefined, expanded, ordered.length))
+    if (expanded) rows.push(...ordered.map(summary => createSessionRow(summary, undefined, sessions.current, 1)))
   }
   return rows
 }
 
-export function projectSearchRows(
+export function projectRows(
+  sessions: SessionListState,
+  workspaces: WorkspaceListState,
+  expandedIds: ReadonlySet<string>,
+  options: SessionsProjectionOptions,
+): SessionsRow[] {
+  if (options.groupMode === 'workspace') {
+    return groupedRows(sessions, workspaces, expandedIds, options.orders)
+  }
+  const owners = workspaceBySession(workspaces.items)
+  return flatSummaries(sessions, workspaces, options.orders.get(FLAT_ID)).map((summary) => {
+    return createSessionRow(summary, owners.get(summary.id)?.workspaceId, sessions.current, 0)
+  })
+}
+
+function fallbackWorkspace(summary: SessionSummary): string {
+  const cwd = summary.cwd
+  if (cwd === undefined || cwd === '') return UNGROUPED_TITLE
+  const basename = cwd.replace(/[/\\]+$/u, '').split(/[/\\]/u).pop()
+  return basename === undefined || basename === '' ? cwd : basename
+}
+
+export interface SessionsSearchProjection {
+  readonly hasMore: boolean
+  readonly rows: readonly SessionsRow[]
+}
+
+export function projectSearch(
   sessions: SessionListState,
   workspaces: WorkspaceListState,
   query: string,
   searchItems: readonly SessionSearchResultItem[],
-): SessionsRow[] {
+  remoteHasMore: boolean,
+): SessionsSearchProjection {
   const archived = new Set(workspaces.archivedSessionIds)
-  const normalizedQuery = query.toLowerCase()
-  const remoteById = new Map(searchItems.map(item => [item.sessionId, item]))
-  const workspaceBySession = new Map<SessionId, WorkspaceId>()
-  for (const workspace of workspaces.items) {
-    for (const id of workspace.sessionIds) workspaceBySession.set(id, workspace.workspaceId)
+  const normalizedQuery = normalizeSessionSearchQuery(query).trim().toLowerCase()
+  if (normalizedQuery === '') return Object.freeze({ hasMore: false, rows: Object.freeze([]) })
+  const owners = workspaceBySession(workspaces.items)
+  const remoteById = new Map<SessionId, SessionSearchResultItem>()
+  for (const item of searchItems) {
+    if (!remoteById.has(item.sessionId)) remoteById.set(item.sessionId, item)
   }
-  return sessions.ids.flatMap((id) => {
+  const local = sessions.ids.flatMap((id) => {
     const summary = sessions.byId[id]
-    if (summary === undefined || !visibleSession(summary, sessions.current, archived) || summary.blank) return []
-    const titleMatch = summary.displayTitle.toLowerCase().includes(normalizedQuery)
-    const remote = remoteById.get(id)
-    if (!titleMatch && remote === undefined) return []
-    const row = createSessionRow(summary, workspaceBySession.get(id), sessions.current)
-    return [remote === undefined ? row : Object.freeze({ ...row, detail: sanitizeText(remote.snippet) })]
+    if (summary === undefined || summary.blank || !visibleSession(summary, sessions.current, archived)) return []
+    const workspaceTitle = owners.get(id)?.title ?? fallbackWorkspace(summary)
+    return sanitizeText(summary.displayTitle).toLowerCase().includes(normalizedQuery)
+      || sanitizeText(workspaceTitle).toLowerCase().includes(normalizedQuery)
+      ? [summary]
+      : []
+  }).toSorted(compareSummaryRecency)
+  const localIds = new Set(local.map(summary => summary.id))
+  const ordered = [...local]
+  const included = new Set(localIds)
+  for (const item of searchItems) {
+    const summary = sessions.byId[item.sessionId]
+    if (summary === undefined
+      || summary.blank
+      || included.has(summary.id)
+      || !visibleSession(summary, sessions.current, archived)) continue
+    included.add(summary.id)
+    ordered.push(summary)
+  }
+  const rows = ordered.slice(0, SESSION_SEARCH_RESULT_LIMIT).map((summary) => {
+    const remote = remoteById.get(summary.id)
+    const owner = owners.get(summary.id)
+    const detail = remote === undefined || localIds.has(summary.id)
+      ? owner?.title ?? fallbackWorkspace(summary)
+      : remote.snippet
+    return createSessionRow(summary, owner?.workspaceId, sessions.current, 0, detail)
+  })
+  return Object.freeze({
+    hasMore: remoteHasMore || ordered.length > SESSION_SEARCH_RESULT_LIMIT,
+    rows: Object.freeze(rows),
   })
 }

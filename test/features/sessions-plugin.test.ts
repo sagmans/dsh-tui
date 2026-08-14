@@ -14,6 +14,29 @@ interface Control {
   renderRoute: (() => BaseRenderable) | undefined
 }
 
+const EXPECTED_COMMAND_NAMES = Object.freeze([
+  'sessions.next',
+  'sessions.previous',
+  'sessions.accept',
+  'sessions.group-mode',
+  'sessions.order-mode',
+  'sessions.unread',
+  'sessions.new',
+  'sessions.search',
+  'sessions.rename',
+  'sessions.fork',
+  'sessions.archive',
+  'sessions.close',
+  'sessions.load-older',
+  'sessions.move-up',
+  'sessions.move-down',
+  'sessions.add-workspace',
+  'sessions.delete-workspace',
+  'sessions.escape',
+  'sessions.confirm-delete',
+  'sessions.cancel-delete',
+])
+
 function fixture(control: Control): Context {
   const ctx = new Context()
   const slots: TuiSlots = {
@@ -87,25 +110,7 @@ test('registers route contribution and disposes its controller with owner fiber'
   })
 
   assert.deepEqual(control.calls, ['slot:dsh-tui-sessions'])
-  assert.deepEqual(control.commandNames, [
-    'sessions.next',
-    'sessions.previous',
-    'sessions.accept',
-    'sessions.new',
-    'sessions.search',
-    'sessions.rename',
-    'sessions.fork',
-    'sessions.archive',
-    'sessions.close',
-    'sessions.load-older',
-    'sessions.move-up',
-    'sessions.move-down',
-    'sessions.add-workspace',
-    'sessions.delete-workspace',
-    'sessions.escape',
-    'sessions.confirm-delete',
-    'sessions.cancel-delete',
-  ])
+  assert.deepEqual(control.commandNames, EXPECTED_COMMAND_NAMES)
   control.renderRoute?.()
   assert.equal(control.controller, controller)
   await ctx.fiber.dispose()

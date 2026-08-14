@@ -9,7 +9,7 @@ import {
   type CliRenderer,
 } from '@opentui/core'
 import type { TuiTheme } from '../../contracts/theme.js'
-import { createInputActions } from '../action.js'
+import { createFocusableAction, createInputActions } from '../action.js'
 import type {
   SessionsController,
   SessionsInputState,
@@ -19,6 +19,7 @@ import type {
 
 const HEADER_HEIGHT = 1
 const ROW_HEIGHT = 1
+const VIEW_ACTION_HEIGHT = 1
 const ACTION_BAR_HEIGHT = 2
 const ACTION_HORIZONTAL_PADDING = 1
 const INPUT_HEIGHT = 6
@@ -34,11 +35,18 @@ const COLLAPSED_INDICATOR = '▸'
 const SESSION_INDICATOR = '·'
 const RUNNING_INDICATOR = '●'
 const PENDING_INDICATOR = '!'
+const UNREAD_INDICATOR = '●'
 const EMPTY_COPY = 'No sessions. Press n to start one or a to add a workspace.'
 const LOADING_COPY = 'Loading sessions…'
 const SEARCH_MORE_COPY = 'More matches exist. Refine search.'
 const ESCAPE_KEY = 'escape'
 const INPUT_ACTION_PREFIX = 'sessions-input'
+const GROUP_ACTION_ID = 'sessions-group-mode'
+const ORDER_ACTION_ID = 'sessions-order-mode'
+const UNREAD_ACTION_ID = 'sessions-unread'
+const GROUP_ACTION_PREFIX = ' GROUP '
+const ORDER_ACTION_PREFIX = ' SORT '
+const UNREAD_ACTION_PREFIX = ' UNREAD '
 
 interface MouseAction {
   readonly label: string
@@ -63,6 +71,7 @@ function rowPrefix(row: SessionsRow): string {
   if (row.kind === 'workspace') return row.expanded === true ? EXPANDED_INDICATOR : COLLAPSED_INDICATOR
   if (row.pending) return PENDING_INDICATOR
   if (row.running) return RUNNING_INDICATOR
+  if (row.unread) return UNREAD_INDICATOR
   return SESSION_INDICATOR
 }
 
@@ -89,10 +98,12 @@ function createRow(
     fg: row.pending
       ? theme.colors.warning
       : row.running
-        ? theme.colors.success
-        : active
-          ? theme.colors.focus
-          : theme.colors.text,
+        ? theme.colors.focus
+        : row.unread
+          ? theme.colors.success
+          : active
+            ? theme.colors.focus
+            : theme.colors.text,
     attributes: active ? TextAttributes.BOLD : 0,
     selectable: false,
     onMouseUp(event) {
@@ -215,6 +226,46 @@ function createDeleteConfirmation(
   return overlay
 }
 
+function createViewActions(
+  renderer: CliRenderer,
+  theme: TuiTheme,
+  controller: SessionsController,
+  snapshot: SessionsSnapshot,
+): BoxRenderable {
+  const root = new BoxRenderable(renderer, {
+    id: 'sessions-view-actions',
+    width: '100%',
+    height: VIEW_ACTION_HEIGHT,
+    flexDirection: 'row',
+  })
+  root.add(createFocusableAction(renderer, {
+    content: `${GROUP_ACTION_PREFIX}${snapshot.groupMode.toUpperCase()} `,
+    fg: theme.colors.focus,
+    height: VIEW_ACTION_HEIGHT,
+    id: GROUP_ACTION_ID,
+    mutedFg: theme.colors.muted,
+    run: () => { controller.setGroupMode(snapshot.groupMode === 'workspace' ? 'flat' : 'workspace') },
+  }))
+  root.add(createFocusableAction(renderer, {
+    content: `${ORDER_ACTION_PREFIX}${snapshot.orderMode.toUpperCase()} `,
+    fg: theme.colors.focus,
+    height: VIEW_ACTION_HEIGHT,
+    id: ORDER_ACTION_ID,
+    mutedFg: theme.colors.muted,
+    run: () => { controller.setOrderMode(snapshot.orderMode === 'updated' ? 'manual' : 'updated') },
+  }))
+  root.add(createFocusableAction(renderer, {
+    content: `${UNREAD_ACTION_PREFIX}${String(snapshot.unreadCount)} `,
+    enabled: snapshot.unreadCount > 0,
+    fg: theme.colors.success,
+    height: VIEW_ACTION_HEIGHT,
+    id: UNREAD_ACTION_ID,
+    mutedFg: theme.colors.muted,
+    run: () => { controller.moveUnread(1) },
+  }))
+  return root
+}
+
 function createActions(
   renderer: CliRenderer,
   theme: TuiTheme,
@@ -267,6 +318,7 @@ function createFrame(
     attributes: TextAttributes.BOLD,
     selectable: false,
   }))
+  frame.add(createViewActions(renderer, theme, controller, snapshot))
   const list = new ScrollBoxRenderable(renderer, {
     id: 'sessions-list',
     flexGrow: 1,

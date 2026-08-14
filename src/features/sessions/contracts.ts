@@ -1,14 +1,20 @@
-import type { SessionId, WorkspaceId, WorkspaceView } from '@deepseek-ai/dsh-api-remotes/client'
+import type {
+  RpcResult,
+  SessionId,
+  WorkspaceId,
+  WorkspaceView,
+} from '@deepseek-ai/dsh-api-remotes/client'
 import type {
   ObservableSnapshot,
   SessionListState,
   SessionSearchResultItem,
   WorkspaceListState,
 } from '@deepseek-ai/dsh-client-runtime/client'
-import type { RpcResult } from '@deepseek-ai/dsh-api-remotes/client'
 import type { TuiNavigationStore } from '../../kernel/navigation.js'
 
 export type SessionsRowKind = 'session' | 'workspace'
+export type SessionsGroupMode = 'flat' | 'workspace'
+export type SessionsOrderMode = 'manual' | 'updated'
 export type SessionsInputKind = 'create-workspace' | 'rename' | 'search'
 export type SessionsPhase = 'error' | 'loading' | 'ready'
 
@@ -21,6 +27,7 @@ export interface SessionsRow {
   readonly selected: boolean
   readonly running: boolean
   readonly pending: boolean
+  readonly unread: boolean
   readonly expanded: boolean | undefined
   readonly sessionId: SessionId | undefined
   readonly workspaceId: WorkspaceId | undefined
@@ -39,11 +46,14 @@ export interface SessionsSnapshot {
   readonly activeRowKey: string | undefined
   readonly confirmDelete: boolean
   readonly error: string | undefined
+  readonly groupMode: SessionsGroupMode
   readonly input: SessionsInputState | undefined
+  readonly orderMode: SessionsOrderMode
   readonly phase: SessionsPhase
   readonly rows: readonly SessionsRow[]
   readonly searchHasMore: boolean
   readonly searchQuery: string
+  readonly unreadCount: number
 }
 
 export interface SessionsSource {
@@ -94,9 +104,12 @@ export interface SessionsController {
   loadOlder(): Promise<void>
   move(offset: number): void
   moveSelected(offset: number): Promise<void>
+  moveUnread(offset: number): void
   openInput(kind: SessionsInputKind): void
   requestDelete(): void
   select(key: string): void
+  setGroupMode(mode: SessionsGroupMode): void
+  setOrderMode(mode: SessionsOrderMode): void
   startSession(): void
   submitInput(value: string): Promise<void>
   subscribe(listener: () => void): () => void

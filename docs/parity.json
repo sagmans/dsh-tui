@@ -270,12 +270,12 @@
       "evidence": ["deepseek-harness/packages/client/ui-workspace/README.md", "src/features/sessions/index.ts"],
       "classification": "parity",
       "owner": "src/features/sessions; src/views/sessions/root.ts",
-      "keyboard": "Sessions route; traverse, search, group, sort, create, rename, fork, archive, reorder",
-      "mouse": "Click sessions, group/sort controls, and CRUD actions",
-      "automatedProof": ["test/features/sessions.test.ts", "test/features/sessions-native.test.ts", "test/features/overlay-actions-native.test.ts", "planned:test/features/session-views.test.ts"],
+      "keyboard": "Sessions route; traverse, search, group/sort, jump unread, create, rename, fork, archive, and reorder",
+      "mouse": "Click sessions, group/sort/unread controls, and CRUD actions",
+      "automatedProof": ["test/features/sessions.test.ts", "test/features/sessions-native.test.ts", "test/features/session-views.test.ts", "test/features/session-views-native.test.ts", "test/features/overlay-actions-native.test.ts"],
       "dogfoodProof": "pending: Task 17 exercise mixed disposable workspaces",
       "status": "partial",
-      "notes": "Core CRUD exists; grouped/flat modes, updated sorting, and unread state are absent."
+      "notes": "Grouped/flat views, updated/manual account ordering, unread traversal, metadata/content search, CRUD, and dual-input controls are proven; cross-launch persistence and real-profile dogfood remain."
     },
     {
       "id": "input.trigger-pipeline",
