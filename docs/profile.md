@@ -23,5 +23,21 @@ Excluded rows: Web server/runtime, browser transport, browser module loading,
 client HMR, client runner, and React UI plugins. Private in-process client
 runtime wiring lands separately.
 
-Startup, kernel, and shell use distinct Loader rows. Later profile patches may
-disable or replace each row independently.
+Startup, kernel, shell, and sessions/workspaces use distinct Loader rows. Later
+profile patches may disable or replace each row independently.
+
+## Sessions and workspaces
+
+Open Sessions with `gs` or the mouse tab. Default actions:
+
+- `j`/`k`, arrows, or `Ctrl+N`/`Ctrl+P`: move selection
+- `Enter`: open a session or fold a workspace
+- `n`, `/`, `r`, `f`, `x`: new, search, rename, fork, archive
+- `c`, `h`: close current view, load older selected-session history
+- `a`, `Delete`: register or remove a workspace
+- `Shift+Up`/`Shift+Down`: reorder the selected workspace or session
+
+Footer actions provide mouse equivalents. Session titles, search excerpts, and
+runtime errors have terminal control sequences removed before rendering.
+Workspace removal unregisters only the workspace; it does not delete its path or
+sessions.

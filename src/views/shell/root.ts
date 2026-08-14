@@ -16,6 +16,12 @@ import { createRouteTabs } from './tabs.js'
 
 const EMPTY_CHAT_COPY = 'Select a session or start a new one.'
 const SLOT_ROW_HEIGHT = 1
+const ROUTE_SLOT_NAMES = {
+  chat: 'route.chat',
+  inspect: 'route.inspect',
+  sessions: 'route.sessions',
+  settings: 'route.settings',
+} as const
 const ROUTE_LABELS = {
   chat: 'CHAT',
   inspect: 'INSPECT',
@@ -109,6 +115,21 @@ function createOverlaySlot(options: ShellViewOptions, snapshot: ShellSnapshot) {
   })
 }
 
+function createGenericRouteSlot(options: ShellViewOptions, snapshot: ShellSnapshot) {
+  const registry = options.slots.registry
+  if (registry === undefined) throw new Error('TUI core slot registry unavailable')
+  return new SlotRenderable(options.renderer, {
+    id: 'shell-generic-route-slot',
+    registry,
+    name: 'route',
+    mode: 'single_winner',
+    data: { focused: snapshot.overlay === undefined },
+    fallback: () => createRouteFallback(options.renderer, options.theme, snapshot),
+    width: '100%',
+    height: '100%',
+  })
+}
+
 function createFrame(options: ShellViewOptions): BoxRenderable {
   const { controller, renderer, slots, theme } = options
   const registry = slots.registry
@@ -127,10 +148,10 @@ function createFrame(options: ShellViewOptions): BoxRenderable {
   frame.add(new SlotRenderable(renderer, {
     id: 'shell-route-slot',
     registry,
-    name: 'route',
+    name: ROUTE_SLOT_NAMES[snapshot.route],
     mode: 'single_winner',
     data: { focused: snapshot.overlay === undefined },
-    fallback: () => createRouteFallback(renderer, theme, snapshot),
+    fallback: () => createGenericRouteSlot(options, snapshot),
     flexGrow: 1,
     width: '100%',
   }))

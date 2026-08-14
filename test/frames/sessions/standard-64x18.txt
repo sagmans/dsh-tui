@@ -1,0 +1,18 @@
+WORKSPACES / SESSIONS                                            
+ ▾  Harness  1 session                                          
+›  ●* Build terminal shell  running                             
+                                                                
+                                                                
+                                                                
+                                                                
+                                                                
+                                                                
+                                                                
+                                                                
+                                                                
+                                                                
+                                                                
+                                                                
+                                                                
+[N]NEW [/]FIND [R]NAME [F]FORK [X]ARCH [C]CLOSE [H]HIST [A]ADD  
+[DEL] [↑] [↓]                                                   

@@ -161,6 +161,9 @@ function shellCommands(
     })
   const globalLayer: TuiCommandLayer = {
     id: SHELL_COMMAND_LAYER_ID, priority: SHELL_COMMAND_PRIORITY,
+    active: () => controller.getSnapshot().overlay === undefined
+      && (resources.renderer.currentFocusedEditor === null
+        || resources.renderer.currentFocusedEditor === undefined),
     commands: globalCommands.map(commandName => command(commandName)),
     bindings: globalBindings,
   }

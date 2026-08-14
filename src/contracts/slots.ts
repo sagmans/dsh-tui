@@ -11,7 +11,15 @@ import type { TuiClientFacade } from '../client/context.js'
 import type { TuiNavigationStore } from '../kernel/navigation.js'
 import type { TuiTheme } from './theme.js'
 
-export type TuiSlotId = 'chrome' | 'footer' | 'overlay' | 'route'
+export type TuiSlotId =
+  | 'chrome'
+  | 'footer'
+  | 'overlay'
+  | 'route'
+  | 'route.chat'
+  | 'route.inspect'
+  | 'route.sessions'
+  | 'route.settings'
 
 export interface TuiSlotContext {
   readonly client: TuiClientFacade

@@ -35,6 +35,10 @@
       "types": "./lib/features/shell/index.d.ts",
       "default": "./lib/features/shell/index.js"
     },
+    "./feature/sessions": {
+      "types": "./lib/features/sessions/index.d.ts",
+      "default": "./lib/features/sessions/index.js"
+    },
     "./contracts": {
       "types": "./lib/contracts/index.d.ts",
       "default": "./lib/contracts/index.js"
