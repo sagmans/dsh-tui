@@ -30,7 +30,7 @@ function fakeController(control: Control): ConfigurationController {
       rowIndex: 0,
       rows: [],
       section: 'models',
-      sections: ['models', 'access', 'presets', 'settings', 'credentials', 'plugins', 'extensions'],
+      sections: ['models', 'providers', 'access', 'presets', 'settings', 'credentials', 'plugins', 'extensions'],
       selectedActionId: undefined,
       status: '',
     }),

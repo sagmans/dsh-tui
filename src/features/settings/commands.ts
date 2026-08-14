@@ -17,12 +17,13 @@ const NEXT_ACTION_BINDINGS = [']'] as const
 const PREVIOUS_ACTION_BINDINGS = ['['] as const
 const SECTION_BINDINGS = Object.freeze([
   { section: 'models', key: '1' },
-  { section: 'access', key: '2' },
-  { section: 'presets', key: '3' },
-  { section: 'settings', key: '4' },
-  { section: 'credentials', key: '5' },
-  { section: 'plugins', key: '6' },
-  { section: 'extensions', key: '7' },
+  { section: 'providers', key: '2' },
+  { section: 'access', key: '3' },
+  { section: 'presets', key: '4' },
+  { section: 'settings', key: '5' },
+  { section: 'credentials', key: '6' },
+  { section: 'plugins', key: '7' },
+  { section: 'extensions', key: '8' },
 ] as const satisfies readonly { readonly section: ConfigurationSection; readonly key: string }[])
 
 export function settingsCommands(

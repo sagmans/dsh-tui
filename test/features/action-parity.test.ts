@@ -19,6 +19,15 @@ import type { TuiCommandLayer } from '../../src/contracts/commands.js'
 
 const SETTINGS_ACTION_IDS = Object.freeze([
   'model.select',
+  'provider.create',
+  'provider.edit',
+  'provider.discover',
+  'provider.remove',
+  'provider.credential',
+  'provider.model.add',
+  'provider.model.edit',
+  'provider.model.remove',
+  'provider.model.adopt',
   'access.select',
   'preset.select',
   'preset.default',

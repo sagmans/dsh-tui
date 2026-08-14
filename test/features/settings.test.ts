@@ -53,6 +53,9 @@ function fixture() {
     },
   })
   const port: ConfigurationPort = {
+    providerCatalog: () => Promise.resolve({ ok: true, value: [] }),
+    discoverProviderModels: () => Promise.resolve({ ok: true, value: [] }),
+    mutateSettings: () => Promise.resolve({ ok: true, value: undefined }),
     models: () => Promise.resolve({ ok: true, value: {
       current: { provider: 'deepseek', model: 'chat', reasoningEffort: 'high' },
       routable: true,

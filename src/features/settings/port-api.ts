@@ -6,6 +6,7 @@ const AGENT_PRESET_SETTINGS_NAMESPACE = 'agent-presets'
 const ACCESS_COMMAND_PREFIX = '/permission '
 
 type ModelAccessPort = Pick<ConfigurationPort, 'models' | 'selectModel' | 'selectAccess'>
+type ProviderPort = Pick<ConfigurationPort, 'providerCatalog' | 'discoverProviderModels' | 'mutateSettings'>
 type PresetPort = Pick<
   ConfigurationPort,
   | 'presets'
@@ -52,6 +53,38 @@ function modelAccessPort(client: TuiClientFacade): ModelAccessPort {
       return result.value.matched
         ? configurationSuccess()
         : { ok: false, error: { code: 'unknown-command', message: 'Permission command unavailable.' } }
+    },
+  }
+}
+
+function providerPort(client: TuiClientFacade): ProviderPort {
+  const { api } = client
+  return {
+    async providerCatalog() {
+      const response = await api.llm.providers({})
+      return response.result.ok
+        ? { ok: true, value: response.result.value.providers }
+        : configurationFailure(response.result.error)
+    },
+    async discoverProviderModels(request) {
+      const response = await api.llm.discoverModels({
+        settingsNs: request.settingsNs,
+        ...request.provider === undefined ? {} : { provider: request.provider },
+        ...request.baseURL === undefined ? {} : { baseURL: request.baseURL },
+        ...request.api === undefined ? {} : { api: request.api },
+        ...request.apiKey === undefined ? {} : { apiKey: request.apiKey },
+      })
+      return response.result.ok
+        ? { ok: true, value: response.result.value.models }
+        : configurationFailure(response.result.error)
+    },
+    async mutateSettings(namespace, operations, revision) {
+      const response = await api.settings.mutate({
+        ns: namespace,
+        ops: operations.map(operation => ({ ...operation, path: [...operation.path] })),
+        expectedRevision: revision,
+      })
+      return response.result.ok ? configurationSuccess() : configurationFailure(response.result.error)
     },
   }
 }
@@ -128,6 +161,13 @@ function settingsCredentialPort(client: TuiClientFacade): SettingsCredentialPort
   }
 }
 
-export function createApiConfigurationPort(client: TuiClientFacade): ModelAccessPort & PresetPort & SettingsCredentialPort {
-  return { ...modelAccessPort(client), ...presetPort(client), ...settingsCredentialPort(client) }
+export function createApiConfigurationPort(
+  client: TuiClientFacade,
+): ModelAccessPort & ProviderPort & PresetPort & SettingsCredentialPort {
+  return {
+    ...modelAccessPort(client),
+    ...providerPort(client),
+    ...presetPort(client),
+    ...settingsCredentialPort(client),
+  }
 }

@@ -9,12 +9,24 @@ import {
   type ConfigurationModels,
   type ConfigurationPluginEntry,
   type ConfigurationPresetCatalog,
+  type ConfigurationProviderEntry,
+  type ConfigurationProviderModel,
+  type ConfigurationDiscoveredModel,
   type ConfigurationRowView,
   type ConfigurationSettingsCatalog,
 } from './contracts.js'
 
 export const CONFIGURATION_ACTIONS = Object.freeze({
   access: defineTuiAction(CONFIGURATION_ACTION_SCOPE, 'access.select', 'SELECT', 'positive'),
+  providerCreate: defineTuiAction(CONFIGURATION_ACTION_SCOPE, 'provider.create', 'CREATE', 'positive'),
+  providerEdit: defineTuiAction(CONFIGURATION_ACTION_SCOPE, 'provider.edit', 'EDIT', 'default'),
+  providerDiscover: defineTuiAction(CONFIGURATION_ACTION_SCOPE, 'provider.discover', 'FETCH MODELS', 'default'),
+  providerRemove: defineTuiAction(CONFIGURATION_ACTION_SCOPE, 'provider.remove', 'REMOVE', 'danger'),
+  providerCredential: defineTuiAction(CONFIGURATION_ACTION_SCOPE, 'provider.credential', 'SET KEY', 'default'),
+  providerModelAdd: defineTuiAction(CONFIGURATION_ACTION_SCOPE, 'provider.model.add', 'ADD MODEL', 'positive'),
+  providerModelEdit: defineTuiAction(CONFIGURATION_ACTION_SCOPE, 'provider.model.edit', 'EDIT', 'default'),
+  providerModelRemove: defineTuiAction(CONFIGURATION_ACTION_SCOPE, 'provider.model.remove', 'REMOVE', 'danger'),
+  providerModelAdopt: defineTuiAction(CONFIGURATION_ACTION_SCOPE, 'provider.model.adopt', 'ADD', 'positive'),
   credentialSet: defineTuiAction(CONFIGURATION_ACTION_SCOPE, 'credential.set', 'SET', 'default'),
   credentialUnset: defineTuiAction(CONFIGURATION_ACTION_SCOPE, 'credential.unset', 'UNSET', 'danger'),
   extensionRemove: defineTuiAction(CONFIGURATION_ACTION_SCOPE, 'extension.remove', 'REMOVE', 'danger'),
@@ -36,13 +48,38 @@ export interface ConfigurationProjectionData {
   readonly extensions: readonly ConfigurationExtensionRow[] | undefined
   readonly models: ConfigurationModels | undefined
   readonly plugins: readonly ConfigurationPluginEntry[] | undefined
+  readonly providers: readonly ConfigurationProviderEntry[] | undefined
+  readonly discoveredModels: ReadonlyMap<string, readonly ConfigurationDiscoveredModel[]>
   readonly presetContents: ReadonlyMap<string, string>
   readonly presets: ConfigurationPresetCatalog | undefined
   readonly settings: ConfigurationSettingsCatalog | undefined
 }
 
+export interface ConfigurationProviderTarget {
+  readonly credential: ConfigurationCredentialView | undefined
+  readonly credentialRef: string | undefined
+  readonly entry: ConfigurationProviderEntry
+  readonly kind: 'provider'
+  readonly namespace: ConfigurationSettingsCatalog['namespaces'][number]
+  readonly profile: Readonly<Record<string, unknown>> | undefined
+  readonly removable: boolean
+}
+
 export type ConfigurationTarget =
   | { readonly kind: 'access'; readonly preset: string }
+  | { readonly kind: 'provider-create'; readonly namespace: ConfigurationSettingsCatalog['namespaces'][number] }
+  | ConfigurationProviderTarget
+  | {
+    readonly candidate: ConfigurationDiscoveredModel
+    readonly kind: 'provider-candidate'
+    readonly provider: ConfigurationProviderTarget
+  }
+  | {
+    readonly index: number
+    readonly kind: 'provider-model'
+    readonly model: ConfigurationProviderModel
+    readonly provider: ConfigurationProviderTarget
+  }
   | { readonly kind: 'credential'; readonly ref: string }
   | {
     readonly kind: 'extension'

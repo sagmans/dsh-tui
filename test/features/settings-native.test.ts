@@ -50,7 +50,7 @@ function controller(calls: string[]): ConfigurationController {
         title: 'DEEPSEEK_API_KEY',
       }],
       section: 'credentials',
-      sections: ['models', 'access', 'presets', 'settings', 'credentials', 'plugins', 'extensions'],
+      sections: ['models', 'providers', 'access', 'presets', 'settings', 'credentials', 'plugins', 'extensions'],
       selectedActionId: 'credential.set',
       status: '1/1',
     }),

@@ -4,18 +4,26 @@ import type {
   ConfigurationActionId,
   ConfigurationController,
   ConfigurationControllerOptions,
+  ConfigurationDiscoveredModel,
   ConfigurationInputView,
+  ConfigurationProviderModel,
   ConfigurationResult,
   ConfigurationSection,
+  ConfigurationSettingsOperation,
   ConfigurationSnapshotView,
 } from './contracts.js'
 import {
   credentialRefs,
   projectConfiguration,
   type ConfigurationProjectionData,
+  type ConfigurationProviderTarget,
   type ConfigurationTarget,
   type ProjectedConfiguration,
 } from './projection.js'
+import {
+  providerCredentialRef,
+  providerModels,
+} from './projection-providers.js'
 import { sanitizeConversationText } from '../conversation/projection.js'
 import { sanitizeText } from '../sessions/projection.js'
 
@@ -24,8 +32,23 @@ export type * from './contracts.js'
 const FIRST_INDEX = 0
 const FULL_ACCESS_PRESET = 'danger-full-access'
 const COPY_SUFFIX = '-copy'
+const PI_AI_NAMESPACE = 'llm-pi-ai'
+const ROUTE_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u
+const API_KEY_PATTERN = /^[\u0021-\u007E]+$/u
+const ENV_ASSIGNMENT_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*=/u
+const QUOTED_VALUE_PATTERN = /^(?:".*"|'.*')$/u
+const PROVIDER_CREATE_FIELDS = Object.freeze([
+  'route', 'displayName', 'baseURL', 'api', 'modelId', 'apiKey',
+] as const)
+const PROVIDER_EDIT_FIELDS = Object.freeze(['displayName', 'baseURL', 'api'] as const)
+const DEEPSEEK_EDIT_FIELDS = Object.freeze(['baseURL'] as const)
+const PROVIDER_MODEL_FIELDS = Object.freeze([
+  'modelId', 'modelName', 'contextWindow', 'maxTokens',
+] as const)
+const MODEL_OPTIONAL_FIELDS = new Set(['name', 'contextWindow', 'maxTokens'])
 const SECTION_NAMES: readonly ConfigurationSection[] = Object.freeze([
   'models',
+  'providers',
   'access',
   'presets',
   'settings',
@@ -34,6 +57,8 @@ const SECTION_NAMES: readonly ConfigurationSection[] = Object.freeze([
   'extensions',
 ])
 const CONFIRMED_ACTIONS = new Set<ConfigurationActionId>([
+  'provider.remove',
+  'provider.model.remove',
   'settings.reset',
   'credential.unset',
   'preset.remove',
@@ -41,8 +66,51 @@ const CONFIRMED_ACTIONS = new Set<ConfigurationActionId>([
   'extension.remove',
 ])
 
+type ProviderInputField =
+  | 'api'
+  | 'apiKey'
+  | 'baseURL'
+  | 'contextWindow'
+  | 'displayName'
+  | 'maxTokens'
+  | 'modelId'
+  | 'modelName'
+  | 'route'
+
+type ProviderInputMode = 'create' | 'credential' | 'edit' | 'model-add' | 'model-edit'
+
+interface ProviderInputDraft {
+  readonly fields: readonly ProviderInputField[]
+  readonly mode: ProviderInputMode
+  readonly target: ConfigurationTarget
+  readonly values: Partial<Record<ProviderInputField, string>>
+  step: number
+}
+
+const PROVIDER_FIELD_LABELS: Readonly<Record<ProviderInputField, string>> = Object.freeze({
+  api: 'API protocol',
+  apiKey: 'API key (optional)',
+  baseURL: 'Base URL',
+  contextWindow: 'Context window (optional)',
+  displayName: 'Display name (optional)',
+  maxTokens: 'Output token limit (optional)',
+  modelId: 'Model id',
+  modelName: 'Model name (optional)',
+  route: 'Provider id',
+})
+
 function errorText(error: unknown): string {
   return sanitizeText(error instanceof Error ? error.message : String(error))
+}
+
+function derivedCredentialRef(provider: string): string {
+  return `${provider.toUpperCase().replaceAll(/[^A-Z0-9]+/gu, '_')}_API_KEY`
+}
+
+function positiveInteger(value: string): number | undefined {
+  if (value.trim() === '') return undefined
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : Number.NaN
 }
 
 class SettingsControllerService implements ConfigurationController {
@@ -52,6 +120,7 @@ class SettingsControllerService implements ConfigurationController {
   private confirmationToken: string | undefined
   private credentials: ConfigurationProjectionData['credentials']
   private current: SessionId | undefined
+  private readonly discoveredModels = new Map<string, readonly ConfigurationDiscoveredModel[]>()
   private disposed = false
   private error: string | undefined
   private extensions: ConfigurationProjectionData['extensions']
@@ -62,6 +131,8 @@ class SettingsControllerService implements ConfigurationController {
   private notice: string | undefined
   private plugins: ConfigurationProjectionData['plugins']
   private readonly port: ConfigurationControllerOptions['port']
+  private providerDraft: ProviderInputDraft | undefined
+  private providers: ConfigurationProjectionData['providers']
   private readonly presetContents = new Map<string, string>()
   private presets: ConfigurationProjectionData['presets']
   private publishPending = false
@@ -234,6 +305,7 @@ class SettingsControllerService implements ConfigurationController {
   submitInput(): Promise<boolean> {
     const input = this.input
     if (input === undefined || this.busyCount > 0) return Promise.resolve(false)
+    if (this.providerDraft !== undefined) return this.submitProviderInput(input)
     const row = this.projected().rows[this.rowIndex]
     const target = row === undefined || row.id !== this.inputTarget
       ? undefined
@@ -290,6 +362,119 @@ class SettingsControllerService implements ConfigurationController {
     return true
   }
 
+  private beginProviderInput(mode: ProviderInputMode, target: ConfigurationTarget): boolean {
+    let fields: readonly ProviderInputField[]
+    const values: Partial<Record<ProviderInputField, string>> = {}
+    switch (mode) {
+      case 'create': {
+        if (target.kind !== 'provider-create') return false
+        fields = PROVIDER_CREATE_FIELDS
+        break
+      }
+      case 'credential': {
+        if (target.kind !== 'provider') return false
+        fields = ['apiKey']
+        break
+      }
+      case 'edit': {
+        if (target.kind !== 'provider') return false
+        fields = target.entry.settingsNs === PI_AI_NAMESPACE ? PROVIDER_EDIT_FIELDS : DEEPSEEK_EDIT_FIELDS
+        values.displayName = typeof target.profile?.displayName === 'string' ? target.profile.displayName : ''
+        values.baseURL = typeof target.profile?.baseURL === 'string' ? target.profile.baseURL : ''
+        values.api = typeof target.profile?.api === 'string' ? target.profile.api : ''
+        break
+      }
+      case 'model-add': {
+        if (target.kind !== 'provider') return false
+        fields = PROVIDER_MODEL_FIELDS
+        break
+      }
+      case 'model-edit': {
+        if (target.kind !== 'provider-model') return false
+        fields = PROVIDER_MODEL_FIELDS
+        values.modelId = target.model.id
+        values.modelName = target.model.name ?? ''
+        values.contextWindow = target.model.contextWindow === undefined ? '' : String(target.model.contextWindow)
+        values.maxTokens = target.model.maxTokens === undefined ? '' : String(target.model.maxTokens)
+        break
+      }
+      default: {
+        const exhaustive: never = mode
+        return exhaustive
+      }
+    }
+    this.providerDraft = { fields, mode, step: FIRST_INDEX, target, values }
+    this.showProviderField()
+    return true
+  }
+
+  private showProviderField(): void {
+    const draft = this.providerDraft
+    const field = draft?.fields[draft.step]
+    if (draft === undefined || field === undefined) return
+    const secret = field === 'apiKey'
+    this.secretInput = ''
+    this.input = {
+      kind: 'provider',
+      secret,
+      title: PROVIDER_FIELD_LABELS[field],
+      value: secret ? '' : draft.values[field] ?? '',
+    }
+    this.error = undefined
+    this.schedulePublish()
+  }
+
+  private validateProviderField(draft: ProviderInputDraft, field: ProviderInputField, value: string): string | undefined {
+    const trimmed = value.trim()
+    if (field === 'route') {
+      if (!ROUTE_PATTERN.test(trimmed)) return 'Provider id must start with a lowercase letter and use lowercase letters, numbers, or hyphens.'
+      if ((this.providers ?? []).some(provider => provider.provider === trimmed)) return 'Provider id already exists.'
+    }
+    if ((field === 'baseURL' || field === 'api' || field === 'modelId')
+      && draft.mode === 'create' && trimmed === '') return `${PROVIDER_FIELD_LABELS[field]} cannot be blank.`
+    if (field === 'modelId' && trimmed === '') return 'Model id cannot be blank.'
+    if (field === 'modelId' && draft.mode !== 'create') {
+      const provider = this.providerFor(draft.target)
+      const editingIndex = draft.target.kind === 'provider-model' ? draft.target.index : -1
+      if (providerModels(provider?.profile).some((model, index) => model.id === trimmed && index !== editingIndex)) {
+        return 'Model id already exists.'
+      }
+    }
+    if (field === 'apiKey' && draft.mode === 'credential' && trimmed === '') return 'API key cannot be blank.'
+    if (field === 'apiKey' && trimmed !== ''
+      && (!API_KEY_PATTERN.test(trimmed) || ENV_ASSIGNMENT_PATTERN.test(trimmed) || QUOTED_VALUE_PATTERN.test(trimmed))) {
+      return 'API key must be an unquoted printable value, not NAME=value.'
+    }
+    if ((field === 'contextWindow' || field === 'maxTokens') && Number.isNaN(positiveInteger(trimmed))) {
+      return `${PROVIDER_FIELD_LABELS[field]} must be a positive integer.`
+    }
+    return undefined
+  }
+
+  private submitProviderInput(input: ConfigurationInputView): Promise<boolean> {
+    const draft = this.providerDraft
+    const field = draft?.fields[draft.step]
+    if (draft === undefined || field === undefined) return Promise.resolve(false)
+    const raw = field === 'apiKey' ? this.secretInput : input.value
+    const failure = this.validateProviderField(draft, field, raw)
+    if (failure !== undefined) {
+      this.error = failure
+      this.schedulePublish()
+      return Promise.resolve(false)
+    }
+    draft.values[field] = raw.trim()
+    this.secretInput = ''
+    draft.step += 1
+    if (draft.step < draft.fields.length) {
+      this.showProviderField()
+      return Promise.resolve(true)
+    }
+    this.input = undefined
+    this.providerDraft = undefined
+    this.schedulePublish()
+    return this.applyProviderDraft(draft)
+  }
+
   private clearConfirmation(): void {
     this.confirmation = undefined
     this.confirmationToken = undefined
@@ -298,6 +483,7 @@ class SettingsControllerService implements ConfigurationController {
   private clearInput(): void {
     this.input = undefined
     this.inputTarget = undefined
+    this.providerDraft = undefined
     this.secretInput = ''
   }
 
@@ -305,6 +491,8 @@ class SettingsControllerService implements ConfigurationController {
     this.models = undefined
     this.extensions = undefined
     this.credentials = undefined
+    this.providers = undefined
+    this.discoveredModels.clear()
     this.presetContents.clear()
     this.rowIndex = FIRST_INDEX
     this.actionCursor.reset()
@@ -330,6 +518,15 @@ class SettingsControllerService implements ConfigurationController {
   private dispatch(action: ConfigurationActionId, rowId: string, target: ConfigurationTarget): Promise<boolean> {
     switch (action) {
       case 'model.select': return this.selectModel(target)
+      case 'provider.create': return Promise.resolve(this.beginProviderInput('create', target))
+      case 'provider.edit': return Promise.resolve(this.beginProviderInput('edit', target))
+      case 'provider.discover': return this.discoverProvider(target)
+      case 'provider.remove': return this.removeProvider(target)
+      case 'provider.credential': return Promise.resolve(this.beginProviderInput('credential', target))
+      case 'provider.model.add': return Promise.resolve(this.beginProviderInput('model-add', target))
+      case 'provider.model.edit': return Promise.resolve(this.beginProviderInput('model-edit', target))
+      case 'provider.model.remove': return this.removeProviderModel(target)
+      case 'provider.model.adopt': return this.adoptProviderModel(target)
       case 'access.select': return this.selectAccess(target)
       case 'preset.select': return this.selectPreset(target)
       case 'preset.default': return this.defaultPreset(target)
@@ -351,6 +548,218 @@ class SettingsControllerService implements ConfigurationController {
     }
   }
 
+  private applyProviderDraft(draft: ProviderInputDraft): Promise<boolean> {
+    switch (draft.mode) {
+      case 'create': return this.createProvider(draft)
+      case 'credential': return this.setProviderCredential(draft)
+      case 'edit': return this.editProvider(draft)
+      case 'model-add': return this.saveProviderModel(draft, false)
+      case 'model-edit': return this.saveProviderModel(draft, true)
+      default: {
+        const exhaustive: never = draft.mode
+        return Promise.resolve(exhaustive)
+      }
+    }
+  }
+
+  private createProvider(draft: ProviderInputDraft): Promise<boolean> {
+    if (draft.target.kind !== 'provider-create') return Promise.resolve(false)
+    const target = draft.target
+    const route = draft.values.route ?? ''
+    const apiKey = draft.values.apiKey ?? ''
+    const credentialRef = derivedCredentialRef(route)
+    const profile = {
+      ...draft.values.displayName === '' ? {} : { displayName: draft.values.displayName },
+      ...apiKey === '' ? {} : { apiKeyEnv: credentialRef },
+      api: draft.values.api ?? '',
+      baseURL: draft.values.baseURL ?? '',
+      models: [{ id: draft.values.modelId ?? '' }],
+    }
+    const operation: ConfigurationSettingsOperation = {
+      op: 'set', path: ['providers', route], value: profile,
+    }
+    return this.runProviderOperation(async () => {
+      const mutation = await this.port.mutateSettings(
+        target.namespace.ns,
+        [operation],
+        target.namespace.revision,
+      )
+      if (!mutation.ok || apiKey === '') return mutation
+      return this.port.setCredential(credentialRef, apiKey)
+    }, apiKey !== '')
+  }
+
+  private editProvider(draft: ProviderInputDraft): Promise<boolean> {
+    if (draft.target.kind !== 'provider') return Promise.resolve(false)
+    const operations: ConfigurationSettingsOperation[] = []
+    for (const field of draft.fields) {
+      const key = field
+      const next = draft.values[field] ?? ''
+      const current = draft.target.profile?.[key]
+      if (next === '' && current !== undefined) {
+        operations.push({ op: 'unset', path: [...draft.target.entry.settingsPath, key] })
+      } else if (next !== '' && next !== current) {
+        operations.push({ op: 'set', path: [...draft.target.entry.settingsPath, key], value: next })
+      }
+    }
+    if (operations.length === 0) return Promise.resolve(true)
+    return this.mutateProvider(draft.target, operations)
+  }
+
+  private providerFor(target: ConfigurationTarget): ConfigurationProviderTarget | undefined {
+    switch (target.kind) {
+      case 'provider': return target
+      case 'provider-candidate': return target.provider
+      case 'provider-model': return target.provider
+      case 'access':
+      case 'credential':
+      case 'extension':
+      case 'model':
+      case 'plugin':
+      case 'preset':
+      case 'provider-create':
+      case 'settings': return undefined
+      default: {
+        const exhaustive: never = target
+        return exhaustive
+      }
+    }
+  }
+
+  private modelFromDraft(draft: ProviderInputDraft): ConfigurationProviderModel {
+    const contextWindow = positiveInteger(draft.values.contextWindow ?? '')
+    const maxTokens = positiveInteger(draft.values.maxTokens ?? '')
+    return {
+      id: draft.values.modelId ?? '',
+      ...draft.values.modelName === '' ? {} : { name: draft.values.modelName },
+      ...contextWindow === undefined ? {} : { contextWindow },
+      ...maxTokens === undefined ? {} : { maxTokens },
+    }
+  }
+
+  private saveProviderModel(draft: ProviderInputDraft, editing: boolean): Promise<boolean> {
+    const provider = this.providerFor(draft.target)
+    if (provider === undefined) return Promise.resolve(false)
+    const current = providerModels(provider.profile)
+    const model = this.modelFromDraft(draft)
+    const editingIndex = draft.target.kind === 'provider-model' ? draft.target.index : -1
+    if (current.some((candidate, index) => candidate.id === model.id && index !== editingIndex)) {
+      this.error = 'Model id already exists.'
+      this.schedulePublish()
+      return Promise.resolve(false)
+    }
+    const models = editing && editingIndex >= 0
+      ? current.map((candidate, index) => index === editingIndex
+          ? {
+              ...Object.fromEntries(Object.entries(candidate).filter(([key]) => !MODEL_OPTIONAL_FIELDS.has(key))),
+              ...model,
+            }
+          : candidate)
+      : [...current, model]
+    return this.writeProviderModels(provider, models)
+  }
+
+  private writeProviderModels(
+    provider: ConfigurationProviderTarget,
+    models: readonly ConfigurationProviderModel[],
+  ): Promise<boolean> {
+    return this.mutateProvider(provider, [{
+      op: 'set',
+      path: [...provider.entry.settingsPath, 'models'],
+      value: models.map(model => ({ ...model })),
+    }])
+  }
+
+  private mutateProvider(
+    provider: ConfigurationProviderTarget,
+    operations: readonly ConfigurationSettingsOperation[],
+  ): Promise<boolean> {
+    return this.runProviderOperation(() => this.port.mutateSettings(
+      provider.namespace.ns,
+      operations,
+      provider.namespace.revision,
+    ))
+  }
+
+  private async runProviderOperation(
+    operation: () => Promise<ConfigurationResult<unknown>>,
+    sensitive = false,
+  ): Promise<boolean> {
+    const result = await this.run(operation, { sensitive })
+    const failure = result.ok ? undefined : this.error
+    if (this.section === 'providers') await this.refresh()
+    if (failure !== undefined) {
+      this.error = failure
+      this.schedulePublish()
+    }
+    return result.ok
+  }
+
+  private discoverProvider(target: ConfigurationTarget): Promise<boolean> {
+    const provider = this.providerFor(target)
+    if (provider === undefined) return Promise.resolve(false)
+    return this.discoverProviderTarget(provider)
+  }
+
+  private async discoverProviderTarget(provider: ConfigurationProviderTarget): Promise<boolean> {
+    const result = await this.run(() => this.port.discoverProviderModels({
+      settingsNs: provider.entry.settingsNs,
+      provider: provider.entry.provider,
+    }))
+    if (!result.ok) return false
+    this.discoveredModels.set(provider.entry.provider, result.value)
+    this.notice = `${String(result.value.length)} models discovered.`
+    this.schedulePublish()
+    return true
+  }
+
+  private adoptProviderModel(target: ConfigurationTarget): Promise<boolean> {
+    if (target.kind !== 'provider-candidate') return Promise.resolve(false)
+    const current = providerModels(target.provider.profile)
+    if (current.some(model => model.id === target.candidate.id)) return Promise.resolve(true)
+    return this.writeProviderModels(target.provider, [...current, { ...target.candidate }])
+  }
+
+  private removeProviderModel(target: ConfigurationTarget): Promise<boolean> {
+    if (target.kind !== 'provider-model') return Promise.resolve(false)
+    const models = providerModels(target.provider.profile).filter((_model, index) => index !== target.index)
+    return this.writeProviderModels(target.provider, models)
+  }
+
+  private removeProvider(target: ConfigurationTarget): Promise<boolean> {
+    if (target.kind !== 'provider' || !target.removable) return Promise.resolve(false)
+    const derivedRef = derivedCredentialRef(target.entry.provider)
+    return this.runProviderOperation(async () => {
+      if (target.credentialRef === derivedRef
+        && target.credential?.configured === true
+        && target.credential.writable) {
+        const credential = await this.port.unsetCredential(derivedRef)
+        if (!credential.ok) return credential
+      }
+      return this.port.mutateSettings(target.namespace.ns, [{
+        op: 'unset', path: [...target.entry.settingsPath],
+      }], target.namespace.revision)
+    })
+  }
+
+  private setProviderCredential(draft: ProviderInputDraft): Promise<boolean> {
+    if (draft.target.kind !== 'provider') return Promise.resolve(false)
+    const target = draft.target
+    const value = draft.values.apiKey ?? ''
+    const credentialRef = target.credentialRef ?? derivedCredentialRef(target.entry.provider)
+    return this.runProviderOperation(async () => {
+      if (providerCredentialRef(target.profile) === undefined) {
+        const mutation = await this.port.mutateSettings(target.namespace.ns, [{
+          op: 'set',
+          path: [...target.entry.settingsPath, 'apiKeyEnv'],
+          value: credentialRef,
+        }], target.namespace.revision)
+        if (!mutation.ok) return mutation
+      }
+      return this.port.setCredential(credentialRef, value)
+    }, true)
+  }
+
   private defaultPreset(target: ConfigurationTarget): Promise<boolean> {
     return target.kind === 'preset'
       ? this.runAndRefresh(() => this.port.defaultPreset(target.id), 'presets')
@@ -366,6 +775,20 @@ class SettingsControllerService implements ConfigurationController {
         if (sessionId !== this.current || this.disposed) return
         if (result.ok) this.models = result.value
         else this.error = `${result.error.message} (${result.error.code})`
+        break
+      }
+      case 'providers': {
+        const providers = await this.port.providerCatalog()
+        if (!providers.ok) {
+          this.error = `${providers.error.message} (${providers.error.code})`
+          break
+        }
+        this.providers = providers.value
+        await this.loadSettings()
+        if (this.error !== undefined) break
+        const credentials = await this.port.credentials(credentialRefs(this.settings))
+        if (credentials.ok) this.credentials = credentials.value
+        else this.error = `${credentials.error.message} (${credentials.error.code})`
         break
       }
       case 'access': break
@@ -425,8 +848,10 @@ class SettingsControllerService implements ConfigurationController {
       data: {
         credentials: this.credentials,
         extensions: this.extensions,
+        discoveredModels: this.discoveredModels,
         models: this.models,
         plugins: this.plugins,
+        providers: this.providers,
         presetContents: this.presetContents,
         presets: this.presets,
         settings: this.settings,

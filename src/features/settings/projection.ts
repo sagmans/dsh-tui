@@ -9,6 +9,7 @@ import {
   settingsRows,
 } from './projection-configuration.js'
 import { extensionRows, pluginRows } from './projection-plugins.js'
+import { providerRows } from './projection-providers.js'
 import { accessRows, modelRows } from './projection-selections.js'
 import type {
   ConfigurationProjectionContext,
@@ -19,6 +20,7 @@ import type {
 export { credentialRefs } from './projection-configuration.js'
 export type {
   ConfigurationProjectionData,
+  ConfigurationProviderTarget,
   ConfigurationTarget,
   ProjectedConfiguration,
 } from './projection-types.js'
@@ -36,6 +38,7 @@ export function projectConfiguration(input: {
   let rows: readonly ConfigurationRowView[]
   switch (input.section) {
     case 'models': rows = modelRows(context); break
+    case 'providers': rows = providerRows(context); break
     case 'access': rows = accessRows(input.list, context.targets); break
     case 'presets': rows = presetRows(input.list, context); break
     case 'settings': rows = settingsRows(context); break

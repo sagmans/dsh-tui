@@ -9,6 +9,7 @@ import { createCatalogView } from '../catalog/root.js'
 
 const SECTION_LABELS: Readonly<Record<ConfigurationSection, string>> = Object.freeze({
   models: 'MODELS',
+  providers: 'PROVIDERS',
   access: 'ACCESS',
   presets: 'PRESETS',
   settings: 'SETTINGS',

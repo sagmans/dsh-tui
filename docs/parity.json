@@ -179,13 +179,13 @@
       "webPackages": ["@deepseek-ai/dsh-client-ui-settings-models"],
       "evidence": ["deepseek-harness/packages/client/ui-settings-models/README.md", "deepseek-harness/packages/client/ui-settings-models/src/client/store.ts"],
       "classification": "parity",
-      "owner": "planned: src/features/settings/providers; src/views/catalog/root.ts",
-      "keyboard": "Settings > Models; add/edit/discover/remove provider and models",
-      "mouse": "Settings > Models; click provider, fields, discovery, and actions",
-      "automatedProof": ["planned:test/features/provider-settings.test.ts", "planned:test/features/provider-settings-native.test.ts"],
+      "owner": "src/features/settings; src/views/catalog/root.ts",
+      "keyboard": "Settings > Providers; add/edit/discover/remove providers and models through staged fields",
+      "mouse": "Settings > Providers; click provider, fields, discovery candidates, and exact actions",
+      "automatedProof": ["test/features/provider-settings.test.ts", "test/features/provider-settings-native.test.ts", "test/features/action-parity.test.ts"],
       "dogfoodProof": "pending: Task 17 add a disposable provider and select discovered model",
-      "status": "missing",
-      "notes": "Opening raw settings is not provider/model management parity."
+      "status": "partial",
+      "notes": "Provider directory, staged add/edit, write-only keys, discovery/adoption/removal, and model field editing exist; onboarding and real-endpoint dogfood remain."
     },
     {
       "id": "settings.plugin-configuration",

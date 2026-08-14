@@ -27,7 +27,7 @@ _None._
 | `locale.chrome` — English and Chinese application locale | parity | missing | planned: src/services/locale.ts; src/locales; src/views |
 | `shell.navigation` — Full-screen shell, navigation, sidebar outcomes, and route access | parity | partial | src/features/shell; src/views/shell |
 | `settings.general` — General settings shell and persisted preferences | parity | partial | src/features/settings; src/views/settings/root.ts |
-| `settings.providers-models` — Provider credentials, endpoints, protocols, model catalog, and discovery | parity | missing | planned: src/features/settings/providers; src/views/catalog/root.ts |
+| `settings.providers-models` — Provider credentials, endpoints, protocols, model catalog, and discovery | parity | partial | src/features/settings; src/views/catalog/root.ts |
 | `settings.plugin-configuration` — Field-level plugin configuration | parity | partial | src/features/settings; src/views/settings/root.ts |
 | `conversation.core` — Messages, reasoning, streaming, history, retry, cancellation, and composer | parity | partial | src/features/conversation; src/client/conversation; src/views/conversation |
 | `tools.inspection` — Generic, specialized, nested Code Mode, and Web tool inspection | parity | partial | src/features/tools; src/views/tools/root.ts |

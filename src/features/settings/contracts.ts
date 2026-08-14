@@ -6,6 +6,15 @@ import type { TuiNavigationStore } from '../../kernel/navigation.js'
 export const CONFIGURATION_ACTION_SCOPE = 'settings.action'
 export const CONFIGURATION_ACTION_IDS = Object.freeze([
   'model.select',
+  'provider.create',
+  'provider.edit',
+  'provider.discover',
+  'provider.remove',
+  'provider.credential',
+  'provider.model.add',
+  'provider.model.edit',
+  'provider.model.remove',
+  'provider.model.adopt',
   'access.select',
   'preset.select',
   'preset.default',
@@ -24,6 +33,7 @@ export const CONFIGURATION_ACTION_IDS = Object.freeze([
 
 export type ConfigurationSection =
   | 'models'
+  | 'providers'
   | 'access'
   | 'presets'
   | 'settings'
@@ -46,7 +56,7 @@ export interface ConfigurationRowView {
 }
 
 export interface ConfigurationInputView {
-  readonly kind: 'credential' | 'preset-copy'
+  readonly kind: 'credential' | 'preset-copy' | 'provider'
   readonly secret?: boolean | undefined
   readonly title: string
   readonly value: string
@@ -114,6 +124,41 @@ export interface ConfigurationModels {
   }[]
   readonly routable: boolean
 }
+
+export interface ConfigurationProviderEntry {
+  readonly active: boolean
+  readonly declared?: boolean | undefined
+  readonly displayName: string
+  readonly provider: string
+  readonly settingsNs: string
+  readonly settingsPath: readonly string[]
+}
+
+export interface ConfigurationProviderModel extends Readonly<Record<string, unknown>> {
+  readonly contextWindow?: number | undefined
+  readonly id: string
+  readonly maxTokens?: number | undefined
+  readonly name?: string | undefined
+}
+
+export interface ConfigurationDiscoveredModel {
+  readonly contextWindow?: number | undefined
+  readonly id: string
+  readonly maxTokens?: number | undefined
+  readonly name?: string | undefined
+}
+
+export interface ConfigurationDiscoverRequest {
+  readonly api?: string | undefined
+  readonly apiKey?: string | undefined
+  readonly baseURL?: string | undefined
+  readonly provider?: string | undefined
+  readonly settingsNs: string
+}
+
+export type ConfigurationSettingsOperation =
+  | { readonly op: 'set'; readonly path: readonly string[]; readonly value: unknown }
+  | { readonly op: 'unset'; readonly path: readonly string[] }
 
 export interface ConfigurationPresetCatalog {
   readonly authorable: boolean
@@ -200,12 +245,19 @@ export interface ConfigurationExtensionRequest {
 export interface ConfigurationPort {
   credentials(refs: readonly string[]): Promise<ConfigurationResult<Readonly<Record<string, ConfigurationCredentialView>>>>
   defaultPreset(preset: string): Promise<ConfigurationResult<void>>
+  discoverProviderModels(request: ConfigurationDiscoverRequest): Promise<ConfigurationResult<readonly ConfigurationDiscoveredModel[]>>
   extensions(): Promise<ConfigurationResult<readonly ConfigurationExtensionRow[]>>
   models(sessionId: SessionId): Promise<ConfigurationResult<ConfigurationModels>>
+  mutateSettings(
+    namespace: string,
+    operations: readonly ConfigurationSettingsOperation[],
+    revision: number,
+  ): Promise<ConfigurationResult<void>>
   openPreset(preset: string): Promise<ConfigurationResult<{ readonly opened: boolean; readonly path?: string | undefined }>>
   openSettings(): Promise<ConfigurationResult<void>>
   plugins(): Promise<ConfigurationResult<readonly ConfigurationPluginEntry[]>>
   presets(): Promise<ConfigurationResult<ConfigurationPresetCatalog>>
+  providerCatalog(): Promise<ConfigurationResult<readonly ConfigurationProviderEntry[]>>
   readPreset(preset: string): Promise<ConfigurationResult<string>>
   removeExtension(agentId: SessionId, pluginId: string): Promise<ConfigurationResult<void>>
   removePreset(preset: string): Promise<ConfigurationResult<void>>
