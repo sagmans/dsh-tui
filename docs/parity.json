@@ -20,7 +20,7 @@
       "automatedProof": ["test/profile-composition.test.ts", "test/startup.test.ts"],
       "dogfoodProof": "pending: Task 17 real profile startup and critical-flow run",
       "status": "partial",
-      "notes": "Shared host rows exist, but agent-preset composition and full capability proof remain incomplete."
+      "notes": "Shared host rows and preset-owned agent composition exist; full capability proof remains incomplete."
     },
     {
       "id": "runtime.browser-surface",
@@ -404,13 +404,13 @@
       "webPackages": ["@deepseek-ai/dsh-agent-presets", "@deepseek-ai/dsh-client-ui-agent-preset"],
       "evidence": ["deepseek-harness/packages/bundle/web-app/cordis.patch.yml", "deepseek-harness/packages/client/ui-agent-preset/README.md"],
       "classification": "parity",
-      "owner": "planned: cordis.patch.yml; src/features/settings; src/views/conversation/composer.ts",
+      "owner": "cordis.patch.yml; src/features/settings; src/views/conversation/composer.ts",
       "keyboard": "Blank-session preset seat or Settings; choose/default/copy/open preset",
       "mouse": "Click preset seat, preset row, and exact management action",
-      "automatedProof": ["planned:test/profile-composition.test.ts", "planned:test/features/agent-presets.test.ts", "planned:test/features/preset-permission-native.test.ts"],
+      "automatedProof": ["test/profile-composition.test.ts", "planned:test/features/agent-presets.test.ts", "planned:test/features/preset-permission-native.test.ts"],
       "dogfoodProof": "pending: Task 17 create sessions under multiple presets",
-      "status": "missing",
-      "notes": "TUI invokes agent preset APIs without composing the required host service."
+      "status": "partial",
+      "notes": "Preset-owned model-facing composition now matches Web; default, staging, and management UI remain incomplete."
     },
     {
       "id": "plans.session",

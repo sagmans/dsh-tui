@@ -6,12 +6,39 @@ import type { PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 
 const PROFILE_PATCH_URL = new URL('../cordis.patch.yml', import.meta.url)
 const TEST_LABEL = 'dsh-tui profile test'
+const DEFAULT_AGENT_PRESET_CONFIG = { default: 'standard' }
+const AGENT_PLANE_ROWS = new Map<string, string>([
+  ['tool-bash', '@deepseek-ai/dsh-tool-bash'],
+  ['tool-pwsh', '@deepseek-ai/dsh-tool-pwsh'],
+  ['tool-jobs', '@deepseek-ai/dsh-tool-jobs'],
+  ['tool-fs', '@deepseek-ai/dsh-tool-fs'],
+  ['tool-fs-search', '@deepseek-ai/dsh-tool-fs-search'],
+  ['tool-str-replace-editor', '@deepseek-ai/dsh-tool-str-replace-editor'],
+  ['skill-filesystem', '@deepseek-ai/dsh-skill-filesystem'],
+  ['tool-skill', '@deepseek-ai/dsh-tool-skill'],
+  ['tool-goal', '@deepseek-ai/dsh-tool-goal'],
+  ['plan-mode', '@deepseek-ai/dsh-plan-mode'],
+  ['compaction-basic', '@deepseek-ai/dsh-compaction-basic'],
+  ['command-compact', '@deepseek-ai/dsh-command-compact'],
+  ['tool-result-pruner', '@deepseek-ai/dsh-compaction-tool-result-pruner'],
+  ['tool-subagent-control', '@deepseek-ai/dsh-tool-subagent-control'],
+  ['tool-subagent-list-agents', '@deepseek-ai/dsh-tool-subagent-control/list-agents'],
+  ['tool-subagent', '@deepseek-ai/dsh-tool-subagent'],
+  ['tool-subagent-fork', '@deepseek-ai/dsh-tool-subagent'],
+  ['workflow-worker-thread', '@deepseek-ai/dsh-workflow-worker-thread'],
+  ['tool-workflow', '@deepseek-ai/dsh-tool-workflow'],
+  ['tool-ralph', '@deepseek-ai/dsh-tool-ralph'],
+  ['agent-instructions', '@deepseek-ai/dsh-agent-instructions'],
+  ['tool-todo', '@deepseek-ai/dsh-tool-todo'],
+  ['tool-web', '@deepseek-ai/dsh-tool-web'],
+])
 const BASE_FIXTURE: PatchOptions[] = [{
   insert: [
     { id: 'system-prompt', name: '@deepseek-ai/dsh-system-prompt' },
     { id: 'hmr', name: '@deepseek-ai/cordis-plugin-hmr' },
     { id: 'session-query-sqlite', name: '@deepseek-ai/dsh-session-query' },
     { id: 'tools', name: '@deepseek-ai/dsh-tools' },
+    ...[...AGENT_PLANE_ROWS].map(([id, name]) => ({ id, name })),
   ],
 }]
 const EXPECTED_OVERRIDES = new Map<string, Readonly<Record<string, unknown>>>([
@@ -33,6 +60,7 @@ const EXPECTED_HOST_ROWS = new Map<string, string>([
   ['plugin-inventory', '@deepseek-ai/dsh-host-plugin-inventory'],
   ['api-gateway', '@deepseek-ai/dsh-host-apiproxy'],
   ['cordis-host-runner', '@deepseek-ai/dsh-cordis-host-runner'],
+  ['agent-presets', '@deepseek-ai/dsh-agent-presets'],
   ['tui-startup', '@sagmans/dsh-tui/startup'],
   ['tui-client', '@sagmans/dsh-tui/service/client'],
   ['tui-kernel', '@sagmans/dsh-tui'],
@@ -89,6 +117,15 @@ test('mounts host parity and separately replaceable TUI rows', () => {
   for (const [id, name] of EXPECTED_HOST_ROWS) {
     assert.equal(entries.find(entry => entry.id === id)?.name, name)
   }
+})
+
+test('delegates the model-facing agent plane to presets', () => {
+  const entries = profileEntries()
+
+  for (const id of AGENT_PLANE_ROWS.keys()) {
+    assert.equal(entries.find(entry => entry.id === id)?.disabled, true, id)
+  }
+  assert.deepEqual(entries.find(entry => entry.id === 'agent-presets')?.config, DEFAULT_AGENT_PRESET_CONFIG)
 })
 
 test('excludes browser transport and React UI rows', () => {
