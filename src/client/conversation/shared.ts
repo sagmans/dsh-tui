@@ -10,6 +10,7 @@ import type {
   ConversationLine,
   ConversationLineKind,
   TuiConversationViewSnapshot,
+  WorkflowPresentation,
 } from '../../features/conversation/contracts.js'
 import type { ToolPresentation } from '../../features/tools/contracts.js'
 import { sanitizeConversationText } from '../../features/conversation/projection.js'
@@ -26,6 +27,7 @@ const MAX_USAGE_FIELDS = 4
 const EMPTY_VIEW: TuiConversationViewSnapshot = Object.freeze({
   lines: Object.freeze([]),
   tools: Object.freeze([]),
+  workflows: Object.freeze([]),
 })
 
 interface TuiConversationNodeData {
@@ -35,6 +37,7 @@ interface TuiConversationNodeData {
   readonly logicalKey: string
   readonly priority: number
   readonly tool?: ToolPresentation
+  readonly workflow?: WorkflowPresentation
 }
 
 export interface TuiConversationViewNode extends ConversationViewNode {
@@ -118,6 +121,7 @@ export function viewNode(
   text: string,
   latestGroup?: string,
   tool?: ToolPresentation,
+  workflow?: WorkflowPresentation,
 ): TuiConversationViewNode {
   return {
     key: context.key,
@@ -131,6 +135,7 @@ export function viewNode(
       priority,
       ...latestGroup === undefined ? {} : { latestGroup },
       ...tool === undefined ? {} : { tool },
+      ...workflow === undefined ? {} : { workflow },
     },
   }
 }
@@ -179,7 +184,12 @@ class TuiConversationSnapshotBuilder implements ConversationViewBuilder<TuiConve
       .toSorted((left, right) => left.data.anchorSeq - right.data.anchorSeq || left.key.localeCompare(right.key))
     const lines = ordered.map(node => node.data.line)
     const tools = ordered.flatMap(node => node.data.tool === undefined ? [] : [node.data.tool])
-    return Object.freeze({ lines: Object.freeze(lines), tools: Object.freeze(tools) })
+    const workflows = ordered.flatMap(node => node.data.workflow === undefined ? [] : [node.data.workflow])
+    return Object.freeze({
+      lines: Object.freeze(lines),
+      tools: Object.freeze(tools),
+      workflows: Object.freeze(workflows),
+    })
   }
 }
 

@@ -17,9 +17,26 @@ export interface ConversationLine {
   readonly text: string
 }
 
+export type WorkflowRunStatus = 'cancelled' | 'completed' | 'failed' | 'interrupted' | 'running'
+
+export interface WorkflowMemberPresentation {
+  readonly childId: SessionId
+  readonly label: string
+  readonly phase: string | undefined
+  readonly status: WorkflowRunStatus
+}
+
+export interface WorkflowPresentation {
+  readonly id: string
+  readonly members: readonly WorkflowMemberPresentation[]
+  readonly name: string
+  readonly status: WorkflowRunStatus
+}
+
 export interface TuiConversationViewSnapshot {
   readonly lines: readonly ConversationLine[]
   readonly tools: readonly ToolPresentation[]
+  readonly workflows: readonly WorkflowPresentation[]
 }
 
 declare module '@deepseek-ai/dsh-client-runtime/client' {

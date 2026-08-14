@@ -88,7 +88,7 @@ test.skipIf(!NATIVE_RENDERER_AVAILABLE)('navigates nested tool inspector with mo
     ...projectToolPresentation({ args: '{}', callId: 'root', isError: false, name: 'run_code' }),
     children: [child],
   }
-  const views: ConversationViewSnapshotStore = { get: () => ({ lines: [], tools: [root] }) }
+  const views: ConversationViewSnapshotStore = { get: () => ({ lines: [], tools: [root], workflows: [] }) }
   const binding = source(conversation({ views }))
   const list = source({ current: SESSION_ID, byId: { [SESSION_ID]: { displayTitle: 'Native tools' } } })
   const controller = createToolsController({ sessions: { list, binding: () => binding } })

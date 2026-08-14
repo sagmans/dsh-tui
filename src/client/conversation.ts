@@ -25,6 +25,7 @@ import {
   toolDefinition,
   toolFallbackDefinition,
 } from './conversation/tools.js'
+import { workflowDefinition } from './conversation/workflows.js'
 
 export { tuiConversationViewDefinition } from './conversation/shared.js'
 
@@ -36,6 +37,7 @@ export const TUI_CONVERSATION_DEFINITIONS: readonly ConversationNodeDefinition[]
   toolFallbackDefinition,
   commandDefinition,
   commandFallbackDefinition,
+  workflowDefinition,
   compactionDefinition,
   retryDefinition,
   turnEndDefinition,

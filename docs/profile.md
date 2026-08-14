@@ -83,3 +83,18 @@ skip, paging, and whole-batch submission. Strict binary `plan-review` requests
 use approve, refuse, and discuss actions; malformed requests expose only a
 cancel path. Responses stay visible and disabled until the host broadcasts
 resolution.
+
+## Operations
+
+Open the operations overlay with `<leader>o`. `1`–`7` select Goal, Plan,
+Workflows, Jobs, Subagents, Trace, and Feedback. `h`/`l` or arrows switch
+sections; `j`/`k` or arrows move rows; `Enter` runs the row's primary action.
+Mouse tabs, rows, and action labels provide equivalent navigation.
+
+Goal mutations use projected compare-and-set revisions. Clear actions require a
+second explicit activation. Plan mode exits through the existing `/plan off`
+command. Workflow and subagent rows open only destinations authorized by the
+shared runtime. Jobs remain read-only, matching current Harness behavior. Trace
+shows the loaded event/request facts and can page older history. Feedback uses
+Host-owned compare-and-set versions; conflicts reconcile from authoritative
+Host values. Paths, payloads, and output remain sanitized inert text.

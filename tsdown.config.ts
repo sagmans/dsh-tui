@@ -10,6 +10,7 @@ export default defineConfig({
     'src/features/conversation/index.ts',
     'src/features/tools/index.ts',
     'src/features/interactions/index.ts',
+    'src/features/operations/index.ts',
     'src/contracts/index.ts',
     'src/testing/index.ts',
   ],

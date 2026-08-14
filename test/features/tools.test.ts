@@ -44,7 +44,7 @@ function source<T>(initial: T): MutableSource<T> {
 
 function snapshot(tools: readonly ToolPresentation[]): ConversationSnapshot {
   const views: ConversationViewSnapshotStore = {
-    get: target => target === 'tui' ? { lines: [], tools } : undefined,
+    get: target => target === 'tui' ? { lines: [], tools, workflows: [] } : undefined,
   }
   return {
     sessionId: SESSION_ID,
