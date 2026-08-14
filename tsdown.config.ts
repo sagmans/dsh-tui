@@ -7,6 +7,7 @@ export default defineConfig({
     'src/services/client.ts',
     'src/features/shell/index.ts',
     'src/features/sessions/index.ts',
+    'src/features/conversation/index.ts',
     'src/contracts/index.ts',
     'src/testing/index.ts',
   ],

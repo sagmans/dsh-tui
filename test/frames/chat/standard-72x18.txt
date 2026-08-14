@@ -1,0 +1,18 @@
+Terminal conversation                                                   
+YOU  Build terminal conversation                                        
+AI  Working                                                             
+[streaming]                                                             
+YOU  queued: Review result                                              
+                                                                        
+                                                                        
+                                                                        
+                                                                        
+                                                                        
+                                                                        
+                                                                        
+1 queued · Ctrl+Enter steers                                            
+┌──────────────────────────────────────────────────────────────────────┐
+│Message, /command, or /skill                                          │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘
+ SEND  STEER  STOP  OLDER Meta+Enter queue · Ctrl+Enter steer · Enter ne

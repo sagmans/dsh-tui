@@ -75,6 +75,11 @@ test('mounts shared Harness runtime services inside an isolated client context',
     assert.notEqual(client.sessions, undefined)
     assert.notEqual(client.workspaces, undefined)
     assert.equal(host.get('tuiClient'), client)
+    assert.equal(client.context.conversationViews.entries().some(entry => entry.target === 'tui'), true)
+    assert.equal(
+      client.context.conversationEvents.entries().some(entry => entry.kind === 'tui-assistant-step'),
+      true,
+    )
   } finally {
     await host.fiber.dispose()
   }

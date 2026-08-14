@@ -1,0 +1,148 @@
+import type { Context } from '@deepseek-ai/cordis'
+import type { BaseRenderable, CliRenderer } from '@opentui/core'
+import type { SessionId } from '@deepseek-ai/dsh-api-remotes/client'
+import type { TuiCommandLayer } from '../../contracts/commands.js'
+import type { TuiTheme } from '../../contracts/theme.js'
+import { createConversationView } from '../../views/conversation/root.js'
+import {
+  createConversationController,
+  type ConversationController,
+  type ConversationControllerOptions,
+  type ConversationSessionBinding,
+} from './model.js'
+
+const CONTRIBUTION_ID = 'dsh-tui-conversation'
+const CONTRIBUTION_ORDER = 100
+const COMMAND_LAYER_ID = 'dsh-tui-conversation'
+const COMMAND_PRIORITY = 350
+const BINDING_ERROR = 'selected session is not locally addressable'
+const COMMAND_COMPLETION_ERROR = 'command completion failed'
+const SKILL_COMPLETION_ERROR = 'skill completion failed'
+
+export const name = 'tui-conversation'
+export const inject: readonly string[] = ['tuiKernel', 'tuiClient']
+
+export interface ConversationSeams {
+  readonly createController: (options: ConversationControllerOptions) => ConversationController
+  readonly createView: (
+    renderer: CliRenderer,
+    theme: TuiTheme,
+    controller: ConversationController,
+  ) => BaseRenderable
+}
+
+const DEFAULT_SEAMS: ConversationSeams = {
+  createController: createConversationController,
+  createView: createConversationView,
+}
+
+function requireSession(ctx: Context, id: SessionId) {
+  const session = ctx.tuiClient.sessions.binding(id)?.session
+  if (session === undefined) throw new Error(`${BINDING_ERROR}: ${id}`)
+  return session
+}
+
+function sessionBinding(ctx: Context, id: SessionId): ConversationSessionBinding | undefined {
+  const session = ctx.tuiClient.sessions.binding(id)?.session
+  let binding: ConversationSessionBinding | undefined
+  if (session !== undefined) {
+    binding = {
+      getSnapshot: () => session.getSnapshot(),
+      subscribe: listener => session.subscribe(listener),
+      cancel: async () => {
+        const result = await requireSession(ctx, id).cancel()
+        if (!result.ok) throw new Error(`cancel failed: ${result.error.code}: ${result.error.message}`)
+      },
+      command: async (line) => {
+        const result = await requireSession(ctx, id).command(line)
+        if (!result.ok) throw new Error(`command failed: ${result.error.code}: ${result.error.message}`)
+        return result.value.matched
+      },
+      loadOlder: () => requireSession(ctx, id).loadOlder(),
+      prompt: async (text, mode) => {
+        const result = await requireSession(ctx, id).prompt([{ type: 'text', text }], mode)
+        if (!result.ok) throw new Error(`send failed: ${result.error.code}: ${result.error.message}`)
+      },
+    }
+  }
+  return binding
+}
+
+function controllerOptions(ctx: Context): ConversationControllerOptions {
+  return {
+    completion: {
+      complete: async (sessionId, query) => {
+        const [commands, skills] = await Promise.all([
+          ctx.tuiClient.remote.commands.list(sessionId),
+          ctx.tuiClient.api.skills.list({ sessionId }),
+        ])
+        if (!commands.ok) {
+          throw new Error(`${COMMAND_COMPLETION_ERROR}: ${commands.error.code}: ${commands.error.message}`)
+        }
+        if (!skills.result.ok) {
+          throw new Error(`${SKILL_COMPLETION_ERROR}: ${skills.result.error.code}: ${skills.result.error.message}`)
+        }
+        return [...new Set([
+          ...commands.value.map(command => command.name),
+          ...skills.result.value.skills.map(skill => skill.name),
+        ])].filter(candidateName => candidateName.startsWith(query)).toSorted((left, right) => left.localeCompare(right))
+      },
+    },
+    sessions: {
+      list: ctx.tuiClient.sessions.list,
+      binding: id => sessionBinding(ctx, id),
+    },
+  }
+}
+
+function commandLayer(controller: ConversationController, active: () => boolean): TuiCommandLayer {
+  return {
+    id: COMMAND_LAYER_ID,
+    priority: COMMAND_PRIORITY,
+    active,
+    commands: [
+      { name: 'conversation.cancel', description: 'Stop active turn', run: () => controller.cancel() },
+      { name: 'conversation.older', description: 'Load older history', run: () => controller.loadOlder() },
+      { name: 'conversation.scroll-up', description: 'Scroll transcript up', run: () => { controller.scroll(-1) } },
+      { name: 'conversation.scroll-down', description: 'Scroll transcript down', run: () => { controller.scroll(1) } },
+    ],
+    bindings: [
+      { key: 'ctrl+x', command: 'conversation.cancel' },
+      { key: 'pageup', command: 'conversation.older' },
+      { key: 'ctrl+u', command: 'conversation.scroll-up' },
+      { key: 'ctrl+d', command: 'conversation.scroll-down' },
+    ],
+  }
+}
+
+export function mountConversation(ctx: Context, seams: ConversationSeams = DEFAULT_SEAMS): void {
+  const resources = ctx.tuiKernel.resources
+  const controller = seams.createController(controllerOptions(ctx))
+  const disposers: Array<() => void> = []
+  try {
+    disposers.push(
+      resources.slots.register(ctx, {
+        id: CONTRIBUTION_ID,
+        order: CONTRIBUTION_ORDER,
+        slots: {
+          'route.chat': () => seams.createView(resources.renderer, resources.theme, controller),
+        },
+      }),
+      resources.commands.register(ctx, commandLayer(
+        controller,
+        () => resources.navigation.getSnapshot().route === 'chat'
+          && (resources.renderer.currentFocusedEditor === null
+            || resources.renderer.currentFocusedEditor === undefined),
+      )),
+    )
+    ctx.effect(() => () => { controller.dispose() }, 'dsh-tui: conversation controller')
+  } catch (error) {
+    controller.dispose()
+    for (const dispose of disposers.toReversed()) dispose()
+    throw error
+  }
+}
+
+export function apply(ctx: Context): void {
+  mountConversation(ctx)
+}

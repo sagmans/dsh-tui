@@ -7,6 +7,7 @@ import type { ApiProxy } from '@deepseek-ai/dsh-host-apiproxy/api'
 import { loadSharedClientPlugins } from './bundles.js'
 import { createInProcessConnection, type TuiConnectionHandle } from './connection.js'
 import { createInProcessRpc } from './rpc.js'
+import { registerTuiConversationRuntime } from './conversation.js'
 
 const TUI_CLIENT_SERVICE = 'tuiClient'
 const PRIVATE_CONNECTION_SERVICE = 'connection'
@@ -71,6 +72,7 @@ async function mountSharedRuntime(client: Context, host: Context, apiProxy: ApiP
   await client.plugin({ name: CLIENT_GATEWAY_PLUGIN_NAME, ...plugins.gateway })
   await client.plugin({ name: CLIENT_REMOTES_PLUGIN_NAME, ...plugins.remotes })
   await client.plugin({ name: CLIENT_RUNTIME_PLUGIN_NAME, ...plugins.runtime })
+  registerTuiConversationRuntime(client)
   const remote = client.get('remote')
   const sessions = client.get('sessions')
   const workspaces = client.get('workspaces')

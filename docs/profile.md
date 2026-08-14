@@ -23,8 +23,9 @@ Excluded rows: Web server/runtime, browser transport, browser module loading,
 client HMR, client runner, and React UI plugins. Private in-process client
 runtime wiring lands separately.
 
-Startup, kernel, shell, and sessions/workspaces use distinct Loader rows. Later
-profile patches may disable or replace each row independently.
+Startup, kernel, shell, sessions/workspaces, and conversation use distinct
+Loader rows. Later profile patches may disable or replace each row
+independently.
 
 ## Sessions and workspaces
 
@@ -41,3 +42,25 @@ Footer actions provide mouse equivalents. Session titles, search excerpts, and
 runtime errors have terminal control sequences removed before rendering.
 Workspace removal unregisters only the workspace; it does not delete its path or
 sessions.
+
+## Conversation and composer
+
+The Chat route reads the shared Harness conversation registry. It renders
+streaming text/reasoning, tool and command lifecycles, compaction, retries,
+todos, request context, usage, queued prompts, and shared runtime errors.
+History rendering is bounded; `Ctrl+U`/`Ctrl+D` move the window and `PageUp`
+loads older events.
+
+- `Enter`: newline
+- `Meta+Enter`: queue prompt or execute a matched command
+- `Ctrl+Enter`: steer the running turn
+- `Ctrl+X`: stop the running turn
+- `Tab`: complete leading slash commands and skills
+
+`SEND`, `STEER`, `STOP`, and `OLDER` provide mouse equivalents. Failed sends
+restore the submitted draft. Terminal-control bytes are removed while line
+breaks remain intact.
+
+MVP attachments are text-only. Browser-owned temporary image uploads are not
+executed in this profile; a terminal-safe local-path attachment flow remains a
+later parity slice.

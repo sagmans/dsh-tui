@@ -85,3 +85,7 @@
     - id: tui-sessions
       name: '@sagmans/dsh-tui/feature/sessions'
       inject: [tuiKernel, tuiClient]
+
+    - id: tui-conversation
+      name: '@sagmans/dsh-tui/feature/conversation'
+      inject: [tuiKernel, tuiClient]

@@ -16,6 +16,7 @@ const CLIENT_PLUGIN_NAME = '@sagmans/dsh-tui/service/client'
 const KERNEL_PLUGIN_NAME = '@sagmans/dsh-tui'
 const SHELL_PLUGIN_NAME = '@sagmans/dsh-tui/feature/shell'
 const SESSIONS_PLUGIN_NAME = '@sagmans/dsh-tui/feature/sessions'
+const CONVERSATION_PLUGIN_NAME = '@sagmans/dsh-tui/feature/conversation'
 
 interface StartupResult {
   readonly exits: readonly number[]
@@ -75,12 +76,18 @@ function installPluginModules(ctx: Context): void {
     inject: [KERNEL_SERVICE, CLIENT_SERVICE],
     apply(): void {},
   }
+  const conversationPlugin = {
+    name: 'tui-conversation-fixture',
+    inject: [KERNEL_SERVICE, CLIENT_SERVICE],
+    apply(): void {},
+  }
   const modules = new Map<string, unknown>([
     [STARTUP_PLUGIN_NAME, startupPlugin],
     [CLIENT_PLUGIN_NAME, clientPlugin],
     [KERNEL_PLUGIN_NAME, kernelPlugin],
     [SHELL_PLUGIN_NAME, shellPlugin],
     [SESSIONS_PLUGIN_NAME, sessionsPlugin],
+    [CONVERSATION_PLUGIN_NAME, conversationPlugin],
   ])
   Reflect.set(ctx.loader, 'internal', {
     version: 'v2',
@@ -127,6 +134,7 @@ test('settles keyless startup, client, kernel, and shell Loader rows without bro
 
     await ctx.loader.create({ name: SHELL_PLUGIN_NAME, inject: [KERNEL_SERVICE] })
     await ctx.loader.create({ name: SESSIONS_PLUGIN_NAME, inject: [KERNEL_SERVICE, CLIENT_SERVICE] })
+    await ctx.loader.create({ name: CONVERSATION_PLUGIN_NAME, inject: [KERNEL_SERVICE, CLIENT_SERVICE] })
     await ctx.loader.create({ name: KERNEL_PLUGIN_NAME, inject: [STARTUP_SERVICE, CLIENT_SERVICE] })
     await ctx.loader.create({
       name: CLIENT_PLUGIN_NAME,
@@ -148,7 +156,14 @@ test('settles keyless startup, client, kernel, and shell Loader rows without bro
     assert.equal(ctx.get('clientRuntime'), undefined)
     assert.deepEqual(
       [...ctx.loader.entries()].map(entry => entry.options.name).toSorted(),
-      [CLIENT_PLUGIN_NAME, KERNEL_PLUGIN_NAME, SESSIONS_PLUGIN_NAME, SHELL_PLUGIN_NAME, STARTUP_PLUGIN_NAME].toSorted(),
+      [
+        CLIENT_PLUGIN_NAME,
+        CONVERSATION_PLUGIN_NAME,
+        KERNEL_PLUGIN_NAME,
+        SESSIONS_PLUGIN_NAME,
+        SHELL_PLUGIN_NAME,
+        STARTUP_PLUGIN_NAME,
+      ].toSorted(),
     )
   } finally {
     await ctx.fiber.dispose()

@@ -39,6 +39,7 @@ const EXPECTED_HOST_ROWS = new Map<string, string>([
   ['tui-kernel', '@sagmans/dsh-tui'],
   ['tui-shell', '@sagmans/dsh-tui/feature/shell'],
   ['tui-sessions', '@sagmans/dsh-tui/feature/sessions'],
+  ['tui-conversation', '@sagmans/dsh-tui/feature/conversation'],
 ])
 const FORBIDDEN_IDS = [
   'web-startup',

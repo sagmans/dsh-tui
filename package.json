@@ -39,6 +39,10 @@
       "types": "./lib/features/sessions/index.d.ts",
       "default": "./lib/features/sessions/index.js"
     },
+    "./feature/conversation": {
+      "types": "./lib/features/conversation/index.d.ts",
+      "default": "./lib/features/conversation/index.js"
+    },
     "./contracts": {
       "types": "./lib/contracts/index.d.ts",
       "default": "./lib/contracts/index.js"
