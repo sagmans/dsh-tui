@@ -14,6 +14,7 @@ import type {
 } from '../../features/conversation/model.js'
 import { imageFallback } from '../../features/attachments/presentation.js'
 import { createFocusableAction } from '../action.js'
+import { createInputTriggerView } from '../input-trigger/root.js'
 import { createComposer, createConversationActions, createConversationInput } from './composer.js'
 
 const HEADER_HEIGHT = 1
@@ -215,6 +216,13 @@ function createFrame(
   }))
   frame.add(composer)
   frame.add(createConversationActions(renderer, theme, controller, snapshot))
+  if (snapshot.trigger !== undefined) {
+    const trigger = createInputTriggerView(renderer, theme, snapshot.trigger, {
+      dismiss: () => { controller.dismissTrigger() },
+      pick: (source, index) => { controller.pickTrigger(source, index) },
+    })
+    if (trigger !== undefined) frame.add(trigger)
+  }
   const input = createConversationInput(renderer, theme, controller, snapshot)
   if (input !== undefined) frame.add(input)
   return frame

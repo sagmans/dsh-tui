@@ -282,15 +282,15 @@
       "title": "Slash and at-sign trigger arbitration, menu, popup, and references",
       "webRows": ["ui-input-trigger"],
       "webPackages": ["@deepseek-ai/dsh-client-ui-input-trigger"],
-      "evidence": ["deepseek-harness/packages/client/ui-input-trigger/README.md", "src/client/conversation/commands.ts"],
+      "evidence": ["deepseek-harness/packages/client/ui-input-trigger/README.md", "src/features/input-trigger/model.ts", "src/client/conversation/commands.ts"],
       "classification": "parity",
-      "owner": "planned: src/features/input-trigger; src/views/input-trigger/root.ts",
+      "owner": "src/features/input-trigger; src/views/input-trigger/root.ts; src/features/conversation",
       "keyboard": "Type / or @; fuzzy-filter, traverse, select, dismiss, or use launcher",
       "mouse": "Click launcher, candidate, menu boundary, and dismissal target",
-      "automatedProof": ["planned:test/features/input-trigger.test.ts", "planned:test/features/input-trigger-native.test.ts"],
+      "automatedProof": ["test/features/input-trigger.test.ts", "test/features/input-trigger-native.test.ts", "test/features/conversation.test.ts"],
       "dogfoodProof": "pending: Task 17 exercise command, skill, and subagent references",
-      "status": "missing",
-      "notes": "Current prefix-only slash completion lacks shared pipeline and mouse behavior."
+      "status": "partial",
+      "notes": "Shared async trigger arbitration, grouped candidates, stale-result rejection, keyboard navigation, mouse selection, launcher access, and serialization failure handling are proven; real-profile dogfood remains."
     },
     {
       "id": "commands.slash",
@@ -299,13 +299,13 @@
       "webPackages": ["@deepseek-ai/dsh-client-ui-commands"],
       "evidence": ["deepseek-harness/packages/client/ui-commands/README.md", "src/client/conversation/commands.ts"],
       "classification": "parity",
-      "owner": "src/client/conversation/commands.ts; planned input-trigger feature",
+      "owner": "src/client/conversation/commands.ts; src/features/input-trigger",
       "keyboard": "Type slash command or choose it from candidate menu",
       "mouse": "Click launcher and command candidate; click submit",
-      "automatedProof": ["test/client/conversation.test.ts", "planned:test/features/input-trigger.test.ts"],
+      "automatedProof": ["test/client/conversation.test.ts", "test/features/input-trigger.test.ts", "test/features/input-trigger-native.test.ts"],
       "dogfoodProof": "pending: Task 17 execute commands with and without arguments",
       "status": "partial",
-      "notes": "Host commands execute; grouped/fuzzy picker and mouse selection are absent."
+      "notes": "Host exact-match precedence, grouped fuzzy discovery, detached bare-command execution, and argument insertion are proven; real-profile dogfood remains."
     },
     {
       "id": "skills.references",
@@ -314,13 +314,13 @@
       "webPackages": ["@deepseek-ai/dsh-client-ui-skill"],
       "evidence": ["deepseek-harness/packages/client/ui-skill/README.md", "src/client/conversation/commands.ts"],
       "classification": "parity",
-      "owner": "src/client/conversation/commands.ts; planned input-trigger feature",
+      "owner": "src/client/conversation/commands.ts; src/features/input-trigger",
       "keyboard": "Type or choose skill trigger and submit arguments",
       "mouse": "Click launcher and skill candidate; click submit",
-      "automatedProof": ["test/client/conversation.test.ts", "planned:test/features/input-trigger.test.ts"],
+      "automatedProof": ["test/client/conversation.test.ts", "test/features/input-trigger.test.ts", "test/features/input-trigger-native.test.ts"],
       "dogfoodProof": "pending: Task 17 load and invoke a safe local skill",
       "status": "partial",
-      "notes": "Skills appear in slash completion; shared grouped/reference semantics remain incomplete."
+      "notes": "Host skill catalogs, grouped prefix discovery, user-only labeling, and plain-text-compatible insertion are proven; real-profile dogfood remains."
     },
     {
       "id": "subagents.lifecycle",
@@ -329,13 +329,13 @@
       "webPackages": ["@deepseek-ai/dsh-client-ui-subagent"],
       "evidence": ["deepseek-harness/packages/client/ui-subagent/README.md", "src/features/operations/projection.ts"],
       "classification": "parity",
-      "owner": "src/features/operations; src/views/conversation; planned input-trigger feature",
+      "owner": "src/features/operations; src/views/conversation; src/features/input-trigger",
       "keyboard": "Traverse recursive tree, open child, inspect activity, or insert @ reference",
       "mouse": "Click tree nodes, activity details, open action, or @ candidate",
-      "automatedProof": ["test/features/operations.test.ts", "planned:test/features/subagents.test.ts", "planned:test/features/subagents-native.test.ts"],
+      "automatedProof": ["test/features/operations.test.ts", "test/features/input-trigger.test.ts", "test/features/input-trigger-native.test.ts", "planned:test/features/subagents.test.ts", "planned:test/features/subagents-native.test.ts"],
       "dogfoodProof": "pending: Task 17 run one-shot and continuable child sessions",
       "status": "partial",
-      "notes": "Direct catalog/open exists; recursive status, usage, and addressed composer modes do not."
+      "notes": "Running direct-child reference discovery and serialization are proven; recursive status, usage, and addressed composer modes remain incomplete."
     },
     {
       "id": "jobs.background",

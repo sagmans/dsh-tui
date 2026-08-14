@@ -24,6 +24,8 @@ const INPUT_LEFT = '7%'
 const INPUT_TOP = '20%'
 const OVERLAY_Z_INDEX = 200
 const ESCAPE_KEY = 'escape'
+const UP_KEY = 'up'
+const DOWN_KEY = 'down'
 const PAGE_UP_KEY = 'pageup'
 const PAGE_DOWN_KEY = 'pagedown'
 const RETURN_KEY = 'return'
@@ -35,7 +37,8 @@ const DELETE_KEY = 'delete'
 const ACCESS_KEY = 'a'
 const MODEL_KEY = 'm'
 const PRESET_KEY = 'p'
-const COMPOSER_HINT = 'M+Enter queue · C+Enter steer · M+M model · M+A access · M+P preset · C+O image · C+E export'
+const TRIGGER_LAUNCH_KEY = '/'
+const COMPOSER_HINT = 'M+Enter queue · C+Enter steer · M+/ menu · M+M model · M+A access · M+P preset'
 const SEND_ACTION = ' SEND '
 const STEER_ACTION = ' STEER '
 const STOP_ACTION = ' STOP '
@@ -43,6 +46,7 @@ const OLDER_ACTION = ' OLDER '
 const ATTACH_ACTION = ' ATTACH '
 const EXPORT_ACTION = ' EXPORT '
 const CLEAR_ACTION = ' CLEAR '
+const TRIGGER_LAUNCH_ACTION = ' + '
 const ACCESS_ACTION_PREFIX = ' ACCESS '
 const MODEL_ACTION_PREFIX = ' MODEL '
 const PRESET_ACTION_PREFIX = ' PRESET '
@@ -53,6 +57,7 @@ const OLDER_ACTION_ID = 'conversation-older'
 const ATTACH_ACTION_ID = 'conversation-attach'
 const EXPORT_ACTION_ID = 'conversation-export'
 const CLEAR_ACTION_ID = 'conversation-clear-attachments'
+const TRIGGER_LAUNCH_ACTION_ID = 'conversation-trigger-launcher'
 const ACCESS_ACTION_ID = 'conversation-access'
 const MODEL_ACTION_ID = 'conversation-model'
 const PRESET_ACTION_ID = 'conversation-preset'
@@ -79,12 +84,27 @@ function handleMediaKey(key: KeyEvent, controller: ConversationController): bool
   return true
 }
 
+function handleTriggerKey(key: KeyEvent, controller: ConversationController): boolean {
+  const trigger = controller.getSnapshot().trigger
+  if (trigger?.open !== true) return false
+  if (key.name === ESCAPE_KEY) controller.dismissTrigger()
+  else if (key.name === UP_KEY) controller.moveTrigger(-1)
+  else if (key.name === DOWN_KEY) controller.moveTrigger(1)
+  else if (key.name === RETURN_KEY && !key.ctrl && !key.meta && !key.shift && trigger.highlight !== undefined) {
+    controller.pickTriggerHighlight()
+  } else return false
+  key.preventDefault()
+  key.stopPropagation()
+  return true
+}
+
 function handleKey(
   key: KeyEvent,
   editor: TextareaRenderable,
   controller: ConversationController,
   focusLastAttachment: () => boolean,
 ): void {
+  if (handleTriggerKey(key, controller)) return
   if (key.ctrl && key.name === CANCEL_KEY) {
     key.preventDefault()
     key.stopPropagation()
@@ -95,6 +115,12 @@ function handleKey(
     key.preventDefault()
     key.stopPropagation()
     submit(editor, controller, 'steer')
+    return
+  }
+  if (key.meta && key.name === TRIGGER_LAUNCH_KEY) {
+    key.preventDefault()
+    key.stopPropagation()
+    controller.launchTrigger()
     return
   }
   if (key.meta && (key.name === ACCESS_KEY || key.name === MODEL_KEY || key.name === PRESET_KEY)) {
@@ -155,7 +181,7 @@ function createEditor(
     focusedBackgroundColor: theme.colors.background,
     wrapMode: 'word',
     keyBindings: [{ name: RETURN_KEY, meta: true, action: 'submit' }],
-    onContentChange() { controller.setDraft(editor.plainText) },
+    onContentChange() { controller.setDraft(editor.plainText, editor.cursorOffset) },
     onKeyDown(key) { handleKey(key, editor, controller, focusLastAttachment) },
   })
   editor.onSubmit = () => { submit(editor, controller, 'queue') }
@@ -308,6 +334,14 @@ export function createConversationActions(
   actions.add(createAction(renderer, theme, CLEAR_ACTION_ID, CLEAR_ACTION, snapshot.attachments.length > 0, () => {
     controller.clearAttachments()
   }))
+  actions.add(createAction(
+    renderer,
+    theme,
+    TRIGGER_LAUNCH_ACTION_ID,
+    TRIGGER_LAUNCH_ACTION,
+    snapshot.sessionId !== undefined,
+    () => { controller.launchTrigger() },
+  ))
   if (snapshot.modelAvailable && snapshot.modelLabel !== undefined) {
     const effort = snapshot.modelEffort === undefined ? '' : ` · ${snapshot.modelEffort}`
     actions.add(createAction(

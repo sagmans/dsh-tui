@@ -25,7 +25,7 @@ const SETTINGS_COMMAND_PREFIX = 'settings.section.'
 const MODEL_COMMAND_NAME = 'model'
 
 export const name = 'tui-conversation'
-export const inject: readonly string[] = ['tuiKernel', 'tuiClient', 'apiProxy', 'tuiModelSelection']
+export const inject: readonly string[] = ['tuiKernel', 'tuiClient', 'apiProxy', 'tuiModelSelection', 'tuiInputTrigger']
 
 export interface ConversationSeams {
   readonly createController: (options: ConversationControllerOptions) => ConversationController
@@ -100,6 +100,7 @@ function controllerOptions(ctx: Context): ConversationControllerOptions {
       queueMicrotask(() => { void resources.commands.run(`${SETTINGS_COMMAND_PREFIX}${section}`) })
     },
     models: ctx.tuiModelSelection,
+    triggers: ctx.tuiInputTrigger,
     media: {
       exportSession: (sessionId, path, signal) => exportSessionArchive(
         ctx.apiProxy.downloads,

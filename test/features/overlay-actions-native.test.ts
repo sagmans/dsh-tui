@@ -115,6 +115,7 @@ function conversationController(calls: string[]): ConversationController {
     cancelInput: () => { calls.push('cancel'); input = undefined; publish() },
     clearAttachments: () => { attachments = []; publish() },
     complete: () => Promise.resolve(),
+    dismissTrigger: () => {},
     dispose: () => {},
     getSnapshot: () => ({
       accessPreset: undefined,
@@ -137,10 +138,15 @@ function conversationController(calls: string[]): ConversationController {
       status: 'Ready',
       suggestions: [],
       title: 'Overlay controls',
+      trigger: undefined,
     }),
+    launchTrigger: () => {},
     loadOlder: () => Promise.resolve(),
+    moveTrigger: () => {},
     openModelSelection: () => {},
     openPreferences: () => {},
+    pickTrigger: () => {},
+    pickTriggerHighlight: () => {},
     removeAttachment: index => {
       calls.push(`remove:${index}`)
       attachments = attachments.filter((_attachment, current) => current !== index)

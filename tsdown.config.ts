@@ -9,6 +9,7 @@ export default defineConfig({
     'src/features/sessions/index.ts',
     'src/features/conversation/index.ts',
     'src/features/model-selection/index.ts',
+    'src/features/input-trigger/index.ts',
     'src/features/tools/index.ts',
     'src/features/interactions/index.ts',
     'src/features/operations/index.ts',

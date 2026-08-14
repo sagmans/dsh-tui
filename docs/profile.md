@@ -56,6 +56,10 @@ loads older events.
 - `Meta+Enter`: queue prompt or execute a matched command
 - `Ctrl+Enter`: steer the running turn
 - `Ctrl+X`: stop the running turn
+- `/`: open grouped fuzzy command and prefix-matched skill candidates
+- `@`: open running direct-child subagent references
+- `Meta+/`: open the command, skill, and subagent launcher without typing a trigger
+- `Up`/`Down`, `Enter`, `Esc`: traverse, select, or dismiss trigger candidates
 - `Tab`: complete leading slash commands and skills
 - `Meta+M`: open the current session's shared model/reasoning picker
 - `/model`: open direct model selection and apply that model's default effort
@@ -63,8 +67,9 @@ loads older events.
 - `Ctrl+E`: export the current session to a new absolute `.zip` path
 - `Ctrl+Delete`: clear staged images
 
-`SEND`, `STEER`, `STOP`, `OLDER`, `MODEL`, `ATTACH`, `EXPORT`, and `CLEAR`
-provide mouse equivalents. Model and reasoning choices share one Host-backed
+`SEND`, `STEER`, `STOP`, `OLDER`, `MODEL`, `ATTACH`, `EXPORT`, `CLEAR`, and
+`+` provide mouse equivalents. Trigger candidates and the dismissal row are
+also clickable. Model and reasoning choices share one Host-backed
 session directory across the composer and `/model`. A definitely unroutable
 Host selection blocks submission and exposes the Providers handoff; unknown or
 unadvertised catalog state does not block. Failed sends restore the submitted

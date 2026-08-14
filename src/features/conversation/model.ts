@@ -10,6 +10,7 @@ import type {
 } from './contracts.js'
 import { ConversationMediaState } from './media.js'
 import { sanitizeConversationText } from './projection.js'
+import type { InputTriggerMutation, InputTriggerSource } from '../input-trigger/contracts.js'
 import {
   conversationError,
   conversationPhase,
@@ -24,6 +25,7 @@ const EMPTY_TITLE = 'NO SESSION'
 const COMMAND_PREFIX = '/'
 const MODEL_COMMAND = '/model'
 const MODEL_UNROUTABLE_ERROR = 'No provider can route the current model. Open model selection to configure a provider.'
+const TRIGGER_COMMAND_MISS_ERROR = 'Selected command is no longer available.'
 const DEFAULT_SEND_MODE: ConversationSendMode = 'queue'
 const SCROLL_STEP = 12
 const COMPLETION_SUFFIX = ' '
@@ -47,7 +49,9 @@ class ConversationControllerService implements ConversationController {
   private readonly models: ConversationControllerOptions['models']
   private readonly openSettings: ConversationControllerOptions['openSettings']
   private readonly sessions: ConversationControllerOptions['sessions']
+  private readonly triggers: ConversationControllerOptions['triggers']
   private readonly resources: Array<() => void>
+  private readonly carets = new Map<string, number>()
   private readonly drafts = new Map<string, string>()
   private binding: ConversationSessionBinding | undefined
   private bindingDispose: (() => void) | undefined
@@ -66,6 +70,7 @@ class ConversationControllerService implements ConversationController {
     this.models = options.models
     this.openSettings = options.openSettings
     this.sessions = options.sessions
+    this.triggers = options.triggers
     this.mediaState = new ConversationMediaState({
       blocked: () => this.sending,
       currentSession: () => this.sessions.list.getSnapshot().current,
@@ -78,14 +83,19 @@ class ConversationControllerService implements ConversationController {
     if (options.models !== undefined) {
       this.resources.push(options.models.subscribe(() => { this.schedulePublish() }))
     }
+    if (options.triggers !== undefined) {
+      this.resources.push(options.triggers.subscribe(() => { this.schedulePublish() }))
+    }
     this.rebind(false)
   }
 
   beginAttachment(): void {
+    this.triggers?.dismiss()
     this.mediaState.beginAttachment()
   }
 
   beginExport(): void {
+    this.triggers?.dismiss()
     this.mediaState.beginExport()
   }
 
@@ -122,9 +132,14 @@ class ConversationControllerService implements ConversationController {
     this.schedulePublish()
   }
 
+  dismissTrigger(): void {
+    this.triggers?.dismiss()
+  }
+
   dispose(): void {
     this.disposed = true
     this.mediaState.dispose()
+    this.triggers?.dismiss()
     this.bindingDispose?.()
     this.bindingDispose = undefined
     for (const dispose of this.resources.splice(0).toReversed()) dispose()
@@ -163,13 +178,26 @@ class ConversationControllerService implements ConversationController {
       status: this.notice ?? conversationStatus(snapshot),
       suggestions: this.suggestions,
       title,
+      trigger: sessionId === undefined ? undefined : this.triggers?.getSnapshot(),
     })
+  }
+
+  launchTrigger(): void {
+    const sessionId = this.sessions.list.getSnapshot().current
+    if (sessionId === undefined) return
+    const draft = this.currentDraft()
+    const caret = this.carets.get(String(sessionId)) ?? draft.length
+    this.triggers?.launch(sessionId, draft, caret)
   }
 
   async loadOlder(): Promise<void> {
     const binding = this.binding
     if (binding === undefined) return
     await this.runAction(() => binding.loadOlder())
+  }
+
+  moveTrigger(delta: number): void {
+    this.triggers?.move(delta)
   }
 
   openModelSelection(entry: ConversationModelSelectionEntry): void {
@@ -179,6 +207,14 @@ class ConversationControllerService implements ConversationController {
 
   openPreferences(section: ConversationPreferenceSection): void {
     this.openSettings?.(section)
+  }
+
+  pickTrigger(source: InputTriggerSource, index: number): void {
+    this.applyTriggerMutation(this.triggers?.pick(source, index))
+  }
+
+  pickTriggerHighlight(): void {
+    this.applyTriggerMutation(this.triggers?.pickHighlighted())
   }
 
   removeAttachment(index: number): void {
@@ -233,13 +269,19 @@ class ConversationControllerService implements ConversationController {
         if (matched) return
       }
       const content: PromptContentPart[] = []
-      if (normalized !== '') content.push({ type: 'text', text: normalized })
+      const serialized = normalized === '' || this.triggers === undefined
+        ? normalized
+        : await this.triggers.serialize(sessionId, normalized, new AbortController().signal)
+      if (serialized !== '') content.push({ type: 'text', text: serialized })
       content.push(...submittedImages.map(image => image.content))
       await binding.prompt(content, mode)
     })
     this.sending = false
     const sessionKey = String(sessionId)
-    if (!sent && (this.drafts.get(sessionKey) ?? '') === '') this.drafts.set(sessionKey, submittedDraft)
+    if (!sent && (this.drafts.get(sessionKey) ?? '') === '') {
+      this.drafts.set(sessionKey, submittedDraft)
+      this.carets.set(sessionKey, submittedDraft.length)
+    }
     if (sent) {
       this.offset = 0
       this.mediaState.removeSent(sessionId, submittedImages)
@@ -248,13 +290,16 @@ class ConversationControllerService implements ConversationController {
     return sent
   }
 
-  setDraft(text: string): void {
+  setDraft(text: string, caret = text.length): void {
     const current = this.sessions.list.getSnapshot().current
     if (current === undefined) return
-    this.drafts.set(String(current), text)
+    const sessionKey = String(current)
+    this.drafts.set(sessionKey, text)
+    this.carets.set(sessionKey, Math.max(0, Math.min(caret, text.length)))
     this.notice = undefined
     this.suggestions = []
     this.completionRevision++
+    this.triggers?.track(current, text, caret)
   }
 
   setInput(value: string): void {
@@ -270,9 +315,32 @@ class ConversationControllerService implements ConversationController {
     return () => { this.listeners.delete(listener) }
   }
 
+  private applyTriggerMutation(mutation: InputTriggerMutation | undefined): void {
+    if (mutation === undefined) return
+    const draft = this.currentDraft()
+    if (mutation.start < 0 || mutation.end < mutation.start || mutation.end > draft.length) return
+    const inserted = mutation.submit ? '' : mutation.text
+    const next = `${draft.slice(0, mutation.start)}${inserted}${draft.slice(mutation.end)}`
+    this.setDraft(next, mutation.start + inserted.length)
+    this.schedulePublish()
+    if (mutation.submit) this.executeTriggerCommand(mutation.text)
+  }
+
   private currentDraft(): string {
     const current = this.sessions.list.getSnapshot().current
     return current === undefined ? '' : this.drafts.get(String(current)) ?? ''
+  }
+
+  private executeTriggerCommand(command: string): void {
+    if (command === MODEL_COMMAND) {
+      this.openModelSelection('command')
+      return
+    }
+    const binding = this.binding
+    if (binding === undefined) return
+    void this.runAction(async () => {
+      if (!await binding.command(command)) throw new Error(TRIGGER_COMMAND_MISS_ERROR)
+    })
   }
 
   private schedulePublish(): void {
@@ -293,6 +361,7 @@ class ConversationControllerService implements ConversationController {
     }
     this.boundSessionId = current
     this.mediaState.resetTransient()
+    this.triggers?.dismiss()
     this.bindingDispose?.()
     this.binding = current === undefined ? undefined : this.sessions.binding(current)
     this.bindingDispose = this.binding?.subscribe(() => { this.schedulePublish() })

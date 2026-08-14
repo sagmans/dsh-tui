@@ -162,9 +162,13 @@
       name: '@sagmans/dsh-tui/feature/model-selection'
       inject: [tuiKernel, tuiClient]
 
+    - id: tui-input-trigger
+      name: '@sagmans/dsh-tui/feature/input-trigger'
+      inject: [tuiClient]
+
     - id: tui-conversation
       name: '@sagmans/dsh-tui/feature/conversation'
-      inject: [tuiKernel, tuiClient, apiProxy, tuiModelSelection]
+      inject: [tuiKernel, tuiClient, apiProxy, tuiModelSelection, tuiInputTrigger]
 
     - id: tui-tools
       name: '@sagmans/dsh-tui/feature/tools'

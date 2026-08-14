@@ -34,10 +34,10 @@ _None._
 | `workflow.runs` — Workflow lifecycle, durable run nodes, workers, and Ralph controls | parity | partial | src/features/operations; src/client/conversation/workflows.ts |
 | `deliverables.files` — Produced-file discovery, turn tails, inert mentions, and safe opening | terminal-alternative | partial | src/features/deliverables; src/views/conversation; src/views/tools |
 | `workspace.sessions` — Workspace/session CRUD, grouping, sorting, unread state, search, and reorder | parity | partial | src/features/sessions; src/views/sessions/root.ts |
-| `input.trigger-pipeline` — Slash and at-sign trigger arbitration, menu, popup, and references | parity | missing | planned: src/features/input-trigger; src/views/input-trigger/root.ts |
-| `commands.slash` — Slash command catalog and exact-match execution | parity | partial | src/client/conversation/commands.ts; planned input-trigger feature |
-| `skills.references` — Skill catalog, loading, command trigger, and prompt reference | parity | partial | src/client/conversation/commands.ts; planned input-trigger feature |
-| `subagents.lifecycle` — Recursive subagent hierarchy, activity, timing, usage, opening, and references | parity | partial | src/features/operations; src/views/conversation; planned input-trigger feature |
+| `input.trigger-pipeline` — Slash and at-sign trigger arbitration, menu, popup, and references | parity | partial | src/features/input-trigger; src/views/input-trigger/root.ts; src/features/conversation |
+| `commands.slash` — Slash command catalog and exact-match execution | parity | partial | src/client/conversation/commands.ts; src/features/input-trigger |
+| `skills.references` — Skill catalog, loading, command trigger, and prompt reference | parity | partial | src/client/conversation/commands.ts; src/features/input-trigger |
+| `subagents.lifecycle` — Recursive subagent hierarchy, activity, timing, usage, opening, and references | parity | partial | src/features/operations; src/views/conversation; src/features/input-trigger |
 | `jobs.background` — Background job status and lifecycle controls | parity | partial | src/features/operations; src/views/operations/root.ts |
 | `goals.session` — Session goal display and lifecycle | parity | partial | src/features/operations; src/views/catalog/root.ts |
 | `model.selection` — Session model/reasoning choice, composer seat, /model, and unroutable blocking | parity | partial | src/features/model-selection; src/views/model-selection/root.ts |

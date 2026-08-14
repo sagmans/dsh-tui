@@ -47,6 +47,10 @@
       "types": "./lib/features/model-selection/index.d.ts",
       "default": "./lib/features/model-selection/index.js"
     },
+    "./feature/input-trigger": {
+      "types": "./lib/features/input-trigger/index.d.ts",
+      "default": "./lib/features/input-trigger/index.js"
+    },
     "./feature/tools": {
       "types": "./lib/features/tools/index.d.ts",
       "default": "./lib/features/tools/index.js"

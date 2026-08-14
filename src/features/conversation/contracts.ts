@@ -1,6 +1,11 @@
 import type { PromptContentPart, SessionId } from '@deepseek-ai/dsh-api-remotes/client'
 import type { ToolPresentation } from '../tools/contracts.js'
 import type {
+  InputTriggerController,
+  InputTriggerSnapshotView,
+  InputTriggerSource,
+} from '../input-trigger/contracts.js'
+import type {
   ConversationNode,
   ConversationSnapshot,
   ObservableSnapshot,
@@ -92,6 +97,7 @@ export interface ConversationSnapshotView {
   readonly status: string
   readonly suggestions: readonly string[]
   readonly title: string
+  readonly trigger: InputTriggerSnapshotView | undefined
 }
 
 export interface ConversationSessionBinding {
@@ -134,6 +140,7 @@ export interface ConversationControllerOptions {
   readonly media?: ConversationMediaSource
   readonly models?: ConversationModelSelectionSource | undefined
   readonly openSettings?: ((section: ConversationPreferenceSection) => void) | undefined
+  readonly triggers?: InputTriggerController | undefined
   readonly sessions: ConversationSessionsSource
 }
 
@@ -144,17 +151,22 @@ export interface ConversationController {
   cancelInput(): void
   clearAttachments(): void
   complete(): Promise<void>
+  dismissTrigger(): void
   dispose(): void
   getSnapshot(): ConversationSnapshotView
+  launchTrigger(): void
   loadOlder(): Promise<void>
+  moveTrigger(delta: number): void
   openModelSelection(entry: ConversationModelSelectionEntry): void
   openPreferences(section: ConversationPreferenceSection): void
+  pickTrigger(source: InputTriggerSource, index: number): void
+  pickTriggerHighlight(): void
   removeAttachment(index: number): void
   scroll(delta: number): void
   scrollOffset(): number
   send(text: string, mode?: ConversationSendMode): Promise<boolean>
   sendDraft(mode?: ConversationSendMode): Promise<boolean>
-  setDraft(text: string): void
+  setDraft(text: string, caret?: number): void
   setInput(value: string): void
   submitInput(): Promise<boolean>
   subscribe(listener: () => void): () => void

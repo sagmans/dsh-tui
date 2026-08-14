@@ -8,6 +8,7 @@ import type {
   ConversationViewSnapshotStore,
   ObservableSnapshot,
 } from '@deepseek-ai/dsh-client-runtime/client'
+import type { InputTriggerController } from '../../src/features/input-trigger/model.js'
 import {
   createConversationController,
   type ConversationControllerOptions,
@@ -65,6 +66,24 @@ function userNode(text: string, seq = 1): ConversationNode {
   }
 }
 
+function triggerController(
+  serialize: InputTriggerController['serialize'] = (_sessionId, text) => Promise.resolve(text),
+): InputTriggerController {
+  return {
+    dismiss: () => {},
+    dispose: () => {},
+    getSnapshot: () => ({ groups: [], highlight: undefined, launcher: false, open: false, pending: false }),
+    invalidate: () => {},
+    launch: () => {},
+    move: () => {},
+    pick: () => undefined,
+    pickHighlighted: () => undefined,
+    serialize,
+    subscribe: () => () => {},
+    track: () => {},
+  }
+}
+
 function assistantNode(text: string): ConversationNode {
   return {
     kind: 'assistant',
@@ -106,7 +125,7 @@ function snapshot(overrides: Partial<ConversationSnapshot> = {}): ConversationSn
   }
 }
 
-function fixture(options: Pick<ConversationControllerOptions, 'completion' | 'media' | 'models' | 'openSettings'> = {}): {
+function fixture(options: Pick<ConversationControllerOptions, 'completion' | 'media' | 'models' | 'openSettings' | 'triggers'> = {}): {
   readonly binding: MutableSource<ConversationSnapshot> & ConversationSessionBinding
   readonly control: Control
   readonly controller: ReturnType<typeof createConversationController>
@@ -264,6 +283,47 @@ test('blocks prompt submission only when the host reports an unroutable model', 
 
   assert.equal(await controller.send('/model'), true)
   assert.deepEqual(opens, ['command'])
+})
+
+test('executes a picked bare command without submitting surrounding draft text', async () => {
+  const triggers: InputTriggerController = {
+    ...triggerController(),
+    pick: () => ({ end: 6, start: 6, submit: true, text: '/compact' }),
+  }
+  const { control, controller } = fixture({ triggers })
+  controller.setDraft('draft ')
+
+  controller.pickTrigger('command', 0)
+  await Promise.resolve()
+
+  assert.equal(controller.getSnapshot().draft, 'draft ')
+  assert.deepEqual(control.commands, ['/compact'])
+  assert.deepEqual(control.prompts, [])
+})
+
+test('opens the trigger launcher at the composer caret', () => {
+  const launches: Array<{ readonly caret: number; readonly draft: string; readonly sessionId: SessionId }> = []
+  const triggers: InputTriggerController = {
+    ...triggerController(),
+    launch: (sessionId, draft, caret) => { launches.push({ caret, draft, sessionId }) },
+  }
+  const { controller } = fixture({ triggers })
+  controller.setDraft('left right', 4)
+
+  controller.launchTrigger()
+
+  assert.deepEqual(launches, [{ caret: 4, draft: 'left right', sessionId: SESSION_ID }])
+})
+
+test('blocks submission and preserves draft when reference serialization fails', async () => {
+  const triggers = triggerController(() => Promise.reject(new Error('reference owner unavailable')))
+  const { control, controller } = fixture({ triggers })
+
+  assert.equal(await controller.send('ask @reviewer'), false)
+
+  assert.deepEqual(control.prompts, [])
+  assert.equal(controller.getSnapshot().draft, 'ask @reviewer')
+  assert.equal(controller.getSnapshot().error, 'reference owner unavailable')
 })
 
 test('completes command and skill names through the injected catalog', async () => {
