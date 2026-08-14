@@ -1,41 +1,81 @@
-# Renderer parity
+<!-- Generated from docs/parity.json. Edit the manifest, then update this file. -->
 
-TUI reuses Harness Host services and shared client runtime. It never loads browser bundles. Each Web renderer capability has one explicit disposition.
+# Web–TUI capability parity
+
+Target: DeepSeek Harness Web `0.1.0-rc.6`. Capability parity, not layout parity.
+
+Web profile roster and shared runtime contracts are authoritative. Every non-Web-only action requires keyboard and mouse reachability plus automated and real-user proof.
+
+Keyboard paths, mouse paths, source evidence, automated proof, dogfood proof, and gap notes live in `docs/parity.json`.
 
 ## Implemented
 
-| Web capability | TUI behavior |
-| --- | --- |
-| Layout, sidebar, workspaces, sessions | Full-screen routes, workspace/session tree, search, create, rename, fork, archive, close, reorder, keyboard and mouse navigation. |
-| `@deepseek-ai/dsh-client-ui-conversation` | Durable and streaming messages, reasoning, commands, tool lifecycle, queues, history paging, cancellation, slash completion, queue, and steer. |
-| `@deepseek-ai/dsh-client-ui-tool` and `@deepseek-ai/dsh-client-ui-cordis` | Sanitized generic, terminal, diff, read, search, Web, and nested Code Mode inspector views. |
-| `@deepseek-ai/dsh-client-ui-workflow-run`, jobs, subagents, goals, plans, trajectory | Operations overlay exposes the shared runtime projections and authorized actions. |
-| Permissions and `@deepseek-ai/dsh-client-ui-user-questions` | Fail-closed approval, question, and plan-review overlays with keyboard and mouse controls. |
-| Model, permission preset, agent preset, settings, credentials, plugin inventory | Redacted configuration routes with confirmation for destructive or full-access changes. |
-| Commands, skills, and subagent input references | Slash completion uses Host command and skill catalogs; shared Harness commands remain executable. |
-| Message feedback | Versioned Host feedback editor is available in Operations. |
-| Theme | Native terminal palette and color-disable support replace browser CSS theming. |
+_None._
+
+## Capability matrix
+
+| Capability | Disposition | Status | Owner |
+| --- | --- | --- | --- |
+| `profile.shared-host-runtime` — Shared Harness host and client runtime | parity | partial | cordis.patch.yml; src/client/context.ts |
+| `runtime.browser-surface` — React client halves, browser server, transport, modules, client runner, and HMR | web-only | excluded | Excluded by cordis.patch.yml surface policy |
+| `conversation.feedback` — Per-message useful/not-useful feedback and note lifecycle | parity | partial | src/features/operations; src/views/operations/root.ts |
+| `conversation.export` — Session and descendant log export | terminal-alternative | partial | src/features/export; src/views/conversation |
+| `conversation.statistics` — Whole-log turn, step, token, tool, timing, and context statistics | parity | missing | planned: src/features/conversation; src/views/conversation/root.ts |
+| `workspace.directory-selection` — Workspace directory selection | terminal-alternative | partial | src/features/sessions; src/views/sessions/root.ts |
+| `settings.plugin-inventory` — Installed plugin inventory and extension lifecycle | parity | partial | src/features/settings; src/views/settings/root.ts |
+| `theme.terminal` — Light, dark, and system theme preference | parity | missing | planned: src/services/theme.ts; src/features/settings |
+| `locale.chrome` — English and Chinese application locale | parity | missing | planned: src/services/locale.ts; src/locales; src/views |
+| `shell.navigation` — Full-screen shell, navigation, sidebar outcomes, and route access | parity | partial | src/features/shell; src/views/shell |
+| `settings.general` — General settings shell and persisted preferences | parity | partial | src/features/settings; src/views/settings/root.ts |
+| `settings.providers-models` — Provider credentials, endpoints, protocols, model catalog, and discovery | parity | missing | planned: src/features/settings/providers; src/views/catalog/root.ts |
+| `settings.plugin-configuration` — Field-level plugin configuration | parity | partial | src/features/settings; src/views/settings/root.ts |
+| `conversation.core` — Messages, reasoning, streaming, history, retry, cancellation, and composer | parity | partial | src/features/conversation; src/client/conversation; src/views/conversation |
+| `tools.inspection` — Generic, specialized, nested Code Mode, and Web tool inspection | parity | partial | src/features/tools; src/views/tools/root.ts |
+| `workflow.runs` — Workflow lifecycle, durable run nodes, workers, and Ralph controls | parity | partial | src/features/operations; src/client/conversation/workflows.ts |
+| `deliverables.files` — Produced-file discovery, turn tails, inert mentions, and safe opening | terminal-alternative | partial | src/features/deliverables; src/views/conversation; src/views/tools |
+| `workspace.sessions` — Workspace/session CRUD, grouping, sorting, unread state, search, and reorder | parity | partial | src/features/sessions; src/views/sessions/root.ts |
+| `input.trigger-pipeline` — Slash and at-sign trigger arbitration, menu, popup, and references | parity | missing | planned: src/features/input-trigger; src/views/input-trigger/root.ts |
+| `commands.slash` — Slash command catalog and exact-match execution | parity | partial | src/client/conversation/commands.ts; planned input-trigger feature |
+| `skills.references` — Skill catalog, loading, command trigger, and prompt reference | parity | partial | src/client/conversation/commands.ts; planned input-trigger feature |
+| `subagents.lifecycle` — Recursive subagent hierarchy, activity, timing, usage, opening, and references | parity | partial | src/features/operations; src/views/conversation; planned input-trigger feature |
+| `jobs.background` — Background job status and lifecycle controls | parity | partial | src/features/operations; src/views/operations/root.ts |
+| `goals.session` — Session goal display and lifecycle | parity | partial | src/features/operations; src/views/catalog/root.ts |
+| `model.selection` — Session model/reasoning choice, composer seat, /model, and unroutable blocking | parity | partial | planned: src/features/model-selection; src/views/model-selection/root.ts |
+| `permissions.presets` — Current-session access and future-session default permission | parity | partial | src/features/settings; src/views/conversation/composer.ts |
+| `agent.presets` — Per-session agent preset composition, defaults, staging, and management | parity | missing | planned: cordis.patch.yml; src/features/settings; src/views/conversation/composer.ts |
+| `plans.session` — Plan state, composer control, review, and command lifecycle | parity | partial | src/features/operations; src/features/interactions; planned conversation seat |
+| `conversation.compaction` — Context meter, compaction command, and tool-result pruning detail | parity | partial | src/features/conversation; planned conversation statistics/detail |
+| `todos.session` — Session todo state and model-facing todo capability | parity | missing | planned: src/features/conversation; src/views/conversation/root.ts |
+| `interactions.questions` — Questions, options, custom answers, recommendations, and approvals | parity | partial | src/features/interactions; src/views/interactions/root.ts |
+| `trajectory.ledger` — Turn/step ledger, search, folding, totals, details, timing, and pagination | parity | partial | planned: src/features/trajectory; src/views/trajectory/root.ts |
+| `attachments.images` — Image attachment admission, removal, metadata, and history access | terminal-alternative | partial | src/features/attachments; src/features/conversation/media.ts; src/views/conversation |
+| `browser.rich-content` — Raw HTML/SVG interpretation and rich browser card markup | web-only | excluded | Excluded by terminal sanitization policy |
+| `browser.url-navigation` — Arbitrary browser URL navigation | web-only | excluded | Excluded by terminal external-open policy |
+| `browser.layout-geometry` — DOM/CSS geometry, responsive placement, hover, and drag gestures | web-only | excluded | Excluded; terminal layout remains OpenTUI-native |
+| `notifications.status` — Completion, attention, and error notifications | terminal-alternative | partial | src/views/shell/status.ts; feature status/error rows |
 
 ## Terminal alternative
 
-| Web capability | TUI behavior |
-| --- | --- |
-| `@deepseek-ai/dsh-client-ui-attachment` | `Ctrl+O` or `ATTACH` accepts an explicit absolute PNG, JPEG, WebP, or GIF path. Bounded bytes enter the shared prompt contract; only safe name, MIME type, dimensions when supplied by Host history, and size metadata render. No path or base64 enters render state. |
-| `@deepseek-ai/dsh-client-ui-deliverables` | Successful Host-projected edit locations appear as inert produced-file paths. `o` or mouse activation requires the same path twice before calling the Host external-open boundary. Failed calls produce no open target. |
-| `@deepseek-ai/dsh-session-log-export` | `Ctrl+E` or `EXPORT` streams the current session and descendants from Host to an explicit absolute destination. Creation is exclusive, mode `0600`, and failed partial files are removed. Browser download routes are bypassed. |
-| `@deepseek-ai/dsh-host-directory-picker` | Workspace registration accepts an explicit typed path. This deterministic terminal path avoids browser picker and display-server dependencies. |
-| `@deepseek-ai/dsh-client-locale` | TUI chrome is English. User, model, workspace, and tool Unicode remains intact across CJK, emoji, combining marks, and RTL scripts; terminal-control and bidi-formatting controls are stripped. |
-| Browser notifications | In-app status and error rows replace system notifications; no background notification permission exists. |
-| Image preview | Text metadata replaces lightbox thumbnails and image decoding. |
+| Capability | Disposition | Status | Owner |
+| --- | --- | --- | --- |
+| `conversation.export` — Session and descendant log export | terminal-alternative | partial | src/features/export; src/views/conversation |
+| `workspace.directory-selection` — Workspace directory selection | terminal-alternative | partial | src/features/sessions; src/views/sessions/root.ts |
+| `deliverables.files` — Produced-file discovery, turn tails, inert mentions, and safe opening | terminal-alternative | partial | src/features/deliverables; src/views/conversation; src/views/tools |
+| `attachments.images` — Image attachment admission, removal, metadata, and history access | terminal-alternative | partial | src/features/attachments; src/features/conversation/media.ts; src/views/conversation |
+| `notifications.status` — Completion, attention, and error notifications | terminal-alternative | partial | src/views/shell/status.ts; feature status/error rows |
 
 ## Web-only exclusion
 
-| Web capability | Reason |
-| --- | --- |
-| React client halves | Loader inventory marks packages with browser faces unsupported. TUI never fetches, evaluates, or mounts React client halves. |
-| Browser server, transport, modules, client runner, and HMR | In-process API, RPC, shared runtime, and OpenTUI own the terminal surface. No HTTP listener is required. |
-| Drag/drop, clipboard image upload, lightbox, and browser download dialog | Explicit local-path attachment and export flows provide bounded terminal equivalents. |
-| Rendered HTML/SVG and rich card markup | Content remains sanitized inert text. HTML/SVG is never interpreted. Only a Host-derived produced path can cross the double-confirmed external-open boundary. |
-| Browser locale preference and live locale switching | TUI chrome remains stable English; terminal content still preserves safe Unicode. |
-| Browser URL navigation | URLs remain selectable inert text. TUI does not launch arbitrary links. |
-| System notifications | Terminal status remains visible and auditable inside the application. |
+| Capability | Disposition | Status | Owner |
+| --- | --- | --- | --- |
+| `runtime.browser-surface` — React client halves, browser server, transport, modules, client runner, and HMR | web-only | excluded | Excluded by cordis.patch.yml surface policy |
+| `browser.rich-content` — Raw HTML/SVG interpretation and rich browser card markup | web-only | excluded | Excluded by terminal sanitization policy |
+| `browser.url-navigation` — Arbitrary browser URL navigation | web-only | excluded | Excluded by terminal external-open policy |
+| `browser.layout-geometry` — DOM/CSS geometry, responsive placement, hover, and drag gestures | web-only | excluded | Excluded; terminal layout remains OpenTUI-native |
+
+## Source of truth
+
+- `deepseek-harness/packages/bundle/web-app/cordis.patch.yml`
+- `deepseek-harness/packages/bundle/base/cordis.patch.yml`
+- `deepseek-harness/packages/client/ui-*/README.md`
+- `deepseek-harness/packages/client/runtime/src/client/contract/session.ts`
