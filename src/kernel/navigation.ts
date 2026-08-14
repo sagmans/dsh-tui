@@ -14,6 +14,7 @@ export interface TuiNavigationSnapshot {
 export interface TuiNavigationStore {
   back(): void
   closeOverlay(): TuiOverlay | undefined
+  dismissOverlay(id: string): TuiOverlay | undefined
   getSnapshot(): TuiNavigationSnapshot
   go(route: TuiRoute): void
   openOverlay(overlay: TuiOverlay): void
@@ -41,6 +42,18 @@ class NavigationStore implements TuiNavigationStore {
     if (closed === undefined) return undefined
     this.publish({ ...this.snapshot, overlays: this.snapshot.overlays.slice(0, -1) })
     return closed
+  }
+
+  dismissOverlay(id: string): TuiOverlay | undefined {
+    const index = this.snapshot.overlays.findLastIndex(overlay => overlay.id === id)
+    if (index < 0) return undefined
+    const dismissed = this.snapshot.overlays[index]
+    if (dismissed === undefined) return undefined
+    this.publish({
+      ...this.snapshot,
+      overlays: this.snapshot.overlays.filter((_overlay, overlayIndex) => overlayIndex !== index),
+    })
+    return dismissed
   }
 
   getSnapshot(): TuiNavigationSnapshot {

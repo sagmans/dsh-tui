@@ -30,6 +30,17 @@ test('restores focus targets in last-opened-first-closed order', () => {
   assert.equal(navigation.closeOverlay(), undefined)
 })
 
+test('dismisses a named overlay without disturbing newer overlays', () => {
+  const navigation = createNavigationStore()
+
+  navigation.openOverlay(FIRST_OVERLAY)
+  navigation.openOverlay(SECOND_OVERLAY)
+
+  assert.deepEqual(navigation.dismissOverlay(FIRST_OVERLAY.id), FIRST_OVERLAY)
+  assert.deepEqual(navigation.getSnapshot().overlays, [SECOND_OVERLAY])
+  assert.equal(navigation.dismissOverlay(FIRST_OVERLAY.id), undefined)
+})
+
 test('notifies only when navigation state changes', () => {
   const navigation = createNavigationStore()
   let notifications = 0

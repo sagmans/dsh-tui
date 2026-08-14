@@ -64,3 +64,22 @@ breaks remain intact.
 MVP attachments are text-only. Browser-owned temporary image uploads are not
 executed in this profile; a terminal-safe local-path attachment flow remains a
 later parity slice.
+
+## Tools and inspector
+
+Open Inspect with `gi` or the mouse tab. Tool calls use host-computed
+presentation intents when structurally valid: generic, terminal, diff, read,
+search, and web result shapes. Unknown or malformed intent payloads fall back
+to sanitized arguments and results. Nested Code Mode dispatches appear as a
+tree; `j`/`k` or arrows move selection and `Enter` or a second click folds a
+branch. URLs and file paths remain inert text in this slice.
+
+## Human interactions
+
+Pending approvals and questions open a blocking overlay. Keyboard and mouse
+actions are equivalent. Only `y` or `ALLOW ONCE` grants an approval; `n`,
+`Esc`, or `REJECT` denies it. Questions support option selection, custom text,
+skip, paging, and whole-batch submission. Strict binary `plan-review` requests
+use approve, refuse, and discuss actions; malformed requests expose only a
+cancel path. Responses stay visible and disabled until the host broadcasts
+resolution.

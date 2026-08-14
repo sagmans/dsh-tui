@@ -82,6 +82,8 @@ test('publishes only built entrypoints and the profile patch', () => {
     './feature/shell',
     './feature/sessions',
     './feature/conversation',
+    './feature/tools',
+    './feature/interactions',
     './contracts',
     './testing',
     './cordis.patch.yml',

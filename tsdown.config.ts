@@ -8,6 +8,8 @@ export default defineConfig({
     'src/features/shell/index.ts',
     'src/features/sessions/index.ts',
     'src/features/conversation/index.ts',
+    'src/features/tools/index.ts',
+    'src/features/interactions/index.ts',
     'src/contracts/index.ts',
     'src/testing/index.ts',
   ],

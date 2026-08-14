@@ -1,4 +1,5 @@
 import type { SessionId } from '@deepseek-ai/dsh-api-remotes/client'
+import type { ToolPresentation } from '../tools/contracts.js'
 import type {
   ConversationNode,
   ConversationSnapshot,
@@ -18,6 +19,7 @@ export interface ConversationLine {
 
 export interface TuiConversationViewSnapshot {
   readonly lines: readonly ConversationLine[]
+  readonly tools: readonly ToolPresentation[]
 }
 
 declare module '@deepseek-ai/dsh-client-runtime/client' {

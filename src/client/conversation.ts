@@ -20,6 +20,8 @@ import {
 import {
   commandDefinition,
   commandFallbackDefinition,
+} from './conversation/commands.js'
+import {
   toolDefinition,
   toolFallbackDefinition,
 } from './conversation/tools.js'

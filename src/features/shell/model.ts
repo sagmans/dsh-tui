@@ -2,7 +2,7 @@ import type { SessionId } from '@deepseek-ai/dsh-api-remotes/client'
 import type { ObservableSnapshot, SessionListState } from '@deepseek-ai/dsh-client-runtime/client'
 import type { TuiNavigationStore, TuiRoute } from '../../kernel/navigation.js'
 
-export type ShellOverlay = 'help' | 'palette'
+export type ShellOverlay = string
 export type PaletteCommandName =
   | 'route.chat'
   | 'route.inspect'
@@ -148,10 +148,7 @@ class ShellControllerService implements ShellController {
     const navigation = this.navigation.getSnapshot()
     const sessions = this.sessions.getSnapshot()
     const current = sessions.current === undefined ? undefined : sessions.byId[sessions.current]
-    const overlayId = navigation.overlays.at(-1)?.id
-    const overlay = overlayId === HELP_OVERLAY_ID || overlayId === PALETTE_OVERLAY_ID
-      ? overlayId
-      : undefined
+    const overlay = navigation.overlays.at(-1)?.id
 
     return Object.freeze({
       activeSessionRunning: current?.running ?? false,
