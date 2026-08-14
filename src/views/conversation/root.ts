@@ -16,6 +16,7 @@ import { imageFallback } from '../../features/attachments/presentation.js'
 import { createFocusableAction } from '../action.js'
 import { createInputTriggerView } from '../input-trigger/root.js'
 import { createComposer, createConversationActions, createConversationInput } from './composer.js'
+import { createConversationQueue, type ConversationQueueDock } from './queue.js'
 
 const HEADER_HEIGHT = 1
 const STATUS_HEIGHT = 1
@@ -185,7 +186,14 @@ function createFrame(
   }))
   frame.add(createTranscript(renderer, theme, snapshot))
   let attachmentStrip: AttachmentStrip | undefined
-  const composer = createComposer(renderer, theme, controller, snapshot, () => attachmentStrip?.focusLast() ?? false)
+  const composer = createComposer(
+    renderer,
+    theme,
+    controller,
+    snapshot,
+    () => attachmentStrip?.focusLast() ?? false,
+    () => queueDock?.focusFirst() ?? false,
+  )
   if (snapshot.attachments.length > 0) {
     attachmentStrip = createAttachments(
       renderer,
@@ -205,6 +213,14 @@ function createFrame(
       selectable: false,
     }))
   }
+  const queueDock: ConversationQueueDock | undefined = createConversationQueue(
+    renderer,
+    theme,
+    controller,
+    snapshot,
+    () => composer.findDescendantById(COMPOSER_ID),
+  )
+  if (queueDock !== undefined) frame.add(queueDock.root)
   frame.add(new TextRenderable(renderer, {
     content: snapshot.error === undefined ? snapshot.busy ? BUSY_COPY : snapshot.status : `Error: ${snapshot.error}`,
     height: STATUS_HEIGHT,

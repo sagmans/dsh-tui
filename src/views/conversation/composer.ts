@@ -2,7 +2,6 @@ import {
   BoxRenderable,
   InputRenderable,
   InputRenderableEvents,
-  MouseButton,
   TextareaRenderable,
   TextAttributes,
   TextRenderable,
@@ -10,7 +9,7 @@ import {
   type KeyEvent,
 } from '@opentui/core'
 import type { TuiTheme } from '../../contracts/theme.js'
-import { createInputActions } from '../action.js'
+import { createFocusableAction, createInputActions } from '../action.js'
 import type {
   ConversationController,
   ConversationSnapshotView,
@@ -37,9 +36,11 @@ const DELETE_KEY = 'delete'
 const ACCESS_KEY = 'a'
 const MODEL_KEY = 'm'
 const PRESET_KEY = 'p'
+const BUSY_ENTER_KEY = 'b'
+const QUEUE_KEY = 'q'
 const TRIGGER_LAUNCH_KEY = '/'
-const COMPOSER_HINT = 'M+Enter queue · C+Enter steer · M+/ menu · M+M model · M+A access · M+P preset'
-const SEND_ACTION = ' SEND '
+const COMPOSER_HINT = 'M+Enter primary · C+Enter alternate · M+Q queue · M+B switch · M+/ menu · M+M model · M+A access · M+P preset'
+const QUEUE_ACTION = ' QUEUE '
 const STEER_ACTION = ' STEER '
 const STOP_ACTION = ' STOP '
 const OLDER_ACTION = ' OLDER '
@@ -50,8 +51,9 @@ const TRIGGER_LAUNCH_ACTION = ' + '
 const ACCESS_ACTION_PREFIX = ' ACCESS '
 const MODEL_ACTION_PREFIX = ' MODEL '
 const PRESET_ACTION_PREFIX = ' PRESET '
+const BUSY_ENTER_ACTION_PREFIX = ' ENTER '
 const SEND_ACTION_ID = 'conversation-send'
-const STEER_ACTION_ID = 'conversation-steer'
+const ALTERNATE_ACTION_ID = 'conversation-alternate'
 const STOP_ACTION_ID = 'conversation-stop'
 const OLDER_ACTION_ID = 'conversation-older'
 const ATTACH_ACTION_ID = 'conversation-attach'
@@ -61,16 +63,33 @@ const TRIGGER_LAUNCH_ACTION_ID = 'conversation-trigger-launcher'
 const ACCESS_ACTION_ID = 'conversation-access'
 const MODEL_ACTION_ID = 'conversation-model'
 const PRESET_ACTION_ID = 'conversation-preset'
+const BUSY_ENTER_ACTION_ID = 'conversation-busy-enter'
 const PATH_ACTION_PREFIX = 'conversation-path'
 
-function submit(
-  editor: TextareaRenderable,
-  controller: ConversationController,
-  mode: 'queue' | 'steer',
-): void {
-  const sending = controller.sendDraft(mode)
-  editor.setText('')
-  void sending
+function sendAction(mode: ConversationSnapshotView['primarySendMode']): string {
+  switch (mode) {
+    case 'queue': return QUEUE_ACTION
+    case 'steer': return STEER_ACTION
+    default: {
+      const exhaustive: never = mode
+      return String(exhaustive)
+    }
+  }
+}
+
+function alternateSendMode(mode: ConversationSnapshotView['primarySendMode']): ConversationSnapshotView['primarySendMode'] {
+  switch (mode) {
+    case 'queue': return 'steer'
+    case 'steer': return 'queue'
+    default: {
+      const exhaustive: never = mode
+      throw new Error(`unhandled primary send mode: ${String(exhaustive)}`)
+    }
+  }
+}
+
+function submit(send: () => Promise<boolean>): void {
+  void send()
 }
 
 function handleMediaKey(key: KeyEvent, controller: ConversationController): boolean {
@@ -103,6 +122,7 @@ function handleKey(
   editor: TextareaRenderable,
   controller: ConversationController,
   focusLastAttachment: () => boolean,
+  focusQueue: () => boolean,
 ): void {
   if (handleTriggerKey(key, controller)) return
   if (key.ctrl && key.name === CANCEL_KEY) {
@@ -114,7 +134,18 @@ function handleKey(
   if (key.ctrl && key.name === RETURN_KEY) {
     key.preventDefault()
     key.stopPropagation()
-    submit(editor, controller, 'steer')
+    submit(() => controller.sendAlternateDraft())
+    return
+  }
+  if (key.meta && key.name === QUEUE_KEY && focusQueue()) {
+    key.preventDefault()
+    key.stopPropagation()
+    return
+  }
+  if (key.meta && key.name === BUSY_ENTER_KEY) {
+    key.preventDefault()
+    key.stopPropagation()
+    void controller.toggleBusyEnter()
     return
   }
   if (key.meta && key.name === TRIGGER_LAUNCH_KEY) {
@@ -168,6 +199,7 @@ function createEditor(
   controller: ConversationController,
   snapshot: ConversationSnapshotView,
   focusLastAttachment: () => boolean,
+  focusQueue: () => boolean,
 ): TextareaRenderable {
   const editor = new TextareaRenderable(renderer, {
     id: 'conversation-composer',
@@ -182,9 +214,9 @@ function createEditor(
     wrapMode: 'word',
     keyBindings: [{ name: RETURN_KEY, meta: true, action: 'submit' }],
     onContentChange() { controller.setDraft(editor.plainText, editor.cursorOffset) },
-    onKeyDown(key) { handleKey(key, editor, controller, focusLastAttachment) },
+    onKeyDown(key) { handleKey(key, editor, controller, focusLastAttachment, focusQueue) },
   })
-  editor.onSubmit = () => { submit(editor, controller, 'queue') }
+  editor.onSubmit = () => { submit(() => controller.sendDraft()) }
   return editor
 }
 
@@ -255,6 +287,7 @@ export function createComposer(
   controller: ConversationController,
   snapshot: ConversationSnapshotView,
   focusLastAttachment: () => boolean,
+  focusQueue: () => boolean,
 ): BoxRenderable {
   const composer = new BoxRenderable(renderer, {
     id: 'conversation-composer-frame',
@@ -264,7 +297,7 @@ export function createComposer(
     borderStyle: 'single',
     borderColor: snapshot.running ? theme.colors.warning : theme.colors.border,
   })
-  const editor = createEditor(renderer, theme, controller, snapshot, focusLastAttachment)
+  const editor = createEditor(renderer, theme, controller, snapshot, focusLastAttachment, focusQueue)
   composer.add(editor)
   queueMicrotask(() => {
     if (editor.isDestroyed || snapshot.sessionId === undefined) return
@@ -282,21 +315,14 @@ function createAction(
   enabled: boolean,
   run: () => void,
 ): TextRenderable {
-  return new TextRenderable(renderer, {
-    id,
+  return createFocusableAction(renderer, {
     content,
+    enabled,
+    fg: theme.colors.focus,
     height: ACTION_HEIGHT,
-    fg: enabled ? theme.colors.focus : theme.colors.muted,
-    attributes: enabled ? TextAttributes.BOLD : TextAttributes.DIM,
-    selectable: false,
-    onMouseUp(event) {
-      // OpenTUI publishes equivalent mouse-button values through separate enum declarations.
-      // oxlint-disable-next-line typescript/no-unsafe-enum-comparison
-      if (!enabled || event.button !== MouseButton.LEFT) return
-      event.preventDefault()
-      event.stopPropagation()
-      run()
-    },
+    id,
+    mutedFg: theme.colors.muted,
+    run,
   })
 }
 
@@ -313,12 +339,22 @@ export function createConversationActions(
     flexDirection: 'row',
   })
   const modelRoutable = snapshot.modelRoutable !== false
-  actions.add(createAction(renderer, theme, SEND_ACTION_ID, SEND_ACTION, snapshot.sessionId !== undefined && modelRoutable, () => {
-    void controller.sendDraft('queue')
-  }))
-  actions.add(createAction(renderer, theme, STEER_ACTION_ID, STEER_ACTION, snapshot.running && modelRoutable, () => {
-    void controller.sendDraft('steer')
-  }))
+  actions.add(createAction(
+    renderer,
+    theme,
+    SEND_ACTION_ID,
+    sendAction(snapshot.primarySendMode),
+    snapshot.sessionId !== undefined && modelRoutable,
+    () => { void controller.sendDraft() },
+  ))
+  actions.add(createAction(
+    renderer,
+    theme,
+    ALTERNATE_ACTION_ID,
+    sendAction(alternateSendMode(snapshot.primarySendMode)),
+    snapshot.running && modelRoutable,
+    () => { void controller.sendAlternateDraft() },
+  ))
   actions.add(createAction(renderer, theme, STOP_ACTION_ID, STOP_ACTION, snapshot.running, () => {
     void controller.cancel()
   }))
@@ -371,6 +407,16 @@ export function createConversationActions(
       `${PRESET_ACTION_PREFIX}${snapshot.agentPreset} `,
       true,
       () => { controller.openPreferences('presets') },
+    ))
+  }
+  if (snapshot.busyEnterAvailable) {
+    actions.add(createAction(
+      renderer,
+      theme,
+      BUSY_ENTER_ACTION_ID,
+      `${BUSY_ENTER_ACTION_PREFIX}${snapshot.busyEnter.toUpperCase()} `,
+      !snapshot.busyEnterBusy,
+      () => { void controller.toggleBusyEnter() },
     ))
   }
   actions.add(new TextRenderable(renderer, {

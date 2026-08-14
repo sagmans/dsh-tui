@@ -1,5 +1,5 @@
 import type { ConversationSnapshot } from '@deepseek-ai/dsh-client-runtime/client'
-import type { ConversationLine, ConversationPhase } from './contracts.js'
+import type { ConversationLine, ConversationPhase, ConversationSendMode } from './contracts.js'
 import { projectConversationLines, projectQueuedLines } from './projection.js'
 import { sanitizeText } from '../sessions/projection.js'
 
@@ -20,14 +20,31 @@ export function conversationPhase(snapshot: ConversationSnapshot | undefined): C
   }
 }
 
-export function conversationStatus(snapshot: ConversationSnapshot | undefined): string {
+function alternateMode(mode: ConversationSendMode): ConversationSendMode {
+  switch (mode) {
+    case 'queue': return 'steer'
+    case 'steer': return 'queue'
+    default: {
+      const exhaustive: never = mode
+      throw new Error(`unhandled conversation send mode: ${String(exhaustive)}`)
+    }
+  }
+}
+
+export function conversationStatus(
+  snapshot: ConversationSnapshot | undefined,
+  busyEnter: ConversationSendMode = 'queue',
+): string {
   if (snapshot === undefined) return EMPTY_STATUS
   if (snapshot.openState === 'loading' || snapshot.openState === 'cold') return 'Loading history…'
   if (snapshot.openState === 'error') return 'History unavailable.'
   if (snapshot.removed) return 'Session removed · read only'
   if (snapshot.pending.length > 0) return `${snapshot.pending.length} interaction${snapshot.pending.length === 1 ? '' : 's'} waiting`
-  if (snapshot.queue.length > 0) return `${snapshot.queue.length} queued · Ctrl+Enter steers`
-  if (snapshot.running) return 'Running · Ctrl+X stop · Ctrl+Enter steer'
+  const queuedCount = snapshot.queue.filter(item => item.placement === 'queued').length
+  if (queuedCount > 0) {
+    return `${queuedCount} queued · M+Enter ${busyEnter} · C+Enter ${alternateMode(busyEnter)}`
+  }
+  if (snapshot.running) return `Running · Ctrl+X stop · M+Enter ${busyEnter} · C+Enter ${alternateMode(busyEnter)}`
   if (snapshot.loadingOlder) return 'Loading older history…'
   if (snapshot.hasMore) return 'Older history available · PageUp'
   return 'Ready'
@@ -50,7 +67,8 @@ export function visibleConversationLines(
     partial: snapshot.partial,
     runningCalls: snapshot.runningCalls,
   })
-  const lines = [...durable, ...projectQueuedLines(snapshot.queue)]
+  const transcriptQueue = snapshot.queue.filter(item => item.placement !== 'queued')
+  const lines = [...durable, ...projectQueuedLines(transcriptQueue)]
   const end = Math.max(0, lines.length - offset)
   const start = Math.max(0, end - MAX_VISIBLE_LINES)
   return Object.freeze(lines.slice(start, end))

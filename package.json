@@ -121,6 +121,7 @@
     "@deepseek-ai/dsh-message-feedback": "0.1.0-rc.6",
     "@deepseek-ai/dsh-session-projection-cache": "0.1.0-rc.6",
     "@deepseek-ai/dsh-session-stats": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-settings": "0.1.0-rc.6",
     "@deepseek-ai/dsh-storage": "0.1.0-rc.6",
     "@deepseek-ai/dsh-storage-domain": "0.1.0-rc.6",
     "@deepseek-ai/dsh-storage-json": "0.1.0-rc.6",
@@ -128,6 +129,7 @@
     "@deepseek-ai/dsh-typert-protocol": "0.1.0-rc.6",
     "@deepseek-ai/dsh-typert-registry": "0.1.0-rc.6",
     "@deepseek-ai/dsh-workspace": "0.1.0-rc.6",
+    "@deepseek-ai/schemastery": "3.18.1",
     "@opentui/core": "0.5.1",
     "@opentui/keymap": "0.5.1",
     "commander": "15.0.0"

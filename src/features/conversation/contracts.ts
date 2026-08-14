@@ -1,4 +1,10 @@
-import type { PromptContentPart, SessionId } from '@deepseek-ai/dsh-api-remotes/client'
+import type {
+  MessageId,
+  PromptContentPart,
+  QueueAction,
+  RpcResult,
+  SessionId,
+} from '@deepseek-ai/dsh-api-remotes/client'
 import type { ToolPresentation } from '../tools/contracts.js'
 import type {
   InputTriggerController,
@@ -15,7 +21,8 @@ import type {
 export type ConversationPhase = 'empty' | 'error' | 'loading' | 'ready'
 export type ConversationLineKind = 'assistant' | 'command' | 'context' | 'error' | 'system' | 'tool' | 'user'
 export type ConversationSendMode = 'queue' | 'steer'
-export type ConversationInputKind = 'attachment' | 'export'
+export type ConversationSubmitGesture = 'alternate' | 'primary'
+export type ConversationInputKind = 'attachment' | 'export' | 'queue-edit'
 export type ConversationModelSelectionEntry = 'command' | 'composer'
 export type ConversationPreferenceSection = 'access' | 'presets'
 
@@ -48,6 +55,13 @@ export interface ConversationLine {
   readonly text: string
 }
 
+export interface ConversationQueueItemView {
+  readonly busy: boolean
+  readonly editable: boolean
+  readonly id: MessageId
+  readonly preview: string
+}
+
 export type WorkflowRunStatus = 'cancelled' | 'completed' | 'failed' | 'interrupted' | 'running'
 
 export interface WorkflowMemberPresentation {
@@ -78,6 +92,9 @@ declare module '@deepseek-ai/dsh-client-runtime/client' {
 
 export interface ConversationSnapshotView {
   readonly accessPreset: string | undefined
+  readonly busyEnter: ConversationSendMode
+  readonly busyEnterAvailable: boolean
+  readonly busyEnterBusy: boolean
   readonly agentPreset: string | undefined
   readonly attachments: readonly ConversationAttachmentView[]
   readonly busy: boolean
@@ -92,6 +109,9 @@ export interface ConversationSnapshotView {
   readonly modelLabel: string | undefined
   readonly modelRoutable: boolean | undefined
   readonly phase: ConversationPhase
+  readonly primarySendMode: ConversationSendMode
+  readonly queue: readonly ConversationQueueItemView[]
+  readonly queueMutable: boolean
   readonly running: boolean
   readonly sessionId: SessionId | undefined
   readonly status: string
@@ -107,6 +127,7 @@ export interface ConversationSessionBinding {
   command(line: string): Promise<boolean>
   loadOlder(): Promise<void>
   prompt(content: readonly PromptContentPart[], mode: ConversationSendMode): Promise<void>
+  updateQueue(itemId: MessageId, action: QueueAction): Promise<RpcResult<{ accepted: true }>>
 }
 
 export interface ConversationSessionsSource {
@@ -126,6 +147,25 @@ export interface ConversationCompletionSource {
   complete(sessionId: SessionId, query: string): Promise<readonly string[]>
 }
 
+export type ConversationPreferenceResult<T> =
+  | { readonly ok: true; readonly value: T }
+  | { readonly ok: false; readonly error: { readonly code: string; readonly message: string } }
+
+export interface ConversationSubmissionPreferences {
+  read(): Promise<ConversationPreferenceResult<{
+    readonly behavior: ConversationSendMode
+    readonly revision: number
+  }>>
+  subscribe(listener: () => void): () => void
+  write(
+    behavior: ConversationSendMode,
+    revision: number,
+  ): Promise<ConversationPreferenceResult<{
+    readonly behavior: ConversationSendMode
+    readonly revision: number
+  }>>
+}
+
 export interface ConversationModelSelectionSource extends ObservableSnapshot<{
   readonly available: boolean
   readonly currentLabel: string
@@ -140,6 +180,7 @@ export interface ConversationControllerOptions {
   readonly media?: ConversationMediaSource
   readonly models?: ConversationModelSelectionSource | undefined
   readonly openSettings?: ((section: ConversationPreferenceSection) => void) | undefined
+  readonly preferences?: ConversationSubmissionPreferences | undefined
   readonly triggers?: InputTriggerController | undefined
   readonly sessions: ConversationSessionsSource
 }
@@ -147,6 +188,7 @@ export interface ConversationControllerOptions {
 export interface ConversationController {
   beginAttachment(): void
   beginExport(): void
+  beginQueueEdit(itemId: MessageId): void
   cancel(): Promise<void>
   cancelInput(): void
   clearAttachments(): void
@@ -162,13 +204,18 @@ export interface ConversationController {
   pickTrigger(source: InputTriggerSource, index: number): void
   pickTriggerHighlight(): void
   removeAttachment(index: number): void
+  removeQueue(itemId: MessageId): Promise<boolean>
   scroll(delta: number): void
   scrollOffset(): number
   send(text: string, mode?: ConversationSendMode): Promise<boolean>
+  sendAlternateDraft(): Promise<boolean>
   sendDraft(mode?: ConversationSendMode): Promise<boolean>
   setDraft(text: string, caret?: number): void
   setInput(value: string): void
+  steerQueue(itemId: MessageId): Promise<boolean>
+  steerQueueAll(): Promise<boolean>
   submitInput(): Promise<boolean>
+  toggleBusyEnter(): Promise<boolean>
   subscribe(listener: () => void): () => void
 }
 

@@ -13,6 +13,10 @@ import {
   type ConversationPreferenceSection,
   type ConversationSessionBinding,
 } from './model.js'
+import {
+  createConversationSubmissionPreferences,
+  registerConversationSettings,
+} from './submission.js'
 
 const CONTRIBUTION_ID = 'dsh-tui-conversation'
 const CONTRIBUTION_ORDER = 100
@@ -68,6 +72,7 @@ function sessionBinding(ctx: Context, id: SessionId): ConversationSessionBinding
         const result = await requireSession(ctx, id).prompt([...content], mode)
         if (!result.ok) throw new Error(`send failed: ${result.error.code}: ${result.error.message}`)
       },
+      updateQueue: (itemId, action) => requireSession(ctx, id).updateQueue(itemId, action),
     }
   }
   return binding
@@ -100,6 +105,7 @@ function controllerOptions(ctx: Context): ConversationControllerOptions {
       queueMicrotask(() => { void resources.commands.run(`${SETTINGS_COMMAND_PREFIX}${section}`) })
     },
     models: ctx.tuiModelSelection,
+    preferences: createConversationSubmissionPreferences(ctx.tuiClient),
     triggers: ctx.tuiInputTrigger,
     media: {
       exportSession: (sessionId, path, signal) => exportSessionArchive(
@@ -176,5 +182,6 @@ export function mountConversation(ctx: Context, seams: ConversationSeams = DEFAU
 }
 
 export function apply(ctx: Context): void {
+  registerConversationSettings(ctx)
   mountConversation(ctx)
 }

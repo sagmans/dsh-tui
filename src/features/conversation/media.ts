@@ -16,6 +16,8 @@ const EXPORT_PLACEHOLDER = 'Absolute new .zip destination'
 const ATTACHMENT_LIMIT_ERROR = `At most ${MAX_DRAFT_IMAGES} images can be staged.`
 const EXPORT_COMPLETE = 'Session archive exported.'
 
+type ConversationMediaInputKind = Exclude<ConversationInputKind, 'queue-edit'>
+
 interface ConversationMediaStateOptions {
   readonly blocked: () => boolean
   readonly currentSession: () => SessionId | undefined
@@ -25,7 +27,7 @@ interface ConversationMediaStateOptions {
   readonly setNotice: (notice: string | undefined) => void
 }
 
-function inputView(kind: ConversationInputKind, value: string): ConversationInputView {
+function inputView(kind: ConversationMediaInputKind, value: string): ConversationInputView {
   switch (kind) {
     case 'attachment': return Object.freeze({
       kind,
@@ -52,7 +54,7 @@ export class ConversationMediaState {
   private abort: AbortController | undefined
   private busyCount = 0
   private disposed = false
-  private inputKind: ConversationInputKind | undefined
+  private inputKind: ConversationMediaInputKind | undefined
   private inputValue = ''
   private revision = 0
 
@@ -196,7 +198,7 @@ export class ConversationMediaState {
       && !this.options.blocked()
   }
 
-  private beginInput(kind: ConversationInputKind): void {
+  private beginInput(kind: ConversationMediaInputKind): void {
     this.inputKind = kind
     this.inputValue = ''
     this.options.setError(undefined)
@@ -205,7 +207,7 @@ export class ConversationMediaState {
   }
 
   private async execute(
-    kind: ConversationInputKind,
+    kind: ConversationMediaInputKind,
     media: NonNullable<ConversationControllerOptions['media']>,
     sessionId: SessionId,
     path: string,

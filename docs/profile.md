@@ -8,7 +8,7 @@ It targets published Harness `0.1.0-rc.6` packages.
 ```sh
 dsh plugin --profile tui add .
 dsh plugin --profile tui install
-NODE_OPTIONS=--experimental-ffi dsh --profile tui
+node --experimental-ffi "$(command -v dsh)" --profile tui
 ```
 
 Runtime requires Node.js 26.4.0 or newer. `--experimental-ffi` must be active.
@@ -53,8 +53,9 @@ History rendering is bounded; `Ctrl+U`/`Ctrl+D` move the window and `PageUp`
 loads older events.
 
 - `Enter`: newline
-- `Meta+Enter`: queue prompt or execute a matched command
-- `Ctrl+Enter`: steer the running turn
+- `Meta+Enter`: submit with the saved busy behavior; idle sessions always queue
+- `Ctrl+Enter`: submit with the opposite queue/steer behavior while running
+- `Meta+B`: switch the Host-backed busy behavior between queue and steer
 - `Ctrl+X`: stop the running turn
 - `/`: open grouped fuzzy command and prefix-matched skill candidates
 - `@`: open running direct-child subagent references
@@ -67,9 +68,13 @@ loads older events.
 - `Ctrl+E`: export the current session to a new absolute `.zip` path
 - `Ctrl+Delete`: clear staged images
 
-`SEND`, `STEER`, `STOP`, `OLDER`, `MODEL`, `ATTACH`, `EXPORT`, `CLEAR`, and
-`+` provide mouse equivalents. Trigger candidates and the dismissal row are
-also clickable. Model and reasoning choices share one Host-backed
+Dynamic `QUEUE`/`STEER`, `ENTER QUEUE`/`ENTER STEER`, `STOP`, `OLDER`,
+`MODEL`, `ATTACH`, `EXPORT`, `CLEAR`, and `+` actions provide mouse and
+focus/Enter equivalents. Each queued occurrence has focusable `EDIT`, `REMOVE`,
+and strict `STEER` actions; `STEER ALL` processes the visible FIFO until Host
+state converges. Queue editing uses mouse-accessible Save/Cancel controls.
+Trigger candidates and the dismissal row are also clickable. Model and
+reasoning choices share one Host-backed
 session directory across the composer and `/model`. A definitely unroutable
 Host selection blocks submission and exposes the Providers handoff; unknown or
 unadvertised catalog state does not block. Failed sends restore the submitted

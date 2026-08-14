@@ -150,6 +150,7 @@ function fixture(options: Pick<ConversationControllerOptions, 'completion' | 'me
       const text = content.find(part => part.type === 'text')?.text
       return text === 'fail' ? Promise.reject(new Error('send unavailable')) : Promise.resolve()
     },
+    updateQueue: () => Promise.resolve({ ok: true, value: { accepted: true } }),
   }
   const list = source({
     current: SESSION_ID,
@@ -187,8 +188,8 @@ test('projects durable, streaming, and queued conversation state', () => {
     ['user', 'Build TUI'],
     ['assistant', 'thinking: inspect contracts\nReady'],
     ['assistant', 'Streaming\n[streaming]'],
-    ['user', 'queued: Next task'],
   ])
+  assert.deepEqual(view.queue.map(item => item.preview), ['Next task'])
 })
 
 test('routes commands before skill prompts and preserves failed drafts', async () => {

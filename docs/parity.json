@@ -210,12 +210,12 @@
       "evidence": ["deepseek-harness/packages/client/ui-conversation/README.md", "src/features/conversation/index.ts"],
       "classification": "parity",
       "owner": "src/features/conversation; src/client/conversation; src/views/conversation",
-      "keyboard": "Conversation route; compose, submit, inspect, page history, retry, and cancel",
-      "mouse": "Click composer, messages, details, history, retry, and cancel controls",
-      "automatedProof": ["test/features/conversation.test.ts", "test/features/conversation-native.test.ts", "planned:test/features/conversation-seats-native.test.ts"],
+      "keyboard": "Conversation route; compose, choose primary/alternate busy delivery, edit/remove/steer queued occurrences, page history, retry, and cancel",
+      "mouse": "Click composer delivery preference, queue occurrence controls, messages, details, history, retry, and cancel controls",
+      "automatedProof": ["test/features/conversation.test.ts", "test/features/conversation-native.test.ts", "test/features/conversation-queue.test.ts", "test/features/conversation-queue-native.test.ts", "test/features/conversation-submission.test.ts", "planned:test/features/conversation-seats-native.test.ts"],
       "dogfoodProof": "pending: Task 17 run complete conversation lifecycle",
       "status": "partial",
-      "notes": "Core conversation works; queue controls, seats, statistics, and full detail parity remain."
+      "notes": "Core conversation, Host-backed busy-submit preference, and occurrence-addressed FIFO queue controls are proven; seats, statistics, and full detail parity remain."
     },
     {
       "id": "tools.inspection",

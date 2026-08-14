@@ -7,6 +7,7 @@ contracts, zen shell, workspace/session workflows, streaming conversation,
 structured tool inspection, path-only image staging, private session export,
 confirmed produced-file opening, fail-closed human interaction overlays,
 session-scoped operational actions, grouped command/skill/subagent discovery,
+occurrence-addressed queued prompts with persisted busy-submit behavior,
 shared model/reasoning selection, provider management, and redacted
 configuration/plugin control.
 

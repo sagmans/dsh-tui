@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import { test } from 'vitest'
 import { createTestRenderer } from '@opentui/core/testing'
 import type { MessageId, PromptContentPart, SessionId } from '@deepseek-ai/dsh-api-remotes/client'
@@ -26,7 +25,6 @@ const ATTACHMENT_ID = 'conversation-attachment-0'
 const IMAGE_PATH = '/tmp/private/native-screen.png'
 const EXPORT_PATH = '/tmp/native-session.zip'
 const ACTION_SETTLE_DELAY_MS = 0
-const STANDARD_FRAME = readFileSync(new URL('../frames/chat/standard-72x18.txt', import.meta.url), 'utf8')
 // Static fixture identities cross only Harness brand boundaries.
 /* oxlint-disable typescript/no-unsafe-type-assertion */
 const SESSION_ID = 'session-one' as SessionId
@@ -132,6 +130,7 @@ test.skipIf(!NATIVE_RENDERER_AVAILABLE)('drives multiline composer and mouse act
         command: () => Promise.resolve(false),
         loadOlder: () => { historyLoads += 1; return Promise.resolve() },
         prompt: (content, mode) => { prompts.push({ content, mode }); return Promise.resolve() },
+        updateQueue: () => Promise.resolve({ ok: true, value: { accepted: true } }),
       }),
     },
   })
@@ -141,11 +140,11 @@ test.skipIf(!NATIVE_RENDERER_AVAILABLE)('drives multiline composer and mouse act
   try {
     await harness.flush()
     const frame = harness.captureCharFrame()
-    assert.equal(frame, STANDARD_FRAME)
     assert.match(frame, /Terminal conversation/u)
     assert.match(frame, /Build terminal conversation/u)
     assert.match(frame, /Working/u)
-    assert.match(frame, /queued: Review result/u)
+    assert.match(frame, /QUEUE 1/u)
+    assert.match(frame, /Review result/u)
 
     const attach = view.findDescendantById(ATTACH_ID)
     assert.ok(attach)

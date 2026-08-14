@@ -111,6 +111,7 @@ function conversationController(calls: string[]): ConversationController {
       inputValue = ''
       publish()
     },
+    beginQueueEdit: () => {},
     cancel: () => Promise.resolve(),
     cancelInput: () => { calls.push('cancel'); input = undefined; publish() },
     clearAttachments: () => { attachments = []; publish() },
@@ -122,6 +123,9 @@ function conversationController(calls: string[]): ConversationController {
       agentPreset: undefined,
       attachments,
       busy: false,
+      busyEnter: 'queue',
+      busyEnterAvailable: false,
+      busyEnterBusy: false,
       draft: '',
       error: undefined,
       hasMore: false,
@@ -133,6 +137,9 @@ function conversationController(calls: string[]): ConversationController {
       modelLabel: undefined,
       modelRoutable: undefined,
       phase: 'ready',
+      primarySendMode: 'queue',
+      queue: [],
+      queueMutable: false,
       running: false,
       sessionId: SESSION_ID,
       status: 'Ready',
@@ -152,13 +159,18 @@ function conversationController(calls: string[]): ConversationController {
       attachments = attachments.filter((_attachment, current) => current !== index)
       publish()
     },
+    removeQueue: () => Promise.resolve(false),
     scroll: () => {},
     scrollOffset: () => 0,
     send: () => Promise.resolve(false),
+    sendAlternateDraft: () => Promise.resolve(false),
     sendDraft: () => Promise.resolve(false),
     setDraft: () => {},
     setInput: value => { inputValue = value },
+    steerQueue: () => Promise.resolve(false),
+    steerQueueAll: () => Promise.resolve(false),
     submitInput: () => { calls.push(`save:${inputValue}`); input = undefined; publish(); return Promise.resolve(true) },
+    toggleBusyEnter: () => Promise.resolve(false),
     subscribe: next => { listener = next; return () => { listener = NOOP_LISTENER } },
   }
 }
