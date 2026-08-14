@@ -20,6 +20,7 @@ const CONVERSATION_PLUGIN_NAME = '@sagmans/dsh-tui/feature/conversation'
 const TOOLS_PLUGIN_NAME = '@sagmans/dsh-tui/feature/tools'
 const INTERACTIONS_PLUGIN_NAME = '@sagmans/dsh-tui/feature/interactions'
 const OPERATIONS_PLUGIN_NAME = '@sagmans/dsh-tui/feature/operations'
+const SETTINGS_PLUGIN_NAME = '@sagmans/dsh-tui/feature/settings'
 
 interface StartupResult {
   readonly exits: readonly number[]
@@ -99,6 +100,11 @@ function installPluginModules(ctx: Context): void {
     inject: [KERNEL_SERVICE, CLIENT_SERVICE],
     apply(): void {},
   }
+  const settingsPlugin = {
+    name: 'tui-settings-fixture',
+    inject: [KERNEL_SERVICE, CLIENT_SERVICE],
+    apply(): void {},
+  }
   const modules = new Map<string, unknown>([
     [STARTUP_PLUGIN_NAME, startupPlugin],
     [CLIENT_PLUGIN_NAME, clientPlugin],
@@ -109,6 +115,7 @@ function installPluginModules(ctx: Context): void {
     [TOOLS_PLUGIN_NAME, toolsPlugin],
     [INTERACTIONS_PLUGIN_NAME, interactionsPlugin],
     [OPERATIONS_PLUGIN_NAME, operationsPlugin],
+    [SETTINGS_PLUGIN_NAME, settingsPlugin],
   ])
   Reflect.set(ctx.loader, 'internal', {
     version: 'v2',
@@ -159,6 +166,7 @@ test('settles keyless startup, client, kernel, and shell Loader rows without bro
     await ctx.loader.create({ name: TOOLS_PLUGIN_NAME, inject: [KERNEL_SERVICE, CLIENT_SERVICE] })
     await ctx.loader.create({ name: INTERACTIONS_PLUGIN_NAME, inject: [KERNEL_SERVICE, CLIENT_SERVICE] })
     await ctx.loader.create({ name: OPERATIONS_PLUGIN_NAME, inject: [KERNEL_SERVICE, CLIENT_SERVICE] })
+    await ctx.loader.create({ name: SETTINGS_PLUGIN_NAME, inject: [KERNEL_SERVICE, CLIENT_SERVICE] })
     await ctx.loader.create({ name: KERNEL_PLUGIN_NAME, inject: [STARTUP_SERVICE, CLIENT_SERVICE] })
     await ctx.loader.create({
       name: CLIENT_PLUGIN_NAME,
@@ -186,6 +194,7 @@ test('settles keyless startup, client, kernel, and shell Loader rows without bro
         INTERACTIONS_PLUGIN_NAME,
         KERNEL_PLUGIN_NAME,
         OPERATIONS_PLUGIN_NAME,
+        SETTINGS_PLUGIN_NAME,
         SESSIONS_PLUGIN_NAME,
         SHELL_PLUGIN_NAME,
         STARTUP_PLUGIN_NAME,

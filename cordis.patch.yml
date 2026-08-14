@@ -101,3 +101,7 @@
     - id: tui-operations
       name: '@sagmans/dsh-tui/feature/operations'
       inject: [tuiKernel, tuiClient]
+
+    - id: tui-settings
+      name: '@sagmans/dsh-tui/feature/settings'
+      inject: [tuiKernel, tuiClient]

@@ -9,6 +9,7 @@ import {
   type KeyEvent,
 } from '@opentui/core'
 import type { TuiTheme } from '../../contracts/theme.js'
+import { SecretInputRenderable } from './secret-input.js'
 
 const OVERLAY_WIDTH = '94%'
 const OVERLAY_HEIGHT = '90%'
@@ -283,20 +284,28 @@ function createInput<ActionId extends string, Section extends string>(
     id: `${config.idPrefix}-input-frame`, title: snapshot.input.title,
     width: '100%', height: INPUT_HEIGHT, border: true, flexShrink: 0,
   })
-  const textColor = snapshot.input.secret === true ? theme.colors.background : theme.colors.text
-  const editor = new TextareaRenderable(renderer, {
+  const commonOptions = {
     id: `${config.idPrefix}-input`,
-    width: '100%',
-    height: '100%',
-    initialValue: snapshot.input.value,
-    textColor,
+    width: '100%' as const,
     cursorColor: theme.colors.focus,
-    focusedTextColor: textColor,
+    textColor: theme.colors.text,
+    focusedTextColor: theme.colors.text,
     focusedBackgroundColor: theme.colors.background,
-    wrapMode: 'word',
-    onContentChange() { controller.setInput(editor.plainText) },
-    onKeyDown(key) { handleInputKey(key, editor, controller) },
-  })
+  }
+  const editor: TextareaRenderable = snapshot.input.secret === true
+    ? new SecretInputRenderable(renderer, {
+        ...commonOptions,
+        onSecretChange(value) { controller.setInput(value) },
+        onKeyDown(key) { handleInputKey(key, editor, controller) },
+      })
+    : new TextareaRenderable(renderer, {
+        ...commonOptions,
+        height: '100%',
+        initialValue: snapshot.input.value,
+        wrapMode: 'word',
+        onContentChange() { controller.setInput(editor.plainText) },
+        onKeyDown(key) { handleInputKey(key, editor, controller) },
+      })
   frame.add(editor)
   queueMicrotask(() => {
     if (editor.isDestroyed) return

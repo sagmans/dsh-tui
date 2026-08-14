@@ -98,3 +98,25 @@ shared runtime. Jobs remain read-only, matching current Harness behavior. Trace
 shows the loaded event/request facts and can page older history. Feedback uses
 Host-owned compare-and-set versions; conflicts reconcile from authoritative
 Host values. Paths, payloads, and output remain sanitized inert text.
+
+## Configuration and plugins
+
+Open Settings with `g,` or the mouse tab. `1`–`7` select Models, Access,
+Presets, Settings, Credentials, Plugins, and Extensions. `h`/`l`, arrows, or
+`Tab` switch sections; `j`/`k`, arrows, or `Ctrl+N`/`Ctrl+P` move rows.
+`Enter` runs the primary action, `e` selects an edit action, `y` selects a
+positive action, `x` selects a destructive action, and `r` refreshes. Mouse
+tabs, rows, and action labels are equivalent.
+
+Model and preset changes reuse Host APIs. Full-access selection requires a
+second exact activation. Settings display redacted values and secret configured
+state only; namespace reset uses the displayed revision and requires
+confirmation. Credential values use a masked write-only editor, leave no
+render-buffer copy, and are cleared before the Host call. Unset also requires
+confirmation.
+
+Configured Loader plugins are read-only inventory. Dynamic Cordis packages are
+limited to the current session. Host-only packages may run; stop and remove
+require confirmation. Packages with browser client halves are shown as
+unsupported and cannot run, so this profile never fetches or executes browser
+plugin code.

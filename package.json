@@ -55,6 +55,10 @@
       "types": "./lib/features/operations/index.d.ts",
       "default": "./lib/features/operations/index.js"
     },
+    "./feature/settings": {
+      "types": "./lib/features/settings/index.d.ts",
+      "default": "./lib/features/settings/index.js"
+    },
     "./contracts": {
       "types": "./lib/contracts/index.d.ts",
       "default": "./lib/contracts/index.js"

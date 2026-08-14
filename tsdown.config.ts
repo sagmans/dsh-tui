@@ -11,6 +11,7 @@ export default defineConfig({
     'src/features/tools/index.ts',
     'src/features/interactions/index.ts',
     'src/features/operations/index.ts',
+    'src/features/settings/index.ts',
     'src/contracts/index.ts',
     'src/testing/index.ts',
   ],
