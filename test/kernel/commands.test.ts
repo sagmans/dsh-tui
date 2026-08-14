@@ -101,6 +101,36 @@ test('registers discoverable commands and dispatches configured sequences', () =
   harness.cleanup()
 })
 
+test('supports active command scopes without global key conflicts', () => {
+  const ctx = new Context()
+  const harness = keymapFixture()
+  const commands = createTuiCommands(harness.keymap)
+  let scoped = false
+  let globalCalls = 0
+  let scopedCalls = 0
+  commands.register(ctx, {
+    id: 'global-scope',
+    bindings: [{ key: 'j', command: 'global.next' }],
+    commands: [{ name: 'global.next', description: 'Global next', run: () => { globalCalls += 1 } }],
+  })
+  commands.register(ctx, {
+    id: 'active-scope',
+    priority: 10,
+    active: () => scoped,
+    bindings: [{ key: 'j', command: 'scoped.next' }],
+    commands: [{ name: 'scoped.next', description: 'Scoped next', run: () => { scopedCalls += 1 } }],
+  })
+
+  harness.press('j')
+  scoped = true
+  harness.press('j')
+  assert.equal(globalCalls, 1)
+  assert.equal(scopedCalls, 1)
+
+  commands.dispose()
+  harness.cleanup()
+})
+
 test('reports shadowed bindings as conflicts', () => {
   const ctx = new Context()
   const harness = keymapFixture()
@@ -120,6 +150,40 @@ test('reports shadowed bindings as conflicts', () => {
   assert.deepEqual(commands.conflicts().map(conflict => conflict.key), ['x'])
   second()
   first()
+  commands.dispose()
+  harness.cleanup()
+})
+
+test('formats leader bindings for discovery', () => {
+  const ctx = new Context()
+  const harness = keymapFixture()
+  const commands = createTuiCommands(harness.keymap)
+  commands.register(ctx, {
+    id: 'leader-binding',
+    bindings: [{ key: '<leader>p', command: 'palette.open' }],
+    commands: [{ name: 'palette.open', description: 'Open palette', run: () => {} }],
+  })
+
+  assert.deepEqual(commands.list({ visibility: 'registered' })[0]?.bindings, ['<leader> p'])
+
+  commands.dispose()
+  harness.cleanup()
+})
+
+test('publishes command catalog changes', () => {
+  const ctx = new Context()
+  const harness = keymapFixture()
+  const commands = createTuiCommands(harness.keymap)
+  let notifications = 0
+  const unsubscribe = commands.subscribe(ctx, () => { notifications += 1 })
+  const dispose = commands.register(ctx, COMMAND_LAYER)
+
+  assert.equal(notifications > 0, true)
+  const afterRegister = notifications
+  dispose()
+  assert.equal(notifications > afterRegister, true)
+
+  unsubscribe()
   commands.dispose()
   harness.cleanup()
 })

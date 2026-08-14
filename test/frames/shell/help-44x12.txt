@@ -1,0 +1,8 @@
+ CHAT      SESSIONS      INSPECT     SETTING
+Implement terminal shell  ·  running
+  ╭─KEYS─────────────────────────────────╮
+  │  g c/s/i/,              routes       │
+  │  j/k · Ctrl+N/P         next/previous│
+  │  Space P · Enter        palette/run  │
+  │  ? · z                  help/zen     │
+  │  Esc · q                close/quit   │

@@ -4,6 +4,8 @@ import { stringifyKeySequence, type Binding, type Command, type Keymap, type Lay
 import {
   registerDeadBindingWarnings,
   registerDefaultKeys,
+  registerEnabledFields,
+  registerLeader,
   registerMetadataFields,
   registerUnresolvedCommandWarnings,
 } from '@opentui/keymap/addons'
@@ -19,6 +21,7 @@ import type {
 
 const DESCRIPTION_ATTRIBUTE = 'desc'
 const DISPOSED_SERVICE_ERROR = 'TUI command service disposed'
+const LEADER_KEY = 'space'
 
 function commandDefinitions(layer: TuiCommandLayer): readonly Command<Renderable, KeyEvent>[] {
   return layer.commands.map(command => ({
@@ -34,6 +37,7 @@ function bindingDefinitions(layer: TuiCommandLayer): readonly Binding<Renderable
 
 function keymapLayer(layer: TuiCommandLayer): Layer<Renderable, KeyEvent> {
   return {
+    ...layer.active === undefined ? {} : { enabled: layer.active },
     bindings: bindingDefinitions(layer),
     commands: commandDefinitions(layer),
     ...layer.priority === undefined ? {} : { priority: layer.priority },
@@ -45,6 +49,7 @@ function keymapLayer(layer: TuiCommandLayer): Layer<Renderable, KeyEvent> {
 class CommandService implements TuiCommands {
   readonly keymap: TuiKeymap
   private readonly layers = new Map<string, () => void>()
+  private readonly listeners = new Set<() => void>()
   private readonly resources: Array<() => void>
   private disposed = false
 
@@ -52,9 +57,14 @@ class CommandService implements TuiCommands {
     this.keymap = keymap
     this.resources = [
       registerDefaultKeys(keymap),
+      registerEnabledFields(keymap),
+      registerLeader(keymap, { trigger: LEADER_KEY }),
       registerMetadataFields(keymap),
       registerDeadBindingWarnings(keymap),
       registerUnresolvedCommandWarnings(keymap),
+      keymap.on('state', () => {
+        for (const listener of this.listeners) listener()
+      }),
     ]
   }
 
@@ -74,6 +84,7 @@ class CommandService implements TuiCommands {
     for (const dispose of [...this.layers.values()].toReversed()) dispose()
     this.layers.clear()
     for (const dispose of this.resources.toReversed()) dispose()
+    this.listeners.clear()
   }
 
   list(query: TuiCommandQuery = {}): readonly TuiCommandView[] {
@@ -118,6 +129,20 @@ class CommandService implements TuiCommands {
 
   run(command: string): ReturnType<Keymap<Renderable, KeyEvent>['runCommand']> {
     return this.keymap.runCommand(command)
+  }
+
+  subscribe(owner: Context, listener: () => void): () => void {
+    if (this.disposed) throw new Error(DISPOSED_SERVICE_ERROR)
+    this.listeners.add(listener)
+    const release = (): void => { this.listeners.delete(listener) }
+    let disposeEffect: () => Promise<void>
+    try {
+      disposeEffect = owner.effect(() => release, 'tuiCommands.subscribe')
+    } catch (error) {
+      release()
+      throw error
+    }
+    return () => { void disposeEffect() }
   }
 }
 

@@ -4,7 +4,6 @@ import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import { assertEntriesActivated } from '@deepseek-ai/dsh-app-boot'
 import { internals, provideCmdline } from '@deepseek-ai/dsh-cmdline'
-import * as shellPlugin from '../src/features/shell/index.js'
 import * as startupPlugin from '../src/startup.js'
 
 const ORIGINAL_INTERNALS = { ...internals }
@@ -64,6 +63,11 @@ function installPluginModules(ctx: Context): void {
     apply(kernelContext: Context): void {
       kernelContext.provide(KERNEL_SERVICE, Object.freeze({ ready: true }))
     },
+  }
+  const shellPlugin = {
+    name: 'tui-shell-fixture',
+    inject: [KERNEL_SERVICE],
+    apply(): void {},
   }
   const modules = new Map<string, unknown>([
     [STARTUP_PLUGIN_NAME, startupPlugin],

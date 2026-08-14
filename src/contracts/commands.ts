@@ -16,6 +16,7 @@ export interface TuiCommandBinding {
 }
 
 export interface TuiCommandLayer {
+  readonly active?: () => boolean
   readonly bindings: readonly TuiCommandBinding[]
   readonly commands: readonly TuiCommand[]
   readonly id: string
@@ -48,6 +49,7 @@ export interface TuiCommands {
   list(query?: TuiCommandQuery): readonly TuiCommandView[]
   register(owner: Context, layer: TuiCommandLayer): () => void
   run(command: string): RunCommandResult<Renderable, KeyEvent>
+  subscribe(owner: Context, listener: () => void): () => void
 }
 
 declare module '@deepseek-ai/cordis' {
