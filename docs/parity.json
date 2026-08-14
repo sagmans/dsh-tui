@@ -47,7 +47,7 @@
       "owner": "src/features/operations; src/views/operations/root.ts",
       "keyboard": "Operations > Feedback; select exact action with action cursor",
       "mouse": "Operations > Feedback; click message and exact action",
-      "automatedProof": ["test/features/operations.test.ts", "test/features/action-parity.test.ts", "test/features/action-parity-native.test.ts", "planned:test/features/operations-parity.test.ts"],
+      "automatedProof": ["test/features/operations.test.ts", "test/features/action-parity.test.ts", "test/features/action-parity-native.test.ts", "test/features/overlay-actions-native.test.ts", "planned:test/features/operations-parity.test.ts"],
       "dogfoodProof": "pending: Task 17 set, replace, annotate, and clear feedback",
       "status": "partial",
       "notes": "Exact action commands and shared cursor are proven; inline placement and complete lifecycle dogfood remain."
@@ -62,10 +62,10 @@
       "owner": "src/features/export; src/views/conversation",
       "keyboard": "Ctrl+E; type absolute destination; activate Save or Cancel",
       "mouse": "Click EXPORT; focus path; click Save or Cancel",
-      "automatedProof": ["test/parity/media-export.test.ts", "planned:test/features/overlay-actions-native.test.ts"],
+      "automatedProof": ["test/parity/media-export.test.ts", "test/features/overlay-actions-native.test.ts"],
       "dogfoodProof": "pending: Task 17 export and inspect a private archive",
       "status": "partial",
-      "notes": "Explicit private local archive replaces browser download; mouse Save/Cancel remain incomplete."
+      "notes": "Explicit private local archive replaces browser download; dual-input path controls and focus recovery are proven."
     },
     {
       "id": "conversation.statistics",
@@ -92,7 +92,7 @@
       "owner": "src/features/sessions; src/views/sessions/root.ts",
       "keyboard": "New workspace; type or choose local directory; submit/cancel",
       "mouse": "Click new workspace and picker controls; submit/cancel",
-      "automatedProof": ["test/features/sessions.test.ts", "test/profile-composition.test.ts", "planned:test/features/overlay-actions-native.test.ts"],
+      "automatedProof": ["test/features/sessions.test.ts", "test/profile-composition.test.ts", "test/features/overlay-actions-native.test.ts"],
       "dogfoodProof": "pending: Task 17 register disposable workspace",
       "status": "partial",
       "notes": "Terminal path/picker preserves directory choice without browser display dependencies."
@@ -152,10 +152,10 @@
       "owner": "src/features/shell; src/views/shell",
       "keyboard": "Global route hotkeys, tab traversal, help, and exit",
       "mouse": "Click tabs, footer actions, help controls, and exit action",
-      "automatedProof": ["test/features/shell.test.ts", "test/features/shell-native.test.ts", "planned:test/features/mouse-navigation-native.test.ts"],
+      "automatedProof": ["test/features/shell.test.ts", "test/features/shell-native.test.ts", "test/features/mouse-navigation-native.test.ts"],
       "dogfoodProof": "pending: Task 17 traverse every route and exit both ways",
       "status": "partial",
-      "notes": "Core zen shell exists; Operations and some routes remain hotkey-only."
+      "notes": "Persistent minimal footer keeps command and Operations entry points mouse-accessible in zen mode."
     },
     {
       "id": "settings.general",
@@ -167,7 +167,7 @@
       "owner": "src/features/settings; src/views/settings/root.ts",
       "keyboard": "Open Settings; traverse sections, rows, forms, confirmations, and actions",
       "mouse": "Click Settings sections, rows, fields, confirmations, and actions",
-      "automatedProof": ["test/features/settings.test.ts", "test/features/settings-native.test.ts", "test/features/action-parity.test.ts", "test/features/action-parity-native.test.ts"],
+      "automatedProof": ["test/features/settings.test.ts", "test/features/settings-native.test.ts", "test/features/action-parity.test.ts", "test/features/action-parity-native.test.ts", "test/features/overlay-actions-native.test.ts"],
       "dogfoodProof": "pending: Task 17 mutate and restore disposable settings",
       "status": "partial",
       "notes": "Redacted namespace inspection exists; complete field-level and preference behavior does not."
@@ -197,7 +197,7 @@
       "owner": "src/features/settings; src/views/settings/root.ts",
       "keyboard": "Settings > Plugins; traverse schema fields, save, reset, and cancel",
       "mouse": "Settings > Plugins; click fields and exact save/reset/cancel actions",
-      "automatedProof": ["test/features/settings.test.ts", "test/features/action-parity.test.ts", "test/features/action-parity-native.test.ts"],
+      "automatedProof": ["test/features/settings.test.ts", "test/features/action-parity.test.ts", "test/features/action-parity-native.test.ts", "test/features/overlay-actions-native.test.ts"],
       "dogfoodProof": "pending: Task 17 edit and restore safe disposable plugin settings",
       "status": "partial",
       "notes": "Current generic redacted namespace view lacks Web schema-driven forms."
@@ -245,7 +245,7 @@
       "automatedProof": ["test/client/workflows.test.ts", "test/features/operations.test.ts", "test/features/action-parity.test.ts", "test/features/action-parity-native.test.ts", "planned:test/features/operations-parity.test.ts"],
       "dogfoodProof": "pending: Task 17 inspect disposable workflow lifecycle",
       "status": "partial",
-      "notes": "Operational projection exists; exhaustive lifecycle and dual-input proof remain."
+      "notes": "Operational projection and exact dual-input actions exist; exhaustive lifecycle proof remains."
     },
     {
       "id": "deliverables.files",
@@ -272,7 +272,7 @@
       "owner": "src/features/sessions; src/views/sessions/root.ts",
       "keyboard": "Sessions route; traverse, search, group, sort, create, rename, fork, archive, reorder",
       "mouse": "Click sessions, group/sort controls, and CRUD actions",
-      "automatedProof": ["test/features/sessions.test.ts", "test/features/sessions-native.test.ts", "planned:test/features/session-views.test.ts"],
+      "automatedProof": ["test/features/sessions.test.ts", "test/features/sessions-native.test.ts", "test/features/overlay-actions-native.test.ts", "planned:test/features/session-views.test.ts"],
       "dogfoodProof": "pending: Task 17 exercise mixed disposable workspaces",
       "status": "partial",
       "notes": "Core CRUD exists; grouped/flat modes, updated sorting, and unread state are absent."
@@ -350,7 +350,7 @@
       "automatedProof": ["test/features/operations.test.ts", "test/features/action-parity.test.ts", "test/features/action-parity-native.test.ts", "planned:test/features/operations-parity.test.ts"],
       "dogfoodProof": "pending: Task 17 start and inspect disposable background job",
       "status": "partial",
-      "notes": "Core projection/actions exist; dual-input and lifecycle matrix proof remain."
+      "notes": "Core projection and exact dual-input actions exist; lifecycle matrix proof remains."
     },
     {
       "id": "goals.session",
@@ -362,10 +362,10 @@
       "owner": "src/features/operations; src/views/catalog/root.ts",
       "keyboard": "Goal seat or Operations > Goal; create/edit/pause/resume/clear",
       "mouse": "Click goal seat, fields, and exact lifecycle action",
-      "automatedProof": ["test/features/operations.test.ts", "test/features/action-parity.test.ts", "test/features/action-parity-native.test.ts", "planned:test/features/operations-parity.test.ts"],
+      "automatedProof": ["test/features/operations.test.ts", "test/features/action-parity.test.ts", "test/features/action-parity-native.test.ts", "test/features/overlay-actions-native.test.ts", "planned:test/features/operations-parity.test.ts"],
       "dogfoodProof": "pending: Task 17 exercise complete disposable goal lifecycle",
       "status": "partial",
-      "notes": "Operations provides core outcome; inline seat and complete overlay mouse controls remain."
+      "notes": "Operations provides dual-input lifecycle controls; inline goal seat and dogfood remain."
     },
     {
       "id": "model.selection",
@@ -467,10 +467,10 @@
       "owner": "src/features/interactions; src/views/interactions/root.ts",
       "keyboard": "Traverse options; focus custom answer; submit/cancel/approve/reject",
       "mouse": "Click options, custom field, submit/cancel, approve/reject",
-      "automatedProof": ["test/features/interactions.test.ts", "test/features/tools-interactions-native.test.ts", "planned:test/features/interactions-native.test.ts"],
+      "automatedProof": ["test/features/interactions.test.ts", "test/features/tools-interactions-native.test.ts", "test/features/overlay-actions-native.test.ts", "planned:test/features/interactions-native.test.ts"],
       "dogfoodProof": "pending: Task 17 answer option/custom and approval flows",
       "status": "partial",
-      "notes": "Core overlays exist; explicit custom-input mouse/focus and full dual-input proof remain."
+      "notes": "Core overlays and custom-input submit/cancel focus paths exist; full lifecycle dogfood remains."
     },
     {
       "id": "trajectory.ledger",
@@ -497,10 +497,10 @@
       "owner": "src/features/attachments; src/features/conversation/media.ts; src/views/conversation",
       "keyboard": "Ctrl+O; type absolute image path; select/remove individual attachment; submit/cancel",
       "mouse": "Click ATTACH; focus path; select/remove attachment; submit/cancel",
-      "automatedProof": ["test/parity/media-export.test.ts", "test/features/conversation-native.test.ts", "planned:test/features/overlay-actions-native.test.ts"],
+      "automatedProof": ["test/parity/media-export.test.ts", "test/features/conversation-native.test.ts", "test/features/overlay-actions-native.test.ts"],
       "dogfoodProof": "pending: Task 17 attach, remove, send, and inspect supported images",
       "status": "partial",
-      "notes": "Path-based admission replaces browser paste/drop; individual keyboard removal and overlay buttons remain."
+      "notes": "Path-based admission replaces browser paste/drop; each staged image supports keyboard and mouse removal."
     },
     {
       "id": "browser.rich-content",
@@ -557,7 +557,7 @@
       "owner": "src/views/shell/status.ts; feature status/error rows",
       "keyboard": "Focus or open in-app status/error source from relevant route",
       "mouse": "Click visible status/error source and related action",
-      "automatedProof": ["test/features/shell.test.ts", "planned:test/features/mouse-navigation-native.test.ts"],
+      "automatedProof": ["test/features/shell.test.ts", "test/features/mouse-navigation-native.test.ts"],
       "dogfoodProof": "pending: Task 17 trigger completion and failure states",
       "status": "partial",
       "notes": "Persistent in-app status replaces browser system notifications and permission prompts."

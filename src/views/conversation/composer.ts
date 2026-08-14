@@ -10,6 +10,7 @@ import {
   type KeyEvent,
 } from '@opentui/core'
 import type { TuiTheme } from '../../contracts/theme.js'
+import { createInputActions } from '../action.js'
 import type {
   ConversationController,
   ConversationSnapshotView,
@@ -17,7 +18,7 @@ import type {
 
 const COMPOSER_HEIGHT = 4
 const ACTION_HEIGHT = 1
-const INPUT_HEIGHT = 5
+const INPUT_HEIGHT = 6
 const INPUT_WIDTH = '86%'
 const INPUT_LEFT = '7%'
 const INPUT_TOP = '20%'
@@ -31,7 +32,7 @@ const CANCEL_KEY = 'x'
 const ATTACH_KEY = 'o'
 const EXPORT_KEY = 'e'
 const DELETE_KEY = 'delete'
-const COMPOSER_HINT = 'M+Enter queue · C+Enter steer · C+O image · C+E export · C+Del clear'
+const COMPOSER_HINT = 'M+Enter queue · C+Enter steer · C+O image · S+Tab files · C+E export · C+Del clear'
 const SEND_ACTION = ' SEND '
 const STEER_ACTION = ' STEER '
 const STOP_ACTION = ' STOP '
@@ -46,6 +47,7 @@ const OLDER_ACTION_ID = 'conversation-older'
 const ATTACH_ACTION_ID = 'conversation-attach'
 const EXPORT_ACTION_ID = 'conversation-export'
 const CLEAR_ACTION_ID = 'conversation-clear-attachments'
+const PATH_ACTION_PREFIX = 'conversation-path'
 
 function submit(
   editor: TextareaRenderable,
@@ -72,6 +74,7 @@ function handleKey(
   key: KeyEvent,
   editor: TextareaRenderable,
   controller: ConversationController,
+  focusLastAttachment: () => boolean,
 ): void {
   if (key.ctrl && key.name === CANCEL_KEY) {
     key.preventDefault()
@@ -86,6 +89,12 @@ function handleKey(
     return
   }
   if (handleMediaKey(key, controller)) return
+  if (key.name === TAB_KEY && key.shift && focusLastAttachment()) {
+    key.preventDefault()
+    key.stopPropagation()
+    editor.blur()
+    return
+  }
   if (key.name === TAB_KEY) {
     key.preventDefault()
     key.stopPropagation()
@@ -116,6 +125,7 @@ function createEditor(
   theme: TuiTheme,
   controller: ConversationController,
   snapshot: ConversationSnapshotView,
+  focusLastAttachment: () => boolean,
 ): TextareaRenderable {
   const editor = new TextareaRenderable(renderer, {
     id: 'conversation-composer',
@@ -130,7 +140,7 @@ function createEditor(
     wrapMode: 'word',
     keyBindings: [{ name: RETURN_KEY, meta: true, action: 'submit' }],
     onContentChange() { controller.setDraft(editor.plainText) },
-    onKeyDown(key) { handleKey(key, editor, controller) },
+    onKeyDown(key) { handleKey(key, editor, controller, focusLastAttachment) },
   })
   editor.onSubmit = () => { submit(editor, controller, 'queue') }
   return editor
@@ -159,6 +169,7 @@ export function createConversationInput(
     backgroundColor: theme.colors.background,
     paddingX: 1,
     paddingY: 1,
+    flexDirection: 'column',
   })
   const input = new InputRenderable(renderer, {
     id: 'conversation-path-input',
@@ -170,6 +181,7 @@ export function createConversationInput(
     focusedBackgroundColor: theme.colors.background,
     onContentChange() { controller.setInput(input.plainText) },
     onKeyDown(key) {
+      if (inputActions.focusForTab(key)) return
       if (key.name !== ESCAPE_KEY) return
       key.preventDefault()
       key.stopPropagation()
@@ -180,7 +192,17 @@ export function createConversationInput(
     controller.setInput(value)
     void controller.submitInput()
   })
+  const inputActions = createInputActions(renderer, theme, {
+    cancel: () => { controller.cancelInput() },
+    idPrefix: PATH_ACTION_PREFIX,
+    input,
+    save: () => {
+      controller.setInput(input.plainText)
+      void controller.submitInput()
+    },
+  })
   overlay.add(input)
+  overlay.add(inputActions.root)
   queueMicrotask(() => { if (!input.isDestroyed) input.focus() })
   return overlay
 }
@@ -190,6 +212,7 @@ export function createComposer(
   theme: TuiTheme,
   controller: ConversationController,
   snapshot: ConversationSnapshotView,
+  focusLastAttachment: () => boolean,
 ): BoxRenderable {
   const composer = new BoxRenderable(renderer, {
     id: 'conversation-composer-frame',
@@ -199,7 +222,7 @@ export function createComposer(
     borderStyle: 'single',
     borderColor: snapshot.running ? theme.colors.warning : theme.colors.border,
   })
-  const editor = createEditor(renderer, theme, controller, snapshot)
+  const editor = createEditor(renderer, theme, controller, snapshot, focusLastAttachment)
   composer.add(editor)
   queueMicrotask(() => {
     if (editor.isDestroyed || snapshot.sessionId === undefined) return

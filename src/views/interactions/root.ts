@@ -9,6 +9,7 @@ import {
   type KeyEvent,
 } from '@opentui/core'
 import type { TuiTheme } from '../../contracts/theme.js'
+import { createFocusableAction } from '../action.js'
 import type {
   InteractionsController,
   InteractionSnapshotView,
@@ -25,6 +26,7 @@ const ACTION_HEIGHT = 1
 const CUSTOM_HEIGHT = 3
 const RETURN_KEY = 'return'
 const ESCAPE_KEY = 'escape'
+const TAB_KEY = 'tab'
 const SELECT_ACTION_ID = 'interaction-select'
 const APPROVE_ACTION_ID = 'interaction-approve'
 const REJECT_ACTION_ID = 'interaction-reject'
@@ -38,21 +40,14 @@ function createAction(
   enabled: boolean,
   run: () => void,
 ): TextRenderable {
-  return new TextRenderable(renderer, {
-    id,
+  return createFocusableAction(renderer, {
     content: ` ${label} `,
+    enabled,
+    fg: theme.colors.focus,
     height: ACTION_HEIGHT,
-    fg: enabled ? theme.colors.focus : theme.colors.muted,
-    attributes: enabled ? TextAttributes.BOLD : TextAttributes.DIM,
-    selectable: false,
-    onMouseUp(event) {
-      // OpenTUI publishes equivalent mouse-button values through separate enum declarations.
-      // oxlint-disable-next-line typescript/no-unsafe-enum-comparison
-      if (!enabled || event.button !== MouseButton.LEFT) return
-      event.preventDefault()
-      event.stopPropagation()
-      run()
-    },
+    id,
+    mutedFg: theme.colors.muted,
+    run,
   })
 }
 
@@ -104,7 +99,17 @@ function handleEditorKey(
   key: KeyEvent,
   editor: TextareaRenderable,
   controller: InteractionsController,
+  focusSubmit: () => void,
+  focusCancel: () => void,
 ): void {
+  if (key.name === TAB_KEY) {
+    key.preventDefault()
+    key.stopPropagation()
+    editor.blur()
+    if (key.shift) focusCancel()
+    else focusSubmit()
+    return
+  }
   if (key.name === ESCAPE_KEY) {
     key.preventDefault()
     key.stopPropagation()
@@ -158,6 +163,8 @@ function createCustomEditor(
   theme: TuiTheme,
   controller: InteractionsController,
   snapshot: InteractionSnapshotView,
+  focusSubmit: () => void,
+  focusCancel: () => void,
 ): TextareaRenderable {
   const editor = new TextareaRenderable(renderer, {
     id: 'interaction-custom',
@@ -171,7 +178,7 @@ function createCustomEditor(
     focusedBackgroundColor: theme.colors.background,
     wrapMode: 'word',
     onContentChange() { controller.setCustom(editor.plainText) },
-    onKeyDown(key) { handleEditorKey(key, editor, controller) },
+    onKeyDown(key) { handleEditorKey(key, editor, controller, focusSubmit, focusCancel) },
   })
   return editor
 }
@@ -180,6 +187,8 @@ function createQuestionBody(
   theme: TuiTheme,
   controller: InteractionsController,
   snapshot: InteractionSnapshotView,
+  focusSubmit: () => void,
+  focusCancel: () => void,
 ): BoxRenderable {
   const body = new BoxRenderable(renderer, {
     id: 'interaction-question-body',
@@ -197,7 +206,7 @@ function createQuestionBody(
     }))
   }
   body.add(createQuestionOptions(renderer, theme, controller, snapshot))
-  body.add(createCustomEditor(renderer, theme, controller, snapshot))
+  body.add(createCustomEditor(renderer, theme, controller, snapshot, focusSubmit, focusCancel))
   return body
 }
 
@@ -206,8 +215,12 @@ function createBody(
   theme: TuiTheme,
   controller: InteractionsController,
   snapshot: InteractionSnapshotView,
+  focusSubmit: () => void,
+  focusCancel: () => void,
 ): BoxRenderable | ScrollBoxRenderable {
-  if (snapshot.kind === 'question') return createQuestionBody(renderer, theme, controller, snapshot)
+  if (snapshot.kind === 'question') {
+    return createQuestionBody(renderer, theme, controller, snapshot, focusSubmit, focusCancel)
+  }
   const body = new ScrollBoxRenderable(renderer, {
     id: 'interaction-body',
     width: '100%',
@@ -261,6 +274,9 @@ function createFrame(
     flexDirection: 'column',
     zIndex: OVERLAY_Z_INDEX,
   })
+  const actions = createActions(renderer, theme, controller, snapshot)
+  const focusSubmit = (): void => { actions.findDescendantById(SUBMIT_ACTION_ID)?.focus() }
+  const focusCancel = (): void => { actions.findDescendantById(CANCEL_ACTION_ID)?.focus() }
   frame.add(new TextRenderable(renderer, {
     content: snapshot.title,
     height: HEADER_HEIGHT,
@@ -269,9 +285,9 @@ function createFrame(
     truncate: true,
     selectable: false,
   }))
-  frame.add(createBody(renderer, theme, controller, snapshot))
+  frame.add(createBody(renderer, theme, controller, snapshot, focusSubmit, focusCancel))
   frame.add(createStatus(renderer, theme, snapshot))
-  frame.add(createActions(renderer, theme, controller, snapshot))
+  frame.add(actions)
   return frame
 }
 

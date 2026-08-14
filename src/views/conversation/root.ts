@@ -1,10 +1,10 @@
 import {
   BoxRenderable,
-  MouseButton,
   ScrollBoxRenderable,
   TextAttributes,
   TextRenderable,
   type CliRenderer,
+  type Renderable,
 } from '@opentui/core'
 import type { TuiTheme } from '../../contracts/theme.js'
 import type {
@@ -13,12 +13,19 @@ import type {
   ConversationSnapshotView,
 } from '../../features/conversation/model.js'
 import { imageFallback } from '../../features/attachments/presentation.js'
+import { createFocusableAction } from '../action.js'
 import { createComposer, createConversationActions, createConversationInput } from './composer.js'
 
 const HEADER_HEIGHT = 1
 const STATUS_HEIGHT = 1
 const ATTACHMENTS_HEIGHT = 1
 const ATTACHMENT_PADDING = 1
+const COMPOSER_ID = 'conversation-composer'
+const ATTACHMENT_DELETE_KEY = 'delete'
+const ATTACHMENT_BACKSPACE_KEY = 'backspace'
+const ATTACHMENT_ESCAPE_KEY = 'escape'
+const ATTACHMENT_LEFT_KEY = 'left'
+const ATTACHMENT_RIGHT_KEY = 'right'
 const BUSY_COPY = 'Working…'
 const CHAT_LINE_PREFIX: Readonly<Record<ConversationLine['kind'], string>> = Object.freeze({
   assistant: 'AI',
@@ -83,39 +90,72 @@ function createTranscript(
   return transcript
 }
 
+interface AttachmentStrip {
+  readonly root: BoxRenderable
+  focusLast(): boolean
+}
+
 function createAttachments(
   renderer: CliRenderer,
   theme: TuiTheme,
   controller: ConversationController,
   snapshot: ConversationSnapshotView,
-): BoxRenderable {
+  focusComposer: () => Renderable | undefined,
+): AttachmentStrip {
   const attachments = new BoxRenderable(renderer, {
     id: 'conversation-attachments',
     width: '100%',
     height: ATTACHMENTS_HEIGHT,
     flexDirection: 'row',
   })
+  const nodes: TextRenderable[] = []
   snapshot.attachments.forEach((attachment, index) => {
     const content = `[×]${imageFallback(attachment)}`
-    attachments.add(new TextRenderable(renderer, {
-      id: `conversation-attachment-${index}`,
+    const remove = (): void => { controller.removeAttachment(index) }
+    const previous = (): Renderable | undefined => nodes[index - 1] ?? focusComposer()
+    const next = (): Renderable | undefined => nodes[index + 1] ?? focusComposer()
+    const node = createFocusableAction(renderer, {
       content,
-      width: content.length + ATTACHMENT_PADDING,
       fg: theme.colors.focus,
-      attributes: TextAttributes.DIM,
-      truncate: true,
-      selectable: false,
-      onMouseUp(event) {
-        // OpenTUI publishes equivalent mouse-button values through separate enum declarations.
-        // oxlint-disable-next-line typescript/no-unsafe-enum-comparison
-        if (event.button !== MouseButton.LEFT) return
-        event.preventDefault()
-        event.stopPropagation()
-        controller.removeAttachment(index)
+      handleKey(key) {
+        if (key.name === ATTACHMENT_DELETE_KEY || key.name === ATTACHMENT_BACKSPACE_KEY) {
+          remove()
+          return true
+        }
+        if (key.name === ATTACHMENT_ESCAPE_KEY) {
+          focusComposer()?.focus()
+          return true
+        }
+        if (key.name === ATTACHMENT_LEFT_KEY) {
+          previous()?.focus()
+          return true
+        }
+        if (key.name === ATTACHMENT_RIGHT_KEY) {
+          next()?.focus()
+          return true
+        }
+        return false
       },
-    }))
+      height: ATTACHMENTS_HEIGHT,
+      id: `conversation-attachment-${index}`,
+      mutedFg: theme.colors.muted,
+      nextFocus: next,
+      previousFocus: previous,
+      run: remove,
+      width: content.length + ATTACHMENT_PADDING,
+    })
+    nodes.push(node)
+    attachments.add(node)
   })
-  return attachments
+  return {
+    root: attachments,
+    focusLast() {
+      const last = nodes.at(-1)
+      if (last === undefined) return false
+      last.focus()
+      return true
+    },
+  }
 }
 
 function createFrame(
@@ -140,7 +180,18 @@ function createFrame(
     selectable: false,
   }))
   frame.add(createTranscript(renderer, theme, snapshot))
-  if (snapshot.attachments.length > 0) frame.add(createAttachments(renderer, theme, controller, snapshot))
+  let attachmentStrip: AttachmentStrip | undefined
+  const composer = createComposer(renderer, theme, controller, snapshot, () => attachmentStrip?.focusLast() ?? false)
+  if (snapshot.attachments.length > 0) {
+    attachmentStrip = createAttachments(
+      renderer,
+      theme,
+      controller,
+      snapshot,
+      () => composer.findDescendantById(COMPOSER_ID),
+    )
+    frame.add(attachmentStrip.root)
+  }
   if (snapshot.suggestions.length > 0) {
     frame.add(new TextRenderable(renderer, {
       content: snapshot.suggestions.map(name => `/${name}`).join('  '),
@@ -159,7 +210,7 @@ function createFrame(
     truncate: true,
     selectable: false,
   }))
-  frame.add(createComposer(renderer, theme, controller, snapshot))
+  frame.add(composer)
   frame.add(createConversationActions(renderer, theme, controller, snapshot))
   const input = createConversationInput(renderer, theme, controller, snapshot)
   if (input !== undefined) frame.add(input)

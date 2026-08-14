@@ -10,6 +10,7 @@ import {
 } from '@opentui/core'
 import type { TuiActionSpec } from '../../contracts/actions.js'
 import type { TuiTheme } from '../../contracts/theme.js'
+import { createInputActions } from '../action.js'
 import { SecretInputRenderable } from './secret-input.js'
 
 const OVERLAY_WIDTH = '94%'
@@ -21,7 +22,8 @@ const ROW_HEIGHT = 1
 const TABS_HEIGHT = 1
 const DETAILS_HEIGHT = 5
 const STATUS_HEIGHT = 1
-const INPUT_HEIGHT = 4
+const INPUT_HEIGHT = 5
+const INPUT_EDITOR_HEIGHT = 2
 const RETURN_KEY = 'return'
 const ESCAPE_KEY = 'escape'
 const DEFAULT_EMPTY_COPY = 'No data for current session.'
@@ -256,7 +258,9 @@ function handleInputKey<ActionId extends string, Section extends string>(
   key: KeyEvent,
   editor: TextareaRenderable,
   controller: CatalogController<ActionId, Section>,
+  focusActions: (key: KeyEvent) => boolean,
 ): void {
+  if (focusActions(key)) return
   if (key.name === ESCAPE_KEY) {
     key.preventDefault()
     key.stopPropagation()
@@ -281,7 +285,7 @@ function createInput<ActionId extends string, Section extends string>(
   if (snapshot.input === undefined) return undefined
   const frame = new BoxRenderable(renderer, {
     id: `${config.idPrefix}-input-frame`, title: snapshot.input.title,
-    width: '100%', height: INPUT_HEIGHT, border: true, flexShrink: 0,
+    width: '100%', height: INPUT_HEIGHT, border: true, flexShrink: 0, flexDirection: 'column',
   })
   const commonOptions = {
     id: `${config.idPrefix}-input`,
@@ -295,17 +299,24 @@ function createInput<ActionId extends string, Section extends string>(
     ? new SecretInputRenderable(renderer, {
         ...commonOptions,
         onSecretChange(value) { controller.setInput(value) },
-        onKeyDown(key) { handleInputKey(key, editor, controller) },
+        onKeyDown(key) { handleInputKey(key, editor, controller, event => inputActions.focusForTab(event)) },
       })
     : new TextareaRenderable(renderer, {
         ...commonOptions,
-        height: '100%',
+        height: INPUT_EDITOR_HEIGHT,
         initialValue: snapshot.input.value,
         wrapMode: 'word',
         onContentChange() { controller.setInput(editor.plainText) },
-        onKeyDown(key) { handleInputKey(key, editor, controller) },
+        onKeyDown(key) { handleInputKey(key, editor, controller, event => inputActions.focusForTab(event)) },
       })
+  const inputActions = createInputActions(renderer, theme, {
+    cancel: () => { controller.cancelInput() },
+    idPrefix: `${config.idPrefix}-input`,
+    input: editor,
+    save: () => { void controller.submitInput() },
+  })
   frame.add(editor)
+  frame.add(inputActions.root)
   queueMicrotask(() => {
     if (editor.isDestroyed) return
     editor.cursorOffset = editor.plainText.length

@@ -95,6 +95,7 @@ function createFooterSlot(options: ShellViewOptions) {
     mode: 'append',
     data: { focused: false },
     fallback: () => createFooterActions(options.renderer, options.theme, options.controller),
+    flexDirection: 'row',
     height: SLOT_ROW_HEIGHT,
     width: '100%',
   })
@@ -155,7 +156,7 @@ function createFrame(options: ShellViewOptions): BoxRenderable {
     flexGrow: 1,
     width: '100%',
   }))
-  if (!snapshot.zen) frame.add(createFooterSlot(options))
+  frame.add(createFooterSlot(options))
   if (snapshot.overlay !== undefined) frame.add(createOverlaySlot(options, snapshot))
   if (snapshot.overlay === 'palette') frame.add(createPalette(renderer, theme, controller))
   if (snapshot.overlay === 'help') frame.add(createHelp(renderer, theme, controller))

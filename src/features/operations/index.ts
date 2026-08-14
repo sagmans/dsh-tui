@@ -2,6 +2,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { BoxRenderable, type BaseRenderable, type CliRenderer } from '@opentui/core'
 import type { TuiClientFacade } from '../../client/context.js'
 import type { TuiTheme } from '../../contracts/theme.js'
+import { createFocusableAction } from '../../views/action.js'
 import { createOperationsView } from '../../views/operations/root.js'
 import {
   createOperationsController,
@@ -22,6 +23,9 @@ const GLOBAL_LAYER_ID = 'dsh-tui-operations-global'
 const GLOBAL_PRIORITY = 120
 const HIDDEN_SIZE = 0
 const OPEN_BINDING = '<leader>o'
+const FOOTER_ACTION_ID = 'operations-footer-open'
+const FOOTER_ACTION_CONTENT = ' SPC O OPERATIONS '
+const FOOTER_ACTION_HEIGHT = 1
 
 export const name = 'tui-operations'
 export const inject: readonly string[] = ['tuiKernel', 'tuiClient']
@@ -212,6 +216,21 @@ function hiddenOverlay(renderer: CliRenderer): BaseRenderable {
   return new BoxRenderable(renderer, { id: 'dsh-tui-operations-hidden', width: HIDDEN_SIZE, height: HIDDEN_SIZE })
 }
 
+function operationsFooter(
+  renderer: CliRenderer,
+  theme: TuiTheme,
+  controller: OperationsController,
+): BaseRenderable {
+  return createFocusableAction(renderer, {
+    content: FOOTER_ACTION_CONTENT,
+    fg: theme.colors.muted,
+    height: FOOTER_ACTION_HEIGHT,
+    id: FOOTER_ACTION_ID,
+    mutedFg: theme.colors.muted,
+    run: () => { void controller.open() },
+  })
+}
+
 export function mountOperations(ctx: Context, seams: OperationsSeams = DEFAULT_SEAMS): void {
   const resources = ctx.tuiKernel.resources
   const controller = seams.createController({
@@ -230,6 +249,7 @@ export function mountOperations(ctx: Context, seams: OperationsSeams = DEFAULT_S
         id: CONTRIBUTION_ID,
         order: CONTRIBUTION_ORDER,
         slots: {
+          footer: () => operationsFooter(resources.renderer, resources.theme, controller),
           overlay: () => active()
             ? seams.createView(resources.renderer, resources.theme, controller)
             : hiddenOverlay(resources.renderer),

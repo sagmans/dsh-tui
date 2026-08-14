@@ -9,6 +9,7 @@ import {
   type CliRenderer,
 } from '@opentui/core'
 import type { TuiTheme } from '../../contracts/theme.js'
+import { createInputActions } from '../action.js'
 import type {
   SessionsController,
   SessionsInputState,
@@ -20,7 +21,7 @@ const HEADER_HEIGHT = 1
 const ROW_HEIGHT = 1
 const ACTION_BAR_HEIGHT = 2
 const ACTION_HORIZONTAL_PADDING = 1
-const INPUT_HEIGHT = 5
+const INPUT_HEIGHT = 6
 const INPUT_WIDTH = '86%'
 const INPUT_LEFT = '7%'
 const INPUT_TOP = '20%'
@@ -37,6 +38,7 @@ const EMPTY_COPY = 'No sessions. Press n to start one or a to add a workspace.'
 const LOADING_COPY = 'Loading sessions…'
 const SEARCH_MORE_COPY = 'More matches exist. Refine search.'
 const ESCAPE_KEY = 'escape'
+const INPUT_ACTION_PREFIX = 'sessions-input'
 
 interface MouseAction {
   readonly label: string
@@ -136,6 +138,7 @@ function createInput(
     focusedTextColor: theme.colors.text,
     focusedBackgroundColor: theme.colors.background,
     onKeyDown(key) {
+      if (inputActions.focusForTab(key)) return
       if (key.name !== ESCAPE_KEY) return
       key.preventDefault()
       key.stopPropagation()
@@ -143,7 +146,14 @@ function createInput(
     },
   })
   input.on(InputRenderableEvents.ENTER, (value: string) => { void controller.submitInput(value) })
+  const inputActions = createInputActions(renderer, theme, {
+    cancel: () => { controller.cancel() },
+    idPrefix: INPUT_ACTION_PREFIX,
+    input,
+    save: () => { void controller.submitInput(input.plainText) },
+  })
   overlay.add(input)
+  overlay.add(inputActions.root)
   queueMicrotask(() => { if (!input.isDestroyed) input.focus() })
   return overlay
 }
