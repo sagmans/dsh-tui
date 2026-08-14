@@ -29,7 +29,7 @@ const EXPECTED_HOST_ROWS = new Map<string, string>([
   ['workspace', '@deepseek-ai/dsh-workspace'],
   ['session-projection-cache', '@deepseek-ai/dsh-session-projection-cache'],
   ['session-stats', '@deepseek-ai/dsh-session-stats'],
-  ['directory-picker', '@deepseek-ai/dsh-host-directory-picker-auto'],
+  ['directory-picker', '@deepseek-ai/dsh-host-directory-picker-browse'],
   ['plugin-inventory', '@deepseek-ai/dsh-host-plugin-inventory'],
   ['api-gateway', '@deepseek-ai/dsh-host-apiproxy'],
   ['cordis-host-runner', '@deepseek-ai/dsh-cordis-host-runner'],
@@ -109,4 +109,6 @@ test('pins the published Harness compatibility line', () => {
   ])) {
     assert.equal(dependencies[packageName], '0.1.0-rc.6', packageName)
   }
+  assert.equal(dependencies['@deepseek-ai/dsh-host-directory-picker-auto'], undefined)
+  assert.equal(dependencies['@deepseek-ai/dsh-session-log-export'], undefined)
 })

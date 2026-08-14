@@ -53,7 +53,7 @@
       name: '@deepseek-ai/dsh-session-stats'
 
     - id: directory-picker
-      name: '@deepseek-ai/dsh-host-directory-picker-auto'
+      name: '@deepseek-ai/dsh-host-directory-picker-browse'
 
     - id: plugin-inventory
       name: '@deepseek-ai/dsh-host-plugin-inventory'
