@@ -12,6 +12,7 @@ import { sanitizeConversationText } from '../conversation/projection.js'
 import { sanitizeText } from '../sessions/projection.js'
 import { LOCALE_SETTINGS_NAMESPACE } from '../../services/locale.js'
 import { THEME_SETTINGS_NAMESPACE } from '../../services/theme.js'
+import { pluginCredentialRefs } from './projection-plugin-settings.js'
 
 const MAX_JSON_LENGTH = 2_000
 const SECRET_CONFIGURED = '[configured]'
@@ -134,6 +135,7 @@ export function credentialRefs(settings: ConfigurationSettingsCatalog | undefine
     }
   }
   for (const namespace of settings?.namespaces ?? []) visit(namespace.value)
+  for (const ref of pluginCredentialRefs(settings)) refs.add(ref)
   return [...refs]
 }
 

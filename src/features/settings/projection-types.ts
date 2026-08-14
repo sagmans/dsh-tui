@@ -44,6 +44,9 @@ export const CONFIGURATION_ACTIONS = Object.freeze({
   presetView: defineTuiAction(CONFIGURATION_ACTION_SCOPE, 'preset.view', 'VIEW', 'default'),
   settingsOpen: defineTuiAction(CONFIGURATION_ACTION_SCOPE, 'settings.open', 'OPEN FILE', 'default'),
   settingsReset: defineTuiAction(CONFIGURATION_ACTION_SCOPE, 'settings.reset', 'RESET', 'danger'),
+  pluginSettingEdit: defineTuiAction(CONFIGURATION_ACTION_SCOPE, 'plugin-setting.edit', 'EDIT', 'default'),
+  pluginSettingReset: defineTuiAction(CONFIGURATION_ACTION_SCOPE, 'plugin-setting.reset', 'RESET', 'danger'),
+  pluginSettingCredential: defineTuiAction(CONFIGURATION_ACTION_SCOPE, 'plugin-setting.credential', 'SET KEY', 'default'),
 } as const satisfies Readonly<Record<string, ConfigurationActionView>>)
 
 export interface ConfigurationProjectionData {
@@ -59,6 +62,25 @@ export interface ConfigurationProjectionData {
   readonly locale: TuiLocale
   readonly theme: TuiTheme
 }
+
+export type ConfigurationPluginSettingTarget = {
+  readonly field: string
+  readonly kind: 'plugin-setting'
+  readonly label: string
+  readonly namespace: string
+  readonly revision: number
+} & (
+  | {
+    readonly base: unknown
+    readonly overridden: boolean
+    readonly value: unknown
+    readonly valueKind: 'number' | 'text'
+  }
+  | {
+    readonly credentialRef: string
+    readonly valueKind: 'credential'
+  }
+)
 
 export interface ConfigurationProviderTarget {
   readonly credential: ConfigurationCredentialView | undefined
@@ -100,6 +122,7 @@ export type ConfigurationTarget =
   }
   | { readonly kind: 'model'; readonly selection: { readonly provider: string; readonly model: string; readonly reasoningEffort?: string } }
   | { readonly kind: 'plugin' }
+  | ConfigurationPluginSettingTarget
   | { readonly kind: 'preset'; readonly id: string; readonly trust: 'system' | 'user' }
   | { readonly kind: 'settings'; readonly namespace: string; readonly revision: number }
   | { readonly kind: 'theme'; readonly namespace: string; readonly revision: number }

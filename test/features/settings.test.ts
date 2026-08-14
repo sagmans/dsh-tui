@@ -15,6 +15,10 @@ import { createTuiTheme } from '../../src/services/theme.js'
 // oxlint-disable-next-line typescript/no-unsafe-type-assertion
 const SESSION_ID = 'session-one' as SessionId
 const SECRET_VALUE = 'never-render-this-secret'
+const SHELL_NAMESPACE = 'shell'
+const AGENT_LOOP_NAMESPACE = 'agent-loop'
+const WEB_SEARCH_NAMESPACE = 'web-search-deepseek'
+const WEB_SEARCH_CREDENTIAL_REF = 'DEEPSEEK_API_KEY'
 
 interface MutableSource<T> extends ObservableSnapshot<T> {
   publish(next: T): void
@@ -35,6 +39,7 @@ function source<T>(initial: T): MutableSource<T> {
 
 function fixture() {
   const calls: string[] = []
+  const mutations: unknown[] = []
   const list = source<ConfigurationListState>({
     current: SESSION_ID,
     byId: {
@@ -57,7 +62,10 @@ function fixture() {
   const port: ConfigurationPort = {
     providerCatalog: () => Promise.resolve({ ok: true, value: [] }),
     discoverProviderModels: () => Promise.resolve({ ok: true, value: [] }),
-    mutateSettings: () => Promise.resolve({ ok: true, value: undefined }),
+    mutateSettings: (namespace, operations, revision) => {
+      mutations.push({ namespace, operations, revision })
+      return Promise.resolve({ ok: true, value: undefined })
+    },
     models: () => Promise.resolve({ ok: true, value: {
       current: { provider: 'deepseek', model: 'chat', reasoningEffort: 'high' },
       routable: true,
@@ -115,15 +123,47 @@ function fixture() {
     settings: () => Promise.resolve({ ok: true, value: {
       writable: true,
       hasDocument: true,
-      namespaces: [{
-        ns: 'llm-deepseek',
-        schema: {},
-        value: { apiKeyEnv: 'DEEPSEEK_API_KEY', endpoint: 'https://api.deepseek.com' },
-        user: { endpoint: 'https://api.deepseek.com' },
-        applies: 'live',
-        secrets: [{ path: ['apiKey'], set: true }],
-        revision: 3,
-      }],
+      namespaces: [
+        {
+          ns: 'llm-deepseek',
+          schema: {},
+          value: { apiKeyEnv: WEB_SEARCH_CREDENTIAL_REF, endpoint: 'https://api.deepseek.com' },
+          user: { endpoint: 'https://api.deepseek.com' },
+          applies: 'live',
+          secrets: [{ path: ['apiKey'], set: true }],
+          revision: 3,
+        },
+        {
+          ns: SHELL_NAMESPACE,
+          schema: {},
+          base: { timeoutMs: 60_000, maxOutputBytes: 64_000 },
+          value: { timeoutMs: 9_000, maxOutputBytes: 64_000 },
+          user: { timeoutMs: 9_000 },
+          applies: 'live',
+          secrets: [],
+          revision: 4,
+        },
+        {
+          ns: AGENT_LOOP_NAMESPACE,
+          schema: {},
+          base: { maxParallelToolCalls: 4 },
+          value: { maxParallelToolCalls: 4 },
+          user: {},
+          applies: 'live',
+          secrets: [],
+          revision: 5,
+        },
+        {
+          ns: WEB_SEARCH_NAMESPACE,
+          schema: {},
+          base: { baseURL: 'https://api.deepseek.com', maxUses: 5 },
+          value: { apiKeyEnv: WEB_SEARCH_CREDENTIAL_REF, baseURL: 'https://search.example', maxUses: 5 },
+          user: { baseURL: 'https://search.example' },
+          applies: 'live',
+          secrets: [{ path: ['apiKey'], set: true }],
+          revision: 6,
+        },
+      ],
     } }),
     openSettings: () => Promise.resolve({ ok: true, value: undefined }),
     resetSetting: (namespace, revision) => {
@@ -182,7 +222,7 @@ function fixture() {
     port,
     theme: createTuiTheme({ color: true }),
   })
-  return { calls, controller, list, navigation, port }
+  return { calls, controller, list, mutations, navigation, port }
 }
 
 async function section(
@@ -209,9 +249,10 @@ test('projects every configuration domain without exposing credential values', a
   assert.equal(controller.getSnapshot().rows[0]?.title, 'DEEPSEEK_API_KEY')
   assert.equal(JSON.stringify(controller.getSnapshot()).includes(SECRET_VALUE), false)
   await section(controller, 'plugins')
-  assert.equal(controller.getSnapshot().rows[0]?.summary, 'enabled · active')
+  assert.equal(controller.getSnapshot().rows[0]?.id, 'plugin-setting:shell:timeoutMs')
   await section(controller, 'extensions')
   assert.match(controller.getSnapshot().rows.find(row => row.id.includes('dyn-web'))?.details ?? '', /Browser client half/u)
+  assert.equal(controller.getSnapshot().rows.some(row => row.summary === 'enabled · active'), true)
 })
 
 test('keeps a routable current model visible when its catalog entry is absent', async () => {
@@ -307,6 +348,115 @@ test('drops write-only input when the active session changes', async () => {
   assert.equal(controller.getSnapshot().input, undefined)
   assert.equal(await controller.submitInput(), false)
   assert.deepEqual(calls, [])
+})
+
+test('projects field-level plugin settings with inherited, overridden, and write-only state', async () => {
+  const { controller } = fixture()
+  await controller.activate()
+  await section(controller, 'plugins')
+
+  const timeout = controller.getSnapshot().rows.find(row => row.id === 'plugin-setting:shell:timeoutMs')
+  const output = controller.getSnapshot().rows.find(row => row.id === 'plugin-setting:shell:maxOutputBytes')
+  const parallel = controller.getSnapshot().rows.find(row => row.id === 'plugin-setting:agent-loop:maxParallelToolCalls')
+  const key = controller.getSnapshot().rows.find(row => row.id === 'plugin-setting:web-search-deepseek:apiKey')
+  assert.match(timeout?.summary ?? '', /9000.*overridden/u)
+  assert.match(output?.summary ?? '', /64000.*inherited/u)
+  assert.match(parallel?.summary ?? '', /4.*inherited/u)
+  assert.equal(timeout?.actions.some(action => action.id === 'plugin-setting.edit'), true)
+  assert.equal(timeout?.actions.some(action => action.id === 'plugin-setting.reset'), true)
+  assert.equal(output?.actions.some(action => action.id === 'plugin-setting.reset'), false)
+  assert.equal(key?.actions.some(action => action.id === 'plugin-setting.credential'), true)
+  assert.equal(JSON.stringify(key).includes(SECRET_VALUE), false)
+})
+
+test('edits and resets plugin fields with revision-fenced writes', async () => {
+  const { controller, mutations } = fixture()
+  await controller.activate()
+  await section(controller, 'plugins')
+  const timeoutIndex = controller.getSnapshot().rows.findIndex(row => row.id === 'plugin-setting:shell:timeoutMs')
+  controller.selectRow(timeoutIndex)
+
+  assert.equal(await controller.perform('plugin-setting.edit'), true)
+  assert.equal(controller.getSnapshot().input?.value, '9000')
+  controller.setInput('12000')
+  assert.equal(await controller.submitInput(), true)
+  assert.deepEqual(mutations, [{
+    namespace: SHELL_NAMESPACE,
+    operations: [{ op: 'set', path: ['timeoutMs'], value: 12_000 }],
+    revision: 4,
+  }])
+
+  assert.equal(await controller.perform('plugin-setting.reset'), true)
+  assert.deepEqual(mutations.at(-1), {
+    namespace: SHELL_NAMESPACE,
+    operations: [{ op: 'unset', path: ['timeoutMs'] }],
+    revision: 4,
+  })
+})
+
+test('rejects invalid plugin numbers without writing', async () => {
+  const { controller, mutations } = fixture()
+  await controller.activate()
+  await section(controller, 'plugins')
+  controller.selectRow(controller.getSnapshot().rows.findIndex(row => row.id === 'plugin-setting:shell:timeoutMs'))
+
+  assert.equal(await controller.perform('plugin-setting.edit'), true)
+  controller.setInput('soon')
+  assert.equal(await controller.submitInput(), false)
+  assert.match(controller.getSnapshot().error ?? '', /finite number/u)
+  assert.equal(controller.getSnapshot().input?.value, 'soon')
+  assert.deepEqual(mutations, [])
+})
+
+test('writes plugin credentials without exposing literals in snapshots', async () => {
+  const { calls, controller } = fixture()
+  await controller.activate()
+  await section(controller, 'plugins')
+  controller.selectRow(controller.getSnapshot().rows.findIndex(row => row.id === 'plugin-setting:web-search-deepseek:apiKey'))
+
+  assert.equal(await controller.perform('plugin-setting.credential'), true)
+  assert.equal(controller.getSnapshot().input?.secret, true)
+  controller.setInput(SECRET_VALUE)
+  assert.equal(JSON.stringify(controller.getSnapshot()).includes(SECRET_VALUE), false)
+  assert.equal(await controller.submitInput(), true)
+  assert.equal(JSON.stringify(controller.getSnapshot()).includes(SECRET_VALUE), false)
+  assert.equal(calls.includes(`credential:set:${WEB_SEARCH_CREDENTIAL_REF}:${SECRET_VALUE}`), true)
+})
+
+test('fences plugin drafts to their opening revision and retains rejected text', async () => {
+  const { controller, mutations, port } = fixture()
+  await controller.activate()
+  await section(controller, 'plugins')
+  controller.selectRow(controller.getSnapshot().rows.findIndex(row => row.id === 'plugin-setting:shell:timeoutMs'))
+  assert.equal(await controller.perform('plugin-setting.edit'), true)
+  controller.setInput('12000')
+
+  const refreshedSettings = await port.settings()
+  assert.equal(refreshedSettings.ok, true)
+  if (!refreshedSettings.ok) return
+  port.settings = () => Promise.resolve({
+    ok: true,
+    value: {
+      ...refreshedSettings.value,
+      namespaces: refreshedSettings.value.namespaces.map(namespace => namespace.ns === SHELL_NAMESPACE
+        ? { ...namespace, revision: 7, value: { timeoutMs: 15_000, maxOutputBytes: 64_000 } }
+        : namespace),
+    },
+  })
+  port.mutateSettings = (namespace, operations, revision) => {
+    mutations.push({ namespace, operations, revision })
+    return Promise.resolve({ ok: false, error: { code: 'revision-conflict', message: 'stale revision' } })
+  }
+  await controller.refresh()
+
+  assert.equal(await controller.submitInput(), false)
+  assert.deepEqual(mutations, [{
+    namespace: SHELL_NAMESPACE,
+    operations: [{ op: 'set', path: ['timeoutMs'], value: 12_000 }],
+    revision: 4,
+  }])
+  assert.equal(controller.getSnapshot().input?.value, '12000')
+  assert.match(controller.getSnapshot().error ?? '', /stale revision.*revision-conflict/u)
 })
 
 test('confirms destructive reset, credential removal, preset removal, and extension removal', async () => {

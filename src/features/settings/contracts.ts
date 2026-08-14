@@ -27,6 +27,9 @@ export const CONFIGURATION_ACTION_IDS = Object.freeze([
   'preset.remove',
   'settings.open',
   'settings.reset',
+  'plugin-setting.edit',
+  'plugin-setting.reset',
+  'plugin-setting.credential',
   'credential.set',
   'credential.unset',
   'extension.run',
@@ -64,7 +67,7 @@ export interface ConfigurationRowView {
 }
 
 export interface ConfigurationInputView {
-  readonly kind: 'credential' | 'preset-copy' | 'provider'
+  readonly kind: 'credential' | 'plugin-setting' | 'preset-copy' | 'provider'
   readonly secret?: boolean | undefined
   readonly title: string
   readonly value: string

@@ -16,6 +16,7 @@ import type {
 import {
   credentialRefs,
   projectConfiguration,
+  type ConfigurationPluginSettingTarget,
   type ConfigurationProjectionData,
   type ConfigurationProviderTarget,
   type ConfigurationTarget,
@@ -49,6 +50,8 @@ const ROUTE_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u
 const API_KEY_PATTERN = /^[\u0021-\u007E]+$/u
 const ENV_ASSIGNMENT_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*=/u
 const QUOTED_VALUE_PATTERN = /^(?:".*"|'.*')$/u
+const PLUGIN_NUMBER_ERROR = 'Plugin setting must be a finite number.'
+const PLUGIN_TARGET_STALE_ERROR = 'Plugin setting target is stale.'
 const PROVIDER_CREATE_FIELDS = Object.freeze([
   'route', 'displayName', 'baseURL', 'api', 'modelId', 'apiKey',
 ] as const)
@@ -129,6 +132,46 @@ function positiveInteger(value: string): number | undefined {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : Number.NaN
 }
 
+type PluginValueTarget = ConfigurationPluginSettingTarget & (
+  | { readonly valueKind: 'number' }
+  | { readonly valueKind: 'text' }
+)
+
+interface PluginSettingPlan {
+  readonly nextValue: unknown
+  readonly operation: ConfigurationSettingsOperation
+}
+
+function pluginSettingPlan(target: PluginValueTarget, input: string): PluginSettingPlan | undefined {
+  const text = input.trim()
+  if (text === '') return { nextValue: undefined, operation: { op: 'unset', path: [target.field] } }
+  switch (target.valueKind) {
+    case 'number': {
+      const parsed = Number(text)
+      return Number.isFinite(parsed)
+        ? { nextValue: parsed, operation: { op: 'set', path: [target.field], value: parsed } }
+        : undefined
+    }
+    case 'text': return { nextValue: text, operation: { op: 'set', path: [target.field], value: text } }
+    default: {
+      const exhaustive: never = target
+      return exhaustive
+    }
+  }
+}
+
+function samePluginSettingIdentity(
+  target: ConfigurationPluginSettingTarget | undefined,
+  current: ConfigurationTarget | undefined,
+): target is ConfigurationPluginSettingTarget {
+  if (target === undefined || current?.kind !== 'plugin-setting') return false
+  if (current.namespace !== target.namespace
+    || current.field !== target.field
+    || current.valueKind !== target.valueKind) return false
+  return target.valueKind !== 'credential'
+    || (current.valueKind === 'credential' && current.credentialRef === target.credentialRef)
+}
+
 class SettingsControllerService implements ConfigurationController {
   private readonly actionCursor = createActionCursor<ConfigurationActionId>()
   private busyCount = 0
@@ -142,6 +185,7 @@ class SettingsControllerService implements ConfigurationController {
   private extensions: ConfigurationProjectionData['extensions']
   private input: ConfigurationInputView | undefined
   private inputTarget: string | undefined
+  private pluginSettingInputTarget: ConfigurationPluginSettingTarget | undefined
   private readonly listeners = new Set<() => void>()
   private readonly locale: ConfigurationControllerOptions['locale']
   private models: ConfigurationProjectionData['models']
@@ -334,6 +378,9 @@ class SettingsControllerService implements ConfigurationController {
     const target = row === undefined || row.id !== this.inputTarget
       ? undefined
       : this.projected().targets.get(row.id)
+    if (input.kind === 'plugin-setting') {
+      return this.submitPluginSettingInput(input, this.pluginSettingInputTarget, target)
+    }
     if (input.kind === 'credential') {
       const value = this.secretInput
       if (target?.kind !== 'credential' || value.trim() === '') {
@@ -379,6 +426,27 @@ class SettingsControllerService implements ConfigurationController {
     this.secretInput = ''
     this.inputTarget = rowId
     this.input = { kind: 'credential', secret: true, title: `Set ${sanitizeText(target.ref)}`, value: '' }
+    this.schedulePublish()
+    return true
+  }
+
+  private beginPluginSetting(
+    rowId: string,
+    target: ConfigurationTarget,
+    mode: 'credential' | 'edit',
+  ): boolean {
+    if (target.kind !== 'plugin-setting') return false
+    if (mode === 'credential' && target.valueKind !== 'credential'
+      || mode === 'edit' && target.valueKind === 'credential') return false
+    this.secretInput = ''
+    this.inputTarget = rowId
+    this.pluginSettingInputTarget = target
+    this.input = {
+      kind: 'plugin-setting',
+      secret: target.valueKind === 'credential',
+      title: target.label,
+      value: target.valueKind === 'credential' ? '' : this.pluginSettingValueText(target),
+    }
     this.schedulePublish()
     return true
   }
@@ -526,6 +594,7 @@ class SettingsControllerService implements ConfigurationController {
   private clearInput(): void {
     this.input = undefined
     this.inputTarget = undefined
+    this.pluginSettingInputTarget = undefined
     this.providerDraft = undefined
     this.secretInput = ''
   }
@@ -580,6 +649,9 @@ class SettingsControllerService implements ConfigurationController {
       case 'preset.remove': return this.removePreset(target)
       case 'settings.open': return this.runBoolean(() => this.port.openSettings())
       case 'settings.reset': return this.resetSetting(target)
+      case 'plugin-setting.edit': return Promise.resolve(this.beginPluginSetting(rowId, target, 'edit'))
+      case 'plugin-setting.reset': return this.resetPluginSetting(target)
+      case 'plugin-setting.credential': return Promise.resolve(this.beginPluginSetting(rowId, target, 'credential'))
       case 'theme.light': return this.changeTheme(target, 'light')
       case 'theme.dark': return this.changeTheme(target, 'dark')
       case 'theme.system': return this.changeTheme(target, 'system')
@@ -666,6 +738,7 @@ class SettingsControllerService implements ConfigurationController {
       case 'extension':
       case 'model':
       case 'plugin':
+      case 'plugin-setting':
       case 'preset':
       case 'provider-create':
       case 'settings':
@@ -867,23 +940,33 @@ class SettingsControllerService implements ConfigurationController {
         else this.error = `${result.error.message} (${result.error.code})`
         break
       }
-      case 'plugins': {
-        const result = await this.port.plugins()
-        if (result.ok) this.plugins = result.value
-        else this.error = `${result.error.message} (${result.error.code})`
-        break
-      }
-      case 'extensions': {
-        const result = await this.port.extensions()
-        if (result.ok) this.extensions = result.value
-        else this.error = `${result.error.message} (${result.error.code})`
-        break
-      }
+      case 'plugins': await this.loadPluginSettings(); break
+      case 'extensions': await this.loadExtensions(); break
       default: {
         const exhaustive: never = section
         return exhaustive
       }
     }
+  }
+
+  private async loadExtensions(): Promise<void> {
+    const extensions = await this.port.extensions()
+    if (!extensions.ok) {
+      this.error = `${extensions.error.message} (${extensions.error.code})`
+      return
+    }
+    this.extensions = extensions.value
+    const plugins = await this.port.plugins()
+    if (plugins.ok) this.plugins = plugins.value
+    else this.error = `${plugins.error.message} (${plugins.error.code})`
+  }
+
+  private async loadPluginSettings(): Promise<void> {
+    await this.loadSettings()
+    if (this.error !== undefined) return
+    const credentials = await this.port.credentials(credentialRefs(this.settings))
+    if (credentials.ok) this.credentials = credentials.value
+    else this.error = `${credentials.error.message} (${credentials.error.code})`
   }
 
   private async loadSettings(): Promise<void> {
@@ -958,6 +1041,27 @@ class SettingsControllerService implements ConfigurationController {
     apply()
     await this.syncPreferences()
     return true
+  }
+
+  private pluginSettingValueText(target: ConfigurationPluginSettingTarget): string {
+    switch (target.valueKind) {
+      case 'number': return typeof target.value === 'number' ? String(target.value) : ''
+      case 'text': return typeof target.value === 'string' ? target.value : ''
+      case 'credential': return ''
+      default: {
+        const exhaustive: never = target
+        return exhaustive
+      }
+    }
+  }
+
+  private resetPluginSetting(target: ConfigurationTarget): Promise<boolean> {
+    if (target.kind !== 'plugin-setting' || target.valueKind === 'credential' || !target.overridden) {
+      return Promise.resolve(false)
+    }
+    return this.runAndRefresh(() => this.port.mutateSettings(target.namespace, [{
+      op: 'unset', path: [target.field],
+    }], target.revision), 'plugins')
   }
 
   private removeExtension(target: ConfigurationTarget): Promise<boolean> {
@@ -1076,6 +1180,55 @@ class SettingsControllerService implements ConfigurationController {
     }
     const row = projected.rows[rowIndex]
     return `${rowIndex + 1}/${projected.rows.length} · ${row?.actions.map(action => action.label).join(' · ') ?? this.locale.t('settings.status.readOnly')}`
+  }
+
+  private async submitPluginSettingInput(
+    input: ConfigurationInputView,
+    target: ConfigurationPluginSettingTarget | undefined,
+    currentTarget: ConfigurationTarget | undefined,
+  ): Promise<boolean> {
+    if (!samePluginSettingIdentity(target, currentTarget)) {
+      this.error = PLUGIN_TARGET_STALE_ERROR
+      this.schedulePublish()
+      return false
+    }
+    if (target.valueKind === 'credential') {
+      const value = this.secretInput.trim()
+      this.clearInput()
+      this.schedulePublish()
+      if (value === '') return true
+      return this.runAndRefresh(
+        () => this.port.setCredential(target.credentialRef, value),
+        'plugins',
+        { sensitive: true },
+      )
+    }
+
+    const plan = pluginSettingPlan(target, input.value)
+    if (plan === undefined) {
+      this.error = PLUGIN_NUMBER_ERROR
+      this.schedulePublish()
+      return false
+    }
+    const unchanged = plan.operation.op === 'unset'
+      ? !target.overridden
+      : Object.is(target.value, plan.nextValue)
+    if (unchanged) {
+      this.clearInput()
+      this.error = undefined
+      this.schedulePublish()
+      return true
+    }
+    const result = await this.run(() => this.port.mutateSettings(
+      target.namespace,
+      [plan.operation],
+      target.revision,
+    ))
+    if (!result.ok) return false
+    this.clearInput()
+    this.schedulePublish()
+    if (this.section === 'plugins') await this.refresh()
+    return true
   }
 
   private stopExtension(target: ConfigurationTarget): Promise<boolean> {

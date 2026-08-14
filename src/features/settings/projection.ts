@@ -8,6 +8,7 @@ import {
   presetRows,
   settingsRows,
 } from './projection-configuration.js'
+import { pluginSettingRows } from './projection-plugin-settings.js'
 import { extensionRows, pluginRows } from './projection-plugins.js'
 import { preferenceRows } from './projection-preferences.js'
 import { providerRows } from './projection-providers.js'
@@ -21,6 +22,7 @@ import type {
 export { credentialRefs } from './projection-configuration.js'
 export type {
   ConfigurationProjectionData,
+  ConfigurationPluginSettingTarget,
   ConfigurationProviderTarget,
   ConfigurationTarget,
   ProjectedConfiguration,
@@ -44,8 +46,8 @@ export function projectConfiguration(input: {
     case 'presets': rows = presetRows(input.list, context); break
     case 'settings': rows = [...settingsRows(context), ...preferenceRows(context)]; break
     case 'credentials': rows = credentialRows(context); break
-    case 'plugins': rows = pluginRows(context); break
-    case 'extensions': rows = extensionRows(context); break
+    case 'plugins': rows = pluginSettingRows(context); break
+    case 'extensions': rows = [...extensionRows(context), ...pluginRows(context)]; break
     default: {
       const exhaustive: never = input.section
       rows = exhaustive
