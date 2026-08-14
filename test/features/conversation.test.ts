@@ -106,13 +106,17 @@ function snapshot(overrides: Partial<ConversationSnapshot> = {}): ConversationSn
   }
 }
 
-function fixture(options: Pick<ConversationControllerOptions, 'completion' | 'media'> = {}): {
+function fixture(options: Pick<ConversationControllerOptions, 'completion' | 'media' | 'openSettings'> = {}): {
   readonly binding: MutableSource<ConversationSnapshot> & ConversationSessionBinding
   readonly control: Control
   readonly controller: ReturnType<typeof createConversationController>
   readonly list: MutableSource<{
     readonly current: SessionId
-    readonly byId: Readonly<Record<SessionId, { readonly displayTitle: string } | undefined>>
+    readonly byId: Readonly<Record<SessionId, {
+      readonly agentPreset?: string | undefined
+      readonly displayTitle: string
+      readonly projectionValues?: Readonly<Record<string, unknown>> | undefined
+    } | undefined>>
   }>
 } {
   const control: Control = { cancels: [], commands: [], exports: [], historyLoads: [], loadedImages: [], prompts: [] }
@@ -189,6 +193,27 @@ test('routes commands before skill prompts and preserves failed drafts', async (
   await controller.loadOlder()
   assert.deepEqual(control.cancels, [1])
   assert.deepEqual(control.historyLoads, [1])
+})
+
+test('surfaces current preset seats and opens their exact settings sections', () => {
+  const opened: string[] = []
+  const { controller, list } = fixture({ openSettings: section => { opened.push(section) } })
+  list.publish({
+    current: SESSION_ID,
+    byId: {
+      [SESSION_ID]: {
+        agentPreset: 'code',
+        displayTitle: 'Terminal session',
+        projectionValues: { permissions: { currentValue: 'workspace-write' } },
+      },
+    },
+  })
+
+  assert.equal(controller.getSnapshot().agentPreset, 'code')
+  assert.equal(controller.getSnapshot().accessPreset, 'workspace-write')
+  controller.openPreferences('access')
+  controller.openPreferences('presets')
+  assert.deepEqual(opened, ['access', 'presets'])
 })
 
 test('completes command and skill names through the injected catalog', async () => {

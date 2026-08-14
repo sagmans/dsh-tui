@@ -2,6 +2,7 @@ import type { PromptContentPart, SessionId } from '@deepseek-ai/dsh-api-remotes/
 import type {
   ConversationController,
   ConversationControllerOptions,
+  ConversationPreferenceSection,
   ConversationSendMode,
   ConversationSessionBinding,
   ConversationSnapshotView,
@@ -26,10 +27,21 @@ const COMPLETION_SUFFIX = ' '
 const COMPLETION_LIMIT = 8
 const WHITESPACE_PATTERN = /\s/u
 
+function record(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function accessPresetOf(values: Readonly<Record<string, unknown>> | undefined): string | undefined {
+  const permissions = values?.permissions
+  if (!record(permissions)) return undefined
+  return typeof permissions.currentValue === 'string' ? sanitizeText(permissions.currentValue) : undefined
+}
+
 class ConversationControllerService implements ConversationController {
   private readonly completion: ConversationControllerOptions['completion']
   private readonly listeners = new Set<() => void>()
   private readonly mediaState: ConversationMediaState
+  private readonly openSettings: ConversationControllerOptions['openSettings']
   private readonly sessions: ConversationControllerOptions['sessions']
   private readonly resources: Array<() => void>
   private readonly drafts = new Map<string, string>()
@@ -47,6 +59,7 @@ class ConversationControllerService implements ConversationController {
 
   constructor(options: ConversationControllerOptions) {
     this.completion = options.completion
+    this.openSettings = options.openSettings
     this.sessions = options.sessions
     this.mediaState = new ConversationMediaState({
       blocked: () => this.sending,
@@ -115,10 +128,13 @@ class ConversationControllerService implements ConversationController {
     const sessionId = list.current
     const snapshot = this.binding?.getSnapshot()
     const phase = conversationPhase(snapshot)
+    const summary = sessionId === undefined ? undefined : list.byId[sessionId]
     const title = sessionId === undefined
       ? EMPTY_TITLE
-      : sanitizeText(list.byId[sessionId]?.displayTitle ?? String(sessionId))
+      : sanitizeText(summary?.displayTitle ?? String(sessionId))
     return Object.freeze({
+      accessPreset: accessPresetOf(summary?.projectionValues),
+      agentPreset: summary?.agentPreset === undefined ? undefined : sanitizeText(summary.agentPreset),
       attachments: this.mediaState.views(sessionId),
       busy: this.mediaState.busy || this.sending,
       draft: this.currentDraft(),
@@ -140,6 +156,10 @@ class ConversationControllerService implements ConversationController {
     const binding = this.binding
     if (binding === undefined) return
     await this.runAction(() => binding.loadOlder())
+  }
+
+  openPreferences(section: ConversationPreferenceSection): void {
+    this.openSettings?.(section)
   }
 
   removeAttachment(index: number): void {

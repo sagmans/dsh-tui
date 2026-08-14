@@ -94,6 +94,8 @@ test('registers chat contribution and disposes its controller with owner fiber',
     'conversation.attach',
     'conversation.export',
     'conversation.clear-attachments',
+    'conversation.access',
+    'conversation.presets',
   ])
   control.renderRoute?.()
   assert.equal(control.controller, controller)

@@ -32,7 +32,9 @@ const CANCEL_KEY = 'x'
 const ATTACH_KEY = 'o'
 const EXPORT_KEY = 'e'
 const DELETE_KEY = 'delete'
-const COMPOSER_HINT = 'M+Enter queue · C+Enter steer · C+O image · S+Tab files · C+E export · C+Del clear'
+const ACCESS_KEY = 'a'
+const PRESET_KEY = 'p'
+const COMPOSER_HINT = 'M+Enter queue · C+Enter steer · M+A access · M+P preset · C+O image · C+E export'
 const SEND_ACTION = ' SEND '
 const STEER_ACTION = ' STEER '
 const STOP_ACTION = ' STOP '
@@ -40,6 +42,8 @@ const OLDER_ACTION = ' OLDER '
 const ATTACH_ACTION = ' ATTACH '
 const EXPORT_ACTION = ' EXPORT '
 const CLEAR_ACTION = ' CLEAR '
+const ACCESS_ACTION_PREFIX = ' ACCESS '
+const PRESET_ACTION_PREFIX = ' PRESET '
 const SEND_ACTION_ID = 'conversation-send'
 const STEER_ACTION_ID = 'conversation-steer'
 const STOP_ACTION_ID = 'conversation-stop'
@@ -47,6 +51,8 @@ const OLDER_ACTION_ID = 'conversation-older'
 const ATTACH_ACTION_ID = 'conversation-attach'
 const EXPORT_ACTION_ID = 'conversation-export'
 const CLEAR_ACTION_ID = 'conversation-clear-attachments'
+const ACCESS_ACTION_ID = 'conversation-access'
+const PRESET_ACTION_ID = 'conversation-preset'
 const PATH_ACTION_PREFIX = 'conversation-path'
 
 function submit(
@@ -86,6 +92,12 @@ function handleKey(
     key.preventDefault()
     key.stopPropagation()
     submit(editor, controller, 'steer')
+    return
+  }
+  if (key.meta && (key.name === ACCESS_KEY || key.name === PRESET_KEY)) {
+    key.preventDefault()
+    key.stopPropagation()
+    controller.openPreferences(key.name === ACCESS_KEY ? 'access' : 'presets')
     return
   }
   if (handleMediaKey(key, controller)) return
@@ -291,6 +303,26 @@ export function createConversationActions(
   actions.add(createAction(renderer, theme, CLEAR_ACTION_ID, CLEAR_ACTION, snapshot.attachments.length > 0, () => {
     controller.clearAttachments()
   }))
+  if (snapshot.accessPreset !== undefined) {
+    actions.add(createAction(
+      renderer,
+      theme,
+      ACCESS_ACTION_ID,
+      `${ACCESS_ACTION_PREFIX}${snapshot.accessPreset} `,
+      true,
+      () => { controller.openPreferences('access') },
+    ))
+  }
+  if (snapshot.agentPreset !== undefined) {
+    actions.add(createAction(
+      renderer,
+      theme,
+      PRESET_ACTION_ID,
+      `${PRESET_ACTION_PREFIX}${snapshot.agentPreset} `,
+      true,
+      () => { controller.openPreferences('presets') },
+    ))
+  }
   actions.add(new TextRenderable(renderer, {
     content: COMPOSER_HINT,
     height: ACTION_HEIGHT,

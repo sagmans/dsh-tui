@@ -27,6 +27,7 @@ const ATTACHMENT_ESCAPE_KEY = 'escape'
 const ATTACHMENT_LEFT_KEY = 'left'
 const ATTACHMENT_RIGHT_KEY = 'right'
 const BUSY_COPY = 'Working…'
+const PRESET_LABEL = 'PRESET'
 const CHAT_LINE_PREFIX: Readonly<Record<ConversationLine['kind'], string>> = Object.freeze({
   assistant: 'AI',
   command: 'CMD',
@@ -172,7 +173,9 @@ function createFrame(
     backgroundColor: theme.colors.background,
   })
   frame.add(new TextRenderable(renderer, {
-    content: snapshot.title,
+    content: snapshot.agentPreset === undefined
+      ? snapshot.title
+      : `${snapshot.title} · ${PRESET_LABEL} ${snapshot.agentPreset}`,
     height: HEADER_HEIGHT,
     fg: theme.colors.accent,
     attributes: TextAttributes.BOLD,

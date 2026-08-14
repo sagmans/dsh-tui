@@ -243,7 +243,9 @@ class SettingsControllerService implements ConfigurationController {
     if (target === undefined) return Promise.resolve(false)
     this.actionCursor.select(row.actions, selectedAction)
     const needsConfirmation = CONFIRMED_ACTIONS.has(selectedAction)
-      || (selectedAction === 'access.select' && target.kind === 'access' && target.preset === FULL_ACCESS_PRESET)
+      || ((selectedAction === 'access.select' && target.kind === 'access'
+        || selectedAction === 'access.default' && target.kind === 'access-default')
+        && target.preset === FULL_ACCESS_PRESET)
     const token = this.confirmationIdentity(selectedAction, row.id, target)
     if (needsConfirmation && this.confirmationToken !== token) {
       this.confirmation = selectedAction
@@ -507,7 +509,7 @@ class SettingsControllerService implements ConfigurationController {
         ? `${target.plugin.currentPackageId ?? ''}:${target.plugin.latestRun?.packageId ?? ''}:${target.plugin.latestRun?.status ?? ''}`
         : target.kind === 'credential'
           ? this.credentials?.[target.ref]?.configured
-          : target.kind === 'access'
+          : target.kind === 'access' || target.kind === 'access-default'
             ? target.preset
             : target.kind === 'preset'
               ? target.id
@@ -528,6 +530,7 @@ class SettingsControllerService implements ConfigurationController {
       case 'provider.model.remove': return this.removeProviderModel(target)
       case 'provider.model.adopt': return this.adoptProviderModel(target)
       case 'access.select': return this.selectAccess(target)
+      case 'access.default': return this.defaultAccess(target)
       case 'preset.select': return this.selectPreset(target)
       case 'preset.default': return this.defaultPreset(target)
       case 'preset.view': return this.viewPreset(target)
@@ -612,6 +615,7 @@ class SettingsControllerService implements ConfigurationController {
       case 'provider-candidate': return target.provider
       case 'provider-model': return target.provider
       case 'access':
+      case 'access-default':
       case 'credential':
       case 'extension':
       case 'model':
@@ -760,6 +764,14 @@ class SettingsControllerService implements ConfigurationController {
     }, true)
   }
 
+  private defaultAccess(target: ConfigurationTarget): Promise<boolean> {
+    return target.kind === 'access-default'
+      ? this.runAndRefresh(() => this.port.mutateSettings(target.namespace.ns, [{
+          op: 'set', path: ['defaultPreset'], value: target.preset,
+        }], target.namespace.revision), 'access')
+      : Promise.resolve(false)
+  }
+
   private defaultPreset(target: ConfigurationTarget): Promise<boolean> {
     return target.kind === 'preset'
       ? this.runAndRefresh(() => this.port.defaultPreset(target.id), 'presets')
@@ -791,7 +803,7 @@ class SettingsControllerService implements ConfigurationController {
         else this.error = `${credentials.error.message} (${credentials.error.code})`
         break
       }
-      case 'access': break
+      case 'access': await this.loadSettings(); break
       case 'presets': {
         const result = await this.port.presets()
         if (result.ok) this.presets = result.value

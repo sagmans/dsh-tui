@@ -117,6 +117,8 @@ function conversationController(calls: string[]): ConversationController {
     complete: () => Promise.resolve(),
     dispose: () => {},
     getSnapshot: () => ({
+      accessPreset: undefined,
+      agentPreset: undefined,
       attachments,
       busy: false,
       draft: '',
@@ -133,6 +135,7 @@ function conversationController(calls: string[]): ConversationController {
       title: 'Overlay controls',
     }),
     loadOlder: () => Promise.resolve(),
+    openPreferences: () => {},
     removeAttachment: index => {
       calls.push(`remove:${index}`)
       attachments = attachments.filter((_attachment, current) => current !== index)

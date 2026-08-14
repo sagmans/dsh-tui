@@ -10,6 +10,7 @@ import {
   createConversationController,
   type ConversationController,
   type ConversationControllerOptions,
+  type ConversationPreferenceSection,
   type ConversationSessionBinding,
 } from './model.js'
 
@@ -20,6 +21,7 @@ const COMMAND_PRIORITY = 350
 const BINDING_ERROR = 'selected session is not locally addressable'
 const COMMAND_COMPLETION_ERROR = 'command completion failed'
 const SKILL_COMPLETION_ERROR = 'skill completion failed'
+const SETTINGS_COMMAND_PREFIX = 'settings.section.'
 
 export const name = 'tui-conversation'
 export const inject: readonly string[] = ['tuiKernel', 'tuiClient', 'apiProxy']
@@ -71,6 +73,7 @@ function sessionBinding(ctx: Context, id: SessionId): ConversationSessionBinding
 }
 
 function controllerOptions(ctx: Context): ConversationControllerOptions {
+  const resources = ctx.tuiKernel.resources
   return {
     completion: {
       complete: async (sessionId, query) => {
@@ -89,6 +92,10 @@ function controllerOptions(ctx: Context): ConversationControllerOptions {
           ...skills.result.value.skills.map(skill => skill.name),
         ])].filter(candidateName => candidateName.startsWith(query)).toSorted((left, right) => left.localeCompare(right))
       },
+    },
+    openSettings: (section: ConversationPreferenceSection) => {
+      resources.navigation.go('settings')
+      queueMicrotask(() => { void resources.commands.run(`${SETTINGS_COMMAND_PREFIX}${section}`) })
     },
     media: {
       exportSession: (sessionId, path, signal) => exportSessionArchive(
@@ -119,6 +126,8 @@ function commandLayer(controller: ConversationController, active: () => boolean)
       { name: 'conversation.attach', description: 'Attach image from absolute local path', run: () => { controller.beginAttachment() } },
       { name: 'conversation.export', description: 'Export session archive to a new local file', run: () => { controller.beginExport() } },
       { name: 'conversation.clear-attachments', description: 'Clear staged image attachments', run: () => { controller.clearAttachments() } },
+      { name: 'conversation.access', description: 'Open current and default access presets', run: () => { controller.openPreferences('access') } },
+      { name: 'conversation.presets', description: 'Open current and default agent presets', run: () => { controller.openPreferences('presets') } },
     ],
     bindings: [
       { key: 'ctrl+x', command: 'conversation.cancel' },
@@ -128,6 +137,8 @@ function commandLayer(controller: ConversationController, active: () => boolean)
       { key: 'ctrl+o', command: 'conversation.attach' },
       { key: 'ctrl+e', command: 'conversation.export' },
       { key: 'ctrl+delete', command: 'conversation.clear-attachments' },
+      { key: 'alt+a', command: 'conversation.access' },
+      { key: 'alt+p', command: 'conversation.presets' },
     ],
   }
 }

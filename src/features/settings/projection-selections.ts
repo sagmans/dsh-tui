@@ -13,6 +13,7 @@ import { sanitizeConversationText } from '../conversation/projection.js'
 
 const FULL_ACCESS_PRESET = 'danger-full-access'
 const CUSTOM_ACCESS_PRESET = 'custom'
+const PERMISSION_SETTINGS_NAMESPACE = 'permission'
 
 interface PermissionOption {
   readonly name: string
@@ -118,13 +119,13 @@ export function modelRows(context: ConfigurationProjectionContext): readonly Con
 
 export function accessRows(
   list: ConfigurationListState,
-  targets: Map<string, ConfigurationTarget>,
+  context: ConfigurationProjectionContext,
 ): readonly ConfigurationRowView[] {
   const { current, options } = permissionOptions(list)
-  return options.map((option): ConfigurationRowView => {
+  const rows = options.map((option): ConfigurationRowView => {
     const id = `access:${option.value}`
     const selected = option.value === current
-    targets.set(id, { kind: 'access', preset: option.value })
+    context.targets.set(id, { kind: 'access', preset: option.value })
     return {
       actions: selected ? [] : [CONFIGURATION_ACTIONS.access],
       details: option.value === FULL_ACCESS_PRESET
@@ -132,8 +133,31 @@ export function accessRows(
         : `Permission preset ${sanitizeConversationText(option.value)}`,
       id,
       state: option.value === FULL_ACCESS_PRESET ? 'warning' : selected ? 'success' : 'idle',
-      summary: selected ? 'current' : option.value === FULL_ACCESS_PRESET ? 'unrestricted' : 'available',
+      summary: selected ? 'current session' : option.value === FULL_ACCESS_PRESET ? 'unrestricted · current session' : 'current session',
       title: sanitizeConversationText(option.name),
     }
   })
+  const namespace = context.data.settings?.namespaces.find(candidate => candidate.ns === PERMISSION_SETTINGS_NAMESPACE)
+  const defaultPreset = record(namespace?.value) && typeof namespace.value.defaultPreset === 'string'
+    ? namespace.value.defaultPreset
+    : undefined
+  if (namespace === undefined || defaultPreset === undefined) return rows
+  for (const option of options) {
+    const id = `access-default:${option.value}`
+    const selected = option.value === defaultPreset
+    context.targets.set(id, { kind: 'access-default', namespace, preset: option.value })
+    rows.push({
+      actions: context.data.settings?.writable === true && !selected
+        ? [CONFIGURATION_ACTIONS.accessDefault]
+        : [],
+      details: option.value === FULL_ACCESS_PRESET
+        ? 'New sessions start with unrestricted host access. Review risk before selecting.'
+        : `New sessions start with ${sanitizeConversationText(option.value)} access.`,
+      id,
+      state: option.value === FULL_ACCESS_PRESET ? 'warning' : selected ? 'success' : 'idle',
+      summary: selected ? 'default · new sessions' : 'available · new sessions',
+      title: `${sanitizeConversationText(option.name)} · default`,
+    })
+  }
+  return rows
 }

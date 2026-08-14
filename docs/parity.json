@@ -392,10 +392,10 @@
       "owner": "src/features/settings; src/views/conversation/composer.ts",
       "keyboard": "Composer access seat or Settings; choose current/default permission",
       "mouse": "Click access seat or Settings permission choice",
-      "automatedProof": ["test/features/settings.test.ts", "planned:test/features/permission-presets.test.ts", "planned:test/features/preset-permission-native.test.ts"],
+      "automatedProof": ["test/features/settings.test.ts", "test/features/permission-presets.test.ts", "test/features/agent-presets.test.ts", "test/features/preset-permission-native.test.ts", "test/features/conversation.test.ts"],
       "dogfoodProof": "pending: Task 17 verify current and newly created session access",
       "status": "partial",
-      "notes": "Current-session selection exists; future-session default and composer seat are absent."
+      "notes": "Current and future-session permission scopes, Full access confirmation, and composer handoff are proven; real-profile inheritance dogfood remains."
     },
     {
       "id": "agent.presets",
@@ -407,10 +407,10 @@
       "owner": "cordis.patch.yml; src/features/settings; src/views/conversation/composer.ts",
       "keyboard": "Blank-session preset seat or Settings; choose/default/copy/open preset",
       "mouse": "Click preset seat, preset row, and exact management action",
-      "automatedProof": ["test/profile-composition.test.ts", "planned:test/features/agent-presets.test.ts", "planned:test/features/preset-permission-native.test.ts"],
+      "automatedProof": ["test/profile-composition.test.ts", "test/features/agent-presets.test.ts", "test/features/preset-permission-native.test.ts", "test/features/conversation.test.ts"],
       "dogfoodProof": "pending: Task 17 create sessions under multiple presets",
       "status": "partial",
-      "notes": "Preset-owned model-facing composition now matches Web; default, staging, and management UI remain incomplete."
+      "notes": "Preset-owned composition, defaults, blank-session selection, current display, and management actions are proven; real-profile inheritance dogfood remains."
     },
     {
       "id": "plans.session",

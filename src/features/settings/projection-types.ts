@@ -18,6 +18,7 @@ import {
 
 export const CONFIGURATION_ACTIONS = Object.freeze({
   access: defineTuiAction(CONFIGURATION_ACTION_SCOPE, 'access.select', 'SELECT', 'positive'),
+  accessDefault: defineTuiAction(CONFIGURATION_ACTION_SCOPE, 'access.default', 'MAKE DEFAULT', 'positive'),
   providerCreate: defineTuiAction(CONFIGURATION_ACTION_SCOPE, 'provider.create', 'CREATE', 'positive'),
   providerEdit: defineTuiAction(CONFIGURATION_ACTION_SCOPE, 'provider.edit', 'EDIT', 'default'),
   providerDiscover: defineTuiAction(CONFIGURATION_ACTION_SCOPE, 'provider.discover', 'FETCH MODELS', 'default'),
@@ -67,6 +68,11 @@ export interface ConfigurationProviderTarget {
 
 export type ConfigurationTarget =
   | { readonly kind: 'access'; readonly preset: string }
+  | {
+    readonly kind: 'access-default'
+    readonly namespace: ConfigurationSettingsCatalog['namespaces'][number]
+    readonly preset: string
+  }
   | { readonly kind: 'provider-create'; readonly namespace: ConfigurationSettingsCatalog['namespaces'][number] }
   | ConfigurationProviderTarget
   | {

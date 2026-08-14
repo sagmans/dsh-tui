@@ -11,6 +11,7 @@ export type ConversationPhase = 'empty' | 'error' | 'loading' | 'ready'
 export type ConversationLineKind = 'assistant' | 'command' | 'context' | 'error' | 'system' | 'tool' | 'user'
 export type ConversationSendMode = 'queue' | 'steer'
 export type ConversationInputKind = 'attachment' | 'export'
+export type ConversationPreferenceSection = 'access' | 'presets'
 
 export interface ConversationAttachmentView {
   readonly bytes: number
@@ -70,6 +71,8 @@ declare module '@deepseek-ai/dsh-client-runtime/client' {
 }
 
 export interface ConversationSnapshotView {
+  readonly accessPreset: string | undefined
+  readonly agentPreset: string | undefined
   readonly attachments: readonly ConversationAttachmentView[]
   readonly busy: boolean
   readonly draft: string
@@ -98,7 +101,12 @@ export interface ConversationSessionBinding {
 export interface ConversationSessionsSource {
   readonly list: ObservableSnapshot<{
     readonly current: SessionId | undefined
-    readonly byId: Readonly<Record<SessionId, { readonly displayTitle: string } | undefined>>
+    readonly byId: Readonly<Record<SessionId, {
+      readonly agentPreset?: string | undefined
+      readonly blank?: boolean | undefined
+      readonly displayTitle: string
+      readonly projectionValues?: Readonly<Record<string, unknown>> | undefined
+    } | undefined>>
   }>
   binding(id: SessionId): ConversationSessionBinding | undefined
 }
@@ -110,6 +118,7 @@ export interface ConversationCompletionSource {
 export interface ConversationControllerOptions {
   readonly completion?: ConversationCompletionSource
   readonly media?: ConversationMediaSource
+  readonly openSettings?: ((section: ConversationPreferenceSection) => void) | undefined
   readonly sessions: ConversationSessionsSource
 }
 
@@ -123,6 +132,7 @@ export interface ConversationController {
   dispose(): void
   getSnapshot(): ConversationSnapshotView
   loadOlder(): Promise<void>
+  openPreferences(section: ConversationPreferenceSection): void
   removeAttachment(index: number): void
   scroll(delta: number): void
   scrollOffset(): number

@@ -39,7 +39,7 @@ export function projectConfiguration(input: {
   switch (input.section) {
     case 'models': rows = modelRows(context); break
     case 'providers': rows = providerRows(context); break
-    case 'access': rows = accessRows(input.list, context.targets); break
+    case 'access': rows = accessRows(input.list, context); break
     case 'presets': rows = presetRows(input.list, context); break
     case 'settings': rows = settingsRows(context); break
     case 'credentials': rows = credentialRows(context); break

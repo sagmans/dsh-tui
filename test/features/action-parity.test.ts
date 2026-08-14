@@ -29,6 +29,7 @@ const SETTINGS_ACTION_IDS = Object.freeze([
   'provider.model.remove',
   'provider.model.adopt',
   'access.select',
+  'access.default',
   'preset.select',
   'preset.default',
   'preset.view',
