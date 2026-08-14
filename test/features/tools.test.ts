@@ -17,6 +17,7 @@ import { projectToolPresentation } from '../../src/features/tools/presentation.j
 // oxlint-disable-next-line typescript/no-unsafe-type-assertion
 const SESSION_ID = 'session-one' as SessionId
 const ESCAPE_CHARACTER = String.fromCodePoint(27)
+const TOOL_RESULT_PRUNE_MARKER = '[... tool result middle pruned ...]'
 const EMPTY_CHAT: ChatSnapshot = {
   order: [],
   nodes: { get: () => undefined, values: () => [] },
@@ -98,6 +99,20 @@ test('maps structured terminal and malformed presentation intents safely', () =>
   })
   assert.equal(malformed.title, 'edit')
   assert.match(malformed.details, /file\.ts/u)
+})
+
+test('keeps host-pruned tool-result boundaries inspectable', () => {
+  const pruned = projectToolPresentation({
+    args: '{"path":"large.log"}',
+    callId: 'call-pruned',
+    isError: false,
+    name: 'read',
+    result: `retained head\n\n${TOOL_RESULT_PRUNE_MARKER}\n\nretained tail`,
+  })
+
+  assert.match(pruned.details, /retained head/u)
+  assert.match(pruned.details, /\[\.\.\. tool result middle pruned \.\.\.\]/u)
+  assert.match(pruned.details, /retained tail/u)
 })
 
 test('excludes tainted and failed paths from external open targets', () => {

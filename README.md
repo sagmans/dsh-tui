@@ -1,17 +1,18 @@
 # dsh-tui
 
-Full-screen, hotkey-first OpenTUI profile for DeepSeek Harness.
+Full-screen, hotkey-first OpenTUI profile for DeepSeek Harness `0.1.0-rc.6`.
 
-Current slices: in-process Harness client bridge, reversible TUI extension
-contracts, zen shell, grouped/flat workspace sessions with activity sorting and unread traversal, streaming conversation,
-complete structured tool inspection, path-only image staging, private session export,
-turn-scoped deliverable tails and confirmed local-file opening, fail-closed human interaction overlays,
-session-scoped operational actions, grouped command/skill/subagent discovery,
-recursive subagent activity with addressed one-shot/continuation ownership,
-occurrence-addressed queued prompts with persisted busy-submit behavior,
-whole-log statistics/context and plan/goal/todo seats, shared model/reasoning
-selection, provider management, and redacted
-configuration/plugin control.
+## Run from this checkout
 
-See [`docs/profile.md`](docs/profile.md) for installation and controls, and
-[`docs/parity.md`](docs/parity.md) for explicit Web/TUI parity decisions.
+```sh
+pnpm run build
+dsh plugin --profile tui add .
+dsh plugin --profile tui install
+mise exec node@26.4.0 -- node --experimental-ffi "$(command -v dsh)" --profile tui
+```
+
+Node.js `26.4.0+` and direct `--experimental-ffi` activation are required by OpenTUI. Plain `dsh --profile tui` remains the intended Harness command, but the current Node launcher cannot inject that process-start flag.
+
+TUI provides terminal-native Web capability parity: sessions/workspaces, conversation and queue control, tools/files, subagents, trajectory, operations, interactions, provider/model/preset/permission management, field-level plugin settings, theme, and locale. Browser/DOM-only behavior stays excluded.
+
+See [`docs/profile.md`](docs/profile.md) for controls and [`docs/parity.md`](docs/parity.md) for capability decisions and proof.

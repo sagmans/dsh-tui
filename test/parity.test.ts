@@ -273,6 +273,16 @@ test('classifies every capability with evidence and dual-input paths', () => {
   }
 })
 
+test('marks every terminal capability complete before claiming parity', () => {
+  const value = manifest()
+  if (value === undefined) return
+
+  for (const capability of value.capabilities) {
+    if (capability.classification === 'web-only') continue
+    assert.equal(capability.status, 'complete', capability.id)
+  }
+})
+
 test('covers every row in the Web profile patch', () => {
   const value = manifest()
   if (value === undefined) return

@@ -6,12 +6,16 @@ It targets published Harness `0.1.0-rc.6` packages.
 ## Install from this checkout
 
 ```sh
+pnpm run build
 dsh plugin --profile tui add .
 dsh plugin --profile tui install
-node --experimental-ffi "$(command -v dsh)" --profile tui
+mise exec node@26.4.0 -- node --experimental-ffi "$(command -v dsh)" --profile tui
 ```
 
-Runtime requires Node.js 26.4.0 or newer. `--experimental-ffi` must be active.
+Runtime requires Node.js 26.4.0 or newer. OpenTUI requires
+`--experimental-ffi` at process start; `NODE_OPTIONS` rejects this flag. Plain
+`dsh --profile tui` remains the intended Harness command but cannot activate
+FFI through the current Node launcher.
 
 ## Composition boundary
 
@@ -34,8 +38,8 @@ Open Sessions with `gs` or the mouse tab. Default actions:
 
 - `j`/`k`, arrows, or `Ctrl+N`/`Ctrl+P`: move selection
 - `Enter`: open a session or fold a workspace
-- `g`: switch Workspace groups and one flat session list
-- `s`: switch Manual and Last-updated ordering
+- `Shift+G`: switch Workspace groups and one flat session list
+- `Shift+S`: switch Manual and Last-updated ordering
 - `u`: move to the next unread completion
 - `n`, `/`, `r`, `f`, `x`: new, search, rename, fork, archive
 - `c`, `h`: close current view, load older selected-session history
@@ -69,7 +73,7 @@ loads older events.
 - `Ctrl+X`: stop the running turn
 - `/`: open grouped fuzzy command and prefix-matched skill candidates
 - `@`: open running direct-child subagent references
-- `Meta+/`: open the command, skill, and subagent launcher without typing a trigger
+- `Meta+L`: open the command, skill, and subagent launcher without typing a trigger
 - `Up`/`Down`, `Enter`, `Esc`: traverse, select, or dismiss trigger candidates
 - `Tab`: complete leading slash commands and skills
 - `Meta+M`: open the current session's shared model/reasoning picker
@@ -169,11 +173,17 @@ confirmation. Credential values use a masked write-only editor, leave no
 render-buffer copy, and are cleared before the Host call. Unset also requires
 confirmation.
 
-Configured Loader plugins are read-only inventory. Dynamic Cordis packages are
-limited to the current session. Host-only packages may run; stop and remove
-require confirmation. Packages with browser client halves are shown as
-unsupported and cannot run, so this profile never fetches or executes browser
-plugin code.
+Plugins exposes field-level Host controls matching Web cards: shell timeout and
+output cap, agent-loop parallel tool calls, and DeepSeek search endpoint, use
+limit, and write-only key. `EDIT` opens a staged Save/Cancel field; blank values
+clear an override. `RESET` removes only that field's user override using the
+shown revision. Host validation and read-back remain authoritative.
+
+Extensions lists dynamic packages first and configured Loader plugins as
+read-only inventory. Dynamic packages are limited to the current session.
+Host-only packages may run; stop and remove require confirmation. Packages with
+browser client halves are shown as unsupported and cannot run, so this profile
+never fetches or executes browser plugin code.
 
 See [`parity.md`](parity.md) for every renderer-specific implementation,
 terminal alternative, and Web-only exclusion.

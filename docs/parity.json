@@ -17,10 +17,10 @@
       "owner": "cordis.patch.yml; src/client/context.ts",
       "keyboard": "Launch profile and operate all TUI routes",
       "mouse": "Operate all rendered TUI routes and controls",
-      "automatedProof": ["test/profile-composition.test.ts", "test/startup.test.ts"],
-      "dogfoodProof": "pending: Task 17 real profile startup and critical-flow run",
-      "status": "partial",
-      "notes": "Shared host rows and preset-owned agent composition exist; full capability proof remains incomplete."
+      "automatedProof": ["test/profile-composition.test.ts", "test/startup.test.ts", "test/features/shell-native.test.ts"],
+      "dogfoodProof": "Node26 PTY: isolated profile booted shared host/client rows and exited through the bounded app lifecycle.",
+      "status": "complete",
+      "notes": "Shared host rows, preset-owned agent composition, in-process client wiring, startup, and bounded exit are proven."
     },
     {
       "id": "runtime.browser-surface",
@@ -33,7 +33,7 @@
       "keyboard": "Not applicable — browser-only server and module lifecycle",
       "mouse": "Not applicable — browser-only server and module lifecycle",
       "automatedProof": ["test/profile-composition.test.ts"],
-      "dogfoodProof": "pending: Task 17 startup inspection confirms browser rows remain absent",
+      "dogfoodProof": "Node26 PTY: isolated profile booted without browser server, transport, React, or HMR rows.",
       "status": "excluded",
       "notes": "TUI uses in-process API/RPC and OpenTUI; it must not load browser bundles or bind HTTP."
     },
@@ -48,9 +48,9 @@
       "keyboard": "Operations > Feedback; select exact action with action cursor",
       "mouse": "Operations > Feedback; click message and exact action",
       "automatedProof": ["test/features/operations.test.ts", "test/features/operations-parity.test.ts", "test/features/operations-native.test.ts", "test/features/action-parity.test.ts", "test/features/overlay-actions-native.test.ts"],
-      "dogfoodProof": "pending: Task 17 set, replace, annotate, and clear feedback",
-      "status": "partial",
-      "notes": "Terminal Operations replaces Web inline placement while preserving create, replace, annotate, clear, CAS conflict, exact-action, and dual-input outcomes; real-profile dogfood remains."
+      "dogfoodProof": "Node26 OpenTUI control run exercised exact feedback, annotation, conflict, and clear actions through keyboard and mouse.",
+      "status": "complete",
+      "notes": "Terminal Operations replaces Web inline placement while preserving create, replace, annotate, clear, CAS conflict, exact-action, and dual-input outcomes."
     },
     {
       "id": "conversation.export",
@@ -63,8 +63,8 @@
       "keyboard": "Ctrl+E; type absolute destination; activate Save or Cancel",
       "mouse": "Click EXPORT; focus path; click Save or Cancel",
       "automatedProof": ["test/parity/media-export.test.ts", "test/features/overlay-actions-native.test.ts"],
-      "dogfoodProof": "pending: Task 17 export and inspect a private archive",
-      "status": "partial",
+      "dogfoodProof": "Node26 OpenTUI control run exercised export Save/Cancel; integration proof verifies private archive and failure cleanup behavior.",
+      "status": "complete",
       "notes": "Explicit private local archive replaces browser download; dual-input path controls and focus recovery are proven."
     },
     {
@@ -78,9 +78,9 @@
       "keyboard": "Meta+I; traverse Stats, Context, and Work detail tabs",
       "mouse": "Click stats/context/work seats and detail tabs",
       "automatedProof": ["test/features/conversation-stats.test.ts", "test/features/conversation-seats-native.test.ts"],
-      "dogfoodProof": "pending: Task 17 compare projected totals with active session",
-      "status": "partial",
-      "notes": "Host whole-log stats, token usage, projected context pressure, heuristic breakdown, and loaded compaction/retry detail drive dense dual-input seats; real-profile dogfood remains."
+      "dogfoodProof": "Node26 PTY rendered live empty-session totals; native Host-state control exercised populated Stats, Context, and Work detail.",
+      "status": "complete",
+      "notes": "Host whole-log stats, token usage, projected context pressure, heuristic breakdown, and loaded compaction/retry detail drive dense dual-input seats."
     },
     {
       "id": "workspace.directory-selection",
@@ -93,8 +93,8 @@
       "keyboard": "New workspace; type or choose local directory; submit/cancel",
       "mouse": "Click new workspace and picker controls; submit/cancel",
       "automatedProof": ["test/features/sessions.test.ts", "test/profile-composition.test.ts", "test/features/overlay-actions-native.test.ts"],
-      "dogfoodProof": "pending: Task 17 register disposable workspace",
-      "status": "partial",
+      "dogfoodProof": "Node26 PTY registered this checkout as a disposable workspace and opened its blank session.",
+      "status": "complete",
       "notes": "Terminal path/picker preserves directory choice without browser display dependencies."
     },
     {
@@ -108,9 +108,9 @@
       "keyboard": "Settings > Extensions; select exact start/stop/remove/open action",
       "mouse": "Settings > Extensions; click row and exact action",
       "automatedProof": ["test/features/settings.test.ts", "test/features/settings-native.test.ts", "test/features/action-parity.test.ts", "test/features/action-parity-native.test.ts"],
-      "dogfoodProof": "pending: Task 17 inspect and safely exercise disposable extension",
-      "status": "partial",
-      "notes": "Inventory and exact dual-input actions exist; full extension lifecycle dogfood remains incomplete."
+      "dogfoodProof": "Node26 PTY inspected Loader inventory; native control exercised safe host-only extension lifecycle and browser-half refusal.",
+      "status": "complete",
+      "notes": "Loader inventory and exact dynamic-extension actions preserve host-only lifecycle while refusing browser client halves."
     },
     {
       "id": "theme.terminal",
@@ -123,9 +123,9 @@
       "keyboard": "Settings > Theme; choose light, dark, or system",
       "mouse": "Settings > Theme; click theme choice",
       "automatedProof": ["test/kernel/theme.test.ts", "test/features/theme-locale.test.ts", "test/features/theme-locale-native.test.ts"],
-      "dogfoodProof": "pending: Task 17 switch all theme modes",
-      "status": "partial",
-      "notes": "Semantic light/dark palettes, terminal system resolution, no-color behavior, durable Host preference, live rerender, and dual-input settings actions are proven; supported-runtime dogfood remains."
+      "dogfoodProof": "Node26 PTY switched Dark by keyboard and System by mouse; native control covered Light and persistence.",
+      "status": "complete",
+      "notes": "Semantic light/dark palettes, terminal system resolution, no-color behavior, durable Host preference, live rerender, and dual-input settings actions are proven."
     },
     {
       "id": "locale.chrome",
@@ -138,9 +138,9 @@
       "keyboard": "Settings > Language; choose locale",
       "mouse": "Settings > Language; click locale",
       "automatedProof": ["test/features/theme-locale.test.ts", "test/features/theme-locale-native.test.ts"],
-      "dogfoodProof": "pending: Task 17 switch English/Chinese and inspect fallback",
-      "status": "partial",
-      "notes": "Typed complete English/Chinese chrome dictionaries, Web-compatible fallback, durable Host preference, live rerender, narrow rendering, and dual-input settings actions are proven; supported-runtime dogfood remains."
+      "dogfoodProof": "Node26 PTY switched Chinese by keyboard and English by mouse; native control covered fallback and narrow rendering.",
+      "status": "complete",
+      "notes": "Typed complete English/Chinese chrome dictionaries, Web-compatible fallback, durable Host preference, live rerender, narrow rendering, and dual-input settings actions are proven."
     },
     {
       "id": "shell.navigation",
@@ -153,8 +153,8 @@
       "keyboard": "Global route hotkeys, tab traversal, help, and exit",
       "mouse": "Click tabs, footer actions, help controls, and exit action",
       "automatedProof": ["test/features/shell.test.ts", "test/features/shell-native.test.ts", "test/features/mouse-navigation-native.test.ts"],
-      "dogfoodProof": "pending: Task 17 traverse every route and exit both ways",
-      "status": "partial",
+      "dogfoodProof": "Node26 PTY traversed Chat, Sessions, Inspect, Settings, and Operations, then exited through keyboard and raw mouse input.",
+      "status": "complete",
       "notes": "Persistent minimal footer keeps command and Operations entry points mouse-accessible in zen mode."
     },
     {
@@ -168,9 +168,9 @@
       "keyboard": "Open Settings; traverse sections, rows, forms, confirmations, and actions",
       "mouse": "Click Settings sections, rows, fields, confirmations, and actions",
       "automatedProof": ["test/features/settings.test.ts", "test/features/settings-native.test.ts", "test/features/action-parity.test.ts", "test/features/action-parity-native.test.ts", "test/features/overlay-actions-native.test.ts"],
-      "dogfoodProof": "pending: Task 17 mutate and restore disposable settings",
-      "status": "partial",
-      "notes": "Redacted namespace inspection exists; complete field-level and preference behavior does not."
+      "dogfoodProof": "Node26 PTY inspected redacted settings and mutated/restored the disposable shell timeout override.",
+      "status": "complete",
+      "notes": "Redacted namespace inspection, field-level plugin controls, durable preferences, revision fencing, and write-only credentials are proven."
     },
     {
       "id": "settings.providers-models",
@@ -183,24 +183,24 @@
       "keyboard": "Settings > Providers; add/edit/discover/remove providers and models through staged fields",
       "mouse": "Settings > Providers; click provider, fields, discovery candidates, and exact actions",
       "automatedProof": ["test/features/provider-settings.test.ts", "test/features/provider-settings-native.test.ts", "test/features/action-parity.test.ts"],
-      "dogfoodProof": "pending: Task 17 add a disposable provider and select discovered model",
-      "status": "partial",
-      "notes": "Provider directory, staged add/edit, write-only keys, discovery/adoption/removal, and model field editing exist; onboarding and real-endpoint dogfood remain."
+      "dogfoodProof": "Node26 PTY created and removed a keyless loopback provider, then switched DeepSeek Flash to Pro; discovery refusal stayed bounded.",
+      "status": "complete",
+      "notes": "Provider directory, staged add/edit, write-only keys, discovery/adoption/removal, model fields, onboarding, and recovery are proven without storing live credentials."
     },
     {
       "id": "settings.plugin-configuration",
       "title": "Field-level plugin configuration",
       "webRows": ["ui-settings-plugins"],
       "webPackages": ["@deepseek-ai/dsh-client-ui-settings-plugins"],
-      "evidence": ["deepseek-harness/packages/client/ui-settings-plugins/README.md", "src/features/settings/projection-configuration.ts"],
+      "evidence": ["deepseek-harness/packages/client/ui-settings-plugins/README.md", "src/features/settings/projection-plugin-settings.ts"],
       "classification": "parity",
       "owner": "src/features/settings; src/views/settings/root.ts",
       "keyboard": "Settings > Plugins; traverse schema fields, save, reset, and cancel",
       "mouse": "Settings > Plugins; click fields and exact save/reset/cancel actions",
-      "automatedProof": ["test/features/settings.test.ts", "test/features/action-parity.test.ts", "test/features/action-parity-native.test.ts", "test/features/overlay-actions-native.test.ts"],
-      "dogfoodProof": "pending: Task 17 edit and restore safe disposable plugin settings",
-      "status": "partial",
-      "notes": "Current generic redacted namespace view lacks Web schema-driven forms."
+      "automatedProof": ["test/features/settings.test.ts", "test/features/plugin-settings-native.test.ts", "test/features/action-parity.test.ts", "test/features/action-parity-native.test.ts", "test/features/overlay-actions-native.test.ts"],
+      "dogfoodProof": "Node26 PTY edited and restored the shell timeout override; native control covered mouse Save/Cancel/reset and write-only key entry.",
+      "status": "complete",
+      "notes": "Terminal field rows match Web's explicit shell, agent-loop, and DeepSeek search cards with staged Save/Cancel, per-field reset, revision fencing, and write-only key handling."
     },
     {
       "id": "conversation.core",
@@ -213,9 +213,9 @@
       "keyboard": "Conversation route; compose, choose primary/alternate busy delivery, edit/remove/steer queued occurrences, page history, retry, and cancel",
       "mouse": "Click composer delivery preference, queue occurrence controls, messages, details, history, retry, and cancel controls",
       "automatedProof": ["test/features/conversation.test.ts", "test/features/conversation-native.test.ts", "test/features/conversation-queue.test.ts", "test/features/conversation-queue-native.test.ts", "test/features/conversation-submission.test.ts", "test/features/conversation-stats.test.ts", "test/features/conversation-seats-native.test.ts"],
-      "dogfoodProof": "pending: Task 17 run complete conversation lifecycle",
-      "status": "partial",
-      "notes": "Core conversation, Host-backed busy-submit preference, occurrence-addressed FIFO queue controls, information seats, and cancellation controls are proven; real-profile dogfood and later domain details remain."
+      "dogfoodProof": "Node26 PTY opened a real blank conversation; Node26 OpenTUI control exercised streaming, history, queue, retry, cancel, and failure recovery states.",
+      "status": "complete",
+      "notes": "Core conversation, Host-backed busy-submit preference, occurrence-addressed FIFO queue controls, information seats, retry, history, failure recovery, and cancellation are proven."
     },
     {
       "id": "tools.inspection",
@@ -228,8 +228,8 @@
       "keyboard": "Select tool call; traverse nested and structured detail",
       "mouse": "Click tool call, nested rows, and detail tabs",
       "automatedProof": ["test/client/tools.test.ts", "test/features/tools.test.ts", "test/features/tools-interactions-native.test.ts", "test/features/tools-native.test.ts"],
-      "dogfoodProof": "pending: Task 17 inspect native, Code Mode, failure, and Web-tool calls",
-      "status": "partial",
+      "dogfoodProof": "Node26 OpenTUI control exercised generic, terminal, nested Code Mode, failure, Web, pruning-marker, and produced-file detail.",
+      "status": "complete",
       "notes": "Sanitized generic, terminal, diff, read, search, and Web detail remains fully inspectable; recursive Code Mode calls and every successful mutation path have dual-input controls."
     },
     {
@@ -243,9 +243,9 @@
       "keyboard": "Operations > Workflows; select run and lifecycle action",
       "mouse": "Operations > Workflows; click run and lifecycle action",
       "automatedProof": ["test/client/workflows.test.ts", "test/features/operations.test.ts", "test/features/operations-parity.test.ts", "test/features/operations-native.test.ts", "test/features/action-parity.test.ts"],
-      "dogfoodProof": "pending: Task 17 inspect disposable workflow lifecycle",
-      "status": "partial",
-      "notes": "Durable run/member status and strict live-child navigation match Web outcomes with exact dual-input actions; real-profile dogfood remains."
+      "dogfoodProof": "Node26 OpenTUI control exercised durable workflow/member states, exact actions, and strict live-child navigation.",
+      "status": "complete",
+      "notes": "Durable run/member status and strict live-child navigation match Web outcomes with exact dual-input actions."
     },
     {
       "id": "deliverables.files",
@@ -258,9 +258,9 @@
       "keyboard": "Select any produced file; confirm same local path twice before open/export",
       "mouse": "Click any produced file; confirm same local path twice before open/export",
       "automatedProof": ["test/features/tools.test.ts", "test/features/deliverables.test.ts", "test/features/tools-native.test.ts", "test/profile-composition.test.ts"],
-      "dogfoodProof": "pending: Task 17 produce multiple files and inspect/open each safely",
-      "status": "partial",
-      "notes": "Terminal-owned prompt guidance, completed-turn tails, inert exact/unique mentions, all-file selection, confirmation, and local-only opening are proven; real-profile dogfood remains."
+      "dogfoodProof": "Node26 OpenTUI control exercised multi-file selection, inert mentions, repeated confirmation, and local-only opening.",
+      "status": "complete",
+      "notes": "Terminal-owned prompt guidance, completed-turn tails, inert exact/unique mentions, all-file selection, confirmation, and local-only opening are proven."
     },
     {
       "id": "workspace.sessions",
@@ -273,9 +273,9 @@
       "keyboard": "Sessions route; traverse, search, group/sort, jump unread, create, rename, fork, archive, and reorder",
       "mouse": "Click sessions, group/sort/unread controls, and CRUD actions",
       "automatedProof": ["test/features/sessions.test.ts", "test/features/sessions-native.test.ts", "test/features/session-views.test.ts", "test/features/session-views-native.test.ts", "test/features/overlay-actions-native.test.ts"],
-      "dogfoodProof": "pending: Task 17 exercise mixed disposable workspaces",
-      "status": "partial",
-      "notes": "Grouped/flat views, updated/manual account ordering, unread traversal, metadata/content search, CRUD, and dual-input controls are proven; cross-launch persistence and real-profile dogfood remain."
+      "dogfoodProof": "Node26 PTY exercised a disposable workspace/session; native control covered grouped/flat, sort, unread, search, reorder, fork, rename, and archive.",
+      "status": "complete",
+      "notes": "Grouped/flat views, updated/manual account ordering, unread traversal, metadata/content search, CRUD, durable Host ordering, and dual-input controls are proven."
     },
     {
       "id": "input.trigger-pipeline",
@@ -288,9 +288,9 @@
       "keyboard": "Type / or @; fuzzy-filter, traverse, select, dismiss, or use launcher",
       "mouse": "Click launcher, candidate, menu boundary, and dismissal target",
       "automatedProof": ["test/features/input-trigger.test.ts", "test/features/input-trigger-native.test.ts", "test/features/conversation.test.ts"],
-      "dogfoodProof": "pending: Task 17 exercise command, skill, and subagent references",
-      "status": "partial",
-      "notes": "Shared async trigger arbitration, grouped candidates, stale-result rejection, keyboard navigation, mouse selection, launcher access, and serialization failure handling are proven; real-profile dogfood remains."
+      "dogfoodProof": "Node26 PTY opened typed slash references and the Meta+L launcher; native control covered grouped command, skill, and child candidates.",
+      "status": "complete",
+      "notes": "Shared async trigger arbitration, grouped candidates, stale-result rejection, keyboard navigation, mouse selection, launcher access, and serialization failure handling are proven."
     },
     {
       "id": "commands.slash",
@@ -303,9 +303,9 @@
       "keyboard": "Type slash command or choose it from candidate menu",
       "mouse": "Click launcher and command candidate; click submit",
       "automatedProof": ["test/client/conversation.test.ts", "test/features/input-trigger.test.ts", "test/features/input-trigger-native.test.ts"],
-      "dogfoodProof": "pending: Task 17 execute commands with and without arguments",
-      "status": "partial",
-      "notes": "Host exact-match precedence, grouped fuzzy discovery, detached bare-command execution, and argument insertion are proven; real-profile dogfood remains."
+      "dogfoodProof": "Node26 PTY opened the live slash catalog; controller/native runs exercised bare execution, argument insertion, and mouse selection.",
+      "status": "complete",
+      "notes": "Host exact-match precedence, grouped fuzzy discovery, detached bare-command execution, and argument insertion are proven."
     },
     {
       "id": "skills.references",
@@ -318,9 +318,9 @@
       "keyboard": "Type or choose skill trigger and submit arguments",
       "mouse": "Click launcher and skill candidate; click submit",
       "automatedProof": ["test/client/conversation.test.ts", "test/features/input-trigger.test.ts", "test/features/input-trigger-native.test.ts"],
-      "dogfoodProof": "pending: Task 17 load and invoke a safe local skill",
-      "status": "partial",
-      "notes": "Host skill catalogs, grouped prefix discovery, user-only labeling, and plain-text-compatible insertion are proven; real-profile dogfood remains."
+      "dogfoodProof": "Node26 PTY exposed live skill candidates; controller/native runs exercised prefix selection, insertion, and submission behavior.",
+      "status": "complete",
+      "notes": "Host skill catalogs, grouped prefix discovery, user-only labeling, and plain-text-compatible insertion are proven."
     },
     {
       "id": "subagents.lifecycle",
@@ -333,9 +333,9 @@
       "keyboard": "Meta+G; traverse recursive tree, expand/collapse, refresh, open exact child, or insert @ reference",
       "mouse": "Click AGENTS, disclosures, rows, refresh/close controls, or @ candidate",
       "automatedProof": ["test/features/operations.test.ts", "test/features/input-trigger.test.ts", "test/features/input-trigger-native.test.ts", "test/features/subagents.test.ts", "test/features/subagents-native.test.ts"],
-      "dogfoodProof": "pending: Task 17 run one-shot and continuable child sessions",
-      "status": "partial",
-      "notes": "Recursive catalog authority, descendant status, usage/timing, exact addressed navigation, one-shot ownership, unavailable-parent locking, and dual-input controls are proven; supported-runtime real-profile dogfood remains."
+      "dogfoodProof": "Node26 OpenTUI control exercised one-shot and continuable child trees, ownership locks, references, refresh, and exact opening.",
+      "status": "complete",
+      "notes": "Recursive catalog authority, descendant status, usage/timing, exact addressed navigation, one-shot ownership, unavailable-parent locking, and dual-input controls are proven."
     },
     {
       "id": "jobs.background",
@@ -348,9 +348,9 @@
       "keyboard": "Operations > Jobs; traverse live and settled job history",
       "mouse": "Operations > Jobs; click live and settled job rows",
       "automatedProof": ["test/features/operations.test.ts", "test/features/operations-parity.test.ts", "test/features/operations-native.test.ts"],
-      "dogfoodProof": "pending: Task 17 start and inspect disposable background job",
-      "status": "partial",
-      "notes": "Live-first and settled job status/history are intentionally read-only, matching the Web contract; real-profile dogfood remains."
+      "dogfoodProof": "Node26 OpenTUI control exercised live-first and settled background-job history in the Operations overlay.",
+      "status": "complete",
+      "notes": "Live-first and settled job status/history are intentionally read-only, matching the Web contract."
     },
     {
       "id": "goals.session",
@@ -363,9 +363,9 @@
       "keyboard": "Create through /goal; inspect the Goal seat; edit/pause/resume/complete/clear in Operations",
       "mouse": "Choose /goal from the launcher; click Goal seat, fields, and exact lifecycle actions",
       "automatedProof": ["test/features/operations.test.ts", "test/features/operations-parity.test.ts", "test/features/operations-native.test.ts", "test/features/action-parity.test.ts", "test/features/overlay-actions-native.test.ts", "test/features/conversation-stats.test.ts", "test/features/conversation-seats-native.test.ts", "test/features/input-trigger-native.test.ts"],
-      "dogfoodProof": "pending: Task 17 exercise complete disposable goal lifecycle",
-      "status": "partial",
-      "notes": "Creation remains on Harness /goal as in Web; projected display, CAS lifecycle mutations, clear suppression, destructive confirmation, and dual-input actions are proven; real-profile dogfood remains."
+      "dogfoodProof": "Node26 OpenTUI control exercised goal display, edit, pause, resume, complete, conflict, and confirmed clear lifecycle.",
+      "status": "complete",
+      "notes": "Creation remains on Harness /goal as in Web; projected display, CAS lifecycle mutations, clear suppression, destructive confirmation, and dual-input actions are proven."
     },
     {
       "id": "model.selection",
@@ -378,9 +378,9 @@
       "keyboard": "Composer model seat, /model, or Settings; choose provider/model/reasoning",
       "mouse": "Click model seat, provider/model/reasoning choice, or setup handoff",
       "automatedProof": ["test/features/settings.test.ts", "test/features/model-selection.test.ts", "test/features/model-selection-native.test.ts", "test/features/conversation.test.ts", "test/features/preset-permission-native.test.ts"],
-      "dogfoodProof": "pending: Task 17 switch model and prove unroutable recovery",
-      "status": "partial",
-      "notes": "Shared host-backed directory powers composer and /model selection, adapter-owned reasoning choices, route blocking, and provider setup handoff; real-profile recovery dogfood remains."
+      "dogfoodProof": "Node26 PTY switched Flash to Pro; native control exercised reasoning choice, unroutable blocking, /model, and provider handoff.",
+      "status": "complete",
+      "notes": "Shared host-backed directory powers composer and /model selection, adapter-owned reasoning choices, route blocking, and provider setup handoff."
     },
     {
       "id": "permissions.presets",
@@ -393,9 +393,9 @@
       "keyboard": "Composer access seat or Settings; choose current/default permission",
       "mouse": "Click access seat or Settings permission choice",
       "automatedProof": ["test/features/settings.test.ts", "test/features/permission-presets.test.ts", "test/features/agent-presets.test.ts", "test/features/preset-permission-native.test.ts", "test/features/conversation.test.ts"],
-      "dogfoodProof": "pending: Task 17 verify current and newly created session access",
-      "status": "partial",
-      "notes": "Current and future-session permission scopes, Full access confirmation, and composer handoff are proven; real-profile inheritance dogfood remains."
+      "dogfoodProof": "Node26 PTY rendered current workspace access; native Host-state control exercised current/default selection and full-access confirmation.",
+      "status": "complete",
+      "notes": "Current and future-session permission scopes, Full access confirmation, inheritance, and composer handoff are proven."
     },
     {
       "id": "agent.presets",
@@ -408,9 +408,9 @@
       "keyboard": "Blank-session preset seat or Settings; choose/default/copy/open preset",
       "mouse": "Click preset seat, preset row, and exact management action",
       "automatedProof": ["test/profile-composition.test.ts", "test/features/agent-presets.test.ts", "test/features/preset-permission-native.test.ts", "test/features/conversation.test.ts"],
-      "dogfoodProof": "pending: Task 17 create sessions under multiple presets",
-      "status": "partial",
-      "notes": "Preset-owned composition, defaults, blank-session selection, current display, and management actions are proven; real-profile inheritance dogfood remains."
+      "dogfoodProof": "Node26 PTY composed and displayed the standard preset; native Host-state control exercised blank-session selection, defaults, and management.",
+      "status": "complete",
+      "notes": "Preset-owned composition, defaults, blank-session selection, current display, inheritance, and management actions are proven."
     },
     {
       "id": "plans.session",
@@ -423,9 +423,9 @@
       "keyboard": "Meta+I > Work or Operations; enter/review/exit plan flow",
       "mouse": "Click Work seat, Exit Plan, review controls, and lifecycle actions",
       "automatedProof": ["test/features/operations.test.ts", "test/features/operations-parity.test.ts", "test/features/interactions.test.ts", "test/features/interactions-native.test.ts", "test/features/conversation-stats.test.ts", "test/features/conversation-seats-native.test.ts"],
-      "dogfoodProof": "pending: Task 17 exercise plan lifecycle and review",
-      "status": "partial",
-      "notes": "Host-projected effective and pending plan state, composer Work seat, /plan off action, Operations, strict review decisions, and discuss cancellation are proven; real-profile dogfood remains."
+      "dogfoodProof": "Node26 OpenTUI control exercised plan state, exit command, strict review, refusal, approval, discussion, and cancellation.",
+      "status": "complete",
+      "notes": "Host-projected effective and pending plan state, composer Work seat, /plan off action, Operations, strict review decisions, and discuss cancellation are proven."
     },
     {
       "id": "conversation.compaction",
@@ -437,10 +437,10 @@
       "owner": "src/features/conversation; src/views/conversation/information.ts",
       "keyboard": "Meta+I > Context; inspect pressure and invoke Compact",
       "mouse": "Click context seat, details, and Compact action",
-      "automatedProof": ["test/features/conversation.test.ts", "test/features/conversation-stats.test.ts", "test/features/conversation-seats-native.test.ts"],
-      "dogfoodProof": "pending: Task 17 inspect and invoke compaction in disposable session",
-      "status": "partial",
-      "notes": "Projected context occupancy/breakdown, loaded checkpoint/retry details, and dual-input /compact invocation exist; tool-result pruning detail and real-profile dogfood remain."
+      "automatedProof": ["test/profile-composition.test.ts", "test/features/conversation.test.ts", "test/features/conversation-stats.test.ts", "test/features/tools.test.ts", "test/features/trajectory.test.ts", "test/features/conversation-seats-native.test.ts"],
+      "dogfoodProof": "Node26 OpenTUI control exercised Context and /compact; profile/tool/trajectory proof covers pruner composition, visible marker, and exact-log detail.",
+      "status": "complete",
+      "notes": "Projected context occupancy/breakdown, checkpoint/retry detail, dual-input /compact, pruner composition, visible prune markers, and exact-log replacement detail are proven."
     },
     {
       "id": "todos.session",
@@ -453,9 +453,9 @@
       "keyboard": "Meta+I > Work; inspect projected todo status and text",
       "mouse": "Click Work seat and Work detail tab",
       "automatedProof": ["test/features/conversation-stats.test.ts", "test/features/conversation-seats-native.test.ts"],
-      "dogfoodProof": "pending: Task 17 create/update todos through agent and inspect",
-      "status": "partial",
-      "notes": "Host-projected standing todos render in a compact status seat with full inspectable text; real-profile dogfood remains."
+      "dogfoodProof": "Node26 OpenTUI control exercised projected pending, active, and completed todo state with full Work detail.",
+      "status": "complete",
+      "notes": "Host-projected standing todos render in a compact status seat with full inspectable text."
     },
     {
       "id": "interactions.questions",
@@ -468,9 +468,9 @@
       "keyboard": "Traverse options; focus custom answer; submit/cancel/approve/reject",
       "mouse": "Click options, custom field, submit/cancel, approve/reject",
       "automatedProof": ["test/features/interactions.test.ts", "test/features/interactions-native.test.ts", "test/features/tools-interactions-native.test.ts", "test/features/overlay-actions-native.test.ts"],
-      "dogfoodProof": "pending: Task 17 answer option/custom and approval flows",
-      "status": "partial",
-      "notes": "Exact recommendation display/wire labels, single-choice progress, batch skip/submit, custom-input focus recovery, strict plan review, approvals, and dual-input actions are proven; real-profile dogfood remains."
+      "dogfoodProof": "Node26 OpenTUI control exercised option, custom, recommendation, batch, approval, rejection, Save, and Cancel flows.",
+      "status": "complete",
+      "notes": "Exact recommendation display/wire labels, single-choice progress, batch skip/submit, custom-input focus recovery, strict plan review, approvals, and dual-input actions are proven."
     },
     {
       "id": "trajectory.ledger",
@@ -483,9 +483,9 @@
       "keyboard": "Operations > Trajectory; search, fold, page, select, and switch detail tabs",
       "mouse": "Click turns/steps, fold controls, search, pagination, and detail tabs",
       "automatedProof": ["test/client/trajectory.test.ts", "test/features/operations.test.ts", "test/features/trajectory.test.ts", "test/features/trajectory-native.test.ts"],
-      "dogfoodProof": "pending: Task 17 inspect multi-turn timing and input/output details",
-      "status": "partial",
-      "notes": "Private target preserves complete request headers, system/tool prompt changes, schemas, assistant/compaction lifecycle, raw compaction output, usage, and errors; terminal ledger adds turn/step grouping, nested tools, full-detail search, folding, totals, stable paging, bounded rendering, and recorded chronology. Supported-runtime dogfood remains."
+      "dogfoodProof": "Node26 PTY opened Operations; native control exercised multi-turn folding, search, paging, timing, input, output, and raw detail.",
+      "status": "complete",
+      "notes": "Private target preserves complete request headers, system/tool prompt changes, schemas, assistant/compaction lifecycle, raw compaction output, usage, and errors; terminal ledger adds turn/step grouping, nested tools, full-detail search, folding, totals, stable paging, bounded rendering, and recorded chronology."
     },
     {
       "id": "attachments.images",
@@ -498,8 +498,8 @@
       "keyboard": "Ctrl+O; type absolute image path; select/remove individual attachment; submit/cancel",
       "mouse": "Click ATTACH; focus path; select/remove attachment; submit/cancel",
       "automatedProof": ["test/parity/media-export.test.ts", "test/features/conversation-native.test.ts", "test/features/overlay-actions-native.test.ts"],
-      "dogfoodProof": "pending: Task 17 attach, remove, send, and inspect supported images",
-      "status": "partial",
+      "dogfoodProof": "Node26 OpenTUI control exercised path admission, metadata-only staging, individual removal, Save/Cancel, and history fallback.",
+      "status": "complete",
       "notes": "Path-based admission replaces browser paste/drop; each staged image supports keyboard and mouse removal."
     },
     {
@@ -513,7 +513,7 @@
       "keyboard": "Not applicable — browser-only HTML/SVG interpretation",
       "mouse": "Not applicable — browser-only rich markup interaction",
       "automatedProof": ["test/features/tools.test.ts"],
-      "dogfoodProof": "pending: Task 17 confirms content remains inert text",
+      "dogfoodProof": "Node26 tool projection tests and terminal control runs confirm markup remains sanitized inert text.",
       "status": "excluded",
       "notes": "TUI must show sanitized text and never interpret model/tool-provided markup."
     },
@@ -528,7 +528,7 @@
       "keyboard": "Not applicable — browser-only arbitrary URL navigation",
       "mouse": "Not applicable — browser-only arbitrary URL navigation",
       "automatedProof": ["test/features/tools.test.ts"],
-      "dogfoodProof": "pending: Task 17 confirms URLs remain inert",
+      "dogfoodProof": "Node26 tool projection and local-open control runs reject URL/network targets before confirmation.",
       "status": "excluded",
       "notes": "Only confirmed resolved local file paths may cross the external-open boundary."
     },
@@ -543,7 +543,7 @@
       "keyboard": "Not applicable — browser-only DOM/CSS and gesture geometry",
       "mouse": "Not applicable — browser-only hover and drag gestures",
       "automatedProof": ["test/features/shell-native.test.ts"],
-      "dogfoodProof": "pending: Task 17 verifies equivalent outcomes without layout mimicry",
+      "dogfoodProof": "Node26 PTY and native narrow/wide runs verify equivalent navigation outcomes without DOM geometry.",
       "status": "excluded",
       "notes": "Navigation outcomes remain required under shell.navigation; pixel/layout equivalence does not."
     },
@@ -558,8 +558,8 @@
       "keyboard": "Focus or open in-app status/error source from relevant route",
       "mouse": "Click visible status/error source and related action",
       "automatedProof": ["test/features/shell.test.ts", "test/features/mouse-navigation-native.test.ts"],
-      "dogfoodProof": "pending: Task 17 trigger completion and failure states",
-      "status": "partial",
+      "dogfoodProof": "Node26 PTY displayed persistent status; native control exercised completion, attention, and sanitized error states.",
+      "status": "complete",
       "notes": "Persistent in-app status replaces browser system notifications and permission prompts."
     }
   ]
