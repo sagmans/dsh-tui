@@ -327,15 +327,15 @@
       "title": "Recursive subagent hierarchy, activity, timing, usage, opening, and references",
       "webRows": ["ui-subagent", "tool-subagent-control", "tool-subagent-list-agents", "tool-subagent", "tool-subagent-fork"],
       "webPackages": ["@deepseek-ai/dsh-client-ui-subagent"],
-      "evidence": ["deepseek-harness/packages/client/ui-subagent/README.md", "src/features/operations/projection.ts"],
+      "evidence": ["deepseek-harness/packages/client/ui-subagent/README.md", "src/features/conversation/subagents.ts", "src/features/operations/projection.ts"],
       "classification": "parity",
-      "owner": "src/features/operations; src/views/conversation; src/features/input-trigger",
-      "keyboard": "Traverse recursive tree, open child, inspect activity, or insert @ reference",
-      "mouse": "Click tree nodes, activity details, open action, or @ candidate",
-      "automatedProof": ["test/features/operations.test.ts", "test/features/input-trigger.test.ts", "test/features/input-trigger-native.test.ts", "planned:test/features/subagents.test.ts", "planned:test/features/subagents-native.test.ts"],
+      "owner": "src/features/conversation; src/views/conversation/subagents.ts; src/features/input-trigger",
+      "keyboard": "Meta+G; traverse recursive tree, expand/collapse, refresh, open exact child, or insert @ reference",
+      "mouse": "Click AGENTS, disclosures, rows, refresh/close controls, or @ candidate",
+      "automatedProof": ["test/features/operations.test.ts", "test/features/input-trigger.test.ts", "test/features/input-trigger-native.test.ts", "test/features/subagents.test.ts", "test/features/subagents-native.test.ts"],
       "dogfoodProof": "pending: Task 17 run one-shot and continuable child sessions",
       "status": "partial",
-      "notes": "Running direct-child reference discovery and serialization are proven; recursive status, usage, and addressed composer modes remain incomplete."
+      "notes": "Recursive catalog authority, descendant status, usage/timing, exact addressed navigation, one-shot ownership, unavailable-parent locking, and dual-input controls are proven; supported-runtime real-profile dogfood remains."
     },
     {
       "id": "jobs.background",

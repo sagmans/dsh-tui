@@ -16,6 +16,7 @@ import type {
   ConversationSubmitGesture,
   ConversationSessionBinding,
   ConversationSnapshotView,
+  ConversationSubagentComposerView,
 } from './contracts.js'
 import { ConversationMediaState } from './media.js'
 import {
@@ -31,12 +32,17 @@ import {
   visibleConversationLines,
 } from './snapshot.js'
 import { sanitizeText } from '../sessions/projection.js'
+import {
+  ConversationSubagentNavigator,
+  projectSubagentComposer,
+} from './subagents.js'
 
 export type * from './contracts.js'
 
 const EMPTY_TITLE = 'NO SESSION'
 const COMMAND_PREFIX = '/'
 const MODEL_COMMAND = '/model'
+const MODEL_COMMAND_TOKEN = MODEL_COMMAND.slice(COMMAND_PREFIX.length)
 const COMPACT_COMMAND = '/compact'
 const PLAN_OFF_COMMAND = '/plan off'
 const COMPACT_UNAVAILABLE_ERROR = 'Compaction command is unavailable.'
@@ -55,6 +61,7 @@ const COMPLETION_SUFFIX = ' '
 const COMPLETION_LIMIT = 8
 const WHITESPACE_PATTERN = /\s/u
 const STEER_CONVERGENCE_CODES = new Set(['queue-item-not-found', 'steer-unavailable'])
+const SUBAGENT_CLOCK_INTERVAL_MS = 1_000
 
 type QueueMutationOutcome = 'applied' | 'converged' | 'failed'
 
@@ -85,6 +92,7 @@ class ConversationControllerService implements ConversationController {
   private readonly openSettings: ConversationControllerOptions['openSettings']
   private readonly preferences: ConversationControllerOptions['preferences']
   private readonly sessions: ConversationControllerOptions['sessions']
+  private readonly subagents: ConversationSubagentNavigator | undefined
   private readonly triggers: ConversationControllerOptions['triggers']
   private readonly resources: Array<() => void>
   private readonly carets = new Map<string, number>()
@@ -109,6 +117,8 @@ class ConversationControllerService implements ConversationController {
   private queueEdit: { readonly id: MessageId; value: string } | undefined
   private sending = false
   private suggestions: readonly string[] = []
+  private subagentClock: ReturnType<typeof setInterval> | undefined
+  private subagentNow = Date.now()
 
   constructor(options: ConversationControllerOptions) {
     this.completion = options.completion
@@ -116,6 +126,9 @@ class ConversationControllerService implements ConversationController {
     this.openSettings = options.openSettings
     this.preferences = options.preferences
     this.sessions = options.sessions
+    this.subagents = options.subagents === undefined
+      ? undefined
+      : new ConversationSubagentNavigator(options.subagents)
     this.triggers = options.triggers
     this.mediaState = new ConversationMediaState({
       blocked: () => this.sending,
@@ -126,6 +139,13 @@ class ConversationControllerService implements ConversationController {
       setNotice: notice => { this.notice = notice },
     })
     this.resources = [options.sessions.list.subscribe(() => { this.rebind() })]
+    if (options.subagents !== undefined) {
+      this.resources.push(options.subagents.list.subscribe(() => {
+        this.subagentNow = Date.now()
+        this.syncSubagentClock()
+        this.schedulePublish()
+      }))
+    }
     if (options.models !== undefined) {
       this.resources.push(options.models.subscribe(() => { this.schedulePublish() }))
     }
@@ -140,6 +160,7 @@ class ConversationControllerService implements ConversationController {
   }
 
   beginAttachment(): void {
+    if (this.subagentControl()?.attachmentEnabled === false) return
     this.triggers?.dismiss()
     this.queueEdit = undefined
     this.mediaState.beginAttachment()
@@ -163,7 +184,8 @@ class ConversationControllerService implements ConversationController {
 
   async cancel(): Promise<void> {
     const binding = this.binding
-    if (binding === undefined) return
+    const control = this.subagentControl()
+    if (binding === undefined || control?.stopEnabled === false) return
     await this.runAction(() => binding.cancel())
   }
 
@@ -180,7 +202,14 @@ class ConversationControllerService implements ConversationController {
     this.mediaState.clearAttachments()
   }
 
+  closeSubagents(): void {
+    this.subagents?.close()
+    this.syncSubagentClock()
+    this.schedulePublish()
+  }
+
   async complete(): Promise<void> {
+    if (this.subagentControl()?.inputEnabled === false) return
     const completion = this.completion
     const sessionId = this.sessions.list.getSnapshot().current
     const draft = this.currentDraft().trimStart()
@@ -192,7 +221,10 @@ class ConversationControllerService implements ConversationController {
     if (candidates === undefined || revision !== this.completionRevision) return
     const current = this.sessions.list.getSnapshot().current
     if (current !== sessionId || this.currentDraft().trimStart() !== draft) return
-    const suggestions = Object.freeze([...new Set(candidates.map(candidate => sanitizeText(candidate)))].slice(0, COMPLETION_LIMIT))
+    const supportedCandidates = this.subagentControl() === undefined
+      ? candidates
+      : candidates.filter(candidate => candidate !== MODEL_COMMAND_TOKEN)
+    const suggestions = Object.freeze([...new Set(supportedCandidates.map(candidate => sanitizeText(candidate)))].slice(0, COMPLETION_LIMIT))
     const selected = suggestions[0]
     if (selected !== undefined) this.setDraft(`${COMMAND_PREFIX}${selected}${COMPLETION_SUFFIX}`)
     this.suggestions = suggestions
@@ -205,6 +237,9 @@ class ConversationControllerService implements ConversationController {
 
   dispose(): void {
     this.disposed = true
+    if (this.subagentClock !== undefined) clearInterval(this.subagentClock)
+    this.subagentClock = undefined
+    this.subagents?.dispose()
     this.mediaState.dispose()
     this.triggers?.dismiss()
     this.bindingDispose?.()
@@ -226,7 +261,9 @@ class ConversationControllerService implements ConversationController {
     )
     const summary = sessionId === undefined ? undefined : list.byId[sessionId]
     const model = this.models?.getSnapshot()
-    const modelAvailable = sessionId !== undefined && model?.available === true
+    const subagent = projectSubagentComposer(snapshot?.subagent, snapshot?.running ?? false)
+    const subagents = this.subagents?.snapshot(this.subagentNow)
+    const modelAvailable = sessionId !== undefined && subagent === undefined && model?.available === true
     const title = sessionId === undefined
       ? EMPTY_TITLE
       : sanitizeText(summary?.displayTitle ?? String(sessionId))
@@ -275,11 +312,15 @@ class ConversationControllerService implements ConversationController {
       sessionId,
       statistics: information.statistics,
       status: this.notice ?? conversationStatus(snapshot, this.busyEnter),
+      subagent,
+      subagents,
       suggestions: this.suggestions,
       plan: information.plan,
       title,
       todos: information.todos,
-      trigger: sessionId === undefined ? undefined : this.triggers?.getSnapshot(),
+      trigger: sessionId === undefined || subagent?.inputEnabled === false
+        ? undefined
+        : this.triggers?.getSnapshot(),
     })
   }
 
@@ -298,6 +339,7 @@ class ConversationControllerService implements ConversationController {
   }
 
   launchTrigger(): void {
+    if (this.subagentControl()?.inputEnabled === false) return
     const sessionId = this.sessions.list.getSnapshot().current
     if (sessionId === undefined) return
     const draft = this.currentDraft()
@@ -309,6 +351,11 @@ class ConversationControllerService implements ConversationController {
     const binding = this.binding
     if (binding === undefined) return
     await this.runAction(() => binding.loadOlder())
+  }
+
+  moveSubagent(delta: number): void {
+    this.subagents?.move(delta, this.subagentNow)
+    this.schedulePublish()
   }
 
   moveTrigger(delta: number): void {
@@ -325,7 +372,7 @@ class ConversationControllerService implements ConversationController {
   }
 
   openModelSelection(entry: ConversationModelSelectionEntry): void {
-    if (this.models?.getSnapshot().available !== true) return
+    if (this.subagentControl() !== undefined || this.models?.getSnapshot().available !== true) return
     void this.runValue(() => this.models?.open(entry) ?? Promise.resolve(false))
   }
 
@@ -339,6 +386,10 @@ class ConversationControllerService implements ConversationController {
 
   pickTriggerHighlight(): void {
     this.applyTriggerMutation(this.triggers?.pickHighlighted())
+  }
+
+  refreshSubagents(parentSessionId?: SessionId): Promise<void> {
+    return this.subagents?.refresh(parentSessionId) ?? Promise.resolve()
   }
 
   removeAttachment(index: number): void {
@@ -370,7 +421,8 @@ class ConversationControllerService implements ConversationController {
   }
 
   async sendDraft(mode?: ConversationSendMode): Promise<boolean> {
-    if (this.sending) return false
+    const subagent = this.subagentControl()
+    if (this.sending || subagent?.sendEnabled === false) return false
     const binding = this.binding
     const sessionId = this.sessions.list.getSnapshot().current
     if (binding === undefined || sessionId === undefined) return false
@@ -379,7 +431,8 @@ class ConversationControllerService implements ConversationController {
     const normalized = sanitizeConversationText(submittedDraft).trim()
     const submittedImages = [...this.mediaState.staged(sessionId)]
     if (normalized === '' && submittedImages.length === 0) return false
-    const model = this.models?.getSnapshot()
+    if (subagent !== undefined && normalized === MODEL_COMMAND) return false
+    const model = subagent === undefined ? this.models?.getSnapshot() : undefined
     if (submittedImages.length === 0 && normalized === MODEL_COMMAND && model?.available === true) {
       const opened = await this.runValue(() => this.models?.open('command') ?? Promise.resolve(false))
       if (opened !== true) return false
@@ -424,7 +477,13 @@ class ConversationControllerService implements ConversationController {
     return sent
   }
 
+  selectSubagent(key: string): void {
+    this.subagents?.select(key, this.subagentNow)
+    this.schedulePublish()
+  }
+
   setDraft(text: string, caret = text.length): void {
+    if (this.subagentControl()?.inputEnabled === false) return
     const current = this.sessions.list.getSnapshot().current
     if (current === undefined) return
     const sessionKey = String(current)
@@ -479,6 +538,26 @@ class ConversationControllerService implements ConversationController {
     return () => { this.listeners.delete(listener) }
   }
 
+  activateSubagent(): boolean {
+    const activated = this.subagents?.activate(this.subagentNow) ?? false
+    this.syncSubagentClock()
+    this.schedulePublish()
+    return activated
+  }
+
+  toggleSubagentBranch(key: string): void {
+    this.subagents?.toggleBranch(key, this.subagentNow)
+    this.syncSubagentClock()
+    this.schedulePublish()
+  }
+
+  toggleSubagents(): void {
+    this.subagentNow = Date.now()
+    this.subagents?.toggle(this.subagentNow)
+    this.syncSubagentClock()
+    this.schedulePublish()
+  }
+
   async toggleBusyEnter(): Promise<boolean> {
     const preferences = this.preferences
     const revision = this.busyEnterRevision
@@ -522,6 +601,7 @@ class ConversationControllerService implements ConversationController {
   }
 
   private executeTriggerCommand(command: string): void {
+    if (this.subagentControl()?.inputEnabled === false) return
     if (command === MODEL_COMMAND) {
       this.openModelSelection('command')
       return
@@ -550,6 +630,8 @@ class ConversationControllerService implements ConversationController {
       return
     }
     this.boundSessionId = current
+    this.subagents?.syncRoot(current)
+    this.syncSubagentClock()
     this.mediaState.resetTransient()
     this.queueEdit = undefined
     this.queueBusy = undefined
@@ -582,9 +664,29 @@ class ConversationControllerService implements ConversationController {
     return Object.fromEntries([...this.projectionFaces].map(([key, face]) => [key, face.getSnapshot()]))
   }
 
+  private subagentControl(): ConversationSubagentComposerView | undefined {
+    const snapshot = this.binding?.getSnapshot()
+    return projectSubagentComposer(snapshot?.subagent, snapshot?.running ?? false)
+  }
+
+  private syncSubagentClock(): void {
+    const projected = this.subagents?.snapshot(this.subagentNow)
+    const shouldRun = projected?.open === true && projected.runningCount > 0
+    if (shouldRun && this.subagentClock === undefined) {
+      this.subagentClock = setInterval(() => {
+        this.subagentNow = Date.now()
+        this.schedulePublish()
+      }, SUBAGENT_CLOCK_INTERVAL_MS)
+      return
+    }
+    if (shouldRun || this.subagentClock === undefined) return
+    clearInterval(this.subagentClock)
+    this.subagentClock = undefined
+  }
+
   private executeCommand(command: string, unavailable: string): Promise<boolean> {
     const binding = this.binding
-    if (binding === undefined) return Promise.resolve(false)
+    if (binding === undefined || this.subagentControl()?.sendEnabled === false) return Promise.resolve(false)
     return this.runAction(async () => {
       if (!await binding.command(command)) throw new Error(unavailable)
     })
@@ -603,7 +705,7 @@ class ConversationControllerService implements ConversationController {
 
   private async mutateQueue(itemId: MessageId, action: QueueAction): Promise<QueueMutationOutcome> {
     const binding = this.binding
-    if (binding === undefined || this.queueBusy !== undefined) return 'failed'
+    if (binding === undefined || this.queueBusy !== undefined || this.subagentControl() !== undefined) return 'failed'
     this.queueBusy = itemId
     this.schedulePublish()
     try {

@@ -4,6 +4,7 @@ import type {
   QueueAction,
   RpcResult,
   SessionId,
+  SubagentAddress,
 } from '@deepseek-ai/dsh-api-remotes/client'
 import type { ToolPresentation } from '../tools/contracts.js'
 import type {
@@ -27,6 +28,7 @@ import type {
   ObservableSnapshot,
   PartialAssistant,
   RunningToolCall,
+  SubagentCatalogSnapshot,
 } from '@deepseek-ai/dsh-client-runtime/client'
 export type * from './information-contracts.js'
 
@@ -37,6 +39,8 @@ export type ConversationSubmitGesture = 'alternate' | 'primary'
 export type ConversationInputKind = 'attachment' | 'export' | 'queue-edit'
 export type ConversationModelSelectionEntry = 'command' | 'composer'
 export type ConversationPreferenceSection = 'access' | 'presets'
+export type ConversationSubagentReadOnlyReason = 'one-shot' | 'parent-unavailable'
+export type ConversationSubagentRowKind = 'child' | 'diagnostic' | 'error' | 'loading'
 
 export interface ConversationAttachmentView {
   readonly bytes: number
@@ -102,6 +106,69 @@ declare module '@deepseek-ai/dsh-client-runtime/client' {
   }
 }
 
+export interface ConversationSubagentSummary {
+  readonly blank?: boolean | undefined
+  readonly displayTitle: string
+  readonly id: SessionId
+  readonly origin?: 'subagent' | undefined
+  readonly parentId?: SessionId | undefined
+  readonly projectionValues?: Readonly<Record<string, unknown>> | undefined
+  readonly running: boolean
+  readonly title?: string | undefined
+  readonly updatedAt?: number | undefined
+}
+
+export interface ConversationSubagentListState {
+  readonly byId: Readonly<Record<SessionId, ConversationSubagentSummary | undefined>>
+  readonly current: SessionId | undefined
+  readonly subagentsByParent: Readonly<Record<SessionId, SubagentCatalogSnapshot | undefined>>
+}
+
+export interface ConversationSubagentsSource {
+  readonly list: ObservableSnapshot<ConversationSubagentListState>
+  open(address: SubagentAddress): void
+  refresh(parentSessionId: SessionId): Promise<void>
+  setOpen(parentSessionId: SessionId, open: boolean): void
+}
+
+export interface ConversationSubagentRowView {
+  readonly active: boolean
+  readonly activity?: 'inactive' | 'running' | undefined
+  readonly depth: number
+  readonly duration?: string | undefined
+  readonly enabled: boolean
+  readonly exactDuration?: string | undefined
+  readonly expanded?: boolean | undefined
+  readonly hasChildren?: boolean | undefined
+  readonly key: string
+  readonly kind: ConversationSubagentRowKind
+  readonly label: string
+  readonly mode?: SubagentAddress['mode'] | undefined
+  readonly parentSessionId: SessionId
+  readonly reason?: 'corrupt' | 'unavailable' | 'unsupported' | undefined
+  readonly sessionId?: SessionId | undefined
+  readonly summary: string
+  readonly tokenMetric?: string | undefined
+}
+
+export interface ConversationSubagentCatalogView {
+  readonly activeRowKey: string | undefined
+  readonly count: number
+  readonly open: boolean
+  readonly rows: readonly ConversationSubagentRowView[]
+  readonly runningCount: number
+}
+
+export interface ConversationSubagentComposerView {
+  readonly attachmentEnabled: boolean
+  readonly inputEnabled: boolean
+  readonly mode: SubagentAddress['mode']
+  readonly parentAvailable: boolean
+  readonly readOnlyReason: ConversationSubagentReadOnlyReason | undefined
+  readonly sendEnabled: boolean
+  readonly stopEnabled: boolean
+}
+
 export interface ConversationSnapshotView {
   readonly accessPreset: string | undefined
   readonly busyEnter: ConversationSendMode
@@ -132,6 +199,8 @@ export interface ConversationSnapshotView {
   readonly sessionId: SessionId | undefined
   readonly statistics: ConversationStatisticsView | undefined
   readonly status: string
+  readonly subagent: ConversationSubagentComposerView | undefined
+  readonly subagents: ConversationSubagentCatalogView | undefined
   readonly suggestions: readonly string[]
   readonly plan: ConversationPlanView | undefined
   readonly title: string
@@ -203,6 +272,7 @@ export interface ConversationControllerOptions {
   readonly preferences?: ConversationSubmissionPreferences | undefined
   readonly triggers?: InputTriggerController | undefined
   readonly sessions: ConversationSessionsSource
+  readonly subagents?: ConversationSubagentsSource | undefined
 }
 
 export interface ConversationController {
@@ -214,18 +284,21 @@ export interface ConversationController {
   closeInformation(): void
   compact(): Promise<boolean>
   clearAttachments(): void
+  closeSubagents(): void
   complete(): Promise<void>
   dismissTrigger(): void
   dispose(): void
   getSnapshot(): ConversationSnapshotView
   launchTrigger(): void
   loadOlder(): Promise<void>
+  moveSubagent(delta: number): void
   moveTrigger(delta: number): void
   openInformation(section: ConversationInformationSection): void
   openModelSelection(entry: ConversationModelSelectionEntry): void
   openPreferences(section: ConversationPreferenceSection): void
   pickTrigger(source: InputTriggerSource, index: number): void
   pickTriggerHighlight(): void
+  refreshSubagents(parentSessionId?: SessionId): Promise<void>
   removeAttachment(index: number): void
   removeQueue(itemId: MessageId): Promise<boolean>
   scroll(delta: number): void
@@ -233,6 +306,7 @@ export interface ConversationController {
   send(text: string, mode?: ConversationSendMode): Promise<boolean>
   sendAlternateDraft(): Promise<boolean>
   sendDraft(mode?: ConversationSendMode): Promise<boolean>
+  selectSubagent(key: string): void
   exitPlanMode(): Promise<boolean>
   setDraft(text: string, caret?: number): void
   setInput(value: string): void
@@ -240,6 +314,9 @@ export interface ConversationController {
   steerQueueAll(): Promise<boolean>
   submitInput(): Promise<boolean>
   toggleBusyEnter(): Promise<boolean>
+  toggleSubagentBranch(key: string): void
+  toggleSubagents(): void
+  activateSubagent(): boolean
   subscribe(listener: () => void): () => void
 }
 

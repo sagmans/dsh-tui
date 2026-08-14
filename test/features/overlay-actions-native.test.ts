@@ -122,6 +122,7 @@ function conversationController(calls: string[]): ConversationController {
     cancelInput: () => { calls.push('cancel'); input = undefined; publish() },
     clearAttachments: () => { attachments = []; publish() },
     closeInformation: () => {},
+    closeSubagents: () => {},
     compact: () => Promise.resolve(false),
     complete: () => Promise.resolve(),
     dismissTrigger: () => {},
@@ -156,6 +157,8 @@ function conversationController(calls: string[]): ConversationController {
       sessionId: SESSION_ID,
       statistics: undefined,
       status: 'Ready',
+      subagent: undefined,
+      subagents: undefined,
       suggestions: [],
       plan: undefined,
       title: 'Overlay controls',
@@ -164,12 +167,14 @@ function conversationController(calls: string[]): ConversationController {
     }),
     launchTrigger: () => {},
     loadOlder: () => Promise.resolve(),
+    moveSubagent: () => {},
     moveTrigger: () => {},
     openInformation: () => {},
     openModelSelection: () => {},
     openPreferences: () => {},
     pickTrigger: () => {},
     pickTriggerHighlight: () => {},
+    refreshSubagents: () => Promise.resolve(),
     removeAttachment: index => {
       calls.push(`remove:${index}`)
       attachments = attachments.filter((_attachment, current) => current !== index)
@@ -181,6 +186,7 @@ function conversationController(calls: string[]): ConversationController {
     send: () => Promise.resolve(false),
     sendAlternateDraft: () => Promise.resolve(false),
     sendDraft: () => Promise.resolve(false),
+    selectSubagent: () => {},
     exitPlanMode: () => Promise.resolve(false),
     setDraft: () => {},
     setInput: value => { inputValue = value },
@@ -188,6 +194,9 @@ function conversationController(calls: string[]): ConversationController {
     steerQueueAll: () => Promise.resolve(false),
     submitInput: () => { calls.push(`save:${inputValue}`); input = undefined; publish(); return Promise.resolve(true) },
     toggleBusyEnter: () => Promise.resolve(false),
+    toggleSubagentBranch: () => {},
+    toggleSubagents: () => {},
+    activateSubagent: () => false,
     subscribe: next => { listener = next; return () => { listener = NOOP_LISTENER } },
   }
 }

@@ -121,6 +121,14 @@ function controllerOptions(ctx: Context): ConversationControllerOptions {
       list: ctx.tuiClient.sessions.list,
       binding: id => sessionBinding(ctx, id),
     },
+    subagents: {
+      list: ctx.tuiClient.sessions.list,
+      open: address => { ctx.tuiClient.sessions.openSubagent(address) },
+      refresh: parentSessionId => ctx.tuiClient.sessions.refreshSubagents(parentSessionId),
+      setOpen: (parentSessionId, open) => {
+        ctx.tuiClient.sessions.setSubagentCatalogOpen(parentSessionId, open)
+      },
+    },
   }
 }
 
@@ -139,6 +147,7 @@ function commandLayer(controller: ConversationController, active: () => boolean)
       { name: 'conversation.clear-attachments', description: 'Clear staged image attachments', run: () => { controller.clearAttachments() } },
       { name: 'conversation.access', description: 'Open current and default access presets', run: () => { controller.openPreferences('access') } },
       { name: 'conversation.presets', description: 'Open current and default agent presets', run: () => { controller.openPreferences('presets') } },
+      { name: 'conversation.subagents', description: 'Toggle recursive subagent activity', run: () => { controller.toggleSubagents() } },
     ],
     bindings: [
       { key: 'ctrl+x', command: 'conversation.cancel' },
@@ -150,6 +159,7 @@ function commandLayer(controller: ConversationController, active: () => boolean)
       { key: 'ctrl+delete', command: 'conversation.clear-attachments' },
       { key: 'alt+a', command: 'conversation.access' },
       { key: 'alt+p', command: 'conversation.presets' },
+      { key: 'alt+g', command: 'conversation.subagents' },
     ],
   }
 }

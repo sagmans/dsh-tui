@@ -96,6 +96,7 @@ test('registers chat contribution and disposes its controller with owner fiber',
     'conversation.clear-attachments',
     'conversation.access',
     'conversation.presets',
+    'conversation.subagents',
   ])
   control.renderRoute?.()
   assert.equal(control.controller, controller)

@@ -34,13 +34,17 @@ const ATTACH_KEY = 'o'
 const EXPORT_KEY = 'e'
 const DELETE_KEY = 'delete'
 const ACCESS_KEY = 'a'
+const AGENTS_KEY = 'g'
 const MODEL_KEY = 'm'
 const PRESET_KEY = 'p'
 const BUSY_ENTER_KEY = 'b'
 const INFORMATION_KEY = 'i'
 const QUEUE_KEY = 'q'
 const TRIGGER_LAUNCH_KEY = '/'
-const COMPOSER_HINT = 'M+Enter primary · C+Enter alternate · M+I info · M+Q queue · M+B switch · M+/ menu · M+M model · M+A access · M+P preset'
+const COMPOSER_HINT = 'M+Enter primary · C+Enter alternate · M+G agents · M+I info · M+Q queue · M+B switch · M+/ menu · M+M model · M+A access · M+P preset'
+const ONE_SHOT_COMPOSER_COPY = 'ONE-SHOT RECORD · Follow-up unavailable.'
+const PARENT_UNAVAILABLE_COPY = 'PARENT UNAVAILABLE · Persisted transcript is read only.'
+const RUNNING_PARENT_UNAVAILABLE_COPY = 'PARENT UNAVAILABLE · Input locked; Stop remains available.'
 const QUEUE_ACTION = ' QUEUE '
 const STEER_ACTION = ' STEER '
 const STOP_ACTION = ' STOP '
@@ -136,6 +140,12 @@ function handleKey(
     key.preventDefault()
     key.stopPropagation()
     submit(() => controller.sendAlternateDraft())
+    return
+  }
+  if (key.meta && key.name === AGENTS_KEY) {
+    key.preventDefault()
+    key.stopPropagation()
+    controller.toggleSubagents()
     return
   }
   if (key.meta && key.name === INFORMATION_KEY) {
@@ -304,6 +314,21 @@ export function createComposer(
     borderStyle: 'single',
     borderColor: snapshot.running ? theme.colors.warning : theme.colors.border,
   })
+  if (snapshot.subagent?.inputEnabled === false) {
+    const content = snapshot.subagent.readOnlyReason === 'one-shot'
+      ? ONE_SHOT_COMPOSER_COPY
+      : snapshot.subagent.readOnlyReason === 'parent-unavailable'
+        ? PARENT_UNAVAILABLE_COPY
+        : RUNNING_PARENT_UNAVAILABLE_COPY
+    composer.add(new TextRenderable(renderer, {
+      id: 'conversation-composer-status',
+      content,
+      fg: snapshot.subagent.stopEnabled ? theme.colors.warning : theme.colors.muted,
+      selectable: true,
+      wrapMode: 'word',
+    }))
+    return composer
+  }
   const editor = createEditor(renderer, theme, controller, snapshot, focusLastAttachment, focusQueue)
   composer.add(editor)
   queueMicrotask(() => {
@@ -346,12 +371,15 @@ export function createConversationActions(
     flexDirection: 'row',
   })
   const modelRoutable = snapshot.modelRoutable !== false
+  const sendEnabled = snapshot.subagent?.sendEnabled ?? snapshot.sessionId !== undefined
+  const stopEnabled = snapshot.subagent?.stopEnabled ?? snapshot.running
+  const attachmentEnabled = snapshot.subagent?.attachmentEnabled ?? snapshot.sessionId !== undefined
   actions.add(createAction(
     renderer,
     theme,
     SEND_ACTION_ID,
     sendAction(snapshot.primarySendMode),
-    snapshot.sessionId !== undefined && modelRoutable,
+    sendEnabled && modelRoutable,
     () => { void controller.sendDraft() },
   ))
   actions.add(createAction(
@@ -359,16 +387,16 @@ export function createConversationActions(
     theme,
     ALTERNATE_ACTION_ID,
     sendAction(alternateSendMode(snapshot.primarySendMode)),
-    snapshot.running && modelRoutable,
+    sendEnabled && snapshot.running && modelRoutable,
     () => { void controller.sendAlternateDraft() },
   ))
-  actions.add(createAction(renderer, theme, STOP_ACTION_ID, STOP_ACTION, snapshot.running, () => {
+  actions.add(createAction(renderer, theme, STOP_ACTION_ID, STOP_ACTION, stopEnabled, () => {
     void controller.cancel()
   }))
   actions.add(createAction(renderer, theme, OLDER_ACTION_ID, OLDER_ACTION, snapshot.hasMore, () => {
     void controller.loadOlder()
   }))
-  actions.add(createAction(renderer, theme, ATTACH_ACTION_ID, ATTACH_ACTION, snapshot.sessionId !== undefined && !snapshot.busy, () => {
+  actions.add(createAction(renderer, theme, ATTACH_ACTION_ID, ATTACH_ACTION, attachmentEnabled && !snapshot.busy, () => {
     controller.beginAttachment()
   }))
   actions.add(createAction(renderer, theme, EXPORT_ACTION_ID, EXPORT_ACTION, snapshot.sessionId !== undefined && !snapshot.busy, () => {
@@ -382,7 +410,7 @@ export function createConversationActions(
     theme,
     TRIGGER_LAUNCH_ACTION_ID,
     TRIGGER_LAUNCH_ACTION,
-    snapshot.sessionId !== undefined,
+    snapshot.sessionId !== undefined && snapshot.subagent?.inputEnabled !== false,
     () => { controller.launchTrigger() },
   ))
   if (snapshot.modelAvailable && snapshot.modelLabel !== undefined) {

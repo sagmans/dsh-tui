@@ -65,6 +65,7 @@ loads older events.
 - `Ctrl+Enter`: submit with the opposite queue/steer behavior while running
 - `Meta+B`: switch the Host-backed busy behavior between queue and steer
 - `Meta+I`: open whole-log statistics; traverse Stats, Context, and Work tabs
+- `Meta+G`: open the recursive subagent activity tree
 - `Ctrl+X`: stop the running turn
 - `/`: open grouped fuzzy command and prefix-matched skill candidates
 - `@`: open running direct-child subagent references
@@ -93,6 +94,18 @@ session directory across the composer and `/model`. A definitely unroutable
 Host selection blocks submission and exposes the Providers handoff; unknown or
 unadvertised catalog state does not block. Failed sends restore the submitted
 draft and staged images.
+
+The `AGENTS` header action counts the uninterrupted subagent-only descendant
+lineage and indicates running descendants. Its full-screen tree lazily opens
+direct catalogs, preserves each row's exact direct-parent address, and shows
+mode, activity, durable token usage, and active-turn duration. `j`/`k`, arrows,
+`Home`/`End`, `Enter`, `r`, and `Esc` navigate, open, refresh, or close it;
+every row, disclosure, refresh, and close action is clickable. One-shot
+transcripts are always read-only. Continuable children accept follow-ups only
+while their exact parent is available; a running child with an unavailable
+parent keeps Stop enabled while locking input. Addressed children never accept
+attachments or model changes.
+
 PNG, JPEG, WebP, and GIF inputs are bounded before base64 enters the shared
 prompt contract. Render state contains metadata only. Exports never overwrite
 an existing file, use mode `0600`, and remove failed partials.

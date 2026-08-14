@@ -21,6 +21,10 @@ import {
   createConversationInformationDock,
 } from './information.js'
 import { createConversationQueue, type ConversationQueueDock } from './queue.js'
+import {
+  createSubagentHeaderTrigger,
+  createSubagentOverlay,
+} from './subagents.js'
 
 const HEADER_HEIGHT = 1
 const STATUS_HEIGHT = 1
@@ -178,7 +182,13 @@ function createFrame(
     flexDirection: 'column',
     backgroundColor: theme.colors.background,
   })
-  frame.add(new TextRenderable(renderer, {
+  const header = new BoxRenderable(renderer, {
+    id: 'conversation-header',
+    width: '100%',
+    height: HEADER_HEIGHT,
+    flexDirection: 'row',
+  })
+  header.add(new TextRenderable(renderer, {
     content: snapshot.agentPreset === undefined
       ? snapshot.title
       : `${snapshot.title} · ${PRESET_LABEL} ${snapshot.agentPreset}`,
@@ -187,7 +197,11 @@ function createFrame(
     attributes: TextAttributes.BOLD,
     truncate: true,
     selectable: false,
+    flexGrow: 1,
   }))
+  const subagentTrigger = createSubagentHeaderTrigger(renderer, theme, controller, snapshot)
+  if (subagentTrigger !== undefined) header.add(subagentTrigger)
+  frame.add(header)
   frame.add(createTranscript(renderer, theme, snapshot))
   let attachmentStrip: AttachmentStrip | undefined
   const composer = createComposer(
@@ -249,6 +263,8 @@ function createFrame(
   if (input !== undefined) frame.add(input)
   const information = createConversationInformation(renderer, theme, controller, snapshot)
   if (information !== undefined) frame.add(information)
+  const subagents = createSubagentOverlay(renderer, theme, controller, snapshot)
+  if (subagents !== undefined) frame.add(subagents)
   return frame
 }
 

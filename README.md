@@ -7,6 +7,7 @@ contracts, zen shell, grouped/flat workspace sessions with activity sorting and 
 structured tool inspection, path-only image staging, private session export,
 confirmed produced-file opening, fail-closed human interaction overlays,
 session-scoped operational actions, grouped command/skill/subagent discovery,
+recursive subagent activity with addressed one-shot/continuation ownership,
 occurrence-addressed queued prompts with persisted busy-submit behavior,
 whole-log statistics/context and plan/goal/todo seats, shared model/reasoning
 selection, provider management, and redacted
