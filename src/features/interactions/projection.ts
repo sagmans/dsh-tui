@@ -36,6 +36,24 @@ function approvalTitle(active: ActiveInteraction): string {
     : EMPTY_TITLE
 }
 
+function titleOf(active: ActiveInteraction | undefined, questionIndex: number): string {
+  if (active === undefined) return EMPTY_TITLE
+  switch (active.kind) {
+    case 'approval': return approvalTitle(active)
+    case 'plan-review': return active.plan?.question.question ?? EMPTY_TITLE
+    case 'question': {
+      const question = active.questions[questionIndex]
+      if (question === undefined) return EMPTY_TITLE
+      return question.header === undefined ? question.question : `${question.header} · ${question.question}`
+    }
+    case 'unavailable': return EMPTY_TITLE
+    default: {
+      const exhaustive: never = active.kind
+      return String(exhaustive)
+    }
+  }
+}
+
 function statusOf(active: ActiveInteraction | undefined, busy: boolean, questionIndex: number): string {
   if (active === undefined) return 'No pending interaction.'
   if (busy) return 'Waiting for host confirmation…'
@@ -61,17 +79,10 @@ export function projectInteractionSnapshot(state: InteractionProjectionState): I
     description: candidate.description,
     index,
     label: candidate.label,
+    recommended: candidate.recommended,
     selected: draft.selected.includes(candidate.wireLabel),
   })) ?? []
-  const title = active === undefined
-    ? EMPTY_TITLE
-    : active.kind === 'approval'
-      ? approvalTitle(active)
-      : active.kind === 'plan-review'
-        ? active.plan?.question.question ?? EMPTY_TITLE
-        : active.kind === 'question'
-          ? question?.question ?? EMPTY_TITLE
-          : EMPTY_TITLE
+  const title = titleOf(active, state.questionIndex)
   const body = active?.kind === 'approval'
     ? approvalBody(active)
     : active?.kind === 'plan-review'

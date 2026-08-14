@@ -29,6 +29,7 @@ export interface InteractionOptionView {
   readonly description: string | undefined
   readonly index: number
   readonly label: string
+  readonly recommended: boolean
   readonly selected: boolean
 }
 

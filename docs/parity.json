@@ -47,10 +47,10 @@
       "owner": "src/features/operations; src/views/operations/root.ts",
       "keyboard": "Operations > Feedback; select exact action with action cursor",
       "mouse": "Operations > Feedback; click message and exact action",
-      "automatedProof": ["test/features/operations.test.ts", "test/features/action-parity.test.ts", "test/features/action-parity-native.test.ts", "test/features/overlay-actions-native.test.ts", "planned:test/features/operations-parity.test.ts"],
+      "automatedProof": ["test/features/operations.test.ts", "test/features/operations-parity.test.ts", "test/features/operations-native.test.ts", "test/features/action-parity.test.ts", "test/features/overlay-actions-native.test.ts"],
       "dogfoodProof": "pending: Task 17 set, replace, annotate, and clear feedback",
       "status": "partial",
-      "notes": "Exact action commands and shared cursor are proven; inline placement and complete lifecycle dogfood remain."
+      "notes": "Terminal Operations replaces Web inline placement while preserving create, replace, annotate, clear, CAS conflict, exact-action, and dual-input outcomes; real-profile dogfood remains."
     },
     {
       "id": "conversation.export",
@@ -242,10 +242,10 @@
       "owner": "src/features/operations; src/client/conversation/workflows.ts",
       "keyboard": "Operations > Workflows; select run and lifecycle action",
       "mouse": "Operations > Workflows; click run and lifecycle action",
-      "automatedProof": ["test/client/workflows.test.ts", "test/features/operations.test.ts", "test/features/action-parity.test.ts", "test/features/action-parity-native.test.ts", "planned:test/features/operations-parity.test.ts"],
+      "automatedProof": ["test/client/workflows.test.ts", "test/features/operations.test.ts", "test/features/operations-parity.test.ts", "test/features/operations-native.test.ts", "test/features/action-parity.test.ts"],
       "dogfoodProof": "pending: Task 17 inspect disposable workflow lifecycle",
       "status": "partial",
-      "notes": "Operational projection and exact dual-input actions exist; exhaustive lifecycle proof remains."
+      "notes": "Durable run/member status and strict live-child navigation match Web outcomes with exact dual-input actions; real-profile dogfood remains."
     },
     {
       "id": "deliverables.files",
@@ -339,18 +339,18 @@
     },
     {
       "id": "jobs.background",
-      "title": "Background job status and lifecycle controls",
+      "title": "Background job status and history",
       "webRows": ["ui-jobs", "tool-jobs"],
       "webPackages": ["@deepseek-ai/dsh-client-ui-jobs"],
       "evidence": ["deepseek-harness/packages/client/ui-jobs/README.md", "src/features/operations/projection.ts"],
       "classification": "parity",
       "owner": "src/features/operations; src/views/operations/root.ts",
-      "keyboard": "Operations > Jobs; select job and exact lifecycle action",
-      "mouse": "Operations > Jobs; click job and exact lifecycle action",
-      "automatedProof": ["test/features/operations.test.ts", "test/features/action-parity.test.ts", "test/features/action-parity-native.test.ts", "planned:test/features/operations-parity.test.ts"],
+      "keyboard": "Operations > Jobs; traverse live and settled job history",
+      "mouse": "Operations > Jobs; click live and settled job rows",
+      "automatedProof": ["test/features/operations.test.ts", "test/features/operations-parity.test.ts", "test/features/operations-native.test.ts"],
       "dogfoodProof": "pending: Task 17 start and inspect disposable background job",
       "status": "partial",
-      "notes": "Core projection and exact dual-input actions exist; lifecycle matrix proof remains."
+      "notes": "Live-first and settled job status/history are intentionally read-only, matching the Web contract; real-profile dogfood remains."
     },
     {
       "id": "goals.session",
@@ -360,12 +360,12 @@
       "evidence": ["deepseek-harness/packages/client/ui-goal/README.md", "src/features/operations/projection.ts"],
       "classification": "parity",
       "owner": "src/features/operations; src/views/catalog/root.ts",
-      "keyboard": "Goal seat or Operations > Goal; create/edit/pause/resume/clear",
-      "mouse": "Click goal seat, fields, and exact lifecycle action",
-      "automatedProof": ["test/features/operations.test.ts", "test/features/action-parity.test.ts", "test/features/action-parity-native.test.ts", "test/features/overlay-actions-native.test.ts", "test/features/conversation-stats.test.ts", "test/features/conversation-seats-native.test.ts", "planned:test/features/operations-parity.test.ts"],
+      "keyboard": "Create through /goal; inspect the Goal seat; edit/pause/resume/complete/clear in Operations",
+      "mouse": "Choose /goal from the launcher; click Goal seat, fields, and exact lifecycle actions",
+      "automatedProof": ["test/features/operations.test.ts", "test/features/operations-parity.test.ts", "test/features/operations-native.test.ts", "test/features/action-parity.test.ts", "test/features/overlay-actions-native.test.ts", "test/features/conversation-stats.test.ts", "test/features/conversation-seats-native.test.ts", "test/features/input-trigger-native.test.ts"],
       "dogfoodProof": "pending: Task 17 exercise complete disposable goal lifecycle",
       "status": "partial",
-      "notes": "Conversation exposes sanitized projected goal phase/objective/round state; Operations provides dual-input lifecycle controls; real-profile dogfood remains."
+      "notes": "Creation remains on Harness /goal as in Web; projected display, CAS lifecycle mutations, clear suppression, destructive confirmation, and dual-input actions are proven; real-profile dogfood remains."
     },
     {
       "id": "model.selection",
@@ -422,10 +422,10 @@
       "owner": "src/features/operations; src/features/interactions; src/features/conversation",
       "keyboard": "Meta+I > Work or Operations; enter/review/exit plan flow",
       "mouse": "Click Work seat, Exit Plan, review controls, and lifecycle actions",
-      "automatedProof": ["test/features/operations.test.ts", "test/features/interactions.test.ts", "test/features/conversation-stats.test.ts", "test/features/conversation-seats-native.test.ts"],
+      "automatedProof": ["test/features/operations.test.ts", "test/features/operations-parity.test.ts", "test/features/interactions.test.ts", "test/features/interactions-native.test.ts", "test/features/conversation-stats.test.ts", "test/features/conversation-seats-native.test.ts"],
       "dogfoodProof": "pending: Task 17 exercise plan lifecycle and review",
       "status": "partial",
-      "notes": "Host-projected effective and pending plan state, composer Work seat, /plan off action, Operations, and review paths exist; real-profile dogfood remains."
+      "notes": "Host-projected effective and pending plan state, composer Work seat, /plan off action, Operations, strict review decisions, and discuss cancellation are proven; real-profile dogfood remains."
     },
     {
       "id": "conversation.compaction",
@@ -467,10 +467,10 @@
       "owner": "src/features/interactions; src/views/interactions/root.ts",
       "keyboard": "Traverse options; focus custom answer; submit/cancel/approve/reject",
       "mouse": "Click options, custom field, submit/cancel, approve/reject",
-      "automatedProof": ["test/features/interactions.test.ts", "test/features/tools-interactions-native.test.ts", "test/features/overlay-actions-native.test.ts", "planned:test/features/interactions-native.test.ts"],
+      "automatedProof": ["test/features/interactions.test.ts", "test/features/interactions-native.test.ts", "test/features/tools-interactions-native.test.ts", "test/features/overlay-actions-native.test.ts"],
       "dogfoodProof": "pending: Task 17 answer option/custom and approval flows",
       "status": "partial",
-      "notes": "Core overlays and custom-input submit/cancel focus paths exist; full lifecycle dogfood remains."
+      "notes": "Exact recommendation display/wire labels, single-choice progress, batch skip/submit, custom-input focus recovery, strict plan review, approvals, and dual-input actions are proven; real-profile dogfood remains."
     },
     {
       "id": "trajectory.ledger",

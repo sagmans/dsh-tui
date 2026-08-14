@@ -64,6 +64,7 @@ class OperationsControllerService implements OperationsController {
   private rowIndex = FIRST_INDEX
   private section: OperationsSection = SECTION_NAMES[FIRST_INDEX] ?? 'goal'
   private subagentError: string | undefined
+  private suppressedGoalRef: GoalMutationRequest['ref'] | undefined
 
   constructor(options: OperationsControllerOptions) {
     this.actions = options.actions
@@ -302,19 +303,26 @@ class OperationsControllerService implements OperationsController {
     return success
   }
 
-  private mutateGoal(
+  private async mutateGoal(
     target: OperationTarget | undefined,
     kind: GoalMutationRequest['kind'],
     objective?: string,
   ): Promise<boolean> {
     const sessionId = this.current
-    if (target?.kind !== 'goal' || sessionId === undefined) return Promise.resolve(false)
-    return this.runBoolean(() => this.actions.mutateGoal({
+    if (target?.kind !== 'goal' || sessionId === undefined) return false
+    const success = await this.runBoolean(() => this.actions.mutateGoal({
       kind,
       ...objective === undefined ? {} : { objective },
       ref: target.goal.ref,
       sessionId,
     }))
+    if (success && kind === 'clear') {
+      this.suppressedGoalRef = target.goal.ref
+      this.rowIndex = FIRST_INDEX
+      this.actionCursor.reset()
+      this.schedulePublish()
+    }
+    return success
   }
 
   private async noteFeedback(target: OperationTarget | undefined, note: string): Promise<boolean> {
@@ -362,6 +370,7 @@ class OperationsControllerService implements OperationsController {
       feedbackLoading: this.feedbackLoading,
       list: this.sessions.list.getSnapshot(),
       section: this.section,
+      suppressedGoalRef: this.suppressedGoalRef,
     })
   }
 
@@ -396,6 +405,7 @@ class OperationsControllerService implements OperationsController {
   private rebind(publish = true): void {
     const next = this.sessions.list.getSnapshot().current
     if (next === this.current) {
+      this.clearConfirmation()
       if (publish) this.schedulePublish()
       return
     }
@@ -411,6 +421,7 @@ class OperationsControllerService implements OperationsController {
     this.feedbackLoading = false
     this.feedbackReady = false
     this.subagentError = undefined
+    this.suppressedGoalRef = undefined
     this.rowIndex = FIRST_INDEX
     this.actionCursor.reset()
     this.clearConfirmation()
@@ -507,7 +518,8 @@ class OperationsControllerService implements OperationsController {
     if (this.input !== undefined) return 'Ctrl+Enter save · Esc cancel'
     if (projected.rows.length === 0) return `No ${this.section} data.`
     const row = projected.rows[rowIndex]
-    return `${rowIndex + 1}/${projected.rows.length} · ${row?.actions.map(action => action.label).join(' · ') ?? 'read only'}`
+    const actions = row?.actions ?? []
+    return `${rowIndex + 1}/${projected.rows.length} · ${actions.length === 0 ? 'read only' : actions.map(action => action.label).join(' · ')}`
   }
 
   private commitFeedback(messageId: string, item: FeedbackItemView | null): void {

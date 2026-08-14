@@ -56,6 +56,7 @@ export interface OperationsProjectionInput {
   readonly feedbackLoading: boolean
   readonly list: OperationsListState
   readonly section: OperationsSection
+  readonly suppressedGoalRef: GoalRef | undefined
 }
 
 function safe(value: string): string {
@@ -118,7 +119,9 @@ function goalActions(phase: GoalView['phase']): readonly OperationActionView[] {
 
 function goalRows(input: OperationsProjectionInput, targets: Map<string, OperationTarget>): readonly OperationRowView[] {
   const goal = goalOf(input.list)
-  if (goal === undefined) return []
+  if (goal === undefined
+    || (input.suppressedGoalRef?.id === goal.ref.id
+      && input.suppressedGoalRef.revision === goal.ref.revision)) return []
   const id = `goal:${goal.ref.id}`
   targets.set(id, { goal, kind: 'goal' })
   return [{

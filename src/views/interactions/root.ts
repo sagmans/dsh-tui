@@ -32,6 +32,8 @@ const APPROVE_ACTION_ID = 'interaction-approve'
 const REJECT_ACTION_ID = 'interaction-reject'
 const CANCEL_ACTION_ID = 'interaction-cancel'
 const SUBMIT_ACTION_ID = 'interaction-submit'
+const CUSTOM_EDITOR_ID = 'interaction-custom'
+const RECOMMENDED_COPY = 'RECOMMENDED'
 function createAction(
   renderer: CliRenderer,
   theme: TuiTheme,
@@ -49,6 +51,50 @@ function createAction(
     mutedFg: theme.colors.muted,
     run,
   })
+}
+
+function addQuestionActions(
+  actions: BoxRenderable,
+  renderer: CliRenderer,
+  theme: TuiTheme,
+  controller: InteractionsController,
+  snapshot: InteractionSnapshotView,
+  enabled: boolean,
+): void {
+  actions.add(createAction(
+    renderer,
+    theme,
+    'interaction-previous',
+    'PREV',
+    enabled && snapshot.questionIndex > 0,
+    () => { controller.previousQuestion() },
+  ))
+  actions.add(createAction(
+    renderer,
+    theme,
+    SELECT_ACTION_ID,
+    'SELECT',
+    enabled && snapshot.options.length > 0,
+    () => { controller.chooseOption() },
+  ))
+  actions.add(createAction(
+    renderer,
+    theme,
+    'interaction-next',
+    'NEXT',
+    enabled && snapshot.questionIndex < snapshot.questionCount - 1,
+    () => { controller.nextQuestion() },
+  ))
+  actions.add(createAction(renderer, theme, 'interaction-skip', 'SKIP', enabled, () => { controller.skipQuestion() }))
+  actions.add(createAction(
+    renderer,
+    theme,
+    SUBMIT_ACTION_ID,
+    'SUBMIT',
+    enabled && snapshot.canSubmit,
+    () => { void controller.submit() },
+  ))
+  actions.add(createAction(renderer, theme, CANCEL_ACTION_ID, 'CANCEL', enabled, () => { void controller.cancel() }))
 }
 
 function createActions(
@@ -75,12 +121,7 @@ function createActions(
       actions.add(createAction(renderer, theme, APPROVE_ACTION_ID, 'APPROVE', enabled, () => { void controller.approve() }))
       break
     case 'question':
-      actions.add(createAction(renderer, theme, 'interaction-previous', 'PREV', enabled, () => { controller.previousQuestion() }))
-      actions.add(createAction(renderer, theme, SELECT_ACTION_ID, 'SELECT', enabled, () => { controller.chooseOption() }))
-      actions.add(createAction(renderer, theme, 'interaction-next', 'NEXT', enabled, () => { controller.nextQuestion() }))
-      actions.add(createAction(renderer, theme, 'interaction-skip', 'SKIP', enabled, () => { controller.skipQuestion() }))
-      actions.add(createAction(renderer, theme, SUBMIT_ACTION_ID, 'SUBMIT', enabled, () => { void controller.submit() }))
-      actions.add(createAction(renderer, theme, CANCEL_ACTION_ID, 'CANCEL', enabled, () => { void controller.cancel() }))
+      addQuestionActions(actions, renderer, theme, controller, snapshot, enabled)
       break
     case 'unavailable':
       actions.add(createAction(renderer, theme, CANCEL_ACTION_ID, 'CANCEL REQUEST', enabled, () => { void controller.cancel() }))
@@ -141,7 +182,7 @@ function createQuestionOptions(
     const cursor = option.index === snapshot.optionIndex
     options.add(new TextRenderable(renderer, {
       id: `interaction-option-${option.index}`,
-      content: `${cursor ? '›' : ' '} ${option.selected ? '[x]' : '[ ]'} ${option.label}${option.description === undefined ? '' : ` · ${option.description}`}`,
+      content: `${cursor ? '›' : ' '} ${option.selected ? '[x]' : '[ ]'} ${option.label}${option.recommended ? ` · ${RECOMMENDED_COPY}` : ''}${option.description === undefined ? '' : ` · ${option.description}`}`,
       fg: cursor ? theme.colors.focus : option.selected ? theme.colors.success : theme.colors.text,
       attributes: cursor ? TextAttributes.BOLD : TextAttributes.NONE,
       selectable: false,
@@ -167,7 +208,7 @@ function createCustomEditor(
   focusCancel: () => void,
 ): TextareaRenderable {
   const editor = new TextareaRenderable(renderer, {
-    id: 'interaction-custom',
+    id: CUSTOM_EDITOR_ID,
     width: '100%',
     height: CUSTOM_HEIGHT,
     initialValue: snapshot.custom,
@@ -177,9 +218,10 @@ function createCustomEditor(
     focusedTextColor: theme.colors.text,
     focusedBackgroundColor: theme.colors.background,
     wrapMode: 'word',
-    onContentChange() { controller.setCustom(editor.plainText) },
+    onContentChange() { if (!snapshot.busy) controller.setCustom(editor.plainText) },
     onKeyDown(key) { handleEditorKey(key, editor, controller, focusSubmit, focusCancel) },
   })
+  editor.focusable = !snapshot.busy
   return editor
 }
 function createQuestionBody(
@@ -305,11 +347,21 @@ export function createInteractionsView(
   let frame = createFrame(renderer, theme, controller, controller.getSnapshot())
   root.add(frame)
   const unsubscribe = controller.subscribe(() => {
+    const restoreCustomFocus = renderer.currentFocusedEditor?.id === CUSTOM_EDITOR_ID
+      && !controller.getSnapshot().busy
     const next = createFrame(renderer, theme, controller, controller.getSnapshot())
     root.remove(frame)
     frame.destroyRecursively()
     frame = next
     root.add(frame)
+    if (restoreCustomFocus) {
+      queueMicrotask(() => {
+        const editor = next.findDescendantById(CUSTOM_EDITOR_ID)
+        if (!(editor instanceof TextareaRenderable) || editor.isDestroyed) return
+        editor.cursorOffset = editor.plainText.length
+        editor.focus()
+      })
+    }
   })
   root.once('destroyed', unsubscribe)
   return root

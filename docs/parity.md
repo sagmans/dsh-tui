@@ -38,7 +38,7 @@ _None._
 | `commands.slash` — Slash command catalog and exact-match execution | parity | partial | src/client/conversation/commands.ts; src/features/input-trigger |
 | `skills.references` — Skill catalog, loading, command trigger, and prompt reference | parity | partial | src/client/conversation/commands.ts; src/features/input-trigger |
 | `subagents.lifecycle` — Recursive subagent hierarchy, activity, timing, usage, opening, and references | parity | partial | src/features/conversation; src/views/conversation/subagents.ts; src/features/input-trigger |
-| `jobs.background` — Background job status and lifecycle controls | parity | partial | src/features/operations; src/views/operations/root.ts |
+| `jobs.background` — Background job status and history | parity | partial | src/features/operations; src/views/operations/root.ts |
 | `goals.session` — Session goal display and lifecycle | parity | partial | src/features/operations; src/views/catalog/root.ts |
 | `model.selection` — Session model/reasoning choice, composer seat, /model, and unroutable blocking | parity | partial | src/features/model-selection; src/views/model-selection/root.ts |
 | `permissions.presets` — Current-session access and future-session default permission | parity | partial | src/features/settings; src/views/conversation/composer.ts |

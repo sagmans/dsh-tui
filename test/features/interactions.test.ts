@@ -190,6 +190,91 @@ test('answers complete multi-question batches and preserves exact option labels'
   }])
 })
 
+test('shows recommendation metadata, preserves wire labels, and follows single-choice progress', async () => {
+  const responses: unknown[] = []
+  const wait = interaction({
+    kind: 'question',
+    key: QUESTION_KEY,
+    sessionId: SESSION_ID,
+    payload: {
+      questions: [
+        {
+          id: 'mode',
+          header: 'Runtime',
+          question: 'Choose mode',
+          options: [
+            { label: 'Fast (Recommended)', description: 'Best default' },
+            { label: 'Safe' },
+          ],
+        },
+        { id: 'note', question: 'Add context?' },
+      ],
+    },
+  }, responses)
+  const { controller } = fixture([wait])
+
+  const initial = controller.getSnapshot()
+  assert.equal(initial.title, 'Runtime · Choose mode')
+  assert.deepEqual(initial.options[0], {
+    description: 'Best default',
+    index: 0,
+    label: 'Fast',
+    recommended: true,
+    selected: false,
+  })
+  assert.equal(initial.options[1]?.recommended, false)
+
+  controller.chooseOption(0)
+  assert.equal(controller.getSnapshot().questionIndex, 1)
+  controller.skipQuestion()
+  await Promise.resolve()
+
+  assert.deepEqual(answerRows(responses[0]), [
+    { id: 'mode', selected: ['Fast (Recommended)'] },
+    { id: 'note', selected: [] },
+  ])
+})
+
+test('publishes custom-answer completion for mouse-accessible submission', async () => {
+  const responses: unknown[] = []
+  const wait = interaction({
+    kind: 'question',
+    key: QUESTION_KEY,
+    sessionId: SESSION_ID,
+    payload: { questions: [{ id: 'note', question: 'Add context?' }] },
+  }, responses)
+  const { controller } = fixture([wait])
+  let publications = 0
+  const unsubscribe = controller.subscribe(() => { publications++ })
+
+  controller.setCustom('Use a disposable fixture')
+  await Promise.resolve()
+
+  assert.equal(controller.getSnapshot().canSubmit, true)
+  assert.equal(publications, 1)
+  unsubscribe()
+})
+
+test('locks question drafts and navigation while the host owns a submitted response', async () => {
+  const responses: unknown[] = []
+  const wait = interaction({
+    kind: 'question',
+    key: QUESTION_KEY,
+    sessionId: SESSION_ID,
+    payload: { questions: [{ id: 'note', question: 'Add context?' }] },
+  }, responses)
+  const { controller } = fixture([wait])
+  controller.setCustom('Original answer')
+
+  assert.equal(await controller.submit(), true)
+  assert.equal(controller.getSnapshot().busy, true)
+  controller.setCustom('Changed too late')
+  controller.skipQuestion()
+
+  assert.equal(controller.getSnapshot().custom, 'Original answer')
+  assert.equal(responses.length, 1)
+})
+
 test('routes strict plan reviews and malformed requests through fail-closed actions', async () => {
   const responses: unknown[] = []
   const review = interaction({

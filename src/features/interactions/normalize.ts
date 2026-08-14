@@ -10,15 +10,18 @@ const MAX_QUESTIONS = 32
 const MAX_OPTIONS = 64
 const QUESTION_PRIORITY = 0
 const APPROVAL_PRIORITY = 1
+const RECOMMENDED_SUFFIX = /\s*(?:\((?:recommended|推荐)\)|（(?:recommended|推荐)）)\s*$/iu
 
 export interface NormalizedOption {
   readonly description: string | undefined
   readonly label: string
+  readonly recommended: boolean
   readonly wireLabel: string
 }
 
 export interface NormalizedQuestion {
   readonly detail: string | undefined
+  readonly header: string | undefined
   readonly id: string
   readonly intent: { readonly approve: string; readonly kind: 'plan-review' } | undefined
   readonly multiSelect: boolean
@@ -78,9 +81,11 @@ export function selectedWait(pending: readonly PendingInteraction[]): AnyInterac
 function option(value: unknown): NormalizedOption | undefined {
   if (!record(value) || typeof value.label !== 'string' || value.label.trim() === '') return undefined
   if (value.description !== undefined && typeof value.description !== 'string') return undefined
+  const recommended = RECOMMENDED_SUFFIX.test(value.label)
   return {
     description: typeof value.description === 'string' ? sanitizeConversationText(value.description) : undefined,
-    label: sanitizeConversationText(value.label),
+    label: sanitizeConversationText(recommended ? value.label.replace(RECOMMENDED_SUFFIX, '') : value.label),
+    recommended,
     wireLabel: value.label,
   }
 }
@@ -97,6 +102,7 @@ function normalizeQuestion(value: unknown): NormalizedQuestion | undefined {
     || typeof value.question !== 'string'
     || value.question.trim() === ''
     || (value.detail !== undefined && typeof value.detail !== 'string')
+    || (value.header !== undefined && typeof value.header !== 'string')
     || (value.multiSelect !== undefined && typeof value.multiSelect !== 'boolean')) {
     return undefined
   }
@@ -108,6 +114,7 @@ function normalizeQuestion(value: unknown): NormalizedQuestion | undefined {
   if (new Set(normalizedOptions.map(candidateOption => candidateOption.wireLabel)).size !== normalizedOptions.length) return undefined
   return {
     detail: typeof value.detail === 'string' ? sanitizeConversationText(value.detail) : undefined,
+    header: typeof value.header === 'string' ? sanitizeConversationText(value.header) : undefined,
     id: value.id,
     intent: intent(value.intent),
     multiSelect: value.multiSelect === true,

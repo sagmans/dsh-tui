@@ -76,6 +76,7 @@ class InteractionsControllerService implements InteractionsController {
   }
 
   chooseOption(index = this.optionIndex): void {
+    if (this.busy) return
     const active = this.active
     const question = active?.questions[this.questionIndex]
     const draft = this.drafts[this.questionIndex]
@@ -86,11 +87,19 @@ class InteractionsControllerService implements InteractionsController {
         ? draft.selected.filter(label => label !== selected.wireLabel)
         : [...draft.selected, selected.wireLabel]
       : [selected.wireLabel]
-    this.replaceDraft(this.questionIndex, {
-      custom: question.multiSelect ? draft.custom : '',
-      selected: nextSelected,
-      skipped: false,
-    })
+    this.drafts = this.drafts.map((current, draftIndex) => draftIndex === this.questionIndex
+      ? {
+          custom: question.multiSelect ? draft.custom : '',
+          selected: nextSelected,
+          skipped: false,
+        }
+      : current)
+    this.error = undefined
+    if (!question.multiSelect && this.questionIndex < active.questions.length - 1) {
+      this.questionIndex++
+      this.optionIndex = FIRST_INDEX
+    }
+    this.schedulePublish()
   }
 
   dispose(): void {
@@ -117,6 +126,7 @@ class InteractionsControllerService implements InteractionsController {
   }
 
   moveOption(delta: number): void {
+    if (this.busy) return
     const active = this.active
     const options = active?.questions[this.questionIndex]?.options ?? []
     if (active?.kind !== 'question' || options.length === 0 || !Number.isFinite(delta) || delta === 0) return
@@ -126,6 +136,7 @@ class InteractionsControllerService implements InteractionsController {
   }
 
   nextQuestion(): void {
+    if (this.busy) return
     const count = this.active?.questions.length ?? 0
     if (this.active?.kind !== 'question' || this.questionIndex >= count - 1) return
     this.questionIndex++
@@ -135,7 +146,7 @@ class InteractionsControllerService implements InteractionsController {
   }
 
   previousQuestion(): void {
-    if (this.active?.kind !== 'question' || this.questionIndex <= FIRST_INDEX) return
+    if (this.busy || this.active?.kind !== 'question' || this.questionIndex <= FIRST_INDEX) return
     this.questionIndex--
     this.optionIndex = FIRST_INDEX
     this.error = undefined
@@ -161,6 +172,7 @@ class InteractionsControllerService implements InteractionsController {
   }
 
   selectOption(index: number): void {
+    if (this.busy) return
     const options = this.active?.questions[this.questionIndex]?.options ?? []
     if (!Number.isSafeInteger(index) || index < 0 || index >= options.length) return
     this.optionIndex = index
@@ -168,6 +180,7 @@ class InteractionsControllerService implements InteractionsController {
   }
 
   setCustom(value: string): void {
+    if (this.busy) return
     const active = this.active
     const question = active?.questions[this.questionIndex]
     const draft = this.drafts[this.questionIndex]
@@ -180,13 +193,17 @@ class InteractionsControllerService implements InteractionsController {
         }
       : current)
     this.error = undefined
+    this.schedulePublish()
   }
 
   skipQuestion(): void {
+    if (this.busy) return
     const active = this.active
     if (active?.kind !== 'question' || this.drafts[this.questionIndex] === undefined) return
+    const finalQuestion = this.questionIndex === active.questions.length - 1
     this.replaceDraft(this.questionIndex, { custom: '', selected: [], skipped: true })
-    this.nextQuestion()
+    if (finalQuestion) void this.submit()
+    else this.nextQuestion()
   }
 
   submit(): Promise<boolean> {

@@ -129,8 +129,9 @@ URL and network targets never cross the local-file opener.
 
 Pending approvals and questions open a blocking overlay. Keyboard and mouse
 actions are equivalent. Only `y` or `ALLOW ONCE` grants an approval; `n`,
-`Esc`, or `REJECT` denies it. Questions support option selection, custom text,
-skip, paging, and whole-batch submission. Strict binary `plan-review` requests
+`Esc`, or `REJECT` denies it. Questions preserve recommendation markers without
+changing answer labels, advance single choices, and support multi-selection,
+custom text, skip, paging, and whole-batch submission. Strict binary `plan-review` requests
 use approve, refuse, and discuss actions; malformed requests expose only a
 cancel path. Responses stay visible and disabled until the host broadcasts
 resolution.
@@ -142,10 +143,13 @@ Workflows, Jobs, Subagents, Trace, and Feedback. `h`/`l` or arrows switch
 sections; `j`/`k` or arrows move rows; `Enter` runs the row's primary action.
 Mouse tabs, rows, and action labels provide equivalent navigation.
 
-Goal mutations use projected compare-and-set revisions. Clear actions require a
-second explicit activation. Plan mode exits through the existing `/plan off`
-command. Workflow and subagent rows open only destinations authorized by the
-shared runtime. Jobs remain read-only, matching current Harness behavior. Trace
+Goal creation remains on the shared `/goal` command. Later mutations use
+projected compare-and-set revisions; a successful clear suppresses its stale
+projection, and destructive clears require a second exact activation. Plan mode
+enters through `/plan`, exits through `/plan off`, and uses the blocking review
+flow. Workflow rows expose durable run/member state and open only live children
+authorized by the shared runtime. Jobs keep live-first and settled history
+read-only, matching current Harness behavior. Trace
 shows the loaded event/request facts and can page older history. Feedback uses
 Host-owned compare-and-set versions; conflicts reconcile from authoritative
 Host values. Paths, payloads, and output remain sanitized inert text.
