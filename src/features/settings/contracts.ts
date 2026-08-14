@@ -1,7 +1,9 @@
 import type { SessionId } from '@deepseek-ai/dsh-api-remotes/client'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-runtime/client'
 import type { TuiActionSpec, TuiActionTone } from '../../contracts/actions.js'
+import type { TuiTheme } from '../../contracts/theme.js'
 import type { TuiNavigationStore } from '../../kernel/navigation.js'
+import type { TuiLocale } from '../../services/locale.js'
 
 export const CONFIGURATION_ACTION_SCOPE = 'settings.action'
 export const CONFIGURATION_ACTION_IDS = Object.freeze([
@@ -30,6 +32,11 @@ export const CONFIGURATION_ACTION_IDS = Object.freeze([
   'extension.run',
   'extension.stop',
   'extension.remove',
+  'theme.light',
+  'theme.dark',
+  'theme.system',
+  'locale.zh',
+  'locale.en',
 ] as const)
 
 export type ConfigurationSection =
@@ -280,8 +287,10 @@ export interface ConfigurationPort {
 
 export interface ConfigurationControllerOptions {
   readonly list: ObservableSnapshot<ConfigurationListState>
+  readonly locale: TuiLocale
   readonly navigation: TuiNavigationStore
   readonly port: ConfigurationPort
+  readonly theme: TuiTheme
 }
 
 export interface ConfigurationController {
@@ -299,4 +308,5 @@ export interface ConfigurationController {
   setInput(value: string): void
   submitInput(): Promise<boolean>
   subscribe(listener: () => void): () => void
+  syncPreferences(): Promise<void>
 }

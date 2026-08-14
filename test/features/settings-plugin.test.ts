@@ -6,6 +6,7 @@ import type { TuiClientFacade } from '../../src/client/context.js'
 import { mountSettings } from '../../src/features/settings/index.js'
 import type { ConfigurationController } from '../../src/features/settings/model.js'
 import type { TuiSlots } from '../../src/contracts/slots.js'
+import { createTuiLocale } from '../../src/services/locale.js'
 
 interface Control {
   activeCommands: number
@@ -44,6 +45,7 @@ function fakeController(control: Control): ConfigurationController {
     setInput: () => {},
     submitInput: () => Promise.resolve(false),
     subscribe: () => () => {},
+    syncPreferences: () => Promise.resolve(),
   }
 }
 
@@ -98,6 +100,7 @@ function fixture(control: Control): Context {
       navigation: { getSnapshot: () => ({ route: 'settings', overlays: [] }), go: () => {} },
       renderer: { currentFocusedEditor: null },
       commands,
+      locale: createTuiLocale({ locale: 'en' }),
       theme: {},
     },
   } as never)
@@ -110,7 +113,7 @@ async function mountCycle(control: Control): Promise<void> {
   const controller = fakeController(control)
   mountSettings(ctx, {
     createController: () => controller,
-    createView: (_renderer, _theme, received) => {
+    createView: (_renderer, _theme, _locale, received) => {
       control.renderedController = received
       // Slot adapter never renders this fixture node.
       // oxlint-disable-next-line typescript/no-unsafe-type-assertion

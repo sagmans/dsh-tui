@@ -10,10 +10,13 @@ import {
 } from './projection-types.js'
 import { sanitizeConversationText } from '../conversation/projection.js'
 import { sanitizeText } from '../sessions/projection.js'
+import { LOCALE_SETTINGS_NAMESPACE } from '../../services/locale.js'
+import { THEME_SETTINGS_NAMESPACE } from '../../services/theme.js'
 
 const MAX_JSON_LENGTH = 2_000
 const SECRET_CONFIGURED = '[configured]'
 const SECRET_UNCONFIGURED = '[not configured]'
+const PREFERENCE_NAMESPACES = new Set([LOCALE_SETTINGS_NAMESPACE, THEME_SETTINGS_NAMESPACE])
 
 function record(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -90,29 +93,31 @@ export function presetRows(
 export function settingsRows(context: ConfigurationProjectionContext): readonly ConfigurationRowView[] {
   const catalog = context.data.settings
   if (catalog === undefined) return []
-  return catalog.namespaces.map((namespace): ConfigurationRowView => {
-    const actions: ConfigurationActionView[] = []
-    if (catalog.hasDocument) actions.push(CONFIGURATION_ACTIONS.settingsOpen)
-    if (catalog.writable && namespace.user !== undefined) actions.push(CONFIGURATION_ACTIONS.settingsReset)
-    const id = `settings:${namespace.ns}`
-    context.targets.set(id, { kind: 'settings', namespace: namespace.ns, revision: namespace.revision })
-    const secretSummary = namespace.secrets.length === 0
-      ? 'secrets none'
-      : namespace.secrets.map(secret => `${secret.path.join('.')} ${secret.set ? 'configured' : 'not configured'}`).join('\n')
-    return {
-      actions,
-      details: sanitizeConversationText([
-        `applies ${namespace.applies}`,
-        `revision ${namespace.revision}`,
-        secretSummary,
-        boundedJson(redactedSettingsValue(namespace.value, namespace.secrets)),
-      ].join('\n')),
-      id,
-      state: namespace.applies === 'restart' ? 'warning' : 'idle',
-      summary: `${namespace.applies} · revision ${namespace.revision}`,
-      title: sanitizeText(namespace.ns),
-    }
-  })
+  return catalog.namespaces
+    .filter(namespace => !PREFERENCE_NAMESPACES.has(namespace.ns))
+    .map((namespace): ConfigurationRowView => {
+      const actions: ConfigurationActionView[] = []
+      if (catalog.hasDocument) actions.push(CONFIGURATION_ACTIONS.settingsOpen)
+      if (catalog.writable && namespace.user !== undefined) actions.push(CONFIGURATION_ACTIONS.settingsReset)
+      const id = `settings:${namespace.ns}`
+      context.targets.set(id, { kind: 'settings', namespace: namespace.ns, revision: namespace.revision })
+      const secretSummary = namespace.secrets.length === 0
+        ? 'secrets none'
+        : namespace.secrets.map(secret => `${secret.path.join('.')} ${secret.set ? 'configured' : 'not configured'}`).join('\n')
+      return {
+        actions,
+        details: sanitizeConversationText([
+          `applies ${namespace.applies}`,
+          `revision ${namespace.revision}`,
+          secretSummary,
+          boundedJson(redactedSettingsValue(namespace.value, namespace.secrets)),
+        ].join('\n')),
+        id,
+        state: namespace.applies === 'restart' ? 'warning' : 'idle',
+        summary: `${namespace.applies} · revision ${namespace.revision}`,
+        title: sanitizeText(namespace.ns),
+      }
+    })
 }
 
 export function credentialRefs(settings: ConfigurationSettingsCatalog | undefined): readonly string[] {

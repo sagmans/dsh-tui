@@ -2,6 +2,8 @@ import assert from 'node:assert/strict'
 import { test } from 'vitest'
 import type { SessionId } from '@deepseek-ai/dsh-api-remotes/client'
 import { projectConfiguration } from '../../src/features/settings/projection.js'
+import { createTuiLocale } from '../../src/services/locale.js'
+import { createTuiTheme } from '../../src/services/theme.js'
 
 // Static fixture identity crosses only the Harness brand boundary.
 // oxlint-disable-next-line typescript/no-unsafe-type-assertion
@@ -18,6 +20,7 @@ test('labels current and future permission lifetimes independently', () => {
       presetContents: new Map(),
       presets: undefined,
       providers: undefined,
+      locale: createTuiLocale({ locale: 'en' }),
       settings: {
         hasDocument: false,
         namespaces: [{
@@ -30,6 +33,7 @@ test('labels current and future permission lifetimes independently', () => {
         }],
         writable: true,
       },
+      theme: createTuiTheme({ color: true }),
     },
     list: {
       current: SESSION_ID,

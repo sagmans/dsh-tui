@@ -3,6 +3,7 @@ import { test } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { mountKernel } from '../../src/kernel/lifecycle.js'
 import type { KernelResources } from '../../src/kernel/lifecycle.js'
+import { createTuiLocale } from '../../src/services/locale.js'
 
 interface LifecycleControl {
   readonly calls: string[]
@@ -20,6 +21,7 @@ function resourceFixture(control: LifecycleControl): KernelResources {
     commands: {
       dispose() { control.calls.push('commands:dispose') },
     } as never,
+    locale: createTuiLocale({ locale: 'en' }),
     slots: {
       dispose() { control.calls.push('slots:dispose') },
     } as never,
@@ -41,6 +43,7 @@ function seams(control: LifecycleControl) {
       if (control.failAt === 'commands') throw new Error('commands failed')
       return resourceFixture(control).commands
     },
+    createLocale: () => resourceFixture(control).locale,
     createSlots: () => {
       control.calls.push('slots:create')
       if (control.failAt === 'slots') throw new Error('slots failed')
@@ -60,6 +63,7 @@ test('publishes kernel services and tears resources down in reverse ownership or
   assert.notEqual(ctx.get('tuiHost'), undefined)
   assert.notEqual(ctx.get('tuiSlots'), undefined)
   assert.notEqual(ctx.get('tuiCommands'), undefined)
+  assert.notEqual(ctx.get('tuiLocale'), undefined)
   assert.notEqual(ctx.get('tuiTheme'), undefined)
 
   await ctx.fiber.dispose()

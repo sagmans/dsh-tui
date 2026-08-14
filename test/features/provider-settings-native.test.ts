@@ -7,6 +7,7 @@ import type {
   ConfigurationSection,
   ConfigurationSnapshotView,
 } from '../../src/features/settings/model.js'
+import { createTuiLocale } from '../../src/services/locale.js'
 import { createTuiTheme } from '../../src/services/theme.js'
 import { createSettingsView } from '../../src/views/settings/root.js'
 
@@ -77,13 +78,19 @@ function controller(calls: string[]): ConfigurationController {
       return Promise.resolve(true)
     },
     subscribe: next => { listener = next; return () => { listener = NOOP } },
+    syncPreferences: () => Promise.resolve(),
   }
 }
 
 test.skipIf(!NATIVE_RENDERER_AVAILABLE)('supports mouse provider navigation and staged form controls', async () => {
   const harness = await createTestRenderer({ width: WIDTH, height: HEIGHT, bufferedOutput: 'memory' })
   const calls: string[] = []
-  const view = createSettingsView(harness.renderer, createTuiTheme({ color: true }), controller(calls))
+  const view = createSettingsView(
+    harness.renderer,
+    createTuiTheme({ color: true }),
+    createTuiLocale({ locale: 'en' }),
+    controller(calls),
+  )
   harness.renderer.root.add(view)
 
   try {

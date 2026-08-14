@@ -9,6 +9,7 @@ import {
   settingsRows,
 } from './projection-configuration.js'
 import { extensionRows, pluginRows } from './projection-plugins.js'
+import { preferenceRows } from './projection-preferences.js'
 import { providerRows } from './projection-providers.js'
 import { accessRows, modelRows } from './projection-selections.js'
 import type {
@@ -41,7 +42,7 @@ export function projectConfiguration(input: {
     case 'providers': rows = providerRows(context); break
     case 'access': rows = accessRows(input.list, context); break
     case 'presets': rows = presetRows(input.list, context); break
-    case 'settings': rows = settingsRows(context); break
+    case 'settings': rows = [...settingsRows(context), ...preferenceRows(context)]; break
     case 'credentials': rows = credentialRows(context); break
     case 'plugins': rows = pluginRows(context); break
     case 'extensions': rows = extensionRows(context); break

@@ -23,8 +23,8 @@ _None._
 | `conversation.statistics` — Whole-log turn, step, token, tool, timing, and context statistics | parity | partial | src/features/conversation; src/views/conversation/information.ts |
 | `workspace.directory-selection` — Workspace directory selection | terminal-alternative | partial | src/features/sessions; src/views/sessions/root.ts |
 | `settings.plugin-inventory` — Installed plugin inventory and extension lifecycle | parity | partial | src/features/settings; src/views/settings/root.ts |
-| `theme.terminal` — Light, dark, and system theme preference | parity | missing | planned: src/services/theme.ts; src/features/settings |
-| `locale.chrome` — English and Chinese application locale | parity | missing | planned: src/services/locale.ts; src/locales; src/views |
+| `theme.terminal` — Light, dark, and system theme preference | parity | partial | src/services/theme.ts; src/features/settings; src/views/shell |
+| `locale.chrome` — English and Chinese application locale | parity | partial | src/services/locale.ts; src/locales; src/views/shell; src/views/settings |
 | `shell.navigation` — Full-screen shell, navigation, sidebar outcomes, and route access | parity | partial | src/features/shell; src/views/shell |
 | `settings.general` — General settings shell and persisted preferences | parity | partial | src/features/settings; src/views/settings/root.ts |
 | `settings.providers-models` — Provider credentials, endpoints, protocols, model catalog, and discovery | parity | partial | src/features/settings; src/views/catalog/root.ts |

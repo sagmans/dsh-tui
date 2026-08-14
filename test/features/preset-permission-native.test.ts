@@ -11,6 +11,7 @@ import type {
   ConfigurationSection,
 } from '../../src/features/settings/model.js'
 import { settingsCommands } from '../../src/features/settings/commands.js'
+import { createTuiLocale } from '../../src/services/locale.js'
 import { createTuiTheme } from '../../src/services/theme.js'
 import { createConversationView } from '../../src/views/conversation/root.js'
 import { createSettingsView } from '../../src/views/settings/root.js'
@@ -81,6 +82,7 @@ function controller(calls: string[]): ConfigurationController {
     setInput: NOOP,
     submitInput: () => Promise.resolve(false),
     subscribe: next => { listener = next; return () => { listener = NOOP } },
+    syncPreferences: () => Promise.resolve(),
   }
 }
 
@@ -218,7 +220,12 @@ test.skipIf(!NATIVE_RENDERER_AVAILABLE)('offers preset and permission outcomes t
   const harness = await createTestRenderer({ width: WIDTH, height: HEIGHT, bufferedOutput: 'memory' })
   const calls: string[] = []
   const actionController = controller(calls)
-  const view = createSettingsView(harness.renderer, createTuiTheme({ color: true }), actionController)
+  const view = createSettingsView(
+    harness.renderer,
+    createTuiTheme({ color: true }),
+    createTuiLocale({ locale: 'en' }),
+    actionController,
+  )
   harness.renderer.root.add(view)
 
   try {

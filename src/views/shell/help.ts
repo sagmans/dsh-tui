@@ -2,28 +2,23 @@ import { BoxRenderable, TextRenderable } from '@opentui/core'
 import type { CliRenderer } from '@opentui/core'
 import type { ShellController } from '../../features/shell/model.js'
 import type { TuiTheme } from '../../contracts/theme.js'
+import type { TuiLocale } from '../../services/locale.js'
 
 const HELP_WIDTH = '90%'
 const HELP_HEIGHT = 11
 const HELP_LEFT = '5%'
 const HELP_TOP = '4%'
 const OVERLAY_Z_INDEX = 100
-const HELP_CONTENT = [
-  'g c/s/i/,              routes',
-  'j/k · Ctrl+N/P         next/previous',
-  'Space P · Enter        palette/run',
-  '? · z                  help/zen',
-  'Esc · q                close/quit',
-].join('\n')
 
 export function createHelp(
   renderer: CliRenderer,
   theme: TuiTheme,
+  locale: TuiLocale,
   controller: ShellController,
 ): BoxRenderable {
   const overlay = new BoxRenderable(renderer, {
     id: 'shell-help',
-    title: 'KEYS',
+    title: locale.t('shell.help.title'),
     position: 'absolute',
     width: HELP_WIDTH,
     height: HELP_HEIGHT,
@@ -38,7 +33,7 @@ export function createHelp(
     zIndex: OVERLAY_Z_INDEX,
   })
   overlay.add(new TextRenderable(renderer, {
-    content: HELP_CONTENT,
+    content: locale.t('shell.help.content'),
     fg: theme.colors.text,
     selectable: false,
   }))

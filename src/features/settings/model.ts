@@ -1,4 +1,5 @@
 import type { SessionId } from '@deepseek-ai/dsh-api-remotes/client'
+import type { TuiThemePreference } from '../../contracts/theme.js'
 import { createActionCursor } from '../catalog/root.js'
 import type {
   ConfigurationActionId,
@@ -26,6 +27,17 @@ import {
 } from './projection-providers.js'
 import { sanitizeConversationText } from '../conversation/projection.js'
 import { sanitizeText } from '../sessions/projection.js'
+import {
+  isLocaleId,
+  LOCALE_PREFERENCE_FIELD,
+  LOCALE_SETTINGS_NAMESPACE,
+  type LocaleId,
+} from '../../services/locale.js'
+import {
+  isThemePreference,
+  THEME_PREFERENCE_FIELD,
+  THEME_SETTINGS_NAMESPACE,
+} from '../../services/theme.js'
 
 export type * from './contracts.js'
 
@@ -103,6 +115,10 @@ function errorText(error: unknown): string {
   return sanitizeText(error instanceof Error ? error.message : String(error))
 }
 
+function recordValue(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
 function derivedCredentialRef(provider: string): string {
   return `${provider.toUpperCase().replaceAll(/[^A-Z0-9]+/gu, '_')}_API_KEY`
 }
@@ -127,6 +143,7 @@ class SettingsControllerService implements ConfigurationController {
   private input: ConfigurationInputView | undefined
   private inputTarget: string | undefined
   private readonly listeners = new Set<() => void>()
+  private readonly locale: ConfigurationControllerOptions['locale']
   private models: ConfigurationProjectionData['models']
   private notice: string | undefined
   private plugins: ConfigurationProjectionData['plugins']
@@ -141,9 +158,12 @@ class SettingsControllerService implements ConfigurationController {
   private section: ConfigurationSection = SECTION_NAMES[FIRST_INDEX] ?? 'models'
   private secretInput = ''
   private settings: ConfigurationProjectionData['settings']
+  private readonly theme: ConfigurationControllerOptions['theme']
 
   constructor(options: ConfigurationControllerOptions) {
+    this.locale = options.locale
     this.port = options.port
+    this.theme = options.theme
     this.current = options.list.getSnapshot().current
     this.resources = [
       options.list.subscribe(() => {
@@ -158,6 +178,8 @@ class SettingsControllerService implements ConfigurationController {
       options.navigation.subscribe(() => {
         if (options.navigation.getSnapshot().route === 'settings') void this.activate()
       }),
+      options.locale.subscribe(() => { this.schedulePublish() }),
+      options.theme.subscribe(() => { this.schedulePublish() }),
     ]
     this.list = options.list
   }
@@ -343,6 +365,15 @@ class SettingsControllerService implements ConfigurationController {
     return () => { this.listeners.delete(listener) }
   }
 
+  async syncPreferences(): Promise<void> {
+    if (this.disposed) return
+    const result = await this.port.settings()
+    if (!result.ok || this.disposed) return
+    this.settings = result.value
+    this.applyPreferenceSettings(result.value)
+    this.schedulePublish()
+  }
+
   private beginCredential(rowId: string, target: ConfigurationTarget): boolean {
     if (target.kind !== 'credential') return false
     this.secretInput = ''
@@ -477,6 +508,16 @@ class SettingsControllerService implements ConfigurationController {
     return this.applyProviderDraft(draft)
   }
 
+  private applyPreferenceSettings(settings: NonNullable<ConfigurationProjectionData['settings']>): void {
+    const theme = settings.namespaces.find(namespace => namespace.ns === THEME_SETTINGS_NAMESPACE)
+    const themeValue = recordValue(theme?.value) ? theme.value[THEME_PREFERENCE_FIELD] : undefined
+    if (isThemePreference(themeValue)) this.theme.setPreference(themeValue)
+
+    const locale = settings.namespaces.find(namespace => namespace.ns === LOCALE_SETTINGS_NAMESPACE)
+    const localeValue = recordValue(locale?.value) ? locale.value[LOCALE_PREFERENCE_FIELD] : undefined
+    if (isLocaleId(localeValue)) this.locale.setLocale(localeValue)
+  }
+
   private clearConfirmation(): void {
     this.confirmation = undefined
     this.confirmationToken = undefined
@@ -503,7 +544,7 @@ class SettingsControllerService implements ConfigurationController {
   }
 
   private confirmationIdentity(action: ConfigurationActionId, rowId: string, target: ConfigurationTarget): string {
-    const version = target.kind === 'settings'
+    const version = target.kind === 'settings' || target.kind === 'theme' || target.kind === 'locale'
       ? target.revision
       : target.kind === 'extension'
         ? `${target.plugin.currentPackageId ?? ''}:${target.plugin.latestRun?.packageId ?? ''}:${target.plugin.latestRun?.status ?? ''}`
@@ -539,6 +580,11 @@ class SettingsControllerService implements ConfigurationController {
       case 'preset.remove': return this.removePreset(target)
       case 'settings.open': return this.runBoolean(() => this.port.openSettings())
       case 'settings.reset': return this.resetSetting(target)
+      case 'theme.light': return this.changeTheme(target, 'light')
+      case 'theme.dark': return this.changeTheme(target, 'dark')
+      case 'theme.system': return this.changeTheme(target, 'system')
+      case 'locale.zh': return this.changeLocale(target, 'zh')
+      case 'locale.en': return this.changeLocale(target, 'en')
       case 'credential.set': return Promise.resolve(this.beginCredential(rowId, target))
       case 'credential.unset': return this.unsetCredential(target)
       case 'extension.run': return this.runExtension(target)
@@ -622,7 +668,9 @@ class SettingsControllerService implements ConfigurationController {
       case 'plugin':
       case 'preset':
       case 'provider-create':
-      case 'settings': return undefined
+      case 'settings':
+      case 'theme':
+      case 'locale': return undefined
       default: {
         const exhaustive: never = target
         return exhaustive
@@ -840,8 +888,10 @@ class SettingsControllerService implements ConfigurationController {
 
   private async loadSettings(): Promise<void> {
     const result = await this.port.settings()
-    if (result.ok) this.settings = result.value
-    else this.error = `${result.error.message} (${result.error.code})`
+    if (result.ok) {
+      this.settings = result.value
+      this.applyPreferenceSettings(result.value)
+    } else this.error = `${result.error.message} (${result.error.code})`
   }
 
   private async openPreset(target: ConfigurationTarget): Promise<boolean> {
@@ -867,10 +917,47 @@ class SettingsControllerService implements ConfigurationController {
         presetContents: this.presetContents,
         presets: this.presets,
         settings: this.settings,
+        locale: this.locale,
+        theme: this.theme,
       },
       list: this.list.getSnapshot(),
       section: this.section,
     })
+  }
+
+  private changeLocale(target: ConfigurationTarget, locale: LocaleId): Promise<boolean> {
+    if (target.kind !== 'locale') return Promise.resolve(false)
+    return this.changePreference(
+      target,
+      LOCALE_PREFERENCE_FIELD,
+      locale,
+      () => { this.locale.setLocale(locale) },
+    )
+  }
+
+  private changeTheme(target: ConfigurationTarget, preference: TuiThemePreference): Promise<boolean> {
+    if (target.kind !== 'theme') return Promise.resolve(false)
+    return this.changePreference(
+      target,
+      THEME_PREFERENCE_FIELD,
+      preference,
+      () => { this.theme.setPreference(preference) },
+    )
+  }
+
+  private async changePreference(
+    target: Extract<ConfigurationTarget, { readonly kind: 'locale' | 'theme' }>,
+    field: string,
+    value: LocaleId | TuiThemePreference,
+    apply: () => void,
+  ): Promise<boolean> {
+    const result = await this.run(() => this.port.mutateSettings(target.namespace, [{
+      op: 'set', path: [field], value,
+    }], target.revision))
+    if (!result.ok) return false
+    apply()
+    await this.syncPreferences()
+    return true
   }
 
   private removeExtension(target: ConfigurationTarget): Promise<boolean> {
@@ -976,15 +1063,19 @@ class SettingsControllerService implements ConfigurationController {
 
   private status(projected: ProjectedConfiguration, rowIndex: number): string {
     if (this.current === undefined && (this.section === 'models' || this.section === 'access' || this.section === 'extensions')) {
-      return 'No active session.'
+      return this.locale.t('settings.status.noSession')
     }
-    if (this.busyCount > 0) return 'Waiting for host…'
-    if (this.confirmation !== undefined) return `Press action again to confirm ${this.confirmation}.`
-    if (this.input !== undefined) return 'Ctrl+Enter save · Esc cancel'
+    if (this.busyCount > 0) return this.locale.t('settings.status.waiting')
+    if (this.confirmation !== undefined) {
+      return this.locale.t('settings.status.confirm', { action: this.confirmation })
+    }
+    if (this.input !== undefined) return this.locale.t('settings.status.input')
     if (this.notice !== undefined) return this.notice
-    if (projected.rows.length === 0) return `No ${this.section} data.`
+    if (projected.rows.length === 0) {
+      return this.locale.t('settings.status.empty', { section: this.section })
+    }
     const row = projected.rows[rowIndex]
-    return `${rowIndex + 1}/${projected.rows.length} · ${row?.actions.map(action => action.label).join(' · ') ?? 'read only'}`
+    return `${rowIndex + 1}/${projected.rows.length} · ${row?.actions.map(action => action.label).join(' · ') ?? this.locale.t('settings.status.readOnly')}`
   }
 
   private stopExtension(target: ConfigurationTarget): Promise<boolean> {

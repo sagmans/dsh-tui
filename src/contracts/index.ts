@@ -21,7 +21,20 @@ export type {
   TuiSlotRenderer,
   TuiSlots,
 } from './slots.js'
-export type { TuiColorPalette, TuiSemanticColor, TuiTheme } from './theme.js'
+export type {
+  TuiColorPalette,
+  TuiSemanticColor,
+  TuiTheme,
+  TuiThemePreference,
+  TuiThemeScheme,
+  TuiThemeSnapshot,
+} from './theme.js'
+export type {
+  LocaleId,
+  TuiLocale,
+  TuiLocaleEnvironment,
+  TuiLocaleSnapshot,
+} from '../services/locale.js'
 export type {
   TuiNavigationSnapshot,
   TuiNavigationStore,

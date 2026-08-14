@@ -7,6 +7,7 @@ import type { TuiSlots } from '../contracts/slots.js'
 import type { TuiTheme } from '../contracts/theme.js'
 import { createTuiCommands } from '../services/commands.js'
 import { createTuiHost, type TuiHost } from '../services/host.js'
+import { createTuiLocale, type TuiLocale } from '../services/locale.js'
 import { createTuiSlots } from '../services/slots.js'
 import { createTuiTheme } from '../services/theme.js'
 import { createNavigationStore, type TuiNavigationStore } from './navigation.js'
@@ -23,12 +24,14 @@ declare module '@deepseek-ai/cordis' {
   interface Context {
     readonly tuiHost: TuiHost
     readonly tuiKernel: TuiKernel
+    readonly tuiLocale: TuiLocale
     readonly tuiTheme: TuiTheme
   }
 }
 
 export interface KernelResources {
   readonly commands: TuiCommands
+  readonly locale: TuiLocale
   readonly navigation: TuiNavigationStore
   readonly renderer: CliRenderer
   readonly slots: TuiSlots
@@ -37,11 +40,13 @@ export interface KernelResources {
 
 export interface KernelSeams {
   readonly createCommands: (renderer: CliRenderer) => TuiCommands
+  readonly createLocale: () => TuiLocale
   readonly createNavigation: () => TuiNavigationStore
   readonly createRenderer: () => Promise<CliRenderer>
   readonly createSlots: (
     renderer: CliRenderer,
     client: TuiClientFacade,
+    locale: TuiLocale,
     navigation: TuiNavigationStore,
     theme: TuiTheme,
   ) => TuiSlots
@@ -55,11 +60,12 @@ function isTuiClient(value: unknown): value is TuiClientFacade {
 function defaultSeams(): KernelSeams {
   return {
     createCommands: renderer => createTuiCommands(createOpenTuiKeymap(renderer)),
+    createLocale: createTuiLocale,
     createNavigation: createNavigationStore,
     createRenderer: createTuiRenderer,
-    createSlots: (renderer, client, navigation, theme) => createTuiSlots(
+    createSlots: (renderer, client, locale, navigation, theme) => createTuiSlots(
       renderer,
-      { client, navigation, theme },
+      { client, locale, navigation, theme },
     ),
     createTheme: () => createTuiTheme({ color: process.env.NO_COLOR === undefined }),
   }
@@ -79,12 +85,14 @@ export async function mountKernel(
     cleanup.push(() => { renderer.destroy() })
     const commands = seams.createCommands(renderer)
     cleanup.push(() => { commands.dispose() })
+    const locale = seams.createLocale()
     const navigation = seams.createNavigation()
     const theme = seams.createTheme()
-    const slots = seams.createSlots(renderer, client, navigation, theme)
+    const slots = seams.createSlots(renderer, client, locale, navigation, theme)
     cleanup.push(() => { slots.dispose() })
     const host = createTuiHost(renderer, navigation)
 
+    ctx.provide('tuiLocale', locale)
     ctx.provide('tuiTheme', theme)
     ctx.provide('tuiCommands', commands)
     ctx.provide('tuiSlots', slots)
@@ -93,7 +101,7 @@ export async function mountKernel(
       for (const dispose of cleanup.toReversed()) await dispose()
     }, 'dsh-tui: kernel resources')
 
-    return { commands, navigation, renderer, slots, theme }
+    return { commands, locale, navigation, renderer, slots, theme }
   } catch (error) {
     for (const dispose of cleanup.toReversed()) await dispose()
     throw error

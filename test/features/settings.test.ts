@@ -8,6 +8,8 @@ import {
   type ConfigurationPort,
 } from '../../src/features/settings/model.js'
 import { createNavigationStore } from '../../src/kernel/navigation.js'
+import { createTuiLocale } from '../../src/services/locale.js'
+import { createTuiTheme } from '../../src/services/theme.js'
 
 // Static fixture identities cross only Harness brand boundaries.
 // oxlint-disable-next-line typescript/no-unsafe-type-assertion
@@ -173,7 +175,13 @@ function fixture() {
     },
   }
   const navigation = createNavigationStore()
-  const controller = createSettingsController({ list, navigation, port })
+  const controller = createSettingsController({
+    list,
+    locale: createTuiLocale({ locale: 'en' }),
+    navigation,
+    port,
+    theme: createTuiTheme({ color: true }),
+  })
   return { calls, controller, list, navigation, port }
 }
 

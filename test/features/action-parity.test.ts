@@ -43,6 +43,11 @@ const SETTINGS_ACTION_IDS = Object.freeze([
   'extension.run',
   'extension.stop',
   'extension.remove',
+  'theme.light',
+  'theme.dark',
+  'theme.system',
+  'locale.zh',
+  'locale.en',
 ] as const satisfies readonly ConfigurationActionId[])
 const OPERATION_ACTION_IDS = Object.freeze([
   'feedback.clear',
@@ -111,6 +116,7 @@ function settingsController(calls: string[]): SettingsFixture {
     setInput: NOOP,
     submitInput: () => Promise.resolve(true),
     subscribe: () => NOOP,
+    syncPreferences: () => Promise.resolve(),
   }
 }
 

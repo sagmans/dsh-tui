@@ -2,20 +2,21 @@ import { MouseButton, TextAttributes, TextRenderable } from '@opentui/core'
 import type { CliRenderer } from '@opentui/core'
 import type { ShellController, ShellSnapshot } from '../../features/shell/model.js'
 import type { TuiTheme } from '../../contracts/theme.js'
+import type { TuiLocale } from '../../services/locale.js'
 
-const EMPTY_SESSION_TITLE = 'No session'
-const IDLE_STATUS = 'idle'
-const RUNNING_STATUS = 'running'
 const STATUS_HEIGHT = 1
 
 export function createStatusLine(
   renderer: CliRenderer,
   theme: TuiTheme,
+  locale: TuiLocale,
   snapshot: ShellSnapshot,
   controller: ShellController,
 ): TextRenderable {
-  const title = snapshot.activeSessionTitle ?? EMPTY_SESSION_TITLE
-  const state = snapshot.activeSessionRunning ? RUNNING_STATUS : IDLE_STATUS
+  const title = snapshot.activeSessionTitle ?? locale.t('shell.status.noSession')
+  const state = snapshot.activeSessionRunning
+    ? locale.t('shell.status.running')
+    : locale.t('shell.status.idle')
   return new TextRenderable(renderer, {
     id: 'shell-status',
     content: `${title}  ·  ${state}`,

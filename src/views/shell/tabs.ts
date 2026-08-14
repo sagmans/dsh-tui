@@ -3,25 +3,28 @@ import type { CliRenderer } from '@opentui/core'
 import type { ShellController } from '../../features/shell/model.js'
 import type { TuiRoute } from '../../kernel/navigation.js'
 import type { TuiTheme } from '../../contracts/theme.js'
+import type { LocaleKey } from '../../locales/en.js'
+import type { TuiLocale } from '../../services/locale.js'
 
 const TAB_HEIGHT = 1
 
 interface RouteTab {
-  readonly label: string
+  readonly labelKey: LocaleKey
   readonly route: TuiRoute
   readonly width: number
 }
 
 const ROUTE_TABS: readonly RouteTab[] = [
-  { label: 'CHAT', route: 'chat', width: 10 },
-  { label: 'SESSIONS', route: 'sessions', width: 14 },
-  { label: 'INSPECT', route: 'inspect', width: 12 },
-  { label: 'SETTINGS', route: 'settings', width: 14 },
+  { labelKey: 'shell.route.chat', route: 'chat', width: 10 },
+  { labelKey: 'shell.route.sessions', route: 'sessions', width: 14 },
+  { labelKey: 'shell.route.inspect', route: 'inspect', width: 12 },
+  { labelKey: 'shell.route.settings', route: 'settings', width: 14 },
 ]
 
 export function createRouteTabs(
   renderer: CliRenderer,
   theme: TuiTheme,
+  locale: TuiLocale,
   controller: ShellController,
 ): BoxRenderable {
   const row = new BoxRenderable(renderer, {
@@ -35,7 +38,7 @@ export function createRouteTabs(
     const active = tab.route === current
     const node = new TextRenderable(renderer, {
       id: `shell-tab-${tab.route}`,
-      content: ` ${tab.label} `,
+      content: ` ${locale.t(tab.labelKey)} `,
       width: tab.width,
       height: TAB_HEIGHT,
       fg: active ? theme.colors.focus : theme.colors.muted,

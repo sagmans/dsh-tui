@@ -10,6 +10,7 @@ import type { OperationsController } from '../../src/features/operations/model.j
 import { createShellController } from '../../src/features/shell/model.js'
 import { createNavigationStore } from '../../src/kernel/navigation.js'
 import { createTuiCommands } from '../../src/services/commands.js'
+import { createTuiLocale } from '../../src/services/locale.js'
 import { createTuiSlots } from '../../src/services/slots.js'
 import { createTuiTheme } from '../../src/services/theme.js'
 import { mountShellView } from '../../src/views/shell/root.js'
@@ -68,16 +69,17 @@ test.skipIf(!NATIVE_RENDERER_AVAILABLE)('keeps footer navigation mouse-accessibl
   const harness = await createTestRenderer({ width: WIDTH, height: HEIGHT, bufferedOutput: 'memory' })
   const owner = new Context()
   const navigation = createNavigationStore()
+  const locale = createTuiLocale({ locale: 'en' })
   const theme = createTuiTheme({ color: true })
   // Native navigation proof needs slot identity, not live Harness services.
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   const client = { sessions: {} } as unknown as TuiClientFacade
-  const slots = createTuiSlots(harness.renderer, { client, navigation, theme })
+  const slots = createTuiSlots(harness.renderer, { client, locale, navigation, theme })
   const commands = createTuiCommands(createOpenTuiKeymap(harness.renderer))
   owner.provide('tuiClient', client)
   // Native fixture supplies only resources consumed by operations wiring.
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-  owner.provide('tuiKernel', { ready: true, resources: { commands, navigation, renderer: harness.renderer, slots, theme } } as never)
+  owner.provide('tuiKernel', { ready: true, resources: { commands, locale, navigation, renderer: harness.renderer, slots, theme } } as never)
   const opened: string[] = []
   mountOperations(owner, {
     createController: () => operationsController(opened),
@@ -87,7 +89,7 @@ test.skipIf(!NATIVE_RENDERER_AVAILABLE)('keeps footer navigation mouse-accessibl
     navigation,
     sessions: { getSnapshot: sessionState, subscribe: () => () => {}, open: () => {}, clear: () => {} },
   })
-  const shell = mountShellView({ controller: shellController, renderer: harness.renderer, slots, theme })
+  const shell = mountShellView({ controller: shellController, locale, renderer: harness.renderer, slots, theme })
   harness.renderer.root.add(shell.root)
 
   try {

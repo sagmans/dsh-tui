@@ -119,28 +119,28 @@
       "webPackages": ["@deepseek-ai/dsh-client-ui-theme"],
       "evidence": ["deepseek-harness/packages/client/ui-theme/README.md", "src/services/theme.ts"],
       "classification": "parity",
-      "owner": "planned: src/services/theme.ts; src/features/settings",
+      "owner": "src/services/theme.ts; src/features/settings; src/views/shell",
       "keyboard": "Settings > Theme; choose light, dark, or system",
       "mouse": "Settings > Theme; click theme choice",
-      "automatedProof": ["test/kernel/theme.test.ts", "planned:test/features/theme-locale.test.ts", "planned:test/features/theme-locale-native.test.ts"],
+      "automatedProof": ["test/kernel/theme.test.ts", "test/features/theme-locale.test.ts", "test/features/theme-locale-native.test.ts"],
       "dogfoodProof": "pending: Task 17 switch all theme modes",
-      "status": "missing",
-      "notes": "Current fixed terminal palette and color-disable support do not provide Web preference parity."
+      "status": "partial",
+      "notes": "Semantic light/dark palettes, terminal system resolution, no-color behavior, durable Host preference, live rerender, and dual-input settings actions are proven; supported-runtime dogfood remains."
     },
     {
       "id": "locale.chrome",
       "title": "English and Chinese application locale",
       "webRows": ["locale"],
       "webPackages": ["@deepseek-ai/dsh-client-locale"],
-      "evidence": ["deepseek-harness/packages/client/locale/README.md", "docs/parity.md"],
+      "evidence": ["deepseek-harness/packages/client/locale/README.md", "src/services/locale.ts", "src/views/shell/root.ts"],
       "classification": "parity",
-      "owner": "planned: src/services/locale.ts; src/locales; src/views",
+      "owner": "src/services/locale.ts; src/locales; src/views/shell; src/views/settings",
       "keyboard": "Settings > Language; choose locale",
       "mouse": "Settings > Language; click locale",
-      "automatedProof": ["planned:test/features/theme-locale.test.ts", "planned:test/features/theme-locale-native.test.ts"],
+      "automatedProof": ["test/features/theme-locale.test.ts", "test/features/theme-locale-native.test.ts"],
       "dogfoodProof": "pending: Task 17 switch English/Chinese and inspect fallback",
-      "status": "missing",
-      "notes": "Safe Unicode rendering exists, but fixed English chrome is not locale parity."
+      "status": "partial",
+      "notes": "Typed complete English/Chinese chrome dictionaries, Web-compatible fallback, durable Host preference, live rerender, narrow rendering, and dual-input settings actions are proven; supported-runtime dogfood remains."
     },
     {
       "id": "shell.navigation",

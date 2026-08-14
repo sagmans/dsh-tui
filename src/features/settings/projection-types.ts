@@ -1,5 +1,7 @@
 import type { SessionId } from '@deepseek-ai/dsh-api-remotes/client'
 import { defineTuiAction } from '../../contracts/actions.js'
+import type { TuiTheme } from '../../contracts/theme.js'
+import type { TuiLocale } from '../../services/locale.js'
 import {
   CONFIGURATION_ACTION_SCOPE,
   type ConfigurationActionView,
@@ -54,6 +56,8 @@ export interface ConfigurationProjectionData {
   readonly presetContents: ReadonlyMap<string, string>
   readonly presets: ConfigurationPresetCatalog | undefined
   readonly settings: ConfigurationSettingsCatalog | undefined
+  readonly locale: TuiLocale
+  readonly theme: TuiTheme
 }
 
 export interface ConfigurationProviderTarget {
@@ -98,6 +102,8 @@ export type ConfigurationTarget =
   | { readonly kind: 'plugin' }
   | { readonly kind: 'preset'; readonly id: string; readonly trust: 'system' | 'user' }
   | { readonly kind: 'settings'; readonly namespace: string; readonly revision: number }
+  | { readonly kind: 'theme'; readonly namespace: string; readonly revision: number }
+  | { readonly kind: 'locale'; readonly namespace: string; readonly revision: number }
 
 export interface ProjectedConfiguration {
   readonly rows: readonly ConfigurationRowView[]

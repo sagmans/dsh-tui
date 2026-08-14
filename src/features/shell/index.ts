@@ -4,7 +4,7 @@ import type { KernelResources } from '../../kernel/lifecycle.js'
 import {
   createShellController,
   DEFAULT_SHELL_BINDINGS,
-  SHELL_COMMAND_DESCRIPTIONS,
+  shellCommandDescription,
   type ShellBindings,
   type ShellCommandName,
 } from './model.js'
@@ -145,7 +145,9 @@ function shellCommands(
     },
   })
   const command = (commandName: ShellCommandName): TuiCommandLayer['commands'][number] => ({
-    name: commandName, description: SHELL_COMMAND_DESCRIPTIONS[commandName], run: () => { controller.run(commandName) },
+    name: commandName,
+    description: shellCommandDescription(commandName, resources.locale),
+    run: () => { controller.run(commandName) },
   })
   const globalCommands = ACTION_COMMANDS.filter(commandName => !commandName.startsWith('palette.'))
   const globalBindings = Object.entries(COMMAND_BINDING_KEYS)
@@ -203,6 +205,7 @@ export function mountShell(
   try {
     view = seams.mountView({
       controller,
+      locale: resources.locale,
       renderer: resources.renderer,
       slots: resources.slots,
       theme: resources.theme,

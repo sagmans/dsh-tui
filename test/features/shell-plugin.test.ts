@@ -3,6 +3,7 @@ import { test } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import type { KernelResources } from '../../src/kernel/lifecycle.js'
 import { Config, DEFAULT_SHELL_CONFIG, mountShell } from '../../src/features/shell/index.js'
+import { createTuiLocale } from '../../src/services/locale.js'
 
 interface ShellPluginControl {
   readonly calls: string[]
@@ -60,6 +61,7 @@ function contextFixture(control: ShellPluginControl): Context {
   const resources = {
     navigation,
     commands,
+    locale: createTuiLocale({ locale: 'en' }),
     slots,
     renderer,
     theme: { color: true, colors: {} },

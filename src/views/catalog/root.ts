@@ -26,7 +26,10 @@ const INPUT_HEIGHT = 5
 const INPUT_EDITOR_HEIGHT = 2
 const RETURN_KEY = 'return'
 const ESCAPE_KEY = 'escape'
+const DEFAULT_CONFIRM_LABEL = 'CONFIRM'
+const DEFAULT_DETAILS_TITLE = 'DETAILS'
 const DEFAULT_EMPTY_COPY = 'No data for current session.'
+const DEFAULT_ERROR_LABEL = 'Error'
 const STATE_LABELS: Readonly<Record<CatalogRowState, string>> = Object.freeze({
   error: 'ERR',
   idle: '·',
@@ -79,7 +82,10 @@ export interface CatalogController<ActionId extends string, Section extends stri
 }
 
 export interface CatalogViewConfig<Section extends string> {
+  readonly confirmLabel?: string
+  readonly detailsTitle?: string
   readonly emptyCopy?: string
+  readonly errorLabel?: string
   readonly idPrefix: string
   readonly sectionLabels: Readonly<Record<Section, string>>
   readonly title: string
@@ -180,7 +186,7 @@ function createDetails<ActionId extends string, Section extends string>(
   const row = snapshot.rows[snapshot.rowIndex]
   const frame = new BoxRenderable(renderer, {
     id: `${config.idPrefix}-details`,
-    title: row?.title ?? 'DETAILS',
+    title: row?.title ?? config.detailsTitle ?? DEFAULT_DETAILS_TITLE,
     width: '100%',
     height: DETAILS_HEIGHT,
     flexShrink: 0,
@@ -230,7 +236,7 @@ function createActions<ActionId extends string, Section extends string>(
     const unavailable = snapshot.busy || !action.enabled
     actions.add(new TextRenderable(renderer, {
       id: `${config.idPrefix}-action-${action.id}`,
-      content: ` ${selected ? '› ' : ''}${confirming ? 'CONFIRM ' : ''}${action.label} `,
+      content: ` ${selected ? '› ' : ''}${confirming ? `${config.confirmLabel ?? DEFAULT_CONFIRM_LABEL} ` : ''}${action.label} `,
       fg: unavailable ? theme.colors.muted : actionColor(theme, action),
       attributes: unavailable ? TextAttributes.DIM : TextAttributes.BOLD,
       selectable: false,
@@ -245,7 +251,9 @@ function createActions<ActionId extends string, Section extends string>(
     }))
   }
   actions.add(new TextRenderable(renderer, {
-    content: snapshot.error === undefined ? `  ${snapshot.status}` : `  Error: ${snapshot.error}`,
+    content: snapshot.error === undefined
+      ? `  ${snapshot.status}`
+      : `  ${config.errorLabel ?? DEFAULT_ERROR_LABEL}: ${snapshot.error}`,
     height: STATUS_HEIGHT,
     fg: snapshot.error === undefined ? theme.colors.muted : theme.colors.danger,
     truncate: true,

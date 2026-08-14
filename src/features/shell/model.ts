@@ -1,6 +1,8 @@
 import type { SessionId } from '@deepseek-ai/dsh-api-remotes/client'
 import type { ObservableSnapshot, SessionListState } from '@deepseek-ai/dsh-client-runtime/client'
 import type { TuiNavigationStore, TuiRoute } from '../../kernel/navigation.js'
+import type { LocaleKey } from '../../locales/en.js'
+import type { TuiLocale } from '../../services/locale.js'
 
 export type ShellOverlay = string
 export type PaletteCommandName =
@@ -112,6 +114,27 @@ export const SHELL_COMMAND_DESCRIPTIONS: Readonly<Record<ShellCommandName, strin
   'shell.quit': 'Exit terminal interface',
   'shell.zen': 'Toggle zen mode',
 })
+
+const SHELL_COMMAND_LOCALE_KEYS: Readonly<Record<ShellCommandName, LocaleKey>> = Object.freeze({
+  'palette.next': 'shell.command.palette.next',
+  'palette.previous': 'shell.command.palette.previous',
+  'palette.run': 'shell.command.palette.run',
+  'route.chat': 'shell.command.route.chat',
+  'route.inspect': 'shell.command.route.inspect',
+  'route.sessions': 'shell.command.route.sessions',
+  'route.settings': 'shell.command.route.settings',
+  'session.next': 'shell.command.session.next',
+  'session.previous': 'shell.command.session.previous',
+  'shell.escape': 'shell.command.shell.escape',
+  'shell.help': 'shell.command.shell.help',
+  'shell.palette': 'shell.command.shell.palette',
+  'shell.quit': 'shell.command.shell.quit',
+  'shell.zen': 'shell.command.shell.zen',
+})
+
+export function shellCommandDescription(command: ShellCommandName, locale: TuiLocale): string {
+  return locale.t(SHELL_COMMAND_LOCALE_KEYS[command])
+}
 
 class ShellControllerService implements ShellController {
   readonly bindings: ShellBindings

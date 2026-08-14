@@ -9,6 +9,7 @@ import type {
 } from '@opentui/core'
 import type { TuiClientFacade } from '../client/context.js'
 import type { TuiNavigationStore } from '../kernel/navigation.js'
+import type { TuiLocale } from '../services/locale.js'
 import type { TuiTheme } from './theme.js'
 
 export type TuiSlotId =
@@ -23,6 +24,7 @@ export type TuiSlotId =
 
 export interface TuiSlotContext {
   readonly client: TuiClientFacade
+  readonly locale: TuiLocale
   readonly navigation: TuiNavigationStore
   readonly theme: TuiTheme
 }

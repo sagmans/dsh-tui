@@ -1,8 +1,9 @@
 import { BoxRenderable, MouseButton, TextAttributes, TextRenderable } from '@opentui/core'
 import type { CliRenderer } from '@opentui/core'
 import type { PaletteCommandName, ShellController } from '../../features/shell/model.js'
-import { PALETTE_COMMANDS, SHELL_COMMAND_DESCRIPTIONS } from '../../features/shell/model.js'
+import { PALETTE_COMMANDS, shellCommandDescription } from '../../features/shell/model.js'
 import type { TuiTheme } from '../../contracts/theme.js'
+import type { TuiLocale } from '../../services/locale.js'
 
 const PALETTE_WIDTH = '86%'
 const PALETTE_HEIGHT = 11
@@ -24,11 +25,12 @@ const PALETTE_LABELS: Readonly<Record<PaletteCommandName, string>> = Object.free
 export function createPalette(
   renderer: CliRenderer,
   theme: TuiTheme,
+  locale: TuiLocale,
   controller: ShellController,
 ): BoxRenderable {
   const overlay = new BoxRenderable(renderer, {
     id: 'shell-palette',
-    title: 'COMMANDS',
+    title: locale.t('shell.palette.title'),
     position: 'absolute',
     width: PALETTE_WIDTH,
     height: PALETTE_HEIGHT,
@@ -47,7 +49,7 @@ export function createPalette(
     const active = command === selected
     overlay.add(new TextRenderable(renderer, {
       id: `shell-palette-${command}`,
-      content: `${active ? '›' : ' '} ${PALETTE_LABELS[command].padEnd(PALETTE_KEY_WIDTH)} ${SHELL_COMMAND_DESCRIPTIONS[command]}`,
+      content: `${active ? '›' : ' '} ${PALETTE_LABELS[command].padEnd(PALETTE_KEY_WIDTH)} ${shellCommandDescription(command, locale)}`,
       height: PALETTE_ROW_HEIGHT,
       fg: active ? theme.colors.focus : theme.colors.text,
       attributes: active ? TextAttributes.BOLD : TextAttributes.DIM,

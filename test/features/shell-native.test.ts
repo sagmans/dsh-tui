@@ -12,6 +12,7 @@ import { mountShellView } from '../../src/views/shell/root.js'
 import { createNavigationStore } from '../../src/kernel/navigation.js'
 import { createTuiCommands } from '../../src/services/commands.js'
 import type { TuiCommands } from '../../src/contracts/commands.js'
+import { createTuiLocale } from '../../src/services/locale.js'
 import { createTuiSlots } from '../../src/services/slots.js'
 import { createTuiTheme } from '../../src/services/theme.js'
 
@@ -110,12 +111,13 @@ test.skipIf(!NATIVE_RENDERER_AVAILABLE)('renders zen shell with mouse parity and
     clear: () => {},
   }
   const controller = createShellController({ navigation, sessions })
+  const locale = createTuiLocale({ locale: 'en' })
   const theme = createTuiTheme({ color: true })
   // Native shell test never invokes client services.
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   const client = { api: {}, context: {} } as unknown as TuiClientFacade
-  const slots = createTuiSlots(harness.renderer, { client, navigation, theme })
-  const view = mountShellView({ controller, renderer: harness.renderer, slots, theme })
+  const slots = createTuiSlots(harness.renderer, { client, locale, navigation, theme })
+  const view = mountShellView({ controller, locale, renderer: harness.renderer, slots, theme })
   const keyHarness = registerShellKeys(harness.renderer, controller)
   harness.renderer.root.add(view.root)
 
