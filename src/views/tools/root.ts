@@ -7,6 +7,7 @@ import {
   type CliRenderer,
 } from '@opentui/core'
 import type { TuiTheme } from '../../contracts/theme.js'
+import { createFocusableAction } from '../action.js'
 import type {
   ToolInspectorRow,
   ToolsController,
@@ -17,9 +18,10 @@ const HEADER_HEIGHT = 1
 const STATUS_HEIGHT = 1
 const ROW_HEIGHT = 1
 const DETAIL_BORDER_HEIGHT = 7
+const FILES_BORDER_HEIGHT = 5
 const TREE_INDENT = '  '
 const EMPTY_COPY = 'No tool calls in current history window.'
-const FOOTER_COPY = 'j/k or arrows move · Enter/click fold · [O] OPEN produced file · g c returns to chat'
+const FOOTER_COPY = 'j/k tools · [/] files · Enter/click fold · [O] OPEN selected file · g c chat'
 const TOOL_STATE_LABELS: Readonly<Record<ToolInspectorRow['state'], string>> = Object.freeze({
   error: 'ERR',
   ok: 'OK',
@@ -90,6 +92,7 @@ function createToolList(
     }))
   } else {
     for (const row of snapshot.rows) list.add(createToolRow(renderer, theme, controller, snapshot, row))
+    if (snapshot.selectedCallId !== undefined) list.scrollChildIntoView(`tool-row-${snapshot.selectedCallId}`)
   }
   return list
 }
@@ -125,6 +128,53 @@ function createDetails(
   return details
 }
 
+function createFiles(
+  renderer: CliRenderer,
+  theme: TuiTheme,
+  controller: ToolsController,
+  snapshot: ToolsSnapshotView,
+): BoxRenderable {
+  const files = new BoxRenderable(renderer, {
+    id: 'tool-files',
+    title: 'PRODUCED FILES',
+    width: '100%',
+    height: FILES_BORDER_HEIGHT,
+    border: true,
+    borderStyle: 'single',
+    borderColor: theme.colors.border,
+    paddingX: 1,
+  })
+  const scroll = new ScrollBoxRenderable(renderer, {
+    width: '100%',
+    height: '100%',
+    scrollY: true,
+    scrollX: false,
+  })
+  const actions: TextRenderable[] = []
+  snapshot.paths.forEach((path, index) => {
+    const action = createFocusableAction(renderer, {
+      content: `${path === snapshot.selectedPath ? '▸' : ' '} ${path}`,
+      fg: path === snapshot.selectedPath ? theme.colors.focus : theme.colors.text,
+      height: ROW_HEIGHT,
+      id: `tool-file-${index}`,
+      mutedFg: theme.colors.muted,
+      nextFocus: () => actions[index + 1] ?? actions[0],
+      previousFocus: () => actions[index - 1] ?? actions.at(-1),
+      run: () => {
+        controller.selectPath(path)
+        void controller.openSelected()
+      },
+      width: '100%',
+    })
+    actions.push(action)
+    scroll.add(action)
+  })
+  const selectedIndex = snapshot.paths.findIndex(path => path === snapshot.selectedPath)
+  if (selectedIndex >= 0) scroll.scrollChildIntoView(`tool-file-${selectedIndex}`)
+  files.add(scroll)
+  return files
+}
+
 function createFrame(
   renderer: CliRenderer,
   theme: TuiTheme,
@@ -148,6 +198,7 @@ function createFrame(
   }))
   frame.add(createToolList(renderer, theme, controller, snapshot))
   frame.add(createDetails(renderer, theme, snapshot))
+  if (snapshot.paths.length > 0) frame.add(createFiles(renderer, theme, controller, snapshot))
   frame.add(new TextRenderable(renderer, {
     id: 'tools-open',
     content: snapshot.status === '' ? FOOTER_COPY : snapshot.status,

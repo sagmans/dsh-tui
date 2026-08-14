@@ -20,6 +20,7 @@ const MODEL_SELECTION_PLUGIN_NAME = '@sagmans/dsh-tui/feature/model-selection'
 const MODEL_SELECTION_SERVICE = 'tuiModelSelection'
 const INPUT_TRIGGER_PLUGIN_NAME = '@sagmans/dsh-tui/feature/input-trigger'
 const INPUT_TRIGGER_SERVICE = 'tuiInputTrigger'
+const DELIVERABLES_PLUGIN_NAME = '@sagmans/dsh-tui/feature/deliverables'
 const CONVERSATION_PLUGIN_NAME = '@sagmans/dsh-tui/feature/conversation'
 const TOOLS_PLUGIN_NAME = '@sagmans/dsh-tui/feature/tools'
 const INTERACTIONS_PLUGIN_NAME = '@sagmans/dsh-tui/feature/interactions'
@@ -98,6 +99,11 @@ function installPluginModules(ctx: Context): void {
       triggerContext.provide(INPUT_TRIGGER_SERVICE, Object.freeze({ ready: true }))
     },
   }
+  const deliverablesPlugin = {
+    name: 'tui-deliverables-fixture',
+    inject: ['systemPrompt'],
+    apply(): void {},
+  }
   const conversationPlugin = {
     name: 'tui-conversation-fixture',
     inject: [KERNEL_SERVICE, CLIENT_SERVICE, MODEL_SELECTION_SERVICE, INPUT_TRIGGER_SERVICE],
@@ -131,6 +137,7 @@ function installPluginModules(ctx: Context): void {
     [SESSIONS_PLUGIN_NAME, sessionsPlugin],
     [MODEL_SELECTION_PLUGIN_NAME, modelSelectionPlugin],
     [INPUT_TRIGGER_PLUGIN_NAME, inputTriggerPlugin],
+    [DELIVERABLES_PLUGIN_NAME, deliverablesPlugin],
     [CONVERSATION_PLUGIN_NAME, conversationPlugin],
     [TOOLS_PLUGIN_NAME, toolsPlugin],
     [INTERACTIONS_PLUGIN_NAME, interactionsPlugin],
@@ -179,11 +186,13 @@ test('settles keyless startup, client, kernel, and shell Loader rows without bro
     installPluginModules(ctx)
     ctx.provide('apiProxy', {})
     ctx.provide('typertGateway', {})
+    ctx.provide('systemPrompt', {})
 
     await ctx.loader.create({ name: SHELL_PLUGIN_NAME, inject: [KERNEL_SERVICE] })
     await ctx.loader.create({ name: SESSIONS_PLUGIN_NAME, inject: [KERNEL_SERVICE, CLIENT_SERVICE] })
     await ctx.loader.create({ name: MODEL_SELECTION_PLUGIN_NAME, inject: [KERNEL_SERVICE, CLIENT_SERVICE] })
     await ctx.loader.create({ name: INPUT_TRIGGER_PLUGIN_NAME, inject: [CLIENT_SERVICE] })
+    await ctx.loader.create({ name: DELIVERABLES_PLUGIN_NAME, inject: ['systemPrompt'] })
     await ctx.loader.create({
       name: CONVERSATION_PLUGIN_NAME,
       inject: [KERNEL_SERVICE, CLIENT_SERVICE, MODEL_SELECTION_SERVICE, INPUT_TRIGGER_SERVICE],
@@ -216,6 +225,7 @@ test('settles keyless startup, client, kernel, and shell Loader rows without bro
       [
         CLIENT_PLUGIN_NAME,
         CONVERSATION_PLUGIN_NAME,
+        DELIVERABLES_PLUGIN_NAME,
         INPUT_TRIGGER_PLUGIN_NAME,
         INTERACTIONS_PLUGIN_NAME,
         KERNEL_PLUGIN_NAME,

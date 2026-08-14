@@ -68,6 +68,7 @@ const EXPECTED_HOST_ROWS = new Map<string, string>([
   ['tui-sessions', '@sagmans/dsh-tui/feature/sessions'],
   ['tui-model-selection', '@sagmans/dsh-tui/feature/model-selection'],
   ['tui-input-trigger', '@sagmans/dsh-tui/feature/input-trigger'],
+  ['tui-deliverables', '@sagmans/dsh-tui/feature/deliverables'],
   ['tui-conversation', '@sagmans/dsh-tui/feature/conversation'],
   ['tui-tools', '@sagmans/dsh-tui/feature/tools'],
   ['tui-interactions', '@sagmans/dsh-tui/feature/interactions'],

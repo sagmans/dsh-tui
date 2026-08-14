@@ -55,6 +55,10 @@
       "types": "./lib/features/tools/index.d.ts",
       "default": "./lib/features/tools/index.js"
     },
+    "./feature/deliverables": {
+      "types": "./lib/features/deliverables/index.d.ts",
+      "default": "./lib/features/deliverables/index.js"
+    },
     "./feature/interactions": {
       "types": "./lib/features/interactions/index.d.ts",
       "default": "./lib/features/interactions/index.js"

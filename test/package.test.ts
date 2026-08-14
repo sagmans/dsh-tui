@@ -85,6 +85,7 @@ test('publishes only built entrypoints and the profile patch', () => {
     './feature/model-selection',
     './feature/input-trigger',
     './feature/tools',
+    './feature/deliverables',
     './feature/interactions',
     './feature/operations',
     './feature/trajectory',

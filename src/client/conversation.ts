@@ -27,6 +27,7 @@ import {
 } from './conversation/tools.js'
 import { workflowDefinition } from './conversation/workflows.js'
 import { registerTuiTrajectoryRuntime } from './trajectory.js'
+import { deliverablesDefinition } from './conversation/deliverables.js'
 
 export { tuiConversationViewDefinition } from './conversation/shared.js'
 
@@ -45,6 +46,7 @@ export const TUI_CONVERSATION_DEFINITIONS: readonly ConversationNodeDefinition[]
   todoDefinition,
   requestHeaderDefinition,
   requestContextDefinition,
+  deliverablesDefinition,
 ])
 
 export function registerTuiConversationRuntime(ctx: Context): void {

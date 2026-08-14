@@ -116,12 +116,14 @@ line breaks remain intact.
 
 Open Inspect with `gi` or the mouse tab. Tool calls use host-computed
 presentation intents when structurally valid: generic, terminal, diff, read,
-search, and web result shapes. Unknown or malformed intent payloads fall back
-to sanitized arguments and results. Nested Code Mode dispatches appear as a
-tree; `j`/`k` or arrows move selection and `Enter` or a second click folds a
-branch. URLs remain inert text. Successful Host-projected edit paths appear as
-produced files; `o` or the mouse action must select the same path twice before
-requesting an external open.
+search, and web result shapes. Full sanitized detail remains scrollable.
+Unknown or malformed intent payloads fall back to sanitized arguments and
+results. Nested Code Mode dispatches appear as a tree; `j`/`k` or arrows move
+selection and `Enter` or a second click folds a branch. URLs remain inert text.
+Successful Host-projected edit paths appear in completed-turn tails and the
+Inspector's produced-file list. `[`/`]` select any file; `o`, Enter/Space on a
+focused file, or clicking it requires repeat confirmation before external open.
+URL and network targets never cross the local-file opener.
 
 ## Human interactions
 

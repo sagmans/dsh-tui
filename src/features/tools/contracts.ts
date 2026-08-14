@@ -40,9 +40,11 @@ export interface ToolInspectorRow {
 export interface ToolsSnapshotView {
   readonly confirmationPath: string | undefined
   readonly details: string
+  readonly paths: readonly string[]
   readonly phase: 'empty' | 'ready'
   readonly rows: readonly ToolInspectorRow[]
   readonly selectedCallId: string | undefined
+  readonly selectedPath: string | undefined
   readonly status: string
   readonly title: string
 }
@@ -69,8 +71,10 @@ export interface ToolsController {
   dispose(): void
   getSnapshot(): ToolsSnapshotView
   move(delta: number): void
+  movePath(delta: number): void
   openSelected(): Promise<boolean>
   select(callId: string): void
+  selectPath(path: string): void
   subscribe(listener: () => void): () => void
   toggleSelected(): void
 }

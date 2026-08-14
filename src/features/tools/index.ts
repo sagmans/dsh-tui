@@ -61,6 +61,8 @@ function commandLayer(controller: ToolsController, active: () => boolean): TuiCo
     commands: [
       { name: 'tools.next', description: 'Select next tool call', run: () => { controller.move(1) } },
       { name: 'tools.previous', description: 'Select previous tool call', run: () => { controller.move(-1) } },
+      { name: 'tools.file-next', description: 'Select next produced file', run: () => { controller.movePath(1) } },
+      { name: 'tools.file-previous', description: 'Select previous produced file', run: () => { controller.movePath(-1) } },
       { name: 'tools.toggle', description: 'Fold selected nested tool call', run: () => { controller.toggleSelected() } },
       { name: 'tools.open', description: 'Confirm external open for selected produced file', run: async () => { await controller.openSelected() } },
     ],
@@ -69,6 +71,8 @@ function commandLayer(controller: ToolsController, active: () => boolean): TuiCo
       { key: 'down', command: 'tools.next' },
       { key: 'k', command: 'tools.previous' },
       { key: 'up', command: 'tools.previous' },
+      { key: ']', command: 'tools.file-next' },
+      { key: '[', command: 'tools.file-previous' },
       { key: 'return', command: 'tools.toggle' },
       { key: 'o', command: 'tools.open' },
     ],

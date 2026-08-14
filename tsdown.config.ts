@@ -11,6 +11,7 @@ export default defineConfig({
     'src/features/model-selection/index.ts',
     'src/features/input-trigger/index.ts',
     'src/features/tools/index.ts',
+    'src/features/deliverables/index.ts',
     'src/features/interactions/index.ts',
     'src/features/operations/index.ts',
     'src/features/trajectory/index.ts',

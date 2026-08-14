@@ -166,6 +166,10 @@
       name: '@sagmans/dsh-tui/feature/input-trigger'
       inject: [tuiClient]
 
+    - id: tui-deliverables
+      name: '@sagmans/dsh-tui/feature/deliverables'
+      inject: [systemPrompt]
+
     - id: tui-conversation
       name: '@sagmans/dsh-tui/feature/conversation'
       inject: [tuiKernel, tuiClient, apiProxy, tuiModelSelection, tuiInputTrigger]

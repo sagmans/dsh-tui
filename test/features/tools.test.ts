@@ -131,7 +131,7 @@ test('excludes tainted and failed paths from external open targets', () => {
   assert.deepEqual(failedPath.paths, [])
 })
 
-test('projects produced paths and requires repeat activation before external open', async () => {
+test('selects and confirms every produced path before external open', async () => {
   const edit = projectToolPresentation({
     args: '{"path":"src/index.ts"}',
     callId: 'edit-one',
@@ -139,7 +139,7 @@ test('projects produced paths and requires repeat activation before external ope
       card: 'diff',
       title: 'Edit source',
       diffs: [{ path: 'src/index.ts', oldText: 'old', newText: 'new' }],
-      locations: [{ path: 'src/index.ts' }],
+      locations: [{ path: 'src/index.ts' }, { path: 'src/other.ts' }],
     },
     isError: false,
     name: 'edit',
@@ -153,13 +153,67 @@ test('projects produced paths and requires repeat activation before external ope
     sessions: { list, binding: () => binding },
   })
 
-  assert.deepEqual(edit.paths, ['src/index.ts'])
-  assert.match(edit.details, /produced files\nsrc\/index\.ts/u)
+  assert.deepEqual(edit.paths, ['src/index.ts', 'src/other.ts'])
+  assert.match(edit.details, /produced files\nsrc\/index\.ts\nsrc\/other\.ts/u)
+  assert.equal(controller.getSnapshot().selectedPath, 'src/index.ts')
+  controller.movePath(1)
+  assert.equal(controller.getSnapshot().selectedPath, 'src/other.ts')
   assert.equal(await controller.openSelected(), false)
   assert.deepEqual(opened, [])
   assert.match(controller.getSnapshot().status, /again to open externally/u)
   assert.equal(await controller.openSelected(), true)
-  assert.deepEqual(opened, ['src/index.ts'])
+  assert.deepEqual(opened, ['src/other.ts'])
+})
+
+test('preserves complete structured details and every produced file', () => {
+  const output = `${'x'.repeat(13_000)}END`
+  const locations = Array.from({ length: 100 }, (_, index) => ({ path: `out/file-${index}.txt` }))
+  const tool = projectToolPresentation({
+    args: '{}',
+    callId: 'large-output',
+    callView: {
+      card: 'generic',
+      kind: 'edit',
+      title: 'Generate outputs',
+      rawInput: { count: locations.length },
+      content: [],
+      locations,
+    },
+    isError: false,
+    name: 'generate',
+    result: 'generated',
+    resultView: { card: 'terminal', output, exitCode: 0 },
+  })
+
+  assert.equal(tool.paths.length, locations.length)
+  assert.equal(tool.paths.at(-1), 'out/file-99.txt')
+  assert.match(tool.details, /END/u)
+  assert.equal(tool.details.endsWith('…'), false)
+})
+
+test('rejects URL targets before confirmation or host delegation', async () => {
+  const unsafe: ToolPresentation = {
+    callId: 'unsafe',
+    children: [],
+    details: 'unsafe',
+    name: 'edit',
+    paths: ['https://example.invalid/output.txt'],
+    state: 'ok',
+    summary: 'unsafe',
+    title: 'Unsafe output',
+  }
+  const binding = source(snapshot([unsafe]))
+  const list = source({ current: SESSION_ID, byId: { [SESSION_ID]: { displayTitle: 'Tool run' } } })
+  const opened: string[] = []
+  const controller = createToolsController({
+    openPath: (path) => { opened.push(path); return Promise.resolve() },
+    sessions: { list, binding: () => binding },
+  })
+
+  assert.equal(await controller.openSelected(), false)
+  assert.deepEqual(opened, [])
+  assert.equal(controller.getSnapshot().confirmationPath, undefined)
+  assert.match(controller.getSnapshot().status, /local filesystem path/u)
 })
 
 test('projects nested tool rows and preserves selection across updates', () => {

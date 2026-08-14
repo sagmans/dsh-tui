@@ -227,10 +227,10 @@
       "owner": "src/features/tools; src/views/tools/root.ts",
       "keyboard": "Select tool call; traverse nested and structured detail",
       "mouse": "Click tool call, nested rows, and detail tabs",
-      "automatedProof": ["test/features/tools.test.ts", "test/features/tools-interactions-native.test.ts", "planned:test/features/tools-native.test.ts"],
+      "automatedProof": ["test/client/tools.test.ts", "test/features/tools.test.ts", "test/features/tools-interactions-native.test.ts", "test/features/tools-native.test.ts"],
       "dogfoodProof": "pending: Task 17 inspect native, Code Mode, failure, and Web-tool calls",
       "status": "partial",
-      "notes": "Sanitized inspection exists; some Web structured detail is reduced."
+      "notes": "Sanitized generic, terminal, diff, read, search, and Web detail remains fully inspectable; recursive Code Mode calls and every successful mutation path have dual-input controls."
     },
     {
       "id": "workflow.runs",
@@ -252,15 +252,15 @@
       "title": "Produced-file discovery, turn tails, inert mentions, and safe opening",
       "webRows": ["ui-deliverables"],
       "webPackages": ["@deepseek-ai/dsh-client-ui-deliverables"],
-      "evidence": ["deepseek-harness/packages/client/ui-deliverables/README.md", "src/features/deliverables/projection.ts"],
+      "evidence": ["deepseek-harness/packages/client/ui-deliverables/README.md", "src/client/conversation/deliverables.ts", "src/features/deliverables/index.ts", "src/features/deliverables/projection.ts"],
       "classification": "terminal-alternative",
       "owner": "src/features/deliverables; src/views/conversation; src/views/tools",
       "keyboard": "Select any produced file; confirm same local path twice before open/export",
       "mouse": "Click any produced file; confirm same local path twice before open/export",
-      "automatedProof": ["test/features/tools.test.ts", "planned:test/features/deliverables.test.ts", "planned:test/features/tools-native.test.ts"],
+      "automatedProof": ["test/features/tools.test.ts", "test/features/deliverables.test.ts", "test/features/tools-native.test.ts", "test/profile-composition.test.ts"],
       "dogfoodProof": "pending: Task 17 produce multiple files and inspect/open each safely",
       "status": "partial",
-      "notes": "Current tool projection exposes paths but not complete turn-tail and all-file outcomes."
+      "notes": "Terminal-owned prompt guidance, completed-turn tails, inert exact/unique mentions, all-file selection, confirmation, and local-only opening are proven; real-profile dogfood remains."
     },
     {
       "id": "workspace.sessions",

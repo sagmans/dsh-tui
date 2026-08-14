@@ -3,8 +3,7 @@ import { imageFallback } from '../attachments/presentation.js'
 import { sanitizeConversationText } from '../conversation/projection.js'
 import { producedPaths } from '../deliverables/projection.js'
 
-const MAX_PRESENTATION_TEXT = 12_000
-const MAX_PRESENTATION_ITEMS = 80
+const MAX_SUMMARY_TEXT = 12_000
 const READ_LINE_NUMBER_WIDTH = 5
 const EMPTY_DETAILS = '(no details)'
 const UNKNOWN_TITLE = 'tool'
@@ -32,24 +31,24 @@ function booleanField(value: unknown, key: string): boolean | undefined {
   return typeof field === 'boolean' ? field : undefined
 }
 
-function bounded(value: string): string {
+function boundedSummary(value: string): string {
   const safe = sanitizeConversationText(value)
-  return safe.length <= MAX_PRESENTATION_TEXT
+  return safe.length <= MAX_SUMMARY_TEXT
     ? safe
-    : `${safe.slice(0, MAX_PRESENTATION_TEXT)}…`
+    : `${safe.slice(0, MAX_SUMMARY_TEXT)}…`
 }
 
 function json(value: unknown): string {
   try {
-    return bounded(JSON.stringify(value, null, 2) ?? String(value))
+    return sanitizeConversationText(JSON.stringify(value, null, 2) ?? String(value))
   } catch {
-    return bounded(String(value))
+    return sanitizeConversationText(String(value))
   }
 }
 
 function content(value: unknown): string {
   if (!Array.isArray(value)) return json(value)
-  return value.slice(0, MAX_PRESENTATION_ITEMS).map((block) => {
+  return value.map((block) => {
     if (!record(block)) return json(block)
     switch (block.type) {
       case 'text': return stringField(block, 'text') ?? ''
@@ -65,7 +64,7 @@ function content(value: unknown): string {
 function diffDetails(value: unknown): string | undefined {
   if (!record(value) || !Array.isArray(value.diffs) || value.diffs.length === 0) return undefined
   const sections: string[] = []
-  for (const candidate of value.diffs.slice(0, MAX_PRESENTATION_ITEMS)) {
+  for (const candidate of value.diffs) {
     if (!record(candidate)) return undefined
     const path = stringField(candidate, 'path')
     const oldText = candidate.oldText
@@ -75,7 +74,7 @@ function diffDetails(value: unknown): string | undefined {
     const added = newText.split(LINE_SEPARATOR).map(line => `+ ${line}`)
     sections.push([path, ...removed, ...added].join(LINE_SEPARATOR))
   }
-  return bounded(sections.join(`${LINE_SEPARATOR}${LINE_SEPARATOR}`))
+  return sections.join(`${LINE_SEPARATOR}${LINE_SEPARATOR}`)
 }
 
 function genericCall(value: unknown): { readonly details: string[]; readonly title?: string | undefined } | undefined {
@@ -84,7 +83,7 @@ function genericCall(value: unknown): { readonly details: string[]; readonly tit
   if ('rawInput' in value) details.push(json(value.rawInput))
   if ('content' in value) details.push(content(value.content))
   if (Array.isArray(value.locations)) {
-    const locations = value.locations.slice(0, MAX_PRESENTATION_ITEMS).flatMap((location) => {
+    const locations = value.locations.flatMap((location) => {
       if (!record(location) || typeof location.path !== 'string') return []
       const line = numberField(location, 'line')
       return [`${sanitizeConversationText(location.path)}${line === undefined ? '' : `:${line}`}`]
@@ -121,16 +120,16 @@ function searchDetails(value: Readonly<Record<string, unknown>>): string | undef
   const total = numberField(value, 'total')
   const header = total === undefined ? `search${truncated}` : `search · ${total}${truncated}`
   if (value.shape === 'paths' && Array.isArray(value.paths)) {
-    const paths = value.paths.slice(0, MAX_PRESENTATION_ITEMS)
+    const paths = value.paths
     if (!paths.every(path => typeof path === 'string')) return undefined
     return [header, ...paths.map(path => sanitizeConversationText(path))].join(LINE_SEPARATOR)
   }
   if (value.shape === 'matches' && Array.isArray(value.files)) {
     const lines: string[] = [header]
-    for (const file of value.files.slice(0, MAX_PRESENTATION_ITEMS)) {
+    for (const file of value.files) {
       if (!record(file) || typeof file.path !== 'string' || !Array.isArray(file.matches)) return undefined
       lines.push(sanitizeConversationText(file.path))
-      for (const match of file.matches.slice(0, MAX_PRESENTATION_ITEMS)) {
+      for (const match of file.matches) {
         if (!record(match) || typeof match.line !== 'string' || typeof match.lineNumber !== 'number') return undefined
         lines.push(`  ${match.lineNumber}: ${sanitizeConversationText(match.line)}`)
       }
@@ -151,7 +150,7 @@ function safeReadLine(value: unknown): value is SafeReadLine {
 
 function readDetails(value: Readonly<Record<string, unknown>>): string | undefined {
   if (!Array.isArray(value.lines) || typeof value.path !== 'string') return undefined
-  const lines: unknown[] = value.lines.slice(0, MAX_PRESENTATION_ITEMS)
+  const lines: unknown[] = value.lines
   if (!lines.every(line => safeReadLine(line))) return undefined
   const safeLines = lines.filter(line => safeReadLine(line))
   const total = numberField(value, 'totalLines')
@@ -170,7 +169,7 @@ function webDetails(value: Readonly<Record<string, unknown>>): string | undefine
   }
   if (value.kind !== 'search' || !Array.isArray(value.sources)) return undefined
   const lines = [stringField(value, 'answer')].filter((line): line is string => line !== undefined)
-  for (const source of value.sources.slice(0, MAX_PRESENTATION_ITEMS)) {
+  for (const source of value.sources) {
     if (!record(source) || typeof source.url !== 'string') return undefined
     const title = stringField(source, 'title')
     lines.push(`${title === undefined ? '' : `${title} · `}${sanitizeConversationText(source.url)}`)
@@ -238,7 +237,7 @@ export function projectToolPresentation(input: ToolPresentationInput): ToolPrese
   const details = [...call.details, ...result.details]
   if (paths.length > 0) details.push(`produced files${LINE_SEPARATOR}${paths.join(LINE_SEPARATOR)}`)
   if (details.length === 0 && rawFallback !== '') details.push(rawFallback)
-  const safeDetails = bounded(details.filter(detail => detail !== '').join(LINE_SEPARATOR) || EMPTY_DETAILS)
+  const safeDetails = sanitizeConversationText(details.filter(detail => detail !== '').join(LINE_SEPARATOR) || EMPTY_DETAILS)
   return Object.freeze({
     callId: sanitizeConversationText(input.callId),
     children: Object.freeze([...(input.children ?? [])]),
@@ -246,7 +245,7 @@ export function projectToolPresentation(input: ToolPresentationInput): ToolPrese
     name: sanitizeConversationText(input.name || UNKNOWN_TITLE),
     paths,
     state,
-    summary: bounded(summaryOf(title, input, state)),
-    title: bounded(title),
+    summary: boundedSummary(summaryOf(title, input, state)),
+    title: boundedSummary(title),
   })
 }
