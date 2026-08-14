@@ -1,5 +1,6 @@
 import {
   BoxRenderable,
+  MouseButton,
   ScrollBoxRenderable,
   TextAttributes,
   TextRenderable,
@@ -11,10 +12,14 @@ import type {
   ConversationLine,
   ConversationSnapshotView,
 } from '../../features/conversation/model.js'
-import { createComposer, createConversationActions } from './composer.js'
+import { imageFallback } from '../../features/attachments/presentation.js'
+import { createComposer, createConversationActions, createConversationInput } from './composer.js'
 
 const HEADER_HEIGHT = 1
 const STATUS_HEIGHT = 1
+const ATTACHMENTS_HEIGHT = 1
+const ATTACHMENT_PADDING = 1
+const BUSY_COPY = 'Working…'
 const CHAT_LINE_PREFIX: Readonly<Record<ConversationLine['kind'], string>> = Object.freeze({
   assistant: 'AI',
   command: 'CMD',
@@ -78,6 +83,41 @@ function createTranscript(
   return transcript
 }
 
+function createAttachments(
+  renderer: CliRenderer,
+  theme: TuiTheme,
+  controller: ConversationController,
+  snapshot: ConversationSnapshotView,
+): BoxRenderable {
+  const attachments = new BoxRenderable(renderer, {
+    id: 'conversation-attachments',
+    width: '100%',
+    height: ATTACHMENTS_HEIGHT,
+    flexDirection: 'row',
+  })
+  snapshot.attachments.forEach((attachment, index) => {
+    const content = `[×]${imageFallback(attachment)}`
+    attachments.add(new TextRenderable(renderer, {
+      id: `conversation-attachment-${index}`,
+      content,
+      width: content.length + ATTACHMENT_PADDING,
+      fg: theme.colors.focus,
+      attributes: TextAttributes.DIM,
+      truncate: true,
+      selectable: false,
+      onMouseUp(event) {
+        // OpenTUI publishes equivalent mouse-button values through separate enum declarations.
+        // oxlint-disable-next-line typescript/no-unsafe-enum-comparison
+        if (event.button !== MouseButton.LEFT) return
+        event.preventDefault()
+        event.stopPropagation()
+        controller.removeAttachment(index)
+      },
+    }))
+  })
+  return attachments
+}
+
 function createFrame(
   renderer: CliRenderer,
   theme: TuiTheme,
@@ -100,6 +140,7 @@ function createFrame(
     selectable: false,
   }))
   frame.add(createTranscript(renderer, theme, snapshot))
+  if (snapshot.attachments.length > 0) frame.add(createAttachments(renderer, theme, controller, snapshot))
   if (snapshot.suggestions.length > 0) {
     frame.add(new TextRenderable(renderer, {
       content: snapshot.suggestions.map(name => `/${name}`).join('  '),
@@ -110,7 +151,7 @@ function createFrame(
     }))
   }
   frame.add(new TextRenderable(renderer, {
-    content: snapshot.error === undefined ? snapshot.status : `Error: ${snapshot.error}`,
+    content: snapshot.error === undefined ? snapshot.busy ? BUSY_COPY : snapshot.status : `Error: ${snapshot.error}`,
     height: STATUS_HEIGHT,
     fg: snapshot.error === undefined
       ? snapshot.running ? theme.colors.warning : theme.colors.muted
@@ -120,6 +161,8 @@ function createFrame(
   }))
   frame.add(createComposer(renderer, theme, controller, snapshot))
   frame.add(createConversationActions(renderer, theme, controller, snapshot))
+  const input = createConversationInput(renderer, theme, controller, snapshot)
+  if (input !== undefined) frame.add(input)
   return frame
 }
 

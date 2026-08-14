@@ -1,104 +1,85 @@
-import type { ConversationSnapshot } from '@deepseek-ai/dsh-client-runtime/client'
+import type { PromptContentPart, SessionId } from '@deepseek-ai/dsh-api-remotes/client'
 import type {
   ConversationController,
   ConversationControllerOptions,
-  ConversationPhase,
   ConversationSendMode,
   ConversationSessionBinding,
   ConversationSnapshotView,
 } from './contracts.js'
+import { ConversationMediaState } from './media.js'
+import { sanitizeConversationText } from './projection.js'
 import {
-  projectConversationLines,
-  projectQueuedLines,
-  sanitizeConversationText,
-} from './projection.js'
+  conversationError,
+  conversationPhase,
+  conversationStatus,
+  visibleConversationLines,
+} from './snapshot.js'
 import { sanitizeText } from '../sessions/projection.js'
 
 export type * from './contracts.js'
 
 const EMPTY_TITLE = 'NO SESSION'
-const EMPTY_STATUS = 'Open Sessions with gs or mouse.'
 const COMMAND_PREFIX = '/'
 const DEFAULT_SEND_MODE: ConversationSendMode = 'queue'
 const SCROLL_STEP = 12
-const MAX_VISIBLE_LINES = 240
 const COMPLETION_SUFFIX = ' '
 const COMPLETION_LIMIT = 8
 const WHITESPACE_PATTERN = /\s/u
 
-function phaseOf(snapshot: ConversationSnapshot | undefined): ConversationPhase {
-  if (snapshot === undefined) return 'empty'
-  switch (snapshot.openState) {
-    case 'cold':
-    case 'loading': return 'loading'
-    case 'error': return 'error'
-    case 'open': return 'ready'
-    default: {
-      const exhaustive: never = snapshot.openState
-      throw new Error(`unhandled conversation open state: ${String(exhaustive)}`)
-    }
-  }
-}
-
-function statusOf(snapshot: ConversationSnapshot | undefined): string {
-  if (snapshot === undefined) return EMPTY_STATUS
-  if (snapshot.openState === 'loading' || snapshot.openState === 'cold') return 'Loading history…'
-  if (snapshot.openState === 'error') return 'History unavailable.'
-  if (snapshot.removed) return 'Session removed · read only'
-  if (snapshot.pending.length > 0) return `${snapshot.pending.length} interaction${snapshot.pending.length === 1 ? '' : 's'} waiting`
-  if (snapshot.queue.length > 0) return `${snapshot.queue.length} queued · Ctrl+Enter steers`
-  if (snapshot.running) return 'Running · Ctrl+X stop · Ctrl+Enter steer'
-  if (snapshot.loadingOlder) return 'Loading older history…'
-  if (snapshot.hasMore) return 'Older history available · PageUp'
-  return 'Ready'
-}
-
-function snapshotError(snapshot: ConversationSnapshot | undefined): string | undefined {
-  if (snapshot === undefined) return undefined
-  if (snapshot.openError !== null) return sanitizeText(snapshot.openError.message)
-  if (snapshot.promptError !== null) return sanitizeText(snapshot.promptError.error.message)
-  if (snapshot.lastAgentError !== null) return sanitizeText(snapshot.lastAgentError)
-  return undefined
-}
-
-function visibleLines(snapshot: ConversationSnapshot, offset: number) {
-  const durable = snapshot.views.get('tui')?.lines ?? projectConversationLines({
-    nodes: snapshot.nodes,
-    partial: snapshot.partial,
-    runningCalls: snapshot.runningCalls,
-  })
-  const lines = [...durable, ...projectQueuedLines(snapshot.queue)]
-  const end = Math.max(0, lines.length - offset)
-  const start = Math.max(0, end - MAX_VISIBLE_LINES)
-  return Object.freeze(lines.slice(start, end))
-}
-
 class ConversationControllerService implements ConversationController {
   private readonly completion: ConversationControllerOptions['completion']
   private readonly listeners = new Set<() => void>()
+  private readonly mediaState: ConversationMediaState
   private readonly sessions: ConversationControllerOptions['sessions']
   private readonly resources: Array<() => void>
   private readonly drafts = new Map<string, string>()
   private binding: ConversationSessionBinding | undefined
   private bindingDispose: (() => void) | undefined
+  private boundSessionId: SessionId | undefined
   private completionRevision = 0
   private disposed = false
   private error: string | undefined
+  private notice: string | undefined
   private offset = 0
   private publishPending = false
+  private sending = false
   private suggestions: readonly string[] = []
 
   constructor(options: ConversationControllerOptions) {
     this.completion = options.completion
     this.sessions = options.sessions
+    this.mediaState = new ConversationMediaState({
+      blocked: () => this.sending,
+      currentSession: () => this.sessions.list.getSnapshot().current,
+      media: options.media,
+      publish: () => { this.schedulePublish() },
+      setError: error => { this.error = error },
+      setNotice: notice => { this.notice = notice },
+    })
     this.resources = [options.sessions.list.subscribe(() => { this.rebind() })]
     this.rebind(false)
+  }
+
+  beginAttachment(): void {
+    this.mediaState.beginAttachment()
+  }
+
+  beginExport(): void {
+    this.mediaState.beginExport()
   }
 
   async cancel(): Promise<void> {
     const binding = this.binding
     if (binding === undefined) return
     await this.runAction(() => binding.cancel())
+  }
+
+  cancelInput(): void {
+    this.mediaState.cancelInput()
+  }
+
+  clearAttachments(): void {
+    this.mediaState.clearAttachments()
   }
 
   async complete(): Promise<void> {
@@ -122,6 +103,7 @@ class ConversationControllerService implements ConversationController {
 
   dispose(): void {
     this.disposed = true
+    this.mediaState.dispose()
     this.bindingDispose?.()
     this.bindingDispose = undefined
     for (const dispose of this.resources.splice(0).toReversed()) dispose()
@@ -132,20 +114,23 @@ class ConversationControllerService implements ConversationController {
     const list = this.sessions.list.getSnapshot()
     const sessionId = list.current
     const snapshot = this.binding?.getSnapshot()
-    const phase = phaseOf(snapshot)
+    const phase = conversationPhase(snapshot)
     const title = sessionId === undefined
       ? EMPTY_TITLE
       : sanitizeText(list.byId[sessionId]?.displayTitle ?? String(sessionId))
     return Object.freeze({
+      attachments: this.mediaState.views(sessionId),
+      busy: this.mediaState.busy || this.sending,
       draft: this.currentDraft(),
-      error: this.error ?? snapshotError(snapshot),
+      error: this.error ?? conversationError(snapshot),
       hasMore: snapshot?.hasMore ?? false,
-      lines: snapshot === undefined ? Object.freeze([]) : visibleLines(snapshot, this.offset),
+      input: this.mediaState.input(),
+      lines: snapshot === undefined ? Object.freeze([]) : visibleConversationLines(snapshot, this.offset),
       loadingOlder: snapshot?.loadingOlder ?? false,
       phase,
       running: snapshot?.running ?? false,
       sessionId,
-      status: statusOf(snapshot),
+      status: this.notice ?? conversationStatus(snapshot),
       suggestions: this.suggestions,
       title,
     })
@@ -155,6 +140,10 @@ class ConversationControllerService implements ConversationController {
     const binding = this.binding
     if (binding === undefined) return
     await this.runAction(() => binding.loadOlder())
+  }
+
+  removeAttachment(index: number): void {
+    this.mediaState.removeAttachment(index)
   }
 
   scroll(delta: number): void {
@@ -173,24 +162,36 @@ class ConversationControllerService implements ConversationController {
   }
 
   async sendDraft(mode: ConversationSendMode = DEFAULT_SEND_MODE): Promise<boolean> {
+    if (this.sending) return false
     const binding = this.binding
-    if (binding === undefined) return false
+    const sessionId = this.sessions.list.getSnapshot().current
+    if (binding === undefined || sessionId === undefined) return false
     const submittedDraft = this.currentDraft()
     const normalized = sanitizeConversationText(submittedDraft).trim()
-    if (normalized === '') return false
+    const submittedImages = [...this.mediaState.staged(sessionId)]
+    if (normalized === '' && submittedImages.length === 0) return false
     this.setDraft('')
+    this.notice = undefined
     this.suggestions = []
+    this.sending = true
     this.schedulePublish()
     const sent = await this.runAction(async () => {
-      if (!normalized.startsWith(COMMAND_PREFIX)) {
-        await binding.prompt(normalized, mode)
-        return
+      if (submittedImages.length === 0 && normalized.startsWith(COMMAND_PREFIX)) {
+        const matched = await binding.command(normalized)
+        if (matched) return
       }
-      const matched = await binding.command(normalized)
-      if (!matched) await binding.prompt(normalized, mode)
+      const content: PromptContentPart[] = []
+      if (normalized !== '') content.push({ type: 'text', text: normalized })
+      content.push(...submittedImages.map(image => image.content))
+      await binding.prompt(content, mode)
     })
-    if (!sent && this.currentDraft() === '') this.setDraft(submittedDraft)
-    if (sent) this.offset = 0
+    this.sending = false
+    const sessionKey = String(sessionId)
+    if (!sent && (this.drafts.get(sessionKey) ?? '') === '') this.drafts.set(sessionKey, submittedDraft)
+    if (sent) {
+      this.offset = 0
+      this.mediaState.removeSent(sessionId, submittedImages)
+    }
     this.schedulePublish()
     return sent
   }
@@ -199,8 +200,17 @@ class ConversationControllerService implements ConversationController {
     const current = this.sessions.list.getSnapshot().current
     if (current === undefined) return
     this.drafts.set(String(current), text)
+    this.notice = undefined
     this.suggestions = []
     this.completionRevision++
+  }
+
+  setInput(value: string): void {
+    this.mediaState.setInput(value)
+  }
+
+  submitInput(): Promise<boolean> {
+    return this.mediaState.submitInput()
   }
 
   subscribe(listener: () => void): () => void {
@@ -224,11 +234,18 @@ class ConversationControllerService implements ConversationController {
   }
 
   private rebind(publish = true): void {
-    this.bindingDispose?.()
     const current = this.sessions.list.getSnapshot().current
+    if (current === this.boundSessionId) {
+      if (publish) this.schedulePublish()
+      return
+    }
+    this.boundSessionId = current
+    this.mediaState.resetTransient()
+    this.bindingDispose?.()
     this.binding = current === undefined ? undefined : this.sessions.binding(current)
     this.bindingDispose = this.binding?.subscribe(() => { this.schedulePublish() })
     this.error = undefined
+    this.notice = undefined
     this.offset = 0
     this.suggestions = []
     this.completionRevision++

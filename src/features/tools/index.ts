@@ -45,6 +45,7 @@ function sessionBinding(ctx: Context, id: SessionId): ToolsSessionBinding | unde
 
 function controllerOptions(ctx: Context): ToolsControllerOptions {
   return {
+    openPath: path => ctx.tuiClient.workspaces.openPath(path),
     sessions: {
       list: ctx.tuiClient.sessions.list,
       binding: id => sessionBinding(ctx, id),
@@ -61,6 +62,7 @@ function commandLayer(controller: ToolsController, active: () => boolean): TuiCo
       { name: 'tools.next', description: 'Select next tool call', run: () => { controller.move(1) } },
       { name: 'tools.previous', description: 'Select previous tool call', run: () => { controller.move(-1) } },
       { name: 'tools.toggle', description: 'Fold selected nested tool call', run: () => { controller.toggleSelected() } },
+      { name: 'tools.open', description: 'Confirm external open for selected produced file', run: async () => { await controller.openSelected() } },
     ],
     bindings: [
       { key: 'j', command: 'tools.next' },
@@ -68,6 +70,7 @@ function commandLayer(controller: ToolsController, active: () => boolean): TuiCo
       { key: 'k', command: 'tools.previous' },
       { key: 'up', command: 'tools.previous' },
       { key: 'return', command: 'tools.toggle' },
+      { key: 'o', command: 'tools.open' },
     ],
   }
 }

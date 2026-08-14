@@ -10,6 +10,7 @@ import {
   type AssistantState,
 } from '../../src/client/conversation/messages.js'
 import {
+  contentText,
   tuiConversationViewDefinition,
   type TuiConversationViewNode,
 } from '../../src/client/conversation/shared.js'
@@ -80,6 +81,26 @@ function viewNode(
     },
   }
 }
+
+test('renders image metadata without embedding binary data or local paths', () => {
+  const text = contentText([{
+    type: 'image',
+    attachment: {
+      attachmentId: 'sha256:fixture',
+      mediaType: 'image/png',
+      bytes: 4_096,
+      width: 800,
+      height: 600,
+      name: 'screen.png',
+      data: 'never-render',
+      path: '/private/screen.png',
+    },
+  }])
+
+  assert.equal(text, '[image screen.png · 800×600 · 4 KiB · image/png]')
+  assert.equal(text.includes('never-render'), false)
+  assert.equal(text.includes('/private'), false)
+})
 
 test('projects assistant chunks at animation-frame cadence', () => {
   const startEvent: Event = {

@@ -22,6 +22,7 @@ const NATIVE_RENDERER_AVAILABLE = process.versions.bun !== undefined
 const WIDTH = 72
 const HEIGHT = 18
 const SETTLE_DELAY_MS = 0
+const PRODUCED_PATH = '/tmp/native-output.txt'
 // Static fixture identity crosses only the Harness brand boundary.
 // oxlint-disable-next-line typescript/no-unsafe-type-assertion
 const SESSION_ID = 'session-one' as SessionId
@@ -52,6 +53,24 @@ function source<T>(initial: T): MutableSource<T> {
 
 function settle(): Promise<void> {
   return new Promise(resolve => { setTimeout(resolve, SETTLE_DELAY_MS) })
+}
+
+async function openProducedPath(
+  harness: Awaited<ReturnType<typeof createTestRenderer>>,
+  view: ReturnType<typeof createToolsView>,
+  opened: readonly string[],
+): Promise<void> {
+  const firstOpen = view.findDescendantById('tools-open')
+  assert.ok(firstOpen)
+  await harness.mockMouse.click(firstOpen.screenX, firstOpen.screenY)
+  await settle()
+  await harness.flush()
+  assert.deepEqual(opened, [])
+  const confirmedOpen = view.findDescendantById('tools-open')
+  assert.ok(confirmedOpen)
+  await harness.mockMouse.click(confirmedOpen.screenX, confirmedOpen.screenY)
+  await settle()
+  await harness.flush()
 }
 
 function conversation(overrides: Partial<ConversationSnapshot> = {}): ConversationSnapshot {
@@ -85,20 +104,38 @@ test.skipIf(!NATIVE_RENDERER_AVAILABLE)('navigates nested tool inspector with mo
   const harness = await createTestRenderer({ width: WIDTH, height: HEIGHT, bufferedOutput: 'memory' })
   const child = projectToolPresentation({ args: '{}', callId: 'child', isError: false, name: 'read', result: 'source' })
   const root = {
-    ...projectToolPresentation({ args: '{}', callId: 'root', isError: false, name: 'run_code' }),
+    ...projectToolPresentation({
+      args: '{}',
+      callId: 'root',
+      callView: {
+        card: 'diff',
+        title: 'Write output',
+        diffs: [{ path: PRODUCED_PATH, oldText: null, newText: 'output' }],
+        locations: [{ path: PRODUCED_PATH }],
+      },
+      isError: false,
+      name: 'edit',
+      result: 'updated',
+    }),
     children: [child],
   }
   const views: ConversationViewSnapshotStore = { get: () => ({ lines: [], tools: [root], workflows: [] }) }
   const binding = source(conversation({ views }))
   const list = source({ current: SESSION_ID, byId: { [SESSION_ID]: { displayTitle: 'Native tools' } } })
-  const controller = createToolsController({ sessions: { list, binding: () => binding } })
+  const opened: string[] = []
+  const controller = createToolsController({
+    openPath: (path) => { opened.push(path); return Promise.resolve() },
+    sessions: { list, binding: () => binding },
+  })
   const view = createToolsView(harness.renderer, createTuiTheme({ color: true }), controller)
   harness.renderer.root.add(view)
 
   try {
     await harness.flush()
     assert.match(harness.captureCharFrame(), /Native tools/u)
-    assert.match(harness.captureCharFrame(), /run_code/u)
+    assert.match(harness.captureCharFrame(), /Write output/u)
+    await openProducedPath(harness, view, opened)
+    assert.deepEqual(opened, [PRODUCED_PATH])
     const childRow = view.findDescendantById('tool-row-child')
     assert.ok(childRow)
     await harness.mockMouse.click(childRow.screenX, childRow.screenY)

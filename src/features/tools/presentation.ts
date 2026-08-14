@@ -1,5 +1,7 @@
 import type { ToolPresentation, ToolPresentationInput, ToolPresentationState } from './contracts.js'
+import { imageFallback } from '../attachments/presentation.js'
 import { sanitizeConversationText } from '../conversation/projection.js'
+import { producedPaths } from '../deliverables/projection.js'
 
 const MAX_PRESENTATION_TEXT = 12_000
 const MAX_PRESENTATION_ITEMS = 80
@@ -52,7 +54,7 @@ function content(value: unknown): string {
     switch (block.type) {
       case 'text': return stringField(block, 'text') ?? ''
       case 'reasoning': return `thinking: ${stringField(block, 'text') ?? ''}`
-      case 'image': return '[image]'
+      case 'image': return imageFallback(block.attachment)
       case 'tool-call': return `tool ${stringField(block, 'name') ?? UNKNOWN_TITLE}: ${stringField(block, 'arguments') ?? ''}`
       case 'tool-result': return content(block.content)
       default: return json(block)
@@ -231,15 +233,18 @@ export function projectToolPresentation(input: ToolPresentationInput): ToolPrese
   const result = resultProjection(input.resultView)
   const title = result.title ?? call.title ?? sanitizeConversationText(input.name || UNKNOWN_TITLE)
   const rawFallback = input.result ?? input.args
+  const state = stateOf(input)
+  const paths = producedPaths(input.callView, state !== 'ok')
   const details = [...call.details, ...result.details]
+  if (paths.length > 0) details.push(`produced files${LINE_SEPARATOR}${paths.join(LINE_SEPARATOR)}`)
   if (details.length === 0 && rawFallback !== '') details.push(rawFallback)
   const safeDetails = bounded(details.filter(detail => detail !== '').join(LINE_SEPARATOR) || EMPTY_DETAILS)
-  const state = stateOf(input)
   return Object.freeze({
     callId: sanitizeConversationText(input.callId),
     children: Object.freeze([...(input.children ?? [])]),
     details: safeDetails,
     name: sanitizeConversationText(input.name || UNKNOWN_TITLE),
+    paths,
     state,
     summary: bounded(summaryOf(title, input, state)),
     title: bounded(title),

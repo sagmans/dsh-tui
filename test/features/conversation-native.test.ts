@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { test } from 'vitest'
 import { createTestRenderer } from '@opentui/core/testing'
-import type { MessageId, SessionId } from '@deepseek-ai/dsh-api-remotes/client'
+import type { MessageId, PromptContentPart, SessionId } from '@deepseek-ai/dsh-api-remotes/client'
 import type {
   ChatSnapshot,
   ConversationSnapshot,
@@ -20,6 +20,11 @@ const HEIGHT = 18
 const SEND_ID = 'conversation-send'
 const STOP_ID = 'conversation-stop'
 const OLDER_ID = 'conversation-older'
+const ATTACH_ID = 'conversation-attach'
+const EXPORT_ID = 'conversation-export'
+const ATTACHMENT_ID = 'conversation-attachment-0'
+const IMAGE_PATH = '/tmp/private/native-screen.png'
+const EXPORT_PATH = '/tmp/native-session.zip'
 const ACTION_SETTLE_DELAY_MS = 0
 const STANDARD_FRAME = readFileSync(new URL('../frames/chat/standard-72x18.txt', import.meta.url), 'utf8')
 // Static fixture identities cross only Harness brand boundaries.
@@ -99,11 +104,26 @@ function snapshot(): ConversationSnapshot {
 test.skipIf(!NATIVE_RENDERER_AVAILABLE)('drives multiline composer and mouse actions in native renderer', async () => {
   const harness = await createTestRenderer({ width: WIDTH, height: HEIGHT, bufferedOutput: 'memory' })
   const session = source(snapshot())
-  const prompts: Array<{ readonly mode: ConversationSendMode; readonly text: string }> = []
+  const prompts: Array<{ readonly content: readonly PromptContentPart[]; readonly mode: ConversationSendMode }> = []
+  const loadedImages: string[] = []
+  const exportedSessions: Array<{ readonly path: string; readonly sessionId: SessionId }> = []
   let cancels = 0
   let historyLoads = 0
   const controller = createConversationController({
     completion: { complete: () => Promise.resolve(['compact', 'commit']) },
+    media: {
+      loadImage: (path) => {
+        loadedImages.push(path)
+        return Promise.resolve({
+          content: { type: 'image', data: 'AQID', mediaType: 'image/png', name: 'native-screen.png' },
+          view: { bytes: 3, mediaType: 'image/png', name: 'native-screen.png' },
+        })
+      },
+      exportSession: (sessionId, path) => {
+        exportedSessions.push({ path, sessionId })
+        return Promise.resolve()
+      },
+    },
     sessions: {
       list: source({ current: SESSION_ID, byId: { [SESSION_ID]: { displayTitle: 'Terminal conversation' } } }),
       binding: () => ({
@@ -111,7 +131,7 @@ test.skipIf(!NATIVE_RENDERER_AVAILABLE)('drives multiline composer and mouse act
         cancel: () => { cancels += 1; return Promise.resolve() },
         command: () => Promise.resolve(false),
         loadOlder: () => { historyLoads += 1; return Promise.resolve() },
-        prompt: (text, mode) => { prompts.push({ text, mode }); return Promise.resolve() },
+        prompt: (content, mode) => { prompts.push({ content, mode }); return Promise.resolve() },
       }),
     },
   })
@@ -127,6 +147,35 @@ test.skipIf(!NATIVE_RENDERER_AVAILABLE)('drives multiline composer and mouse act
     assert.match(frame, /Working/u)
     assert.match(frame, /queued: Review result/u)
 
+    const attach = view.findDescendantById(ATTACH_ID)
+    assert.ok(attach)
+    await harness.mockMouse.click(attach.screenX, attach.screenY)
+    await harness.flush()
+    await harness.mockInput.typeText(IMAGE_PATH)
+    harness.mockInput.pressEnter()
+    await settleActions()
+    await harness.flush()
+    assert.deepEqual(loadedImages, [IMAGE_PATH])
+    const attachmentFrame = harness.captureCharFrame()
+    assert.match(attachmentFrame, /native-screen\.png/u)
+    assert.equal(attachmentFrame.includes(IMAGE_PATH), false)
+    assert.equal(attachmentFrame.includes('AQID'), false)
+    const attachment = view.findDescendantById(ATTACHMENT_ID)
+    assert.ok(attachment)
+    await harness.mockMouse.click(attachment.screenX, attachment.screenY)
+    await harness.flush()
+    assert.deepEqual(controller.getSnapshot().attachments, [])
+
+    const exportAction = view.findDescendantById(EXPORT_ID)
+    assert.ok(exportAction)
+    await harness.mockMouse.click(exportAction.screenX, exportAction.screenY)
+    await harness.flush()
+    await harness.mockInput.typeText(EXPORT_PATH)
+    harness.mockInput.pressEnter()
+    await settleActions()
+    await harness.flush()
+    assert.deepEqual(exportedSessions, [{ path: EXPORT_PATH, sessionId: SESSION_ID }])
+
     await harness.mockInput.typeText('first line')
     harness.mockInput.pressEnter()
     await harness.mockInput.typeText('second line')
@@ -134,7 +183,7 @@ test.skipIf(!NATIVE_RENDERER_AVAILABLE)('drives multiline composer and mouse act
     await settleActions()
     assert.equal(controller.getSnapshot().draft, '')
     await harness.flush()
-    assert.deepEqual(prompts, [{ text: 'first line\nsecond line', mode: 'queue' }])
+    assert.deepEqual(prompts, [{ content: [{ type: 'text', text: 'first line\nsecond line' }], mode: 'queue' }])
 
     await harness.mockInput.typeText('/co')
     harness.mockInput.pressTab()
@@ -147,7 +196,7 @@ test.skipIf(!NATIVE_RENDERER_AVAILABLE)('drives multiline composer and mouse act
     assert.ok(send)
     await harness.mockMouse.click(send.screenX, send.screenY)
     await harness.flush()
-    assert.deepEqual(prompts.at(-1), { text: '/compact', mode: 'queue' })
+    assert.deepEqual(prompts.at(-1), { content: [{ type: 'text', text: '/compact' }], mode: 'queue' })
 
     const stop = view.findDescendantById(STOP_ID)
     assert.ok(stop)

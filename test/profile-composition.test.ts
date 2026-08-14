@@ -26,7 +26,6 @@ const EXPECTED_HOST_ROWS = new Map<string, string>([
   ['storage-json', '@deepseek-ai/dsh-storage-json'],
   ['storage-domain', '@deepseek-ai/dsh-storage-domain'],
   ['message-feedback', '@deepseek-ai/dsh-message-feedback'],
-  ['session-log-download', '@deepseek-ai/dsh-session-log-export'],
   ['workspace', '@deepseek-ai/dsh-workspace'],
   ['session-projection-cache', '@deepseek-ai/dsh-session-projection-cache'],
   ['session-stats', '@deepseek-ai/dsh-session-stats'],
@@ -54,6 +53,7 @@ const FORBIDDEN_IDS = [
   'connection',
   'cordis-client-runner',
   'ui-layout',
+  'session-log-download',
 ] as const
 
 interface Entry {

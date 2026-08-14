@@ -8,6 +8,7 @@ export interface ToolPresentation {
   readonly children: readonly ToolPresentation[]
   readonly details: string
   readonly name: string
+  readonly paths: readonly string[]
   readonly state: ToolPresentationState
   readonly summary: string
   readonly title: string
@@ -37,10 +38,12 @@ export interface ToolInspectorRow {
 }
 
 export interface ToolsSnapshotView {
+  readonly confirmationPath: string | undefined
   readonly details: string
   readonly phase: 'empty' | 'ready'
   readonly rows: readonly ToolInspectorRow[]
   readonly selectedCallId: string | undefined
+  readonly status: string
   readonly title: string
 }
 
@@ -58,6 +61,7 @@ export interface ToolsSessionsSource {
 }
 
 export interface ToolsControllerOptions {
+  readonly openPath?: (path: string) => Promise<void>
   readonly sessions: ToolsSessionsSource
 }
 
@@ -65,6 +69,7 @@ export interface ToolsController {
   dispose(): void
   getSnapshot(): ToolsSnapshotView
   move(delta: number): void
+  openSelected(): Promise<boolean>
   select(callId: string): void
   subscribe(listener: () => void): () => void
   toggleSelected(): void

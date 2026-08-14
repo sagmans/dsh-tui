@@ -1,4 +1,4 @@
-import type { SessionId } from '@deepseek-ai/dsh-api-remotes/client'
+import type { PromptContentPart, SessionId } from '@deepseek-ai/dsh-api-remotes/client'
 import type { ToolPresentation } from '../tools/contracts.js'
 import type {
   ConversationNode,
@@ -10,6 +10,30 @@ import type {
 export type ConversationPhase = 'empty' | 'error' | 'loading' | 'ready'
 export type ConversationLineKind = 'assistant' | 'command' | 'context' | 'error' | 'system' | 'tool' | 'user'
 export type ConversationSendMode = 'queue' | 'steer'
+export type ConversationInputKind = 'attachment' | 'export'
+
+export interface ConversationAttachmentView {
+  readonly bytes: number
+  readonly mediaType: Extract<PromptContentPart, { type: 'image' }>['mediaType']
+  readonly name: string
+}
+
+export interface ConversationLoadedImage {
+  readonly content: Extract<PromptContentPart, { type: 'image' }>
+  readonly view: ConversationAttachmentView
+}
+
+export interface ConversationInputView {
+  readonly kind: ConversationInputKind
+  readonly placeholder: string
+  readonly title: string
+  readonly value: string
+}
+
+export interface ConversationMediaSource {
+  exportSession(sessionId: SessionId, path: string, signal: AbortSignal): Promise<void>
+  loadImage(path: string, signal: AbortSignal): Promise<ConversationLoadedImage>
+}
 
 export interface ConversationLine {
   readonly key: string
@@ -46,10 +70,13 @@ declare module '@deepseek-ai/dsh-client-runtime/client' {
 }
 
 export interface ConversationSnapshotView {
+  readonly attachments: readonly ConversationAttachmentView[]
+  readonly busy: boolean
   readonly draft: string
   readonly error: string | undefined
   readonly hasMore: boolean
   readonly lines: readonly ConversationLine[]
+  readonly input: ConversationInputView | undefined
   readonly loadingOlder: boolean
   readonly phase: ConversationPhase
   readonly running: boolean
@@ -65,7 +92,7 @@ export interface ConversationSessionBinding {
   cancel(): Promise<void>
   command(line: string): Promise<boolean>
   loadOlder(): Promise<void>
-  prompt(text: string, mode: ConversationSendMode): Promise<void>
+  prompt(content: readonly PromptContentPart[], mode: ConversationSendMode): Promise<void>
 }
 
 export interface ConversationSessionsSource {
@@ -82,20 +109,28 @@ export interface ConversationCompletionSource {
 
 export interface ConversationControllerOptions {
   readonly completion?: ConversationCompletionSource
+  readonly media?: ConversationMediaSource
   readonly sessions: ConversationSessionsSource
 }
 
 export interface ConversationController {
+  beginAttachment(): void
+  beginExport(): void
   cancel(): Promise<void>
+  cancelInput(): void
+  clearAttachments(): void
   complete(): Promise<void>
   dispose(): void
   getSnapshot(): ConversationSnapshotView
   loadOlder(): Promise<void>
+  removeAttachment(index: number): void
   scroll(delta: number): void
   scrollOffset(): number
   send(text: string, mode?: ConversationSendMode): Promise<boolean>
   sendDraft(mode?: ConversationSendMode): Promise<boolean>
   setDraft(text: string): void
+  setInput(value: string): void
+  submitInput(): Promise<boolean>
   subscribe(listener: () => void): () => void
 }
 

@@ -100,6 +100,68 @@ test('maps structured terminal and malformed presentation intents safely', () =>
   assert.match(malformed.details, /file\.ts/u)
 })
 
+test('excludes tainted and failed paths from external open targets', () => {
+  const unsafePath = projectToolPresentation({
+    args: '{}',
+    callId: 'call-three',
+    callView: {
+      card: 'diff',
+      title: 'Unsafe output',
+      diffs: [{ path: 'safe.ts', oldText: null, newText: 'new' }],
+      locations: [{ path: `${ESCAPE_CHARACTER}]8;;https://unsafe.invalid\u0007safe.ts` }],
+    },
+    isError: false,
+    name: 'edit',
+    result: 'updated',
+  })
+  const failedPath = projectToolPresentation({
+    args: '{}',
+    callId: 'call-four',
+    callView: {
+      card: 'diff',
+      title: 'Failed output',
+      diffs: [{ path: 'failed.ts', oldText: null, newText: 'new' }],
+      locations: [{ path: 'failed.ts' }],
+    },
+    isError: true,
+    name: 'edit',
+    result: 'failed',
+  })
+  assert.deepEqual(unsafePath.paths, [])
+  assert.deepEqual(failedPath.paths, [])
+})
+
+test('projects produced paths and requires repeat activation before external open', async () => {
+  const edit = projectToolPresentation({
+    args: '{"path":"src/index.ts"}',
+    callId: 'edit-one',
+    callView: {
+      card: 'diff',
+      title: 'Edit source',
+      diffs: [{ path: 'src/index.ts', oldText: 'old', newText: 'new' }],
+      locations: [{ path: 'src/index.ts' }],
+    },
+    isError: false,
+    name: 'edit',
+    result: 'updated',
+  })
+  const binding = source(snapshot([edit]))
+  const list = source({ current: SESSION_ID, byId: { [SESSION_ID]: { displayTitle: 'Tool run' } } })
+  const opened: string[] = []
+  const controller = createToolsController({
+    openPath: (path) => { opened.push(path); return Promise.resolve() },
+    sessions: { list, binding: () => binding },
+  })
+
+  assert.deepEqual(edit.paths, ['src/index.ts'])
+  assert.match(edit.details, /produced files\nsrc\/index\.ts/u)
+  assert.equal(await controller.openSelected(), false)
+  assert.deepEqual(opened, [])
+  assert.match(controller.getSnapshot().status, /again to open externally/u)
+  assert.equal(await controller.openSelected(), true)
+  assert.deepEqual(opened, ['src/index.ts'])
+})
+
 test('projects nested tool rows and preserves selection across updates', () => {
   const child = projectToolPresentation({
     args: '{"path":"src/index.ts"}',

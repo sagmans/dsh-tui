@@ -1,11 +1,11 @@
 import type { ConversationNodeDefinition } from '@deepseek-ai/dsh-client-runtime/client'
 import type { ConversationLineKind } from '../../features/conversation/contracts.js'
+import { imageFallback } from '../../features/attachments/presentation.js'
 import {
   boundedJson,
   contentText,
   EMPTY_TEXT,
   FALLBACK_PRIORITY,
-  IMAGE_TEXT,
   MAIN_PRIORITY,
   numberField,
   record,
@@ -44,7 +44,7 @@ function assistantPart(block: unknown): AssistantPart {
       kind: 'tool',
       text: `${typeof block.name === 'string' ? block.name : 'unknown'}: ${typeof block.arguments === 'string' ? block.arguments : ''}`,
     }
-    case 'image': return { kind: 'other', text: IMAGE_TEXT }
+    case 'image': return { kind: 'other', text: imageFallback(block.attachment) }
     default: return { kind: 'other', text: boundedJson(block) }
   }
 }

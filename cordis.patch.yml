@@ -40,9 +40,6 @@
       config:
         maxNoteBytes: 8192
 
-    - id: session-log-download
-      name: '@deepseek-ai/dsh-session-log-export'
-
     - id: workspace
       name: '@deepseek-ai/dsh-workspace'
 
@@ -88,7 +85,7 @@
 
     - id: tui-conversation
       name: '@sagmans/dsh-tui/feature/conversation'
-      inject: [tuiKernel, tuiClient]
+      inject: [tuiKernel, tuiClient, apiProxy]
 
     - id: tui-tools
       name: '@sagmans/dsh-tui/feature/tools'

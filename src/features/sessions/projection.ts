@@ -23,6 +23,20 @@ const CONTROL_ONE_END = 31
 const CONTROL_TWO_START = 128
 const CONTROL_TWO_END = 159
 const BMP_END = 65_535
+const ARABIC_LETTER_MARK_CODE = 1_564
+const DIRECTIONAL_MARK_START = 8_206
+const DIRECTIONAL_MARK_END = 8_207
+const DIRECTIONAL_EMBEDDING_START = 8_234
+const DIRECTIONAL_EMBEDDING_END = 8_238
+const DIRECTIONAL_ISOLATE_START = 8_294
+const DIRECTIONAL_ISOLATE_END = 8_297
+
+function bidiFormatting(code: number): boolean {
+  return code === ARABIC_LETTER_MARK_CODE
+    || (code >= DIRECTIONAL_MARK_START && code <= DIRECTIONAL_MARK_END)
+    || (code >= DIRECTIONAL_EMBEDDING_START && code <= DIRECTIONAL_EMBEDDING_END)
+    || (code >= DIRECTIONAL_ISOLATE_START && code <= DIRECTIONAL_ISOLATE_END)
+}
 
 function skipCsi(value: string, start: number): number {
   let index = start
@@ -57,7 +71,7 @@ export function sanitizeText(value: string): string {
     }
     const control = code <= CONTROL_ONE_END || code === DELETE_CODE
       || (code >= CONTROL_TWO_START && code <= CONTROL_TWO_END)
-    if (!control) sanitized += String.fromCodePoint(code)
+    if (!control && !bidiFormatting(code)) sanitized += String.fromCodePoint(code)
     if (code > BMP_END) index += 1
   }
   return sanitized

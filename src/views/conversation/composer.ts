@@ -1,5 +1,7 @@
 import {
   BoxRenderable,
+  InputRenderable,
+  InputRenderableEvents,
   MouseButton,
   TextareaRenderable,
   TextAttributes,
@@ -15,21 +17,35 @@ import type {
 
 const COMPOSER_HEIGHT = 4
 const ACTION_HEIGHT = 1
+const INPUT_HEIGHT = 5
+const INPUT_WIDTH = '86%'
+const INPUT_LEFT = '7%'
+const INPUT_TOP = '20%'
+const OVERLAY_Z_INDEX = 200
 const ESCAPE_KEY = 'escape'
 const PAGE_UP_KEY = 'pageup'
 const PAGE_DOWN_KEY = 'pagedown'
 const RETURN_KEY = 'return'
 const TAB_KEY = 'tab'
 const CANCEL_KEY = 'x'
-const COMPOSER_HINT = 'Meta+Enter queue · Ctrl+Enter steer · Enter newline · Tab complete · text-only attachments'
+const ATTACH_KEY = 'o'
+const EXPORT_KEY = 'e'
+const DELETE_KEY = 'delete'
+const COMPOSER_HINT = 'M+Enter queue · C+Enter steer · C+O image · C+E export · C+Del clear'
 const SEND_ACTION = ' SEND '
 const STEER_ACTION = ' STEER '
 const STOP_ACTION = ' STOP '
 const OLDER_ACTION = ' OLDER '
+const ATTACH_ACTION = ' ATTACH '
+const EXPORT_ACTION = ' EXPORT '
+const CLEAR_ACTION = ' CLEAR '
 const SEND_ACTION_ID = 'conversation-send'
 const STEER_ACTION_ID = 'conversation-steer'
 const STOP_ACTION_ID = 'conversation-stop'
 const OLDER_ACTION_ID = 'conversation-older'
+const ATTACH_ACTION_ID = 'conversation-attach'
+const EXPORT_ACTION_ID = 'conversation-export'
+const CLEAR_ACTION_ID = 'conversation-clear-attachments'
 
 function submit(
   editor: TextareaRenderable,
@@ -39,6 +55,17 @@ function submit(
   const sending = controller.sendDraft(mode)
   editor.setText('')
   void sending
+}
+
+function handleMediaKey(key: KeyEvent, controller: ConversationController): boolean {
+  if (!key.ctrl) return false
+  if (key.name === ATTACH_KEY) controller.beginAttachment()
+  else if (key.name === EXPORT_KEY) controller.beginExport()
+  else if (key.name === DELETE_KEY) controller.clearAttachments()
+  else return false
+  key.preventDefault()
+  key.stopPropagation()
+  return true
 }
 
 function handleKey(
@@ -58,6 +85,7 @@ function handleKey(
     submit(editor, controller, 'steer')
     return
   }
+  if (handleMediaKey(key, controller)) return
   if (key.name === TAB_KEY) {
     key.preventDefault()
     key.stopPropagation()
@@ -106,6 +134,55 @@ function createEditor(
   })
   editor.onSubmit = () => { submit(editor, controller, 'queue') }
   return editor
+}
+
+export function createConversationInput(
+  renderer: CliRenderer,
+  theme: TuiTheme,
+  controller: ConversationController,
+  snapshot: ConversationSnapshotView,
+): BoxRenderable | undefined {
+  const state = snapshot.input
+  if (state === undefined) return undefined
+  const overlay = new BoxRenderable(renderer, {
+    id: 'conversation-path-overlay',
+    title: state.title,
+    position: 'absolute',
+    width: INPUT_WIDTH,
+    height: INPUT_HEIGHT,
+    left: INPUT_LEFT,
+    top: INPUT_TOP,
+    zIndex: OVERLAY_Z_INDEX,
+    border: true,
+    borderStyle: 'rounded',
+    borderColor: theme.colors.accent,
+    backgroundColor: theme.colors.background,
+    paddingX: 1,
+    paddingY: 1,
+  })
+  const input = new InputRenderable(renderer, {
+    id: 'conversation-path-input',
+    value: state.value,
+    placeholder: state.placeholder,
+    textColor: theme.colors.text,
+    cursorColor: theme.colors.focus,
+    focusedTextColor: theme.colors.text,
+    focusedBackgroundColor: theme.colors.background,
+    onContentChange() { controller.setInput(input.plainText) },
+    onKeyDown(key) {
+      if (key.name !== ESCAPE_KEY) return
+      key.preventDefault()
+      key.stopPropagation()
+      controller.cancelInput()
+    },
+  })
+  input.on(InputRenderableEvents.ENTER, (value: string) => {
+    controller.setInput(value)
+    void controller.submitInput()
+  })
+  overlay.add(input)
+  queueMicrotask(() => { if (!input.isDestroyed) input.focus() })
+  return overlay
 }
 
 export function createComposer(
@@ -181,6 +258,15 @@ export function createConversationActions(
   }))
   actions.add(createAction(renderer, theme, OLDER_ACTION_ID, OLDER_ACTION, snapshot.hasMore, () => {
     void controller.loadOlder()
+  }))
+  actions.add(createAction(renderer, theme, ATTACH_ACTION_ID, ATTACH_ACTION, snapshot.sessionId !== undefined && !snapshot.busy, () => {
+    controller.beginAttachment()
+  }))
+  actions.add(createAction(renderer, theme, EXPORT_ACTION_ID, EXPORT_ACTION, snapshot.sessionId !== undefined && !snapshot.busy, () => {
+    controller.beginExport()
+  }))
+  actions.add(createAction(renderer, theme, CLEAR_ACTION_ID, CLEAR_ACTION, snapshot.attachments.length > 0, () => {
+    controller.clearAttachments()
   }))
   actions.add(new TextRenderable(renderer, {
     content: COMPOSER_HINT,

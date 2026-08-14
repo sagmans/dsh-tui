@@ -14,6 +14,16 @@ export type * from './contracts.js'
 const EMPTY_TITLE = 'NO TOOL CALLS'
 const MAX_TOOL_DEPTH = 64
 const MAX_TOOL_ROWS = 1_000
+const CONFIRM_OPEN_COPY = 'Press o again to open externally.'
+const NO_PATH_COPY = 'Selected tool has no produced file.'
+const OPEN_UNAVAILABLE_COPY = 'External open unavailable.'
+const OPENED_PREFIX = 'Opened externally'
+const OPEN_FAILED_PREFIX = 'External open failed'
+const STATUS_SEPARATOR = ': '
+
+function errorText(error: unknown): string {
+  return sanitizeText(error instanceof Error ? error.message : String(error))
+}
 
 interface FlattenedTool {
   readonly depth: number
@@ -43,15 +53,20 @@ function flattenTools(
 class ToolsControllerService implements ToolsController {
   private readonly collapsed = new Set<string>()
   private readonly listeners = new Set<() => void>()
+  private readonly openPath: ToolsControllerOptions['openPath']
   private readonly sessions: ToolsControllerOptions['sessions']
   private readonly resources: Array<() => void>
   private binding: ToolsSessionBinding | undefined
   private bindingDispose: (() => void) | undefined
+  private confirmationPath: string | undefined
   private disposed = false
+  private opening = false
   private publishPending = false
   private selectedCallId: string | undefined
+  private status = ''
 
   constructor(options: ToolsControllerOptions) {
+    this.openPath = options.openPath
     this.sessions = options.sessions
     this.resources = [options.sessions.list.subscribe(() => { this.rebind() })]
     this.rebind(false)
@@ -84,11 +99,17 @@ class ToolsControllerService implements ToolsController {
     const title = current === undefined
       ? EMPTY_TITLE
       : sanitizeText(list.byId[current]?.displayTitle ?? String(current))
+    if (this.confirmationPath !== undefined
+      && (selected === undefined || !selected.presentation.paths.includes(this.confirmationPath))) {
+      this.clearConfirmation()
+    }
     return Object.freeze({
+      confirmationPath: this.confirmationPath,
       details: selected?.presentation.details ?? '',
       phase: rows.length === 0 ? 'empty' : 'ready',
       rows: Object.freeze(rows),
       selectedCallId: selected?.presentation.callId,
+      status: this.status,
       title,
     })
   }
@@ -103,13 +124,54 @@ class ToolsControllerService implements ToolsController {
     const next = rows[(start + direction + rows.length) % rows.length]
     if (next === undefined) return
     this.selectedCallId = next.presentation.callId
+    this.clearConfirmation()
     this.schedulePublish()
+  }
+
+  async openSelected(): Promise<boolean> {
+    if (this.opening) return false
+    const rows = flattenTools(toolsOf(this.binding?.getSnapshot()), this.collapsed)
+    const selected = rows.find(row => row.presentation.callId === this.selectedCallId) ?? rows[0]
+    this.selectedCallId = selected?.presentation.callId
+    const path = selected?.presentation.paths[0]
+    if (path === undefined) {
+      this.status = NO_PATH_COPY
+      this.clearConfirmation(false)
+      this.schedulePublish()
+      return false
+    }
+    if (this.openPath === undefined) {
+      this.status = OPEN_UNAVAILABLE_COPY
+      this.clearConfirmation(false)
+      this.schedulePublish()
+      return false
+    }
+    if (this.confirmationPath !== path) {
+      this.confirmationPath = path
+      this.status = `${CONFIRM_OPEN_COPY}${STATUS_SEPARATOR}${path}`
+      this.schedulePublish()
+      return false
+    }
+    this.opening = true
+    this.clearConfirmation(false)
+    try {
+      await this.openPath(path)
+      this.status = `${OPENED_PREFIX}${STATUS_SEPARATOR}${path}`
+      return true
+    } catch (error) {
+      this.status = `${OPEN_FAILED_PREFIX}${STATUS_SEPARATOR}${errorText(error)}`
+      return false
+    } finally {
+      this.opening = false
+      this.schedulePublish()
+    }
   }
 
   select(callId: string): void {
     const rows = flattenTools(toolsOf(this.binding?.getSnapshot()), this.collapsed)
     if (!rows.some(row => row.presentation.callId === callId)) return
     this.selectedCallId = callId
+    this.clearConfirmation()
     this.schedulePublish()
   }
 
@@ -124,7 +186,13 @@ class ToolsControllerService implements ToolsController {
     if (selected === undefined || selected.presentation.children.length === 0) return
     if (this.collapsed.has(selected.presentation.callId)) this.collapsed.delete(selected.presentation.callId)
     else this.collapsed.add(selected.presentation.callId)
+    this.clearConfirmation()
     this.schedulePublish()
+  }
+
+  private clearConfirmation(clearStatus = true): void {
+    this.confirmationPath = undefined
+    if (clearStatus) this.status = ''
   }
 
   private ensureSelection(rows: readonly FlattenedTool[]): FlattenedTool | undefined {
@@ -139,6 +207,7 @@ class ToolsControllerService implements ToolsController {
     this.binding = current === undefined ? undefined : this.sessions.binding(current)
     this.bindingDispose = this.binding?.subscribe(() => { this.schedulePublish() })
     this.selectedCallId = undefined
+    this.clearConfirmation()
     this.collapsed.clear()
     if (publish) this.schedulePublish()
   }

@@ -10,6 +10,7 @@ import type {
 import { createNavigationStore } from '../../src/kernel/navigation.js'
 import {
   createSessionsController,
+  sanitizeText,
   type SessionsControllerOptions,
 } from '../../src/features/sessions/model.js'
 
@@ -318,6 +319,14 @@ test('routes workspace and session reorder through shared runtime', async () => 
     id: FIRST_SESSION,
     before: undefined,
   })
+})
+
+test('preserves readable Unicode while removing terminal and bidi format controls', () => {
+  const bidiOverride = '\u202E'
+  const bidiIsolate = '\u2066'
+  const escape = '\u001B]8;;https://evil.invalid\u0007'
+
+  assert.equal(sanitizeText(`${escape}中文 👩🏽‍💻 e\u0301 ${bidiOverride}spoof${bidiIsolate}`), '中文 👩🏽‍💻 é spoof')
 })
 
 test('preserves cursor identity across live list updates and sanitizes terminal text', () => {

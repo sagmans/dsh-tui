@@ -19,6 +19,7 @@ const ROW_HEIGHT = 1
 const DETAIL_BORDER_HEIGHT = 7
 const TREE_INDENT = '  '
 const EMPTY_COPY = 'No tool calls in current history window.'
+const FOOTER_COPY = 'j/k or arrows move · Enter/click fold · [O] OPEN produced file · g c returns to chat'
 const TOOL_STATE_LABELS: Readonly<Record<ToolInspectorRow['state'], string>> = Object.freeze({
   error: 'ERR',
   ok: 'OK',
@@ -148,12 +149,21 @@ function createFrame(
   frame.add(createToolList(renderer, theme, controller, snapshot))
   frame.add(createDetails(renderer, theme, snapshot))
   frame.add(new TextRenderable(renderer, {
-    content: 'j/k or arrows move · Enter/click fold · g c returns to chat',
+    id: 'tools-open',
+    content: snapshot.status === '' ? FOOTER_COPY : snapshot.status,
     height: STATUS_HEIGHT,
-    fg: theme.colors.muted,
-    attributes: TextAttributes.DIM,
+    fg: snapshot.confirmationPath === undefined ? theme.colors.muted : theme.colors.warning,
+    attributes: snapshot.confirmationPath === undefined ? TextAttributes.DIM : TextAttributes.BOLD,
     truncate: true,
     selectable: false,
+    onMouseUp(event) {
+      // OpenTUI publishes equivalent mouse-button values through separate enum declarations.
+      // oxlint-disable-next-line typescript/no-unsafe-enum-comparison
+      if (event.button !== MouseButton.LEFT) return
+      event.preventDefault()
+      event.stopPropagation()
+      void controller.openSelected()
+    },
   }))
   return frame
 }

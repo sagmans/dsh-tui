@@ -14,10 +14,10 @@ import type {
   ConversationLineKind,
   ConversationProjectionInput,
 } from './contracts.js'
+import { imageFallback } from '../attachments/presentation.js'
 import { sanitizeText } from '../sessions/projection.js'
 
 const EMPTY_TEXT = '(empty)'
-const IMAGE_TEXT = '[image]'
 const UNKNOWN_TEXT = '[unsupported content]'
 const CONTEXT_PREFIX = 'context'
 const REASONING_PREFIX = 'thinking'
@@ -52,7 +52,7 @@ function contentText(blocks: readonly ContentBlock[]): string {
     switch (block.type) {
       case 'text': return block.text
       case 'reasoning': return `${REASONING_PREFIX}: ${block.text}`
-      case 'image': return IMAGE_TEXT
+      case 'image': return imageFallback(block.attachment)
       case 'tool-call': return `${TOOL_PREFIX} ${block.name}: ${block.arguments}`
       case 'tool-result': return contentText(block.content)
       default: return UNKNOWN_TEXT
@@ -67,7 +67,7 @@ function assistantText(blocks: readonly AssistantBlock[]): string {
     switch (block.kind) {
       case 'text': return block.text
       case 'reasoning': return `${REASONING_PREFIX}: ${block.text}`
-      case 'image': return IMAGE_TEXT
+      case 'image': return imageFallback(block.attachment)
       case 'tool-call': return `${TOOL_PREFIX} ${block.name}: ${block.argsRaw}`
       case 'other': return boundedJson(block.block)
       default: {

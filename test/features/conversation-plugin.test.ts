@@ -53,6 +53,7 @@ function fixture(control: Control): Context {
     remote: { commands: {} },
     api: { skills: {} },
   } as unknown as TuiClientFacade)
+  ctx.provide('apiProxy', { downloads: {} } as never)
   ctx.provide('tuiKernel', {
     ready: true,
     resources: {
@@ -90,6 +91,9 @@ test('registers chat contribution and disposes its controller with owner fiber',
     'conversation.older',
     'conversation.scroll-up',
     'conversation.scroll-down',
+    'conversation.attach',
+    'conversation.export',
+    'conversation.clear-attachments',
   ])
   control.renderRoute?.()
   assert.equal(control.controller, controller)

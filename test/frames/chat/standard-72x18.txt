@@ -15,4 +15,4 @@ YOU  queued: Review result
 │Message, /command, or /skill                                          │
 │                                                                      │
 └──────────────────────────────────────────────────────────────────────┘
- SEND  STEER  STOP  OLDER Meta+Enter queue · Ctrl+Enter steer · Enter ne
+ SEND  STEER  STOP  OLDER  ATTACH  EXPORT  CLEAR M+Enter queue · C+Enter

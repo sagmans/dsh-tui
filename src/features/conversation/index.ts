@@ -4,6 +4,8 @@ import type { SessionId } from '@deepseek-ai/dsh-api-remotes/client'
 import type { TuiCommandLayer } from '../../contracts/commands.js'
 import type { TuiTheme } from '../../contracts/theme.js'
 import { createConversationView } from '../../views/conversation/root.js'
+import { loadTerminalImage } from '../attachments/index.js'
+import { exportSessionArchive } from '../export/index.js'
 import {
   createConversationController,
   type ConversationController,
@@ -20,7 +22,7 @@ const COMMAND_COMPLETION_ERROR = 'command completion failed'
 const SKILL_COMPLETION_ERROR = 'skill completion failed'
 
 export const name = 'tui-conversation'
-export const inject: readonly string[] = ['tuiKernel', 'tuiClient']
+export const inject: readonly string[] = ['tuiKernel', 'tuiClient', 'apiProxy']
 
 export interface ConversationSeams {
   readonly createController: (options: ConversationControllerOptions) => ConversationController
@@ -59,8 +61,8 @@ function sessionBinding(ctx: Context, id: SessionId): ConversationSessionBinding
         return result.value.matched
       },
       loadOlder: () => requireSession(ctx, id).loadOlder(),
-      prompt: async (text, mode) => {
-        const result = await requireSession(ctx, id).prompt([{ type: 'text', text }], mode)
+      prompt: async (content, mode) => {
+        const result = await requireSession(ctx, id).prompt([...content], mode)
         if (!result.ok) throw new Error(`send failed: ${result.error.code}: ${result.error.message}`)
       },
     }
@@ -88,6 +90,15 @@ function controllerOptions(ctx: Context): ConversationControllerOptions {
         ])].filter(candidateName => candidateName.startsWith(query)).toSorted((left, right) => left.localeCompare(right))
       },
     },
+    media: {
+      exportSession: (sessionId, path, signal) => exportSessionArchive(
+        ctx.apiProxy.downloads,
+        sessionId,
+        path,
+        signal,
+      ),
+      loadImage: (path, signal) => loadTerminalImage(path, signal),
+    },
     sessions: {
       list: ctx.tuiClient.sessions.list,
       binding: id => sessionBinding(ctx, id),
@@ -105,12 +116,18 @@ function commandLayer(controller: ConversationController, active: () => boolean)
       { name: 'conversation.older', description: 'Load older history', run: () => controller.loadOlder() },
       { name: 'conversation.scroll-up', description: 'Scroll transcript up', run: () => { controller.scroll(-1) } },
       { name: 'conversation.scroll-down', description: 'Scroll transcript down', run: () => { controller.scroll(1) } },
+      { name: 'conversation.attach', description: 'Attach image from absolute local path', run: () => { controller.beginAttachment() } },
+      { name: 'conversation.export', description: 'Export session archive to a new local file', run: () => { controller.beginExport() } },
+      { name: 'conversation.clear-attachments', description: 'Clear staged image attachments', run: () => { controller.clearAttachments() } },
     ],
     bindings: [
       { key: 'ctrl+x', command: 'conversation.cancel' },
       { key: 'pageup', command: 'conversation.older' },
       { key: 'ctrl+u', command: 'conversation.scroll-up' },
       { key: 'ctrl+d', command: 'conversation.scroll-down' },
+      { key: 'ctrl+o', command: 'conversation.attach' },
+      { key: 'ctrl+e', command: 'conversation.export' },
+      { key: 'ctrl+delete', command: 'conversation.clear-attachments' },
     ],
   }
 }

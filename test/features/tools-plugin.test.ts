@@ -83,7 +83,7 @@ test('registers inspect contribution and disposes its controller with owner fibe
   })
 
   assert.deepEqual(control.calls, ['slot:dsh-tui-tools'])
-  assert.deepEqual(control.commandNames, ['tools.next', 'tools.previous', 'tools.toggle'])
+  assert.deepEqual(control.commandNames, ['tools.next', 'tools.previous', 'tools.toggle', 'tools.open'])
   control.renderRoute?.()
   assert.equal(control.controller, controller)
   await ctx.fiber.dispose()

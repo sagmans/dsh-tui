@@ -13,12 +13,12 @@ import type {
   WorkflowPresentation,
 } from '../../features/conversation/contracts.js'
 import type { ToolPresentation } from '../../features/tools/contracts.js'
+import { imageFallback } from '../../features/attachments/presentation.js'
 import { sanitizeConversationText } from '../../features/conversation/projection.js'
 import { sanitizeText } from '../../features/sessions/projection.js'
 
 export const VIEW_TARGET = 'tui'
 export const EMPTY_TEXT = '(empty)'
-export const IMAGE_TEXT = '[image]'
 export const MAIN_PRIORITY = 3
 export const FALLBACK_PRIORITY = 2
 export const EVENT_PRIORITY = 1
@@ -83,7 +83,7 @@ export function contentText(content: unknown): string {
     switch (block.type) {
       case 'text': return typeof block.text === 'string' ? block.text : EMPTY_TEXT
       case 'reasoning': return `thinking: ${typeof block.text === 'string' ? block.text : EMPTY_TEXT}`
-      case 'image': return IMAGE_TEXT
+      case 'image': return imageFallback(block.attachment)
       case 'tool-call': {
         const name = typeof block.name === 'string' ? block.name : 'unknown'
         const args = typeof block.arguments === 'string' ? block.arguments : boundedJson(block.arguments)

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'vitest'
-import type { MessageId, SessionId } from '@deepseek-ai/dsh-api-remotes/client'
+import type { MessageId, PromptContentPart, SessionId } from '@deepseek-ai/dsh-api-remotes/client'
 import type {
   ChatSnapshot,
   ConversationNode,
@@ -37,7 +37,9 @@ interface Control {
   readonly cancels: number[]
   readonly commands: string[]
   readonly historyLoads: number[]
-  readonly prompts: Array<{ readonly mode: ConversationSendMode; readonly text: string }>
+  readonly prompts: Array<{ readonly content: readonly PromptContentPart[]; readonly mode: ConversationSendMode }>
+  readonly exports: Array<{ readonly path: string; readonly sessionId: SessionId }>
+  readonly loadedImages: string[]
 }
 
 function source<T>(initial: T): MutableSource<T> {
@@ -104,20 +106,25 @@ function snapshot(overrides: Partial<ConversationSnapshot> = {}): ConversationSn
   }
 }
 
-function fixture(options: Pick<ConversationControllerOptions, 'completion'> = {}): {
+function fixture(options: Pick<ConversationControllerOptions, 'completion' | 'media'> = {}): {
   readonly binding: MutableSource<ConversationSnapshot> & ConversationSessionBinding
   readonly control: Control
   readonly controller: ReturnType<typeof createConversationController>
+  readonly list: MutableSource<{
+    readonly current: SessionId
+    readonly byId: Readonly<Record<SessionId, { readonly displayTitle: string } | undefined>>
+  }>
 } {
-  const control: Control = { cancels: [], commands: [], historyLoads: [], prompts: [] }
+  const control: Control = { cancels: [], commands: [], exports: [], historyLoads: [], loadedImages: [], prompts: [] }
   const session = source(snapshot())
   const binding: MutableSource<ConversationSnapshot> & ConversationSessionBinding = {
     ...session,
     cancel: () => { control.cancels.push(1); return Promise.resolve() },
     command: (line) => { control.commands.push(line); return Promise.resolve(line === '/compact') },
     loadOlder: () => { control.historyLoads.push(1); return Promise.resolve() },
-    prompt: (text, mode) => {
-      control.prompts.push({ text, mode })
+    prompt: (content, mode) => {
+      control.prompts.push({ content, mode })
+      const text = content.find(part => part.type === 'text')?.text
       return text === 'fail' ? Promise.reject(new Error('send unavailable')) : Promise.resolve()
     },
   }
@@ -129,6 +136,7 @@ function fixture(options: Pick<ConversationControllerOptions, 'completion'> = {}
     binding,
     control,
     controller: createConversationController({ ...options, sessions: { list, binding: id => id === SESSION_ID ? binding : undefined } }),
+    list,
   }
 }
 
@@ -170,9 +178,9 @@ test('routes commands before skill prompts and preserves failed drafts', async (
 
   assert.deepEqual(control.commands, ['/compact', '/skill'])
   assert.deepEqual(control.prompts, [
-    { text: 'hello', mode: 'queue' },
-    { text: '/skill', mode: 'steer' },
-    { text: 'fail', mode: 'queue' },
+    { content: [{ type: 'text', text: 'hello' }], mode: 'queue' },
+    { content: [{ type: 'text', text: '/skill' }], mode: 'steer' },
+    { content: [{ type: 'text', text: 'fail' }], mode: 'queue' },
   ])
   assert.equal(controller.getSnapshot().error, 'send unavailable')
   assert.equal(controller.getSnapshot().draft, 'fail')
@@ -193,6 +201,45 @@ test('completes command and skill names through the injected catalog', async () 
 
   assert.equal(controller.getSnapshot().draft, '/commit ')
   assert.deepEqual(controller.getSnapshot().suggestions, ['commit', 'compact'])
+})
+
+test('loads path-only image drafts, sends durable content, and exports explicitly', async () => {
+  const control: Control = { cancels: [], commands: [], exports: [], historyLoads: [], loadedImages: [], prompts: [] }
+  const media: NonNullable<ConversationControllerOptions['media']> = {
+    loadImage: (path) => {
+      control.loadedImages.push(path)
+      return Promise.resolve({
+        content: { type: 'image', mediaType: 'image/png', data: 'AQID', name: 'screen.png' },
+        view: { bytes: 3, mediaType: 'image/png', name: 'screen.png' },
+      })
+    },
+    exportSession: (sessionId, path) => {
+      control.exports.push({ sessionId, path })
+      return Promise.resolve()
+    },
+  }
+  const { binding, controller, list } = fixture({ media })
+  // Use the fixture's binding while retaining direct media call evidence.
+  binding.publish(snapshot())
+
+  controller.beginAttachment()
+  controller.setInput('/tmp/private/screen.png')
+  list.publish({ current: SESSION_ID, byId: { [SESSION_ID]: { displayTitle: 'Renamed terminal session' } } })
+  assert.equal(controller.getSnapshot().input?.value, '/tmp/private/screen.png')
+  assert.equal(await controller.submitInput(), true)
+  assert.deepEqual(control.loadedImages, ['/tmp/private/screen.png'])
+  assert.deepEqual(controller.getSnapshot().attachments, [{ bytes: 3, mediaType: 'image/png', name: 'screen.png' }])
+  assert.equal(JSON.stringify(controller.getSnapshot()).includes('AQID'), false)
+  assert.equal(JSON.stringify(controller.getSnapshot()).includes('/tmp/private'), false)
+
+  controller.setDraft('inspect image')
+  assert.equal(await controller.sendDraft(), true)
+  assert.deepEqual(controller.getSnapshot().attachments, [])
+
+  controller.beginExport()
+  controller.setInput('/tmp/session.zip')
+  assert.equal(await controller.submitInput(), true)
+  assert.deepEqual(control.exports, [{ sessionId: SESSION_ID, path: '/tmp/session.zip' }])
 })
 
 test('coalesces live updates and keeps bounded history windows', async () => {

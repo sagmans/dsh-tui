@@ -15,9 +15,10 @@ Runtime requires Node.js 26.4.0 or newer. `--experimental-ffi` must be active.
 
 ## Composition boundary
 
-Included host services match Web workflows requiring storage, workspaces,
-session projections and statistics, feedback, export, directory selection,
-plugin inventory, API proxying, Cordis host control, and Code Mode.
+Included Host services match Web workflows requiring storage, workspaces,
+session projections and statistics, feedback, directory selection, plugin
+inventory, API proxying, Cordis host control, and Code Mode. Session archives
+stream directly through the Host API rather than the browser export command.
 
 Excluded rows: Web server/runtime, browser transport, browser module loading,
 client HMR, client runner, and React UI plugins. Private in-process client
@@ -56,14 +57,17 @@ loads older events.
 - `Ctrl+Enter`: steer the running turn
 - `Ctrl+X`: stop the running turn
 - `Tab`: complete leading slash commands and skills
+- `Ctrl+O`: stage an image from an absolute local path
+- `Ctrl+E`: export the current session to a new absolute `.zip` path
+- `Ctrl+Delete`: clear staged images
 
-`SEND`, `STEER`, `STOP`, and `OLDER` provide mouse equivalents. Failed sends
-restore the submitted draft. Terminal-control bytes are removed while line
-breaks remain intact.
-
-MVP attachments are text-only. Browser-owned temporary image uploads are not
-executed in this profile; a terminal-safe local-path attachment flow remains a
-later parity slice.
+`SEND`, `STEER`, `STOP`, `OLDER`, `ATTACH`, `EXPORT`, and `CLEAR` provide mouse
+equivalents. Failed sends restore the submitted draft and staged images.
+PNG, JPEG, WebP, and GIF inputs are bounded before base64 enters the shared
+prompt contract. Render state contains metadata only. Exports never overwrite
+an existing file, use mode `0600`, and remove failed partials.
+Terminal-control and bidi-formatting bytes are removed while safe Unicode and
+line breaks remain intact.
 
 ## Tools and inspector
 
@@ -72,7 +76,9 @@ presentation intents when structurally valid: generic, terminal, diff, read,
 search, and web result shapes. Unknown or malformed intent payloads fall back
 to sanitized arguments and results. Nested Code Mode dispatches appear as a
 tree; `j`/`k` or arrows move selection and `Enter` or a second click folds a
-branch. URLs and file paths remain inert text in this slice.
+branch. URLs remain inert text. Successful Host-projected edit paths appear as
+produced files; `o` or the mouse action must select the same path twice before
+requesting an external open.
 
 ## Human interactions
 
@@ -120,3 +126,6 @@ limited to the current session. Host-only packages may run; stop and remove
 require confirmation. Packages with browser client halves are shown as
 unsupported and cannot run, so this profile never fetches or executes browser
 plugin code.
+
+See [`parity.md`](parity.md) for every renderer-specific implementation,
+terminal alternative, and Web-only exclusion.
