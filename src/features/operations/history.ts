@@ -1,7 +1,9 @@
 import type { ConversationNode } from '@deepseek-ai/dsh-client-runtime/client'
-import type {
-  OperationActionView,
-  OperationRowView,
+import { defineTuiAction } from '../../contracts/actions.js'
+import {
+  OPERATION_ACTION_SCOPE,
+  type OperationActionView,
+  type OperationRowView,
 } from './contracts.js'
 import type {
   OperationsProjectionInput,
@@ -10,11 +12,11 @@ import type {
 import { boundedJson } from '../../client/conversation/shared.js'
 import { sanitizeConversationText } from '../conversation/projection.js'
 
-const LOAD_OLDER: OperationActionView = { id: 'trajectory.older', label: 'LOAD OLDER', tone: 'default' }
-const FEEDBACK_POSITIVE: OperationActionView = { id: 'feedback.positive', label: 'USEFUL', tone: 'positive' }
-const FEEDBACK_NEGATIVE: OperationActionView = { id: 'feedback.negative', label: 'NOT USEFUL', tone: 'danger' }
-const FEEDBACK_NOTE: OperationActionView = { id: 'feedback.note', label: 'NOTE', tone: 'default' }
-const FEEDBACK_CLEAR: OperationActionView = { id: 'feedback.clear', label: 'CLEAR', tone: 'danger' }
+const LOAD_OLDER: OperationActionView = defineTuiAction(OPERATION_ACTION_SCOPE, 'trajectory.older', 'LOAD OLDER', 'default')
+const FEEDBACK_POSITIVE: OperationActionView = defineTuiAction(OPERATION_ACTION_SCOPE, 'feedback.positive', 'USEFUL', 'positive')
+const FEEDBACK_NEGATIVE: OperationActionView = defineTuiAction(OPERATION_ACTION_SCOPE, 'feedback.negative', 'NOT USEFUL', 'danger')
+const FEEDBACK_NOTE: OperationActionView = defineTuiAction(OPERATION_ACTION_SCOPE, 'feedback.note', 'NOTE', 'default')
+const FEEDBACK_CLEAR: OperationActionView = defineTuiAction(OPERATION_ACTION_SCOPE, 'feedback.clear', 'CLEAR', 'danger')
 
 function safe(value: string): string {
   return sanitizeConversationText(value)

@@ -1,4 +1,5 @@
 import type { SessionId } from '@deepseek-ai/dsh-api-remotes/client'
+import { createActionCursor } from '../catalog/root.js'
 import type {
   FeedbackItemView,
   GoalMutationRequest,
@@ -38,6 +39,7 @@ function errorText(error: unknown): string {
 }
 
 class OperationsControllerService implements OperationsController {
+  private readonly actionCursor = createActionCursor<OperationActionId>()
   private readonly actions: OperationsControllerOptions['actions']
   private readonly listeners = new Set<() => void>()
   private readonly navigation: OperationsControllerOptions['navigation']
@@ -101,6 +103,7 @@ class OperationsControllerService implements OperationsController {
     const projected = this.projected()
     const maxIndex = Math.max(FIRST_INDEX, projected.rows.length - 1)
     const rowIndex = Math.min(this.rowIndex, maxIndex)
+    const selectedActionId = this.actionCursor.current(projected.rows[rowIndex]?.actions ?? [])
     return Object.freeze({
       busy: this.busy,
       confirmation: this.confirmation,
@@ -111,6 +114,7 @@ class OperationsControllerService implements OperationsController {
       rows: projected.rows,
       section: this.section,
       sections: SECTION_NAMES,
+      selectedActionId,
       status: this.status(projected, rowIndex),
     })
   }
@@ -120,6 +124,15 @@ class OperationsControllerService implements OperationsController {
     if (count === 0 || !Number.isFinite(delta) || delta === 0) return
     const direction = delta < 0 ? -1 : 1
     this.rowIndex = (this.rowIndex + direction + count) % count
+    this.actionCursor.reset()
+    this.clearConfirmation()
+    this.schedulePublish()
+  }
+
+  moveAction(delta: number): void {
+    const row = this.projected().rows[this.rowIndex]
+    if (row === undefined) return
+    this.actionCursor.move(row.actions, delta)
     this.clearConfirmation()
     this.schedulePublish()
   }
@@ -150,12 +163,15 @@ class OperationsControllerService implements OperationsController {
     if (this.busy || this.input !== undefined) return Promise.resolve(false)
     const projected = this.projected()
     const row = projected.rows[this.rowIndex]
-    const selectedAction = action ?? row?.actions[0]?.id
-    if (row === undefined || selectedAction === undefined || !row.actions.some(candidate => candidate.id === selectedAction)) {
+    const selectedAction = action ?? this.actionCursor.current(row?.actions ?? [])
+    if (row === undefined
+      || selectedAction === undefined
+      || !row.actions.some(candidate => candidate.id === selectedAction && candidate.enabled)) {
       return Promise.resolve(false)
     }
     const target = projected.targets.get(row.id)
     if (target === undefined) return Promise.resolve(false)
+    this.actionCursor.select(row.actions, selectedAction)
     const confirmationToken = this.confirmationIdentity(selectedAction, row.id, target)
     if (CONFIRMED_ACTIONS.has(selectedAction) && this.confirmationToken !== confirmationToken) {
       this.confirmation = selectedAction
@@ -189,6 +205,7 @@ class OperationsControllerService implements OperationsController {
     const rows = this.projected().rows
     if (!Number.isSafeInteger(index) || index < 0 || index >= rows.length) return
     this.rowIndex = index
+    this.actionCursor.reset()
     this.clearConfirmation()
     this.schedulePublish()
   }
@@ -197,6 +214,7 @@ class OperationsControllerService implements OperationsController {
     if (!SECTION_NAMES.includes(section) || section === this.section) return
     this.section = section
     this.rowIndex = FIRST_INDEX
+    this.actionCursor.reset()
     this.clearConfirmation()
     this.input = undefined
     this.error = undefined
@@ -390,6 +408,7 @@ class OperationsControllerService implements OperationsController {
     this.feedbackReady = false
     this.subagentError = undefined
     this.rowIndex = FIRST_INDEX
+    this.actionCursor.reset()
     this.clearConfirmation()
     this.input = undefined
     if (publish) this.schedulePublish()

@@ -4,27 +4,29 @@ import type {
   SessionId,
 } from '@deepseek-ai/dsh-client-connection/client'
 import type { ConversationSnapshot } from '@deepseek-ai/dsh-client-runtime/client'
-import type {
-  OperationActionView,
-  OperationRowState,
-  OperationRowView,
-  OperationsListState,
-  OperationsSection,
-  FeedbackItemView,
+import { defineTuiAction } from '../../contracts/actions.js'
+import {
+  OPERATION_ACTION_SCOPE,
+  type OperationActionView,
+  type OperationRowState,
+  type OperationRowView,
+  type OperationsListState,
+  type OperationsSection,
+  type FeedbackItemView,
 } from './contracts.js'
 import type { WorkflowPresentation } from '../conversation/contracts.js'
 import { record } from '../../client/conversation/shared.js'
 import { sanitizeConversationText } from '../conversation/projection.js'
 import { feedbackRows, trajectoryRows } from './history.js'
 
-const GOAL_EDIT: OperationActionView = { id: 'goal.edit', label: 'EDIT', tone: 'default' }
-const GOAL_PAUSE: OperationActionView = { id: 'goal.pause', label: 'PAUSE', tone: 'default' }
-const GOAL_RESUME: OperationActionView = { id: 'goal.resume', label: 'RESUME', tone: 'positive' }
-const GOAL_COMPLETE: OperationActionView = { id: 'goal.complete', label: 'COMPLETE', tone: 'positive' }
-const GOAL_CLEAR: OperationActionView = { id: 'goal.clear', label: 'CLEAR', tone: 'danger' }
-const PLAN_OFF: OperationActionView = { id: 'plan.off', label: 'EXIT PLAN', tone: 'default' }
-const OPEN_WORKFLOW: OperationActionView = { id: 'workflow.open', label: 'OPEN', tone: 'default' }
-const OPEN_SUBAGENT: OperationActionView = { id: 'subagent.open', label: 'OPEN', tone: 'default' }
+const GOAL_EDIT: OperationActionView = defineTuiAction(OPERATION_ACTION_SCOPE, 'goal.edit', 'EDIT', 'default')
+const GOAL_PAUSE: OperationActionView = defineTuiAction(OPERATION_ACTION_SCOPE, 'goal.pause', 'PAUSE', 'default')
+const GOAL_RESUME: OperationActionView = defineTuiAction(OPERATION_ACTION_SCOPE, 'goal.resume', 'RESUME', 'positive')
+const GOAL_COMPLETE: OperationActionView = defineTuiAction(OPERATION_ACTION_SCOPE, 'goal.complete', 'COMPLETE', 'positive')
+const GOAL_CLEAR: OperationActionView = defineTuiAction(OPERATION_ACTION_SCOPE, 'goal.clear', 'CLEAR', 'danger')
+const PLAN_OFF: OperationActionView = defineTuiAction(OPERATION_ACTION_SCOPE, 'plan.off', 'EXIT PLAN', 'default')
+const OPEN_WORKFLOW: OperationActionView = defineTuiAction(OPERATION_ACTION_SCOPE, 'workflow.open', 'OPEN', 'default')
+const OPEN_SUBAGENT: OperationActionView = defineTuiAction(OPERATION_ACTION_SCOPE, 'subagent.open', 'OPEN', 'default')
 interface GoalView {
   readonly maxGoalRounds: number
   readonly objective: string

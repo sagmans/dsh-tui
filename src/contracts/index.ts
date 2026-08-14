@@ -1,3 +1,5 @@
+export { defineTuiAction, tuiActionCommand } from './actions.js'
+export type { TuiActionSpec, TuiActionTone } from './actions.js'
 export type {
   TuiCommand,
   TuiCommandBinding,

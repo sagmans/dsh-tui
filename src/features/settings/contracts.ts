@@ -1,6 +1,26 @@
 import type { SessionId } from '@deepseek-ai/dsh-api-remotes/client'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-runtime/client'
+import type { TuiActionSpec, TuiActionTone } from '../../contracts/actions.js'
 import type { TuiNavigationStore } from '../../kernel/navigation.js'
+
+export const CONFIGURATION_ACTION_SCOPE = 'settings.action'
+export const CONFIGURATION_ACTION_IDS = Object.freeze([
+  'model.select',
+  'access.select',
+  'preset.select',
+  'preset.default',
+  'preset.view',
+  'preset.copy',
+  'preset.open',
+  'preset.remove',
+  'settings.open',
+  'settings.reset',
+  'credential.set',
+  'credential.unset',
+  'extension.run',
+  'extension.stop',
+  'extension.remove',
+] as const)
 
 export type ConfigurationSection =
   | 'models'
@@ -11,31 +31,10 @@ export type ConfigurationSection =
   | 'plugins'
   | 'extensions'
 
-export type ConfigurationActionId =
-  | 'model.select'
-  | 'access.select'
-  | 'preset.select'
-  | 'preset.default'
-  | 'preset.view'
-  | 'preset.copy'
-  | 'preset.open'
-  | 'preset.remove'
-  | 'settings.open'
-  | 'settings.reset'
-  | 'credential.set'
-  | 'credential.unset'
-  | 'extension.run'
-  | 'extension.stop'
-  | 'extension.remove'
-
-export type ConfigurationActionTone = 'danger' | 'default' | 'positive'
+export type ConfigurationActionId = typeof CONFIGURATION_ACTION_IDS[number]
+export type ConfigurationActionTone = TuiActionTone
 export type ConfigurationRowState = 'error' | 'idle' | 'running' | 'success' | 'warning'
-
-export interface ConfigurationActionView {
-  readonly id: ConfigurationActionId
-  readonly label: string
-  readonly tone: ConfigurationActionTone
-}
+export type ConfigurationActionView = TuiActionSpec<ConfigurationActionId>
 
 export interface ConfigurationRowView {
   readonly actions: readonly ConfigurationActionView[]
@@ -61,6 +60,7 @@ export interface ConfigurationSnapshotView {
   readonly rowIndex: number
   readonly rows: readonly ConfigurationRowView[]
   readonly section: ConfigurationSection
+  readonly selectedActionId: ConfigurationActionId | undefined
   readonly sections: readonly ConfigurationSection[]
   readonly status: string
 }
@@ -237,6 +237,7 @@ export interface ConfigurationController {
   dispose(): void
   getSnapshot(): ConfigurationSnapshotView
   move(delta: number): void
+  moveAction(delta: number): void
   moveSection(delta: number): void
   perform(action?: ConfigurationActionId): Promise<boolean>
   refresh(): Promise<void>

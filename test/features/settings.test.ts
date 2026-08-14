@@ -220,6 +220,22 @@ test('keeps a routable current model visible when its catalog entry is absent', 
   assert.deepEqual(controller.getSnapshot().rows[0]?.actions, [])
 })
 
+test('cycles every enabled row action and runs the selected action', async () => {
+  const { calls, controller } = fixture()
+  await controller.activate()
+  await section(controller, 'presets')
+  controller.selectRow(1)
+
+  assert.equal(controller.getSnapshot().selectedActionId, 'preset.select')
+  controller.moveAction(1)
+  assert.equal(controller.getSnapshot().selectedActionId, 'preset.default')
+  assert.equal(await controller.perform(), true)
+  controller.moveAction(-1)
+  assert.equal(controller.getSnapshot().selectedActionId, 'preset.select')
+
+  assert.deepEqual(calls, ['preset:default:mine'])
+})
+
 test('routes model, access, preset, credential, and host-only extension actions safely', async () => {
   const { calls, controller } = fixture()
   await controller.activate()

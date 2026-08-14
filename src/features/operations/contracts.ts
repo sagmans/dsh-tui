@@ -13,31 +13,31 @@ import type {
   MessageFeedbackRating,
   MessageFeedbackVersion,
 } from '@deepseek-ai/dsh-message-feedback/types'
+import type { TuiActionSpec, TuiActionTone } from '../../contracts/actions.js'
 import type { TuiNavigationStore } from '../../kernel/navigation.js'
+
+export const OPERATION_ACTION_SCOPE = 'operations.action'
+export const OPERATION_ACTION_IDS = Object.freeze([
+  'feedback.clear',
+  'feedback.negative',
+  'feedback.note',
+  'feedback.positive',
+  'goal.clear',
+  'goal.complete',
+  'goal.edit',
+  'goal.pause',
+  'goal.resume',
+  'plan.off',
+  'subagent.open',
+  'trajectory.older',
+  'workflow.open',
+] as const)
 
 export type OperationsSection = 'goal' | 'plan' | 'workflows' | 'jobs' | 'subagents' | 'trajectory' | 'feedback'
 export type OperationRowState = 'error' | 'idle' | 'running' | 'success' | 'warning'
-export type OperationActionTone = 'danger' | 'default' | 'positive'
-export type OperationActionId =
-  | 'feedback.clear'
-  | 'feedback.negative'
-  | 'feedback.note'
-  | 'feedback.positive'
-  | 'goal.clear'
-  | 'goal.complete'
-  | 'goal.edit'
-  | 'goal.pause'
-  | 'goal.resume'
-  | 'plan.off'
-  | 'subagent.open'
-  | 'trajectory.older'
-  | 'workflow.open'
-
-export interface OperationActionView {
-  readonly id: OperationActionId
-  readonly label: string
-  readonly tone: OperationActionTone
-}
+export type OperationActionId = typeof OPERATION_ACTION_IDS[number]
+export type OperationActionTone = TuiActionTone
+export type OperationActionView = TuiActionSpec<OperationActionId>
 
 export interface OperationRowView {
   readonly actions: readonly OperationActionView[]
@@ -63,6 +63,7 @@ export interface OperationsSnapshotView {
   readonly rowIndex: number
   readonly rows: readonly OperationRowView[]
   readonly section: OperationsSection
+  readonly selectedActionId: OperationActionId | undefined
   readonly sections: readonly OperationsSection[]
   readonly status: string
 }
@@ -171,6 +172,7 @@ export interface OperationsController {
   dispose(): void
   getSnapshot(): OperationsSnapshotView
   move(delta: number): void
+  moveAction(delta: number): void
   moveSection(delta: number): void
   open(): Promise<void>
   perform(action?: OperationActionId): Promise<boolean>

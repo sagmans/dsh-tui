@@ -289,6 +289,22 @@ test('projects large trajectory snapshots without dropping events', () => {
   assert.equal(controller.getSnapshot().rows.at(-1)?.title, `Assistant #${LARGE_TRAJECTORY_COUNT}`)
 })
 
+test('cycles every enabled operation action and runs the selected action', async () => {
+  const { calls, controller } = fixture()
+  await controller.open()
+
+  assert.equal(controller.getSnapshot().selectedActionId, 'goal.pause')
+  controller.moveAction(1)
+  assert.equal(controller.getSnapshot().selectedActionId, 'goal.edit')
+  assert.equal(await controller.perform(), true)
+  assert.equal(controller.getSnapshot().input?.kind, 'goal-edit')
+  controller.cancelInput()
+  controller.moveAction(-1)
+  assert.equal(controller.getSnapshot().selectedActionId, 'goal.pause')
+
+  assert.deepEqual(calls.filter(call => !call.startsWith('refresh:')), [])
+})
+
 test('routes explicit actions and confirms destructive goal clearing', async () => {
   const { calls, controller } = fixture()
   await controller.open()

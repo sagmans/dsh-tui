@@ -1,4 +1,5 @@
 import type { SessionId } from '@deepseek-ai/dsh-api-remotes/client'
+import { createActionCursor } from '../catalog/root.js'
 import type {
   ConfigurationActionId,
   ConfigurationController,
@@ -45,6 +46,7 @@ function errorText(error: unknown): string {
 }
 
 class SettingsControllerService implements ConfigurationController {
+  private readonly actionCursor = createActionCursor<ConfigurationActionId>()
   private busyCount = 0
   private confirmation: ConfigurationActionId | undefined
   private confirmationToken: string | undefined
@@ -115,6 +117,7 @@ class SettingsControllerService implements ConfigurationController {
     const projected = this.projected()
     const maxIndex = Math.max(FIRST_INDEX, projected.rows.length - 1)
     const rowIndex = Math.min(this.rowIndex, maxIndex)
+    const selectedActionId = this.actionCursor.current(projected.rows[rowIndex]?.actions ?? [])
     return Object.freeze({
       busy: this.busyCount > 0,
       confirmation: this.confirmation,
@@ -124,6 +127,7 @@ class SettingsControllerService implements ConfigurationController {
       rows: projected.rows,
       section: this.section,
       sections: SECTION_NAMES,
+      selectedActionId,
       status: this.status(projected, rowIndex),
     })
   }
@@ -133,6 +137,15 @@ class SettingsControllerService implements ConfigurationController {
     if (count === 0 || !Number.isFinite(delta) || delta === 0) return
     const direction = delta < 0 ? -1 : 1
     this.rowIndex = (this.rowIndex + direction + count) % count
+    this.actionCursor.reset()
+    this.clearConfirmation()
+    this.schedulePublish()
+  }
+
+  moveAction(delta: number): void {
+    const row = this.projected().rows[this.rowIndex]
+    if (row === undefined) return
+    this.actionCursor.move(row.actions, delta)
     this.clearConfirmation()
     this.schedulePublish()
   }
@@ -149,12 +162,15 @@ class SettingsControllerService implements ConfigurationController {
     if (this.busyCount > 0 || this.input !== undefined) return Promise.resolve(false)
     const projected = this.projected()
     const row = projected.rows[this.rowIndex]
-    const selectedAction = action ?? row?.actions[0]?.id
-    if (row === undefined || selectedAction === undefined || !row.actions.some(candidate => candidate.id === selectedAction)) {
+    const selectedAction = action ?? this.actionCursor.current(row?.actions ?? [])
+    if (row === undefined
+      || selectedAction === undefined
+      || !row.actions.some(candidate => candidate.id === selectedAction && candidate.enabled)) {
       return Promise.resolve(false)
     }
     const target = projected.targets.get(row.id)
     if (target === undefined) return Promise.resolve(false)
+    this.actionCursor.select(row.actions, selectedAction)
     const needsConfirmation = CONFIRMED_ACTIONS.has(selectedAction)
       || (selectedAction === 'access.select' && target.kind === 'access' && target.preset === FULL_ACCESS_PRESET)
     const token = this.confirmationIdentity(selectedAction, row.id, target)
@@ -188,6 +204,7 @@ class SettingsControllerService implements ConfigurationController {
     const rows = this.projected().rows
     if (!Number.isSafeInteger(index) || index < 0 || index >= rows.length) return
     this.rowIndex = index
+    this.actionCursor.reset()
     this.clearConfirmation()
     this.schedulePublish()
   }
@@ -196,6 +213,7 @@ class SettingsControllerService implements ConfigurationController {
     if (!SECTION_NAMES.includes(section) || section === this.section) return
     this.section = section
     this.rowIndex = FIRST_INDEX
+    this.actionCursor.reset()
     this.clearConfirmation()
     this.clearInput()
     this.error = undefined
@@ -289,6 +307,7 @@ class SettingsControllerService implements ConfigurationController {
     this.credentials = undefined
     this.presetContents.clear()
     this.rowIndex = FIRST_INDEX
+    this.actionCursor.reset()
     this.clearConfirmation()
     this.clearInput()
   }

@@ -47,10 +47,10 @@
       "owner": "src/features/operations; src/views/operations/root.ts",
       "keyboard": "Operations > Feedback; select exact action with action cursor",
       "mouse": "Operations > Feedback; click message and exact action",
-      "automatedProof": ["test/features/operations.test.ts", "planned:test/features/operations-parity.test.ts"],
+      "automatedProof": ["test/features/operations.test.ts", "test/features/action-parity.test.ts", "test/features/action-parity-native.test.ts", "planned:test/features/operations-parity.test.ts"],
       "dogfoodProof": "pending: Task 17 set, replace, annotate, and clear feedback",
       "status": "partial",
-      "notes": "Host lifecycle exists; current first-action keyboard dispatch makes some actions unreachable."
+      "notes": "Exact action commands and shared cursor are proven; inline placement and complete lifecycle dogfood remain."
     },
     {
       "id": "conversation.export",
@@ -107,10 +107,10 @@
       "owner": "src/features/settings; src/views/settings/root.ts",
       "keyboard": "Settings > Extensions; select exact start/stop/remove/open action",
       "mouse": "Settings > Extensions; click row and exact action",
-      "automatedProof": ["test/features/settings.test.ts", "test/features/settings-native.test.ts", "planned:test/features/action-parity-native.test.ts"],
+      "automatedProof": ["test/features/settings.test.ts", "test/features/settings-native.test.ts", "test/features/action-parity.test.ts", "test/features/action-parity-native.test.ts"],
       "dogfoodProof": "pending: Task 17 inspect and safely exercise disposable extension",
       "status": "partial",
-      "notes": "Inventory exists; exact keyboard reachability and full lifecycle proof remain incomplete."
+      "notes": "Inventory and exact dual-input actions exist; full extension lifecycle dogfood remains incomplete."
     },
     {
       "id": "theme.terminal",
@@ -167,7 +167,7 @@
       "owner": "src/features/settings; src/views/settings/root.ts",
       "keyboard": "Open Settings; traverse sections, rows, forms, confirmations, and actions",
       "mouse": "Click Settings sections, rows, fields, confirmations, and actions",
-      "automatedProof": ["test/features/settings.test.ts", "test/features/settings-native.test.ts", "planned:test/features/action-parity.test.ts"],
+      "automatedProof": ["test/features/settings.test.ts", "test/features/settings-native.test.ts", "test/features/action-parity.test.ts", "test/features/action-parity-native.test.ts"],
       "dogfoodProof": "pending: Task 17 mutate and restore disposable settings",
       "status": "partial",
       "notes": "Redacted namespace inspection exists; complete field-level and preference behavior does not."
@@ -197,7 +197,7 @@
       "owner": "src/features/settings; src/views/settings/root.ts",
       "keyboard": "Settings > Plugins; traverse schema fields, save, reset, and cancel",
       "mouse": "Settings > Plugins; click fields and exact save/reset/cancel actions",
-      "automatedProof": ["test/features/settings.test.ts", "planned:test/features/action-parity-native.test.ts"],
+      "automatedProof": ["test/features/settings.test.ts", "test/features/action-parity.test.ts", "test/features/action-parity-native.test.ts"],
       "dogfoodProof": "pending: Task 17 edit and restore safe disposable plugin settings",
       "status": "partial",
       "notes": "Current generic redacted namespace view lacks Web schema-driven forms."
@@ -242,7 +242,7 @@
       "owner": "src/features/operations; src/client/conversation/workflows.ts",
       "keyboard": "Operations > Workflows; select run and lifecycle action",
       "mouse": "Operations > Workflows; click run and lifecycle action",
-      "automatedProof": ["test/client/workflows.test.ts", "test/features/operations.test.ts", "planned:test/features/operations-parity.test.ts"],
+      "automatedProof": ["test/client/workflows.test.ts", "test/features/operations.test.ts", "test/features/action-parity.test.ts", "test/features/action-parity-native.test.ts", "planned:test/features/operations-parity.test.ts"],
       "dogfoodProof": "pending: Task 17 inspect disposable workflow lifecycle",
       "status": "partial",
       "notes": "Operational projection exists; exhaustive lifecycle and dual-input proof remain."
@@ -347,7 +347,7 @@
       "owner": "src/features/operations; src/views/operations/root.ts",
       "keyboard": "Operations > Jobs; select job and exact lifecycle action",
       "mouse": "Operations > Jobs; click job and exact lifecycle action",
-      "automatedProof": ["test/features/operations.test.ts", "planned:test/features/operations-parity.test.ts"],
+      "automatedProof": ["test/features/operations.test.ts", "test/features/action-parity.test.ts", "test/features/action-parity-native.test.ts", "planned:test/features/operations-parity.test.ts"],
       "dogfoodProof": "pending: Task 17 start and inspect disposable background job",
       "status": "partial",
       "notes": "Core projection/actions exist; dual-input and lifecycle matrix proof remain."
@@ -362,7 +362,7 @@
       "owner": "src/features/operations; src/views/catalog/root.ts",
       "keyboard": "Goal seat or Operations > Goal; create/edit/pause/resume/clear",
       "mouse": "Click goal seat, fields, and exact lifecycle action",
-      "automatedProof": ["test/features/operations.test.ts", "planned:test/features/operations-parity.test.ts"],
+      "automatedProof": ["test/features/operations.test.ts", "test/features/action-parity.test.ts", "test/features/action-parity-native.test.ts", "planned:test/features/operations-parity.test.ts"],
       "dogfoodProof": "pending: Task 17 exercise complete disposable goal lifecycle",
       "status": "partial",
       "notes": "Operations provides core outcome; inline seat and complete overlay mouse controls remain."

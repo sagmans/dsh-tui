@@ -1,9 +1,10 @@
+import { tuiActionCommand } from '../../contracts/actions.js'
 import type { TuiCommandLayer } from '../../contracts/commands.js'
-import type {
-  ConfigurationActionId,
-  ConfigurationActionTone,
-  ConfigurationController,
-  ConfigurationSection,
+import {
+  CONFIGURATION_ACTION_IDS,
+  CONFIGURATION_ACTION_SCOPE,
+  type ConfigurationController,
+  type ConfigurationSection,
 } from './contracts.js'
 
 const SETTINGS_LAYER_ID = 'dsh-tui-settings'
@@ -12,13 +13,8 @@ const NEXT_SECTION_BINDINGS = ['l', 'right', 'tab'] as const
 const PREVIOUS_SECTION_BINDINGS = ['h', 'left'] as const
 const NEXT_ROW_BINDINGS = ['j', 'down', 'ctrl+n'] as const
 const PREVIOUS_ROW_BINDINGS = ['k', 'up', 'ctrl+p'] as const
-const EDIT_ACTIONS = new Set<ConfigurationActionId>([
-  'preset.view',
-  'preset.copy',
-  'preset.open',
-  'settings.open',
-  'credential.set',
-])
+const NEXT_ACTION_BINDINGS = [']'] as const
+const PREVIOUS_ACTION_BINDINGS = ['['] as const
 const SECTION_BINDINGS = Object.freeze([
   { section: 'models', key: '1' },
   { section: 'access', key: '2' },
@@ -28,14 +24,6 @@ const SECTION_BINDINGS = Object.freeze([
   { section: 'plugins', key: '6' },
   { section: 'extensions', key: '7' },
 ] as const satisfies readonly { readonly section: ConfigurationSection; readonly key: string }[])
-
-function selectedAction(
-  controller: ConfigurationController,
-  predicate: (action: { readonly id: ConfigurationActionId; readonly tone: ConfigurationActionTone }) => boolean,
-): ConfigurationActionId | undefined {
-  const snapshot = controller.getSnapshot()
-  return snapshot.rows[snapshot.rowIndex]?.actions.find(predicate)?.id
-}
 
 export function settingsCommands(
   controller: ConfigurationController,
@@ -52,11 +40,15 @@ export function settingsCommands(
       { name: 'settings.previous-section', description: 'Open previous configuration section', run: () => { controller.moveSection(-1) } },
       { name: 'settings.next', description: 'Select next configuration row', run: () => { controller.move(1) } },
       { name: 'settings.previous', description: 'Select previous configuration row', run: () => { controller.move(-1) } },
-      { name: 'settings.primary', description: 'Run primary configuration action', run: () => controller.perform() },
-      { name: 'settings.edit', description: 'Run edit configuration action', run: () => controller.perform(selectedAction(controller, action => EDIT_ACTIONS.has(action.id))) },
-      { name: 'settings.positive', description: 'Run positive configuration action', run: () => controller.perform(selectedAction(controller, action => action.tone === 'positive')) },
-      { name: 'settings.danger', description: 'Run destructive configuration action', run: () => controller.perform(selectedAction(controller, action => action.tone === 'danger')) },
+      { name: 'settings.next-action', description: 'Select next configuration action', run: () => { controller.moveAction(1) } },
+      { name: 'settings.previous-action', description: 'Select previous configuration action', run: () => { controller.moveAction(-1) } },
+      { name: 'settings.primary', description: 'Run selected configuration action', run: () => controller.perform() },
       { name: 'settings.refresh', description: 'Refresh configuration', run: () => controller.refresh() },
+      ...CONFIGURATION_ACTION_IDS.map(action => ({
+        name: tuiActionCommand(CONFIGURATION_ACTION_SCOPE, action),
+        description: `Run ${action} configuration action`,
+        run: () => controller.perform(action),
+      })),
       ...SECTION_BINDINGS.map(({ section }) => ({
         name: `settings.section.${section}`,
         description: `Open ${section} configuration`,
@@ -70,10 +62,9 @@ export function settingsCommands(
       ...PREVIOUS_SECTION_BINDINGS.map(key => ({ key, command: 'settings.previous-section' })),
       ...NEXT_ROW_BINDINGS.map(key => ({ key, command: 'settings.next' })),
       ...PREVIOUS_ROW_BINDINGS.map(key => ({ key, command: 'settings.previous' })),
+      ...NEXT_ACTION_BINDINGS.map(key => ({ key, command: 'settings.next-action' })),
+      ...PREVIOUS_ACTION_BINDINGS.map(key => ({ key, command: 'settings.previous-action' })),
       { key: 'return', command: 'settings.primary' },
-      { key: 'e', command: 'settings.edit' },
-      { key: 'y', command: 'settings.positive' },
-      { key: 'x', command: 'settings.danger' },
       { key: 'r', command: 'settings.refresh' },
       ...SECTION_BINDINGS.map(({ section, key }) => ({ key, command: `settings.section.${section}` })),
     ],

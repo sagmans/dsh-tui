@@ -36,7 +36,13 @@ function controller(calls: string[]): ConfigurationController {
       input,
       rowIndex: 0,
       rows: [{
-        actions: [{ id: 'credential.set', label: 'SET', tone: 'default' }],
+        actions: [{
+          command: 'settings.action.credential.set',
+          enabled: true,
+          id: 'credential.set',
+          label: 'SET',
+          tone: 'default',
+        }],
         details: 'Write-only credential',
         id: 'credential:DEEPSEEK_API_KEY',
         state: 'success',
@@ -45,9 +51,11 @@ function controller(calls: string[]): ConfigurationController {
       }],
       section: 'credentials',
       sections: ['models', 'access', 'presets', 'settings', 'credentials', 'plugins', 'extensions'],
+      selectedActionId: 'credential.set',
       status: '1/1',
     }),
     move: delta => { calls.push(`move:${delta}`) },
+    moveAction: delta => { calls.push(`action-cursor:${delta}`) },
     moveSection: delta => { calls.push(`section:${delta}`) },
     perform: (action?: ConfigurationActionId) => {
       calls.push(`action:${action}`)

@@ -8,6 +8,7 @@ import {
   type CliRenderer,
   type KeyEvent,
 } from '@opentui/core'
+import type { TuiActionSpec } from '../../contracts/actions.js'
 import type { TuiTheme } from '../../contracts/theme.js'
 import { SecretInputRenderable } from './secret-input.js'
 
@@ -33,13 +34,8 @@ const STATE_LABELS: Readonly<Record<CatalogRowState, string>> = Object.freeze({
 })
 
 export type CatalogRowState = 'error' | 'idle' | 'running' | 'success' | 'warning'
-export type CatalogActionTone = 'danger' | 'default' | 'positive'
 
-export interface CatalogAction<ActionId extends string> {
-  readonly id: ActionId
-  readonly label: string
-  readonly tone: CatalogActionTone
-}
+export type CatalogAction<ActionId extends string> = TuiActionSpec<ActionId>
 
 export interface CatalogRow<ActionId extends string> {
   readonly actions: readonly CatalogAction<ActionId>[]
@@ -64,6 +60,7 @@ export interface CatalogSnapshot<ActionId extends string, Section extends string
   readonly rowIndex: number
   readonly rows: readonly CatalogRow<ActionId>[]
   readonly section: Section
+  readonly selectedActionId: ActionId | undefined
   readonly sections: readonly Section[]
   readonly status: string
 }
@@ -227,16 +224,18 @@ function createActions<ActionId extends string, Section extends string>(
   const row = snapshot.rows[snapshot.rowIndex]
   for (const action of row?.actions ?? []) {
     const confirming = snapshot.confirmation === action.id
+    const selected = snapshot.selectedActionId === action.id
+    const unavailable = snapshot.busy || !action.enabled
     actions.add(new TextRenderable(renderer, {
       id: `${config.idPrefix}-action-${action.id}`,
-      content: ` ${confirming ? 'CONFIRM ' : ''}${action.label} `,
-      fg: snapshot.busy ? theme.colors.muted : actionColor(theme, action),
-      attributes: snapshot.busy ? TextAttributes.DIM : TextAttributes.BOLD,
+      content: ` ${selected ? '› ' : ''}${confirming ? 'CONFIRM ' : ''}${action.label} `,
+      fg: unavailable ? theme.colors.muted : actionColor(theme, action),
+      attributes: unavailable ? TextAttributes.DIM : TextAttributes.BOLD,
       selectable: false,
       onMouseUp(event) {
         // OpenTUI publishes equivalent mouse-button values through separate enum declarations.
         // oxlint-disable-next-line typescript/no-unsafe-enum-comparison
-        if (event.button !== MouseButton.LEFT || snapshot.busy) return
+        if (event.button !== MouseButton.LEFT || unavailable) return
         event.preventDefault()
         event.stopPropagation()
         void controller.perform(action.id)
