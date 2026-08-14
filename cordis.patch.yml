@@ -158,9 +158,13 @@
       name: '@sagmans/dsh-tui/feature/sessions'
       inject: [tuiKernel, tuiClient]
 
+    - id: tui-model-selection
+      name: '@sagmans/dsh-tui/feature/model-selection'
+      inject: [tuiKernel, tuiClient]
+
     - id: tui-conversation
       name: '@sagmans/dsh-tui/feature/conversation'
-      inject: [tuiKernel, tuiClient, apiProxy]
+      inject: [tuiKernel, tuiClient, apiProxy, tuiModelSelection]
 
     - id: tui-tools
       name: '@sagmans/dsh-tui/feature/tools'

@@ -33,8 +33,9 @@ const ATTACH_KEY = 'o'
 const EXPORT_KEY = 'e'
 const DELETE_KEY = 'delete'
 const ACCESS_KEY = 'a'
+const MODEL_KEY = 'm'
 const PRESET_KEY = 'p'
-const COMPOSER_HINT = 'M+Enter queue · C+Enter steer · M+A access · M+P preset · C+O image · C+E export'
+const COMPOSER_HINT = 'M+Enter queue · C+Enter steer · M+M model · M+A access · M+P preset · C+O image · C+E export'
 const SEND_ACTION = ' SEND '
 const STEER_ACTION = ' STEER '
 const STOP_ACTION = ' STOP '
@@ -43,6 +44,7 @@ const ATTACH_ACTION = ' ATTACH '
 const EXPORT_ACTION = ' EXPORT '
 const CLEAR_ACTION = ' CLEAR '
 const ACCESS_ACTION_PREFIX = ' ACCESS '
+const MODEL_ACTION_PREFIX = ' MODEL '
 const PRESET_ACTION_PREFIX = ' PRESET '
 const SEND_ACTION_ID = 'conversation-send'
 const STEER_ACTION_ID = 'conversation-steer'
@@ -52,6 +54,7 @@ const ATTACH_ACTION_ID = 'conversation-attach'
 const EXPORT_ACTION_ID = 'conversation-export'
 const CLEAR_ACTION_ID = 'conversation-clear-attachments'
 const ACCESS_ACTION_ID = 'conversation-access'
+const MODEL_ACTION_ID = 'conversation-model'
 const PRESET_ACTION_ID = 'conversation-preset'
 const PATH_ACTION_PREFIX = 'conversation-path'
 
@@ -94,10 +97,11 @@ function handleKey(
     submit(editor, controller, 'steer')
     return
   }
-  if (key.meta && (key.name === ACCESS_KEY || key.name === PRESET_KEY)) {
+  if (key.meta && (key.name === ACCESS_KEY || key.name === MODEL_KEY || key.name === PRESET_KEY)) {
     key.preventDefault()
     key.stopPropagation()
-    controller.openPreferences(key.name === ACCESS_KEY ? 'access' : 'presets')
+    if (key.name === MODEL_KEY) controller.openModelSelection('composer')
+    else controller.openPreferences(key.name === ACCESS_KEY ? 'access' : 'presets')
     return
   }
   if (handleMediaKey(key, controller)) return
@@ -282,10 +286,11 @@ export function createConversationActions(
     height: ACTION_HEIGHT,
     flexDirection: 'row',
   })
-  actions.add(createAction(renderer, theme, SEND_ACTION_ID, SEND_ACTION, snapshot.sessionId !== undefined, () => {
+  const modelRoutable = snapshot.modelRoutable !== false
+  actions.add(createAction(renderer, theme, SEND_ACTION_ID, SEND_ACTION, snapshot.sessionId !== undefined && modelRoutable, () => {
     void controller.sendDraft('queue')
   }))
-  actions.add(createAction(renderer, theme, STEER_ACTION_ID, STEER_ACTION, snapshot.running, () => {
+  actions.add(createAction(renderer, theme, STEER_ACTION_ID, STEER_ACTION, snapshot.running && modelRoutable, () => {
     void controller.sendDraft('steer')
   }))
   actions.add(createAction(renderer, theme, STOP_ACTION_ID, STOP_ACTION, snapshot.running, () => {
@@ -303,6 +308,17 @@ export function createConversationActions(
   actions.add(createAction(renderer, theme, CLEAR_ACTION_ID, CLEAR_ACTION, snapshot.attachments.length > 0, () => {
     controller.clearAttachments()
   }))
+  if (snapshot.modelAvailable && snapshot.modelLabel !== undefined) {
+    const effort = snapshot.modelEffort === undefined ? '' : ` · ${snapshot.modelEffort}`
+    actions.add(createAction(
+      renderer,
+      theme,
+      MODEL_ACTION_ID,
+      `${MODEL_ACTION_PREFIX}${snapshot.modelLabel}${effort} `,
+      true,
+      () => { controller.openModelSelection('composer') },
+    ))
+  }
   if (snapshot.accessPreset !== undefined) {
     actions.add(createAction(
       renderer,

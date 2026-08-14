@@ -11,6 +11,7 @@ export type ConversationPhase = 'empty' | 'error' | 'loading' | 'ready'
 export type ConversationLineKind = 'assistant' | 'command' | 'context' | 'error' | 'system' | 'tool' | 'user'
 export type ConversationSendMode = 'queue' | 'steer'
 export type ConversationInputKind = 'attachment' | 'export'
+export type ConversationModelSelectionEntry = 'command' | 'composer'
 export type ConversationPreferenceSection = 'access' | 'presets'
 
 export interface ConversationAttachmentView {
@@ -81,6 +82,10 @@ export interface ConversationSnapshotView {
   readonly lines: readonly ConversationLine[]
   readonly input: ConversationInputView | undefined
   readonly loadingOlder: boolean
+  readonly modelAvailable: boolean
+  readonly modelEffort: string | undefined
+  readonly modelLabel: string | undefined
+  readonly modelRoutable: boolean | undefined
   readonly phase: ConversationPhase
   readonly running: boolean
   readonly sessionId: SessionId | undefined
@@ -115,9 +120,19 @@ export interface ConversationCompletionSource {
   complete(sessionId: SessionId, query: string): Promise<readonly string[]>
 }
 
+export interface ConversationModelSelectionSource extends ObservableSnapshot<{
+  readonly available: boolean
+  readonly currentLabel: string
+  readonly effortLabel: string | undefined
+  readonly routable: boolean | undefined
+}> {
+  open(entry: ConversationModelSelectionEntry): Promise<boolean>
+}
+
 export interface ConversationControllerOptions {
   readonly completion?: ConversationCompletionSource
   readonly media?: ConversationMediaSource
+  readonly models?: ConversationModelSelectionSource | undefined
   readonly openSettings?: ((section: ConversationPreferenceSection) => void) | undefined
   readonly sessions: ConversationSessionsSource
 }
@@ -132,6 +147,7 @@ export interface ConversationController {
   dispose(): void
   getSnapshot(): ConversationSnapshotView
   loadOlder(): Promise<void>
+  openModelSelection(entry: ConversationModelSelectionEntry): void
   openPreferences(section: ConversationPreferenceSection): void
   removeAttachment(index: number): void
   scroll(delta: number): void

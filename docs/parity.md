@@ -40,7 +40,7 @@ _None._
 | `subagents.lifecycle` — Recursive subagent hierarchy, activity, timing, usage, opening, and references | parity | partial | src/features/operations; src/views/conversation; planned input-trigger feature |
 | `jobs.background` — Background job status and lifecycle controls | parity | partial | src/features/operations; src/views/operations/root.ts |
 | `goals.session` — Session goal display and lifecycle | parity | partial | src/features/operations; src/views/catalog/root.ts |
-| `model.selection` — Session model/reasoning choice, composer seat, /model, and unroutable blocking | parity | partial | planned: src/features/model-selection; src/views/model-selection/root.ts |
+| `model.selection` — Session model/reasoning choice, composer seat, /model, and unroutable blocking | parity | partial | src/features/model-selection; src/views/model-selection/root.ts |
 | `permissions.presets` — Current-session access and future-session default permission | parity | partial | src/features/settings; src/views/conversation/composer.ts |
 | `agent.presets` — Per-session agent preset composition, defaults, staging, and management | parity | partial | cordis.patch.yml; src/features/settings; src/views/conversation/composer.ts |
 | `plans.session` — Plan state, composer control, review, and command lifecycle | parity | partial | src/features/operations; src/features/interactions; planned conversation seat |

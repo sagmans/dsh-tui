@@ -43,6 +43,10 @@
       "types": "./lib/features/conversation/index.d.ts",
       "default": "./lib/features/conversation/index.js"
     },
+    "./feature/model-selection": {
+      "types": "./lib/features/model-selection/index.d.ts",
+      "default": "./lib/features/model-selection/index.js"
+    },
     "./feature/tools": {
       "types": "./lib/features/tools/index.d.ts",
       "default": "./lib/features/tools/index.js"
@@ -87,7 +91,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "oxlint --type-aware .",
     "test": "vitest run",
-    "check": "corepack pnpm run typecheck && corepack pnpm run lint && corepack pnpm run test && corepack pnpm run build"
+    "check": "pnpm run typecheck && pnpm run lint && pnpm run test && pnpm run build"
   },
   "dependencies": {
     "@deepseek-ai/cordis": "4.0.1",

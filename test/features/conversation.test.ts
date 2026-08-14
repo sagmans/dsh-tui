@@ -106,7 +106,7 @@ function snapshot(overrides: Partial<ConversationSnapshot> = {}): ConversationSn
   }
 }
 
-function fixture(options: Pick<ConversationControllerOptions, 'completion' | 'media' | 'openSettings'> = {}): {
+function fixture(options: Pick<ConversationControllerOptions, 'completion' | 'media' | 'models' | 'openSettings'> = {}): {
   readonly binding: MutableSource<ConversationSnapshot> & ConversationSessionBinding
   readonly control: Control
   readonly controller: ReturnType<typeof createConversationController>
@@ -214,6 +214,56 @@ test('surfaces current preset seats and opens their exact settings sections', ()
   controller.openPreferences('access')
   controller.openPreferences('presets')
   assert.deepEqual(opened, ['access', 'presets'])
+})
+
+test('shares the composer model seat and intercepts /model without prompt content', async () => {
+  const opens: string[] = []
+  const models = source({
+    available: true,
+    currentLabel: 'Flash',
+    effortLabel: 'High',
+    routable: true,
+  })
+  const { control, controller } = fixture({
+    models: {
+      ...models,
+      open: entry => { opens.push(entry); return Promise.resolve(true) },
+    },
+  })
+
+  assert.equal(controller.getSnapshot().modelLabel, 'Flash')
+  assert.equal(controller.getSnapshot().modelEffort, 'High')
+  controller.openModelSelection('composer')
+  assert.equal(await controller.send('/model'), true)
+
+  assert.deepEqual(opens, ['composer', 'command'])
+  assert.deepEqual(control.commands, [])
+  assert.deepEqual(control.prompts, [])
+  assert.equal(controller.getSnapshot().draft, '')
+})
+
+test('blocks prompt submission only when the host reports an unroutable model', async () => {
+  const opens: string[] = []
+  const models = source({
+    available: true,
+    currentLabel: 'Retired route',
+    effortLabel: undefined,
+    routable: false,
+  })
+  const { control, controller } = fixture({
+    models: {
+      ...models,
+      open: entry => { opens.push(entry); return Promise.resolve(true) },
+    },
+  })
+
+  assert.equal(await controller.send('keep this draft'), false)
+  assert.equal(controller.getSnapshot().draft, 'keep this draft')
+  assert.match(controller.getSnapshot().error ?? '', /provider/u)
+  assert.deepEqual(control.prompts, [])
+
+  assert.equal(await controller.send('/model'), true)
+  assert.deepEqual(opens, ['command'])
 })
 
 test('completes command and skill names through the injected catalog', async () => {

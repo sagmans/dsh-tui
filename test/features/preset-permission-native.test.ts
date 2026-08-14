@@ -104,6 +104,10 @@ function conversationController(calls: string[]): ConversationController {
       input: undefined,
       lines: [],
       loadingOlder: false,
+      modelAvailable: true,
+      modelEffort: 'high',
+      modelLabel: 'flash',
+      modelRoutable: true,
       phase: 'empty',
       running: false,
       sessionId: undefined,
@@ -112,6 +116,7 @@ function conversationController(calls: string[]): ConversationController {
       title: 'Preset seats',
     }),
     loadOlder: () => Promise.resolve(),
+    openModelSelection: entry => { calls.push(`model:${entry}`) },
     openPreferences: section => { calls.push(`seat:${section}`) },
     removeAttachment: NOOP,
     scroll: NOOP,
@@ -146,6 +151,7 @@ test.skipIf(!NATIVE_RENDERER_AVAILABLE)('opens composer access and preset seats 
   try {
     await harness.flush()
     for (const [id, expected] of [
+      ['conversation-model', 'model:composer'],
       ['conversation-access', 'seat:access'],
       ['conversation-preset', 'seat:presets'],
     ] as const) {
@@ -159,10 +165,11 @@ test.skipIf(!NATIVE_RENDERER_AVAILABLE)('opens composer access and preset seats 
     const composer = view.findDescendantById('conversation-composer')
     assert.ok(composer)
     await harness.mockMouse.click(composer.screenX + 1, composer.screenY)
+    harness.mockInput.pressKey('m', { meta: true })
     harness.mockInput.pressKey('a', { meta: true })
     harness.mockInput.pressKey('p', { meta: true })
     await settle()
-    assert.deepEqual(calls.slice(-2), ['seat:access', 'seat:presets'])
+    assert.deepEqual(calls.slice(-3), ['model:composer', 'seat:access', 'seat:presets'])
   } finally {
     view.destroyRecursively()
     harness.renderer.destroy()

@@ -127,6 +127,10 @@ function conversationController(calls: string[]): ConversationController {
       input,
       lines: [],
       loadingOlder: false,
+      modelAvailable: false,
+      modelEffort: undefined,
+      modelLabel: undefined,
+      modelRoutable: undefined,
       phase: 'ready',
       running: false,
       sessionId: SESSION_ID,
@@ -135,6 +139,7 @@ function conversationController(calls: string[]): ConversationController {
       title: 'Overlay controls',
     }),
     loadOlder: () => Promise.resolve(),
+    openModelSelection: () => {},
     openPreferences: () => {},
     removeAttachment: index => {
       calls.push(`remove:${index}`)

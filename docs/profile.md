@@ -57,12 +57,18 @@ loads older events.
 - `Ctrl+Enter`: steer the running turn
 - `Ctrl+X`: stop the running turn
 - `Tab`: complete leading slash commands and skills
+- `Meta+M`: open the current session's shared model/reasoning picker
+- `/model`: open direct model selection and apply that model's default effort
 - `Ctrl+O`: stage an image from an absolute local path
 - `Ctrl+E`: export the current session to a new absolute `.zip` path
 - `Ctrl+Delete`: clear staged images
 
-`SEND`, `STEER`, `STOP`, `OLDER`, `ATTACH`, `EXPORT`, and `CLEAR` provide mouse
-equivalents. Failed sends restore the submitted draft and staged images.
+`SEND`, `STEER`, `STOP`, `OLDER`, `MODEL`, `ATTACH`, `EXPORT`, and `CLEAR`
+provide mouse equivalents. Model and reasoning choices share one Host-backed
+session directory across the composer and `/model`. A definitely unroutable
+Host selection blocks submission and exposes the Providers handoff; unknown or
+unadvertised catalog state does not block. Failed sends restore the submitted
+draft and staged images.
 PNG, JPEG, WebP, and GIF inputs are bounded before base64 enters the shared
 prompt contract. Render state contains metadata only. Exports never overwrite
 an existing file, use mode `0600`, and remove failed partials.
@@ -107,12 +113,11 @@ Host values. Paths, payloads, and output remain sanitized inert text.
 
 ## Configuration and plugins
 
-Open Settings with `g,` or the mouse tab. `1`–`7` select Models, Access,
-Presets, Settings, Credentials, Plugins, and Extensions. `h`/`l`, arrows, or
-`Tab` switch sections; `j`/`k`, arrows, or `Ctrl+N`/`Ctrl+P` move rows.
-`Enter` runs the primary action, `e` selects an edit action, `y` selects a
-positive action, `x` selects a destructive action, and `r` refreshes. Mouse
-tabs, rows, and action labels are equivalent.
+Open Settings with `g,` or the mouse tab. `1`–`8` select Models, Providers,
+Access, Presets, Settings, Credentials, Plugins, and Extensions. `h`/`l`,
+arrows, or `Tab` switch sections; `j`/`k`, arrows, or `Ctrl+N`/`Ctrl+P` move
+rows. `[`/`]` choose an exact row action, `Enter` runs it, and `r` refreshes.
+Mouse tabs, rows, and action labels are equivalent.
 
 Model and preset changes reuse Host APIs. Full-access selection requires a
 second exact activation. Settings display redacted values and secret configured

@@ -2,6 +2,7 @@ import type { PromptContentPart, SessionId } from '@deepseek-ai/dsh-api-remotes/
 import type {
   ConversationController,
   ConversationControllerOptions,
+  ConversationModelSelectionEntry,
   ConversationPreferenceSection,
   ConversationSendMode,
   ConversationSessionBinding,
@@ -21,6 +22,8 @@ export type * from './contracts.js'
 
 const EMPTY_TITLE = 'NO SESSION'
 const COMMAND_PREFIX = '/'
+const MODEL_COMMAND = '/model'
+const MODEL_UNROUTABLE_ERROR = 'No provider can route the current model. Open model selection to configure a provider.'
 const DEFAULT_SEND_MODE: ConversationSendMode = 'queue'
 const SCROLL_STEP = 12
 const COMPLETION_SUFFIX = ' '
@@ -41,6 +44,7 @@ class ConversationControllerService implements ConversationController {
   private readonly completion: ConversationControllerOptions['completion']
   private readonly listeners = new Set<() => void>()
   private readonly mediaState: ConversationMediaState
+  private readonly models: ConversationControllerOptions['models']
   private readonly openSettings: ConversationControllerOptions['openSettings']
   private readonly sessions: ConversationControllerOptions['sessions']
   private readonly resources: Array<() => void>
@@ -59,6 +63,7 @@ class ConversationControllerService implements ConversationController {
 
   constructor(options: ConversationControllerOptions) {
     this.completion = options.completion
+    this.models = options.models
     this.openSettings = options.openSettings
     this.sessions = options.sessions
     this.mediaState = new ConversationMediaState({
@@ -70,6 +75,9 @@ class ConversationControllerService implements ConversationController {
       setNotice: notice => { this.notice = notice },
     })
     this.resources = [options.sessions.list.subscribe(() => { this.rebind() })]
+    if (options.models !== undefined) {
+      this.resources.push(options.models.subscribe(() => { this.schedulePublish() }))
+    }
     this.rebind(false)
   }
 
@@ -129,6 +137,8 @@ class ConversationControllerService implements ConversationController {
     const snapshot = this.binding?.getSnapshot()
     const phase = conversationPhase(snapshot)
     const summary = sessionId === undefined ? undefined : list.byId[sessionId]
+    const model = this.models?.getSnapshot()
+    const modelAvailable = sessionId !== undefined && model?.available === true
     const title = sessionId === undefined
       ? EMPTY_TITLE
       : sanitizeText(summary?.displayTitle ?? String(sessionId))
@@ -143,6 +153,10 @@ class ConversationControllerService implements ConversationController {
       input: this.mediaState.input(),
       lines: snapshot === undefined ? Object.freeze([]) : visibleConversationLines(snapshot, this.offset),
       loadingOlder: snapshot?.loadingOlder ?? false,
+      modelAvailable,
+      modelEffort: modelAvailable ? model.effortLabel : undefined,
+      modelLabel: modelAvailable ? model.currentLabel : undefined,
+      modelRoutable: modelAvailable ? model.routable : undefined,
       phase,
       running: snapshot?.running ?? false,
       sessionId,
@@ -156,6 +170,11 @@ class ConversationControllerService implements ConversationController {
     const binding = this.binding
     if (binding === undefined) return
     await this.runAction(() => binding.loadOlder())
+  }
+
+  openModelSelection(entry: ConversationModelSelectionEntry): void {
+    if (this.models?.getSnapshot().available !== true) return
+    void this.runValue(() => this.models?.open(entry) ?? Promise.resolve(false))
   }
 
   openPreferences(section: ConversationPreferenceSection): void {
@@ -190,6 +209,19 @@ class ConversationControllerService implements ConversationController {
     const normalized = sanitizeConversationText(submittedDraft).trim()
     const submittedImages = [...this.mediaState.staged(sessionId)]
     if (normalized === '' && submittedImages.length === 0) return false
+    const model = this.models?.getSnapshot()
+    if (submittedImages.length === 0 && normalized === MODEL_COMMAND && model?.available === true) {
+      const opened = await this.runValue(() => this.models?.open('command') ?? Promise.resolve(false))
+      if (opened !== true) return false
+      this.setDraft('')
+      this.schedulePublish()
+      return true
+    }
+    if (model?.available === true && model.routable === false) {
+      this.error = MODEL_UNROUTABLE_ERROR
+      this.schedulePublish()
+      return false
+    }
     this.setDraft('')
     this.notice = undefined
     this.suggestions = []

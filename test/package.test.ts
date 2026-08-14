@@ -82,6 +82,7 @@ test('publishes only built entrypoints and the profile patch', () => {
     './feature/shell',
     './feature/sessions',
     './feature/conversation',
+    './feature/model-selection',
     './feature/tools',
     './feature/interactions',
     './feature/operations',
@@ -94,6 +95,6 @@ test('publishes only built entrypoints and the profile patch', () => {
   assert.equal(metadata?.scripts?.test, 'vitest run')
   assert.equal(
     metadata?.scripts?.check,
-    'corepack pnpm run typecheck && corepack pnpm run lint && corepack pnpm run test && corepack pnpm run build',
+    'pnpm run typecheck && pnpm run lint && pnpm run test && pnpm run build',
   )
 })

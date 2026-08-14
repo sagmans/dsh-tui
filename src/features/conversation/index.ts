@@ -22,9 +22,10 @@ const BINDING_ERROR = 'selected session is not locally addressable'
 const COMMAND_COMPLETION_ERROR = 'command completion failed'
 const SKILL_COMPLETION_ERROR = 'skill completion failed'
 const SETTINGS_COMMAND_PREFIX = 'settings.section.'
+const MODEL_COMMAND_NAME = 'model'
 
 export const name = 'tui-conversation'
-export const inject: readonly string[] = ['tuiKernel', 'tuiClient', 'apiProxy']
+export const inject: readonly string[] = ['tuiKernel', 'tuiClient', 'apiProxy', 'tuiModelSelection']
 
 export interface ConversationSeams {
   readonly createController: (options: ConversationControllerOptions) => ConversationController
@@ -88,6 +89,7 @@ function controllerOptions(ctx: Context): ConversationControllerOptions {
           throw new Error(`${SKILL_COMPLETION_ERROR}: ${skills.result.error.code}: ${skills.result.error.message}`)
         }
         return [...new Set([
+          MODEL_COMMAND_NAME,
           ...commands.value.map(command => command.name),
           ...skills.result.value.skills.map(skill => skill.name),
         ])].filter(candidateName => candidateName.startsWith(query)).toSorted((left, right) => left.localeCompare(right))
@@ -97,6 +99,7 @@ function controllerOptions(ctx: Context): ConversationControllerOptions {
       resources.navigation.go('settings')
       queueMicrotask(() => { void resources.commands.run(`${SETTINGS_COMMAND_PREFIX}${section}`) })
     },
+    models: ctx.tuiModelSelection,
     media: {
       exportSession: (sessionId, path, signal) => exportSessionArchive(
         ctx.apiProxy.downloads,

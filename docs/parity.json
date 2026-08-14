@@ -372,15 +372,15 @@
       "title": "Session model/reasoning choice, composer seat, /model, and unroutable blocking",
       "webRows": ["ui-model-selection"],
       "webPackages": ["@deepseek-ai/dsh-client-ui-model-selection"],
-      "evidence": ["deepseek-harness/packages/client/ui-model-selection/README.md", "src/features/settings/projection-selections.ts"],
+      "evidence": ["deepseek-harness/packages/client/ui-model-selection/README.md", "src/features/model-selection/model.ts", "src/features/settings/projection-selections.ts"],
       "classification": "parity",
-      "owner": "planned: src/features/model-selection; src/views/model-selection/root.ts",
+      "owner": "src/features/model-selection; src/views/model-selection/root.ts",
       "keyboard": "Composer model seat, /model, or Settings; choose provider/model/reasoning",
       "mouse": "Click model seat, provider/model/reasoning choice, or setup handoff",
-      "automatedProof": ["test/features/settings.test.ts", "planned:test/features/model-selection.test.ts", "planned:test/features/model-selection-native.test.ts"],
+      "automatedProof": ["test/features/settings.test.ts", "test/features/model-selection.test.ts", "test/features/model-selection-native.test.ts", "test/features/conversation.test.ts", "test/features/preset-permission-native.test.ts"],
       "dogfoodProof": "pending: Task 17 switch model and prove unroutable recovery",
       "status": "partial",
-      "notes": "Settings selection exists; composer seat, /model, and blocking/setup handoff are absent."
+      "notes": "Shared host-backed directory powers composer and /model selection, adapter-owned reasoning choices, route blocking, and provider setup handoff; real-profile recovery dogfood remains."
     },
     {
       "id": "permissions.presets",

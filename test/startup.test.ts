@@ -16,6 +16,8 @@ const CLIENT_PLUGIN_NAME = '@sagmans/dsh-tui/service/client'
 const KERNEL_PLUGIN_NAME = '@sagmans/dsh-tui'
 const SHELL_PLUGIN_NAME = '@sagmans/dsh-tui/feature/shell'
 const SESSIONS_PLUGIN_NAME = '@sagmans/dsh-tui/feature/sessions'
+const MODEL_SELECTION_PLUGIN_NAME = '@sagmans/dsh-tui/feature/model-selection'
+const MODEL_SELECTION_SERVICE = 'tuiModelSelection'
 const CONVERSATION_PLUGIN_NAME = '@sagmans/dsh-tui/feature/conversation'
 const TOOLS_PLUGIN_NAME = '@sagmans/dsh-tui/feature/tools'
 const INTERACTIONS_PLUGIN_NAME = '@sagmans/dsh-tui/feature/interactions'
@@ -80,9 +82,16 @@ function installPluginModules(ctx: Context): void {
     inject: [KERNEL_SERVICE, CLIENT_SERVICE],
     apply(): void {},
   }
+  const modelSelectionPlugin = {
+    name: 'tui-model-selection-fixture',
+    inject: [KERNEL_SERVICE, CLIENT_SERVICE],
+    apply(modelContext: Context): void {
+      modelContext.provide(MODEL_SELECTION_SERVICE, Object.freeze({ ready: true }))
+    },
+  }
   const conversationPlugin = {
     name: 'tui-conversation-fixture',
-    inject: [KERNEL_SERVICE, CLIENT_SERVICE],
+    inject: [KERNEL_SERVICE, CLIENT_SERVICE, MODEL_SELECTION_SERVICE],
     apply(): void {},
   }
   const toolsPlugin = {
@@ -111,6 +120,7 @@ function installPluginModules(ctx: Context): void {
     [KERNEL_PLUGIN_NAME, kernelPlugin],
     [SHELL_PLUGIN_NAME, shellPlugin],
     [SESSIONS_PLUGIN_NAME, sessionsPlugin],
+    [MODEL_SELECTION_PLUGIN_NAME, modelSelectionPlugin],
     [CONVERSATION_PLUGIN_NAME, conversationPlugin],
     [TOOLS_PLUGIN_NAME, toolsPlugin],
     [INTERACTIONS_PLUGIN_NAME, interactionsPlugin],
@@ -162,7 +172,11 @@ test('settles keyless startup, client, kernel, and shell Loader rows without bro
 
     await ctx.loader.create({ name: SHELL_PLUGIN_NAME, inject: [KERNEL_SERVICE] })
     await ctx.loader.create({ name: SESSIONS_PLUGIN_NAME, inject: [KERNEL_SERVICE, CLIENT_SERVICE] })
-    await ctx.loader.create({ name: CONVERSATION_PLUGIN_NAME, inject: [KERNEL_SERVICE, CLIENT_SERVICE] })
+    await ctx.loader.create({ name: MODEL_SELECTION_PLUGIN_NAME, inject: [KERNEL_SERVICE, CLIENT_SERVICE] })
+    await ctx.loader.create({
+      name: CONVERSATION_PLUGIN_NAME,
+      inject: [KERNEL_SERVICE, CLIENT_SERVICE, MODEL_SELECTION_SERVICE],
+    })
     await ctx.loader.create({ name: TOOLS_PLUGIN_NAME, inject: [KERNEL_SERVICE, CLIENT_SERVICE] })
     await ctx.loader.create({ name: INTERACTIONS_PLUGIN_NAME, inject: [KERNEL_SERVICE, CLIENT_SERVICE] })
     await ctx.loader.create({ name: OPERATIONS_PLUGIN_NAME, inject: [KERNEL_SERVICE, CLIENT_SERVICE] })
@@ -193,6 +207,7 @@ test('settles keyless startup, client, kernel, and shell Loader rows without bro
         CONVERSATION_PLUGIN_NAME,
         INTERACTIONS_PLUGIN_NAME,
         KERNEL_PLUGIN_NAME,
+        MODEL_SELECTION_PLUGIN_NAME,
         OPERATIONS_PLUGIN_NAME,
         SETTINGS_PLUGIN_NAME,
         SESSIONS_PLUGIN_NAME,
