@@ -181,7 +181,7 @@ export function mountModelSelection(ctx: Context, seams: ModelSelectionSeams = D
           && resources.navigation.getSnapshot().overlays.length === 0
           && noEditor(),
       )),
-      resources.commands.register(ctx, modelSelectionCommands(controller, () => active() && noEditor())),
+      resources.commands.register(ctx, modelSelectionCommands(controller, active)),
       ctx.tuiClient.remote.$on('llm/adapters-updated', () => { void controller.refresh() }),
       ctx.tuiClient.remote.$on('settings/document-updated', () => { void controller.refresh() }),
     )

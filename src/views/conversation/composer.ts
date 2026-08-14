@@ -17,6 +17,9 @@ import type {
 
 const COMPOSER_HEIGHT = 4
 const ACTION_HEIGHT = 1
+const ACTION_BAR_HEIGHT = 2
+const PRIMARY_ACTION_WIDTH = '12.5%'
+const PREFERENCE_ACTION_WIDTH = '25%'
 const INPUT_HEIGHT = 6
 const INPUT_WIDTH = '86%'
 const INPUT_LEFT = '7%'
@@ -40,8 +43,8 @@ const PRESET_KEY = 'p'
 const BUSY_ENTER_KEY = 'b'
 const INFORMATION_KEY = 'i'
 const QUEUE_KEY = 'q'
-const TRIGGER_LAUNCH_KEY = '/'
-const COMPOSER_HINT = 'M+Enter primary · C+Enter alternate · M+G agents · M+I info · M+Q queue · M+B switch · M+/ menu · M+M model · M+A access · M+P preset'
+const TRIGGER_LAUNCH_KEY = 'l'
+const COMPOSER_HINT = 'M+Enter primary · C+Enter alternate · M+G agents · M+I info · M+Q queue · M+B switch · M+L menu · M+M model · M+A access · M+P preset'
 const ONE_SHOT_COMPOSER_COPY = 'ONE-SHOT RECORD · Follow-up unavailable.'
 const PARENT_UNAVAILABLE_COPY = 'PARENT UNAVAILABLE · Persisted transcript is read only.'
 const RUNNING_PARENT_UNAVAILABLE_COPY = 'PARENT UNAVAILABLE · Input locked; Stop remains available.'
@@ -108,13 +111,18 @@ function handleMediaKey(key: KeyEvent, controller: ConversationController): bool
   return true
 }
 
-function handleTriggerKey(key: KeyEvent, controller: ConversationController): boolean {
+function handleTriggerKey(
+  key: KeyEvent,
+  editor: TextareaRenderable,
+  controller: ConversationController,
+): boolean {
   const trigger = controller.getSnapshot().trigger
   if (trigger?.open !== true) return false
   if (key.name === ESCAPE_KEY) controller.dismissTrigger()
   else if (key.name === UP_KEY) controller.moveTrigger(-1)
   else if (key.name === DOWN_KEY) controller.moveTrigger(1)
   else if (key.name === RETURN_KEY && !key.ctrl && !key.meta && !key.shift && trigger.highlight !== undefined) {
+    editor.blur()
     controller.pickTriggerHighlight()
   } else return false
   key.preventDefault()
@@ -129,7 +137,7 @@ function handleKey(
   focusLastAttachment: () => boolean,
   focusQueue: () => boolean,
 ): void {
-  if (handleTriggerKey(key, controller)) return
+  if (handleTriggerKey(key, editor, controller)) return
   if (key.ctrl && key.name === CANCEL_KEY) {
     key.preventDefault()
     key.stopPropagation()
@@ -174,8 +182,12 @@ function handleKey(
   if (key.meta && (key.name === ACCESS_KEY || key.name === MODEL_KEY || key.name === PRESET_KEY)) {
     key.preventDefault()
     key.stopPropagation()
-    if (key.name === MODEL_KEY) controller.openModelSelection('composer')
-    else controller.openPreferences(key.name === ACCESS_KEY ? 'access' : 'presets')
+    if (key.name === MODEL_KEY) {
+      editor.blur()
+      controller.openModelSelection('composer')
+    } else {
+      controller.openPreferences(key.name === ACCESS_KEY ? 'access' : 'presets')
+    }
     return
   }
   if (handleMediaKey(key, controller)) return
@@ -218,6 +230,7 @@ function createEditor(
   focusLastAttachment: () => boolean,
   focusQueue: () => boolean,
 ): TextareaRenderable {
+  let lastValue = snapshot.draft
   const editor = new TextareaRenderable(renderer, {
     id: 'conversation-composer',
     width: '100%',
@@ -230,7 +243,12 @@ function createEditor(
     focusedBackgroundColor: theme.colors.background,
     wrapMode: 'word',
     keyBindings: [{ name: RETURN_KEY, meta: true, action: 'submit' }],
-    onContentChange() { controller.setDraft(editor.plainText, editor.cursorOffset) },
+    onContentChange() {
+      const nextValue = editor.plainText
+      if (nextValue === lastValue) return
+      lastValue = nextValue
+      controller.setDraft(nextValue, editor.cursorOffset)
+    },
     onKeyDown(key) { handleKey(key, editor, controller, focusLastAttachment, focusQueue) },
   })
   editor.onSubmit = () => { submit(() => controller.sendDraft()) }
@@ -346,6 +364,7 @@ function createAction(
   content: string,
   enabled: boolean,
   run: () => void,
+  width?: `${number}%`,
 ): TextRenderable {
   return createFocusableAction(renderer, {
     content,
@@ -355,6 +374,7 @@ function createAction(
     id,
     mutedFg: theme.colors.muted,
     run,
+    ...width === undefined ? {} : { width },
   })
 }
 
@@ -367,6 +387,18 @@ export function createConversationActions(
   const actions = new BoxRenderable(renderer, {
     id: 'conversation-actions',
     width: '100%',
+    height: ACTION_BAR_HEIGHT,
+    flexDirection: 'column',
+  })
+  const primary = new BoxRenderable(renderer, {
+    id: 'conversation-primary-actions',
+    width: '100%',
+    height: ACTION_HEIGHT,
+    flexDirection: 'row',
+  })
+  const preferences = new BoxRenderable(renderer, {
+    id: 'conversation-preference-actions',
+    width: '100%',
     height: ACTION_HEIGHT,
     flexDirection: 'row',
   })
@@ -374,87 +406,94 @@ export function createConversationActions(
   const sendEnabled = snapshot.subagent?.sendEnabled ?? snapshot.sessionId !== undefined
   const stopEnabled = snapshot.subagent?.stopEnabled ?? snapshot.running
   const attachmentEnabled = snapshot.subagent?.attachmentEnabled ?? snapshot.sessionId !== undefined
-  actions.add(createAction(
+  primary.add(createAction(
     renderer,
     theme,
     SEND_ACTION_ID,
     sendAction(snapshot.primarySendMode),
     sendEnabled && modelRoutable,
     () => { void controller.sendDraft() },
+    PRIMARY_ACTION_WIDTH,
   ))
-  actions.add(createAction(
+  primary.add(createAction(
     renderer,
     theme,
     ALTERNATE_ACTION_ID,
     sendAction(alternateSendMode(snapshot.primarySendMode)),
     sendEnabled && snapshot.running && modelRoutable,
     () => { void controller.sendAlternateDraft() },
+    PRIMARY_ACTION_WIDTH,
   ))
-  actions.add(createAction(renderer, theme, STOP_ACTION_ID, STOP_ACTION, stopEnabled, () => {
+  primary.add(createAction(renderer, theme, STOP_ACTION_ID, STOP_ACTION, stopEnabled, () => {
     void controller.cancel()
-  }))
-  actions.add(createAction(renderer, theme, OLDER_ACTION_ID, OLDER_ACTION, snapshot.hasMore, () => {
+  }, PRIMARY_ACTION_WIDTH))
+  primary.add(createAction(renderer, theme, OLDER_ACTION_ID, OLDER_ACTION, snapshot.hasMore, () => {
     void controller.loadOlder()
-  }))
-  actions.add(createAction(renderer, theme, ATTACH_ACTION_ID, ATTACH_ACTION, attachmentEnabled && !snapshot.busy, () => {
+  }, PRIMARY_ACTION_WIDTH))
+  primary.add(createAction(renderer, theme, ATTACH_ACTION_ID, ATTACH_ACTION, attachmentEnabled && !snapshot.busy, () => {
     controller.beginAttachment()
-  }))
-  actions.add(createAction(renderer, theme, EXPORT_ACTION_ID, EXPORT_ACTION, snapshot.sessionId !== undefined && !snapshot.busy, () => {
+  }, PRIMARY_ACTION_WIDTH))
+  primary.add(createAction(renderer, theme, EXPORT_ACTION_ID, EXPORT_ACTION, snapshot.sessionId !== undefined && !snapshot.busy, () => {
     controller.beginExport()
-  }))
-  actions.add(createAction(renderer, theme, CLEAR_ACTION_ID, CLEAR_ACTION, snapshot.attachments.length > 0, () => {
+  }, PRIMARY_ACTION_WIDTH))
+  primary.add(createAction(renderer, theme, CLEAR_ACTION_ID, CLEAR_ACTION, snapshot.attachments.length > 0, () => {
     controller.clearAttachments()
-  }))
-  actions.add(createAction(
+  }, PRIMARY_ACTION_WIDTH))
+  primary.add(createAction(
     renderer,
     theme,
     TRIGGER_LAUNCH_ACTION_ID,
     TRIGGER_LAUNCH_ACTION,
     snapshot.sessionId !== undefined && snapshot.subagent?.inputEnabled !== false,
     () => { controller.launchTrigger() },
+    PRIMARY_ACTION_WIDTH,
   ))
   if (snapshot.modelAvailable && snapshot.modelLabel !== undefined) {
     const effort = snapshot.modelEffort === undefined ? '' : ` · ${snapshot.modelEffort}`
-    actions.add(createAction(
+    preferences.add(createAction(
       renderer,
       theme,
       MODEL_ACTION_ID,
       `${MODEL_ACTION_PREFIX}${snapshot.modelLabel}${effort} `,
       true,
       () => { controller.openModelSelection('composer') },
+      PREFERENCE_ACTION_WIDTH,
     ))
   }
   if (snapshot.accessPreset !== undefined) {
-    actions.add(createAction(
+    preferences.add(createAction(
       renderer,
       theme,
       ACCESS_ACTION_ID,
       `${ACCESS_ACTION_PREFIX}${snapshot.accessPreset} `,
       true,
       () => { controller.openPreferences('access') },
+      PREFERENCE_ACTION_WIDTH,
     ))
   }
   if (snapshot.agentPreset !== undefined) {
-    actions.add(createAction(
+    preferences.add(createAction(
       renderer,
       theme,
       PRESET_ACTION_ID,
       `${PRESET_ACTION_PREFIX}${snapshot.agentPreset} `,
       true,
       () => { controller.openPreferences('presets') },
+      PREFERENCE_ACTION_WIDTH,
     ))
   }
   if (snapshot.busyEnterAvailable) {
-    actions.add(createAction(
+    preferences.add(createAction(
       renderer,
       theme,
       BUSY_ENTER_ACTION_ID,
       `${BUSY_ENTER_ACTION_PREFIX}${snapshot.busyEnter.toUpperCase()} `,
       !snapshot.busyEnterBusy,
       () => { void controller.toggleBusyEnter() },
+      PREFERENCE_ACTION_WIDTH,
     ))
   }
-  actions.add(new TextRenderable(renderer, {
+  preferences.add(new TextRenderable(renderer, {
     content: COMPOSER_HINT,
     height: ACTION_HEIGHT,
     fg: theme.colors.muted,
@@ -463,5 +502,7 @@ export function createConversationActions(
     selectable: false,
     flexGrow: 1,
   }))
+  actions.add(primary)
+  actions.add(preferences)
   return actions
 }

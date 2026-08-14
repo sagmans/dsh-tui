@@ -14,13 +14,13 @@ import { createInputActions } from '../action.js'
 import { SecretInputRenderable } from './secret-input.js'
 
 const OVERLAY_WIDTH = '94%'
-const OVERLAY_HEIGHT = '90%'
+const OVERLAY_HEIGHT = '100%'
 const OVERLAY_LEFT = '3%'
-const OVERLAY_TOP = '5%'
+const OVERLAY_TOP = '0%'
 const OVERLAY_Z_INDEX = 105
 const ROW_HEIGHT = 1
 const TABS_HEIGHT = 1
-const DETAILS_HEIGHT = 5
+const DETAILS_HEIGHT = 3
 const STATUS_HEIGHT = 1
 const INPUT_HEIGHT = 5
 const INPUT_EDITOR_HEIGHT = 2

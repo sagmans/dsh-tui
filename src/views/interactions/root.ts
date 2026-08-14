@@ -91,7 +91,7 @@ function addQuestionActions(
     theme,
     SUBMIT_ACTION_ID,
     'SUBMIT',
-    enabled && snapshot.canSubmit,
+    enabled,
     () => { void controller.submit() },
   ))
   actions.add(createAction(renderer, theme, CANCEL_ACTION_ID, 'CANCEL', enabled, () => { void controller.cancel() }))
@@ -347,21 +347,13 @@ export function createInteractionsView(
   let frame = createFrame(renderer, theme, controller, controller.getSnapshot())
   root.add(frame)
   const unsubscribe = controller.subscribe(() => {
-    const restoreCustomFocus = renderer.currentFocusedEditor?.id === CUSTOM_EDITOR_ID
-      && !controller.getSnapshot().busy
-    const next = createFrame(renderer, theme, controller, controller.getSnapshot())
+    const snapshot = controller.getSnapshot()
+    if (renderer.currentFocusedEditor?.id === CUSTOM_EDITOR_ID && !snapshot.busy) return
+    const next = createFrame(renderer, theme, controller, snapshot)
     root.remove(frame)
     frame.destroyRecursively()
     frame = next
     root.add(frame)
-    if (restoreCustomFocus) {
-      queueMicrotask(() => {
-        const editor = next.findDescendantById(CUSTOM_EDITOR_ID)
-        if (!(editor instanceof TextareaRenderable) || editor.isDestroyed) return
-        editor.cursorOffset = editor.plainText.length
-        editor.focus()
-      })
-    }
   })
   root.once('destroyed', unsubscribe)
   return root

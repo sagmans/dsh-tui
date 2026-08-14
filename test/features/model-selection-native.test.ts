@@ -77,10 +77,11 @@ test.skipIf(!NATIVE_RENDERER_AVAILABLE)('supports mouse model choice and provide
     assert.match(frame, /No provider can route/u)
 
     const model = view.findDescendantById('model-selection-row-1')
-    const providers = view.findDescendantById('model-selection-providers')
     assert.ok(model)
-    assert.ok(providers)
     await harness.mockMouse.click(model.screenX + 1, model.screenY)
+    await harness.flush()
+    const providers = view.findDescendantById('model-selection-providers')
+    assert.ok(providers)
     await harness.mockMouse.click(providers.screenX + 1, providers.screenY)
 
     assert.deepEqual(calls, ['row:1', 'activate', 'providers'])

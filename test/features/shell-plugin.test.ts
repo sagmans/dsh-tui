@@ -9,6 +9,7 @@ interface ShellPluginControl {
   readonly calls: string[]
   readonly commandNames: string[]
   failViewAdd?: boolean
+  quit?: () => void
 }
 
 // One fixture preserves service identity and teardown ordering across the complete plugin seam.
@@ -30,8 +31,10 @@ function contextFixture(control: ShellPluginControl): Context {
     list: () => [],
     run: () => ({ ok: true as const }),
     subscribe: () => () => {},
-    register(owner: Context, layer: { commands: readonly { name: string }[] }) {
+    register(owner: Context, layer: { commands: readonly { name: string; run: () => void | Promise<void> }[] }) {
       control.commandNames.push(...layer.commands.map(command => command.name))
+      const quit = layer.commands.find(command => command.name === 'shell.quit')
+      if (quit !== undefined) control.quit = () => { void quit.run() }
       control.calls.push('commands:register')
       const disposeEffect = owner.effect(
         () => () => { control.calls.push('commands:dispose') },
@@ -146,6 +149,27 @@ test('registers configurable shell commands and disposes the view before command
     'commands:dispose',
     'commands:dispose',
   ])
+})
+
+test('requests bounded launcher shutdown from the quit command', async () => {
+  const control: ShellPluginControl = { calls: [], commandNames: [] }
+  const ctx = contextFixture(control)
+  const exits: number[] = []
+  ctx.provide('appExit', code => { exits.push(code) })
+
+  mountShell(ctx, DEFAULT_SHELL_CONFIG, {
+    mountView: () => ({
+      // Lifecycle fixture only needs root identity.
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      root: {} as never,
+      dispose: () => {},
+    }),
+  })
+  control.quit?.()
+
+  assert.deepEqual(exits, [0])
+  assert.equal(control.calls.includes('renderer:destroy'), false)
+  await ctx.fiber.dispose()
 })
 
 test('rolls back shell resources when renderer insertion fails', async () => {

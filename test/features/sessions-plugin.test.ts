@@ -8,6 +8,7 @@ import type { SessionsController } from '../../src/features/sessions/model.js'
 import type { TuiSlots } from '../../src/contracts/slots.js'
 
 interface Control {
+  readonly bindings: Array<{ readonly command: string; readonly key: string }>
   readonly calls: string[]
   readonly commandNames: string[]
   controller: SessionsController | undefined
@@ -60,7 +61,11 @@ function fixture(control: Control): Context {
     },
   }
   const commands = {
-    register(owner: Context, layer: { commands: readonly { name: string }[] }) {
+    register(owner: Context, layer: {
+      bindings: readonly { readonly command: string; readonly key: string }[]
+      commands: readonly { name: string }[]
+    }) {
+      control.bindings.push(...layer.bindings)
       control.commandNames.push(...layer.commands.map(command => command.name))
       const disposeEffect = owner.effect(
         () => () => { control.calls.push('commands:dispose') },
@@ -90,7 +95,13 @@ function fixture(control: Control): Context {
 }
 
 test('registers route contribution and disposes its controller with owner fiber', async () => {
-  const control: Control = { calls: [], commandNames: [], controller: undefined, renderRoute: undefined }
+  const control: Control = {
+    bindings: [],
+    calls: [],
+    commandNames: [],
+    controller: undefined,
+    renderRoute: undefined,
+  }
   const ctx = fixture(control)
   const controller = {
     deactivate: () => { control.calls.push('controller:deactivate') },
@@ -111,6 +122,14 @@ test('registers route contribution and disposes its controller with owner fiber'
 
   assert.deepEqual(control.calls, ['slot:dsh-tui-sessions'])
   assert.deepEqual(control.commandNames, EXPECTED_COMMAND_NAMES)
+  assert.deepEqual(
+    control.bindings.filter(binding => binding.command === 'sessions.group-mode'
+      || binding.command === 'sessions.order-mode'),
+    [
+      { key: 'shift+g', command: 'sessions.group-mode' },
+      { key: 'shift+s', command: 'sessions.order-mode' },
+    ],
+  )
   control.renderRoute?.()
   assert.equal(control.controller, controller)
   await ctx.fiber.dispose()

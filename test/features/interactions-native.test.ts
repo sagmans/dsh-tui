@@ -144,7 +144,6 @@ test.skipIf(!NATIVE_RENDERER_AVAILABLE)('completes recommended option and custom
     await harness.mockMouse.click(custom.screenX + 1, custom.screenY)
     await harness.mockInput.typeText('Use disposable fixtures')
     await settle()
-    await harness.flush()
     assert.equal(harness.renderer.currentFocusedEditor?.id, 'interaction-custom')
 
     const submit = view.findDescendantById('interaction-submit')

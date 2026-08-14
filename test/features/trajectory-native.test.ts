@@ -138,7 +138,8 @@ function controller(calls: string[]): TrajectoryController {
 async function click(view: ReturnType<typeof createTrajectoryView>, harness: Awaited<ReturnType<typeof createTestRenderer>>, id: string): Promise<void> {
   const target = view.findDescendantById(id)
   assert.ok(target, id)
-  await harness.mockMouse.click(target.screenX + 1, target.screenY)
+  const offset = Math.max(0, Math.floor((target.width - 1) / 2))
+  await harness.mockMouse.click(target.screenX + offset, target.screenY)
   await harness.flush()
 }
 

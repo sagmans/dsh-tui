@@ -1,4 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis'
+import type { AppExit } from '@deepseek-ai/dsh-cmdline'
 import type { TuiCommandLayer } from '../../contracts/commands.js'
 import type { KernelResources } from '../../kernel/lifecycle.js'
 import {
@@ -15,6 +16,7 @@ const PALETTE_COMMAND_LAYER_ID = 'dsh-tui-shell-palette'
 const SHELL_COMMAND_PRIORITY = 100
 const PALETTE_COMMAND_PRIORITY = 200
 const INVALID_CONFIG_ERROR = 'invalid TUI shell config'
+const SUCCESS_EXIT_CODE = 0
 const BINDING_KEYS = Object.freeze([
   'accept',
   'escape',
@@ -136,7 +138,11 @@ function shellCommands(
   const controller = createShellController({
     bindings: config.bindings,
     navigation: resources.navigation,
-    onQuit: () => { resources.renderer.destroy() },
+    onQuit: () => {
+      const exit: AppExit | undefined = ctx.get('appExit')
+      if (exit === undefined) resources.renderer.destroy()
+      else exit(SUCCESS_EXIT_CODE)
+    },
     sessions: {
       getSnapshot: () => ctx.tuiClient.sessions.list.getSnapshot(),
       subscribe: listener => ctx.tuiClient.sessions.list.subscribe(listener),

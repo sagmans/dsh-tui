@@ -206,7 +206,13 @@ test.skipIf(!NATIVE_RENDERER_AVAILABLE)('opens composer access and preset seats 
     assert.ok(composer)
     await harness.mockMouse.click(composer.screenX + 1, composer.screenY)
     harness.mockInput.pressKey('m', { meta: true })
+    await settle()
+    assert.equal(harness.renderer.currentFocusedEditor === null
+      || harness.renderer.currentFocusedEditor === undefined, true)
+    assert.equal(calls.at(-1), 'model:composer')
+    composer.focus()
     harness.mockInput.pressKey('a', { meta: true })
+    composer.focus()
     harness.mockInput.pressKey('p', { meta: true })
     await settle()
     assert.deepEqual(calls.slice(-3), ['model:composer', 'seat:access', 'seat:presets'])

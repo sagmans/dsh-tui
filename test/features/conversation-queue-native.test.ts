@@ -20,7 +20,7 @@ const NATIVE_RENDERER_AVAILABLE = process.versions.bun !== undefined
   || process.getBuiltinModule('node:ffi') !== undefined
 const WIDTH = 88
 const HEIGHT = 24
-const SETTLE_DELAY_MS = 0
+const SETTLE_DELAY_MS = 50
 const QUEUE_ACTION_PREFIX = 'conversation-queue'
 // Static fixture identities cross only Harness brand boundaries.
 /* oxlint-disable typescript/no-unsafe-type-assertion */
@@ -157,8 +157,10 @@ test.skipIf(!NATIVE_RENDERER_AVAILABLE)('drives queue occurrence actions by keyb
     harness.mockInput.pressEnter()
     await harness.flush()
     assert.ok(view.findDescendantById('conversation-path-input'))
-    harness.mockInput.pressKey('ESCAPE')
+    harness.mockInput.pressEscape()
     await settle()
+    await harness.flush()
+    assert.equal(view.findDescendantById('conversation-path-input'), undefined)
 
     const firstSteer = view.findDescendantById(`${QUEUE_ACTION_PREFIX}-steer-${String(FIRST_ID)}`)
     assert.ok(firstSteer)

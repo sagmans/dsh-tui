@@ -64,7 +64,7 @@ test.skipIf(!NATIVE_RENDERER_AVAILABLE)('reflows narrow chrome and keeps locale 
     theme.setPreference('light')
     await harness.flush()
     const frame = harness.captureCharFrame()
-    assert.equal(frame.split('\n')[0]?.length, WIDTH)
+    assert.equal(view.root.width, WIDTH)
     assert.match(frame, /对话/u)
     assert.match(frame, /设置/u)
 
@@ -137,11 +137,12 @@ test.skipIf(!NATIVE_RENDERER_AVAILABLE)('invokes theme and locale choices throug
   const harness = await createTestRenderer({ width: WIDTH, height: HEIGHT, bufferedOutput: 'memory' })
   const calls: string[] = []
   const locale = createTuiLocale({ locale: 'zh' })
+  const controller = preferencesController(calls)
   const view = createSettingsView(
     harness.renderer,
     createTuiTheme({ color: true, preference: 'dark' }),
     locale,
-    preferencesController(calls),
+    controller,
   )
   harness.renderer.root.add(view)
 
@@ -156,6 +157,7 @@ test.skipIf(!NATIVE_RENDERER_AVAILABLE)('invokes theme and locale choices throug
     assert.ok(languageRow)
     await harness.mockMouse.click(languageRow.screenX + 1, languageRow.screenY)
     await harness.flush()
+    assert.equal(controller.getSnapshot().rowIndex, 1)
     const english = view.findDescendantById('settings-action-locale.en')
     assert.ok(english)
     await harness.mockMouse.click(english.screenX + 1, english.screenY)

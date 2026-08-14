@@ -11,7 +11,7 @@ const NATIVE_RENDERER_AVAILABLE = process.versions.bun !== undefined
 const WIDTH = 88
 const HEIGHT = 22
 const NOOP = (): void => {}
-const SETTLE_DELAY_MS = 0
+const SETTLE_DELAY_MS = 50
 // Static fixture identity crosses only Harness brand boundaries.
 // oxlint-disable-next-line typescript/no-unsafe-type-assertion
 const SESSION_ID = 'trigger-session' as SessionId
@@ -109,7 +109,7 @@ function controller(calls: string[]): ConversationController {
     sendDraft: () => Promise.resolve(false),
     selectSubagent: NOOP,
     exitPlanMode: () => Promise.resolve(false),
-    setDraft: NOOP,
+    setDraft: (text, caret) => { calls.push(`draft:${text}:${String(caret)}`) },
     setInput: NOOP,
     steerQueue: () => Promise.resolve(false),
     steerQueueAll: () => Promise.resolve(false),
@@ -145,14 +145,23 @@ test.skipIf(!NATIVE_RENDERER_AVAILABLE)('supports keyboard and mouse trigger nav
 
     const composer = view.findDescendantById('conversation-composer')
     assert.ok(composer)
-    await harness.mockMouse.click(composer.screenX + 1, composer.screenY)
-    harness.mockInput.pressKey('ARROWDOWN')
+    composer.focus()
+    await harness.mockInput.typeText('x')
+    await settle()
+    harness.mockInput.pressKey('l', { meta: true })
+    harness.mockInput.pressArrow('down')
     harness.mockInput.pressEnter()
-    harness.mockInput.pressKey('ESCAPE')
+    await settle()
+    assert.equal(harness.renderer.currentFocusedEditor === null
+      || harness.renderer.currentFocusedEditor === undefined, true)
+    composer.focus()
+    harness.mockInput.pressEscape()
     await settle()
 
     assert.deepEqual(calls, [
       'pick:command:1',
+      'launch',
+      'draft:/cox:4',
       'launch',
       'move:1',
       'pick:highlight',

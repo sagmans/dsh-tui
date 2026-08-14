@@ -19,7 +19,7 @@ const NATIVE_RENDERER_AVAILABLE = process.versions.bun !== undefined
   || process.getBuiltinModule('node:ffi') !== undefined
 const WIDTH = 100
 const HEIGHT = 28
-const SETTLE_DELAY_MS = 0
+const SETTLE_DELAY_MS = 20
 const MODEL_ACTION_ID = 'conversation-model'
 const ACCESS_ACTION_ID = 'conversation-access'
 const PRESET_ACTION_ID = 'conversation-preset'
@@ -141,7 +141,10 @@ async function invokeByKeyboard(
 ): Promise<void> {
   const action = view.findDescendantById(id)
   assert.ok(action)
+  assert.ok(action.width > 0, `${id} must remain visible`)
   action.focus()
+  await harness.flush()
+  assert.equal(harness.renderer.currentFocusedRenderable?.id, id)
   harness.mockInput.pressEnter()
   await settle()
   await harness.flush()
@@ -154,6 +157,7 @@ async function invokeByMouse(
 ): Promise<void> {
   const action = view.findDescendantById(id)
   assert.ok(action)
+  assert.ok(action.screenX < harness.renderer.width, `${id} must remain on screen`)
   await harness.mockMouse.click(action.screenX + 1, action.screenY)
   await settle()
   await harness.flush()
@@ -210,6 +214,7 @@ test.skipIf(!NATIVE_RENDERER_AVAILABLE)('exposes conversation information and co
     await invokeByMouse(view, harness, ACCESS_ACTION_ID)
     await invokeByKeyboard(view, harness, ACCESS_ACTION_ID)
     await invokeByMouse(view, harness, PRESET_ACTION_ID)
+    assert.deepEqual(preferenceOpens, ['access', 'access', 'presets'])
     await invokeByKeyboard(view, harness, PRESET_ACTION_ID)
     assert.deepEqual(modelOpens, ['composer', 'composer'])
     assert.deepEqual(preferenceOpens, ['access', 'access', 'presets', 'presets'])
@@ -220,7 +225,7 @@ test.skipIf(!NATIVE_RENDERER_AVAILABLE)('exposes conversation information and co
     harness.mockInput.pressKey('i', { meta: true })
     await settle()
     await harness.flush()
-    assert.match(harness.captureCharFrame(), /CONVERSATION INFO.*Turns 3.*Steps 4/u)
+    assert.match(harness.captureCharFrame(), /CONVERSATION INFO.*Turns 3.*Steps 4/su)
 
     await invokeByKeyboard(view, harness, CONTEXT_TAB_ID)
     assert.match(harness.captureCharFrame(), /Context used 75%.*System ~500.*Tools ~600/su)
