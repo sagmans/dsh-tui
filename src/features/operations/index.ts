@@ -28,7 +28,7 @@ const FOOTER_ACTION_CONTENT = ' SPC O OPERATIONS '
 const FOOTER_ACTION_HEIGHT = 1
 
 export const name = 'tui-operations'
-export const inject: readonly string[] = ['tuiKernel', 'tuiClient']
+export const inject: readonly string[] = ['tuiKernel', 'tuiClient', 'tuiTrajectory']
 
 export interface OperationsSeams {
   readonly createController: (options: OperationsControllerOptions) => OperationsController
@@ -236,6 +236,7 @@ export function mountOperations(ctx: Context, seams: OperationsSeams = DEFAULT_S
   const controller = seams.createController({
     actions: operationsActions(ctx.tuiClient),
     navigation: resources.navigation,
+    openTrajectory: () => { void ctx.tuiTrajectory.open() },
     sessions: sessionsSource(ctx.tuiClient),
   })
   const active = (): boolean => controller.getSnapshot().overlayId !== undefined

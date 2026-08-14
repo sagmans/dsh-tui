@@ -47,7 +47,7 @@ _None._
 | `conversation.compaction` — Context meter, compaction command, and tool-result pruning detail | parity | partial | src/features/conversation; src/views/conversation/information.ts |
 | `todos.session` — Session todo state and model-facing todo capability | parity | partial | src/features/conversation; src/views/conversation/information.ts |
 | `interactions.questions` — Questions, options, custom answers, recommendations, and approvals | parity | partial | src/features/interactions; src/views/interactions/root.ts |
-| `trajectory.ledger` — Turn/step ledger, search, folding, totals, details, timing, and pagination | parity | partial | planned: src/features/trajectory; src/views/trajectory/root.ts |
+| `trajectory.ledger` — Turn/step ledger, search, folding, totals, details, timing, and pagination | parity | partial | src/features/trajectory; src/views/trajectory/root.ts |
 | `attachments.images` — Image attachment admission, removal, metadata, and history access | terminal-alternative | partial | src/features/attachments; src/features/conversation/media.ts; src/views/conversation |
 | `browser.rich-content` — Raw HTML/SVG interpretation and rich browser card markup | web-only | excluded | Excluded by terminal sanitization policy |
 | `browser.url-navigation` — Arbitrary browser URL navigation | web-only | excluded | Excluded by terminal external-open policy |

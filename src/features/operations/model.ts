@@ -43,6 +43,7 @@ class OperationsControllerService implements OperationsController {
   private readonly actions: OperationsControllerOptions['actions']
   private readonly listeners = new Set<() => void>()
   private readonly navigation: OperationsControllerOptions['navigation']
+  private readonly openTrajectoryView: OperationsControllerOptions['openTrajectory']
   private readonly sessions: OperationsControllerOptions['sessions']
   private binding: OperationsSessionBinding | undefined
   private bindingDispose: (() => void) | undefined
@@ -67,6 +68,7 @@ class OperationsControllerService implements OperationsController {
   constructor(options: OperationsControllerOptions) {
     this.actions = options.actions
     this.navigation = options.navigation
+    this.openTrajectoryView = options.openTrajectory
     this.sessions = options.sessions
     this.resources = [this.sessions.list.subscribe(() => { this.rebind() })]
     this.rebind(false)
@@ -190,7 +192,7 @@ class OperationsControllerService implements OperationsController {
       case 'plan.off': return this.planOff(target)
       case 'subagent.open': return Promise.resolve(this.openSubagent(target))
       case 'workflow.open': return Promise.resolve(this.openWorkflow(target))
-      case 'trajectory.older': return this.loadOlder(target)
+      case 'trajectory.open': return Promise.resolve(this.openTrajectory(target))
       case 'feedback.positive': return this.rateFeedback(target, 'positive')
       case 'feedback.negative': return this.rateFeedback(target, 'negative')
       case 'feedback.clear': return this.clearFeedback(target)
@@ -225,6 +227,7 @@ class OperationsControllerService implements OperationsController {
     if (section === 'subagents' && this.current !== undefined) {
       void this.refreshSubagents(this.current)
     }
+    if (section === 'trajectory') this.openTrajectoryView()
   }
 
   setInput(value: string): void {
@@ -299,11 +302,6 @@ class OperationsControllerService implements OperationsController {
     return success
   }
 
-  private loadOlder(target: OperationTarget): Promise<boolean> {
-    if (target.kind !== 'trajectory' || this.binding === undefined) return Promise.resolve(false)
-    return this.runVoid(() => this.binding?.loadOlder() ?? Promise.resolve())
-  }
-
   private mutateGoal(
     target: OperationTarget | undefined,
     kind: GoalMutationRequest['kind'],
@@ -324,6 +322,12 @@ class OperationsControllerService implements OperationsController {
     const success = await this.putFeedback(target, target.item.rating, note)
     if (success) this.input = undefined
     return success
+  }
+
+  private openTrajectory(target: OperationTarget): boolean {
+    if (target.kind !== 'trajectory') return false
+    this.openTrajectoryView()
+    return true
   }
 
   private openSubagent(target: OperationTarget): boolean {
@@ -470,22 +474,6 @@ class OperationsControllerService implements OperationsController {
 
   private async runBoolean(operation: () => Promise<OperationsResult<unknown>>): Promise<boolean> {
     return (await this.run(operation)).ok
-  }
-
-  private async runVoid(operation: () => Promise<void>): Promise<boolean> {
-    this.busy = true
-    this.error = undefined
-    this.schedulePublish()
-    try {
-      await operation()
-      return true
-    } catch (error) {
-      this.error = errorText(error)
-      return false
-    } finally {
-      this.busy = false
-      this.schedulePublish()
-    }
   }
 
   private clearConfirmation(): void {

@@ -56,7 +56,7 @@ const OPERATION_ACTION_IDS = Object.freeze([
   'goal.resume',
   'plan.off',
   'subagent.open',
-  'trajectory.older',
+  'trajectory.open',
   'workflow.open',
 ] as const satisfies readonly OperationActionId[])
 const SETTINGS_PREFIX = 'settings.action.'

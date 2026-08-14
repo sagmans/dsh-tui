@@ -71,6 +71,7 @@ const EXPECTED_HOST_ROWS = new Map<string, string>([
   ['tui-conversation', '@sagmans/dsh-tui/feature/conversation'],
   ['tui-tools', '@sagmans/dsh-tui/feature/tools'],
   ['tui-interactions', '@sagmans/dsh-tui/feature/interactions'],
+  ['tui-trajectory', '@sagmans/dsh-tui/feature/trajectory'],
   ['tui-operations', '@sagmans/dsh-tui/feature/operations'],
   ['tui-settings', '@sagmans/dsh-tui/feature/settings'],
 ])

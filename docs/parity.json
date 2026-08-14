@@ -477,15 +477,15 @@
       "title": "Turn/step ledger, search, folding, totals, details, timing, and pagination",
       "webRows": ["ui-trajectory"],
       "webPackages": ["@deepseek-ai/dsh-client-ui-trajectory"],
-      "evidence": ["deepseek-harness/packages/client/ui-trajectory/README.md", "src/features/operations/projection.ts"],
+      "evidence": ["deepseek-harness/packages/client/ui-trajectory/README.md", "src/client/trajectory.ts", "src/features/trajectory/model.ts", "src/views/trajectory/root.ts"],
       "classification": "parity",
-      "owner": "planned: src/features/trajectory; src/views/trajectory/root.ts",
+      "owner": "src/features/trajectory; src/views/trajectory/root.ts",
       "keyboard": "Operations > Trajectory; search, fold, page, select, and switch detail tabs",
       "mouse": "Click turns/steps, fold controls, search, pagination, and detail tabs",
-      "automatedProof": ["test/features/operations.test.ts", "planned:test/features/trajectory.test.ts", "planned:test/features/trajectory-native.test.ts"],
+      "automatedProof": ["test/client/trajectory.test.ts", "test/features/operations.test.ts", "test/features/trajectory.test.ts", "test/features/trajectory-native.test.ts"],
       "dogfoodProof": "pending: Task 17 inspect multi-turn timing and input/output details",
       "status": "partial",
-      "notes": "Current raw node list and bounded JSON lack Web ledger behavior."
+      "notes": "Private target preserves complete request headers, system/tool prompt changes, schemas, assistant/compaction lifecycle, raw compaction output, usage, and errors; terminal ledger adds turn/step grouping, nested tools, full-detail search, folding, totals, stable paging, bounded rendering, and recorded chronology. Supported-runtime dogfood remains."
     },
     {
       "id": "attachments.images",

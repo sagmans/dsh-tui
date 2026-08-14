@@ -63,6 +63,10 @@
       "types": "./lib/features/operations/index.d.ts",
       "default": "./lib/features/operations/index.js"
     },
+    "./feature/trajectory": {
+      "types": "./lib/features/trajectory/index.d.ts",
+      "default": "./lib/features/trajectory/index.js"
+    },
     "./feature/settings": {
       "types": "./lib/features/settings/index.d.ts",
       "default": "./lib/features/settings/index.js"

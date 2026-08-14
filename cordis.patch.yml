@@ -178,9 +178,13 @@
       name: '@sagmans/dsh-tui/feature/interactions'
       inject: [tuiKernel, tuiClient]
 
+    - id: tui-trajectory
+      name: '@sagmans/dsh-tui/feature/trajectory'
+      inject: [tuiKernel, tuiClient]
+
     - id: tui-operations
       name: '@sagmans/dsh-tui/feature/operations'
-      inject: [tuiKernel, tuiClient]
+      inject: [tuiKernel, tuiClient, tuiTrajectory]
 
     - id: tui-settings
       name: '@sagmans/dsh-tui/feature/settings'

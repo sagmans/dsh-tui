@@ -23,7 +23,6 @@ const MESSAGE_ID = 'message-one' as MessageId
 const FEEDBACK_VERSION = 'v1' as MessageFeedbackVersion
 const NEXT_FEEDBACK_VERSION = 'v2' as MessageFeedbackVersion
 /* oxlint-enable typescript/no-unsafe-type-assertion */
-const LARGE_TRAJECTORY_COUNT = 10_000
 const EMPTY_CHAT: ChatSnapshot = {
   order: [],
   nodes: { get: () => undefined, values: () => [] },
@@ -137,6 +136,7 @@ function fixture(fixtureOptions: FixtureOptions = {}) {
   })
   const options: OperationsControllerOptions = {
     navigation: createNavigationStore(),
+    openTrajectory: () => { calls.push('trajectory:open') },
     sessions: {
       list,
       binding: () => ({
@@ -214,7 +214,7 @@ function fixture(fixtureOptions: FixtureOptions = {}) {
 }
 
 test('projects operational sections from shared session state', async () => {
-  const { controller, navigation } = fixture()
+  const { calls, controller, navigation } = fixture()
   await controller.open()
 
   assert.equal(navigation.getSnapshot().overlays.at(-1)?.id, 'operations')
@@ -226,7 +226,8 @@ test('projects operational sections from shared session state', async () => {
   controller.selectSection('workflows')
   assert.match(controller.getSnapshot().rows[0]?.title ?? '', /Verify/u)
   controller.selectSection('trajectory')
-  assert.equal(controller.getSnapshot().rows.find(row => row.id.includes('assistant'))?.title, 'Assistant #3')
+  assert.equal(controller.getSnapshot().rows[0]?.title, 'Trajectory ledger')
+  assert.equal(calls.includes('trajectory:open'), true)
   controller.selectSection('feedback')
   assert.match(controller.getSnapshot().rows[0]?.summary ?? '', /positive/u)
 })
@@ -272,21 +273,14 @@ test('contains operational refresh failures inside the overlay', async () => {
   assert.equal(controller.getSnapshot().busy, false)
 })
 
-test('projects large trajectory snapshots without dropping events', () => {
-  const { binding, controller } = fixture()
-  const nodes: ConversationSnapshot['nodes'] = Array.from({ length: LARGE_TRAJECTORY_COUNT }, (_, index) => ({
-    kind: 'assistant',
-    seq: index + 1,
-    time: index + 1,
-    turn: index + 1,
-    step: 1,
-    blocks: [{ kind: 'text', text: `event ${index + 1}` }],
-  }))
-  binding.publish({ ...binding.getSnapshot(), nodes })
+test('replaces raw trajectory rows with one terminal ledger entry', async () => {
+  const { calls, controller } = fixture()
   controller.selectSection('trajectory')
 
-  assert.equal(controller.getSnapshot().rows.length, LARGE_TRAJECTORY_COUNT + 1)
-  assert.equal(controller.getSnapshot().rows.at(-1)?.title, `Assistant #${LARGE_TRAJECTORY_COUNT}`)
+  assert.equal(controller.getSnapshot().rows.length, 1)
+  assert.equal(controller.getSnapshot().rows[0]?.details, 'Searchable turn/step ledger with folding, totals, timing, and complete record details.')
+  assert.equal(await controller.perform('trajectory.open'), true)
+  assert.deepEqual(calls.filter(call => call === 'trajectory:open'), ['trajectory:open', 'trajectory:open'])
 })
 
 test('cycles every enabled operation action and runs the selected action', async () => {

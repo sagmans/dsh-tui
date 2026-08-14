@@ -26,6 +26,7 @@ import {
   toolFallbackDefinition,
 } from './conversation/tools.js'
 import { workflowDefinition } from './conversation/workflows.js'
+import { registerTuiTrajectoryRuntime } from './trajectory.js'
 
 export { tuiConversationViewDefinition } from './conversation/shared.js'
 
@@ -48,6 +49,7 @@ export const TUI_CONVERSATION_DEFINITIONS: readonly ConversationNodeDefinition[]
 
 export function registerTuiConversationRuntime(ctx: Context): void {
   ctx.conversationViews.register(tuiConversationViewDefinition)
+  registerTuiTrajectoryRuntime(ctx)
   for (const definition of TUI_CONVERSATION_DEFINITIONS) ctx.conversationEvents.register(definition)
   ctx.conversationEvents.registerFallback(unknownFallbackDefinition)
 }
