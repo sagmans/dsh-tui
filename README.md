@@ -115,6 +115,16 @@ The automated checks drive a real PTY, but they run on this machine's terminal. 
 | `echo hi \| dsh --profile tui` | refuses with a non-zero exit and a message naming the TTY requirement |
 | `/quit`, Ctrl+C while idle, `kill -TERM <pid>` | the shell returns with cursor, echo, mouse, and title restored |
 
+## Releasing
+
+Published artefacts carry a provenance attestation, which only a CI provider can issue, so releases ship from the tag workflow rather than a laptop.
+
+1. Bump `version` in `package.json` and commit it.
+2. `git tag v<version> && git push origin v<version>`.
+3. `.github/workflows/release.yml` re-runs typecheck, tests, and the package smoke, then publishes with `--provenance`.
+
+The workflow needs an `NPM_TOKEN` repository secret with publish rights for the `@sagmans` scope. To publish by hand instead, run `pnpm publish --access public --provenance` from a clean checkout of the tag.
+
 ## Limitations
 
 - `/mode` is not a command here: the base bundle's `/permission <preset>` switches the permission preset and the footer shows the current one.
