@@ -5,6 +5,7 @@ import { displayText } from '../text.ts'
 import type { TranscriptEntry, TranscriptModel } from '../transcript.ts'
 import type { TuiTheme } from '../theme.ts'
 import type { MarkdownRenderer } from './markdown.ts'
+import type { PickerCard } from './picker.ts'
 
 const DETAIL_INDENT = '    '
 const OPTION_INDENT = '   '
@@ -25,14 +26,24 @@ const ALL_COLLAPSED: ViewState = { expandCards: false, expandReasoning: false }
  * anything. Everything it draws came from a model, a tool, or a file, so the
  * text passes through the display escaping before it is styled.
  */
+/** What sits below the transcript while the reader is being asked something. */
+export interface TranscriptViewOptions {
+  readonly state?: () => ViewState
+  readonly gate?: () => GateCard | undefined
+  readonly picker?: () => PickerCard | undefined
+}
+
 export class TranscriptView implements Component {
   constructor(
     private readonly model: TranscriptModel,
     private readonly theme: TuiTheme,
     private readonly markdown: MarkdownRenderer,
-    private readonly state: () => ViewState = () => ALL_COLLAPSED,
-    private readonly pendingGate: () => GateCard | undefined = () => undefined,
+    private readonly options: TranscriptViewOptions = {},
   ) {}
+
+  private get viewState(): ViewState {
+    return this.options.state?.() ?? ALL_COLLAPSED
+  }
 
   invalidate(): void {
     // The model, the gate, and the expansion state are the only inputs.
@@ -68,14 +79,14 @@ export class TranscriptView implements Component {
 
   private pushReasoning(lines: string[], entry: Extract<TranscriptEntry, { kind: 'reasoning' }>, width: number): void {
     lines.push(this.theme.dim(truncateToWidth(`${this.theme.glyphs.reasoning} ${displayText(entry.summary)}`, width, '')))
-    if (!this.state().expandReasoning) return
+    if (!this.viewState.expandReasoning) return
     for (const line of entry.body.split('\n')) {
       this.pushWrapped(lines, line, width, DETAIL_INDENT, this.theme.dim)
     }
   }
 
   private pushCard(lines: string[], card: ToolCard, width: number): void {
-    const expanded = this.state().expandCards
+    const expanded = this.viewState.expandCards
     const { lines: detail, hidden } = cardDetailRows(card, expanded)
     const mark = card.failed ? '✗' : '⚒'
     lines.push(this.theme.tool(truncateToWidth(`${mark} ${displayText(card.title)}`, width, '')))
@@ -89,6 +100,23 @@ export class TranscriptView implements Component {
       const hint = expanded ? `${hidden} more lines not shown` : `… ${hidden} more lines · ctrl+o shows them`
       lines.push(this.theme.dim(truncateToWidth(`${DETAIL_INDENT}${hint}`, width, '')))
     }
+  }
+
+  private pushPicker(lines: string[], picker: PickerCard, width: number): void {
+    lines.push('')
+    lines.push(this.theme.bold(truncateToWidth(`↻ ${displayText(picker.title)}`, width, '')))
+    if (picker.filter !== '') {
+      lines.push(this.theme.dim(truncateToWidth(`${DETAIL_INDENT}filter: ${displayText(picker.filter)}`, width, '')))
+    }
+    for (const row of picker.rows) {
+      const cursor = row.current ? '❯' : ' '
+      const text = row.description === undefined
+        ? `${cursor} ${row.label}`
+        : `${cursor} ${row.label} — ${row.description}`
+      const style = row.current ? this.theme.bold : (value: string) => value
+      lines.push(style(truncateToWidth(`${OPTION_INDENT}${displayText(text)}`, width, '')))
+    }
+    lines.push(this.theme.dim(truncateToWidth(`${OPTION_INDENT}${displayText(picker.hint)}`, width, '')))
   }
 
   private pushGate(lines: string[], gate: GateCard, width: number): void {
@@ -133,7 +161,9 @@ export class TranscriptView implements Component {
           break
       }
     }
-    const gate = this.pendingGate()
+    const picker = this.options.picker?.()
+    if (picker !== undefined) this.pushPicker(lines, picker, width)
+    const gate = this.options.gate?.()
     if (gate !== undefined) this.pushGate(lines, gate, width)
     return lines
   }

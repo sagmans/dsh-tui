@@ -3,13 +3,14 @@ import type { GateCard } from '@/gates.ts'
 import { createTheme } from '@/theme.ts'
 import { TranscriptModel } from '@/transcript.ts'
 import { MarkdownRenderer } from '@/ui/markdown.ts'
+import type { PickerCard } from '@/ui/picker.ts'
 import { TranscriptView, type ViewState } from '@/ui/view.ts'
 
 const theme = createTheme(false)
 const COLLAPSED: ViewState = { expandCards: false, expandReasoning: false }
 
 function viewOf(model: TranscriptModel, state: ViewState = COLLAPSED, gate?: GateCard): TranscriptView {
-  return new TranscriptView(model, theme, new MarkdownRenderer(theme.markdown), () => state, () => gate)
+  return new TranscriptView(model, theme, new MarkdownRenderer(theme.markdown), { state: () => state, gate: () => gate })
 }
 
 const toolCall = (argumentsJson = '{}') => ({ type: 'tool/call', data: { name: 'bash', arguments: argumentsJson, callId: 'c1' } })
@@ -84,6 +85,29 @@ describe('TranscriptView expansion', () => {
       '    first thought',
       '    second thought',
     ])
+  })
+})
+
+describe('TranscriptView picker', () => {
+  it('lists stored sessions with a cursor, a filter, and the keys that drive it', () => {
+    const picker: PickerCard = {
+      title: 'resume a session · 2 stored',
+      rows: [
+        { label: 'fix the parser', description: '/work · 3m ago · 12 events', current: true },
+        { label: 'tui-session-b', description: '/tmp · 1d ago', current: false },
+      ],
+      filter: 'fix',
+      hint: '↑↓ move · enter open · esc cancel · type to filter',
+    }
+    const view = new TranscriptView(new TranscriptModel(), theme, new MarkdownRenderer(theme.markdown), {
+      picker: () => picker,
+    })
+    const lines = view.render(80)
+    expect(lines).toContain('↻ resume a session · 2 stored')
+    expect(lines).toContain('    filter: fix')
+    expect(lines).toContain('   ❯ fix the parser — /work · 3m ago · 12 events')
+    expect(lines).toContain('     tui-session-b — /tmp · 1d ago')
+    expect(lines.some(line => line.includes('enter open'))).toBe(true)
   })
 })
 

@@ -4,16 +4,18 @@ export type Submission =
   | { readonly kind: 'quit' }
   | { readonly kind: 'clear' }
   | { readonly kind: 'help' }
+  | { readonly kind: 'resume' }
   | { readonly kind: 'command'; readonly name: string; readonly line: string }
   | { readonly kind: 'prompt'; readonly text: string }
 
 /** Commands the surface answers itself, without a model turn. */
-export const LOCAL_COMMANDS = ['/help', '/clear', '/quit', '/exit'] as const
+export const LOCAL_COMMANDS = ['/help', '/clear', '/resume', '/quit', '/exit'] as const
 
 /** What each local command does, shown in the editor's completion menu. */
 export const LOCAL_COMMAND_DESCRIPTIONS: Readonly<Record<string, string>> = {
   '/help': 'list registered and local commands',
   '/clear': 'clear the visible transcript',
+  '/resume': 'open another stored session',
   '/quit': 'leave and print the resume command',
   '/exit': 'leave and print the resume command',
 }
@@ -31,6 +33,7 @@ export function classifySubmission(text: string): Submission {
   if (trimmed === '/quit' || trimmed === '/exit') return { kind: 'quit' }
   if (trimmed === '/clear') return { kind: 'clear' }
   if (trimmed === '/help') return { kind: 'help' }
+  if (trimmed === '/resume') return { kind: 'resume' }
   if (trimmed.startsWith('/')) {
     const [head = ''] = trimmed.slice(1).split(/\s+/u, 1)
     const name = head.toLowerCase()

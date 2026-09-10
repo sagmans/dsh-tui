@@ -5,6 +5,14 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 // listens to, and the event map is declaration-merged by that package.
 import type {} from '@deepseek-ai/dsh-commands'
 import { startAgent, type TuiAgent } from './agent/host.ts'
+import {
+  PICKER_LIMIT,
+  TITLE_EVENT_LIMIT,
+  createSessionHistory,
+  sessionTitle,
+  type SessionHistory,
+  type StoredSession,
+} from './agent/history.ts'
 import { createToolPresenter } from './agent/present.ts'
 import type { ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
 import type { AskUserQuestionAnswer } from '@deepseek-ai/dsh-user-questions'
@@ -14,8 +22,10 @@ import { LOCAL_COMMANDS, classifySubmission } from './input/submission.ts'
 import { resolveConfig } from './config.ts'
 import { createRestoreRegistry } from './terminal/restore.ts'
 import { createTheme } from './theme.ts'
+import { SessionId } from '@deepseek-ai/dsh-session'
 import { TranscriptModel } from './transcript.ts'
 import { MarkdownRenderer } from './ui/markdown.ts'
+import { SessionPicker } from './ui/picker.ts'
 import { TranscriptView } from './ui/view.ts'
 
 export const name = 'tui'
@@ -27,6 +37,9 @@ const GOODBYE_KEY = 'tuiGoodbyeMessage'
 
 /** Keys the surface answers itself, listed wherever the reader asks for help. */
 const LOCAL_KEYS = 'ctrl+o tool detail · ctrl+t reasoning · ctrl+c interrupt or exit'
+
+/** Stored sessions titled at once when the picker opens. */
+const TITLE_CONCURRENCY = 4
 
 /**
  * The command registry, described structurally: the surface only lists,
@@ -88,8 +101,20 @@ export function apply(ctx: Context, config: unknown): void {
     | { readonly kind: 'approval'; readonly gate: ApprovalGate; readonly settle: (outcome: ApprovalOutcome) => void }
     | { readonly kind: 'question'; readonly gate: QuestionGate; readonly settle: (answers: GateAnswer[]) => void }
 
+  /** The session the surface is showing, which a resume can change. */
+  let activeSession = resolved.sessionId
+  /** The one picker a terminal can present at a time, and how it settles its caller. */
+  interface PendingPicker {
+    readonly picker: SessionPicker
+    readonly settle: (id: SessionId | undefined) => void
+  }
   let pending: PendingGate | undefined
-  const view = new TranscriptView(model, theme, markdown, () => viewState, () => pending?.gate.card())
+  let pendingPicker: PendingPicker | undefined
+  const view = new TranscriptView(model, theme, markdown, {
+    state: () => viewState,
+    gate: () => pending?.gate.card(),
+    picker: () => pendingPicker?.picker.card(),
+  })
   const editor = new Editor(tui, theme.editor)
   const disposers: Array<() => void> = []
   let agent: TuiAgent | undefined
@@ -156,6 +181,19 @@ export function apply(ctx: Context, config: unknown): void {
       }
       return { consume: true }
     }
+    if (pendingPicker !== undefined) {
+      const action = pendingPicker.picker.handleKey(data)
+      if (action === undefined) tui.requestRender()
+      else {
+        const settle = pendingPicker.settle
+        pendingPicker = undefined
+        editor.disableSubmit = false
+        tui.setFocus(editor)
+        settle(action.kind === 'pick' ? SessionId(action.id) : undefined)
+        tui.requestRender()
+      }
+      return { consume: true }
+    }
     // Detail the reader asked for is always available, even mid-turn: the
     // collapsed view is a default, not the only state.
     if (matchesKey(data, 'ctrl+o')) {
@@ -195,6 +233,122 @@ export function apply(ctx: Context, config: unknown): void {
     const commands = registry()
     if (current === undefined || commands === undefined) return
     editor.setAutocompleteProvider(createCompletionProvider(commands.list(current), process.cwd()))
+  }
+
+  /**
+   * Take the keyboard for a picker.
+   *
+   * The list is already in hand, so the picker is interactive immediately while
+   * the titles that make its rows recognizable stream in behind it.
+   */
+  const askForSession = (history: SessionHistory, sessions: readonly StoredSession[]): Promise<SessionId | undefined> => {
+    const titles = new Map<string, string>()
+    void loadTitles(history, sessions, titles)
+    const picker = new SessionPicker(sessions, () => titles)
+    return new Promise<SessionId | undefined>(resolve => {
+      pendingPicker = { picker, settle: resolve }
+      editor.disableSubmit = true
+      tui.setFocus(null)
+      tui.requestRender()
+    })
+  }
+
+  /** Title the listed sessions without making the reader wait for the slowest log. */
+  const loadTitles = async (
+    history: SessionHistory,
+    sessions: readonly StoredSession[],
+    titles: Map<string, string>,
+  ): Promise<void> => {
+    const queue = [...sessions]
+    const worker = async (): Promise<void> => {
+      for (;;) {
+        const next = queue.shift()
+        if (next === undefined) return
+        try {
+          const title = sessionTitle(await history.read(next.id, TITLE_EVENT_LIMIT))
+          if (title === undefined) continue
+          titles.set(next.id, title)
+          tui.requestRender()
+        } catch {
+          // A log this build cannot read stays listed by id; the picker is not
+          // the place to explain storage, and one bad session is not the list.
+        }
+      }
+    }
+    await Promise.all(Array.from({ length: TITLE_CONCURRENCY }, worker))
+  }
+
+  const storedSessions = async (): Promise<{ history: SessionHistory; sessions: readonly StoredSession[] } | undefined> => {
+    const history = createSessionHistory(ctx)
+    if (history === undefined) {
+      model.notice('this profile has no session storage, so there is nothing to resume')
+      tui.requestRender()
+      return undefined
+    }
+    try {
+      const sessions = await history.list(PICKER_LIMIT)
+      if (sessions.length === 0) {
+        model.notice('no stored sessions to resume')
+        tui.requestRender()
+        return undefined
+      }
+      return { history, sessions }
+    } catch (error) {
+      model.notice(`could not list stored sessions: ${error instanceof Error ? error.message : String(error)}`)
+      tui.requestRender()
+      return undefined
+    }
+  }
+
+  const chooseSession = async (): Promise<SessionId | undefined> => {
+    const listed = await storedSessions()
+    return listed === undefined ? undefined : askForSession(listed.history, listed.sessions)
+  }
+
+  /**
+   * Replay a stored session so a resumed run opens on the conversation the
+   * reader left, not on an empty screen: the durable log is the transcript.
+   */
+  const replayHistory = async (id: SessionId): Promise<void> => {
+    const history = createSessionHistory(ctx)
+    if (history === undefined) return
+    try {
+      const events = await history.read(id)
+      if (events.length === 0) return
+      for (const event of events) model.apply(event)
+      model.notice(`replayed ${events.length} events from the stored log`)
+    } catch (error) {
+      model.notice(`could not replay this session: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
+  const openAgent = async (id: SessionId, resume: boolean): Promise<void> => {
+    if (resume) await replayHistory(id)
+    const handle = await startAgent(ctx, {
+      sessionId: id,
+      resume,
+      model: resolved.model,
+      provider: resolved.provider,
+      cwd: process.cwd(),
+    })
+    activeSession = id
+    agent = handle
+    disposers.push(() => {
+      void handle.dispose()
+    })
+    installCompletion()
+    model.notice(`session ${handle.sessionId}${resume ? ' (resumed)' : ''}`)
+    tui.requestRender()
+  }
+
+  /** Move the surface to another stored session without leaving the terminal. */
+  const switchSession = async (id: SessionId): Promise<void> => {
+    const previous = agent
+    agent = undefined
+    turnOpen = false
+    model.reset()
+    if (previous !== undefined) await previous.dispose()
+    await openAgent(id, true)
   }
 
   const helpText = (): string => {
@@ -247,6 +401,12 @@ export function apply(ctx: Context, config: unknown): void {
         model.notice(helpText())
         tui.requestRender()
         return
+      case 'resume':
+        void chooseSession().then(picked => picked === undefined ? undefined : switchSession(picked)).catch((error: unknown) => {
+          model.notice(`could not resume: ${error instanceof Error ? error.message : String(error)}`)
+          tui.requestRender()
+        })
+        return
       case 'command':
         runCommand(submission.name, submission.line)
         return
@@ -263,7 +423,7 @@ export function apply(ctx: Context, config: unknown): void {
   }
 
   disposers.push(ctx.on('session/event', (session, event) => {
-    if (session.id !== resolved.sessionId) return
+    if (session.id !== activeSession) return
     if (event.type === 'turn/start') turnOpen = true
     if (event.type === 'turn/end') turnOpen = false
     model.apply(event)
@@ -274,7 +434,7 @@ export function apply(ctx: Context, config: unknown): void {
   // all: without an answerer every gated tool fails closed, and the model's
   // questions never reach the human.
   disposers.push(ctx.on('approval/request', (request, next) => {
-    if (request.agent.id !== resolved.sessionId) return next()
+    if (request.agent.id !== activeSession) return next()
     return new Promise<ApprovalOutcome>(resolve => {
       const gate = new ApprovalGate(request.toolName, request.reason)
       request.signal?.addEventListener('abort', () => {
@@ -288,7 +448,7 @@ export function apply(ctx: Context, config: unknown): void {
 
   disposers.push(ctx.on('user-questions/request', (request, next) => {
     const agentId = (request as { agent?: { id?: string } }).agent?.id
-    if (agentId !== undefined && agentId !== resolved.sessionId) return next()
+    if (agentId !== undefined && agentId !== activeSession) return next()
     const questions = toGateQuestions(request)
     if (questions.length === 0) return next()
     return new Promise<AskUserQuestionAnswer>(resolve => {
@@ -312,13 +472,13 @@ export function apply(ctx: Context, config: unknown): void {
   disposers.push(ctx.on('commands/change', () => installCompletion()))
 
   disposers.push(ctx.on('agent/error', payload => {
-    if (payload.agent.id !== resolved.sessionId) return
+    if (payload.agent.id !== activeSession) return
     model.reportError(payload.error)
     tui.requestRender()
   }))
 
   disposers.push(ctx.on('agent/assistant-stream', payload => {
-    if (payload.agent.id !== resolved.sessionId) return
+    if (payload.agent.id !== activeSession) return
     if (payload.frame.type !== 'chunk') return
     model.applyStreamChunk(payload.frame.chunk)
     tui.requestRender()
@@ -326,21 +486,28 @@ export function apply(ctx: Context, config: unknown): void {
 
   tui.start()
 
-  void startAgent(ctx, {
-    sessionId: resolved.sessionId,
-    resume: resolved.resume,
-    model: resolved.model,
-    provider: resolved.provider,
-    cwd: process.cwd(),
-  }).then(handle => {
-    agent = handle
-    disposers.push(() => {
-      void handle.dispose()
-    })
-    installCompletion()
-    model.notice(`session ${handle.sessionId}${resolved.resume ? ' (resumed)' : ''}`)
-    tui.requestRender()
-  }).catch((error: unknown) => {
+  /**
+   * Open the session this run was launched for.
+   *
+   * A bare `--resume` asks a question only the reader can answer, so the
+   * picker runs before anything is created: the agent is then opened on the
+   * chosen session rather than swapped afterwards, which would leave the first
+   * one's turn half-started.
+   */
+  const boot = async (): Promise<void> => {
+    if (!resolved.resumePicker) {
+      await openAgent(resolved.sessionId, resolved.resume)
+      return
+    }
+    const picked = await chooseSession()
+    if (picked === undefined) {
+      requestExit(0)
+      return
+    }
+    await openAgent(picked, true)
+  }
+
+  void boot().catch((error: unknown) => {
     terminal.write(`\ndsh-tui: ${error instanceof Error ? error.message : String(error)}\n`)
     requestExit(1)
   })

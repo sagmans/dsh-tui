@@ -12,6 +12,7 @@ describe('classifySubmission', () => {
     expect(classifySubmission('/exit')).toEqual({ kind: 'quit' })
     expect(classifySubmission('/clear')).toEqual({ kind: 'clear' })
     expect(classifySubmission('/help')).toEqual({ kind: 'help' })
+    expect(classifySubmission('/resume')).toEqual({ kind: 'resume' })
   })
 
   it('routes any other slash line as a command with its arguments', () => {

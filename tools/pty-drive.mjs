@@ -12,6 +12,7 @@
  *   node tools/pty-drive.mjs --prompt "Run: echo hi" --approve 20 [--permission-mode danger-full-access]
  *   node tools/pty-drive.mjs --prelude "/permission workspace-write" --prompt "Run: echo hi" --approve 15
  *   node tools/pty-drive.mjs --prompt "Ask which colour" --answer "20:1,22:enter"
+ *   node tools/pty-drive.mjs --args "--resume" --prompt "" --answer "4:enter"
  *
  * --approve N answers the approval gate N seconds after the prompt; without it
  * a turn that needs a gated tool waits for a decision the harness never makes.
@@ -69,6 +70,8 @@ const option = (name, fallback) => {
   return index >= 0 && args[index + 1] !== undefined ? args[index + 1] : fallback
 }
 const prompt = option('prompt', 'Reply with exactly: pong')
+/** Launcher arguments for the child, for reaching a mode the default run does not. */
+const extraArgs = option('args', '').split(' ').filter(argument => argument !== '')
 const home = option('home', undefined)
 const seconds = Number.parseInt(option('seconds', '45'), 10)
 const approve = Number.parseInt(option('approve', '0'), 10)
@@ -96,7 +99,7 @@ const answers = option('answer', '')
 const permissionMode = option('permission-mode', 'workspace-write')
 const keep = option('log', join(tmpdir(), `dsh-tui-pty-${Date.now()}.log`))
 
-const child = pty.spawn('pnpm', ['dsh', '--profile', 'tui'], {
+const child = pty.spawn('pnpm', ['dsh', '--profile', 'tui', ...extraArgs], {
   name: 'xterm-256color',
   cols: 100,
   rows: 30,
@@ -124,7 +127,9 @@ const PRELUDE_AT_MS = 6000
 const PRELUDE_LEAD_MS = 1500
 const promptAt = PRELUDE_AT_MS + (prelude === '' ? 0 : PRELUDE_LEAD_MS)
 if (prelude !== '') at(PRELUDE_AT_MS, () => child.write(`${prelude}\r`))
-at(promptAt, () => child.write(`${prompt}\r`))
+// An empty prompt drives a surface that asks its own question first, such as
+// the session picker a bare --resume opens.
+if (prompt !== '') at(promptAt, () => child.write(`${prompt}\r`))
 if (approve > 0) at(promptAt + approve * 1000, () => child.write('y'))
 for (const answer of answers) at(promptAt + answer.at * 1000, () => child.write(answer.value))
 at(promptAt + seconds * 1000, () => child.write('\u0003'))
