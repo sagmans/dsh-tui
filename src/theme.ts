@@ -80,6 +80,19 @@ function selectListTheme(dim: (t: string) => string, accent: (t: string) => stri
 }
 
 /**
+ * Whether styling is on, given the launch flag and the environment.
+ *
+ * `NO_COLOR` is a cross-tool convention (no-color.org): when it is present and
+ * not empty, a program that colors by default must not, regardless of its own
+ * flags. Honouring it means one environment variable turns styling off for
+ * every tool in a session, which is how a reader actually wants it to work.
+ */
+export function colorEnabled(requested: boolean, env: Record<string, string | undefined> = process.env): boolean {
+  const noColor = env.NO_COLOR
+  return requested && (noColor === undefined || noColor === '')
+}
+
+/**
  * Build the surface theme.
  *
  * Styling uses the standard 16 ANSI colors and terminal defaults rather than

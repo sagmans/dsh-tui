@@ -98,16 +98,22 @@ export class TranscriptModel {
   private readonly pending = new Map<string, PendingCall>()
   private live = ''
   private liveReasoning = ''
+  private reasoningStartedAt: number | undefined
 
-  constructor(private readonly presenter?: ToolPresenter) {}
+  constructor(
+    private readonly presenter?: ToolPresenter,
+    /** Clock for "how long has this been thinking"; injected so a test can pin it. */
+    private readonly now: () => number = () => Date.now(),
+  ) {}
 
   /** Rows to render: settled rows, the in-flight reasoning, then the in-flight text. */
   entries(): readonly TranscriptEntry[] {
     const entries = [...this.settled]
     if (this.liveReasoning !== '') {
+      const ranFor = this.reasoningStartedAt === undefined ? undefined : this.now() - this.reasoningStartedAt
       entries.push({
         kind: 'reasoning',
-        summary: `reasoning · ${this.liveReasoning.length} chars · streaming`,
+        summary: `reasoning · ${this.liveReasoning.length} chars${ranFor === undefined ? '' : ` · ${Math.max(1, Math.round(ranFor / 1000))}s`} · streaming`,
         body: this.liveReasoning,
         live: true,
       })
@@ -126,6 +132,7 @@ export class TranscriptModel {
     this.pending.clear()
     this.live = ''
     this.liveReasoning = ''
+    this.reasoningStartedAt = undefined
   }
 
   /** Append a surface-local line that is not part of the durable conversation. */
@@ -147,7 +154,9 @@ export class TranscriptModel {
         if (typeof record.text === 'string') this.live += record.text
         return
       case 'reasoning-delta':
-        if (typeof record.text === 'string') this.liveReasoning += record.text
+        if (typeof record.text !== 'string') return
+        this.reasoningStartedAt ??= this.now()
+        this.liveReasoning += record.text
         return
       case 'block-end': {
         const block = asRecord(record.block)
@@ -194,12 +203,14 @@ export class TranscriptModel {
   private settleReasoning(): void {
     if (this.liveReasoning === '') return
     const text = this.liveReasoning
+    const ranFor = this.reasoningStartedAt === undefined ? undefined : this.now() - this.reasoningStartedAt
     this.liveReasoning = ''
+    this.reasoningStartedAt = undefined
     const lines = countLines(text)
     const cut = text.length > REASONING_CHAR_LIMIT ? `\n… truncated at ${REASONING_CHAR_LIMIT} chars` : ''
     this.settled.push({
       kind: 'reasoning',
-      summary: `reasoning · ${lines} line${lines === 1 ? '' : 's'} · ${text.length} chars`,
+      summary: `reasoning · ${lines} line${lines === 1 ? '' : 's'} · ${text.length} chars${ranFor === undefined ? '' : ` · ${Math.max(1, Math.round(ranFor / 1000))}s`}`,
       body: text.slice(0, REASONING_CHAR_LIMIT) + cut,
       live: false,
     })

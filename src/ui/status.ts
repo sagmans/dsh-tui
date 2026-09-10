@@ -7,11 +7,18 @@ export interface StatusFacts {
   readonly activity: 'idle' | 'working'
   /** How long the running turn has been running, when one is. */
   readonly elapsedMs: number | undefined
+  readonly provider: string | undefined
   readonly model: string | undefined
   readonly effort: string | undefined
   readonly preset: string | undefined
   readonly contextTokens: number | undefined
   readonly contextWindow: number | undefined
+  /** Share of prompt tokens served from the provider's cache, 0–1. */
+  readonly cacheRate: number | undefined
+  /** Prompt tokens the provider did not have cached, when it reported any. */
+  readonly uncachedInputTokens: number | undefined
+  /** Tokens this session has generated, when the provider reported any. */
+  readonly outputTokens: number | undefined
   readonly cwd: string
   readonly home: string | undefined
 }
@@ -60,7 +67,8 @@ export function formatStatus(facts: StatusFacts, width: number, theme: TuiTheme)
     parts.push('● ready')
   }
   if (facts.model !== undefined && facts.model !== '') {
-    parts.push(facts.effort === undefined || facts.effort === '' ? facts.model : `${facts.model} (${facts.effort})`)
+    const route = facts.provider === undefined || facts.provider === '' ? facts.model : `${facts.provider}/${facts.model}`
+    parts.push(facts.effort === undefined || facts.effort === '' ? route : `${route} (${facts.effort})`)
   }
   if (facts.preset !== undefined && facts.preset !== '') parts.push(facts.preset)
   if (facts.contextTokens !== undefined) {
@@ -68,6 +76,7 @@ export function formatStatus(facts: StatusFacts, width: number, theme: TuiTheme)
       ? `ctx ${formatTokens(facts.contextTokens)}`
       : `ctx ${formatTokens(facts.contextTokens)}/${formatTokens(facts.contextWindow)}`)
   }
+  if (facts.cacheRate !== undefined) parts.push(`cache ${Math.round(facts.cacheRate * 100)}%`)
   parts.push(shortPath(facts.cwd, facts.home))
   return theme.dim(truncateToWidth(displayText(parts.join(' · ')), width, '…'))
 }

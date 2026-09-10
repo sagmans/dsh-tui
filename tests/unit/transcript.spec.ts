@@ -66,26 +66,30 @@ describe('TranscriptModel rows', () => {
 })
 
 describe('TranscriptModel reasoning', () => {
-  it('shows a live reasoning row and settles it ahead of the answer it produced', () => {
-    const model = new TranscriptModel()
+  it('shows a live reasoning row, with how long it has been thinking, and settles it ahead of the answer', () => {
+    let clock = 1_000
+    const model = new TranscriptModel(undefined, () => clock)
     model.applyStreamChunk({ type: 'reasoning-delta', text: 'think' })
     model.applyStreamChunk({ type: 'reasoning-delta', text: 'ing' })
+    clock = 4_000
     expect(model.entries()).toEqual([
-      { kind: 'reasoning', summary: 'reasoning · 8 chars · streaming', body: 'thinking', live: true },
+      { kind: 'reasoning', summary: 'reasoning · 8 chars · 3s · streaming', body: 'thinking', live: true },
     ])
     model.apply({ type: 'assistant/message', data: { message: { content: text('answer') } } })
     expect(model.entries()).toEqual([
-      { kind: 'reasoning', summary: 'reasoning · 1 line · 8 chars', body: 'thinking', live: false },
+      { kind: 'reasoning', summary: 'reasoning · 1 line · 8 chars · 3s', body: 'thinking', live: false },
       { kind: 'assistant', text: 'answer' },
     ])
   })
 
   it('settles a completed reasoning block without waiting for the message', () => {
-    const model = new TranscriptModel()
+    let clock = 0
+    const model = new TranscriptModel(undefined, () => clock)
     model.applyStreamChunk({ type: 'reasoning-delta', text: 'a\nb' })
+    clock = 2_000
     model.applyStreamChunk({ type: 'block-end', block: { type: 'reasoning' } })
     expect(model.entries()).toEqual([
-      { kind: 'reasoning', summary: 'reasoning · 2 lines · 3 chars', body: 'a\nb', live: false },
+      { kind: 'reasoning', summary: 'reasoning · 2 lines · 3 chars · 2s', body: 'a\nb', live: false },
     ])
   })
 

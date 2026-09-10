@@ -41,6 +41,26 @@ function todoEntries(value: unknown): TodoEntry[] {
   return entries
 }
 
+const TODO_GLYPHS: Readonly<Record<TodoEntry['status'], string>> = {
+  pending: '☐',
+  in_progress: '▸',
+  completed: '☑',
+}
+
+/** What the reader most needs to see first: work in flight, then work left. */
+export function orderTodos(todos: readonly TodoEntry[]): readonly TodoEntry[] {
+  const rank: Record<TodoEntry['status'], number> = { in_progress: 0, pending: 1, completed: 2 }
+  return [...todos].sort((left, right) => rank[left.status] - rank[right.status])
+}
+
+/** The todo list as plain lines, for a reader who asked for it by name. */
+export function describeTodos(todos: readonly TodoEntry[] | undefined): string {
+  if (todos === undefined || todos.length === 0) return 'no todo list has been written in this session'
+  const done = todos.filter(todo => todo.status === 'completed').length
+  const rows = orderTodos(todos).map(todo => `  ${TODO_GLYPHS[todo.status]} ${todo.content}`)
+  return [`todos · ${done}/${todos.length} done`, ...rows].join('\n')
+}
+
 /**
  * Fold the agent's work state out of durable events.
  *

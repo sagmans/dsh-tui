@@ -22,6 +22,9 @@ describe('classifySubmission', () => {
     expect(classifySubmission('/export /tmp/out.md')).toEqual({ kind: 'export', path: '/tmp/out.md' })
     expect(classifySubmission('/subagents kill abc')).toEqual({ kind: 'subagents', argument: 'kill abc' })
     expect(classifySubmission('/fork  parser branch ')).toEqual({ kind: 'fork', title: 'parser branch' })
+    expect(classifySubmission('/todo')).toEqual({ kind: 'todo' })
+    expect(classifySubmission('/copy')).toEqual({ kind: 'copy' })
+    expect(classifySubmission('/new  fresh start')).toEqual({ kind: 'new', title: 'fresh start' })
   })
 
   it('routes any other slash line as a command with its arguments', () => {

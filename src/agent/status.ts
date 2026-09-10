@@ -10,7 +10,7 @@ export interface ActivityState {
 
 /** The default-model directory, described structurally. */
 interface ModelDirectory {
-  currentSelection?(): { readonly model?: string; readonly reasoningEffort?: string }
+  currentSelection?(): { readonly provider?: string; readonly model?: string; readonly reasoningEffort?: string }
 }
 
 /** The session registry, described structurally. */
@@ -26,6 +26,30 @@ interface PresetDirectory {
 /** The work-state projection registry, described structurally. */
 interface Projections {
   stateOf?(session: unknown, key: string): unknown
+}
+
+/**
+ * The token-usage projection state.
+ *
+ * The unit projects `{ totals, last }` — a flat usage object is the wrong shape
+ * and reading it silently yields nothing, so the reader is pinned by a test.
+ */
+export function usageTotals(state: unknown): Record<string, unknown> | undefined {
+  return asRecord(asRecord(state)?.totals)
+}
+
+/**
+ * Share of prompt tokens a provider served from cache.
+ *
+ * Read tokens against the uncached ones: a hit rate is what a reader can act on
+ * (it is what caching buys), while the raw counts belong in `/status`.
+ */
+export function cacheRate(usage: Record<string, unknown> | undefined): number | undefined {
+  const read = numberOr(usage?.cacheReadTokens)
+  const uncached = numberOr(usage?.uncachedInputTokens)
+  if (read === undefined || uncached === undefined) return undefined
+  const total = read + uncached
+  return total === 0 ? undefined : read / total
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -51,7 +75,11 @@ export interface StatusSources {
    * A route the reader chose for this session, which outranks the composition
    * default: the footer must show the model the next step will actually use.
    */
-  readonly override?: (() => { readonly model?: string; readonly reasoningEffort?: string } | undefined) | undefined
+  readonly override?: (() => {
+    readonly provider?: string
+    readonly model?: string
+    readonly reasoningEffort?: string
+  } | undefined) | undefined
   readonly home?: string | undefined
 }
 
@@ -79,15 +107,20 @@ export function createStatusFacts(ctx: Context, sources: StatusSources): () => S
       }
     }
     const pressure = session === undefined ? undefined : projection(session, 'contextPressure')
+    const totals = session === undefined ? undefined : usageTotals(projection(session, 'tokenUsage'))
     const state = sources.activity()
     return {
       activity: state.running ? 'working' : 'idle',
       elapsedMs: state.startedAt === undefined ? undefined : Date.now() - state.startedAt,
+      provider: selection?.provider,
       model: selection?.model,
       effort: selection?.reasoningEffort,
       preset,
       contextTokens: numberOr(pressure?.pressureTokens),
       contextWindow: numberOr(pressure?.contextWindow),
+      cacheRate: cacheRate(totals),
+      uncachedInputTokens: numberOr(totals?.uncachedInputTokens),
+      outputTokens: numberOr(totals?.outputTokens),
       cwd: process.cwd(),
       home: sources.home,
     }

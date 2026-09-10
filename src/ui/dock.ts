@@ -34,6 +34,8 @@ export class WorkDock implements Component {
     private readonly jobs: () => readonly JobSummary[] = () => [],
     /** Delegations this session started; also live state. */
     private readonly subagents: () => readonly SubagentRun[] = () => [],
+    /** Clock for elapsed times, so a frame can be pinned in a test. */
+    private readonly now: () => number = () => Date.now(),
   ) {}
 
   invalidate(): void {
@@ -55,7 +57,7 @@ export class WorkDock implements Component {
   private pushSubagents(lines: string[], runs: readonly SubagentRun[], width: number): void {
     const running = runs.filter(run => run.status === 'running').length
     lines.push(this.theme.bold(truncateToWidth(`⚇ subagents · ${running} running, ${runs.length - running} done`, width, '…')))
-    const now = Date.now()
+    const now = this.now()
     for (const run of runs.slice(0, DOCK_SUBAGENT_LIMIT)) {
       const glyph = run.status === 'running' ? '▸' : run.status === 'completed' ? '✓' : '✗'
       lines.push(this.theme.dim(truncateToWidth(`  ${glyph} ${displayText(describeSubagent(run, now))}`, width, '…')))
@@ -71,7 +73,7 @@ export class WorkDock implements Component {
     // Work still holding resources first, then the most recent.
     const ordered = [...jobs].sort((left, right) =>
       Number(isLive(right.status)) - Number(isLive(left.status)) || right.startedAt - left.startedAt)
-    const now = Date.now()
+    const now = this.now()
     for (const job of ordered.slice(0, DOCK_JOB_LIMIT)) {
       const glyph = isLive(job.status) ? '▸' : job.status === 'completed' ? '✓' : '✗'
       lines.push(this.theme.dim(truncateToWidth(`  ${glyph} ${displayText(describeJob(job, now))}`, width, '…')))

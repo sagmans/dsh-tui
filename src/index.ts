@@ -37,12 +37,13 @@ import { LOCAL_COMMANDS, classifySubmission } from './input/submission.ts'
 import { resolveConfig } from './config.ts'
 import { createRestoreRegistry } from './terminal/restore.ts'
 import { BELL, shouldRingBell } from './terminal/bell.ts'
+import { clipboardSequence } from './terminal/clipboard.ts'
 import { CLEAR_TITLE, windowTitle } from './terminal/title.ts'
 import { defaultExportFile, transcriptToText } from './export.ts'
-import { createTheme } from './theme.ts'
+import { colorEnabled, createTheme } from './theme.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { TranscriptModel } from './transcript.ts'
-import { WorkFold } from './work.ts'
+import { WorkFold, describeTodos } from './work.ts'
 import { WorkDock } from './ui/dock.ts'
 import { MarkdownRenderer } from './ui/markdown.ts'
 import { SessionPicker } from './ui/picker.ts'
@@ -53,8 +54,6 @@ export const name = 'tui'
 
 /** `agents` is the only service the surface cannot run without. */
 export const inject = ['agents']
-
-const GOODBYE_KEY = 'tuiGoodbyeMessage'
 
 /** Keys the surface answers itself, listed wherever the reader asks for help. */
 const LOCAL_KEYS = 'ctrl+o tool detail · ctrl+t reasoning · ctrl+b back to this session · ctrl+c interrupt or exit'
@@ -124,7 +123,7 @@ export function apply(ctx: Context, config: unknown): void {
     throw new Error('dsh-tui: the dsh launcher must provide appExit; start this surface with dsh --profile tui')
   }
 
-  const theme = createTheme(resolved.color)
+  const theme = createTheme(colorEnabled(resolved.color))
   const model = new TranscriptModel(createToolPresenter(ctx))
   const work = new WorkFold()
   const modelSwitch = new ModelSwitch()
@@ -215,8 +214,9 @@ export function apply(ctx: Context, config: unknown): void {
     // its own title can take over cleanly.
     terminal.write(CLEAR_TITLE)
     restore.restore()
-    const goodbye = ctx.get(GOODBYE_KEY)
-    if (typeof goodbye === 'string' && goodbye !== '') terminal.write(`\n${goodbye}\n`)
+    // The hint is computed here rather than read from the context because only
+    // the surface knows which session it is leaving: a fork or a switch moves it.
+    terminal.write(`\n${resumeHint(String(activeSession), PROFILE_NAME)}\n`)
     appExit(code)
   }
 
@@ -481,9 +481,6 @@ export function apply(ctx: Context, config: unknown): void {
       void handle.dispose()
     })
     installCompletion()
-    // The hint must name the session this run will actually leave behind, which
-    // a fork or a switch changes.
-    ctx.provide(GOODBYE_KEY, resumeHint(String(id), PROFILE_NAME))
     model.notice(`session ${handle.sessionId}${resume ? ' (resumed)' : ''}`)
     tui.requestRender()
   }
@@ -628,6 +625,56 @@ export function apply(ctx: Context, config: unknown): void {
    * conversation they already had. The cut is anchored to the last completed
    * turn, because half an exchange is not a state to hand a model.
    */
+  /** Start a fresh session without leaving the terminal. */
+  const runNewCommand = (title: string): void => {
+    if (agent === undefined) {
+      model.notice('the agent is still starting; try again in a moment')
+      tui.requestRender()
+      return
+    }
+    void (async () => {
+      const previous = agent
+      agent = undefined
+      turnOpen = false
+      turnStartedAt = undefined
+      model.reset()
+      work.reset()
+      roster.reset()
+      if (previous !== undefined) await previous.dispose()
+      await openAgent(SessionId(`tui-session-${randomUUID()}`), false)
+      if (title !== '') runRenameCommand(title)
+      model.notice('started a new session')
+      tui.requestRender()
+    })().catch((error: unknown) => {
+      model.notice(`could not start a session: ${error instanceof Error ? error.message : String(error)}`)
+      tui.requestRender()
+    })
+  }
+
+  /** Show the todo list the agent has been keeping. */
+  const runTodoCommand = (): void => {
+    model.notice(describeTodos(work.state().todos))
+    tui.requestRender()
+  }
+
+  /**
+   * Put the last answer on the reader's clipboard.
+   *
+   * The clipboard belongs to the terminal, so this asks it through OSC 52 —
+   * which is also the only route that works over SSH.
+   */
+  const runCopyCommand = (): void => {
+    const last = [...model.entries()].reverse().find(entry => entry.kind === 'assistant')
+    if (last === undefined || last.kind !== 'assistant') {
+      model.notice('nothing to copy yet')
+      tui.requestRender()
+      return
+    }
+    terminal.write(clipboardSequence(last.text))
+    model.notice(`copied ${last.text.length} characters through the terminal`)
+    tui.requestRender()
+  }
+
   const runForkCommand = (title: string): void => {
     if (agent === undefined) {
       model.notice('the agent is still starting; try again in a moment')
@@ -788,6 +835,15 @@ export function apply(ctx: Context, config: unknown): void {
       case 'fork':
         runForkCommand(submission.title)
         return
+      case 'new':
+        runNewCommand(submission.title)
+        return
+      case 'todo':
+        runTodoCommand()
+        return
+      case 'copy':
+        runCopyCommand()
+        return
       case 'status': {
         const facts = statusFacts()
         const context = facts.contextTokens === undefined
@@ -796,9 +852,14 @@ export function apply(ctx: Context, config: unknown): void {
         model.notice([
           `session ${activeSession}`,
           viewedSession === activeSession ? undefined : `viewing ${viewedSession}`,
-          facts.model === undefined ? undefined : `model ${facts.model}${facts.effort === undefined ? '' : ` (${facts.effort})`}`,
+          facts.model === undefined
+            ? undefined
+            : `model ${facts.provider === undefined ? '' : `${facts.provider}/`}${facts.model}${facts.effort === undefined ? '' : ` (${facts.effort})`}`,
           facts.preset === undefined ? undefined : `permissions ${facts.preset}`,
           context,
+          facts.uncachedInputTokens === undefined && facts.outputTokens === undefined
+            ? undefined
+            : `tokens in ${formatTokens(facts.uncachedInputTokens ?? 0)} out ${formatTokens(facts.outputTokens ?? 0)}`,
           `cwd ${facts.cwd}`,
         ].filter(part => part !== undefined).join(' · '))
         tui.requestRender()

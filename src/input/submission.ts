@@ -12,11 +12,16 @@ export type Submission =
   | { readonly kind: 'export'; readonly path: string }
   | { readonly kind: 'subagents'; readonly argument: string }
   | { readonly kind: 'fork'; readonly title: string }
+  | { readonly kind: 'new'; readonly title: string }
+  | { readonly kind: 'todo' }
+  | { readonly kind: 'copy' }
   | { readonly kind: 'command'; readonly name: string; readonly line: string }
   | { readonly kind: 'prompt'; readonly text: string }
 
 /** Commands the surface answers itself, without a model turn. */
-export const LOCAL_COMMANDS = ['/help', '/status', '/model', '/jobs', '/subagents', '/fork', '/rename', '/export', '/clear', '/resume', '/quit', '/exit'] as const
+export const LOCAL_COMMANDS = [
+  '/help', '/status', '/model', '/todo', '/jobs', '/subagents', '/fork', '/new', '/rename', '/export', '/copy', '/clear', '/resume', '/quit', '/exit',
+] as const
 
 /** What each local command does, shown in the editor's completion menu. */
 export const LOCAL_COMMAND_DESCRIPTIONS: Readonly<Record<string, string>> = {
@@ -25,7 +30,10 @@ export const LOCAL_COMMAND_DESCRIPTIONS: Readonly<Record<string, string>> = {
   '/model': 'show or switch the model for the next step',
   '/jobs': 'list background jobs, read one, or kill one',
   '/subagents': 'list delegations; /subagents open <id|last> reads one, /subagents kill <id> stops one',
+  '/todo': 'show the list of tasks the agent is keeping',
   '/fork': 'branch this conversation and continue in the branch',
+  '/new': 'start a fresh session without leaving the terminal',
+  '/copy': 'copy the last answer to the clipboard through the terminal',
   '/rename': 'give this session a title the picker will show',
   '/export': 'write the visible transcript to a markdown file',
   '/clear': 'clear the visible transcript',
@@ -66,6 +74,11 @@ export function classifySubmission(text: string): Submission {
   }
   if (trimmed === '/fork' || trimmed.startsWith('/fork ')) {
     return { kind: 'fork', title: trimmed.slice('/fork'.length).trim() }
+  }
+  if (trimmed === '/todo') return { kind: 'todo' }
+  if (trimmed === '/copy') return { kind: 'copy' }
+  if (trimmed === '/new' || trimmed.startsWith('/new ')) {
+    return { kind: 'new', title: trimmed.slice('/new'.length).trim() }
   }
   if (trimmed.startsWith('/')) {
     const [head = ''] = trimmed.slice(1).split(/\s+/u, 1)

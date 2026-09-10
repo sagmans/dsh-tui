@@ -82,14 +82,16 @@ describe('TranscriptView expansion', () => {
   })
 
   it('keeps reasoning folded until it is asked for', () => {
-    const model = new TranscriptModel()
+    let clock = 0
+    const model = new TranscriptModel(undefined, () => clock)
     model.applyStreamChunk({ type: 'reasoning-delta', text: 'first thought\nsecond thought' })
+    clock = 5_000
     model.applyStreamChunk({ type: 'block-end', block: { type: 'reasoning' } })
     const folded = viewOf(model).render(60)
-    expect(folded).toEqual(['▸ reasoning · 2 lines · 28 chars'])
+    expect(folded).toEqual(['▸ reasoning · 2 lines · 28 chars · 5s'])
     const opened = viewOf(model, { expandCards: false, expandReasoning: true }).render(60)
     expect(opened).toEqual([
-      '▸ reasoning · 2 lines · 28 chars',
+      '▸ reasoning · 2 lines · 28 chars · 5s',
       '    first thought',
       '    second thought',
     ])

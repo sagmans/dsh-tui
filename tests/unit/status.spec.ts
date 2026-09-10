@@ -1,6 +1,7 @@
 import { visibleWidth } from '@earendil-works/pi-tui'
 import { describe, expect, it } from 'vitest'
 import { createTheme } from '@/theme.ts'
+import { cacheRate, usageTotals } from '@/agent/status.ts'
 import { formatStatus, formatTokens, shortPath, type StatusFacts } from '@/ui/status.ts'
 
 const theme = createTheme(false)
@@ -8,11 +9,15 @@ const theme = createTheme(false)
 const facts = (overrides: Partial<StatusFacts> = {}): StatusFacts => ({
   activity: 'idle',
   elapsedMs: undefined,
+  provider: 'deepseek-official',
   model: 'deepseek-chat',
   effort: 'max',
   preset: 'workspace-write',
   contextTokens: 12_400,
   contextWindow: 128_000,
+  cacheRate: 0.87,
+  uncachedInputTokens: 1_600,
+  outputTokens: 3_100,
   cwd: '/Users/dev/source/opensource/deepseek-harness/master',
   home: '/Users/dev',
   ...overrides,
@@ -36,10 +41,48 @@ describe('shortPath', () => {
   })
 })
 
+describe('usageTotals', () => {
+  it('reads the totals the token meter projects', () => {
+    const state = {
+      totals: { uncachedInputTokens: 1_600, outputTokens: 3_100, cacheReadTokens: 8_700, cacheWriteTokens: 0 },
+      last: { turn: 1, step: 1, buckets: {} },
+    }
+    expect(usageTotals(state)).toEqual({
+      uncachedInputTokens: 1_600,
+      outputTokens: 3_100,
+      cacheReadTokens: 8_700,
+      cacheWriteTokens: 0,
+    })
+  })
+
+  it('refuses a state that is not the projected shape', () => {
+    expect(usageTotals({ uncachedInputTokens: 1 })).toBeUndefined()
+    expect(usageTotals(undefined)).toBeUndefined()
+    expect(usageTotals({ totals: 'nope' })).toBeUndefined()
+  })
+})
+
+describe('cacheRate', () => {
+  it('reads as the share of prompt tokens the provider cached', () => {
+    expect(cacheRate({ cacheReadTokens: 87, uncachedInputTokens: 13 })).toBeCloseTo(0.87)
+  })
+
+  it('has no opinion without both counts, or without any tokens at all', () => {
+    expect(cacheRate({ cacheReadTokens: 87 })).toBeUndefined()
+    expect(cacheRate({})).toBeUndefined()
+    expect(cacheRate({ cacheReadTokens: 0, uncachedInputTokens: 0 })).toBeUndefined()
+    expect(cacheRate(undefined)).toBeUndefined()
+  })
+
+  it('ignores counts a backend reported as something other than a number', () => {
+    expect(cacheRate({ cacheReadTokens: '87', uncachedInputTokens: 13 })).toBeUndefined()
+  })
+})
+
 describe('formatStatus', () => {
   it('reads as a sentence about the session', () => {
     expect(formatStatus(facts(), 200, theme)).toBe(
-      '● ready · deepseek-chat (max) · workspace-write · ctx 12.4k/128k · ~/deepseek-harness/master',
+      '● ready · deepseek-official/deepseek-chat (max) · workspace-write · ctx 12.4k/128k · cache 87% · ~/deepseek-harness/master',
     )
   })
 
@@ -50,7 +93,15 @@ describe('formatStatus', () => {
 
   it('omits what the composition does not provide', () => {
     const line = formatStatus(
-      facts({ model: undefined, effort: undefined, preset: undefined, contextTokens: undefined, contextWindow: undefined }),
+      facts({
+        provider: undefined,
+        model: undefined,
+        effort: undefined,
+        preset: undefined,
+        contextTokens: undefined,
+        contextWindow: undefined,
+        cacheRate: undefined,
+      }),
       200,
       theme,
     )
