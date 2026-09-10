@@ -20,6 +20,7 @@ describe('classifySubmission', () => {
     expect(classifySubmission('/jobs kill j1')).toEqual({ kind: 'jobs', argument: 'kill j1' })
     expect(classifySubmission('/rename  dock polish ')).toEqual({ kind: 'rename', title: 'dock polish' })
     expect(classifySubmission('/export /tmp/out.md')).toEqual({ kind: 'export', path: '/tmp/out.md' })
+    expect(classifySubmission('/subagents kill abc')).toEqual({ kind: 'subagents', argument: 'kill abc' })
   })
 
   it('routes any other slash line as a command with its arguments', () => {

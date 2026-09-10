@@ -44,6 +44,8 @@ dsh --profile tui --no-color
 | `/model <provider>/<model>` | use that route from the next step on (session only, nothing is written to settings) |
 | `/jobs` | list background jobs with their state and duration |
 | `/jobs read <id>` / `/jobs kill <id>` | show the tail of a job's output, or stop it |
+| `/subagents` | list the delegations this session started, with their provider and age |
+| `/subagents kill <id>` | stop a live child agent |
 | `/rename <title>` | title this session; the picker shows it instead of the session id |
 | `/export [path]` | write the visible transcript as markdown (default `dsh-session-<id>.md`) |
 | `/resume` | open another stored session without leaving the terminal |

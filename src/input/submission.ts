@@ -10,11 +10,12 @@ export type Submission =
   | { readonly kind: 'jobs'; readonly argument: string }
   | { readonly kind: 'rename'; readonly title: string }
   | { readonly kind: 'export'; readonly path: string }
+  | { readonly kind: 'subagents'; readonly argument: string }
   | { readonly kind: 'command'; readonly name: string; readonly line: string }
   | { readonly kind: 'prompt'; readonly text: string }
 
 /** Commands the surface answers itself, without a model turn. */
-export const LOCAL_COMMANDS = ['/help', '/status', '/model', '/jobs', '/rename', '/export', '/clear', '/resume', '/quit', '/exit'] as const
+export const LOCAL_COMMANDS = ['/help', '/status', '/model', '/jobs', '/subagents', '/rename', '/export', '/clear', '/resume', '/quit', '/exit'] as const
 
 /** What each local command does, shown in the editor's completion menu. */
 export const LOCAL_COMMAND_DESCRIPTIONS: Readonly<Record<string, string>> = {
@@ -22,6 +23,7 @@ export const LOCAL_COMMAND_DESCRIPTIONS: Readonly<Record<string, string>> = {
   '/status': 'show the session, model, permissions, and context',
   '/model': 'show or switch the model for the next step',
   '/jobs': 'list background jobs, read one, or kill one',
+  '/subagents': 'list the delegations this session started, or stop one',
   '/rename': 'give this session a title the picker will show',
   '/export': 'write the visible transcript to a markdown file',
   '/clear': 'clear the visible transcript',
@@ -56,6 +58,9 @@ export function classifySubmission(text: string): Submission {
   }
   if (trimmed === '/export' || trimmed.startsWith('/export ')) {
     return { kind: 'export', path: trimmed.slice('/export'.length).trim() }
+  }
+  if (trimmed === '/subagents' || trimmed.startsWith('/subagents ')) {
+    return { kind: 'subagents', argument: trimmed.slice('/subagents'.length).trim() }
   }
   if (trimmed.startsWith('/')) {
     const [head = ''] = trimmed.slice(1).split(/\s+/u, 1)

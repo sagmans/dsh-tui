@@ -62,6 +62,17 @@ describe('WorkDock', () => {
     expect(lines[2]).toContain('✓ bash-1 · completed')
   })
 
+  it('lists delegations with their provider and age', () => {
+    const runs = [
+      { runId: 'r1', provider: 'spawn', id: 'child-abcdef', startedAt: Date.now() - 4_000, status: 'running' as const },
+      { runId: 'r2', provider: 'fork', id: 'child-2', startedAt: 1_000, status: 'failed' as const, finishedAt: 2_000 },
+    ]
+    const lines = new WorkDock(() => EMPTY, theme, () => [], () => runs).render(80)
+    expect(lines[0]).toBe('⚇ subagents · 1 running, 1 done')
+    expect(lines[1]).toContain('▸ child-ab · spawn · running')
+    expect(lines[2]).toContain('✗ child-2 · fork · failed')
+  })
+
   it('takes no rows when no job is running', () => {
     expect(new WorkDock(() => EMPTY, theme, () => []).render(80)).toEqual([])
   })

@@ -1,5 +1,6 @@
 import { type Component, truncateToWidth } from '@earendil-works/pi-tui'
 import { DOCK_JOB_LIMIT, describeJob, isLive, type JobSummary } from '../jobs.ts'
+import { DOCK_SUBAGENT_LIMIT, describeSubagent, type SubagentRun } from '../subagents.ts'
 import { displayText } from '../text.ts'
 import type { TuiTheme } from '../theme.ts'
 import type { TodoEntry, WorkState } from '../work.ts'
@@ -31,6 +32,8 @@ export class WorkDock implements Component {
     private readonly theme: TuiTheme,
     /** Live background jobs: process state, not something a resume can replay. */
     private readonly jobs: () => readonly JobSummary[] = () => [],
+    /** Delegations this session started; also live state. */
+    private readonly subagents: () => readonly SubagentRun[] = () => [],
   ) {}
 
   invalidate(): void {
@@ -46,6 +49,19 @@ export class WorkDock implements Component {
     }
     if (ordered.length > DOCK_TODO_LIMIT) {
       lines.push(this.theme.dim(truncateToWidth(`  … ${ordered.length - DOCK_TODO_LIMIT} more`, width, '…')))
+    }
+  }
+
+  private pushSubagents(lines: string[], runs: readonly SubagentRun[], width: number): void {
+    const running = runs.filter(run => run.status === 'running').length
+    lines.push(this.theme.bold(truncateToWidth(`⚇ subagents · ${running} running, ${runs.length - running} done`, width, '…')))
+    const now = Date.now()
+    for (const run of runs.slice(0, DOCK_SUBAGENT_LIMIT)) {
+      const glyph = run.status === 'running' ? '▸' : run.status === 'completed' ? '✓' : '✗'
+      lines.push(this.theme.dim(truncateToWidth(`  ${glyph} ${displayText(describeSubagent(run, now))}`, width, '…')))
+    }
+    if (runs.length > DOCK_SUBAGENT_LIMIT) {
+      lines.push(this.theme.dim(truncateToWidth(`  … ${runs.length - DOCK_SUBAGENT_LIMIT} more`, width, '…')))
     }
   }
 
@@ -81,6 +97,8 @@ export class WorkDock implements Component {
     if (state.planMode) {
       lines.push(this.theme.bold(truncateToWidth('⏸ plan mode · answer the plan before edits happen', width, '…')))
     }
+    const subagents = this.subagents()
+    if (subagents.length > 0) this.pushSubagents(lines, subagents, width)
     const jobs = this.jobs()
     if (jobs.length > 0) this.pushJobs(lines, jobs, width)
     if (state.todos !== undefined) this.pushTodos(lines, state.todos, width)

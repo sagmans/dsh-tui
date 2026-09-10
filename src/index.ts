@@ -18,6 +18,12 @@ import { createToolPresenter } from './agent/present.ts'
 import { createStatusFacts } from './agent/status.ts'
 import { ModelSwitch, createModelCatalog, parseModelArgument } from './agent/model.ts'
 import { JOB_READ_LINES, createJobDirectory, describeJobs, parseJobsArgument, type JobSummary } from './jobs.ts'
+import {
+  SubagentRoster,
+  createSubagentControl,
+  describeSubagents,
+  parseSubagentsArgument,
+} from './subagents.ts'
 import { describeMissingOptional, describeMissingRequired, probeComposition } from './compat/probe.ts'
 import type { ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
 import type { AskUserQuestionAnswer } from '@deepseek-ai/dsh-user-questions'
@@ -116,6 +122,8 @@ export function apply(ctx: Context, config: unknown): void {
   const catalog = createModelCatalog(ctx)
   const jobDirectory = createJobDirectory(ctx)
   let jobs: readonly JobSummary[] = []
+  const roster = new SubagentRoster()
+  const subagentControl = createSubagentControl(ctx)
   const markdown = new MarkdownRenderer(theme.markdown)
   /** Rows the reader has opened. The model stays untouched; only the view reads this. */
   const viewState = { expandCards: false, expandReasoning: false }
@@ -160,7 +168,7 @@ export function apply(ctx: Context, config: unknown): void {
     home: process.env.HOME,
   })
   const statusBar = new StatusBar(statusFacts, theme)
-  const dock = new WorkDock(() => work.state(), theme, () => jobs)
+  const dock = new WorkDock(() => work.state(), theme, () => jobs, () => roster.list())
   // Only a running turn has anything to say over time, so the clock stops with it.
   const statusTicker: ReturnType<typeof setInterval> = setInterval(() => {
     if (turnOpen) tui.requestRender()
@@ -409,6 +417,7 @@ export function apply(ctx: Context, config: unknown): void {
     turnOpen = false
     model.reset()
     work.reset()
+    roster.reset()
     if (previous !== undefined) await previous.dispose()
     await openAgent(id, true)
   }
@@ -427,6 +436,35 @@ export function apply(ctx: Context, config: unknown): void {
    * invisible: the board is the only place a reader can see what is still
    * running and stop it.
    */
+  /**
+   * List or stop the delegations this session started.
+   *
+   * A child runs in the same process as an ordinary agent, so a stop is the
+   * cancel a reader's Ctrl+C sends to the parent; nothing here reaches into the
+   * child's own session, which keeps its own transcript either way.
+   */
+  const runSubagentsCommand = (argument: string): void => {
+    const command = parseSubagentsArgument(argument)
+    switch (command.kind) {
+      case 'list':
+        model.notice(describeSubagents(roster.list(), Date.now()))
+        tui.requestRender()
+        return
+      case 'kill': {
+        const stopped = subagentControl?.stop(command.id) ?? false
+        model.notice(stopped
+          ? `${command.id}: stop requested`
+          : `${command.id}: no live child with that id`)
+        tui.requestRender()
+        return
+      }
+      case 'invalid':
+        model.notice(`/subagents: ${command.reason}`)
+        tui.requestRender()
+        return
+    }
+  }
+
   const runJobsCommand = (argument: string): void => {
     if (jobDirectory === undefined) {
       model.notice('this profile has no job registry, so there is nothing to list')
@@ -614,6 +652,9 @@ export function apply(ctx: Context, config: unknown): void {
       case 'export':
         runExportCommand(submission.path)
         return
+      case 'subagents':
+        runSubagentsCommand(submission.argument)
+        return
       case 'status': {
         const facts = statusFacts()
         const context = facts.contextTokens === undefined
@@ -689,6 +730,7 @@ export function apply(ctx: Context, config: unknown): void {
     (ctx.on as unknown as (event: string, listener: (...args: readonly unknown[]) => void) => () => void)(name, handler)
 
   disposers.push(listenFor('subagent/start', info => {
+    roster.start(info)
     const record = asRecord(info)
     const provider = typeof record?.provider === 'string' ? record.provider : 'subagent'
     const id = typeof record?.id === 'string' ? record.id : ''
@@ -697,6 +739,7 @@ export function apply(ctx: Context, config: unknown): void {
   }))
 
   disposers.push(listenFor('subagent/end', info => {
+    roster.end(info)
     const record = asRecord(info)
     const provider = typeof record?.provider === 'string' ? record.provider : 'subagent'
     const stop = typeof record?.stopReason === 'string' ? record.stopReason : undefined
