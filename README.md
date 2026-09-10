@@ -2,7 +2,7 @@
 
 Interactive terminal (TUI) surface for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): use `dsh` in a terminal instead of a browser.
 
-Status: **early v1.** The surface boots over the composed agent plane, owns the alternate screen, streams assistant text as markdown, renders every tool's own card, answers approvals and questions, restores a stored conversation, switches model mid-session, keeps the agent's goal, plan mode, and todo list above the editor with a status line below it, and hands the terminal back on exit. Packaging and CI are next.
+Status: **v1 feature-complete.** The surface owns the alternate screen, streams assistant text as markdown, renders every tool's own card, answers approvals and questions, restores and names stored conversations, switches model mid-session, reads a child agent's conversation in place, keeps the goal, plan mode, todo list, delegations, and background jobs above the editor with a status line below it, and hands the terminal back on every graceful exit. What is left is packaging: the publish itself.
 
 ## Install
 
@@ -37,6 +37,7 @@ dsh --profile tui --no-bell            # do not ring when a long turn finishes
 | `ctrl+shift+f` | search the transcript (`enter` next, `shift+enter` previous, `esc` close) |
 | `home` / `end` | jump to the start or the end of the transcript |
 | `ctrl+down` | jump to the next prompt |
+| `ctrl+b` | leave a child's conversation and return to this session |
 | mouse wheel, drag | scroll, and copy a selection through OSC 52 |
 | `/help` | list registered and local commands |
 | `/status` | show the session id, model, permissions, context, and directory |
@@ -46,6 +47,7 @@ dsh --profile tui --no-bell            # do not ring when a long turn finishes
 | `/jobs` | list background jobs with their state and duration |
 | `/jobs read <id>` / `/jobs kill <id>` | show the tail of a job's output, or stop it |
 | `/subagents` | list the delegations this session started, with their provider and age |
+| `/subagents open <id\|last>` | read a child's own conversation in place; `ctrl+b` comes back |
 | `/subagents kill <id>` | stop a live child agent |
 | `/rename <title>` | title this session; the picker shows it instead of the session id |
 | `/export [path]` | write the visible transcript as markdown (default `dsh-session-<id>.md`) |
@@ -103,7 +105,8 @@ Test specs import plugin sources through the `@/` alias. Under this test runner 
 - A turn that ran longer than ten seconds rings the terminal bell when it ends, because the reader may have walked away; `--no-bell` turns that off.
 - The dock shows the goal, plan mode, the todo list, and any background job still running; the transcript marks where older history was compacted away. `/plan` toggles plan mode; `/plan <message>` also steers that message, which is the base command's own behaviour.
 - Background jobs and subagent runs are live process state, not durable events: they disappear when the run ends, and a resumed session starts with an empty board and roster.
-- The subagent roster shows children and can stop one, but the surface never opens a child's own conversation; fork and delete are unimplemented because session storage exposes neither.
+- Reading a child's conversation does not move the terminal: commands, approvals, and the status line stay with the session you launched, and the transcript is the only thing that switches.
+- Fork and delete are unimplemented because session storage exposes neither.
 - Approvals and questions render inline and take the keyboard; a question batch is answered in order.
 - Styling uses the standard 16 ANSI colors and terminal defaults, so light and dark terminals follow their own theme.
 - Tool text, model text, and file content are escaped before rendering, so a hostile result cannot inject terminal control sequences; the cost is that a literal tab shows as \x09.

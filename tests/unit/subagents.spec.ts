@@ -4,6 +4,7 @@ import {
   describeSubagent,
   describeSubagents,
   parseSubagentsArgument,
+  resolveRun,
   shortId,
 } from '@/subagents.ts'
 
@@ -84,7 +85,8 @@ describe('parseSubagentsArgument', () => {
     expect(parseSubagentsArgument('  ')).toEqual({ kind: 'list' })
   })
 
-  it('stops a named child', () => {
+  it('opens and stops a named child', () => {
+    expect(parseSubagentsArgument('open child-1')).toEqual({ kind: 'open', id: 'child-1' })
     expect(parseSubagentsArgument('kill child-1')).toEqual({ kind: 'kill', id: 'child-1' })
   })
 
@@ -92,5 +94,35 @@ describe('parseSubagentsArgument', () => {
     expect(parseSubagentsArgument('stop child-1').kind).toBe('invalid')
     const missing = parseSubagentsArgument('kill')
     expect(missing.kind === 'invalid' && missing.reason).toContain('child id')
+  })
+})
+
+describe('resolveRun', () => {
+  const runs = [
+    { runId: 'r1', provider: 'spawn', id: 'c000cfa3-1111', startedAt: 1, status: 'running' as const },
+    { runId: 'r2', provider: 'fork', id: 'c000cfa3-2222', startedAt: 2, status: 'completed' as const },
+    { runId: 'r3', provider: 'spawn', id: 'deadbeef-3333', startedAt: 3, status: 'completed' as const },
+  ]
+
+  it('finds a run by its whole id', () => {
+    expect(resolveRun(runs, 'deadbeef-3333')?.runId).toBe('r3')
+  })
+
+  it('finds a run by the short id the roster shows', () => {
+    expect(resolveRun(runs, 'deadbeef')?.runId).toBe('r3')
+  })
+
+  it('names the newest run as "last", whatever order it is handed', () => {
+    expect(resolveRun(runs, 'last')?.runId).toBe('r3')
+    expect(resolveRun([...runs].reverse(), 'last')?.runId).toBe('r3')
+    expect(resolveRun([], 'last')).toBeUndefined()
+  })
+
+  it('refuses a prefix that matches more than one child', () => {
+    expect(resolveRun(runs, 'c000cfa3')).toBeUndefined()
+  })
+
+  it('answers nothing for an id nobody started', () => {
+    expect(resolveRun(runs, 'nope')).toBeUndefined()
   })
 })

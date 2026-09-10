@@ -23,6 +23,7 @@ import {
   createSubagentControl,
   describeSubagents,
   parseSubagentsArgument,
+  resolveRun,
 } from './subagents.ts'
 import { describeMissingOptional, describeMissingRequired, probeComposition } from './compat/probe.ts'
 import type { ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
@@ -53,7 +54,10 @@ export const inject = ['agents']
 const GOODBYE_KEY = 'tuiGoodbyeMessage'
 
 /** Keys the surface answers itself, listed wherever the reader asks for help. */
-const LOCAL_KEYS = 'ctrl+o tool detail · ctrl+t reasoning · ctrl+c interrupt or exit'
+const LOCAL_KEYS = 'ctrl+o tool detail · ctrl+t reasoning · ctrl+b back to this session · ctrl+c interrupt or exit'
+
+/** The one thing to say about a view a reader did not open. */
+const LOCAL_KEYS_BACK = 'ctrl+b returns'
 
 /** Stored sessions titled at once when the picker opens. */
 const TITLE_CONCURRENCY = 4
@@ -137,8 +141,10 @@ export function apply(ctx: Context, config: unknown): void {
     | { readonly kind: 'approval'; readonly gate: ApprovalGate; readonly settle: (outcome: ApprovalOutcome) => void }
     | { readonly kind: 'question'; readonly gate: QuestionGate; readonly settle: (answers: GateAnswer[]) => void }
 
-  /** The session the surface is showing, which a resume can change. */
+  /** The session this surface drives: commands, approvals, and the bell belong to it. */
   let activeSession = resolved.sessionId
+  /** The session the transcript is showing, which can be one of its children. */
+  let viewedSession = resolved.sessionId
   /** The one picker a terminal can present at a time, and how it settles its caller. */
   interface PendingPicker {
     readonly picker: SessionPicker
@@ -270,6 +276,10 @@ export function apply(ctx: Context, config: unknown): void {
       tui.requestRender()
       return { consume: true }
     }
+    if (matchesKey(data, 'ctrl+b')) {
+      if (viewedSession !== activeSession) void showAgentSession()
+      return { consume: true }
+    }
     // In raw mode Ctrl+C never reaches the process as SIGINT, so the surface
     // decides: stop the work in flight, or leave when there is none.
     if (!matchesKey(data, 'ctrl+c')) return undefined
@@ -373,17 +383,64 @@ export function apply(ctx: Context, config: unknown): void {
    * Replay a stored session so a resumed run opens on the conversation the
    * reader left, not on an empty screen: the durable log is the transcript.
    */
-  const replayHistory = async (id: SessionId): Promise<void> => {
+  /**
+   * Fold one session's history into the transcript.
+   *
+   * A live session answers from memory, which is the only source that includes
+   * events not yet flushed and the only one that works for a child that has not
+   * materialized; a session this process is not running falls back to storage.
+   */
+  const foldHistory = async (id: SessionId): Promise<number> => {
+    const live = (ctx.get('sessions') as
+      | { get?: (id: SessionId) => { snapshotEvents?: () => readonly { readonly type: string; readonly data?: unknown }[] } | undefined }
+      | undefined)?.get?.(id)
+    const inMemory = live?.snapshotEvents?.()
+    if (inMemory !== undefined) {
+      for (const event of inMemory) applyEvent(event)
+      return inMemory.length
+    }
     const history = createSessionHistory(ctx)
-    if (history === undefined) return
+    if (history === undefined) return 0
+    const events = await history.read(id)
+    for (const event of events) applyEvent(event)
+    return events.length
+  }
+
+  const replayHistory = async (id: SessionId): Promise<void> => {
     try {
-      const events = await history.read(id)
-      if (events.length === 0) return
-      for (const event of events) applyEvent(event)
-      model.notice(`replayed ${events.length} events from the stored log`)
+      const folded = await foldHistory(id)
+      if (folded > 0) model.notice(`replayed ${folded} events from the stored log`)
     } catch (error) {
       model.notice(`could not replay this session: ${error instanceof Error ? error.message : String(error)}`)
     }
+  }
+
+  /**
+   * Show another session in the transcript without leaving this one.
+   *
+   * A delegation is an ordinary session, so the reader can read what a child is
+   * doing rather than only that it exists; the agent this terminal drives does
+   * not change, which keeps commands, approvals, and the bell where they were.
+   */
+  const showSession = async (id: SessionId): Promise<void> => {
+    const previous = viewedSession
+    model.reset()
+    work.reset()
+    viewedSession = id
+    try {
+      await foldHistory(id)
+    } catch (error) {
+      model.notice(`could not read that session: ${error instanceof Error ? error.message : String(error)}`)
+    }
+    const returned = id === activeSession && previous !== activeSession
+    model.marker(returned
+      ? 'back to the session this terminal drives'
+      : `viewing ${id}${id === activeSession ? '' : ` — ${LOCAL_KEYS_BACK}`}`)
+    tui.requestRender()
+  }
+
+  const showAgentSession = async (): Promise<void> => {
+    await showSession(activeSession)
   }
 
   /** Feed one durable event to everything that folds it. */
@@ -403,6 +460,7 @@ export function apply(ctx: Context, config: unknown): void {
       setup: agentCtx => modelSwitch.install(agentCtx),
     })
     activeSession = id
+    viewedSession = id
     agent = handle
     disposers.push(() => {
       void handle.dispose()
@@ -452,6 +510,16 @@ export function apply(ctx: Context, config: unknown): void {
         model.notice(describeSubagents(roster.list(), Date.now()))
         tui.requestRender()
         return
+      case 'open': {
+        const run = resolveRun(roster.list(), command.id)
+        if (run === undefined) {
+          model.notice(`${command.id}: no single child matches; /subagents lists them`)
+          tui.requestRender()
+          return
+        }
+        void showSession(SessionId(run.id))
+        return
+      }
       case 'kill': {
         const stopped = subagentControl?.stop(command.id) ?? false
         model.notice(stopped
@@ -664,6 +732,7 @@ export function apply(ctx: Context, config: unknown): void {
           : `context ${formatTokens(facts.contextTokens)}${facts.contextWindow === undefined ? '' : `/${formatTokens(facts.contextWindow)}`}`
         model.notice([
           `session ${activeSession}`,
+          viewedSession === activeSession ? undefined : `viewing ${viewedSession}`,
           facts.model === undefined ? undefined : `model ${facts.model}${facts.effort === undefined ? '' : ` (${facts.effort})`}`,
           facts.preset === undefined ? undefined : `permissions ${facts.preset}`,
           context,
@@ -703,23 +772,26 @@ export function apply(ctx: Context, config: unknown): void {
   }
 
   disposers.push(ctx.on('session/event', (session, event) => {
-    if (session.id !== activeSession) return
-    if (event.type === 'turn/start') {
-      turnOpen = true
-      turnStartedAt = Date.now()
-      terminal.write(windowTitle(process.cwd(), 'working'))
+    // The surface state — activity, timer, title, bell, job board — belongs to
+    // the agent this terminal drives, even while a child is on screen.
+    if (session.id === activeSession) {
+      if (event.type === 'turn/start') {
+        turnOpen = true
+        turnStartedAt = Date.now()
+        terminal.write(windowTitle(process.cwd(), 'working'))
+      }
+      if (event.type === 'turn/end') {
+        const ranFor = turnStartedAt === undefined ? 0 : Date.now() - turnStartedAt
+        turnOpen = false
+        turnStartedAt = undefined
+        terminal.write(windowTitle(process.cwd(), 'ready'))
+        if (shouldRingBell({ bell: resolved.bell, ranForMs: ranFor, exiting: exited })) terminal.write(BELL)
+        // A job the turn started may have settled while the reader was watching
+        // something else, and nothing else refreshes a live board.
+        refreshJobs()
+      }
     }
-    if (event.type === 'turn/end') {
-      const ranFor = turnStartedAt === undefined ? 0 : Date.now() - turnStartedAt
-      turnOpen = false
-      turnStartedAt = undefined
-      terminal.write(windowTitle(process.cwd(), 'ready'))
-      if (shouldRingBell({ bell: resolved.bell, ranForMs: ranFor, exiting: exited })) terminal.write(BELL)
-      // A job the turn started may have settled while the reader was watching
-      // something else, and nothing else refreshes a live board.
-      refreshJobs()
-      return
-    }
+    if (session.id !== viewedSession) return
     applyEvent(event)
     tui.requestRender()
   }))

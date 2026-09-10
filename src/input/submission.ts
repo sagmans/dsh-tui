@@ -23,7 +23,7 @@ export const LOCAL_COMMAND_DESCRIPTIONS: Readonly<Record<string, string>> = {
   '/status': 'show the session, model, permissions, and context',
   '/model': 'show or switch the model for the next step',
   '/jobs': 'list background jobs, read one, or kill one',
-  '/subagents': 'list the delegations this session started, or stop one',
+  '/subagents': 'list delegations; /subagents open <id|last> reads one, /subagents kill <id> stops one',
   '/rename': 'give this session a title the picker will show',
   '/export': 'write the visible transcript to a markdown file',
   '/clear': 'clear the visible transcript',

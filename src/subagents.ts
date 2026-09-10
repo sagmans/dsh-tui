@@ -104,17 +104,48 @@ export function describeSubagents(runs: readonly SubagentRun[], now: number): st
 /** What a `/subagents` argument asks the surface to do. */
 export type SubagentsCommand =
   | { readonly kind: 'list' }
+  | { readonly kind: 'open'; readonly id: string }
   | { readonly kind: 'kill'; readonly id: string }
   | { readonly kind: 'invalid'; readonly reason: string }
+
+/** Actions a reader can name, so an unknown verb is refused instead of guessed at. */
+const ACTIONS = new Set(['open', 'kill'])
 
 /** Read a `/subagents` argument; the id is the only handle, so actions stay explicit. */
 export function parseSubagentsArgument(argument: string): SubagentsCommand {
   const parts = argument.trim().split(/\s+/u).filter(part => part !== '')
   if (parts.length === 0) return { kind: 'list' }
   const [verb = '', id = ''] = parts
-  if (verb !== 'kill') return { kind: 'invalid', reason: `unknown action "${verb}" — use /subagents or /subagents kill <id>` }
-  if (id === '') return { kind: 'invalid', reason: 'kill needs a child id; /subagents lists them' }
-  return { kind: 'kill', id }
+  if (!ACTIONS.has(verb)) {
+    return { kind: 'invalid', reason: `unknown action "${verb}" — use /subagents, /subagents open <id>, or /subagents kill <id>` }
+  }
+  if (id === '') return { kind: 'invalid', reason: `${verb} needs a child id; /subagents lists them` }
+  return verb === 'open' ? { kind: 'open', id } : { kind: 'kill', id }
+}
+
+/** Names the most recent run, for a reader who just watched one start. */
+export const LAST_RUN = 'last'
+
+/**
+ * Find one run by exact id or unambiguous prefix.
+ *
+ * Rows show a short id, so the reader types what they can see; an ambiguous
+ * prefix resolves to nothing rather than to the wrong child. \`last\` names the
+ * newest run, because copying a uuid out of a terminal is not a workflow.
+ */
+export function resolveRun(runs: readonly SubagentRun[], idOrPrefix: string): SubagentRun | undefined {
+  // The roster happens to hand these over newest first; picking by time keeps
+  // the shortcut honest even if a caller ever hands them over differently.
+  if (idOrPrefix === LAST_RUN) {
+    return runs.reduce<SubagentRun | undefined>(
+      (newest, run) => newest === undefined || run.startedAt > newest.startedAt ? run : newest,
+      undefined,
+    )
+  }
+  const exact = runs.find(run => run.id === idOrPrefix)
+  if (exact !== undefined) return exact
+  const matches = runs.filter(run => run.id.startsWith(idOrPrefix))
+  return matches.length === 1 ? matches[0] : undefined
 }
 
 /** The part of the agent registry a stop needs, described structurally. */

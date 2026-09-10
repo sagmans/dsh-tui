@@ -87,7 +87,14 @@ const prelude = option('prelude', '')
  * of the named keys. A question gate needs a pick and a confirm, which one
  * hardcoded approval key cannot express.
  */
-const NAMED_KEYS = { enter: '\r', space: ' ', up: '\u001b[A', down: '\u001b[B', esc: '\u001b' }
+const NAMED_KEYS = {
+  enter: '\r',
+  space: ' ',
+  up: '\u001b[A',
+  down: '\u001b[B',
+  esc: '\u001b',
+  back: '\u0002',
+}
 const answers = option('answer', '')
   .split(',')
   .filter(entry => entry !== '')
