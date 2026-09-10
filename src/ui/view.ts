@@ -114,6 +114,9 @@ export class TranscriptView implements Component {
     if (picker.filter !== '') {
       lines.push(this.theme.dim(truncateToWidth(`${DETAIL_INDENT}filter: ${displayText(picker.filter)}`, width, '')))
     }
+    if (picker.above > 0) {
+      lines.push(this.theme.dim(truncateToWidth(`${OPTION_INDENT}… ${picker.above} newer`, width, '')))
+    }
     for (const row of picker.rows) {
       const cursor = row.current ? '❯' : ' '
       const text = row.description === undefined
@@ -121,6 +124,9 @@ export class TranscriptView implements Component {
         : `${cursor} ${row.label} — ${row.description}`
       const style = row.current ? this.theme.bold : (value: string) => value
       lines.push(style(truncateToWidth(`${OPTION_INDENT}${displayText(text)}`, width, '')))
+    }
+    if (picker.below > 0) {
+      lines.push(this.theme.dim(truncateToWidth(`${OPTION_INDENT}… ${picker.below} older`, width, '')))
     }
     lines.push(this.theme.dim(truncateToWidth(`${OPTION_INDENT}${displayText(picker.hint)}`, width, '')))
   }

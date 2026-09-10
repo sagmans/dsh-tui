@@ -14,12 +14,25 @@ export interface PickerCard {
   readonly rows: readonly PickerRow[]
   readonly filter: string
   readonly hint: string
+  /** Sessions above the window, so the reader knows the list continues. */
+  readonly above: number
+  /** Sessions below the window. */
+  readonly below: number
 }
 
 /** What one key press asked the picker to do. */
 export type PickerAction =
   | { readonly kind: 'pick'; readonly id: string }
   | { readonly kind: 'cancel' }
+
+/**
+ * Rows the picker shows at once.
+ *
+ * The card is drawn at the end of a viewport that follows the transcript, so a
+ * list taller than the screen would push its own cursor out of sight. The
+ * window stays around the cursor instead, and the counts say what is hidden.
+ */
+export const PICKER_WINDOW = 12
 
 const MINUTE_MS = 60_000
 const HOUR_MS = 60 * MINUTE_MS
@@ -107,13 +120,18 @@ export class SessionPicker {
 
   card(): PickerCard {
     const rows = this.visible()
+    const cursor = Math.min(this.cursor, Math.max(0, rows.length - 1))
+    const start = Math.max(0, Math.min(cursor - Math.floor(PICKER_WINDOW / 2), rows.length - PICKER_WINDOW))
+    const window = rows.slice(start, start + PICKER_WINDOW)
     return {
       title: `resume a session · ${this.sessions.length} stored`,
-      rows: rows.map((session, index) => ({
+      rows: window.map((session, index) => ({
         label: this.labelOf(session),
         description: this.descriptionOf(session),
-        current: index === Math.min(this.cursor, Math.max(0, rows.length - 1)),
+        current: start + index === cursor,
       })),
+      above: start,
+      below: Math.max(0, rows.length - start - window.length),
       filter: this.filter,
       hint: rows.length === 0
         ? 'nothing matches · backspace to widen · esc cancel'

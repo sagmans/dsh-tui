@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { StoredSession } from '@/agent/history.ts'
-import { SessionPicker, describeAge } from '@/ui/picker.ts'
+import { PICKER_WINDOW, SessionPicker, describeAge } from '@/ui/picker.ts'
 
 const session = (id: string, overrides: Partial<StoredSession> = {}): StoredSession => ({
   id,
@@ -60,6 +60,21 @@ describe('SessionPicker', () => {
     expect(picker.visible()).toEqual([])
     expect(picker.handleKey('\r')).toBeUndefined()
     expect(picker.card().hint).toContain('nothing matches')
+  })
+
+  it('keeps the cursor inside the window it draws', () => {
+    const many = Array.from({ length: 40 }, (_, index) => session(`s${index}`))
+    const picker = pickerOf(many)
+    const first = picker.card()
+    expect(first.rows).toHaveLength(PICKER_WINDOW)
+    expect(first.rows[0]?.current).toBe(true)
+    expect(first.above).toBe(0)
+    expect(first.below).toBe(40 - PICKER_WINDOW)
+    for (let step = 0; step < 30; step += 1) picker.handleKey('\u001b[B')
+    const moved = picker.card()
+    expect(moved.rows.some(row => row.current)).toBe(true)
+    expect(moved.above).toBeGreaterThan(0)
+    expect(moved.above + moved.rows.length + moved.below).toBe(40)
   })
 
   it('offers the newest session first and titles it when known', () => {

@@ -106,6 +106,8 @@ describe('TranscriptView picker', () => {
       ],
       filter: 'fix',
       hint: '↑↓ move · enter open · esc cancel · type to filter',
+      above: 2,
+      below: 3,
     }
     const view = new TranscriptView(new TranscriptModel(), theme, new MarkdownRenderer(theme.markdown), {
       picker: () => picker,
@@ -115,6 +117,8 @@ describe('TranscriptView picker', () => {
     expect(lines).toContain('    filter: fix')
     expect(lines).toContain('   ❯ fix the parser — /work · 3m ago · 12 events')
     expect(lines).toContain('     tui-session-b — /tmp · 1d ago')
+    expect(lines).toContain('   … 2 newer')
+    expect(lines).toContain('   … 3 older')
     expect(lines.some(line => line.includes('enter open'))).toBe(true)
   })
 })
