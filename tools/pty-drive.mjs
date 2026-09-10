@@ -117,6 +117,8 @@ const signalOption = option('signal', '')
 // process.kill takes POSIX names, so accept the short form a reader would type.
 const signal = signalOption === '' || signalOption.startsWith('SIG') ? signalOption : `SIG${signalOption.toUpperCase()}`
 const keep = option('log', join(tmpdir(), `dsh-tui-pty-${Date.now()}.log`))
+/** Exit code the run is expected to end with, so a broken boot fails the harness. */
+const expectExit = Number.parseInt(option('expect-exit', '0'), 10)
 
 const child = pty.spawn('pnpm', ['dsh', '--profile', 'tui', ...extraArgs], {
   name: 'xterm-256color',
@@ -196,6 +198,13 @@ function finish() {
   console.log(`\n--- exit: code=${exitInfo?.exitCode ?? 'none'} signal=${exitInfo?.signal ?? 'none'}`)
   console.log(`--- terminal restored: ${missing.length === 0 ? 'yes' : `no (missing ${missing.join(', ')})`}`)
   console.log(`--- raw log: ${keep} (${raw.length} bytes) ---`)
+  // A run that fails the application must fail the harness: a screen that looks
+  // right is not the contract, a clean exit is part of it.
+  const code = exitInfo?.exitCode
+  if (code !== expectExit) {
+    console.error(`pty-drive: expected exit ${expectExit}, got ${code ?? 'no exit before the grace deadline'}`)
+    process.exit(1)
+  }
   process.exit(0)
 }
 
