@@ -32,10 +32,10 @@ describe('TranscriptModel rows', () => {
     expect(model.entries()).toEqual([{ kind: 'user', text: 'hello' }])
   })
 
-  it('renders injected context as a notice rather than as the human speaking', () => {
+  it('names the producer of injected context instead of quoting it', () => {
     const model = new TranscriptModel()
     model.apply({ type: 'user/message', data: { content: text('context'), source: { kind: 'plugin', plugin: 'x' } } })
-    expect(model.entries()).toEqual([{ kind: 'notice', text: 'context' }])
+    expect(model.entries()).toEqual([{ kind: 'notice', text: 'injected x · 1 lines — context' }])
   })
 
   it('accumulates streamed text and drops it once the durable message settles', () => {
@@ -129,5 +129,75 @@ describe('TranscriptModel tool cards', () => {
     expect(model.entries()).toEqual([
       { kind: 'tool', card: { kind: 'generic', title: 'grep', detail: ['{"q":"x"}'], failed: false, hiddenLines: 0 } },
     ])
+  })
+})
+
+describe('TranscriptModel outcomes', () => {
+  it('stays quiet when a turn completes normally', () => {
+    const model = new TranscriptModel()
+    model.apply({ type: 'turn/end', data: { turn: 1, reason: { kind: 'completed' } } })
+    expect(model.entries()).toEqual([])
+  })
+
+  it('reports a failed turn with the provider failure text', () => {
+    const model = new TranscriptModel()
+    model.apply({
+      type: 'turn/end',
+      data: { turn: 1, reason: { kind: 'error', error: { code: 'MISSING_CREDENTIAL', message: 'no API key' } } },
+    })
+    expect(model.entries()).toEqual([{ kind: 'notice', text: 'turn failed: no API key' }])
+  })
+
+  it('reports an aborted and a blocked turn', () => {
+    const model = new TranscriptModel()
+    model.apply({ type: 'turn/end', data: { turn: 1, reason: { kind: 'aborted', reason: { kind: 'user' } } } })
+    model.apply({ type: 'turn/end', data: { turn: 2, reason: { kind: 'blocked' } } })
+    expect(model.entries()).toEqual([
+      { kind: 'notice', text: 'turn aborted (user)' },
+      { kind: 'notice', text: 'turn ended: blocked' },
+    ])
+  })
+
+  it('reports a live agent failure that carries no message', () => {
+    const model = new TranscriptModel()
+    model.reportError(new Error('connection reset'))
+    model.reportError(undefined)
+    expect(model.entries()).toEqual([
+      { kind: 'notice', text: 'error: connection reset' },
+      { kind: 'notice', text: 'error: agent failed' },
+    ])
+  })
+
+  it('reports an attempt that settled without a message', () => {
+    const model = new TranscriptModel()
+    model.apply({ type: 'assistant/attempt', data: { turn: 1, step: 1, stream: [], error: { code: 'RATE_LIMIT', message: 'slow down' } } })
+    expect(model.entries()).toEqual([{ kind: 'notice', text: 'request failed: slow down' }])
+  })
+
+  it('summarizes injected context instead of printing it', () => {
+    const model = new TranscriptModel()
+    model.apply({
+      type: 'user/message',
+      data: {
+        content: [{ type: 'text', text: '<system-reminder>\nrule one\nrule two' }],
+        source: { kind: 'plugin', plugin: 'dsh-agent-instructions' },
+      },
+    })
+    expect(model.entries()).toEqual([
+      { kind: 'notice', text: 'injected dsh-agent-instructions · 3 lines — <system-reminder>' },
+    ])
+  })
+
+  it('truncates a long preview line', () => {
+    const model = new TranscriptModel()
+    model.apply({
+      type: 'user/message',
+      data: { content: [{ type: 'text', text: 'x'.repeat(200) }], source: { kind: 'plugin', plugin: 'p' } },
+    })
+    const entry = model.entries()[0]
+    const text = entry !== undefined && entry.kind === 'notice' ? entry.text : ''
+    expect(text.startsWith('injected p · 1 lines — ')).toBe(true)
+    expect(text.endsWith('…')).toBe(true)
+    expect(text.length).toBeLessThan(120)
   })
 })

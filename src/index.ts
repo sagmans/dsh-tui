@@ -1,7 +1,9 @@
 import { Editor, ProcessTerminal, ScrollView, TuiAltScreen, VStack, matchesKey } from '@earendil-works/pi-tui'
 import type { Context } from '@deepseek-ai/cordis'
+import type { Agent } from '@deepseek-ai/dsh-agent'
 import { startAgent, type TuiAgent } from './agent/host.ts'
 import { createToolPresenter } from './agent/present.ts'
+import { LOCAL_COMMANDS, classifySubmission } from './input/submission.ts'
 import { resolveConfig } from './config.ts'
 import { createRestoreRegistry } from './terminal/restore.ts'
 import { createTheme } from './theme.ts'
@@ -14,7 +16,19 @@ export const name = 'tui'
 export const inject = ['agents']
 
 const GOODBYE_KEY = 'tuiGoodbyeMessage'
-const LOCAL_COMMANDS = ['/help', '/clear', '/quit', '/exit'] as const
+
+/**
+ * The command registry, described structurally: the surface only lists,
+ * looks up, and dispatches human commands, so it does not depend on the
+ * command package's full surface.
+ */
+interface CommandRegistry {
+  list(agent: Agent): readonly { readonly name: string; readonly description: string }[]
+  find(agent: Agent, name: string): unknown
+  execute(agent: Agent, line: string, attachments: readonly unknown[], signal: AbortSignal): Promise<
+    { readonly result: { readonly kind: 'success' | 'error'; readonly text?: string } } | undefined
+  >
+}
 
 /**
  * Refuse to run without a real terminal.
@@ -102,31 +116,71 @@ export function apply(ctx: Context, config: unknown): void {
     return { consume: true }
   }))
 
-  editor.onSubmit = text => {
-    const trimmed = text.trim()
-    if (trimmed === '') return
-    if (trimmed === '/quit' || trimmed === '/exit') {
-      requestExit(0)
-      return
-    }
-    if (trimmed === '/clear') {
-      model.reset()
-      tui.requestRender()
-      return
-    }
-    if (trimmed === '/help') {
-      model.notice(`local commands: ${LOCAL_COMMANDS.join(' ')}; any other /command goes to the agent`)
-      tui.requestRender()
-      return
-    }
-    if (agent === undefined) {
+  const registry = (): CommandRegistry | undefined => ctx.get('commands') as CommandRegistry | undefined
+
+  const helpText = (): string => {
+    const current = agent?.agent
+    const registered = current === undefined || registry() === undefined
+      ? []
+      : registry()?.list(current).map(command => `/${command.name}`) ?? []
+    const commands = registered.length === 0 ? 'none registered yet' : registered.join(' ')
+    return `commands: ${commands} · surface: ${LOCAL_COMMANDS.join(' ')}`
+  }
+
+  const runCommand = (name: string, line: string): void => {
+    const current = agent
+    const commands = registry()
+    if (current === undefined) {
       model.notice('the agent is still starting; try again in a moment')
       tui.requestRender()
       return
     }
-    // While a turn is running the human is steering it, not opening another.
-    if (turnOpen) agent.steer(trimmed)
-    else agent.submit(trimmed)
+    if (commands === undefined || commands.find(current.agent, name) === undefined) {
+      model.notice(`unknown command: /${name} — ${helpText()}`)
+      tui.requestRender()
+      return
+    }
+    const controller = new AbortController()
+    void commands.execute(current.agent, line, [], controller.signal).then(execution => {
+      const result = execution?.result
+      if (result === undefined) return
+      model.notice(result.kind === 'error' ? `/${name} failed: ${result.text ?? 'no detail'}` : `/${name} ${result.text ?? 'done'}`)
+      tui.requestRender()
+    }).catch((error: unknown) => {
+      model.notice(`/${name} failed: ${error instanceof Error ? error.message : String(error)}`)
+      tui.requestRender()
+    })
+  }
+
+  editor.onSubmit = text => {
+    const submission = classifySubmission(text)
+    switch (submission.kind) {
+      case 'empty':
+        return
+      case 'quit':
+        requestExit(0)
+        return
+      case 'clear':
+        model.reset()
+        tui.requestRender()
+        return
+      case 'help':
+        model.notice(helpText())
+        tui.requestRender()
+        return
+      case 'command':
+        runCommand(submission.name, submission.line)
+        return
+      case 'prompt':
+        if (agent === undefined) {
+          model.notice('the agent is still starting; try again in a moment')
+          tui.requestRender()
+          return
+        }
+        // While a turn is running the human is steering it, not opening another.
+        if (turnOpen) agent.steer(submission.text)
+        else agent.submit(submission.text)
+    }
   }
 
   disposers.push(ctx.on('session/event', (session, event) => {
@@ -134,6 +188,12 @@ export function apply(ctx: Context, config: unknown): void {
     if (event.type === 'turn/start') turnOpen = true
     if (event.type === 'turn/end') turnOpen = false
     model.apply(event)
+    tui.requestRender()
+  }))
+
+  disposers.push(ctx.on('agent/error', payload => {
+    if (payload.agent.id !== resolved.sessionId) return
+    model.reportError(payload.error)
     tui.requestRender()
   }))
 

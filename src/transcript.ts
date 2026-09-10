@@ -56,6 +56,30 @@ function countLines(text: string): number {
   return text === '' ? 0 : text.split('\n').length
 }
 
+function messageOf(value: unknown): string {
+  const record = asRecord(value)
+  if (record === undefined) return ''
+  if (typeof record.message === 'string') return record.message
+  if (typeof record.code === 'string') return record.code
+  return ''
+}
+
+/**
+ * Summarize an injected context block.
+ *
+ * Injected instructions can be thousands of lines and are rewritten by the
+ * model, not read by the human, so the row names the producer and its size and
+ * keeps one line of preview instead of pushing the conversation off screen.
+ */
+function injectionSummary(data: Record<string, unknown>, text: string): string {
+  const source = asRecord(data.source) ?? {}
+  const plugin = typeof source.plugin === 'string' ? source.plugin : 'plugin'
+  const lines = text.split('\n').filter(line => line.trim() !== '')
+  const first = lines[0]?.trim() ?? ''
+  const preview = first.length > 72 ? `${first.slice(0, 71)}…` : first
+  return `injected ${plugin} · ${lines.length} lines${preview === '' ? '' : ` — ${preview}`}`
+}
+
 /**
  * Fold durable session events into readable rows, and hold the in-flight
  * assistant text and reasoning apart from them.
@@ -127,6 +151,30 @@ export class TranscriptModel {
     }
   }
 
+  /** Report why a turn ended, except for the ordinary completion the reader already sees. */
+  private reportTurnEnd(reason: Record<string, unknown>): void {
+    const kind = typeof reason.kind === 'string' ? reason.kind : 'completed'
+    if (kind === 'completed') return
+    if (kind === 'error') {
+      const failure = messageOf(reason.error)
+      this.settled.push({ kind: 'notice', text: `turn failed: ${failure === '' ? 'model request failed' : failure}` })
+      return
+    }
+    if (kind === 'aborted') {
+      const cause = asRecord(reason.reason)
+      const by = typeof cause?.kind === 'string' ? cause.kind : 'user'
+      this.settled.push({ kind: 'notice', text: `turn aborted (${by})` })
+      return
+    }
+    this.settled.push({ kind: 'notice', text: `turn ended: ${kind}` })
+  }
+
+  /** Report a live agent failure the durable log never carries as a message. */
+  reportError(error: unknown): void {
+    const text = error instanceof Error ? error.message : messageOf(error)
+    this.settled.push({ kind: 'notice', text: `error: ${text === '' ? 'agent failed' : text}` })
+  }
+
   private settleReasoning(): void {
     if (this.liveReasoning === '') return
     this.reasoning = { lines: countLines(this.liveReasoning), chars: this.liveReasoning.length }
@@ -139,7 +187,19 @@ export class TranscriptModel {
       case 'user/message': {
         const text = textOfContent(data.content)
         if (text === '') return
-        this.settled.push(sourceKind(data) === 'user' ? { kind: 'user', text } : { kind: 'notice', text })
+        this.settled.push(sourceKind(data) === 'user'
+          ? { kind: 'user', text }
+          : { kind: 'notice', text: injectionSummary(data, text) })
+        return
+      }
+      case 'turn/end': {
+        this.reportTurnEnd(asRecord(data.reason) ?? {})
+        return
+      }
+      case 'assistant/attempt': {
+        // An attempt that settled without a message still has to explain itself.
+        const failure = data.error === undefined ? '' : messageOf(data.error)
+        if (failure !== '') this.settled.push({ kind: 'notice', text: `request failed: ${failure}` })
         return
       }
       case 'assistant/message': {
