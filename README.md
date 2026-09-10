@@ -2,7 +2,7 @@
 
 Interactive terminal (TUI) surface for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): use `dsh` in a terminal instead of a browser.
 
-Status: **v1 feature-complete.** The surface owns the alternate screen, streams assistant text as markdown, renders every tool's own card, answers approvals and questions, restores and names stored conversations, switches model mid-session, reads a child agent's conversation in place, keeps the goal, plan mode, todo list, delegations, and background jobs above the editor with a status line below it, and hands the terminal back on every graceful exit. What is left is packaging: the publish itself.
+Status: **v1 feature-complete, unpublished by choice.** The surface owns the alternate screen, streams assistant text as markdown, renders every tool's own card, answers approvals and questions, restores and names stored conversations, switches model mid-session, reads a child agent's conversation in place, keeps the goal, plan mode, todo list, delegations, and background jobs above the editor with a status line below it, and hands the terminal back on every graceful exit. Publishing is deferred, and the tag workflow that would do it with a provenance attestation is in place.
 
 ## Install
 
@@ -12,6 +12,16 @@ dsh --profile tui
 ```
 
 The first command creates a base-backed `tui` profile and adds this bundle to it. Requires Node.js >= 22.19, a real terminal (stdin and stdout must be TTYs), and `pnpm` on `PATH` for the install step.
+
+### Launching from a DSH checkout
+
+`pnpm dsh --profile tui` is the sanctioned launcher, but pnpm verifies that dependencies are current before it runs any script, and a checkout whose `postinstall` refuses to take over a user-owned `core.hooksPath` fails that check — the process exits before the surface starts. Any of these reaches the surface:
+
+```sh
+pnpm --config.verify-deps-before-run=false dsh --profile tui   # from the checkout
+CI=true pnpm dsh --profile tui                                 # also suppresses the check
+node "$CHECKOUT/apps/cli/lib/bin.js" --profile tui             # needs neither pnpm nor the check
+```
 
 ## Usage
 

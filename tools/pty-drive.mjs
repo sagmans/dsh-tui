@@ -14,10 +14,14 @@
  *   node tools/pty-drive.mjs --prompt "Ask which colour" --answer "20:1,22:enter"
  *   node tools/pty-drive.mjs --args "--resume" --prompt "" --answer "4:enter"
  *   node tools/pty-drive.mjs --prompt "say hi" --signal TERM
+ *   node tools/pty-drive.mjs --launcher /path/to/dsh/lib/bin.js --prompt "say hi"
  *
  * Every run ends by reporting the child's exit code and whether the terminal
  * was handed back, because a surface that exits cleanly but leaves the shell in
  * raw mode has failed the reader.
+ *
+ * --launcher runs that launcher binary instead of the checkout's own script, so
+ * a report can be reproduced in the exact command that produced it.
  *
  * --approve N answers the approval gate N seconds after the prompt; without it
  * a turn that needs a gated tool waits for a decision the harness never makes.
@@ -78,6 +82,8 @@ const prompt = option('prompt', 'Reply with exactly: pong')
 /** Launcher arguments for the child, for reaching a mode the default run does not. */
 const extraArgs = option('args', '').split(' ').filter(argument => argument !== '')
 const home = option('home', undefined)
+/** A dsh launcher binary to drive instead of the checkout's own script. */
+const launcher = option('launcher', '')
 const seconds = Number.parseInt(option('seconds', '45'), 10)
 const approve = Number.parseInt(option('approve', '0'), 10)
 /** A slash command sent before the prompt, for reaching a state the prompt assumes. */
@@ -120,13 +126,26 @@ const keep = option('log', join(tmpdir(), `dsh-tui-pty-${Date.now()}.log`))
 /** Exit code the run is expected to end with, so a broken boot fails the harness. */
 const expectExit = Number.parseInt(option('expect-exit', '0'), 10)
 
-const child = pty.spawn('pnpm', ['dsh', '--profile', 'tui', ...extraArgs], {
+/**
+ * pnpm re-checks dependencies before it runs a script, and a checkout whose
+ * postinstall declines to take over a user-owned hooks path fails that check:
+ * the launch dies before the surface starts. This harness wants the surface,
+ * not a second install, so the check is off for the child.
+ */
+const DEPS_CHECK_OFF = { npm_config_verify_deps_before_run: 'false' }
+const command = launcher === '' ? 'pnpm' : process.execPath
+const launcherArgs = launcher === ''
+  ? ['dsh', '--profile', 'tui', ...extraArgs]
+  : [launcher, '--profile', 'tui', ...extraArgs]
+
+const child = pty.spawn(command, launcherArgs, {
   name: 'xterm-256color',
   cols: 100,
   rows: 30,
   cwd: DSH_CHECKOUT,
   env: {
     ...process.env,
+    ...DEPS_CHECK_OFF,
     TERM: 'xterm-256color',
     DSH_PERMISSION_MODE: permissionMode,
     ...(home === undefined ? {} : { DSH_HOME: home }),
