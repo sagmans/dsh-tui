@@ -13,6 +13,11 @@
  *   node tools/pty-drive.mjs --prelude "/permission workspace-write" --prompt "Run: echo hi" --approve 15
  *   node tools/pty-drive.mjs --prompt "Ask which colour" --answer "20:1,22:enter"
  *   node tools/pty-drive.mjs --args "--resume" --prompt "" --answer "4:enter"
+ *   node tools/pty-drive.mjs --prompt "say hi" --signal TERM
+ *
+ * Every run ends by reporting the child's exit code and whether the terminal
+ * was handed back, because a surface that exits cleanly but leaves the shell in
+ * raw mode has failed the reader.
  *
  * --approve N answers the approval gate N seconds after the prompt; without it
  * a turn that needs a gated tool waits for a decision the harness never makes.
@@ -97,6 +102,13 @@ const answers = option('answer', '')
  * gate the run is meant to exercise.
  */
 const permissionMode = option('permission-mode', 'workspace-write')
+/**
+ * End the run with a signal instead of the quit sequence, to exercise the
+ * launcher's shutdown path rather than the surface's own.
+ */
+const signalOption = option('signal', '')
+// process.kill takes POSIX names, so accept the short form a reader would type.
+const signal = signalOption === '' || signalOption.startsWith('SIG') ? signalOption : `SIG${signalOption.toUpperCase()}`
 const keep = option('log', join(tmpdir(), `dsh-tui-pty-${Date.now()}.log`))
 
 const child = pty.spawn('pnpm', ['dsh', '--profile', 'tui', ...extraArgs], {
@@ -132,16 +144,60 @@ if (prelude !== '') at(PRELUDE_AT_MS, () => child.write(`${prelude}\r`))
 if (prompt !== '') at(promptAt, () => child.write(`${prompt}\r`))
 if (approve > 0) at(promptAt + approve * 1000, () => child.write('y'))
 for (const answer of answers) at(promptAt + answer.at * 1000, () => child.write(answer.value))
-at(promptAt + seconds * 1000, () => child.write('\u0003'))
-// Kill the line first: a stray key left in the editor would turn the quit
-// sequence into an ordinary prompt and leave the session running.
-at(promptAt + seconds * 1000 + 500, () => child.write('\u0015/quit\r'))
-at(9000 + seconds * 1000, () => {
-  child.kill()
+/** Sequences a terminal must see before the shell is usable again. */
+const RESTORE_SEQUENCES = {
+  'alt screen': '\u001b[?1049l',
+  'cursor shown': '\u001b[?25h',
+  'mouse released': '\u001b[?1006l',
+}
+
+if (signal === '') {
+  at(promptAt + seconds * 1000, () => child.write('\u0003'))
+  // Kill the line first: a stray key left in the editor would turn the quit
+  // sequence into an ordinary prompt and leave the session running.
+  at(promptAt + seconds * 1000 + 500, () => child.write('\u0015/quit\r'))
+} else {
+  at(promptAt + seconds * 1000, () => {
+    // The pty child is a session leader whose own child is the harness's real
+    // target: signalling only the launcher shim leaves the surface running with
+    // a dead terminal, which proves nothing about its shutdown path.
+    try {
+      process.kill(-child.pid, signal)
+    } catch {
+      try {
+        process.kill(child.pid, signal)
+      } catch (error) {
+        console.error(`pty-drive: could not send ${signal}: ${error.message}`)
+      }
+    }
+  })
+}
+
+/** How long the child is given to exit before the harness stops waiting. */
+const EXIT_GRACE_MS = 12_000
+let exitInfo
+let reported = false
+
+function finish() {
+  if (reported) return
+  reported = true
   mkdirSync(join(keep, '..'), { recursive: true })
   writeFileSync(keep, raw)
   const screen = strip(raw).split('\n').map(line => line.trimEnd()).filter((line, index, all) => line !== '' || all[index - 1] !== '')
   console.log(screen.join('\n').slice(-6000))
-  console.log(`\n--- raw log: ${keep} (${raw.length} bytes) ---`)
+  const missing = Object.entries(RESTORE_SEQUENCES).filter(([, sequence]) => !raw.includes(sequence)).map(([name]) => name)
+  console.log(`\n--- exit: code=${exitInfo?.exitCode ?? 'none'} signal=${exitInfo?.signal ?? 'none'}`)
+  console.log(`--- terminal restored: ${missing.length === 0 ? 'yes' : `no (missing ${missing.join(', ')})`}`)
+  console.log(`--- raw log: ${keep} (${raw.length} bytes) ---`)
   process.exit(0)
+}
+
+child.onExit(info => {
+  exitInfo = info
+  finish()
+})
+
+at(promptAt + seconds * 1000 + EXIT_GRACE_MS, () => {
+  child.kill()
+  finish()
 })
