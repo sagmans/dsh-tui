@@ -54,6 +54,13 @@ pnpm test
 pnpm run build
 ```
 
+**A linked profile loads the built entry point**, so edits under `src/` are invisible to `dsh --profile tui` until `pnpm run build` runs. Drive the real surface end to end — it rebuilds first, allocates a PTY, sends a prompt, and prints what the screen showed:
+
+```sh
+node tools/pty-drive.mjs --prompt 'Reply with exactly: pong'
+node tools/pty-drive.mjs --home /tmp/scratch-home --seconds 20   # no credentials: proves failures are visible
+```
+
 Test specs import plugin sources through the `@/` alias. Under this test runner the spec file is resolved with a root-relative id, so parent-relative imports (`../src/...`) do not resolve; the alias and its matching `tsconfig.test.json` path mapping avoid that.
 
 ## Limitations
