@@ -14,18 +14,18 @@
   "license": "MIT",
   "type": "module",
   "main": "lib/index.js",
-  "types": "lib/types/index.d.ts",
+  "types": "lib/index.d.ts",
   "exports": {
     ".": {
-      "types": "./lib/types/index.d.ts",
+      "types": "./lib/index.d.ts",
       "default": "./lib/index.js"
     },
     "./startup": {
-      "types": "./lib/types/startup.d.ts",
+      "types": "./lib/startup.d.ts",
       "default": "./lib/startup.js"
     },
     "./ask-user": {
-      "types": "./lib/types/ask-user.d.ts",
+      "types": "./lib/ask-user.d.ts",
       "default": "./lib/ask-user.js"
     },
     "./cordis.patch.yml": "./cordis.patch.yml",
