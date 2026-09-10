@@ -1,0 +1,74 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`golden frames > renders the dock at 40 columns 1`] = `
+[
+  "⏸ plan mode · answer the plan before ed[0m…[0m",
+  "☰ todos 1/3 done",
+  "  ▸ verify the dock",
+  "  ☐ document the dock",
+  "  ☑ write the dock",
+]
+`;
+
+exports[`golden frames > renders the dock at 80 columns 1`] = `
+[
+  "⏸ plan mode · answer the plan before edits happen",
+  "☰ todos 1/3 done",
+  "  ▸ verify the dock",
+  "  ☐ document the dock",
+  "  ☑ write the dock",
+]
+`;
+
+exports[`golden frames > renders the status row at 40 columns 1`] = `
+[
+  "● ready · glm-5.3 (max) · workspace-wri[0m…[0m",
+]
+`;
+
+exports[`golden frames > renders the status row at 80 columns 1`] = `
+[
+  "● ready · glm-5.3 (max) · workspace-write · ctx 17.5k/1.0M · ~/deepseek-harness[0m…[0m",
+]
+`;
+
+exports[`golden frames > renders the transcript at 40 columns 1`] = `
+[
+  "› add a dock above the editor",
+  "· injected dsh-agent-instructions · 3",
+  "  lines — <system-reminder>",
+  "▸ reasoning · 2 lines · 53 chars",
+  "⏺ Done.",
+  "",
+  "  - fold the work state",
+  "  - render it only when it says",
+  "    something",
+  "",
+  "  \`\`\`ts",
+  "    const dock = new WorkDock(state,",
+  "  theme)",
+  "  \`\`\`",
+  "⚒ bash",
+  "    Tests  154 passed (154)",
+  "⧉ compacted 3 events (≈4200 tokens)",
+]
+`;
+
+exports[`golden frames > renders the transcript at 80 columns 1`] = `
+[
+  "› add a dock above the editor",
+  "· injected dsh-agent-instructions · 3 lines — <system-reminder>",
+  "▸ reasoning · 2 lines · 53 chars",
+  "⏺ Done.",
+  "",
+  "  - fold the work state",
+  "  - render it only when it says something",
+  "",
+  "  \`\`\`ts",
+  "    const dock = new WorkDock(state, theme)",
+  "  \`\`\`",
+  "⚒ bash",
+  "    Tests  154 passed (154)",
+  "⧉ compacted 3 events (≈4200 tokens)",
+]
+`;

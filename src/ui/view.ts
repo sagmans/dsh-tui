@@ -73,7 +73,13 @@ export class TranscriptView implements Component {
     rendered.forEach((line, index) => {
       // The renderer pads to its width for background styling we do not use.
       const trimmed = line.replace(/[ \t]+$/u, '')
-      lines.push(truncateToWidth(`${index === 0 ? prefix : indent}${trimmed}`, width, ''))
+      // A blank markdown line stays blank: indenting it would leave trailing
+      // spaces in the frame for a row that shows nothing.
+      if (trimmed === '') {
+        lines.push('')
+        return
+      }
+      lines.push(truncateToWidth(`${index === 0 ? prefix : indent}${trimmed}`, width, '…'))
     })
   }
 

@@ -69,7 +69,7 @@ export function formatStatus(facts: StatusFacts, width: number, theme: TuiTheme)
       : `ctx ${formatTokens(facts.contextTokens)}/${formatTokens(facts.contextWindow)}`)
   }
   parts.push(shortPath(facts.cwd, facts.home))
-  return theme.dim(truncateToWidth(displayText(parts.join(' · ')), width, ''))
+  return theme.dim(truncateToWidth(displayText(parts.join(' · ')), width, '…'))
 }
 
 /** A one-row view of the state around the transcript. */

@@ -60,7 +60,7 @@ export class WorkDock implements Component {
       lines.push(this.theme.bold(truncateToWidth(`◎ goal ${rounds} · ${displayText(objective)}`, width, '…')))
     }
     if (state.planMode) {
-      lines.push(this.theme.bold(truncateToWidth('⏸ plan mode · answer the plan before edits happen', width, '')))
+      lines.push(this.theme.bold(truncateToWidth('⏸ plan mode · answer the plan before edits happen', width, '…')))
     }
     if (state.todos !== undefined) this.pushTodos(lines, state.todos, width)
     return lines
