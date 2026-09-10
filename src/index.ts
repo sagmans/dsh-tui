@@ -25,6 +25,7 @@ import { createCompletionProvider } from './input/completion.ts'
 import { LOCAL_COMMANDS, classifySubmission } from './input/submission.ts'
 import { resolveConfig } from './config.ts'
 import { createRestoreRegistry } from './terminal/restore.ts'
+import { CLEAR_TITLE, windowTitle } from './terminal/title.ts'
 import { createTheme } from './theme.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { TranscriptModel } from './transcript.ts'
@@ -189,6 +190,9 @@ export function apply(ctx: Context, config: unknown): void {
     if (exited) return
     exited = true
     clearInterval(statusTicker)
+    // Hand the window label back before the screen does, so a shell that sets
+    // its own title can take over cleanly.
+    terminal.write(CLEAR_TITLE)
     restore.restore()
     const goodbye = ctx.get(GOODBYE_KEY)
     if (typeof goodbye === 'string' && goodbye !== '') terminal.write(`\n${goodbye}\n`)
@@ -605,10 +609,12 @@ export function apply(ctx: Context, config: unknown): void {
     if (event.type === 'turn/start') {
       turnOpen = true
       turnStartedAt = Date.now()
+      terminal.write(windowTitle(process.cwd(), 'working'))
     }
     if (event.type === 'turn/end') {
       turnOpen = false
       turnStartedAt = undefined
+      terminal.write(windowTitle(process.cwd(), 'ready'))
       // A job the turn started may have settled while the reader was watching
       // something else, and nothing else refreshes a live board.
       refreshJobs()
@@ -704,6 +710,7 @@ export function apply(ctx: Context, config: unknown): void {
   }))
 
   tui.start()
+  terminal.write(windowTitle(process.cwd(), 'ready'))
 
   const degraded = describeMissingOptional(probe)
   if (degraded !== undefined) model.notice(degraded)

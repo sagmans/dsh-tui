@@ -33,6 +33,10 @@ dsh --profile tui --no-color
 | digits / space / ↑↓ / Enter / Esc | answer a question: pick or toggle, confirm, or skip one |
 | `/` then Tab | complete commands, including every command this session registered |
 | `@` or a path then Tab | complete workspace file references |
+| `ctrl+shift+f` | search the transcript (`enter` next, `shift+enter` previous, `esc` close) |
+| `home` / `end` | jump to the start or the end of the transcript |
+| `ctrl+down` | jump to the next prompt |
+| mouse wheel, drag | scroll, and copy a selection through OSC 52 |
 | `/help` | list registered and local commands |
 | `/status` | show the session id, model, permissions, context, and directory |
 | `/model` | show the route the next step will use, and the providers available |
