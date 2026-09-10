@@ -31,6 +31,8 @@ dsh --profile tui --no-color
 | Ctrl+T | show the reasoning behind an answer instead of its summary |
 | `y` / `n` / Esc | allow once, reject, or cancel a pending approval |
 | digits / space / ↑↓ / Enter / Esc | answer a question: pick or toggle, confirm, or skip one |
+| `/` then Tab | complete commands, including every command this session registered |
+| `@` or a path then Tab | complete workspace file references |
 | `/help` | list registered and local commands |
 | `/clear` | clear the visible transcript |
 | `/quit` | leave and print the resume command |

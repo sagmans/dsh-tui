@@ -10,6 +10,14 @@ export type Submission =
 /** Commands the surface answers itself, without a model turn. */
 export const LOCAL_COMMANDS = ['/help', '/clear', '/quit', '/exit'] as const
 
+/** What each local command does, shown in the editor's completion menu. */
+export const LOCAL_COMMAND_DESCRIPTIONS: Readonly<Record<string, string>> = {
+  '/help': 'list registered and local commands',
+  '/clear': 'clear the visible transcript',
+  '/quit': 'leave and print the resume command',
+  '/exit': 'leave and print the resume command',
+}
+
 /**
  * Classify one submitted line.
  *

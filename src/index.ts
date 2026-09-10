@@ -1,11 +1,15 @@
 import { Editor, ProcessTerminal, ScrollView, TuiAltScreen, VStack, matchesKey } from '@earendil-works/pi-tui'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
+// Type-only: the command registry publishes the change event this surface
+// listens to, and the event map is declaration-merged by that package.
+import type {} from '@deepseek-ai/dsh-commands'
 import { startAgent, type TuiAgent } from './agent/host.ts'
 import { createToolPresenter } from './agent/present.ts'
 import type { ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
 import type { AskUserQuestionAnswer } from '@deepseek-ai/dsh-user-questions'
 import { ApprovalGate, QuestionGate, toGateQuestions, type GateAnswer } from './gates.ts'
+import { createCompletionProvider } from './input/completion.ts'
 import { LOCAL_COMMANDS, classifySubmission } from './input/submission.ts'
 import { resolveConfig } from './config.ts'
 import { createRestoreRegistry } from './terminal/restore.ts'
@@ -179,6 +183,20 @@ export function apply(ctx: Context, config: unknown): void {
 
   const registry = (): CommandRegistry | undefined => ctx.get('commands') as CommandRegistry | undefined
 
+  /**
+   * Offer completion for whatever this session can run right now.
+   *
+   * The registry is agent-scoped and still empty while the agent starts, so the
+   * menu is rebuilt when the agent arrives and whenever a package registers
+   * another command.
+   */
+  const installCompletion = (): void => {
+    const current = agent?.agent
+    const commands = registry()
+    if (current === undefined || commands === undefined) return
+    editor.setAutocompleteProvider(createCompletionProvider(commands.list(current), process.cwd()))
+  }
+
   const helpText = (): string => {
     const current = agent?.agent
     const registered = current === undefined || registry() === undefined
@@ -291,6 +309,8 @@ export function apply(ctx: Context, config: unknown): void {
     })
   }))
 
+  disposers.push(ctx.on('commands/change', () => installCompletion()))
+
   disposers.push(ctx.on('agent/error', payload => {
     if (payload.agent.id !== resolved.sessionId) return
     model.reportError(payload.error)
@@ -317,6 +337,7 @@ export function apply(ctx: Context, config: unknown): void {
     disposers.push(() => {
       void handle.dispose()
     })
+    installCompletion()
     model.notice(`session ${handle.sessionId}${resolved.resume ? ' (resumed)' : ''}`)
     tui.requestRender()
   }).catch((error: unknown) => {
