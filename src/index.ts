@@ -11,6 +11,7 @@ import { resolveConfig } from './config.ts'
 import { createRestoreRegistry } from './terminal/restore.ts'
 import { createTheme } from './theme.ts'
 import { TranscriptModel } from './transcript.ts'
+import { MarkdownRenderer } from './ui/markdown.ts'
 import { TranscriptView } from './ui/view.ts'
 
 export const name = 'tui'
@@ -19,6 +20,9 @@ export const name = 'tui'
 export const inject = ['agents']
 
 const GOODBYE_KEY = 'tuiGoodbyeMessage'
+
+/** Keys the surface answers itself, listed wherever the reader asks for help. */
+const LOCAL_KEYS = 'ctrl+o tool detail · ctrl+t reasoning · ctrl+c interrupt or exit'
 
 /**
  * The command registry, described structurally: the surface only lists,
@@ -69,6 +73,9 @@ export function apply(ctx: Context, config: unknown): void {
 
   const theme = createTheme(resolved.color)
   const model = new TranscriptModel(createToolPresenter(ctx))
+  const markdown = new MarkdownRenderer(theme.markdown)
+  /** Rows the reader has opened. The model stays untouched; only the view reads this. */
+  const viewState = { expandCards: false, expandReasoning: false }
   const restore = createRestoreRegistry()
   const terminal = new ProcessTerminal()
   const tui = new TuiAltScreen(terminal)
@@ -78,7 +85,7 @@ export function apply(ctx: Context, config: unknown): void {
     | { readonly kind: 'question'; readonly gate: QuestionGate; readonly settle: (answers: GateAnswer[]) => void }
 
   let pending: PendingGate | undefined
-  const view = new TranscriptView(model, theme, () => pending?.gate.card())
+  const view = new TranscriptView(model, theme, markdown, () => viewState, () => pending?.gate.card())
   const editor = new Editor(tui, theme.editor)
   const disposers: Array<() => void> = []
   let agent: TuiAgent | undefined
@@ -145,6 +152,18 @@ export function apply(ctx: Context, config: unknown): void {
       }
       return { consume: true }
     }
+    // Detail the reader asked for is always available, even mid-turn: the
+    // collapsed view is a default, not the only state.
+    if (matchesKey(data, 'ctrl+o')) {
+      viewState.expandCards = !viewState.expandCards
+      tui.requestRender()
+      return { consume: true }
+    }
+    if (matchesKey(data, 'ctrl+t')) {
+      viewState.expandReasoning = !viewState.expandReasoning
+      tui.requestRender()
+      return { consume: true }
+    }
     // In raw mode Ctrl+C never reaches the process as SIGINT, so the surface
     // decides: stop the work in flight, or leave when there is none.
     if (!matchesKey(data, 'ctrl+c')) return undefined
@@ -166,7 +185,7 @@ export function apply(ctx: Context, config: unknown): void {
       ? []
       : registry()?.list(current).map(command => `/${command.name}`) ?? []
     const commands = registered.length === 0 ? 'none registered yet' : registered.join(' ')
-    return `commands: ${commands} · surface: ${LOCAL_COMMANDS.join(' ')}`
+    return `commands: ${commands} · surface: ${LOCAL_COMMANDS.join(' ')} · keys: ${LOCAL_KEYS}`
   }
 
   const runCommand = (name: string, line: string): void => {

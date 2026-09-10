@@ -35,18 +35,28 @@ export interface ToolPresenter {
 /** Which treatment a card gets; mirrors the tool's declared render intent. */
 export type ToolCardKind = 'generic' | 'terminal' | 'diff' | 'search' | 'read' | 'web'
 
-/** One renderable tool row: a header plus bounded detail lines. */
+/** One renderable tool row: a header plus the detail rows kept for rendering. */
 export interface ToolCard {
   readonly kind: ToolCardKind
   readonly title: string
+  /** Rows retained for rendering, already capped at CARD_DETAIL_MAX. */
   readonly detail: readonly string[]
   readonly failed: boolean
-  /** Rows the card would have shown beyond its bound, so the reader knows it is partial. */
-  readonly hiddenLines: number
+  /** Rows the tool actually presented, which retention may have cut short. */
+  readonly totalLines: number
 }
 
 /** Detail rows a settled card shows before it is summarized. */
 export const CARD_DETAIL_LIMIT = 10
+
+/**
+ * Detail rows retained on a card at all.
+ *
+ * A collapse key must be able to show more than the summary does, and a tool
+ * that prints a hundred thousand lines must not keep the whole transcript in
+ * memory for a reader who will never scroll that far.
+ */
+export const CARD_DETAIL_MAX = 200
 
 /** Character budget for one detail row, so a minified file cannot flood the viewport. */
 export const CARD_LINE_LIMIT = 200
@@ -55,9 +65,19 @@ function clipLine(text: string): string {
   return text.length <= CARD_LINE_LIMIT ? text : `${text.slice(0, CARD_LINE_LIMIT - 1)}…`
 }
 
-function bound(lines: readonly string[]): { detail: string[]; hiddenLines: number } {
-  const detail = lines.slice(0, CARD_DETAIL_LIMIT).map(clipLine)
-  return { detail, hiddenLines: Math.max(0, lines.length - detail.length) }
+function bound(lines: readonly string[]): { detail: string[]; totalLines: number } {
+  return { detail: lines.slice(0, CARD_DETAIL_MAX).map(clipLine), totalLines: lines.length }
+}
+
+/**
+ * The rows a card shows right now, and how many the reader is not seeing.
+ *
+ * Expansion is a view decision rather than a card field so one key press can
+ * change every card at once without rebuilding the transcript.
+ */
+export function cardDetailRows(card: ToolCard, expanded: boolean): { lines: readonly string[]; hidden: number } {
+  const lines = card.detail.slice(0, expanded ? CARD_DETAIL_MAX : CARD_DETAIL_LIMIT)
+  return { lines, hidden: Math.max(0, card.totalLines - lines.length) }
 }
 
 /** Text lines carried by model-facing content blocks. */
@@ -91,7 +111,7 @@ export function mergeCards(call: ToolCard | undefined, result: ToolCard | undefi
     title: call.title,
     detail: result.detail.length > 0 ? result.detail : call.detail,
     failed: result.failed,
-    hiddenLines: result.detail.length > 0 ? result.hiddenLines : call.hiddenLines,
+    totalLines: result.detail.length > 0 ? result.totalLines : call.totalLines,
   }
 }
 
@@ -135,20 +155,20 @@ function title(view: { title?: string }, fallback: string): string {
 /** Map a tool's pending-call intent to a card, falling back to the raw call name. */
 export function cardOfCall(view: ToolCallView | undefined, fallbackName: string): ToolCard {
   if (view === undefined) {
-    return { kind: 'generic', title: fallbackName, detail: [], failed: false, hiddenLines: 0 }
+    return { kind: 'generic', title: fallbackName, detail: [], failed: false, totalLines: 0 }
   }
   switch (view.card) {
     case 'terminal': {
       const terminal = view as TerminalCallView
       const lines = terminal.description === undefined || terminal.description === '' ? [] : [terminal.description]
       if (terminal.cwd !== undefined && terminal.cwd !== '') lines.push(`cwd ${terminal.cwd}`)
-      return { kind: 'terminal', title: title(terminal, fallbackName), detail: bound(lines).detail, failed: false, hiddenLines: 0 }
+      return { kind: 'terminal', title: title(terminal, fallbackName), detail: bound(lines).detail, failed: false, totalLines: 0 }
     }
     case 'diff': {
       const diff = view as DiffCallView
       const lines = diff.diffs.flatMap(renderFileDiff)
       const bounded = bound(lines)
-      return { kind: 'diff', title: title(diff, fallbackName), detail: bounded.detail, failed: false, hiddenLines: bounded.hiddenLines }
+      return { kind: 'diff', title: title(diff, fallbackName), detail: bounded.detail, failed: false, totalLines: bounded.totalLines }
     }
     default: {
       const generic = view as GenericCallView
@@ -157,7 +177,7 @@ export function cardOfCall(view: ToolCallView | undefined, fallbackName: string)
         lines.push(typeof generic.rawInput === 'string' ? generic.rawInput : JSON.stringify(generic.rawInput))
       }
       const bounded = bound(lines)
-      return { kind: 'generic', title: title(generic, fallbackName), detail: bounded.detail, failed: false, hiddenLines: bounded.hiddenLines }
+      return { kind: 'generic', title: title(generic, fallbackName), detail: bounded.detail, failed: false, totalLines: bounded.totalLines }
     }
   }
 }
@@ -170,7 +190,7 @@ export function cardOfResult(
   const failed = input.failed
   if (view === undefined) {
     const bounded = bound(input.contentLines)
-    return { kind: 'generic', title: input.fallbackTitle, detail: bounded.detail, failed, hiddenLines: bounded.hiddenLines }
+    return { kind: 'generic', title: input.fallbackTitle, detail: bounded.detail, failed, totalLines: bounded.totalLines }
   }
   switch (view.card) {
     case 'terminal': {
@@ -181,12 +201,12 @@ export function cardOfResult(
         : terminal.exitCode === undefined ? undefined : `exit ${terminal.exitCode}`
       if (status !== undefined) lines.push(status)
       const bounded = bound(lines)
-      return { kind: 'terminal', title: title(terminal, input.fallbackTitle), detail: bounded.detail, failed, hiddenLines: bounded.hiddenLines }
+      return { kind: 'terminal', title: title(terminal, input.fallbackTitle), detail: bounded.detail, failed, totalLines: bounded.totalLines }
     }
     case 'diff': {
       const diff = view as DiffResultView
       const bounded = bound(diff.diffs.flatMap(renderFileDiff))
-      return { kind: 'diff', title: title(diff, input.fallbackTitle), detail: bounded.detail, failed, hiddenLines: bounded.hiddenLines }
+      return { kind: 'diff', title: title(diff, input.fallbackTitle), detail: bounded.detail, failed, totalLines: bounded.totalLines }
     }
     case 'search': {
       const search = view as SearchResultView
@@ -195,7 +215,7 @@ export function cardOfResult(
         : search.files.flatMap(file => file.matches.map(match => `${file.path}:${match.lineNumber}: ${match.line}`))
       if (search.truncated) lines.push(`… ${search.total} total`)
       const bounded = bound(lines)
-      return { kind: 'search', title: title(search, input.fallbackTitle), detail: bounded.detail, failed, hiddenLines: bounded.hiddenLines }
+      return { kind: 'search', title: title(search, input.fallbackTitle), detail: bounded.detail, failed, totalLines: bounded.totalLines }
     }
     case 'read': {
       const read = view as ReadResultView
@@ -204,7 +224,7 @@ export function cardOfResult(
         : contentLines(read.content)
       lines.unshift(`${read.path} (from line ${read.offset}, ${read.totalLines} total)`)
       const bounded = bound(lines)
-      return { kind: 'read', title: title(read, input.fallbackTitle), detail: bounded.detail, failed, hiddenLines: bounded.hiddenLines }
+      return { kind: 'read', title: title(read, input.fallbackTitle), detail: bounded.detail, failed, totalLines: bounded.totalLines }
     }
     case 'web': {
       const web = view as WebResultView
@@ -218,13 +238,13 @@ export function cardOfResult(
         if (web.truncated) lines.push('… body truncated')
       }
       const bounded = bound(lines)
-      return { kind: 'web', title: title(web, input.fallbackTitle), detail: bounded.detail, failed, hiddenLines: bounded.hiddenLines }
+      return { kind: 'web', title: title(web, input.fallbackTitle), detail: bounded.detail, failed, totalLines: bounded.totalLines }
     }
     default: {
       const generic = view as GenericResultView
       const lines = contentLines(generic.content)
       const bounded = bound(lines.length > 0 ? lines : input.contentLines)
-      return { kind: 'generic', title: title(generic, input.fallbackTitle), detail: bounded.detail, failed, hiddenLines: bounded.hiddenLines }
+      return { kind: 'generic', title: title(generic, input.fallbackTitle), detail: bounded.detail, failed, totalLines: bounded.totalLines }
     }
   }
 }

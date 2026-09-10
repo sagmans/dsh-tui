@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cardOfCall, cardOfResult, mergeCards, renderFileDiff, type ToolCard } from '@/cards.ts'
+import { CARD_DETAIL_LIMIT, CARD_DETAIL_MAX, cardDetailRows, cardOfCall, cardOfResult, mergeCards, renderFileDiff, type ToolCard } from '@/cards.ts'
 
 describe('renderFileDiff', () => {
   it('renders a new file as additions only', () => {
@@ -20,12 +20,12 @@ describe('renderFileDiff', () => {
 
 describe('cardOfCall', () => {
   it('falls back to a generic card when the tool declares no view', () => {
-    expect(cardOfCall(undefined, 'mystery')).toEqual({ kind: 'generic', title: 'mystery', detail: [], failed: false, hiddenLines: 0 })
+    expect(cardOfCall(undefined, 'mystery')).toEqual({ kind: 'generic', title: 'mystery', detail: [], failed: false, totalLines: 0 })
   })
 
   it('maps a terminal call to its command and working directory', () => {
     const card = cardOfCall({ card: 'terminal', title: 'ls -la', description: 'list files', cwd: '/tmp' }, 'bash')
-    expect(card).toEqual({ kind: 'terminal', title: 'ls -la', detail: ['list files', 'cwd /tmp'], failed: false, hiddenLines: 0 })
+    expect(card).toEqual({ kind: 'terminal', title: 'ls -la', detail: ['list files', 'cwd /tmp'], failed: false, totalLines: 0 })
   })
 
   it('maps a diff call to bounded diff lines', () => {
@@ -34,16 +34,44 @@ describe('cardOfCall', () => {
     expect(card.detail).toEqual(['a.txt  new', '+x'])
   })
 
-  it('uses the declared title and bounds oversized detail', () => {
+  it('uses the declared title and counts every presented row', () => {
     const long = Array.from({ length: 25 }, (_, index) => `line ${index}`)
     const card = cardOfCall({ card: 'generic', title: 'Read many', content: [{ type: 'text', text: long.join('\n') }] }, 'read')
     expect(card.title).toBe('Read many')
-    expect(card.detail).toHaveLength(10)
-    expect(card.hiddenLines).toBe(15)
+    expect(card.detail).toHaveLength(25)
+    expect(card.totalLines).toBe(25)
   })
 
   it('falls back to the tool name when a view declares no title', () => {
     expect(cardOfCall({ card: 'generic', title: '  ' }, 'grep').title).toBe('grep')
+  })
+})
+
+describe('cardDetailRows', () => {
+  const card = (rows: number): ToolCard => ({
+    kind: 'generic',
+    title: 'flood',
+    detail: Array.from({ length: rows }, (_, index) => `line ${index}`),
+    failed: false,
+    totalLines: rows,
+  })
+
+  it('shows a preview and counts the rest while collapsed', () => {
+    const shown = cardDetailRows(card(25), false)
+    expect(shown.lines).toHaveLength(CARD_DETAIL_LIMIT)
+    expect(shown.hidden).toBe(25 - CARD_DETAIL_LIMIT)
+  })
+
+  it('shows every retained row while expanded', () => {
+    const shown = cardDetailRows(card(25), true)
+    expect(shown.lines).toHaveLength(25)
+    expect(shown.hidden).toBe(0)
+  })
+
+  it('stays bounded for a card that streamed far more than it keeps', () => {
+    const shown = cardDetailRows({ ...card(0), detail: [], totalLines: 5000 }, true)
+    expect(shown.lines).toHaveLength(0)
+    expect(shown.hidden).toBe(5000)
   })
 })
 
@@ -55,7 +83,7 @@ describe('cardOfResult', () => {
 
   it('marks a failed result so the reader sees it without expanding', () => {
     const card = cardOfResult(undefined, { fallbackTitle: 'bash', failed: true, contentLines: ['boom'] })
-    expect(card).toEqual({ kind: 'generic', title: 'bash', detail: ['boom'], failed: true, hiddenLines: 0 })
+    expect(card).toEqual({ kind: 'generic', title: 'bash', detail: ['boom'], failed: true, totalLines: 1 })
   })
 
   it('renders search matches with their file and line', () => {
@@ -94,19 +122,26 @@ describe('cardOfResult', () => {
     )
     expect(fetch.detail).toEqual(['https://x → 200', '… body truncated'])
   })
+
+  it('keeps a flood of rows bounded in memory', () => {
+    const flood = Array.from({ length: 5000 }, (_, index) => `row ${index}`)
+    const card = cardOfResult(undefined, { fallbackTitle: 'bash', failed: false, contentLines: flood })
+    expect(card.detail).toHaveLength(CARD_DETAIL_MAX)
+    expect(card.totalLines).toBe(5000)
+  })
 })
 
 describe('mergeCards', () => {
-  const call: ToolCard = { kind: 'terminal', title: 'ls -la', detail: ['cwd /tmp'], failed: false, hiddenLines: 0 }
+  const call: ToolCard = { kind: 'terminal', title: 'ls -la', detail: ['cwd /tmp'], failed: false, totalLines: 1 }
 
   it('keeps the call header and swaps in the result', () => {
-    const result: ToolCard = { kind: 'terminal', title: 'ls', detail: ['a', 'b'], failed: false, hiddenLines: 0 }
-    expect(mergeCards(call, result)).toEqual({ kind: 'terminal', title: 'ls -la', detail: ['a', 'b'], failed: false, hiddenLines: 0 })
+    const result: ToolCard = { kind: 'terminal', title: 'ls', detail: ['a', 'b'], failed: false, totalLines: 2 }
+    expect(mergeCards(call, result)).toEqual({ kind: 'terminal', title: 'ls -la', detail: ['a', 'b'], failed: false, totalLines: 2 })
   })
 
   it('keeps the call detail when the result presents nothing', () => {
-    const result: ToolCard = { kind: 'generic', title: 'ls', detail: [], failed: true, hiddenLines: 0 }
-    expect(mergeCards(call, result)).toEqual({ kind: 'terminal', title: 'ls -la', detail: ['cwd /tmp'], failed: true, hiddenLines: 0 })
+    const result: ToolCard = { kind: 'generic', title: 'ls', detail: [], failed: true, totalLines: 0 }
+    expect(mergeCards(call, result)).toEqual({ kind: 'terminal', title: 'ls -la', detail: ['cwd /tmp'], failed: true, totalLines: 1 })
   })
 
   it('returns the single available card when only one side exists', () => {

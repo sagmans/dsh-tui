@@ -2,7 +2,7 @@
 
 Interactive terminal (TUI) surface for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): use `dsh` in a terminal instead of a browser.
 
-Status: **M0 walking skeleton.** The surface boots over the composed agent plane, owns the alternate screen, streams assistant text, and exits cleanly. Approvals, questions, plan review, session resume, and the full card set are the next milestones.
+Status: **early v1.** The surface boots over the composed agent plane, owns the alternate screen, streams assistant text as markdown, renders every tool's own card, answers approvals and questions, and restores the terminal on exit. Session resume, pickers, and work-state panels are next.
 
 ## Install
 
@@ -27,6 +27,8 @@ dsh --profile tui --no-color
 |---|---|
 | Enter | submit the prompt |
 | Ctrl+C | interrupt the running turn, or leave when idle |
+| Ctrl+O | show every line of the tool cards instead of their preview |
+| Ctrl+T | show the reasoning behind an answer instead of its summary |
 | `y` / `n` / Esc | allow once, reject, or cancel a pending approval |
 | digits / space / ↑↓ / Enter / Esc | answer a question: pick or toggle, confirm, or skip one |
 | `/help` | list registered and local commands |
@@ -58,17 +60,27 @@ pnpm run build
 
 ```sh
 node tools/pty-drive.mjs --prompt 'Reply with exactly: pong'
-node tools/pty-drive.mjs --home /tmp/scratch-home --seconds 20   # no credentials: proves failures are visible
+node tools/pty-drive.mjs --prompt 'Run: echo hi' --approve 20   # answer the approval gate
+node tools/pty-drive.mjs --home /tmp/scratch-home --seconds 20  # no credentials: proves failures are visible
+```
+
+Keep verification off your real home: install the profile into a throwaway one and copy only the credentials it needs.
+
+```sh
+S=$(mktemp -d)
+cp ~/.dsh/.credentials.yaml ~/.dsh/settings.yaml "$S/" && chmod 600 "$S"/*.yaml
+DSH_HOME="$S" dsh plugin --profile tui add "$PWD"
+node tools/pty-drive.mjs --home "$S" --prompt 'Reply with exactly: pong'
 ```
 
 Test specs import plugin sources through the `@/` alias. Under this test runner the spec file is resolved with a root-relative id, so parent-relative imports (`../src/...`) do not resolve; the alias and its matching `tsconfig.test.json` path mapping avoid that.
 
 ## Limitations
 
-- No session resume picker, plan-review panel, subagents, jobs, model switching, or transcript scrolling controls yet.
+- No session resume picker, plan-review panel, subagent and job panels, model switching, or scroll keys yet.
 - Approvals and questions render inline and take the keyboard; a question batch is answered in order.
-- Transcript rendering is plain text: markdown, diffs, and tool cards arrive with the presentation milestone.
-- Rendering styling uses the standard 16 ANSI colors and terminal defaults, so light and dark themes follow the terminal.
+- Styling uses the standard 16 ANSI colors and terminal defaults, so light and dark terminals follow their own theme.
+- Tool text, model text, and file content are escaped before rendering, so a hostile result cannot inject terminal control sequences; the cost is that a literal tab shows as \x09.
 
 ## License
 

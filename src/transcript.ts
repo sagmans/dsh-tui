@@ -6,7 +6,10 @@ export type TranscriptEntry =
   | { readonly kind: 'assistant'; readonly text: string }
   | { readonly kind: 'notice'; readonly text: string }
   | { readonly kind: 'tool'; readonly card: ToolCard }
-  | { readonly kind: 'reasoning'; readonly text: string; readonly live: boolean }
+  | { readonly kind: 'reasoning'; readonly summary: string; readonly body: string; readonly live: boolean }
+
+/** Reasoning kept per settled block, so one runaway thought cannot grow the transcript without bound. */
+export const REASONING_CHAR_LIMIT = 20_000
 
 /**
  * Minimal durable-input shape the fold needs.
@@ -94,17 +97,19 @@ export class TranscriptModel {
   private readonly pending = new Map<string, PendingCall>()
   private live = ''
   private liveReasoning = ''
-  private reasoning: { lines: number; chars: number } | undefined
 
   constructor(private readonly presenter?: ToolPresenter) {}
 
-  /** Rows to render: settled rows, the reasoning row, then the in-flight text. */
+  /** Rows to render: settled rows, the in-flight reasoning, then the in-flight text. */
   entries(): readonly TranscriptEntry[] {
     const entries = [...this.settled]
     if (this.liveReasoning !== '') {
-      entries.push({ kind: 'reasoning', text: `reasoning · ${this.liveReasoning.length} chars`, live: true })
-    } else if (this.reasoning !== undefined) {
-      entries.push({ kind: 'reasoning', text: `reasoning · ${this.reasoning.lines} lines`, live: false })
+      entries.push({
+        kind: 'reasoning',
+        summary: `reasoning · ${this.liveReasoning.length} chars · streaming`,
+        body: this.liveReasoning,
+        live: true,
+      })
     }
     if (this.live !== '') entries.push({ kind: 'assistant', text: this.live })
     return entries
@@ -112,7 +117,7 @@ export class TranscriptModel {
 
   /** Whether any row exists, so a caller can decide to clear or redraw. */
   isEmpty(): boolean {
-    return this.settled.length === 0 && this.live === '' && this.liveReasoning === '' && this.reasoning === undefined
+    return this.settled.length === 0 && this.live === '' && this.liveReasoning === ''
   }
 
   reset(): void {
@@ -120,7 +125,6 @@ export class TranscriptModel {
     this.pending.clear()
     this.live = ''
     this.liveReasoning = ''
-    this.reasoning = undefined
   }
 
   /** Append a surface-local line that is not part of the durable conversation. */
@@ -175,10 +179,24 @@ export class TranscriptModel {
     this.settled.push({ kind: 'notice', text: `error: ${text === '' ? 'agent failed' : text}` })
   }
 
+  /**
+   * Settle the reasoning streamed so far into a row of its own.
+   *
+   * The row lands where the reasoning happened, which is before the answer it
+   * produced, so reading order still matches the order the model thought in.
+   */
   private settleReasoning(): void {
     if (this.liveReasoning === '') return
-    this.reasoning = { lines: countLines(this.liveReasoning), chars: this.liveReasoning.length }
+    const text = this.liveReasoning
     this.liveReasoning = ''
+    const lines = countLines(text)
+    const cut = text.length > REASONING_CHAR_LIMIT ? `\n… truncated at ${REASONING_CHAR_LIMIT} chars` : ''
+    this.settled.push({
+      kind: 'reasoning',
+      summary: `reasoning · ${lines} line${lines === 1 ? '' : 's'} · ${text.length} chars`,
+      body: text.slice(0, REASONING_CHAR_LIMIT) + cut,
+      live: false,
+    })
   }
 
   apply(event: FoldableEvent): void {
@@ -216,7 +234,13 @@ export class TranscriptModel {
         this.settled.push({
           kind: 'tool',
           // Without a presenter the row still has to say what ran and with what.
-          card: card ?? { kind: 'generic', title: name, detail: argumentsJson === '' ? [] : [argumentsJson], failed: false, hiddenLines: 0 },
+          card: card ?? {
+            kind: 'generic',
+            title: name,
+            detail: argumentsJson === '' ? [] : argumentsJson.split('\n'),
+            failed: false,
+            totalLines: argumentsJson === '' ? 0 : countLines(argumentsJson),
+          },
         })
         const callId = typeof data.callId === 'string' ? data.callId : ''
         if (callId !== '') this.pending.set(callId, { name, argumentsJson, index: this.settled.length - 1 })
@@ -254,7 +278,7 @@ export class TranscriptModel {
           title: name,
           detail: contentLinesOf(message?.content),
           failed: isError,
-          hiddenLines: 0,
+          totalLines: contentLinesOf(message?.content).length,
         },
       })
       return
@@ -262,8 +286,16 @@ export class TranscriptModel {
     const previous = this.settled[pending.index]
     const call = previous !== undefined && previous.kind === 'tool' ? previous.card : undefined
     if (result === undefined) {
-      const base = call ?? { kind: 'generic' as const, title: name, detail: [], hiddenLines: 0 }
-      this.settled[pending.index] = { kind: 'tool', card: { ...base, failed: isError } }
+      // No presenter answered: the model-facing content is still what happened,
+      // and a reader without it would see a tool row that never reported back.
+      const reported = contentLinesOf(message?.content)
+      const base = call ?? { kind: 'generic' as const, title: name, detail: [], totalLines: 0 }
+      this.settled[pending.index] = {
+        kind: 'tool',
+        card: reported.length === 0
+          ? { ...base, failed: isError }
+          : { ...base, detail: reported, totalLines: reported.length, failed: isError },
+      }
       return
     }
     this.settled[pending.index] = { kind: 'tool', card: mergeCards(call, { ...result, failed: isError }) }

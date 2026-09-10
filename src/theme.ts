@@ -1,4 +1,4 @@
-import type { EditorTheme, SelectListTheme } from '@earendil-works/pi-tui'
+import type { EditorTheme, MarkdownTheme, SelectListTheme } from '@earendil-works/pi-tui'
 
 const RESET = '\u001B[0m'
 
@@ -26,7 +26,44 @@ export interface TuiTheme {
   /** Diff additions and removals, colored by background rather than by hue alone. */
   added(text: string): string
   removed(text: string): string
+  /** Structure the reader scans for: headings, links, inline code, list bullets. */
+  accent(text: string): string
+  italic(text: string): string
   readonly editor: EditorTheme
+  readonly markdown: MarkdownTheme
+}
+
+/**
+ * Style markdown through the same palette as the rest of the surface.
+ *
+ * Code blocks stay unstyled on purpose: a fenced block is already set apart by
+ * its border and indentation, and coloring it would fight the reader's own
+ * terminal theme.
+ */
+function markdownTheme(style: {
+  readonly dim: (text: string) => string
+  readonly bold: (text: string) => string
+  readonly accent: (text: string) => string
+  readonly italic: (text: string) => string
+  readonly underline: (text: string) => string
+  readonly strike: (text: string) => string
+}): MarkdownTheme {
+  return {
+    heading: text => style.bold(style.accent(text)),
+    link: text => style.underline(style.accent(text)),
+    linkUrl: style.dim,
+    code: style.accent,
+    codeBlock: text => text,
+    codeBlockBorder: style.dim,
+    quote: style.dim,
+    quoteBorder: style.dim,
+    hr: style.dim,
+    listBullet: style.accent,
+    bold: style.bold,
+    italic: style.italic,
+    strikethrough: style.strike,
+    underline: style.underline,
+  }
 }
 
 function selectListTheme(dim: (t: string) => string, accent: (t: string) => string, bold: (t: string) => string): SelectListTheme {
@@ -53,7 +90,9 @@ export function createTheme(color: boolean): TuiTheme {
   const warn = sgr('33', color)
   const added = sgr('32', color)
   const removed = sgr('31', color)
-  const select = selectListTheme(dim, accent, bold)
+  const italic = sgr('3', color)
+  const underline = sgr('4', color)
+  const strike = sgr('9', color)
   return {
     color,
     glyphs: { user: '›', assistant: '⏺', tool: '⚒', notice: '·', reasoning: '▸' },
@@ -63,6 +102,9 @@ export function createTheme(color: boolean): TuiTheme {
     notice: dim,
     added,
     removed,
-    editor: { borderColor: dim, selectList: select },
+    accent,
+    italic,
+    editor: { borderColor: dim, selectList: selectListTheme(dim, accent, bold) },
+    markdown: markdownTheme({ dim, bold, accent, italic, underline, strike }),
   }
 }
