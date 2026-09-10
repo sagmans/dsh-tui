@@ -3,9 +3,10 @@ import { cardDetailRows, type ToolCard } from '../cards.ts'
 import type { GateCard } from '../gates.ts'
 import { displayText } from '../text.ts'
 import type { TranscriptEntry, TranscriptModel } from '../transcript.ts'
-import type { TuiTheme } from '../theme.ts'
+import type { TranscriptGlyphs, TuiTheme } from '../theme.ts'
 import type { MarkdownRenderer } from './markdown.ts'
 import type { PickerCard } from './picker.ts'
+import { RowCache } from './rows.ts'
 
 const DETAIL_INDENT = '    '
 const OPTION_INDENT = '   '
@@ -31,22 +32,35 @@ export interface TranscriptViewOptions {
   readonly state?: () => ViewState
   readonly gate?: () => GateCard | undefined
   readonly picker?: () => PickerCard | undefined
+  /** Injectable so a test can see that a repaint reused the rows it had. */
+  readonly rows?: RowCache<TranscriptEntry>
 }
 
 export class TranscriptView implements Component {
+  private readonly rows: RowCache<TranscriptEntry>
+
   constructor(
     private readonly model: TranscriptModel,
     private readonly theme: TuiTheme,
     private readonly markdown: MarkdownRenderer,
     private readonly options: TranscriptViewOptions = {},
-  ) {}
+  ) {
+    this.rows = options.rows ?? new RowCache<TranscriptEntry>()
+  }
 
   private get viewState(): ViewState {
     return this.options.state?.() ?? ALL_COLLAPSED
   }
 
+  /** The cache's own account of the work it avoided; a test reads this. */
+  rowStats(): { readonly hits: number; readonly misses: number; readonly size: number } {
+    return this.rows.stats()
+  }
+
   invalidate(): void {
-    // The model, the gate, and the expansion state are the only inputs.
+    // The rows are keyed by width and expansion state, so a real change misses
+    // anyway; an explicit invalidate means the caller wants them rebuilt.
+    this.rows.clear()
   }
 
   /** Wrap one text block under a prefix, keeping the prefix's column budget. */
@@ -150,31 +164,54 @@ export class TranscriptView implements Component {
     lines.push(this.theme.dim(truncateToWidth(`${OPTION_INDENT}${displayText(gate.hint)}`, width, '')))
   }
 
+  /** The rows one transcript entry becomes. */
+  private renderEntry(entry: TranscriptEntry, lines: string[], width: number, glyphs: TranscriptGlyphs): void {
+    switch (entry.kind) {
+      case 'tool':
+        this.pushCard(lines, entry.card, width)
+        return
+      case 'reasoning':
+        this.pushReasoning(lines, entry, width)
+        return
+      case 'assistant':
+        this.pushMarkdown(lines, entry.text, width, `${glyphs.assistant} `)
+        return
+      case 'user':
+        this.pushWrapped(lines, entry.text, width, `${glyphs.user} `, this.theme.bold)
+        return
+      case 'notice':
+        this.pushWrapped(lines, entry.text, width, `${glyphs.notice} `, this.theme.notice)
+        return
+      case 'marker':
+        this.pushWrapped(lines, entry.text, width, `${glyphs.marker} `, this.theme.marker)
+        return
+    }
+  }
+
   render(width: number): string[] {
     if (width <= 0) return []
     const { glyphs } = this.theme
+    const state = this.viewState
+    const tag = `${width}|${state.expandCards ? 'c' : '-'}${state.expandReasoning ? 'r' : '-'}`
     const lines: string[] = []
-    for (const entry of this.model.entries()) {
-      switch (entry.kind) {
-        case 'tool':
-          this.pushCard(lines, entry.card, width)
-          break
-        case 'reasoning':
-          this.pushReasoning(lines, entry, width)
-          break
-        case 'assistant':
-          this.pushMarkdown(lines, entry.text, width, `${glyphs.assistant} `)
-          break
-        case 'user':
-          this.pushWrapped(lines, entry.text, width, `${glyphs.user} `, this.theme.bold)
-          break
-        case 'notice':
-          this.pushWrapped(lines, entry.text, width, `${glyphs.notice} `, this.theme.notice)
-          break
-        case 'marker':
-          this.pushWrapped(lines, entry.text, width, `${glyphs.marker} `, this.theme.marker)
-          break
+    const settled = this.model.settledCount()
+    const entries = this.model.entries()
+    for (const [index, entry] of entries.entries()) {
+      // The in-flight rows change on every frame, so caching them would only
+      // fill the cache with objects nobody will ask for again.
+      if (index >= settled) {
+        this.renderEntry(entry, lines, width, glyphs)
+        continue
       }
+      const cached = this.rows.lookup(entry, tag)
+      if (cached !== undefined) {
+        lines.push(...cached)
+        continue
+      }
+      const rendered: string[] = []
+      this.renderEntry(entry, rendered, width, glyphs)
+      this.rows.store(entry, tag, rendered)
+      lines.push(...rendered)
     }
     const picker = this.options.picker?.()
     if (picker !== undefined) this.pushPicker(lines, picker, width)

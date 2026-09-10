@@ -122,6 +122,17 @@ export class TranscriptModel {
     return entries
   }
 
+  /**
+   * How many rows are settled.
+   *
+   * Rows after this are the in-flight ones, rebuilt on every frame anyway, so a
+   * renderer can keep its cache to the part of the transcript that stopped
+   * changing.
+   */
+  settledCount(): number {
+    return this.settled.length
+  }
+
   /** Whether any row exists, so a caller can decide to clear or redraw. */
   isEmpty(): boolean {
     return this.settled.length === 0 && this.live === '' && this.liveReasoning === ''

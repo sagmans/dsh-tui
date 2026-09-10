@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { GateCard } from '@/gates.ts'
 import { createTheme } from '@/theme.ts'
-import { TranscriptModel } from '@/transcript.ts'
+import { TranscriptModel, type TranscriptEntry } from '@/transcript.ts'
 import { MarkdownRenderer } from '@/ui/markdown.ts'
 import type { PickerCard } from '@/ui/picker.ts'
+import { RowCache } from '@/ui/rows.ts'
 import { TranscriptView, type ViewState } from '@/ui/view.ts'
 
 const theme = createTheme(false)
@@ -17,6 +18,37 @@ const toolCall = (argumentsJson = '{}') => ({ type: 'tool/call', data: { name: '
 const toolResult = (text: string) => ({
   type: 'tool/result',
   data: { message: { content: [{ type: 'tool-result', toolCallId: 'c1', text }], isError: false } },
+})
+
+describe('TranscriptView repaints', () => {
+  it('reuses the rows it already built instead of re-wrapping the transcript', () => {
+    const rows = new RowCache<TranscriptEntry>()
+    const model = new TranscriptModel()
+    model.apply({ type: 'user/message', data: { content: [{ type: 'text', text: 'hello' }], source: { kind: 'user' } } })
+    model.apply({ type: 'assistant/message', data: { message: { content: [{ type: 'text', text: 'hi' }] } } })
+    const view = new TranscriptView(model, theme, new MarkdownRenderer(theme.markdown), { rows })
+
+    const first = view.render(80)
+    expect(rows.stats()).toEqual({ hits: 0, misses: 2, size: 2 })
+    expect(view.render(80)).toEqual(first)
+    expect(rows.stats()).toEqual({ hits: 2, misses: 2, size: 2 })
+  })
+
+  it('rebuilds when a resize or an expansion changes what the rows say', () => {
+    const rows = new RowCache<TranscriptEntry>()
+    const model = new TranscriptModel()
+    model.apply({ type: 'user/message', data: { content: [{ type: 'text', text: 'hello there' }], source: { kind: 'user' } } })
+    const state = { expandCards: false, expandReasoning: false }
+    const view = new TranscriptView(model, theme, new MarkdownRenderer(theme.markdown), { rows, state: () => state })
+
+    view.render(80)
+    expect(rows.stats().misses).toBe(1)
+    view.render(40)
+    expect(rows.stats().misses).toBe(2)
+    state.expandCards = true
+    view.render(40)
+    expect(rows.stats().misses).toBe(3)
+  })
 })
 
 describe('TranscriptView text', () => {
