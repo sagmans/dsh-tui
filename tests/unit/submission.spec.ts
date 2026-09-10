@@ -21,6 +21,7 @@ describe('classifySubmission', () => {
     expect(classifySubmission('/rename  dock polish ')).toEqual({ kind: 'rename', title: 'dock polish' })
     expect(classifySubmission('/export /tmp/out.md')).toEqual({ kind: 'export', path: '/tmp/out.md' })
     expect(classifySubmission('/subagents kill abc')).toEqual({ kind: 'subagents', argument: 'kill abc' })
+    expect(classifySubmission('/fork  parser branch ')).toEqual({ kind: 'fork', title: 'parser branch' })
   })
 
   it('routes any other slash line as a command with its arguments', () => {

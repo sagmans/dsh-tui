@@ -4,15 +4,14 @@ import type { Context } from '@deepseek-ai/cordis'
 import { parseCmdline } from '@deepseek-ai/dsh-cmdline'
 import { CONFIGURED_AGENT_IDENTITIES_KEY } from '@deepseek-ai/dsh-agent-loop'
 import type { TuiStartup } from './contracts.ts'
-import { LaunchUsageError, identityOf, resolveLaunchIntent, resumeHint } from './identity.ts'
+import { LaunchUsageError, PROFILE_NAME, identityOf, resolveLaunchIntent, resumeHint } from './identity.ts'
 
 export const name = 'tui-startup'
 
 /** The launcher owns the arguments; this row only reads its own snapshot. */
 export const inject = ['cmdlineArgs']
 
-/** Profile the surface is installed into; only used for the resume hint. */
-export const PROFILE_NAME = 'tui'
+export { PROFILE_NAME } from './identity.ts'
 
 /** Config id the agent-loop row uses when a profile configures one. */
 export const MAIN_AGENT_ID = 'main'

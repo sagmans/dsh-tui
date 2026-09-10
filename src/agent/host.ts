@@ -1,6 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import type { SessionId } from '@deepseek-ai/dsh-session'
+import { SessionLogOffset, type SessionEvent, type SessionId } from '@deepseek-ai/dsh-session'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 
 /** Everything the terminal surface needs to own one interactive agent. */
@@ -15,6 +15,14 @@ export interface TuiAgent {
   interrupt(): void
   /** Stop the loop and release the session. */
   dispose(): Promise<void>
+}
+
+/** History a fork inherits from the session it branches off. */
+export interface ForkInheritance {
+  /** Session the branch starts from. */
+  readonly from: SessionId
+  /** Contiguous prefix of that session's log, ending on a completed turn. */
+  readonly events: readonly unknown[]
 }
 
 /** Launch inputs that decide which agent this run drives. */
@@ -33,6 +41,8 @@ export interface StartAgentOptions {
    * on the context that created the agent.
    */
   readonly setup?: (agentCtx: Context) => void
+  /** Branch from another session's completed history instead of starting empty. */
+  readonly fork?: ForkInheritance
 }
 
 function routeOf(ctx: Context, options: StartAgentOptions): { provider?: string; model?: string } {
@@ -61,11 +71,22 @@ export async function startAgent(ctx: Context, options: StartAgentOptions): Prom
   const agentOptions = routeOf(ctx, options)
   const meta = { cwd: options.cwd }
   const setup = options.setup === undefined ? {} : { setup: options.setup }
+  // A branch inherits a prefix of its parent's log, so the child is marked as
+  // seeded and carries the exact cut the host validates against.
+  const branch = options.fork === undefined
+    ? {}
+    : {
+        seed: options.fork.events as readonly SessionEvent[],
+        inheritedEventCount: SessionLogOffset(options.fork.events.length),
+      }
+  const identity = options.fork === undefined
+    ? meta
+    : { ...meta, parentSession: options.fork.from, isSeeded: true }
   const handle = options.resume
     ? await ctx.agents
         .resume({ resumeSessionId: options.sessionId, agentOptions, ...setup })
-        .catch(() => ctx.agents.create({ sessionId: options.sessionId, meta, agentOptions, ...setup }))
-    : await ctx.agents.create({ sessionId: options.sessionId, meta, agentOptions, ...setup })
+        .catch(() => ctx.agents.create({ sessionId: options.sessionId, meta: identity, agentOptions, ...branch, ...setup }))
+    : await ctx.agents.create({ sessionId: options.sessionId, meta: identity, agentOptions, ...branch, ...setup })
   let disposed = false
   return {
     sessionId: options.sessionId,

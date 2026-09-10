@@ -59,6 +59,9 @@ export function identityOf(intent: LaunchIntent, uuid: string): LauncherAgentIde
     : { id: SessionId(intent.resumeId), resume: true }
 }
 
+/** Profile the surface is installed into; only used for the resume hint. */
+export const PROFILE_NAME = 'tui'
+
 /** Line printed after the terminal is handed back, so the session is recoverable. */
 export function resumeHint(sessionId: string, profile: string): string {
   return `To resume this session: dsh --profile ${profile} --resume=${sessionId}`

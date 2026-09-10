@@ -49,6 +49,7 @@ dsh --profile tui --no-bell            # do not ring when a long turn finishes
 | `/subagents` | list the delegations this session started, with their provider and age |
 | `/subagents open <id\|last>` | read a child's own conversation in place; `ctrl+b` comes back |
 | `/subagents kill <id>` | stop a live child agent |
+| `/fork [title]` | branch this conversation after its last completed turn and continue in the branch |
 | `/rename <title>` | title this session; the picker shows it instead of the session id |
 | `/export [path]` | write the visible transcript as markdown (default `dsh-session-<id>.md`) |
 | `/resume` | open another stored session without leaving the terminal |

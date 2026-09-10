@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { Editor, ProcessTerminal, ScrollView, TuiAltScreen, VStack, matchesKey } from '@earendil-works/pi-tui'
@@ -6,7 +7,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 // Type-only: the command registry publishes the change event this surface
 // listens to, and the event map is declaration-merged by that package.
 import type {} from '@deepseek-ai/dsh-commands'
-import { startAgent, type TuiAgent } from './agent/host.ts'
+import { startAgent, type ForkInheritance, type TuiAgent } from './agent/host.ts'
 import {
   PICKER_LIMIT,
   createSessionHistory,
@@ -15,6 +16,8 @@ import {
   type StoredSession,
 } from './agent/history.ts'
 import { createToolPresenter } from './agent/present.ts'
+import { forkPoint, type ForkEvent } from './agent/fork.ts'
+import { PROFILE_NAME, resumeHint } from './identity.ts'
 import { createStatusFacts } from './agent/status.ts'
 import { ModelSwitch, createModelCatalog, parseModelArgument } from './agent/model.ts'
 import { JOB_READ_LINES, createJobDirectory, describeJobs, parseJobsArgument, type JobSummary } from './jobs.ts'
@@ -390,11 +393,11 @@ export function apply(ctx: Context, config: unknown): void {
    * events not yet flushed and the only one that works for a child that has not
    * materialized; a session this process is not running falls back to storage.
    */
+  const liveSession = (id: SessionId): { snapshotEvents?: () => readonly ForkEvent[] } | undefined =>
+    (ctx.get('sessions') as { get?: (id: SessionId) => { snapshotEvents?: () => readonly ForkEvent[] } | undefined } | undefined)?.get?.(id)
+
   const foldHistory = async (id: SessionId): Promise<number> => {
-    const live = (ctx.get('sessions') as
-      | { get?: (id: SessionId) => { snapshotEvents?: () => readonly { readonly type: string; readonly data?: unknown }[] } | undefined }
-      | undefined)?.get?.(id)
-    const inMemory = live?.snapshotEvents?.()
+    const inMemory = liveSession(id)?.snapshotEvents?.()
     if (inMemory !== undefined) {
       for (const event of inMemory) applyEvent(event)
       return inMemory.length
@@ -449,7 +452,15 @@ export function apply(ctx: Context, config: unknown): void {
     work.apply(event)
   }
 
-  const openAgent = async (id: SessionId, resume: boolean): Promise<void> => {
+  /** Every event of a session, from memory when this process runs it. */
+  const sessionEvents = async (id: SessionId): Promise<readonly ForkEvent[]> => {
+    const inMemory = liveSession(id)?.snapshotEvents?.()
+    if (inMemory !== undefined) return inMemory
+    const history = createSessionHistory(ctx)
+    return history === undefined ? [] : history.read(id)
+  }
+
+  const openAgent = async (id: SessionId, resume: boolean, fork?: ForkInheritance): Promise<void> => {
     if (resume) await replayHistory(id)
     const handle = await startAgent(ctx, {
       sessionId: id,
@@ -458,14 +469,21 @@ export function apply(ctx: Context, config: unknown): void {
       provider: resolved.provider,
       cwd: process.cwd(),
       setup: agentCtx => modelSwitch.install(agentCtx),
+      ...(fork === undefined ? {} : { fork }),
     })
     activeSession = id
     viewedSession = id
     agent = handle
+    // A branch inherits the conversation the reader was already reading, so it
+    // opens on that history rather than on an empty screen.
+    if (fork !== undefined) await foldHistory(id)
     disposers.push(() => {
       void handle.dispose()
     })
     installCompletion()
+    // The hint must name the session this run will actually leave behind, which
+    // a fork or a switch changes.
+    ctx.provide(GOODBYE_KEY, resumeHint(String(id), PROFILE_NAME))
     model.notice(`session ${handle.sessionId}${resume ? ' (resumed)' : ''}`)
     tui.requestRender()
   }
@@ -602,6 +620,48 @@ export function apply(ctx: Context, config: unknown): void {
     tui.requestRender()
   }
 
+  /**
+   * Branch this conversation and continue in the branch.
+   *
+   * The branch is a real session with its own identity that inherits a prefix
+   * of this one, so a reader can try something without spending the
+   * conversation they already had. The cut is anchored to the last completed
+   * turn, because half an exchange is not a state to hand a model.
+   */
+  const runForkCommand = (title: string): void => {
+    if (agent === undefined) {
+      model.notice('the agent is still starting; try again in a moment')
+      tui.requestRender()
+      return
+    }
+    void (async () => {
+      const source = activeSession
+      const events = await sessionEvents(source)
+      const point = forkPoint(events)
+      if (point === undefined) {
+        model.notice('nothing to fork yet: this session has no completed turn')
+        tui.requestRender()
+        return
+      }
+      const childId = SessionId(`tui-session-${randomUUID()}`)
+      const previous = agent
+      agent = undefined
+      turnOpen = false
+      turnStartedAt = undefined
+      model.reset()
+      work.reset()
+      roster.reset()
+      if (previous !== undefined) await previous.dispose()
+      await openAgent(childId, false, { from: source, events: events.slice(0, point.inheritedEvents) })
+      if (title !== '') runRenameCommand(title)
+      model.notice(`forked from ${source} at event ${point.boundarySeq} — ${point.inheritedEvents} inherited`)
+      tui.requestRender()
+    })().catch((error: unknown) => {
+      model.notice(`could not fork: ${error instanceof Error ? error.message : String(error)}`)
+      tui.requestRender()
+    })
+  }
+
   const runRenameCommand = (title: string): void => {
     if (title === '') {
       model.notice('use /rename <title>; the title is what the resume picker shows')
@@ -724,6 +784,9 @@ export function apply(ctx: Context, config: unknown): void {
         return
       case 'subagents':
         runSubagentsCommand(submission.argument)
+        return
+      case 'fork':
+        runForkCommand(submission.title)
         return
       case 'status': {
         const facts = statusFacts()
