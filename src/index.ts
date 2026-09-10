@@ -3,6 +3,9 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { startAgent, type TuiAgent } from './agent/host.ts'
 import { createToolPresenter } from './agent/present.ts'
+import type { ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
+import type { AskUserQuestionAnswer } from '@deepseek-ai/dsh-user-questions'
+import { ApprovalGate, QuestionGate, toGateQuestions, type GateAnswer } from './gates.ts'
 import { LOCAL_COMMANDS, classifySubmission } from './input/submission.ts'
 import { resolveConfig } from './config.ts'
 import { createRestoreRegistry } from './terminal/restore.ts'
@@ -69,7 +72,13 @@ export function apply(ctx: Context, config: unknown): void {
   const restore = createRestoreRegistry()
   const terminal = new ProcessTerminal()
   const tui = new TuiAltScreen(terminal)
-  const view = new TranscriptView(model, theme)
+  /** The one gate a terminal can present at a time, and how it settles its caller. */
+  type PendingGate =
+    | { readonly kind: 'approval'; readonly gate: ApprovalGate; readonly settle: (outcome: ApprovalOutcome) => void }
+    | { readonly kind: 'question'; readonly gate: QuestionGate; readonly settle: (answers: GateAnswer[]) => void }
+
+  let pending: PendingGate | undefined
+  const view = new TranscriptView(model, theme, () => pending?.gate.card())
   const editor = new Editor(tui, theme.editor)
   const disposers: Array<() => void> = []
   let agent: TuiAgent | undefined
@@ -102,7 +111,40 @@ export function apply(ctx: Context, config: unknown): void {
     appExit(code)
   }
 
+  const openGate = (next: PendingGate): void => {
+    pending = next
+    // A gate owns the keyboard: the editor must not collect the decision keys.
+    editor.disableSubmit = true
+    tui.setFocus(null)
+    tui.requestRender()
+  }
+
+  const closeGate = (): void => {
+    pending = undefined
+    editor.disableSubmit = false
+    tui.setFocus(editor)
+    tui.requestRender()
+  }
+
   disposers.push(tui.addInputListener(data => {
+    if (pending !== undefined) {
+      if (pending.kind === 'approval') {
+        const outcome = pending.gate.handleKey(data)
+        if (outcome === undefined) tui.requestRender()
+        else {
+          pending.settle(outcome)
+          closeGate()
+        }
+      } else {
+        const answers = pending.gate.handleKey(data)
+        if (answers === undefined) tui.requestRender()
+        else {
+          pending.settle(answers)
+          closeGate()
+        }
+      }
+      return { consume: true }
+    }
     // In raw mode Ctrl+C never reaches the process as SIGINT, so the surface
     // decides: stop the work in flight, or leave when there is none.
     if (!matchesKey(data, 'ctrl+c')) return undefined
@@ -189,6 +231,45 @@ export function apply(ctx: Context, config: unknown): void {
     if (event.type === 'turn/end') turnOpen = false
     model.apply(event)
     tui.requestRender()
+  }))
+
+  // Answering these two waterfalls is what makes a terminal surface usable at
+  // all: without an answerer every gated tool fails closed, and the model's
+  // questions never reach the human.
+  disposers.push(ctx.on('approval/request', (request, next) => {
+    if (request.agent.id !== resolved.sessionId) return next()
+    return new Promise<ApprovalOutcome>(resolve => {
+      const gate = new ApprovalGate(request.toolName, request.reason)
+      request.signal?.addEventListener('abort', () => {
+        gate.cancel()
+        if (pending?.gate === gate) closeGate()
+        resolve('cancelled')
+      }, { once: true })
+      openGate({ kind: 'approval', gate, settle: resolve })
+    })
+  }))
+
+  disposers.push(ctx.on('user-questions/request', (request, next) => {
+    const agentId = (request as { agent?: { id?: string } }).agent?.id
+    if (agentId !== undefined && agentId !== resolved.sessionId) return next()
+    const questions = toGateQuestions(request)
+    if (questions.length === 0) return next()
+    return new Promise<AskUserQuestionAnswer>(resolve => {
+      const gate = new QuestionGate(questions)
+      // The seam takes mutable selection arrays and an optional custom field, so
+      // the read-only gate answer is copied into that exact shape here.
+      openGate({
+        kind: 'question',
+        gate,
+        settle: answers => resolve({
+          answers: answers.map(answer => ({
+            id: answer.id,
+            selected: [...answer.selected],
+            ...(answer.custom === undefined ? {} : { custom: answer.custom }),
+          })),
+        }),
+      })
+    })
   }))
 
   disposers.push(ctx.on('agent/error', payload => {

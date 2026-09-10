@@ -27,9 +27,13 @@ dsh --profile tui --no-color
 |---|---|
 | Enter | submit the prompt |
 | Ctrl+C | interrupt the running turn, or leave when idle |
-| `/help` | local commands |
+| `y` / `n` / Esc | allow once, reject, or cancel a pending approval |
+| digits / space / ↑↓ / Enter / Esc | answer a question: pick or toggle, confirm, or skip one |
+| `/help` | list registered and local commands |
 | `/clear` | clear the visible transcript |
 | `/quit` | leave and print the resume command |
+
+Any other `/command` goes to the command registry, so `/plan`, `/compact`, `/goal`, and `/feedback` behave as they do on the other surfaces.
 
 ## How it works
 
@@ -54,7 +58,8 @@ Test specs import plugin sources through the `@/` alias. Under this test runner 
 
 ## Limitations
 
-- No approvals, questions, plan review, session resume, subagents, jobs, or commands yet.
+- No session resume picker, plan-review panel, subagents, jobs, model switching, or transcript scrolling controls yet.
+- Approvals and questions render inline and take the keyboard; a question batch is answered in order.
 - Transcript rendering is plain text: markdown, diffs, and tool cards arrive with the presentation milestone.
 - Rendering styling uses the standard 16 ANSI colors and terminal defaults, so light and dark themes follow the terminal.
 

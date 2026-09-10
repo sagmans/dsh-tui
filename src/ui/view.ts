@@ -1,26 +1,29 @@
 import { type Component, truncateToWidth, wrapTextWithAnsi } from '@earendil-works/pi-tui'
 import type { ToolCard } from '../cards.ts'
-import type { TranscriptEntry, TranscriptModel } from '../transcript.ts'
+import type { GateCard } from '../gates.ts'
+import type { TranscriptModel } from '../transcript.ts'
 import type { TuiTheme } from '../theme.ts'
 
 const CONTINUATION = '  '
 const DETAIL_INDENT = '    '
+const OPTION_INDENT = '   '
 
 /**
- * Renders the transcript rows as terminal lines.
+ * Renders the transcript rows and any pending gate as terminal lines.
  *
- * The component stays a pure projection of the model: it owns no cache beyond
- * the render call, so a resize or a resume re-renders the same rows without
+ * The component stays a pure projection: it owns no cache beyond the render
+ * call, so a resize, a resume, or an open gate re-renders the same rows without
  * replaying anything.
  */
 export class TranscriptView implements Component {
   constructor(
     private readonly model: TranscriptModel,
     private readonly theme: TuiTheme,
+    private readonly pendingGate: () => GateCard | undefined = () => undefined,
   ) {}
 
   invalidate(): void {
-    // The model is the only state; nothing is cached across renders.
+    // The model and the gate are the only state; nothing is cached.
   }
 
   private pushWrapped(lines: string[], text: string, width: number, prefix: string, style: (text: string) => string): void {
@@ -33,8 +36,7 @@ export class TranscriptView implements Component {
 
   private pushCard(lines: string[], card: ToolCard, width: number): void {
     const mark = card.failed ? '✗' : '⚒'
-    const header = this.theme.tool(truncateToWidth(`${mark} ${card.title}`, width, ''))
-    lines.push(header)
+    lines.push(this.theme.tool(truncateToWidth(`${mark} ${card.title}`, width, '')))
     for (const detail of card.detail) {
       const style = detail.startsWith('+')
         ? this.theme.added
@@ -44,6 +46,24 @@ export class TranscriptView implements Component {
     if (card.hiddenLines > 0) {
       lines.push(this.theme.dim(truncateToWidth(`${DETAIL_INDENT}… ${card.hiddenLines} more lines`, width, '')))
     }
+  }
+
+  private pushGate(lines: string[], gate: GateCard, width: number): void {
+    lines.push('')
+    lines.push(this.theme.bold(truncateToWidth(`${gate.kind === 'approval' ? '⚠' : '?'} ${gate.title}`, width, '')))
+    for (const detail of gate.detail) {
+      this.pushWrapped(lines, detail, width, DETAIL_INDENT, this.theme.dim)
+    }
+    gate.options.forEach((option, position) => {
+      const box = option.selected ? '[x]' : '[ ]'
+      const cursor = option.current ? '❯' : ' '
+      const text = option.description === undefined
+        ? `${cursor} ${box} ${position + 1}. ${option.label}`
+        : `${cursor} ${box} ${position + 1}. ${option.label} — ${option.description}`
+      const style = option.current ? this.theme.bold : (value: string) => value
+      lines.push(style(truncateToWidth(`${OPTION_INDENT}${text}`, width, '')))
+    })
+    lines.push(this.theme.dim(truncateToWidth(`${OPTION_INDENT}${gate.hint}`, width, '')))
   }
 
   render(width: number): string[] {
@@ -56,17 +76,15 @@ export class TranscriptView implements Component {
         continue
       }
       if (entry.kind === 'reasoning') {
-        const text = entry.live ? `${glyphs.reasoning} ${entry.text}` : `${glyphs.reasoning} ${entry.text}`
-        lines.push(this.theme.dim(truncateToWidth(text, width, '')))
+        lines.push(this.theme.dim(truncateToWidth(`${glyphs.reasoning} ${entry.text}`, width, '')))
         continue
       }
       const prefix = `${glyphs[entry.kind]} `
       const style = entry.kind === 'notice' ? this.theme.notice : (value: string) => value
       this.pushWrapped(lines, entry.kind === 'user' ? this.theme.bold(entry.text) : entry.text, width, prefix, style)
     }
+    const gate = this.pendingGate()
+    if (gate !== undefined) this.pushGate(lines, gate, width)
     return lines
   }
 }
-
-/** Narrowing helper kept for callers that switch on entry kinds. */
-export type { TranscriptEntry }
