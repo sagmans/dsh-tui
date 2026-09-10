@@ -1,3 +1,5 @@
+import { writeFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { Editor, ProcessTerminal, ScrollView, TuiAltScreen, VStack, matchesKey } from '@earendil-works/pi-tui'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -7,9 +9,8 @@ import type {} from '@deepseek-ai/dsh-commands'
 import { startAgent, type TuiAgent } from './agent/host.ts'
 import {
   PICKER_LIMIT,
-  TITLE_EVENT_LIMIT,
   createSessionHistory,
-  sessionTitle,
+  readSessionTitle,
   type SessionHistory,
   type StoredSession,
 } from './agent/history.ts'
@@ -26,6 +27,7 @@ import { LOCAL_COMMANDS, classifySubmission } from './input/submission.ts'
 import { resolveConfig } from './config.ts'
 import { createRestoreRegistry } from './terminal/restore.ts'
 import { CLEAR_TITLE, windowTitle } from './terminal/title.ts'
+import { defaultExportFile, transcriptToText } from './export.ts'
 import { createTheme } from './theme.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { TranscriptModel } from './transcript.ts'
@@ -317,7 +319,7 @@ export function apply(ctx: Context, config: unknown): void {
         const next = queue.shift()
         if (next === undefined) return
         try {
-          const title = sessionTitle(await history.read(next.id, TITLE_EVENT_LIMIT))
+          const title = await readSessionTitle(history, next)
           if (title === undefined) continue
           titles.set(next.id, title)
           tui.requestRender()
@@ -467,6 +469,53 @@ export function apply(ctx: Context, config: unknown): void {
     }
   }
 
+  /**
+   * Give this session a title.
+   *
+   * The title is what the resume picker shows and what every other surface
+   * displays, so a reader who has several sessions can name the one they are in
+   * without waiting for the harness to guess.
+   */
+  /**
+   * Write what the reader can see to a file.
+   *
+   * The base's `/export` downloads the log through the browser, which a
+   * terminal has no way to do, so this dumps the transcript the reader is
+   * looking at — the thing worth pasting into a message.
+   */
+  const runExportCommand = (argument: string): void => {
+    const path = resolve(argument === '' ? defaultExportFile(String(activeSession)) : argument)
+    try {
+      writeFileSync(path, transcriptToText(model.entries()), 'utf8')
+      model.notice(`transcript written to ${path}`)
+    } catch (error) {
+      model.notice(`could not write ${path}: ${error instanceof Error ? error.message : String(error)}`)
+    }
+    tui.requestRender()
+  }
+
+  const runRenameCommand = (title: string): void => {
+    if (title === '') {
+      model.notice('use /rename <title>; the title is what the resume picker shows')
+      tui.requestRender()
+      return
+    }
+    const session = (ctx.get('sessions') as { get?: (id: SessionId) => unknown } | undefined)?.get?.(activeSession)
+    const titles = ctx.get('sessionTitle') as { rename?: (session: unknown, title: string) => { readonly title?: string } } | undefined
+    if (session === undefined || typeof titles?.rename !== 'function') {
+      model.notice('this profile has no session-title service, so this session cannot be renamed')
+      tui.requestRender()
+      return
+    }
+    try {
+      const accepted = titles.rename(session, title)
+      model.notice(`session renamed to "${typeof accepted?.title === 'string' ? accepted.title : title}"`)
+    } catch (error) {
+      model.notice(`could not rename: ${error instanceof Error ? error.message : String(error)}`)
+    }
+    tui.requestRender()
+  }
+
   const runModelCommand = (argument: string): void => {
     if (catalog === undefined) {
       model.notice('this profile has no llm service, so models cannot be listed or switched')
@@ -558,6 +607,12 @@ export function apply(ctx: Context, config: unknown): void {
         return
       case 'jobs':
         runJobsCommand(submission.argument)
+        return
+      case 'rename':
+        runRenameCommand(submission.title)
+        return
+      case 'export':
+        runExportCommand(submission.path)
         return
       case 'status': {
         const facts = statusFacts()

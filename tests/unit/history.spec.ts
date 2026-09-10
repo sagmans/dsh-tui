@@ -22,6 +22,17 @@ describe('sessionTitle', () => {
     expect(long?.endsWith('…')).toBe(true)
   })
 
+  it('prefers the title the harness derived or the reader set', () => {
+    const titled: StoredEvent = { type: 'session/title', data: { title: 'dock polish', messageSeqs: [], source: 'user' } }
+    expect(sessionTitle([user('first prompt'), titled])).toBe('dock polish')
+    // Latest wins, exactly as the projection folds it.
+    expect(sessionTitle([titled, { type: 'session/title', data: { title: 'later' } }])).toBe('later')
+  })
+
+  it('ignores a title that normalizes to nothing', () => {
+    expect(sessionTitle([{ type: 'session/title', data: { title: '   ' } }, user('first prompt')])).toBe('first prompt')
+  })
+
   it('reads past events that are not messages', () => {
     expect(sessionTitle([{ type: 'turn/start', data: { turn: 1 } }, user('hello')])).toBe('hello')
   })

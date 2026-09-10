@@ -18,14 +18,14 @@ export interface StoredEvent {
 export interface SessionHistory {
   /** Newest sessions first, at most `limit` of them. */
   list(limit: number): Promise<readonly StoredSession[]>
-  /** Read a session's log from its start; `limit` bounds a title read. */
-  read(id: string, limit?: number): Promise<readonly StoredEvent[]>
+  /** Read a slice of a session's log; `limit` bounds a title read. */
+  read(id: string, options?: { readonly offset?: number; readonly limit?: number }): Promise<readonly StoredEvent[]>
 }
 
 /** Sessions the picker offers before a menu stops being a menu. */
 export const PICKER_LIMIT = 30
 
-/** Events read to title one session: enough to reach its first prompt. */
+/** Events read to title one session: enough to reach its title or first prompt. */
 export const TITLE_EVENT_LIMIT = 40
 
 /** Longest session title the picker shows, before the row can no longer hold it. */
@@ -35,14 +35,29 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined
 }
 
+function clip(title: string, limit: number): string {
+  const collapsed = title.replace(/\s+/gu, ' ').trim()
+  if (collapsed === '') return ''
+  return collapsed.length > limit ? `${collapsed.slice(0, limit - 1)}…` : collapsed
+}
+
 /**
- * First human prompt of a session, for a row a person can recognize.
+ * Name a session, preferring the title the harness derived or the reader set.
  *
- * Only a direct prompt titles a session: injected context and plugin notices
- * also arrive as user-role messages and would name every session after whatever
- * the harness happened to inject first.
+ * The durable `session/title` wins because it is what every other surface
+ * shows; a session that has none yet falls back to its first human prompt.
+ * Injected context and plugin notices also arrive as user-role messages, so
+ * only a direct prompt may name a session.
  */
 export function sessionTitle(events: readonly StoredEvent[], limit = TITLE_CHAR_LIMIT): string | undefined {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index]
+    if (event?.type !== 'session/title') continue
+    const declared = asRecord(event.data)?.title
+    if (typeof declared !== 'string') continue
+    const title = clip(declared, limit)
+    if (title !== '') return title
+  }
   for (const event of events) {
     if (event.type !== 'user/message') continue
     const data = asRecord(event.data)
@@ -53,11 +68,28 @@ export function sessionTitle(events: readonly StoredEvent[], limit = TITLE_CHAR_
       const text = asRecord(block)?.text
       if (typeof text === 'string') parts.push(text)
     }
-    const title = parts.join(' ').replace(/\s+/gu, ' ').trim()
+    const title = clip(parts.join(' '), limit)
     if (title === '') continue
-    return title.length > limit ? `${title.slice(0, limit - 1)}…` : title
+    return title
   }
   return undefined
+}
+
+/**
+ * Title one stored session.
+ *
+ * The tail is read first because a title is latest-wins and usually written
+ * after the first turn; the head is the fallback for a session that has a
+ * prompt but no title yet.
+ */
+export async function readSessionTitle(history: SessionHistory, session: StoredSession): Promise<string | undefined> {
+  const end = session.eventCount ?? 0
+  if (end > TITLE_EVENT_LIMIT) {
+    const tail = await history.read(session.id, { offset: end - TITLE_EVENT_LIMIT, limit: TITLE_EVENT_LIMIT })
+    const declared = sessionTitle(tail)
+    if (declared !== undefined) return declared
+  }
+  return sessionTitle(await history.read(session.id, { limit: TITLE_EVENT_LIMIT }))
 }
 
 /**
@@ -76,13 +108,16 @@ export function createSessionHistory(ctx: Context): SessionHistory | undefined {
       }
     | undefined
   if (typeof service?.list !== 'function' || typeof service.open !== 'function') return undefined
-  const read = async (id: string, limit?: number): Promise<readonly StoredEvent[]> => {
+  const read = async (
+    id: string,
+    options?: { readonly offset?: number; readonly limit?: number },
+  ): Promise<readonly StoredEvent[]> => {
     const handle = (await service.open(id, 'read')) as {
       read(offset?: number, length?: number): Promise<{ events?: readonly unknown[] }>
       close(): Promise<void>
     }
     try {
-      const result = await handle.read(0, limit)
+      const result = await handle.read(options?.offset ?? 0, options?.limit)
       const events: StoredEvent[] = []
       for (const entry of result.events ?? []) {
         const record = asRecord(entry)

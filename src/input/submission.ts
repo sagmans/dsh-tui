@@ -8,11 +8,13 @@ export type Submission =
   | { readonly kind: 'status' }
   | { readonly kind: 'model'; readonly argument: string }
   | { readonly kind: 'jobs'; readonly argument: string }
+  | { readonly kind: 'rename'; readonly title: string }
+  | { readonly kind: 'export'; readonly path: string }
   | { readonly kind: 'command'; readonly name: string; readonly line: string }
   | { readonly kind: 'prompt'; readonly text: string }
 
 /** Commands the surface answers itself, without a model turn. */
-export const LOCAL_COMMANDS = ['/help', '/status', '/model', '/jobs', '/clear', '/resume', '/quit', '/exit'] as const
+export const LOCAL_COMMANDS = ['/help', '/status', '/model', '/jobs', '/rename', '/export', '/clear', '/resume', '/quit', '/exit'] as const
 
 /** What each local command does, shown in the editor's completion menu. */
 export const LOCAL_COMMAND_DESCRIPTIONS: Readonly<Record<string, string>> = {
@@ -20,6 +22,8 @@ export const LOCAL_COMMAND_DESCRIPTIONS: Readonly<Record<string, string>> = {
   '/status': 'show the session, model, permissions, and context',
   '/model': 'show or switch the model for the next step',
   '/jobs': 'list background jobs, read one, or kill one',
+  '/rename': 'give this session a title the picker will show',
+  '/export': 'write the visible transcript to a markdown file',
   '/clear': 'clear the visible transcript',
   '/resume': 'open another stored session',
   '/quit': 'leave and print the resume command',
@@ -46,6 +50,12 @@ export function classifySubmission(text: string): Submission {
   }
   if (trimmed === '/jobs' || trimmed.startsWith('/jobs ')) {
     return { kind: 'jobs', argument: trimmed.slice('/jobs'.length).trim() }
+  }
+  if (trimmed === '/rename' || trimmed.startsWith('/rename ')) {
+    return { kind: 'rename', title: trimmed.slice('/rename'.length).trim() }
+  }
+  if (trimmed === '/export' || trimmed.startsWith('/export ')) {
+    return { kind: 'export', path: trimmed.slice('/export'.length).trim() }
   }
   if (trimmed.startsWith('/')) {
     const [head = ''] = trimmed.slice(1).split(/\s+/u, 1)

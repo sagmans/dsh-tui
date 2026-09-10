@@ -18,6 +18,8 @@ describe('classifySubmission', () => {
     expect(classifySubmission('/model  zai-coding-cn/glm-5.3 ')).toEqual({ kind: 'model', argument: 'zai-coding-cn/glm-5.3' })
     expect(classifySubmission('/jobs')).toEqual({ kind: 'jobs', argument: '' })
     expect(classifySubmission('/jobs kill j1')).toEqual({ kind: 'jobs', argument: 'kill j1' })
+    expect(classifySubmission('/rename  dock polish ')).toEqual({ kind: 'rename', title: 'dock polish' })
+    expect(classifySubmission('/export /tmp/out.md')).toEqual({ kind: 'export', path: '/tmp/out.md' })
   })
 
   it('routes any other slash line as a command with its arguments', () => {
