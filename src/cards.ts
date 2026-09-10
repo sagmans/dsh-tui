@@ -80,6 +80,23 @@ export function cardDetailRows(card: ToolCard, expanded: boolean): { lines: read
   return { lines, hidden: Math.max(0, card.totalLines - lines.length) }
 }
 
+/**
+ * Build a card from raw lines.
+ *
+ * Every path that turns text into a card goes through here, so a tool with no
+ * presenter — or a result whose presenter declined — cannot keep a hundred
+ * thousand lines alive in the transcript.
+ */
+export function cardFromLines(
+  kind: ToolCardKind,
+  title: string,
+  lines: readonly string[],
+  failed: boolean,
+): ToolCard {
+  const bounded = bound(lines)
+  return { kind, title, detail: bounded.detail, failed, totalLines: bounded.totalLines }
+}
+
 /** Text lines carried by model-facing content blocks. */
 export function contentLines(content: unknown): string[] {
   if (!Array.isArray(content)) return []

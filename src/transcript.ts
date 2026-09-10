@@ -1,4 +1,4 @@
-import { mergeCards, type ToolCard, type ToolPresenter } from './cards.ts'
+import { cardFromLines, mergeCards, type ToolCard, type ToolPresenter } from './cards.ts'
 
 /** One renderable transcript row. */
 export type TranscriptEntry =
@@ -253,13 +253,7 @@ export class TranscriptModel {
         this.settled.push({
           kind: 'tool',
           // Without a presenter the row still has to say what ran and with what.
-          card: card ?? {
-            kind: 'generic',
-            title: name,
-            detail: argumentsJson === '' ? [] : argumentsJson.split('\n'),
-            failed: false,
-            totalLines: argumentsJson === '' ? 0 : countLines(argumentsJson),
-          },
+          card: card ?? cardFromLines('generic', name, argumentsJson === '' ? [] : argumentsJson.split('\n'), false),
         })
         const callId = typeof data.callId === 'string' ? data.callId : ''
         if (callId !== '') this.pending.set(callId, { name, argumentsJson, index: this.settled.length - 1 })
@@ -292,13 +286,7 @@ export class TranscriptModel {
       // No matching call in this fold: a resumed transcript may start mid-call.
       this.settled.push({
         kind: 'tool',
-        card: result ?? {
-          kind: 'generic',
-          title: name,
-          detail: contentLinesOf(message?.content),
-          failed: isError,
-          totalLines: contentLinesOf(message?.content).length,
-        },
+        card: result ?? cardFromLines('generic', name, contentLinesOf(message?.content), isError),
       })
       return
     }
@@ -308,12 +296,12 @@ export class TranscriptModel {
       // No presenter answered: the model-facing content is still what happened,
       // and a reader without it would see a tool row that never reported back.
       const reported = contentLinesOf(message?.content)
-      const base = call ?? { kind: 'generic' as const, title: name, detail: [], totalLines: 0 }
+      const base = call ?? cardFromLines('generic', name, [], false)
       this.settled[pending.index] = {
         kind: 'tool',
         card: reported.length === 0
           ? { ...base, failed: isError }
-          : { ...base, detail: reported, totalLines: reported.length, failed: isError },
+          : { ...cardFromLines(base.kind, base.title, reported, isError) },
       }
       return
     }
