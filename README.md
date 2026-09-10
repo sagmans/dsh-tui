@@ -102,7 +102,8 @@ Test specs import plugin sources through the `@/` alias. Under this test runner 
 - Scrolling is the mouse wheel, or the terminal's own scrollback keys where it offers them.
 - A turn that ran longer than ten seconds rings the terminal bell when it ends, because the reader may have walked away; `--no-bell` turns that off.
 - The dock shows the goal, plan mode, the todo list, and any background job still running; the transcript marks where older history was compacted away. `/plan` toggles plan mode; `/plan <message>` also steers that message, which is the base command's own behaviour.
-- Background jobs are live process state, not durable events: they disappear when the run ends, and a resumed session starts with an empty board.
+- Background jobs and subagent runs are live process state, not durable events: they disappear when the run ends, and a resumed session starts with an empty board and roster.
+- The subagent roster shows children and can stop one, but the surface never opens a child's own conversation; fork and delete are unimplemented because session storage exposes neither.
 - Approvals and questions render inline and take the keyboard; a question batch is answered in order.
 - Styling uses the standard 16 ANSI colors and terminal defaults, so light and dark terminals follow their own theme.
 - Tool text, model text, and file content are escaped before rendering, so a hostile result cannot inject terminal control sequences; the cost is that a literal tab shows as \x09.
