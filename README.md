@@ -98,6 +98,23 @@ node tools/pty-drive.mjs --home "$S" --prompt 'Reply with exactly: pong'
 
 Test specs import plugin sources through the `@/` alias. Under this test runner the spec file is resolved with a root-relative id, so parent-relative imports (`../src/...`) do not resolve; the alias and its matching `tsconfig.test.json` path mapping avoid that.
 
+## Manual acceptance
+
+The automated checks drive a real PTY, but they run on this machine's terminal. These are the checks only a terminal on your desk can answer; each line is what to do and what it should look like.
+
+| Check | Expected |
+|---|---|
+| `dsh plugin --profile tui add @sagmans/dsh-tui@latest` into a fresh `DSH_HOME` | the profile is created, and `dsh --profile tui` reaches a prompt |
+| the same over SSH | the interface arrives intact; keys and mouse work on the host, with no local echo doubling |
+| inside tmux or screen | wheel scroll and `ctrl+shift+f` search work; dragging selects text |
+| a light terminal and a dark one | the interface follows the terminal's own palette; nothing becomes unreadable |
+| `NO_COLOR=1 dsh --profile tui` | no styling anywhere, layout unchanged |
+| `dsh --profile tui --no-bell` | a turn that runs for minutes still ends silently |
+| resize the window mid-turn | the transcript rewraps; the dock, editor, and status row stay put |
+| a 40-column terminal | rows end in `…` instead of wrapping into the next line |
+| `echo hi \| dsh --profile tui` | refuses with a non-zero exit and a message naming the TTY requirement |
+| `/quit`, Ctrl+C while idle, `kill -TERM <pid>` | the shell returns with cursor, echo, mouse, and title restored |
+
 ## Limitations
 
 - `/mode` is not a command here: the base bundle's `/permission <preset>` switches the permission preset and the footer shows the current one.
