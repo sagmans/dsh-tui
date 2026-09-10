@@ -12,6 +12,7 @@ export interface TranscriptGlyphs {
   readonly assistant: string
   readonly tool: string
   readonly notice: string
+  readonly reasoning: string
 }
 
 /** Styling the surface applies, and the editor/select themes pi-tui needs. */
@@ -22,6 +23,9 @@ export interface TuiTheme {
   bold(text: string): string
   tool(text: string): string
   notice(text: string): string
+  /** Diff additions and removals, colored by background rather than by hue alone. */
+  added(text: string): string
+  removed(text: string): string
   readonly editor: EditorTheme
 }
 
@@ -47,14 +51,18 @@ export function createTheme(color: boolean): TuiTheme {
   const bold = sgr('1', color)
   const accent = sgr('36', color)
   const warn = sgr('33', color)
+  const added = sgr('32', color)
+  const removed = sgr('31', color)
   const select = selectListTheme(dim, accent, bold)
   return {
     color,
-    glyphs: { user: '›', assistant: '⏺', tool: '⚒', notice: '·' },
+    glyphs: { user: '›', assistant: '⏺', tool: '⚒', notice: '·', reasoning: '▸' },
     dim,
     bold,
     tool: warn,
     notice: dim,
+    added,
+    removed,
     editor: { borderColor: dim, selectList: select },
   }
 }

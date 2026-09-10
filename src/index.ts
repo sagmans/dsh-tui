@@ -1,6 +1,7 @@
 import { Editor, ProcessTerminal, ScrollView, TuiAltScreen, VStack, matchesKey } from '@earendil-works/pi-tui'
 import type { Context } from '@deepseek-ai/cordis'
 import { startAgent, type TuiAgent } from './agent/host.ts'
+import { createToolPresenter } from './agent/present.ts'
 import { resolveConfig } from './config.ts'
 import { createRestoreRegistry } from './terminal/restore.ts'
 import { createTheme } from './theme.ts'
@@ -50,7 +51,7 @@ export function apply(ctx: Context, config: unknown): void {
   }
 
   const theme = createTheme(resolved.color)
-  const model = new TranscriptModel()
+  const model = new TranscriptModel(createToolPresenter(ctx))
   const restore = createRestoreRegistry()
   const terminal = new ProcessTerminal()
   const tui = new TuiAltScreen(terminal)
