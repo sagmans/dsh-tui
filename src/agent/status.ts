@@ -43,12 +43,19 @@ function numberOr(value: unknown): number | undefined {
  * important thing on screen, and a composition that omits the model directory or
  * the token meter should cost the reader a segment, not the session.
  */
-export function createStatusFacts(
-  ctx: Context,
-  sessionId: () => SessionId,
-  activity: () => ActivityState,
-  home: string | undefined,
-): () => StatusFacts {
+/** Where the footer reads its facts from. */
+export interface StatusSources {
+  readonly sessionId: () => SessionId
+  readonly activity: () => ActivityState
+  /**
+   * A route the reader chose for this session, which outranks the composition
+   * default: the footer must show the model the next step will actually use.
+   */
+  readonly override?: (() => { readonly model?: string; readonly reasoningEffort?: string } | undefined) | undefined
+  readonly home?: string | undefined
+}
+
+export function createStatusFacts(ctx: Context, sources: StatusSources): () => StatusFacts {
   const projection = (session: unknown, key: string): Record<string, unknown> | undefined => {
     const projections = ctx.get('sessionProjections') as Projections | undefined
     if (projections?.stateOf === undefined) return undefined
@@ -60,8 +67,9 @@ export function createStatusFacts(
     }
   }
   return () => {
-    const selection = (ctx.get('agentDefaultModel') as ModelDirectory | undefined)?.currentSelection?.()
-    const session = (ctx.get('sessions') as SessionRegistry | undefined)?.get?.(sessionId())
+    const override = sources.override?.()
+    const selection = override ?? (ctx.get('agentDefaultModel') as ModelDirectory | undefined)?.currentSelection?.()
+    const session = (ctx.get('sessions') as SessionRegistry | undefined)?.get?.(sources.sessionId())
     let preset: string | undefined
     if (session !== undefined) {
       try {
@@ -71,7 +79,7 @@ export function createStatusFacts(
       }
     }
     const pressure = session === undefined ? undefined : projection(session, 'contextPressure')
-    const state = activity()
+    const state = sources.activity()
     return {
       activity: state.running ? 'working' : 'idle',
       elapsedMs: state.startedAt === undefined ? undefined : Date.now() - state.startedAt,
@@ -81,7 +89,7 @@ export function createStatusFacts(
       contextTokens: numberOr(pressure?.pressureTokens),
       contextWindow: numberOr(pressure?.contextWindow),
       cwd: process.cwd(),
-      home,
+      home: sources.home,
     }
   }
 }

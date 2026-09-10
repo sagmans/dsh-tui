@@ -15,6 +15,7 @@ import {
 } from './agent/history.ts'
 import { createToolPresenter } from './agent/present.ts'
 import { createStatusFacts } from './agent/status.ts'
+import { ModelSwitch, createModelCatalog, parseModelArgument } from './agent/model.ts'
 import { describeMissingOptional, describeMissingRequired, probeComposition } from './compat/probe.ts'
 import type { ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
 import type { AskUserQuestionAnswer } from '@deepseek-ai/dsh-user-questions'
@@ -107,6 +108,8 @@ export function apply(ctx: Context, config: unknown): void {
   const theme = createTheme(resolved.color)
   const model = new TranscriptModel(createToolPresenter(ctx))
   const work = new WorkFold()
+  const modelSwitch = new ModelSwitch()
+  const catalog = createModelCatalog(ctx)
   const markdown = new MarkdownRenderer(theme.markdown)
   /** Rows the reader has opened. The model stays untouched; only the view reads this. */
   const viewState = { expandCards: false, expandReasoning: false }
@@ -138,12 +141,12 @@ export function apply(ctx: Context, config: unknown): void {
   let turnOpen = false
   let turnStartedAt: number | undefined
   let exited = false
-  const statusFacts = createStatusFacts(
-    ctx,
-    () => activeSession,
-    () => ({ running: turnOpen, startedAt: turnStartedAt }),
-    process.env.HOME,
-  )
+  const statusFacts = createStatusFacts(ctx, {
+    sessionId: () => activeSession,
+    activity: () => ({ running: turnOpen, startedAt: turnStartedAt }),
+    override: () => modelSwitch.current(),
+    home: process.env.HOME,
+  })
   const statusBar = new StatusBar(statusFacts, theme)
   const dock = new WorkDock(() => work.state(), theme)
   // Only a running turn has anything to say over time, so the clock stops with it.
@@ -372,6 +375,7 @@ export function apply(ctx: Context, config: unknown): void {
       model: resolved.model,
       provider: resolved.provider,
       cwd: process.cwd(),
+      setup: agentCtx => modelSwitch.install(agentCtx),
     })
     activeSession = id
     agent = handle
@@ -392,6 +396,57 @@ export function apply(ctx: Context, config: unknown): void {
     work.reset()
     if (previous !== undefined) await previous.dispose()
     await openAgent(id, true)
+  }
+
+  /**
+   * Show or choose the route the next step will use.
+   *
+   * The choice is session-scoped: it changes nothing about the settings a later
+   * run reads, and the loop logs its own durable notice when the route a request
+   * actually used changes.
+   */
+  const runModelCommand = (argument: string): void => {
+    if (catalog === undefined) {
+      model.notice('this profile has no llm service, so models cannot be listed or switched')
+      tui.requestRender()
+      return
+    }
+    const command = parseModelArgument(argument, catalog.providers(), modelSwitch.current())
+    switch (command.kind) {
+      case 'current': {
+        const facts = statusFacts()
+        const current = modelSwitch.current()
+        const route = current === undefined
+          // Without a choice of its own the surface reports what the next step
+          // would actually use, not that it has no opinion.
+          ? `${facts.model ?? 'unset'}${facts.effort === undefined ? '' : ` (${facts.effort})`} · composition default`
+          : `${current.provider}/${current.model}${current.reasoningEffort === undefined ? '' : ` (${current.reasoningEffort})`}`
+        const providers = catalog.providers().map(provider => provider.id)
+        model.notice(`model ${route} · providers: ${providers.length === 0 ? 'none' : providers.join(', ')} · /model <provider>/<model> switches, /model <provider> lists its models`)
+        tui.requestRender()
+        return
+      }
+      case 'list-models':
+        void catalog.models(command.provider).then(entries => {
+          model.notice(entries.length === 0
+            ? `${command.provider} advertises no models; an id may still work`
+            : `${command.provider}: ${entries.map(entry => entry.id).join(' ')}`)
+          tui.requestRender()
+        }).catch((error: unknown) => {
+          model.notice(`could not list models: ${error instanceof Error ? error.message : String(error)}`)
+          tui.requestRender()
+        })
+        return
+      case 'switch':
+        modelSwitch.choose(command.choice)
+        model.notice(`model set to ${command.choice.provider}/${command.choice.model} for the next step`)
+        tui.requestRender()
+        return
+      case 'invalid':
+        model.notice(`/model: ${command.reason}`)
+        tui.requestRender()
+        return
+    }
   }
 
   const helpText = (): string => {
@@ -435,6 +490,9 @@ export function apply(ctx: Context, config: unknown): void {
         return
       case 'quit':
         requestExit(0)
+        return
+      case 'model':
+        runModelCommand(submission.argument)
         return
       case 'status': {
         const facts = statusFacts()

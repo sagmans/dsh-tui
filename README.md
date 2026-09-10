@@ -2,7 +2,7 @@
 
 Interactive terminal (TUI) surface for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): use `dsh` in a terminal instead of a browser.
 
-Status: **early v1.** The surface boots over the composed agent plane, owns the alternate screen, streams assistant text as markdown, renders every tool's own card, answers approvals and questions, restores a stored conversation, keeps the agent's goal, plan mode, and todo list above the editor with a status line below it, and hands the terminal back on exit. Model switching is next.
+Status: **early v1.** The surface boots over the composed agent plane, owns the alternate screen, streams assistant text as markdown, renders every tool's own card, answers approvals and questions, restores a stored conversation, switches model mid-session, keeps the agent's goal, plan mode, and todo list above the editor with a status line below it, and hands the terminal back on exit. Packaging and CI are next.
 
 ## Install
 
@@ -35,6 +35,9 @@ dsh --profile tui --no-color
 | `@` or a path then Tab | complete workspace file references |
 | `/help` | list registered and local commands |
 | `/status` | show the session id, model, permissions, context, and directory |
+| `/model` | show the route the next step will use, and the providers available |
+| `/model <provider>` | list that provider's advertised models |
+| `/model <provider>/<model>` | use that route from the next step on (session only, nothing is written to settings) |
 | `/resume` | open another stored session without leaving the terminal |
 | `/clear` | clear the visible transcript |
 | `/quit` | leave and print the resume command |
@@ -83,7 +86,8 @@ Test specs import plugin sources through the `@/` alias. Under this test runner 
 
 ## Limitations
 
-- `/model` and `/mode` are not wired; `/permission <preset>` from the base bundle switches the permission preset, and the footer shows the current one.
+- `/mode` is not a command here: the base bundle's `/permission <preset>` switches the permission preset and the footer shows the current one.
+- `/model` changes the route for the running session only. Catalog membership is advisory — an adapter may accept an id it does not advertise.
 - Scrolling is the mouse wheel, or the terminal's own scrollback keys where it offers them.
 - The dock shows the goal, plan mode, and the todo list, and the transcript marks where older history was compacted away. `/plan` toggles plan mode; `/plan <message>` also steers that message, which is the base command's own behaviour.
 - Approvals and questions render inline and take the keyboard; a question batch is answered in order.

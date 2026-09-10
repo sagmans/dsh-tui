@@ -25,6 +25,14 @@ export interface StartAgentOptions {
   readonly provider: string | undefined
   /** Workspace for a fresh session; ignored when resuming persisted history. */
   readonly cwd: string
+  /**
+   * Compose the agent's own scoped world before it is published.
+   *
+   * Agent-scoped waterfalls — model selection among them — only see requests
+   * dispatched inside that scope, so they must be registered here rather than
+   * on the context that created the agent.
+   */
+  readonly setup?: (agentCtx: Context) => void
 }
 
 function routeOf(ctx: Context, options: StartAgentOptions): { provider?: string; model?: string } {
@@ -52,11 +60,12 @@ function userMessage(text: string) {
 export async function startAgent(ctx: Context, options: StartAgentOptions): Promise<TuiAgent> {
   const agentOptions = routeOf(ctx, options)
   const meta = { cwd: options.cwd }
+  const setup = options.setup === undefined ? {} : { setup: options.setup }
   const handle = options.resume
     ? await ctx.agents
-        .resume({ resumeSessionId: options.sessionId, agentOptions })
-        .catch(() => ctx.agents.create({ sessionId: options.sessionId, meta, agentOptions }))
-    : await ctx.agents.create({ sessionId: options.sessionId, meta, agentOptions })
+        .resume({ resumeSessionId: options.sessionId, agentOptions, ...setup })
+        .catch(() => ctx.agents.create({ sessionId: options.sessionId, meta, agentOptions, ...setup }))
+    : await ctx.agents.create({ sessionId: options.sessionId, meta, agentOptions, ...setup })
   let disposed = false
   return {
     sessionId: options.sessionId,
