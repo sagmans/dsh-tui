@@ -16,6 +16,7 @@ import {
 import { createToolPresenter } from './agent/present.ts'
 import { createStatusFacts } from './agent/status.ts'
 import { ModelSwitch, createModelCatalog, parseModelArgument } from './agent/model.ts'
+import { JOB_READ_LINES, createJobDirectory, describeJobs, parseJobsArgument, type JobSummary } from './jobs.ts'
 import { describeMissingOptional, describeMissingRequired, probeComposition } from './compat/probe.ts'
 import type { ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
 import type { AskUserQuestionAnswer } from '@deepseek-ai/dsh-user-questions'
@@ -110,6 +111,8 @@ export function apply(ctx: Context, config: unknown): void {
   const work = new WorkFold()
   const modelSwitch = new ModelSwitch()
   const catalog = createModelCatalog(ctx)
+  const jobDirectory = createJobDirectory(ctx)
+  let jobs: readonly JobSummary[] = []
   const markdown = new MarkdownRenderer(theme.markdown)
   /** Rows the reader has opened. The model stays untouched; only the view reads this. */
   const viewState = { expandCards: false, expandReasoning: false }
@@ -141,6 +144,12 @@ export function apply(ctx: Context, config: unknown): void {
   let turnOpen = false
   let turnStartedAt: number | undefined
   let exited = false
+  /** Re-read the job board; it is live state, so nothing else can fold it. */
+  const refreshJobs = (): void => {
+    jobs = agent === undefined || jobDirectory === undefined ? [] : jobDirectory.list(agent.agent)
+    tui.requestRender()
+  }
+
   const statusFacts = createStatusFacts(ctx, {
     sessionId: () => activeSession,
     activity: () => ({ running: turnOpen, startedAt: turnStartedAt }),
@@ -148,7 +157,7 @@ export function apply(ctx: Context, config: unknown): void {
     home: process.env.HOME,
   })
   const statusBar = new StatusBar(statusFacts, theme)
-  const dock = new WorkDock(() => work.state(), theme)
+  const dock = new WorkDock(() => work.state(), theme, () => jobs)
   // Only a running turn has anything to say over time, so the clock stops with it.
   const statusTicker: ReturnType<typeof setInterval> = setInterval(() => {
     if (turnOpen) tui.requestRender()
@@ -405,6 +414,55 @@ export function apply(ctx: Context, config: unknown): void {
    * run reads, and the loop logs its own durable notice when the route a request
    * actually used changes.
    */
+  /**
+   * Show, read, or kill a background job.
+   *
+   * A terminal has no second window, so a job started by the model is otherwise
+   * invisible: the board is the only place a reader can see what is still
+   * running and stop it.
+   */
+  const runJobsCommand = (argument: string): void => {
+    if (jobDirectory === undefined) {
+      model.notice('this profile has no job registry, so there is nothing to list')
+      tui.requestRender()
+      return
+    }
+    if (agent === undefined) {
+      model.notice('the agent is still starting; try again in a moment')
+      tui.requestRender()
+      return
+    }
+    const command = parseJobsArgument(argument)
+    switch (command.kind) {
+      case 'list':
+        refreshJobs()
+        model.notice(describeJobs(jobs, Date.now()))
+        tui.requestRender()
+        return
+      case 'read': {
+        const result = jobDirectory.read(agent.agent, command.id)
+        const text = result?.text.trim() ?? ''
+        model.notice(text === ''
+          ? `${command.id}: no output yet`
+          : `${command.id} output\n${text.split('\n').slice(-JOB_READ_LINES).join('\n')}`)
+        refreshJobs()
+        return
+      }
+      case 'kill': {
+        const outcome = jobDirectory.kill(agent.agent, command.id)
+        model.notice(outcome === undefined
+          ? `${command.id}: no such job`
+          : outcome === 'requested' ? `${command.id}: stop requested` : `${command.id} had already finished`)
+        refreshJobs()
+        return
+      }
+      case 'invalid':
+        model.notice(`/jobs: ${command.reason}`)
+        tui.requestRender()
+        return
+    }
+  }
+
   const runModelCommand = (argument: string): void => {
     if (catalog === undefined) {
       model.notice('this profile has no llm service, so models cannot be listed or switched')
@@ -494,6 +552,9 @@ export function apply(ctx: Context, config: unknown): void {
       case 'model':
         runModelCommand(submission.argument)
         return
+      case 'jobs':
+        runJobsCommand(submission.argument)
+        return
       case 'status': {
         const facts = statusFacts()
         const context = facts.contextTokens === undefined
@@ -548,6 +609,10 @@ export function apply(ctx: Context, config: unknown): void {
     if (event.type === 'turn/end') {
       turnOpen = false
       turnStartedAt = undefined
+      // A job the turn started may have settled while the reader was watching
+      // something else, and nothing else refreshes a live board.
+      refreshJobs()
+      return
     }
     applyEvent(event)
     tui.requestRender()
@@ -618,6 +683,12 @@ export function apply(ctx: Context, config: unknown): void {
   }))
 
   disposers.push(ctx.on('commands/change', () => installCompletion()))
+
+  // The board is live state: watch it directly rather than folding events.
+  disposers.push(jobDirectory?.watch(owner => {
+    if (owner !== undefined && (owner as { id?: string }).id !== activeSession) return
+    refreshJobs()
+  }) ?? (() => {}))
 
   disposers.push(ctx.on('agent/error', payload => {
     if (payload.agent.id !== activeSession) return

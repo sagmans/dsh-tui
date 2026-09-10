@@ -38,6 +38,8 @@ dsh --profile tui --no-color
 | `/model` | show the route the next step will use, and the providers available |
 | `/model <provider>` | list that provider's advertised models |
 | `/model <provider>/<model>` | use that route from the next step on (session only, nothing is written to settings) |
+| `/jobs` | list background jobs with their state and duration |
+| `/jobs read <id>` / `/jobs kill <id>` | show the tail of a job's output, or stop it |
 | `/resume` | open another stored session without leaving the terminal |
 | `/clear` | clear the visible transcript |
 | `/quit` | leave and print the resume command |
@@ -89,7 +91,8 @@ Test specs import plugin sources through the `@/` alias. Under this test runner 
 - `/mode` is not a command here: the base bundle's `/permission <preset>` switches the permission preset and the footer shows the current one.
 - `/model` changes the route for the running session only. Catalog membership is advisory — an adapter may accept an id it does not advertise.
 - Scrolling is the mouse wheel, or the terminal's own scrollback keys where it offers them.
-- The dock shows the goal, plan mode, and the todo list, and the transcript marks where older history was compacted away. `/plan` toggles plan mode; `/plan <message>` also steers that message, which is the base command's own behaviour.
+- The dock shows the goal, plan mode, the todo list, and any background job still running; the transcript marks where older history was compacted away. `/plan` toggles plan mode; `/plan <message>` also steers that message, which is the base command's own behaviour.
+- Background jobs are live process state, not durable events: they disappear when the run ends, and a resumed session starts with an empty board.
 - Approvals and questions render inline and take the keyboard; a question batch is answered in order.
 - Styling uses the standard 16 ANSI colors and terminal defaults, so light and dark terminals follow their own theme.
 - Tool text, model text, and file content are escaped before rendering, so a hostile result cannot inject terminal control sequences; the cost is that a literal tab shows as \x09.

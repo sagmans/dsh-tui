@@ -1,4 +1,5 @@
 import { type Component, truncateToWidth } from '@earendil-works/pi-tui'
+import { DOCK_JOB_LIMIT, describeJob, isLive, type JobSummary } from '../jobs.ts'
 import { displayText } from '../text.ts'
 import type { TuiTheme } from '../theme.ts'
 import type { TodoEntry, WorkState } from '../work.ts'
@@ -28,6 +29,8 @@ export class WorkDock implements Component {
   constructor(
     private readonly state: () => WorkState,
     private readonly theme: TuiTheme,
+    /** Live background jobs: process state, not something a resume can replay. */
+    private readonly jobs: () => readonly JobSummary[] = () => [],
   ) {}
 
   invalidate(): void {
@@ -43,6 +46,22 @@ export class WorkDock implements Component {
     }
     if (ordered.length > DOCK_TODO_LIMIT) {
       lines.push(this.theme.dim(truncateToWidth(`  … ${ordered.length - DOCK_TODO_LIMIT} more`, width, '…')))
+    }
+  }
+
+  private pushJobs(lines: string[], jobs: readonly JobSummary[], width: number): void {
+    const live = jobs.filter(job => isLive(job.status)).length
+    lines.push(this.theme.bold(truncateToWidth(`⛭ jobs · ${live} running, ${jobs.length - live} done`, width, '…')))
+    // Work still holding resources first, then the most recent.
+    const ordered = [...jobs].sort((left, right) =>
+      Number(isLive(right.status)) - Number(isLive(left.status)) || right.startedAt - left.startedAt)
+    const now = Date.now()
+    for (const job of ordered.slice(0, DOCK_JOB_LIMIT)) {
+      const glyph = isLive(job.status) ? '▸' : job.status === 'completed' ? '✓' : '✗'
+      lines.push(this.theme.dim(truncateToWidth(`  ${glyph} ${displayText(describeJob(job, now))}`, width, '…')))
+    }
+    if (ordered.length > DOCK_JOB_LIMIT) {
+      lines.push(this.theme.dim(truncateToWidth(`  … ${ordered.length - DOCK_JOB_LIMIT} more`, width, '…')))
     }
   }
 
@@ -62,6 +81,8 @@ export class WorkDock implements Component {
     if (state.planMode) {
       lines.push(this.theme.bold(truncateToWidth('⏸ plan mode · answer the plan before edits happen', width, '…')))
     }
+    const jobs = this.jobs()
+    if (jobs.length > 0) this.pushJobs(lines, jobs, width)
     if (state.todos !== undefined) this.pushTodos(lines, state.todos, width)
     return lines
   }

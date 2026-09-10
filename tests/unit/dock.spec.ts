@@ -51,6 +51,21 @@ describe('WorkDock', () => {
     expect(lines.at(-1)).toBe('  … 3 more')
   })
 
+  it('shows live jobs first and counts them', () => {
+    const jobs = [
+      { id: 'bash-1', kind: 'bash', label: 'build', status: 'completed' as const, startedAt: 1_000, finishedAt: 2_000 },
+      { id: 'bash-2', kind: 'bash', label: 'test', status: 'running' as const, startedAt: Date.now(), finishedAt: undefined },
+    ]
+    const lines = new WorkDock(() => EMPTY, theme, () => jobs).render(80)
+    expect(lines[0]).toBe('⛭ jobs · 1 running, 1 done')
+    expect(lines[1]).toContain('▸ bash-2 · running')
+    expect(lines[2]).toContain('✓ bash-1 · completed')
+  })
+
+  it('takes no rows when no job is running', () => {
+    expect(new WorkDock(() => EMPTY, theme, () => []).render(80)).toEqual([])
+  })
+
   it('never overflows its row', () => {
     const state: WorkState = { ...EMPTY, todos: [{ content: 'y'.repeat(200), status: 'pending' }] }
     for (const line of dockOf(state).render(30)) expect(visibleWidth(line)).toBeLessThanOrEqual(30)
