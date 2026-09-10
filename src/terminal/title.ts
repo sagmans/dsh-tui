@@ -37,3 +37,4 @@ export function windowTitle(cwd: string, activity: 'ready' | 'working'): string 
 
 /** Hand the title back: the shell sets its own on the next prompt. */
 export const CLEAR_TITLE = titleSequence('')
+

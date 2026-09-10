@@ -21,6 +21,7 @@ dsh --profile tui --resume             # pick a stored session, titled by its fi
 dsh --profile tui --resume <session-id>
 dsh --profile tui --model deepseek-chat
 dsh --profile tui --no-color
+dsh --profile tui --no-bell            # do not ring when a long turn finishes
 ```
 
 | Key | Action |
@@ -99,6 +100,7 @@ Test specs import plugin sources through the `@/` alias. Under this test runner 
 - `/mode` is not a command here: the base bundle's `/permission <preset>` switches the permission preset and the footer shows the current one.
 - `/model` changes the route for the running session only. Catalog membership is advisory — an adapter may accept an id it does not advertise.
 - Scrolling is the mouse wheel, or the terminal's own scrollback keys where it offers them.
+- A turn that ran longer than ten seconds rings the terminal bell when it ends, because the reader may have walked away; `--no-bell` turns that off.
 - The dock shows the goal, plan mode, the todo list, and any background job still running; the transcript marks where older history was compacted away. `/plan` toggles plan mode; `/plan <message>` also steers that message, which is the base command's own behaviour.
 - Background jobs are live process state, not durable events: they disappear when the run ends, and a resumed session starts with an empty board.
 - Approvals and questions render inline and take the keyboard; a question batch is answered in order.

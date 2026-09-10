@@ -43,5 +43,6 @@ export function resolveConfig(raw: unknown): TuiStartup {
     model: optionalString(record.model, 'model'),
     provider: optionalString(record.provider, 'provider'),
     color: optionalBoolean(record.color, 'color', true),
+    bell: optionalBoolean(record.bell, 'bell', true),
   }
 }

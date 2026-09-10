@@ -10,12 +10,13 @@ describe('resolveConfig', () => {
       model: undefined,
       provider: undefined,
       color: true,
+      bell: true,
     })
   })
 
   it('keeps explicit values', () => {
-    expect(resolveConfig({ sessionId: 'abc', resume: true, resumePicker: true, model: 'm', provider: 'p', color: false }))
-      .toEqual({ sessionId: 'abc', resume: true, resumePicker: true, model: 'm', provider: 'p', color: false })
+    expect(resolveConfig({ sessionId: 'abc', resume: true, resumePicker: true, model: 'm', provider: 'p', color: false, bell: false }))
+      .toEqual({ sessionId: 'abc', resume: true, resumePicker: true, model: 'm', provider: 'p', color: false, bell: false })
   })
 
   it('treats blank optional strings as absent', () => {
@@ -36,5 +37,6 @@ describe('resolveConfig', () => {
     expect(() => resolveConfig({ sessionId: 'abc', resume: 'yes' })).toThrow(TuiConfigError)
     expect(() => resolveConfig({ sessionId: 'abc', color: 1 })).toThrow(TuiConfigError)
     expect(() => resolveConfig({ sessionId: 'abc', model: 7 })).toThrow(TuiConfigError)
+    expect(() => resolveConfig({ sessionId: 'abc', bell: 'no' })).toThrow(TuiConfigError)
   })
 })

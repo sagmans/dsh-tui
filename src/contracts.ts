@@ -18,6 +18,8 @@ export interface TuiStartup {
   readonly provider: string | undefined
   /** Whether ANSI styling is enabled. */
   readonly color: boolean
+  /** Whether a long turn may ring the terminal bell when it finishes. */
+  readonly bell: boolean
 }
 
 declare module '@deepseek-ai/cordis' {

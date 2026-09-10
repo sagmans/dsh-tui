@@ -32,6 +32,7 @@ import { createCompletionProvider } from './input/completion.ts'
 import { LOCAL_COMMANDS, classifySubmission } from './input/submission.ts'
 import { resolveConfig } from './config.ts'
 import { createRestoreRegistry } from './terminal/restore.ts'
+import { BELL, shouldRingBell } from './terminal/bell.ts'
 import { CLEAR_TITLE, windowTitle } from './terminal/title.ts'
 import { defaultExportFile, transcriptToText } from './export.ts'
 import { createTheme } from './theme.ts'
@@ -59,6 +60,7 @@ const TITLE_CONCURRENCY = 4
 
 /** How often the running-state clock repaints while a turn is open. */
 const STATUS_TICK_MS = 1000
+
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined
@@ -708,9 +710,11 @@ export function apply(ctx: Context, config: unknown): void {
       terminal.write(windowTitle(process.cwd(), 'working'))
     }
     if (event.type === 'turn/end') {
+      const ranFor = turnStartedAt === undefined ? 0 : Date.now() - turnStartedAt
       turnOpen = false
       turnStartedAt = undefined
       terminal.write(windowTitle(process.cwd(), 'ready'))
+      if (shouldRingBell({ bell: resolved.bell, ranForMs: ranFor, exiting: exited })) terminal.write(BELL)
       // A job the turn started may have settled while the reader was watching
       // something else, and nothing else refreshes a live board.
       refreshJobs()

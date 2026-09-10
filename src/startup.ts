@@ -38,11 +38,12 @@ export function apply(ctx: Context): void {
     .option('--model <model>', 'override the default model id')
     .option('--provider <provider>', 'override the default provider route')
     .option('--no-color', 'disable ANSI styling')
+    .option('--no-bell', 'do not ring the terminal bell when a long turn finishes')
 
   program.action((
     mode: string | undefined,
     session: string | undefined,
-    options: { resume?: string | boolean; new?: boolean; model?: string; provider?: string; color?: boolean },
+    options: { resume?: string | boolean; new?: boolean; model?: string; provider?: string; color?: boolean; bell?: boolean },
   ) => {
     let intent
     try {
@@ -68,6 +69,7 @@ export function apply(ctx: Context): void {
       model: options.model?.trim() || undefined,
       provider: options.provider?.trim() || undefined,
       color: options.color !== false,
+      bell: options.bell !== false,
     } satisfies TuiStartup)
     ctx.provide('tuiGoodbyeMessage', resumeHint(identity.id, PROFILE_NAME))
   })
