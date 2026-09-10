@@ -15,6 +15,7 @@ import {
 } from './agent/history.ts'
 import { createToolPresenter } from './agent/present.ts'
 import { createStatusFacts } from './agent/status.ts'
+import { describeMissingOptional, describeMissingRequired, probeComposition } from './compat/probe.ts'
 import type { ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
 import type { AskUserQuestionAnswer } from '@deepseek-ai/dsh-user-questions'
 import { ApprovalGate, QuestionGate, toGateQuestions, type GateAnswer } from './gates.ts'
@@ -94,6 +95,10 @@ export function apply(ctx: Context, config: unknown): void {
   const resolved = resolveConfig(config)
   assertInteractiveTerminal()
 
+  // Fail before taking the screen over: a missing row is a composition mistake,
+  // and the reader deserves the row name rather than a stack trace mid-turn.
+  const probe = probeComposition(service => ctx.get(service) !== undefined)
+  if (probe.missingRequired.length > 0) throw new Error(describeMissingRequired(probe))
   const appExit = ctx.get('appExit')
   if (appExit === undefined) {
     throw new Error('dsh-tui: the dsh launcher must provide appExit; start this surface with dsh --profile tui')
@@ -570,6 +575,9 @@ export function apply(ctx: Context, config: unknown): void {
   }))
 
   tui.start()
+
+  const degraded = describeMissingOptional(probe)
+  if (degraded !== undefined) model.notice(degraded)
 
   /**
    * Open the session this run was launched for.
