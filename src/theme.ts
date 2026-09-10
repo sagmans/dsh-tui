@@ -13,6 +13,7 @@ export interface TranscriptGlyphs {
   readonly tool: string
   readonly notice: string
   readonly reasoning: string
+  readonly marker: string
 }
 
 /** Styling the surface applies, and the editor/select themes pi-tui needs. */
@@ -26,6 +27,8 @@ export interface TuiTheme {
   /** Diff additions and removals, colored by background rather than by hue alone. */
   added(text: string): string
   removed(text: string): string
+  /** A boundary in the conversation rather than something anyone said. */
+  marker(text: string): string
   /** Structure the reader scans for: headings, links, inline code, list bullets. */
   accent(text: string): string
   italic(text: string): string
@@ -95,13 +98,14 @@ export function createTheme(color: boolean): TuiTheme {
   const strike = sgr('9', color)
   return {
     color,
-    glyphs: { user: '›', assistant: '⏺', tool: '⚒', notice: '·', reasoning: '▸' },
+    glyphs: { user: '›', assistant: '⏺', tool: '⚒', notice: '·', reasoning: '▸', marker: '⧉' },
     dim,
     bold,
     tool: warn,
     notice: dim,
     added,
     removed,
+    marker: dim,
     accent,
     italic,
     editor: { borderColor: dim, selectList: selectListTheme(dim, accent, bold) },

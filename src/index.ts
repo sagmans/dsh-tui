@@ -25,6 +25,8 @@ import { createRestoreRegistry } from './terminal/restore.ts'
 import { createTheme } from './theme.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { TranscriptModel } from './transcript.ts'
+import { WorkFold } from './work.ts'
+import { WorkDock } from './ui/dock.ts'
 import { MarkdownRenderer } from './ui/markdown.ts'
 import { SessionPicker } from './ui/picker.ts'
 import { StatusBar, formatTokens } from './ui/status.ts'
@@ -45,6 +47,10 @@ const TITLE_CONCURRENCY = 4
 
 /** How often the running-state clock repaints while a turn is open. */
 const STATUS_TICK_MS = 1000
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined
+}
 
 /**
  * The command registry, described structurally: the surface only lists,
@@ -95,6 +101,7 @@ export function apply(ctx: Context, config: unknown): void {
 
   const theme = createTheme(resolved.color)
   const model = new TranscriptModel(createToolPresenter(ctx))
+  const work = new WorkFold()
   const markdown = new MarkdownRenderer(theme.markdown)
   /** Rows the reader has opened. The model stays untouched; only the view reads this. */
   const viewState = { expandCards: false, expandReasoning: false }
@@ -133,6 +140,7 @@ export function apply(ctx: Context, config: unknown): void {
     process.env.HOME,
   )
   const statusBar = new StatusBar(statusFacts, theme)
+  const dock = new WorkDock(() => work.state(), theme)
   // Only a running turn has anything to say over time, so the clock stops with it.
   const statusTicker: ReturnType<typeof setInterval> = setInterval(() => {
     if (turnOpen) tui.requestRender()
@@ -152,6 +160,9 @@ export function apply(ctx: Context, config: unknown): void {
       grow: 1,
       minSize: 1,
     },
+    // Work state earns rows only when there is some: a dock that always
+    // occupied a row would cost every conversation one line of transcript.
+    { component: dock, basis: 'auto', shrink: 0, minSize: 0 },
     { component: new VStack([{ component: editor, basis: 'auto', shrink: 1, minSize: 1 }]), basis: 'auto', shrink: 1, minSize: 1 },
     { component: statusBar, basis: 'auto', shrink: 0, minSize: 1 },
   ]))
@@ -335,11 +346,17 @@ export function apply(ctx: Context, config: unknown): void {
     try {
       const events = await history.read(id)
       if (events.length === 0) return
-      for (const event of events) model.apply(event)
+      for (const event of events) applyEvent(event)
       model.notice(`replayed ${events.length} events from the stored log`)
     } catch (error) {
       model.notice(`could not replay this session: ${error instanceof Error ? error.message : String(error)}`)
     }
+  }
+
+  /** Feed one durable event to everything that folds it. */
+  const applyEvent = (event: { readonly type: string; readonly data?: unknown }): void => {
+    model.apply(event)
+    work.apply(event)
   }
 
   const openAgent = async (id: SessionId, resume: boolean): Promise<void> => {
@@ -367,6 +384,7 @@ export function apply(ctx: Context, config: unknown): void {
     agent = undefined
     turnOpen = false
     model.reset()
+    work.reset()
     if (previous !== undefined) await previous.dispose()
     await openAgent(id, true)
   }
@@ -430,6 +448,7 @@ export function apply(ctx: Context, config: unknown): void {
       }
       case 'clear':
         model.reset()
+        work.reset()
         tui.requestRender()
         return
       case 'help':
@@ -467,7 +486,32 @@ export function apply(ctx: Context, config: unknown): void {
       turnOpen = false
       turnStartedAt = undefined
     }
-    model.apply(event)
+    applyEvent(event)
+    tui.requestRender()
+  }))
+
+  /**
+   * Subagent lifecycle arrives as a service event rather than a session event,
+   * so it is decoration in the transcript: the durable record of a delegation
+   * is the tool call that asked for it. The name is cast so a rename in the
+   * harness cannot break compilation of this surface.
+   */
+  const listenFor = (name: string, handler: (...args: readonly unknown[]) => void): (() => void) =>
+    (ctx.on as unknown as (event: string, listener: (...args: readonly unknown[]) => void) => () => void)(name, handler)
+
+  disposers.push(listenFor('subagent/start', info => {
+    const record = asRecord(info)
+    const provider = typeof record?.provider === 'string' ? record.provider : 'subagent'
+    const id = typeof record?.id === 'string' ? record.id : ''
+    model.marker(`subagent ${provider} started${id === '' ? '' : ` · ${id}`}`)
+    tui.requestRender()
+  }))
+
+  disposers.push(listenFor('subagent/end', info => {
+    const record = asRecord(info)
+    const provider = typeof record?.provider === 'string' ? record.provider : 'subagent'
+    const stop = typeof record?.stopReason === 'string' ? record.stopReason : undefined
+    model.marker(`subagent ${provider} finished${stop === undefined ? '' : ` · ${stop}`}`)
     tui.requestRender()
   }))
 

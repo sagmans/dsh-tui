@@ -5,6 +5,7 @@ export type TranscriptEntry =
   | { readonly kind: 'user'; readonly text: string }
   | { readonly kind: 'assistant'; readonly text: string }
   | { readonly kind: 'notice'; readonly text: string }
+  | { readonly kind: 'marker'; readonly text: string }
   | { readonly kind: 'tool'; readonly card: ToolCard }
   | { readonly kind: 'reasoning'; readonly summary: string; readonly body: string; readonly live: boolean }
 
@@ -132,6 +133,11 @@ export class TranscriptModel {
     this.settled.push({ kind: 'notice', text })
   }
 
+  /** Mark a boundary in the conversation: compaction, or work that ran elsewhere. */
+  marker(text: string): void {
+    this.settled.push({ kind: 'marker', text })
+  }
+
   /** Apply one transient assistant-stream chunk. */
   applyStreamChunk(chunk: unknown): void {
     const record = asRecord(chunk)
@@ -212,6 +218,19 @@ export class TranscriptModel {
       }
       case 'turn/end': {
         this.reportTurnEnd(asRecord(data.reason) ?? {})
+        return
+      }
+      case 'compaction/start': {
+        this.marker('compacting the conversation')
+        return
+      }
+      case 'compaction/summary': {
+        const events = Array.isArray(data.shadowedSeqs) ? data.shadowedSeqs.length : 0
+        const tokens = typeof data.shadowedTokenCount === 'number' ? data.shadowedTokenCount : undefined
+        const size = tokens === undefined ? '' : ` (≈${tokens} tokens)`
+        // The summary itself arrives as the user/message that follows, so this
+        // row only has to explain where the older history went.
+        this.marker(`compacted ${events} events${size}`)
         return
       }
       case 'assistant/attempt': {

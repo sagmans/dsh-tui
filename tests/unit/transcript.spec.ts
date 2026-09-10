@@ -101,6 +101,27 @@ describe('TranscriptModel reasoning', () => {
   })
 })
 
+describe('TranscriptModel markers', () => {
+  it('marks where older history was compacted away', () => {
+    const model = new TranscriptModel()
+    model.apply({ type: 'compaction/start', data: { compactionId: 'c1', turn: 1 } })
+    model.apply({
+      type: 'compaction/summary',
+      data: { compactionId: 'c1', shadowedSeqs: [1, 2, 3], shadowedTokenCount: 4200 },
+    })
+    expect(model.entries()).toEqual([
+      { kind: 'marker', text: 'compacting the conversation' },
+      { kind: 'marker', text: 'compacted 3 events (≈4200 tokens)' },
+    ])
+  })
+
+  it('carries a marker that a caller sets for work running elsewhere', () => {
+    const model = new TranscriptModel()
+    model.marker('subagent explorer started')
+    expect(model.entries()).toEqual([{ kind: 'marker', text: 'subagent explorer started' }])
+  })
+})
+
 describe('TranscriptModel tool cards', () => {
   it('asks the presenter for the call and merges the result into the same row', () => {
     const presenter = recordingPresenter()

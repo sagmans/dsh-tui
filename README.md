@@ -2,7 +2,7 @@
 
 Interactive terminal (TUI) surface for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): use `dsh` in a terminal instead of a browser.
 
-Status: **early v1.** The surface boots over the composed agent plane, owns the alternate screen, streams assistant text as markdown, renders every tool's own card, answers approvals and questions, restores a stored conversation, keeps a status line under the editor, and hands the terminal back on exit. Work-state panels are next.
+Status: **early v1.** The surface boots over the composed agent plane, owns the alternate screen, streams assistant text as markdown, renders every tool's own card, answers approvals and questions, restores a stored conversation, keeps the agent's goal, plan mode, and todo list above the editor with a status line below it, and hands the terminal back on exit. Model switching is next.
 
 ## Install
 
@@ -47,7 +47,9 @@ The package is a Cordis plugin bundle that stacks over `@deepseek-ai/dsh-base`:
 
 - `@sagmans/dsh-tui/startup` parses this app's own flags and publishes the launch identity.
 - `@sagmans/dsh-tui/ask-user` mounts the official `ask_user_question` tool, which the base does not ship because agent presets normally provide it.
-- `@sagmans/dsh-tui` owns the terminal: it creates or resumes one agent through `ctx.agents`, folds `session/event` into transcript rows, renders them with `@earendil-works/pi-tui`, and releases the terminal on exit, on a boot failure, and on a signal.
+- `@sagmans/dsh-tui` owns the terminal: it creates or resumes one agent through `ctx.agents`, folds `session/event` into transcript rows and work state, renders them with `@earendil-works/pi-tui`, and releases the terminal on exit, on a boot failure, and on a signal.
+
+The fold is durable-only: the live stream decorates the row that is still being written, and everything else — cards, reasoning, work state, compaction markers — comes from the log, so a resumed session renders what the live one did. Subagent start and finish are the exception: they arrive as service events, and the transcript shows them as decoration because the durable record of a delegation is the tool call that asked for it.
 
 The rows are additive. No base row is replaced or disabled, so the bundle composes with any profile that is already running.
 
@@ -83,6 +85,7 @@ Test specs import plugin sources through the `@/` alias. Under this test runner 
 
 - `/model` and `/mode` are not wired; `/permission <preset>` from the base bundle switches the permission preset, and the footer shows the current one.
 - Scrolling is the mouse wheel, or the terminal's own scrollback keys where it offers them.
+- The dock shows the goal, plan mode, and the todo list, and the transcript marks where older history was compacted away. `/plan` toggles plan mode; `/plan <message>` also steers that message, which is the base command's own behaviour.
 - Approvals and questions render inline and take the keyboard; a question batch is answered in order.
 - Styling uses the standard 16 ANSI colors and terminal defaults, so light and dark terminals follow their own theme.
 - Tool text, model text, and file content are escaped before rendering, so a hostile result cannot inject terminal control sequences; the cost is that a literal tab shows as \x09.

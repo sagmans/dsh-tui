@@ -159,6 +159,9 @@ export class TranscriptView implements Component {
         case 'notice':
           this.pushWrapped(lines, entry.text, width, `${glyphs.notice} `, this.theme.notice)
           break
+        case 'marker':
+          this.pushWrapped(lines, entry.text, width, `${glyphs.marker} `, this.theme.marker)
+          break
       }
     }
     const picker = this.options.picker?.()

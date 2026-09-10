@@ -53,6 +53,14 @@ describe('TranscriptView text', () => {
   })
 })
 
+describe('TranscriptView markers', () => {
+  it('sets a boundary row apart from what anyone said', () => {
+    const model = new TranscriptModel()
+    model.marker('compacted 12 events (≈3000 tokens)')
+    expect(viewOf(model).render(60)).toEqual(['⧉ compacted 12 events (≈3000 tokens)'])
+  })
+})
+
 describe('TranscriptView expansion', () => {
   const withRows = (rows: number): TranscriptModel => {
     const model = new TranscriptModel()
