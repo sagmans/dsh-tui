@@ -14,6 +14,7 @@ import {
   type StoredSession,
 } from './agent/history.ts'
 import { createToolPresenter } from './agent/present.ts'
+import { createStatusFacts } from './agent/status.ts'
 import type { ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
 import type { AskUserQuestionAnswer } from '@deepseek-ai/dsh-user-questions'
 import { ApprovalGate, QuestionGate, toGateQuestions, type GateAnswer } from './gates.ts'
@@ -26,6 +27,7 @@ import { SessionId } from '@deepseek-ai/dsh-session'
 import { TranscriptModel } from './transcript.ts'
 import { MarkdownRenderer } from './ui/markdown.ts'
 import { SessionPicker } from './ui/picker.ts'
+import { StatusBar, formatTokens } from './ui/status.ts'
 import { TranscriptView } from './ui/view.ts'
 
 export const name = 'tui'
@@ -40,6 +42,9 @@ const LOCAL_KEYS = 'ctrl+o tool detail · ctrl+t reasoning · ctrl+c interrupt o
 
 /** Stored sessions titled at once when the picker opens. */
 const TITLE_CONCURRENCY = 4
+
+/** How often the running-state clock repaints while a turn is open. */
+const STATUS_TICK_MS = 1000
 
 /**
  * The command registry, described structurally: the surface only lists,
@@ -119,7 +124,20 @@ export function apply(ctx: Context, config: unknown): void {
   const disposers: Array<() => void> = []
   let agent: TuiAgent | undefined
   let turnOpen = false
+  let turnStartedAt: number | undefined
   let exited = false
+  const statusFacts = createStatusFacts(
+    ctx,
+    () => activeSession,
+    () => ({ running: turnOpen, startedAt: turnStartedAt }),
+    process.env.HOME,
+  )
+  const statusBar = new StatusBar(statusFacts, theme)
+  // Only a running turn has anything to say over time, so the clock stops with it.
+  const statusTicker: ReturnType<typeof setInterval> = setInterval(() => {
+    if (turnOpen) tui.requestRender()
+  }, STATUS_TICK_MS)
+  disposers.push(() => clearInterval(statusTicker))
 
   restore.add(() => tui.stop())
   ctx.effect(() => () => {
@@ -135,12 +153,14 @@ export function apply(ctx: Context, config: unknown): void {
       minSize: 1,
     },
     { component: new VStack([{ component: editor, basis: 'auto', shrink: 1, minSize: 1 }]), basis: 'auto', shrink: 1, minSize: 1 },
+    { component: statusBar, basis: 'auto', shrink: 0, minSize: 1 },
   ]))
   tui.setFocus(editor)
 
   const requestExit = (code: number): void => {
     if (exited) return
     exited = true
+    clearInterval(statusTicker)
     restore.restore()
     const goodbye = ctx.get(GOODBYE_KEY)
     if (typeof goodbye === 'string' && goodbye !== '') terminal.write(`\n${goodbye}\n`)
@@ -393,6 +413,21 @@ export function apply(ctx: Context, config: unknown): void {
       case 'quit':
         requestExit(0)
         return
+      case 'status': {
+        const facts = statusFacts()
+        const context = facts.contextTokens === undefined
+          ? undefined
+          : `context ${formatTokens(facts.contextTokens)}${facts.contextWindow === undefined ? '' : `/${formatTokens(facts.contextWindow)}`}`
+        model.notice([
+          `session ${activeSession}`,
+          facts.model === undefined ? undefined : `model ${facts.model}${facts.effort === undefined ? '' : ` (${facts.effort})`}`,
+          facts.preset === undefined ? undefined : `permissions ${facts.preset}`,
+          context,
+          `cwd ${facts.cwd}`,
+        ].filter(part => part !== undefined).join(' · '))
+        tui.requestRender()
+        return
+      }
       case 'clear':
         model.reset()
         tui.requestRender()
@@ -424,8 +459,14 @@ export function apply(ctx: Context, config: unknown): void {
 
   disposers.push(ctx.on('session/event', (session, event) => {
     if (session.id !== activeSession) return
-    if (event.type === 'turn/start') turnOpen = true
-    if (event.type === 'turn/end') turnOpen = false
+    if (event.type === 'turn/start') {
+      turnOpen = true
+      turnStartedAt = Date.now()
+    }
+    if (event.type === 'turn/end') {
+      turnOpen = false
+      turnStartedAt = undefined
+    }
     model.apply(event)
     tui.requestRender()
   }))

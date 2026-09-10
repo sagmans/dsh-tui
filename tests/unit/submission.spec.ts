@@ -13,6 +13,7 @@ describe('classifySubmission', () => {
     expect(classifySubmission('/clear')).toEqual({ kind: 'clear' })
     expect(classifySubmission('/help')).toEqual({ kind: 'help' })
     expect(classifySubmission('/resume')).toEqual({ kind: 'resume' })
+    expect(classifySubmission('/status')).toEqual({ kind: 'status' })
   })
 
   it('routes any other slash line as a command with its arguments', () => {

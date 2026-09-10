@@ -2,7 +2,7 @@
 
 Interactive terminal (TUI) surface for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): use `dsh` in a terminal instead of a browser.
 
-Status: **early v1.** The surface boots over the composed agent plane, owns the alternate screen, streams assistant text as markdown, renders every tool's own card, answers approvals and questions, restores a stored conversation, and hands the terminal back on exit. Model and work-state panels are next.
+Status: **early v1.** The surface boots over the composed agent plane, owns the alternate screen, streams assistant text as markdown, renders every tool's own card, answers approvals and questions, restores a stored conversation, keeps a status line under the editor, and hands the terminal back on exit. Work-state panels are next.
 
 ## Install
 
@@ -34,6 +34,7 @@ dsh --profile tui --no-color
 | `/` then Tab | complete commands, including every command this session registered |
 | `@` or a path then Tab | complete workspace file references |
 | `/help` | list registered and local commands |
+| `/status` | show the session id, model, permissions, context, and directory |
 | `/resume` | open another stored session without leaving the terminal |
 | `/clear` | clear the visible transcript |
 | `/quit` | leave and print the resume command |
@@ -80,7 +81,7 @@ Test specs import plugin sources through the `@/` alias. Under this test runner 
 
 ## Limitations
 
-- No model, permission-mode, or status panel yet; `/model` and `/mode` are not wired.
+- `/model` and `/mode` are not wired; `/permission <preset>` from the base bundle switches the permission preset, and the footer shows the current one.
 - Scrolling is the mouse wheel, or the terminal's own scrollback keys where it offers them.
 - Approvals and questions render inline and take the keyboard; a question batch is answered in order.
 - Styling uses the standard 16 ANSI colors and terminal defaults, so light and dark terminals follow their own theme.
