@@ -70,6 +70,21 @@ try {
     problems.push('the manifest does not point at a patch file that ships')
   }
 
+  // Every entry point a consumer or a type checker resolves must be inside the
+  // artefact: a missing lib/types file breaks TypeScript consumers only after
+  // they have installed the package.
+  const shipped = (target) => typeof target === 'string' && entries.includes(`package/${target.replace(/^\.\//u, '')}`)
+  const declaredTargets = [
+    ['main', manifest.main],
+    ['types', manifest.types],
+    ...Object.entries(manifest.exports ?? {}).flatMap(([key, value]) => typeof value === 'string'
+      ? [[`exports["${key}"]`, value]]
+      : Object.entries(value).map(([condition, path]) => [`exports["${key}"].${condition}`, path])),
+  ]
+  for (const [label, target] of declaredTargets) {
+    if (!shipped(target)) problems.push(`${label} points at ${String(target)}, which is not in the tarball`)
+  }
+
   const modules = walk(join(ROOT, 'lib')).filter(file => file.endsWith('.js'))
   for (const module of modules) execFileSync(process.execPath, ['--check', module], { stdio: 'inherit' })
 
