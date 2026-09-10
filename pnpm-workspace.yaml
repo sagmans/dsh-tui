@@ -1,0 +1,13 @@
+# Supply-chain policy for this repository.
+#
+# pnpm blocks a dependency's install/build script until it is reviewed here.
+allowBuilds:
+  # The PTY dogfood harness needs node-pty's native addon.
+  node-pty: true
+
+# The pinned dsh release set was published inside the release-age window, and
+# this project tracks that exact release, so the window cannot be waited out.
+# Scoped to the one publisher and version line the plugin targets.
+minimumReleaseAgeExclude:
+  - '@deepseek-ai/dsh-*'
+  - '@deepseek-ai/cordis@4.0.2'

@@ -1,0 +1,25 @@
+# dsh-tui — additive rows over dsh-base.
+#
+# Every row here is owned by this plugin: no base row is replaced or disabled
+# and no row names an @deepseek-ai/* package, so this layer composes with any
+# profile the user already runs and stays within plugin-store patch rules.
+- insert:
+    - id: tui-startup
+      name: '@sagmans/dsh-tui/startup'
+
+    # The base mounts the user-questions SERVICE but no ask_user_question tool:
+    # the Web profile gets that tool from agent presets, which a single-session
+    # terminal composition does not use. Mounted through our own subpath.
+    - id: tui-ask-user
+      name: '@sagmans/dsh-tui/ask-user'
+
+    - id: tui
+      name: '@sagmans/dsh-tui'
+      inject: [tuiStartup]
+      config:
+        sessionId: !!js ctx.tuiStartup.sessionId
+        resume: !!js ctx.tuiStartup.resume
+        resumePicker: !!js ctx.tuiStartup.resumePicker
+        model: !!js ctx.tuiStartup.model
+        provider: !!js ctx.tuiStartup.provider
+        color: !!js ctx.tuiStartup.color
