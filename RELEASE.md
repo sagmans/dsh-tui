@@ -10,7 +10,7 @@ Applies to maintainers. Current release owner: repository owner ([`LICENSE`](LIC
 
 1. Candidate lands on `main` through a reviewed PR (squash merge).
 2. `verify` CI green on the exact merged SHA.
-3. Locally on that SHA: `pnpm typecheck`, `pnpm test`, `pnpm test:release`, `node tools/pack-smoke.mjs`.
+3. Locally on that SHA: `pnpm typecheck`, `pnpm test`, `pnpm test:release`, `npm audit signatures`, `node tools/pack-smoke.mjs`.
 4. Dogfooding: install the candidate into a plugin profile and drive a real session in a terminal per [README](README.md#install). Unit tests do not prove the terminal surface.
 5. README accuracy pass: every documented command and profile path still behaves as written.
 6. A published npm version is immutable. A broken release is forward-fixed, never unpublished (see [Rollback](#rollback)).
