@@ -31,7 +31,7 @@ const HUNDRED_THOUSAND = 100 * THOUSAND
 const MILLION = 1_000_000
 const SECOND_MS = 1000
 const MINUTE_MS = 60 * SECOND_MS
-/** Path segments kept in the footer; a terminal row is not a file browser. */
+/** Path segments kept for a directory outside the home; a terminal row is not a file browser. */
 const PATH_SEGMENTS = 2
 
 /** Compact a token count, because the exact number changes nothing a reader decides. */
@@ -43,14 +43,21 @@ export function formatTokens(count: number): string {
   return String(count)
 }
 
-/** Shorten an absolute path to its tail, with `~` for the reader's own home. */
+/**
+ * Shorten an absolute path for the footer: the reader's own home becomes `~`,
+ * and only a path from outside it is cut down to its tail.
+ *
+ * A home path keeps every directory between `~` and the leaf. Dropping those
+ * away would name a location that does not exist, which is worse than a long one.
+ */
 export function shortPath(path: string, home: string | undefined): string {
-  const withinHome = home !== undefined && home !== '' && (path === home || path.startsWith(`${home}/`))
-  const rest = withinHome ? path.slice(home.length).replace(/^\//u, '') : path
-  const segments = rest.split('/').filter(segment => segment !== '')
-  if (segments.length <= PATH_SEGMENTS) return withinHome ? `~/${segments.join('/')}` : path
-  const tail = segments.slice(-PATH_SEGMENTS).join('/')
-  return withinHome ? `~/${tail}` : `…/${tail}`
+  if (home !== undefined && home !== '' && (path === home || path.startsWith(`${home}/`))) {
+    const rest = path.slice(home.length).replace(/^\//u, '')
+    return rest === '' ? '~/' : `~/${rest}`
+  }
+  const segments = path.split('/').filter(segment => segment !== '')
+  if (segments.length <= PATH_SEGMENTS) return path
+  return `…/${segments.slice(-PATH_SEGMENTS).join('/')}`
 }
 
 function elapsed(ms: number): string {
