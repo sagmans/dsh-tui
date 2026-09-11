@@ -23,14 +23,70 @@ const REQUIRED = [
   'package/LICENSE',
   'package/lib/index.js',
   'package/lib/startup.js',
-  'package/lib/ask-user.js',
 ]
 
 /** Entries that must never ship. */
-const FORBIDDEN = [/^package\/src\//u, /^package\/tests\//u, /^package\/\.plans\//u, /^package\/node_modules\//u, /^package\/tools\//u]
+const FORBIDDEN = [
+  /^package\/src\//u,
+  /^package\/tests\//u,
+  /^package\/\.plans\//u,
+  /^package\/node_modules\//u,
+  /^package\/tools\//u,
+  /^package\/lib\/ask-user\.js$/u,
+]
 
 /** Rows the bundle patch promises the composed profile. */
-const PATCH_ROWS = ['@sagmans/dsh-tui/startup', '@sagmans/dsh-tui/ask-user', "name: '@sagmans/dsh-tui'"]
+const PATCH_ROWS = [
+  '@sagmans/dsh-tui/startup',
+  "name: '@sagmans/dsh-tui'",
+  "name: '@deepseek-ai/dsh-agent-presets'",
+  "name: '@deepseek-ai/dsh-code-runtime-worker-thread'",
+]
+
+/**
+ * Base rows this bundle takes out of the global agent plane.
+ *
+ * The list is derived rather than chosen: it is exactly the set of base rows
+ * the shipped agent presets supply, so every one of them must be owned per
+ * session instead of globally. A missing entry silently double-registers what
+ * the preset mounts.
+ */
+const DISABLED_ROWS = [
+  'agent-instructions',
+  'command-compact',
+  'command-goal',
+  'compaction-basic',
+  'plan-mode',
+  'skill-filesystem',
+  'tool-bash',
+  'tool-fs',
+  'tool-fs-search',
+  'tool-goal',
+  'tool-jobs',
+  'tool-pwsh',
+  'tool-ralph',
+  'tool-result-pruner',
+  'tool-skill',
+  'tool-subagent',
+  'tool-subagent-control',
+  'tool-subagent-fork',
+  'tool-subagent-list-agents',
+  'tool-todo',
+  'tool-web',
+  'tool-workflow',
+  'workflow-worker-thread',
+]
+
+/**
+ * First-party packages the patch may name.
+ *
+ * A bundle owns the rows it inserts, so naming anything else would make the
+ * profile depend on a package this plugin never declared.
+ */
+const NAMED_PACKAGES = [
+  '@deepseek-ai/dsh-agent-presets',
+  '@deepseek-ai/dsh-code-runtime-worker-thread',
+]
 
 function walk(directory) {
   const found = []
@@ -63,11 +119,31 @@ try {
   for (const row of PATCH_ROWS) {
     if (!patch.includes(row)) problems.push(`the bundle patch no longer names ${row}`)
   }
+  for (const id of DISABLED_ROWS) {
+    if (!patch.includes(`- id: ${id}\n  disabled: true`)) {
+      problems.push(`the bundle patch no longer disables ${id}, which a preset supplies`)
+    }
+  }
+  const named = new Set([...patch.matchAll(/name: '(@deepseek-ai\/[^']+)'/gu)].map(match => match[1]))
+  for (const name of named) {
+    if (!NAMED_PACKAGES.includes(name)) problems.push(`the bundle patch mounts ${name}, which it does not depend on`)
+  }
+  for (const name of NAMED_PACKAGES) {
+    if (!named.has(name)) problems.push(`the bundle patch no longer mounts ${name}`)
+  }
+  if (patch.includes('dsh-tui/ask-user')) {
+    problems.push('the bundle patch still mounts the removed ask-user entry point')
+  }
 
   const manifest = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
   const declared = manifest.dsh?.bundle?.patch
   if (typeof declared !== 'string' || !entries.includes(`package/${declared.replace(/^\.\//u, '')}`)) {
     problems.push('the manifest does not point at a patch file that ships')
+  }
+  for (const name of NAMED_PACKAGES) {
+    if (manifest.dependencies?.[name] === undefined) {
+      problems.push(`the patch mounts ${name} but the manifest does not depend on it`)
+    }
   }
 
   // Every entry point a consumer or a type checker resolves must be inside the
