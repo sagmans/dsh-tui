@@ -12,6 +12,8 @@ export interface PickerRow {
 /** How the picker presents itself, independent of how it is drawn. */
 export interface PickerCard {
   readonly title: string
+  /** Why the last pick was refused, for as long as it stays the last thing asked. */
+  readonly note: string | undefined
   readonly rows: readonly PickerRow[]
   readonly filter: string
   readonly hint: string
@@ -66,6 +68,7 @@ export function describeAge(createdAt: number, now: number): string {
 export class ListPicker<Row> {
   private cursor = 0
   private filter = ''
+  private note: string | undefined
 
   constructor(
     private readonly source: () => readonly Row[],
@@ -85,8 +88,20 @@ export class ListPicker<Row> {
     return this.source().filter(row => this.haystackOf(row).toLowerCase().includes(needle))
   }
 
+  /**
+   * Say why the row under the cursor cannot be taken.
+   *
+   * Cleared by the next key press, because it explains one refusal rather than
+   * describing the list: a note that outlived it would read as a property of
+   * whatever the reader moved to.
+   */
+  setNote(text: string | undefined): void {
+    this.note = text
+  }
+
   /** Apply one key press; returns an action only when the picker settles. */
   handleKey(data: string): PickerAction | undefined {
+    this.note = undefined
     const rows = this.visible()
     if (matchesKey(data, 'escape')) return { kind: 'cancel' }
     if (matchesKey(data, 'enter')) {
@@ -125,6 +140,7 @@ export class ListPicker<Row> {
     const window = rows.slice(start, start + PICKER_WINDOW)
     return {
       title: this.heading(),
+      note: this.note,
       rows: window.map((row, index) => ({
         ...this.describe(row),
         current: start + index === cursor,

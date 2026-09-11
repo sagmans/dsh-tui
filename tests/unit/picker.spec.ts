@@ -77,6 +77,15 @@ describe('SessionPicker', () => {
     expect(moved.above + moved.rows.length + moved.below).toBe(40)
   })
 
+  it('carries a refusal note until the reader does something else', () => {
+    const picker = pickerOf([session('a'), session('b')])
+    expect(picker.card().note).toBeUndefined()
+    picker.setNote('session a runs mode "cordis", so --preset standard does not apply')
+    expect(picker.card().note).toContain('does not apply')
+    picker.handleKey('\u001b[B')
+    expect(picker.card().note).toBeUndefined()
+  })
+
   it('offers the newest session first and titles it when known', () => {
     const picker = pickerOf([session('new', { createdAt: 999_500 }), session('old', { createdAt: 1_000 })], { new: 'latest work' })
     const card = picker.card()

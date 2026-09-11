@@ -134,6 +134,7 @@ describe('TranscriptView picker', () => {
   it('lists stored sessions with a cursor, a filter, and the keys that drive it', () => {
     const picker: PickerCard = {
       title: 'resume a session · 2 stored',
+      note: undefined,
       rows: [
         { label: 'fix the parser', description: '/work · 3m ago · 12 events', current: true },
         { label: 'tui-session-b', description: '/tmp · 1d ago', current: false },
@@ -154,6 +155,29 @@ describe('TranscriptView picker', () => {
     expect(lines).toContain('   … 2 newer')
     expect(lines).toContain('   … 3 older')
     expect(lines.some(line => line.includes('enter open'))).toBe(true)
+  })
+
+  it('wraps the reason a pick was refused under the heading', () => {
+    const picker: PickerCard = {
+      title: 'resume a session · 1 stored',
+      note: 'session tui-session-a runs mode "cordis", so --preset standard does not apply; /preset standard switches it before its first turn',
+      rows: [{ label: 'tui-session-a', description: '/work · 3m ago', current: true }],
+      filter: '',
+      hint: '↑↓ move · enter open · esc cancel · type to filter',
+      above: 0,
+      below: 0,
+    }
+    const view = new TranscriptView(new TranscriptModel(), theme, new MarkdownRenderer(theme.markdown), {
+      picker: () => picker,
+    })
+    const lines = view.render(60)
+    const heading = lines.findIndex(line => line.includes('↻ resume a session'))
+    const row = lines.findIndex(line => line.includes('❯ tui-session-a'))
+    // A reason that does not fit has to keep going rather than be cut off.
+    const note = lines.slice(heading + 1, row).join(' ').replace(/\s+/gu, ' ')
+    expect(note).toContain('session tui-session-a runs mode "cordis"')
+    expect(note).toContain('switches it before its first turn')
+    expect(lines[heading + 1]?.length).toBeLessThanOrEqual(60)
   })
 })
 

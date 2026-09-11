@@ -56,6 +56,7 @@ exports[`golden frames > renders the session picker at 40 columns 1`] = `
   "below": 0,
   "filter": "",
   "hint": "↑↓ move · enter open · esc cancel · type to filter",
+  "note": undefined,
   "rows": [
     {
       "current": true,
@@ -78,6 +79,7 @@ exports[`golden frames > renders the session picker at 80 columns 1`] = `
   "below": 0,
   "filter": "",
   "hint": "↑↓ move · enter open · esc cancel · type to filter",
+  "note": undefined,
   "rows": [
     {
       "current": true,

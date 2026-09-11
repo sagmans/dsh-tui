@@ -162,11 +162,20 @@ export function apply(ctx: Context, config: unknown): void {
   let viewedSession = resolved.sessionId
   /** The one picker a terminal can present at a time, and how it settles its caller. */
   interface PendingPicker {
-    readonly picker: { handleKey(data: string): PickerAction | undefined; card(): PickerCard }
+    readonly picker: { handleKey(data: string): PickerAction | undefined; card(): PickerCard; setNote(text: string | undefined): void }
     readonly settle: (id: string | undefined) => void
+    /**
+     * Why this run cannot open an id, or undefined when it can.
+     *
+     * Asked before a pick settles, so a refusal the reader can act on stays in
+     * the menu they are already looking at instead of ending the run.
+     */
+    readonly vet: ((id: string) => Promise<string | undefined>) | undefined
   }
   let pending: PendingGate | undefined
   let pendingPicker: PendingPicker | undefined
+  /** A pick being vetted owns the keyboard: a key would answer what is unanswered. */
+  let vetting = false
   const view = new TranscriptView(model, theme, markdown, {
     state: () => viewState,
     gate: () => pending?.gate.card(),
@@ -284,16 +293,38 @@ export function apply(ctx: Context, config: unknown): void {
       return { consume: true }
     }
     if (pendingPicker !== undefined) {
+      if (vetting) return { consume: true }
       const action = pendingPicker.picker.handleKey(data)
-      if (action === undefined) tui.requestRender()
-      else {
-        const settle = pendingPicker.settle
-        pendingPicker = undefined
-        editor.disableSubmit = false
-        tui.setFocus(editor)
-        settle(action.kind === 'pick' ? action.id : undefined)
+      if (action === undefined) {
         tui.requestRender()
+        return { consume: true }
       }
+      if (action.kind === 'cancel') {
+        settlePicker(undefined)
+        return { consume: true }
+      }
+      const vet = pendingPicker.vet
+      if (vet === undefined) {
+        settlePicker(action.id)
+        return { consume: true }
+      }
+      vetting = true
+      void (async () => {
+        let reason: string | undefined
+        try {
+          reason = await vet(action.id)
+        } finally {
+          // A check that fails must not take the keyboard with it.
+          vetting = false
+        }
+        if (pendingPicker === undefined) return
+        if (reason === undefined) {
+          settlePicker(action.id)
+          return
+        }
+        pendingPicker.picker.setNote(reason)
+        tui.requestRender()
+      })()
       return { consume: true }
     }
     // Detail the reader asked for is always available, even mid-turn: the
@@ -350,14 +381,44 @@ export function apply(ctx: Context, config: unknown): void {
   const askForSession = async (history: SessionHistory, sessions: readonly StoredSession[]): Promise<SessionId | undefined> => {
     const titles = new Map<string, string>()
     void loadTitles(history, sessions, titles)
-    const picked = await openPicker(new SessionPicker(sessions, () => titles))
+    const picked = await openPicker(new SessionPicker(sessions, () => titles), refuseReason)
     return picked === undefined ? undefined : SessionId(picked)
   }
 
+  /** Give the keyboard back to the editor and answer whoever opened the picker. */
+  const settlePicker = (id: string | undefined): void => {
+    const settle = pendingPicker?.settle
+    pendingPicker = undefined
+    editor.disableSubmit = false
+    tui.setFocus(editor)
+    settle?.(id)
+    tui.requestRender()
+  }
+
+  /**
+   * Why this run cannot open a stored session, or undefined when it can.
+   *
+   * A session runs the mode its own log recorded, so a `--preset` that
+   * disagrees with it can only be refused: the picker asks first so the refusal
+   * lands in the list rather than after the terminal has been handed back.
+   */
+  const refuseReason = async (id: string): Promise<string | undefined> => {
+    if (requestedPreset === undefined || agentPresets === undefined) return undefined
+    try {
+      await presetFor(SessionId(id), true, undefined)
+      return undefined
+    } catch (error) {
+      return error instanceof Error ? error.message : String(error)
+    }
+  }
+
   /** Take the keyboard for a picker and answer with the id it settled on. */
-  const openPicker = (picker: PendingPicker['picker']): Promise<string | undefined> =>
+  const openPicker = (
+    picker: PendingPicker['picker'],
+    vet?: (id: string) => Promise<string | undefined>,
+  ): Promise<string | undefined> =>
     new Promise<string | undefined>(resolve => {
-      pendingPicker = { picker, settle: resolve }
+      pendingPicker = { picker, settle: resolve, vet }
       editor.disableSubmit = true
       tui.setFocus(null)
       tui.requestRender()

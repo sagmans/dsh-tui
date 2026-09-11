@@ -125,6 +125,9 @@ export class TranscriptView implements Component {
   private pushPicker(lines: string[], picker: PickerCard, width: number): void {
     lines.push('')
     lines.push(this.theme.bold(truncateToWidth(`↻ ${displayText(picker.title)}`, width, '')))
+    if (picker.note !== undefined) {
+      this.pushWrapped(lines, picker.note, width, DETAIL_INDENT, this.theme.bold)
+    }
     if (picker.filter !== '') {
       lines.push(this.theme.dim(truncateToWidth(`${DETAIL_INDENT}filter: ${displayText(picker.filter)}`, width, '')))
     }

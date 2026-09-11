@@ -148,6 +148,7 @@ The automated checks drive a real PTY, but they run on this machine's terminal. 
 | `dsh --profile tui --preset ptc`, then a turn | the status line names `ptc`, and the agent reaches its tools through one TypeScript program rather than one shell call at a time |
 | `/preset` on a fresh session | the picker lists four modes, marks the current one, and the switch survives a resume |
 | `/preset minimal` after a turn | refused, naming the reason; the session keeps the mode it composed with |
+| `--resume --preset <mode>` and then picking a session that runs another mode | the list stays open and says why that row cannot be taken; `esc` leaves the picker |
 | `dsh --profile tui --preset nope` | exits non-zero naming the modes that do exist, before the alternate screen appears |
 | arrow keys in a picker, or on a question's options, in a terminal that reports key events (Kitty, WezTerm, Ghostty, iTerm2) | one press moves one row, and holding a key still repeats; a terminal that sends only the legacy sequence behaves the same |
 | resize the window mid-turn | the transcript rewraps; the dock, editor, and status row stay put |
