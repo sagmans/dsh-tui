@@ -225,7 +225,7 @@ The automated checks drive a real PTY, but they run on this machine's terminal. 
 | inside tmux or screen | wheel scroll and `ctrl+shift+f` search work; dragging selects text |
 | a light terminal and a dark one | the interface follows the terminal's own palette; nothing becomes unreadable |
 | `NO_COLOR=1 dsh --profile tui` | no styling anywhere, layout unchanged |
-| a turn with `Ctrl+T` pressed between states | thinking reads as dimmed grey above the answer, then shows its full text, then disappears entirely while the answer keeps its place; a third press restores the summary |
+| a turn with `Ctrl+T` pressed between states | thinking reads as dimmed grey above the answer, then shows its full text, then disappears entirely while the answer keeps its place; the next press starts the cycle again at the summary |
 | `dsh --profile tui --no-bell` | a turn that runs for minutes still ends silently |
 | `dsh --profile tui --preset ptc`, then a turn | the status line names `ptc`, and the agent reaches its tools through one TypeScript program rather than one shell call at a time |
 | `/preset` on a fresh session | the picker lists four modes, marks the current one, and the switch survives a resume |
@@ -260,7 +260,7 @@ The workflow stores no npm token: the registry trusts `release.yml` on the `npm-
 - Delete is unimplemented: the session store exposes no delete, and the surface does not reach around that seam into its files. `/fork` covers the case that needs it — it branches into a new session and leaves the original alone.
 - Approvals and questions render inline and take the keyboard; a question batch is answered in order.
 - Styling uses the standard 16 ANSI colors and terminal defaults, so light and dark terminals follow their own theme.
-- A model's thinking is dimmed and set off by its own glyph, and `Ctrl+T` steps it through summary, the full thought, and hidden. The row is rebuilt from the stored log, so a resumed session shows where the model thought instead of only what it concluded. Hidden leaves no row at all — not even a placeholder — so the answer reads as the only reply; `Ctrl+T` brings it back. The `/export` dump always keeps thinking as an HTML comment, whatever the screen shows.
+- A model's thinking is dimmed and set off by its own glyph, and `Ctrl+T` steps it through summary, the full thought, and hidden. Every settled thought row is rebuilt from the stored log — the live stream only decorates the row still being written — so a resumed session shows where the model thought instead of only what it concluded. Hidden leaves no row at all, not even a placeholder, so the answer reads as the only reply; `Ctrl+T` brings it back. The `/export` dump keeps the thought itself, commented out, whatever the screen shows.
 - Tool text, model text, and file content are escaped before rendering, so a hostile result cannot inject terminal control sequences; the cost is that a literal tab shows as \x09.
 
 ## License
