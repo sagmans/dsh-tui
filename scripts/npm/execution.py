@@ -11,12 +11,19 @@ import sys
 import time
 
 PTY_CHUNK_BYTES = 65536
-READ_ATTEMPTS = 5
-READ_BACKOFF_SECONDS = 2
+# The registry needed about six minutes to serve the tarball of a version it had already accepted,
+# so the window for a read that trails a write is minutes, not seconds.
+READ_ATTEMPTS = 10
+READ_BACKOFF_SECONDS = 5
+READ_BACKOFF_CAP_SECONDS = 120
 
 
 class ReleaseError(Exception):
     """An unmet release condition, without raw provider response data."""
+
+
+class ReadFailure(ReleaseError):
+    """A provider read that did not complete; the only failure a retry may repeat."""
 
 
 def require(condition, message):
@@ -48,7 +55,8 @@ def run(command, *, data=None, check=True, tty=False):
         result = _run_in_pty(command)
     else:
         result = subprocess.run(command, input=data, text=True, capture_output=True, check=False)
-    require(not check or result.returncode == 0, f"{Path(command[0]).name} read failed; inspect authentication and service status privately")
+    if check and result.returncode != 0:
+        raise ReadFailure(f"{Path(command[0]).name} read failed; inspect authentication and service status privately")
     return result
 
 
@@ -78,15 +86,21 @@ def _run_in_pty(command):
     return subprocess.CompletedProcess(command, returncode, captured, "")
 
 
-def read_with_retry(operation, *, attempts=READ_ATTEMPTS, backoff=READ_BACKOFF_SECONDS):
-    """Retry a read-only call; a registry read can lag a completed write, and a write is never retried."""
+def read_with_retry(operation, *, attempts=READ_ATTEMPTS, backoff=READ_BACKOFF_SECONDS, cap=READ_BACKOFF_CAP_SECONDS):
+    """Retry a read that did not complete; a registry read can trail a completed write.
+
+    Only a transport failure is repeated. A read that answered with the wrong shape or identity is a
+    different problem, and repeating it would delay the report without changing the outcome.
+    """
+    delay = backoff
     for attempt in range(attempts):
         try:
             return operation()
-        except ReleaseError:
+        except ReadFailure:
             if attempt + 1 == attempts:
                 raise
-            time.sleep(backoff * (attempt + 1))
+            time.sleep(delay)
+            delay = min(delay * 2, cap)
 
 
 def mutate(action, command, *, data=None):

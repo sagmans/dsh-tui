@@ -58,7 +58,7 @@ DRY_RUN=1 python3 scripts/npm/release.py bootstrap-publish
 CONFIRM=bootstrap-publish python3 scripts/npm/release.py bootstrap-publish
 ```
 
-`bootstrap-publish` refuses an existing package, publishes the reviewed tarball with lifecycle scripts disabled, and verifies the delivered integrity. Local publication cannot generate provenance; provenance begins with the OIDC releases that follow. A registry read can trail the write that precedes it, so the helper retries that read only; a publication is never retried. If the result is ambiguous, inspect the registry before any retry.
+`bootstrap-publish` refuses an existing package, publishes the reviewed tarball with lifecycle scripts disabled, and verifies the delivered integrity. Local publication cannot generate provenance; provenance begins with the OIDC releases that follow. The registry can take minutes to serve a version it has already accepted — observed at about six minutes for the tarball — so the helper repeats a read that did not complete, then reports; a read that answered with the wrong identity is not repeated, and a publication is never retried. If the result is ambiguous, inspect the registry before any retry.
 
 ## Recurring release controls (once, after the bootstrap)
 
