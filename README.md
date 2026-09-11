@@ -2,7 +2,7 @@
 
 Interactive terminal (TUI) surface for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): use `dsh` in a terminal instead of a browser.
 
-Status: **v1 feature-complete, unpublished by choice.** The surface owns the alternate screen, streams assistant text as markdown, renders every tool's own card, answers approvals and questions, restores and names stored conversations, switches model mid-session, reads a child agent's conversation in place, keeps the goal, plan mode, todo list, delegations, and background jobs above the editor with a status line below it, and hands the terminal back on every graceful exit. Publishing is deferred, and the tag workflow that would do it with a provenance attestation is in place.
+Status: **v1 feature-complete, unpublished by choice.** The surface owns the alternate screen, streams assistant text as markdown, renders every tool's own card, answers approvals and questions, restores and names stored conversations, switches model mid-session, runs any of the four shipped agent modes and switches between them before a session's first turn, reads a child agent's conversation in place, keeps the goal, plan mode, todo list, delegations, and background jobs above the editor with a status line below it, and hands the terminal back on every graceful exit. Publishing is deferred, and the tag workflow that would do it with a provenance attestation is in place.
 
 ## Install
 
@@ -29,6 +29,7 @@ node "$CHECKOUT/apps/cli/lib/bin.js" --profile tui             # needs neither p
 dsh --profile tui                      # new session in the current directory
 dsh --profile tui --resume             # pick a stored session, titled by its first prompt
 dsh --profile tui --resume <session-id>
+dsh --profile tui --preset ptc             # start in one of the shipped agent modes
 dsh --profile tui --model deepseek-chat
 dsh --profile tui --no-color
 dsh --profile tui --no-bell            # do not ring when a long turn finishes
@@ -54,6 +55,8 @@ dsh --profile tui --no-bell            # do not ring when a long turn finishes
 | `/model` | show the route the next step will use, and the providers available |
 | `/model <provider>` | list that provider's advertised models |
 | `/model <provider>/<model>` | use that route from the next step on (session only, nothing is written to settings) |
+| `/preset` | pick the agent mode for this session from the roster |
+| `/preset <id>` | switch to that mode, while the session is still blank |
 | `/jobs` | list background jobs with their state and duration |
 | `/jobs read <id>` / `/jobs kill <id>` | show the tail of a job's output, or stop it |
 | `/subagents` | list the delegations this session started, with their provider and age |
@@ -68,17 +71,38 @@ dsh --profile tui --no-bell            # do not ring when a long turn finishes
 
 Any other `/command` goes to the command registry, so `/plan`, `/compact`, `/goal`, and `/feedback` behave as they do on the other surfaces.
 
+## Modes
+
+A mode is an **agent preset**: the plugin composition an agent's own scope joins. It decides that agent's tools, prompt sections, skills, and planning rows, which is why a mode is fixed once a session has produced a turn — it is what composed the agent that answered.
+
+Four ship, under the ids a session log records:
+
+| `--preset` | Mode | What the agent gets |
+|---|---|---|
+| `standard` | standard | full agent: editing, shell, search, skills, planning, goals, subagents, workflows |
+| `ptc` | PTC | the same agent, reaching its tools through one TypeScript program |
+| `minimal` | minimal | one tool: a persistent shell |
+| `cordis` | creator | harness authoring: runtime inspection and composition guidance |
+
+A session takes its mode from the first of these that applies:
+
+1. `--preset <id>`, refused before the terminal is taken over when the roster does not ship that id.
+2. `/preset` while the session is still blank: a bare command opens the picker, `/preset <id>` switches directly, and the choice is written to the log.
+3. The roster's default, `standard`, when nobody names one.
+
+The mode is re-read rather than remembered: resuming mounts what that session's own log recorded, resuming with a `--preset` that disagrees with it is refused instead of silently ignored, and forking inherits the mode of the conversation being branched. The status line names the mode, and `/status` lists it with the rest.
+
 ## How it works
 
 The package is a Cordis plugin bundle that stacks over `@deepseek-ai/dsh-base`:
 
 - `@sagmans/dsh-tui/startup` parses this app's own flags and publishes the launch identity.
-- `@sagmans/dsh-tui/ask-user` mounts the official `ask_user_question` tool, which the base does not ship because agent presets normally provide it.
+- `@deepseek-ai/dsh-agent-presets` is the roster of modes, holding the id a session starts in when nobody names one.
 - `@sagmans/dsh-tui` owns the terminal: it creates or resumes one agent through `ctx.agents`, folds `session/event` into transcript rows and work state, renders them with `@earendil-works/pi-tui`, and releases the terminal on exit, on a boot failure, and on a signal.
 
 The fold is durable-only: the live stream decorates the row that is still being written, and everything else — cards, reasoning, work state, compaction markers — comes from the log, so a resumed session renders what the live one did. Subagent start and finish are the exception: they arrive as service events, and the transcript shows them as decoration because the durable record of a delegation is the tool call that asked for it.
 
-The rows are additive. No base row is replaced or disabled, so the bundle composes with any profile that is already running.
+The bundle also takes the base's global agent rows out of the composition, twenty-three of them. Every one is a row the shipped modes supply per session instead, so leaving it mounted registers the same tool names in two layers and doubles each prompt section it owns. What stays mounted is the host: sessions, storage, models, permissions, jobs, and the command registry.
 
 ## Development
 
@@ -120,6 +144,10 @@ The automated checks drive a real PTY, but they run on this machine's terminal. 
 | a light terminal and a dark one | the interface follows the terminal's own palette; nothing becomes unreadable |
 | `NO_COLOR=1 dsh --profile tui` | no styling anywhere, layout unchanged |
 | `dsh --profile tui --no-bell` | a turn that runs for minutes still ends silently |
+| `dsh --profile tui --preset ptc`, then a turn | the status line names `ptc`, and the agent reaches its tools through one TypeScript program rather than one shell call at a time |
+| `/preset` on a fresh session | the picker lists four modes, marks the current one, and the switch survives a resume |
+| `/preset minimal` after a turn | refused, naming the reason; the session keeps the mode it composed with |
+| `dsh --profile tui --preset nope` | exits non-zero naming the modes that do exist, before the alternate screen appears |
 | resize the window mid-turn | the transcript rewraps; the dock, editor, and status row stay put |
 | a 40-column terminal | rows end in `…` instead of wrapping into the next line |
 | `echo hi \| dsh --profile tui` | refuses with a non-zero exit and a message naming the TTY requirement |
@@ -137,7 +165,7 @@ The workflow needs an `NPM_TOKEN` repository secret with publish rights for the 
 
 ## Limitations
 
-- `/mode` is not a command here: the base bundle's `/permission <preset>` switches the permission preset and the footer shows the current one.
+- Two different things are called a preset. The agent mode (`--preset`, `/preset`) is fixed once a session has produced a turn; the permission preset (`/permission <preset>`, named in the status line) can change at any time.
 - `/model` changes the route for the running session only. Catalog membership is advisory — an adapter may accept an id it does not advertise.
 - Scrolling is the mouse wheel, or the terminal's own scrollback keys where it offers them.
 - A turn that ran longer than ten seconds rings the terminal bell when it ends, because the reader may have walked away; `--no-bell` turns that off.
