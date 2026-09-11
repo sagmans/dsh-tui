@@ -5,10 +5,10 @@ import { TranscriptModel, type TranscriptEntry } from '@/transcript.ts'
 import { MarkdownRenderer } from '@/ui/markdown.ts'
 import type { PickerCard } from '@/ui/picker.ts'
 import { RowCache } from '@/ui/rows.ts'
-import { TranscriptView, REASONING_VIEW_ORDER, nextReasoningView, type ViewState } from '@/ui/view.ts'
+import { TranscriptView, nextReasoningView, DEFAULT_REASONING_VIEW, type ViewState } from '@/ui/view.ts'
 
 const theme = createTheme(false)
-const COLLAPSED: ViewState = { expandCards: false, reasoning: 'summary' }
+const COLLAPSED: ViewState = { expandCards: false, reasoning: DEFAULT_REASONING_VIEW }
 
 function viewOf(model: TranscriptModel, state: ViewState = COLLAPSED, gate?: GateCard): TranscriptView {
   return new TranscriptView(model, theme, new MarkdownRenderer(theme.markdown), { state: () => state, gate: () => gate })
@@ -21,6 +21,10 @@ function reasoningModel(): TranscriptModel {
   model.applyStreamChunk({ type: 'reasoning-delta', text: 'first thought\nsecond thought' })
   clock = 5_000
   model.applyStreamChunk({ type: 'block-end', block: { type: 'reasoning' } })
+  model.apply({
+    type: 'assistant/message',
+    data: { message: { content: [{ type: 'reasoning', text: 'first thought\nsecond thought' }] } },
+  })
   return model
 }
 
@@ -48,7 +52,7 @@ describe('TranscriptView repaints', () => {
     const rows = new RowCache<TranscriptEntry>()
     const model = new TranscriptModel()
     model.apply({ type: 'user/message', data: { content: [{ type: 'text', text: 'hello there' }], source: { kind: 'user' } } })
-    const state: { expandCards: boolean; reasoning: ViewState['reasoning'] } = { expandCards: false, reasoning: 'summary' }
+    const state: { expandCards: boolean; reasoning: ViewState['reasoning'] } = { expandCards: false, reasoning: DEFAULT_REASONING_VIEW }
     const view = new TranscriptView(model, theme, new MarkdownRenderer(theme.markdown), { rows, state: () => state })
 
     view.render(80)
@@ -118,20 +122,20 @@ describe('TranscriptView expansion', () => {
   })
 
   it('shows every retained row once cards are expanded', () => {
-    const lines = viewOf(withRows(25), { expandCards: true, reasoning: 'summary' }).render(60)
+    const lines = viewOf(withRows(25), { expandCards: true, reasoning: DEFAULT_REASONING_VIEW }).render(60)
     expect(lines.filter(line => line.startsWith('    row '))).toHaveLength(25)
     expect(lines.some(line => line.includes('ctrl+o'))).toBe(false)
   })
 
   it('keeps reasoning folded until it is asked for', () => {
     const lines = viewOf(reasoningModel()).render(60)
-    expect(lines).toEqual(['▸ reasoning · 2 lines · 28 chars · 5s'])
+    expect(lines).toEqual(['▸ thinking · 2 lines · 28 chars'])
   })
 
   it('shows the thought itself only once reasoning is expanded', () => {
     const lines = viewOf(reasoningModel(), { expandCards: false, reasoning: 'expanded' }).render(60)
     expect(lines).toEqual([
-      '▸ reasoning · 2 lines · 28 chars · 5s',
+      '▸ thinking · 2 lines · 28 chars',
       '    first thought',
       '    second thought',
     ])
@@ -141,15 +145,25 @@ describe('TranscriptView expansion', () => {
     const model = reasoningModel()
     model.apply({ type: 'assistant/message', data: { message: { content: [{ type: 'text', text: 'the answer' }] } } })
     const lines = viewOf(model, { expandCards: false, reasoning: 'hidden' }).render(60)
-    expect(lines.some(line => line.includes('reasoning'))).toBe(false)
+    expect(lines.some(line => line.includes('thinking'))).toBe(false)
     expect(lines.some(line => line.includes('first thought'))).toBe(false)
     expect(lines.some(line => line.includes('the answer'))).toBe(true)
   })
 
-  it('leaves no row for a thought that is still streaming', () => {
-    const model = new TranscriptModel(undefined, () => 1_000)
-    model.applyStreamChunk({ type: 'reasoning-delta', text: 'mid-thought' })
-    expect(viewOf(model, { expandCards: false, reasoning: 'hidden' }).render(60)).toEqual([])
+  it('shows a streaming thought in every mode but hidden', () => {
+    // The in-flight row is the one thing the stream still paints, so hidden has
+    // to suppress it too or hiding would only take effect a step late.
+    const streaming = () => {
+      const model = new TranscriptModel(undefined, () => 1_000)
+      model.applyStreamChunk({ type: 'reasoning-delta', text: 'mid-thought' })
+      return model
+    }
+    expect(viewOf(streaming()).render(60)).toEqual(['▸ thinking · 11 chars · 1s · streaming'])
+    expect(viewOf(streaming(), { expandCards: false, reasoning: 'expanded' }).render(60)).toEqual([
+      '▸ thinking · 11 chars · 1s · streaming',
+      '    mid-thought',
+    ])
+    expect(viewOf(streaming(), { expandCards: false, reasoning: 'hidden' }).render(60)).toEqual([])
   })
 
   it('marks reasoning with styling the answer does not carry', () => {
@@ -160,7 +174,7 @@ describe('TranscriptView expansion', () => {
       state: () => ({ expandCards: false, reasoning: 'expanded' } satisfies ViewState),
     })
     const lines = view.render(60)
-    const thought = lines.filter(line => /reasoning|thought/.test(line))
+    const thought = lines.filter(line => /thinking|thought/.test(line))
     const answer = lines.filter(line => line.includes('the answer'))
     expect(thought).toHaveLength(3)
     expect(answer).toHaveLength(1)
@@ -179,8 +193,8 @@ describe('TranscriptView expansion', () => {
         { type: 'text', text: 'the answer' },
       ] } },
     })
-    const summary = viewOf(model, { expandCards: false, reasoning: 'summary' }).render(60)
-    expect(summary.some(line => line.startsWith('▸ reasoning'))).toBe(true)
+    const summary = viewOf(model, { expandCards: false, reasoning: DEFAULT_REASONING_VIEW }).render(60)
+    expect(summary.some(line => line.startsWith('▸ thinking'))).toBe(true)
     expect(summary.some(line => line.includes('the thought itself'))).toBe(false)
     expect(summary.some(line => line.includes('the answer'))).toBe(true)
 
@@ -188,14 +202,13 @@ describe('TranscriptView expansion', () => {
     expect(expanded.some(line => line.trim() === 'the thought itself')).toBe(true)
 
     const hidden = viewOf(model, { expandCards: false, reasoning: 'hidden' }).render(60)
-    expect(hidden.some(line => line.startsWith('▸ reasoning'))).toBe(false)
+    expect(hidden.some(line => line.startsWith('▸ thinking'))).toBe(false)
     expect(hidden.some(line => line.includes('the answer'))).toBe(true)
   })
 })
 
 describe('nextReasoningView', () => {
   it('walks summary, then the thought itself, then nothing, and back', () => {
-    expect(REASONING_VIEW_ORDER).toEqual(['summary', 'expanded', 'hidden'])
     expect(nextReasoningView('summary')).toBe('expanded')
     expect(nextReasoningView('expanded')).toBe('hidden')
     expect(nextReasoningView('hidden')).toBe('summary')

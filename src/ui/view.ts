@@ -27,24 +27,48 @@ export interface ViewState {
 }
 
 /**
+ * The same view state with the fields writable, for the surface that owns it.
+ *
+ * {@link ViewState} is what the renderer reads, and read-only is what it wants:
+ * the view must not decide what the reader asked for. The keyboard handler does
+ * have to write it, so it needs a type that says so rather than a hand-written
+ * copy of these fields that silently drifts from them.
+ */
+export type MutableViewState = { -readonly [K in keyof ViewState]: ViewState[K] }
+
+/** The state the reader starts in, and the one an unreadable state falls back to. */
+export const DEFAULT_REASONING_VIEW: ReasoningViewState = 'summary'
+
+/**
  * The order one key walks the reasoning states in.
  *
  * `summary` is the default and `expanded` its first step, so the key that has
  * always revealed the detail still does that first; hiding is the third state
- * because it is the one a reader returns from least often.
+ * because it is the one a reader returns from least often. Kept private because
+ * the order is this module's own decision, and a caller reaching for it would
+ * be depending on the sequence instead of on what a press means.
  */
-export const REASONING_VIEW_ORDER: readonly ReasoningViewState[] = ['summary', 'expanded', 'hidden']
+const REASONING_VIEW_ORDER: readonly ReasoningViewState[] = [DEFAULT_REASONING_VIEW, 'expanded', 'hidden']
 
 /** The state one press of the reasoning key moves to. */
 export function nextReasoningView(current: ReasoningViewState): ReasoningViewState {
   const position = REASONING_VIEW_ORDER.indexOf(current)
-  return REASONING_VIEW_ORDER[(position + 1) % REASONING_VIEW_ORDER.length] ?? 'summary'
+  // An unrecognised state has no place in the cycle, so it falls back to the
+  // default: indexing past the end would otherwise wrap to it by accident, and
+  // an accident is not a promise a reader can rely on.
+  if (position < 0) return DEFAULT_REASONING_VIEW
+  return REASONING_VIEW_ORDER[(position + 1) % REASONING_VIEW_ORDER.length] ?? DEFAULT_REASONING_VIEW
 }
 
-/** One character per state, for the row cache key: `h`idden, `s`ummary, `e`xpanded. */
+/**
+ * One character per state, for the row cache key: `h`idden, `s`ummary, `e`xpanded.
+ *
+ * A single character keeps the tag a fixed shape, so it cannot collide with the
+ * `-`/`c` the card flag writes just before it.
+ */
 const REASONING_VIEW_TAG: Readonly<Record<ReasoningViewState, string>> = { hidden: 'h', summary: 's', expanded: 'e' }
 
-const ALL_COLLAPSED: ViewState = { expandCards: false, reasoning: 'summary' }
+const ALL_COLLAPSED: ViewState = { expandCards: false, reasoning: DEFAULT_REASONING_VIEW }
 
 /**
  * Renders the transcript rows and any pending gate as terminal lines.
@@ -125,12 +149,13 @@ export class TranscriptView implements Component {
   }
 
   private pushReasoning(lines: string[], entry: Extract<TranscriptEntry, { kind: 'reasoning' }>, width: number): void {
-    const view = this.viewState.reasoning
-    // A hidden block leaves no row at all: the record of the thinking is the
-    // answer it produced, and a placeholder would defeat the point of hiding.
-    if (view === 'hidden') return
+    const mode = this.viewState.reasoning
+    // No placeholder marks the absence: a reader hiding the thinking wants the
+    // answer to read as the whole reply, and a standing "hidden" row would keep
+    // asking for the attention they just declined to give.
+    if (mode === 'hidden') return
     lines.push(this.theme.dim(truncateToWidth(`${this.theme.glyphs.reasoning} ${displayText(entry.summary)}`, width, '')))
-    if (view !== 'expanded') return
+    if (mode !== 'expanded') return
     for (const line of entry.body.split('\n')) {
       this.pushWrapped(lines, line, width, DETAIL_INDENT, this.theme.dim)
     }

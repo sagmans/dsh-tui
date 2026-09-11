@@ -44,13 +44,13 @@ import { CLEAR_TITLE, windowTitle } from './terminal/title.ts'
 import { defaultExportFile, transcriptToText } from './export.ts'
 import { colorEnabled, createTheme } from './theme.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import { TranscriptModel } from './transcript.ts'
+import { TranscriptModel, REASONING_LABEL } from './transcript.ts'
 import { WorkFold, describeTodos } from './work.ts'
 import { WorkDock } from './ui/dock.ts'
 import { MarkdownRenderer } from './ui/markdown.ts'
 import { PresetPicker, SessionPicker, type PickerAction, type PickerCard } from './ui/picker.ts'
 import { StatusBar, formatTokens } from './ui/status.ts'
-import { TranscriptView, nextReasoningView, type ReasoningViewState } from './ui/view.ts'
+import { TranscriptView, nextReasoningView, DEFAULT_REASONING_VIEW, type MutableViewState } from './ui/view.ts'
 
 export const name = 'tui'
 
@@ -58,7 +58,7 @@ export const name = 'tui'
 export const inject = ['agents']
 
 /** Keys the surface answers itself, listed wherever the reader asks for help. */
-const LOCAL_KEYS = 'ctrl+o tool detail · ctrl+t thinking detail or hidden · ctrl+b back to this session · ctrl+c interrupt or exit'
+const LOCAL_KEYS = `ctrl+o tool detail · ctrl+t ${REASONING_LABEL} detail or hidden · ctrl+b back to this session · ctrl+c interrupt or exit`
 
 /** The one thing to say about a view a reader did not open. */
 const LOCAL_KEYS_BACK = 'ctrl+b returns'
@@ -148,9 +148,10 @@ export function apply(ctx: Context, config: unknown): void {
   const markdown = new MarkdownRenderer(theme.markdown)
   /**
    * Rows the reader has opened. The model stays untouched; only the view reads
-   * this, and it is the surface's own mutable copy of what the view sees.
+   * this, and it is the surface's own copy of what the view sees — mutably
+   * typed, because changing it is exactly this handler's job.
    */
-  const viewState: { expandCards: boolean; reasoning: ReasoningViewState } = { expandCards: false, reasoning: 'summary' }
+  const viewState: MutableViewState = { expandCards: false, reasoning: DEFAULT_REASONING_VIEW }
   const restore = createRestoreRegistry()
   const terminal = new ProcessTerminal()
   const tui = new TuiAltScreen(terminal)
