@@ -16,6 +16,8 @@ describe('classifySubmission', () => {
     expect(classifySubmission('/status')).toEqual({ kind: 'status' })
     expect(classifySubmission('/model')).toEqual({ kind: 'model', argument: '' })
     expect(classifySubmission('/model  zai-coding-cn/glm-5.3 ')).toEqual({ kind: 'model', argument: 'zai-coding-cn/glm-5.3' })
+    expect(classifySubmission('/preset')).toEqual({ kind: 'preset', argument: '' })
+    expect(classifySubmission('/preset  ptc ')).toEqual({ kind: 'preset', argument: 'ptc' })
     expect(classifySubmission('/jobs')).toEqual({ kind: 'jobs', argument: '' })
     expect(classifySubmission('/jobs kill j1')).toEqual({ kind: 'jobs', argument: 'kill j1' })
     expect(classifySubmission('/rename  dock polish ')).toEqual({ kind: 'rename', title: 'dock polish' })

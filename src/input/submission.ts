@@ -7,6 +7,7 @@ export type Submission =
   | { readonly kind: 'resume' }
   | { readonly kind: 'status' }
   | { readonly kind: 'model'; readonly argument: string }
+  | { readonly kind: 'preset'; readonly argument: string }
   | { readonly kind: 'jobs'; readonly argument: string }
   | { readonly kind: 'rename'; readonly title: string }
   | { readonly kind: 'export'; readonly path: string }
@@ -20,7 +21,7 @@ export type Submission =
 
 /** Commands the surface answers itself, without a model turn. */
 export const LOCAL_COMMANDS = [
-  '/help', '/status', '/model', '/todo', '/jobs', '/subagents', '/fork', '/new', '/rename', '/export', '/copy', '/clear', '/resume', '/quit', '/exit',
+  '/help', '/status', '/model', '/preset', '/todo', '/jobs', '/subagents', '/fork', '/new', '/rename', '/export', '/copy', '/clear', '/resume', '/quit', '/exit',
 ] as const
 
 /** What each local command does, shown in the editor's completion menu. */
@@ -28,6 +29,7 @@ export const LOCAL_COMMAND_DESCRIPTIONS: Readonly<Record<string, string>> = {
   '/help': 'list registered and local commands',
   '/status': 'show the session, model, permissions, and context',
   '/model': 'show or switch the model for the next step',
+  '/preset': 'choose the agent preset (mode) this session runs',
   '/jobs': 'list background jobs, read one, or kill one',
   '/subagents': 'list delegations; /subagents open <id|last> reads one, /subagents kill <id> stops one',
   '/todo': 'show the list of tasks the agent is keeping',
@@ -59,6 +61,9 @@ export function classifySubmission(text: string): Submission {
   if (trimmed === '/status') return { kind: 'status' }
   if (trimmed === '/model' || trimmed.startsWith('/model ')) {
     return { kind: 'model', argument: trimmed.slice('/model'.length).trim() }
+  }
+  if (trimmed === '/preset' || trimmed.startsWith('/preset ')) {
+    return { kind: 'preset', argument: trimmed.slice('/preset'.length).trim() }
   }
   if (trimmed === '/jobs' || trimmed.startsWith('/jobs ')) {
     return { kind: 'jobs', argument: trimmed.slice('/jobs'.length).trim() }

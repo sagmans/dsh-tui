@@ -36,13 +36,22 @@ export function apply(ctx: Context): void {
     .option('--new', 'start a fresh session without the history picker')
     .option('--model <model>', 'override the default model id')
     .option('--provider <provider>', 'override the default provider route')
+    .option('--preset <preset>', 'agent preset (mode) the new session runs')
     .option('--no-color', 'disable ANSI styling')
     .option('--no-bell', 'do not ring the terminal bell when a long turn finishes')
 
   program.action((
     mode: string | undefined,
     session: string | undefined,
-    options: { resume?: string | boolean; new?: boolean; model?: string; provider?: string; color?: boolean; bell?: boolean },
+    options: {
+      resume?: string | boolean
+      new?: boolean
+      model?: string
+      provider?: string
+      preset?: string
+      color?: boolean
+      bell?: boolean
+    },
   ) => {
     let intent
     try {
@@ -67,6 +76,7 @@ export function apply(ctx: Context): void {
       resumePicker: intent.resumePicker,
       model: options.model?.trim() || undefined,
       provider: options.provider?.trim() || undefined,
+      preset: options.preset?.trim() || undefined,
       color: options.color !== false,
       bell: options.bell !== false,
     } satisfies TuiStartup)

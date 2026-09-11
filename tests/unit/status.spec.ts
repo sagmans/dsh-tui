@@ -12,6 +12,7 @@ const facts = (overrides: Partial<StatusFacts> = {}): StatusFacts => ({
   provider: 'deepseek-official',
   model: 'deepseek-chat',
   effort: 'max',
+  agentPreset: 'standard',
   preset: 'workspace-write',
   contextTokens: 12_400,
   contextWindow: 128_000,
@@ -82,7 +83,7 @@ describe('cacheRate', () => {
 describe('formatStatus', () => {
   it('reads as a sentence about the session', () => {
     expect(formatStatus(facts(), 200, theme)).toBe(
-      '● ready · deepseek-official/deepseek-chat (max) · workspace-write · ctx 12.4k/128k · cache 87% · ~/deepseek-harness/master',
+      '● ready · standard · deepseek-official/deepseek-chat (max) · workspace-write · ctx 12.4k/128k · cache 87% · ~/deepseek-harness/master',
     )
   })
 
@@ -97,6 +98,7 @@ describe('formatStatus', () => {
         provider: undefined,
         model: undefined,
         effort: undefined,
+        agentPreset: undefined,
         preset: undefined,
         contextTokens: undefined,
         contextWindow: undefined,
@@ -106,6 +108,11 @@ describe('formatStatus', () => {
       theme,
     )
     expect(line).toBe('● ready · ~/deepseek-harness/master')
+  })
+
+  it('states the mode before the model it applies to', () => {
+    const line = formatStatus(facts({ agentPreset: 'minimal' }), 200, theme)
+    expect(line.startsWith('● ready · minimal · deepseek-official/deepseek-chat')).toBe(true)
   })
 
   it('never overflows the row it was given', () => {

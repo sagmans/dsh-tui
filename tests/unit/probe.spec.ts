@@ -18,6 +18,12 @@ describe('probeComposition', () => {
     expect(describeMissingOptional(report)).toBeUndefined()
   })
 
+  it('requires the roster, because it owns the tools every session runs', () => {
+    expect(REQUIRED_CAPABILITIES.some(capability => capability.service === 'agentPresets')).toBe(true)
+    expect(probeComposition(service => service !== 'agentPresets').missingRequired
+      .map(capability => capability.service)).toEqual(['agentPresets'])
+  })
+
   it('separates what stops the surface from what only degrades it', () => {
     const report = probeComposition(service => service !== 'agents' && service !== 'commands')
     expect(report.missingRequired.map(capability => capability.service)).toEqual(['agents'])

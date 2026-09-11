@@ -96,13 +96,13 @@ exports[`golden frames > renders the session picker at 80 columns 1`] = `
 
 exports[`golden frames > renders the status row at 40 columns 1`] = `
 [
-  "● ready · zai-coding-cn/glm-5.3 (max) ·[0m…[0m",
+  "● ready · standard · zai-coding-cn/glm-[0m…[0m",
 ]
 `;
 
 exports[`golden frames > renders the status row at 80 columns 1`] = `
 [
-  "● ready · zai-coding-cn/glm-5.3 (max) · workspace-write · ctx 17.5k/1.0M · cach[0m…[0m",
+  "● ready · standard · zai-coding-cn/glm-5.3 (max) · workspace-write · ctx 17.5k/[0m…[0m",
 ]
 `;
 

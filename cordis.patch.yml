@@ -93,6 +93,7 @@
         resumePicker: !!js ctx.tuiStartup.resumePicker
         model: !!js ctx.tuiStartup.model
         provider: !!js ctx.tuiStartup.provider
+        preset: !!js ctx.tuiStartup.preset
         color: !!js ctx.tuiStartup.color
         bell: !!js ctx.tuiStartup.bell
 
@@ -102,6 +103,18 @@
       name: '@deepseek-ai/dsh-agent-presets'
       config:
         default: standard
+
+    # A preset's subagent tool samples its delegation model from this host-owned
+    # settings row. It is host machinery rather than agent plane, which is why
+    # the Web bundle inserts it too instead of leaving it to the preset.
+    - id: subagent-model-selection-settings
+      name: '@deepseek-ai/dsh-tool-subagent/model-selection-settings'
+
+    # Creator mode inspects and re-composes the running harness, which needs the
+    # host half of the dynamic-plugin runner. Only the Web bundle ships this
+    # row, so a terminal profile has to mount it to offer that mode at all.
+    - id: cordis-host-runner
+      name: '@deepseek-ai/dsh-cordis-host-runner'
 
     # PTC mode runs its programs against a code runtime. The Web bundle mounts
     # this at host level for the same reason: the runtime is machinery, while

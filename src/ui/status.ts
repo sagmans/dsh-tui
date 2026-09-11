@@ -10,6 +10,9 @@ export interface StatusFacts {
   readonly provider: string | undefined
   readonly model: string | undefined
   readonly effort: string | undefined
+  /** The agent preset (mode) the session runs; fixed once it has a turn. */
+  readonly agentPreset: string | undefined
+  /** The permission preset, which is a sandbox policy and a different thing. */
   readonly preset: string | undefined
   readonly contextTokens: number | undefined
   readonly contextWindow: number | undefined
@@ -66,6 +69,9 @@ export function formatStatus(facts: StatusFacts, width: number, theme: TuiTheme)
   } else {
     parts.push('● ready')
   }
+  // The mode comes first: it decides which tools exist at all, so a reader who
+  // saw a tool disappear needs it before the model that ran it.
+  if (facts.agentPreset !== undefined && facts.agentPreset !== '') parts.push(facts.agentPreset)
   if (facts.model !== undefined && facts.model !== '') {
     const route = facts.provider === undefined || facts.provider === '' ? facts.model : `${facts.provider}/${facts.model}`
     parts.push(facts.effort === undefined || facts.effort === '' ? route : `${route} (${facts.effort})`)

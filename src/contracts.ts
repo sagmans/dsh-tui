@@ -16,6 +16,8 @@ export interface TuiStartup {
   readonly model: string | undefined
   /** Provider-route override supplied on the command line. */
   readonly provider: string | undefined
+  /** Agent preset the new session runs; absent takes the roster's default. */
+  readonly preset: string | undefined
   /** Whether ANSI styling is enabled. */
   readonly color: boolean
   /** Whether a long turn may ring the terminal bell when it finishes. */

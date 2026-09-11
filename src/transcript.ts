@@ -242,6 +242,13 @@ export class TranscriptModel {
         this.reportTurnEnd(asRecord(data.reason) ?? {})
         return
       }
+      case 'agent-preset/selected': {
+        // The log records the composition later turns ran under, so a reader
+        // who switched modes sees where the switch happened.
+        const selected = typeof data.agentPreset === 'string' ? data.agentPreset : ''
+        if (selected !== '') this.marker(`preset → ${selected}`)
+        return
+      }
       case 'compaction/start': {
         this.marker('compacting the conversation')
         return

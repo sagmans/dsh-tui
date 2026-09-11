@@ -78,14 +78,28 @@ const DISABLED_ROWS = [
 ]
 
 /**
- * First-party packages the patch may name.
+ * First-party packages the patch names for rows this plugin provides.
  *
- * A bundle owns the rows it inserts, so naming anything else would make the
- * profile depend on a package this plugin never declared.
+ * A bundle owns the rows it inserts, so naming anything here makes the profile
+ * depend on a package that nothing would install unless this manifest declares
+ * it — which the check below enforces.
  */
 const NAMED_PACKAGES = [
   '@deepseek-ai/dsh-agent-presets',
   '@deepseek-ai/dsh-code-runtime-worker-thread',
+  '@deepseek-ai/dsh-cordis-host-runner',
+]
+
+/**
+ * First-party packages the patch names for HOST machinery instead.
+ *
+ * These rows are not part of the agent plane: a preset's own rows require them
+ * in the host scope, and the harness install already ships each package (the
+ * base bundle mounts them), so the profile resolves them without this plugin
+ * depending on them.
+ */
+const HOST_ROWS = [
+  '@deepseek-ai/dsh-tool-subagent/model-selection-settings',
 ]
 
 function walk(directory) {
@@ -125,8 +139,9 @@ try {
     }
   }
   const named = new Set([...patch.matchAll(/name: '(@deepseek-ai\/[^']+)'/gu)].map(match => match[1]))
+  const allowed = [...NAMED_PACKAGES, ...HOST_ROWS]
   for (const name of named) {
-    if (!NAMED_PACKAGES.includes(name)) problems.push(`the bundle patch mounts ${name}, which it does not depend on`)
+    if (!allowed.includes(name)) problems.push(`the bundle patch mounts ${name}, which this plugin neither provides nor is documented as host machinery`)
   }
   for (const name of NAMED_PACKAGES) {
     if (!named.has(name)) problems.push(`the bundle patch no longer mounts ${name}`)

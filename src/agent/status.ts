@@ -1,7 +1,8 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { StatusFacts } from '../ui/status.ts'
-import { projectionRecord } from './projections.ts'
+import { AGENT_PRESET_KEY } from './presets.ts'
+import { projectionRecord, projectionString } from './projections.ts'
 
 /** Whether a turn is running and when it started. */
 export interface ActivityState {
@@ -101,6 +102,7 @@ export function createStatusFacts(ctx: Context, sources: StatusSources): () => S
       provider: selection?.provider,
       model: selection?.model,
       effort: selection?.reasoningEffort,
+      agentPreset: session === undefined ? undefined : projectionString(ctx, session, AGENT_PRESET_KEY),
       preset,
       contextTokens: numberOr(pressure?.pressureTokens),
       contextWindow: numberOr(pressure?.contextWindow),

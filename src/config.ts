@@ -42,6 +42,7 @@ export function resolveConfig(raw: unknown): TuiStartup {
     resumePicker: optionalBoolean(record.resumePicker, 'resumePicker', false),
     model: optionalString(record.model, 'model'),
     provider: optionalString(record.provider, 'provider'),
+    preset: optionalString(record.preset, 'preset'),
     color: optionalBoolean(record.color, 'color', true),
     bell: optionalBoolean(record.bell, 'bell', true),
   }

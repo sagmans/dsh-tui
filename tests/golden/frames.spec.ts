@@ -64,6 +64,7 @@ function fixture(): { view: TranscriptView; dock: WorkDock; status: StatusBar } 
       provider: 'zai-coding-cn',
       model: 'glm-5.3',
       effort: 'max',
+      agentPreset: 'standard',
       preset: 'workspace-write',
       contextTokens: 17_500,
       contextWindow: 1_000_000,

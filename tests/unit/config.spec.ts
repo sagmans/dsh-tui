@@ -9,18 +9,20 @@ describe('resolveConfig', () => {
       resumePicker: false,
       model: undefined,
       provider: undefined,
+      preset: undefined,
       color: true,
       bell: true,
     })
   })
 
   it('keeps explicit values', () => {
-    expect(resolveConfig({ sessionId: 'abc', resume: true, resumePicker: true, model: 'm', provider: 'p', color: false, bell: false }))
-      .toEqual({ sessionId: 'abc', resume: true, resumePicker: true, model: 'm', provider: 'p', color: false, bell: false })
+    expect(resolveConfig({ sessionId: 'abc', resume: true, resumePicker: true, model: 'm', provider: 'p', preset: 'ptc', color: false, bell: false }))
+      .toEqual({ sessionId: 'abc', resume: true, resumePicker: true, model: 'm', provider: 'p', preset: 'ptc', color: false, bell: false })
   })
 
   it('treats blank optional strings as absent', () => {
     expect(resolveConfig({ sessionId: 'abc', model: '   ' }).model).toBeUndefined()
+    expect(resolveConfig({ sessionId: 'abc', preset: '  ' }).preset).toBeUndefined()
   })
 
   it('rejects a missing or blank session id', () => {
@@ -37,6 +39,7 @@ describe('resolveConfig', () => {
     expect(() => resolveConfig({ sessionId: 'abc', resume: 'yes' })).toThrow(TuiConfigError)
     expect(() => resolveConfig({ sessionId: 'abc', color: 1 })).toThrow(TuiConfigError)
     expect(() => resolveConfig({ sessionId: 'abc', model: 7 })).toThrow(TuiConfigError)
+    expect(() => resolveConfig({ sessionId: 'abc', preset: 7 })).toThrow(TuiConfigError)
     expect(() => resolveConfig({ sessionId: 'abc', bell: 'no' })).toThrow(TuiConfigError)
   })
 })

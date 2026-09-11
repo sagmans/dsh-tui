@@ -25,6 +25,11 @@ export const REQUIRED_CAPABILITIES: readonly Capability[] = [
     fix: 'mount @deepseek-ai/dsh-agent with an agent-loop implementation',
   },
   {
+    service: 'agentPresets',
+    use: 'choosing the composition an agent runs, which owns its tools and prompt',
+    fix: 'mount @deepseek-ai/dsh-agent-presets, which this bundle inserts',
+  },
+  {
     service: 'appExit',
     use: 'leaving with the exit code the launcher owns',
     fix: 'start this surface with dsh --profile tui',
