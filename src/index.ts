@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { Editor, ProcessTerminal, ScrollView, TuiAltScreen, VStack, matchesKey } from '@earendil-works/pi-tui'
+import { Editor, ProcessTerminal, ScrollView, TuiAltScreen, VStack, isKeyRelease, matchesKey } from '@earendil-works/pi-tui'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 // Type-only: the command registry publishes the change event this surface
@@ -258,6 +258,13 @@ export function apply(ctx: Context, config: unknown): void {
   }
 
   disposers.push(tui.addInputListener(data => {
+    // A key arrives as a press and a release once the surface asks the terminal
+    // to report key events, and this library drops the release only for the
+    // focused component: a listener sees both halves, so an arrow key that is
+    // acted on twice steps a picker two rows and answers a question two options
+    // on. Falls through rather than consuming, which leaves a component that
+    // asked for releases its own half.
+    if (isKeyRelease(data)) return undefined
     if (pending !== undefined) {
       if (pending.kind === 'approval') {
         const outcome = pending.gate.handleKey(data)

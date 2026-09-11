@@ -149,6 +149,7 @@ The automated checks drive a real PTY, but they run on this machine's terminal. 
 | `/preset` on a fresh session | the picker lists four modes, marks the current one, and the switch survives a resume |
 | `/preset minimal` after a turn | refused, naming the reason; the session keeps the mode it composed with |
 | `dsh --profile tui --preset nope` | exits non-zero naming the modes that do exist, before the alternate screen appears |
+| arrow keys in a picker, or on a question's options, in a terminal that reports key events (Kitty, WezTerm, Ghostty, iTerm2) | one press moves one row, and holding a key still repeats; a terminal that sends only the legacy sequence behaves the same |
 | resize the window mid-turn | the transcript rewraps; the dock, editor, and status row stay put |
 | a 40-column terminal | rows end in `…` instead of wrapping into the next line |
 | `echo hi \| dsh --profile tui` | refuses with a non-zero exit and a message naming the TTY requirement |
