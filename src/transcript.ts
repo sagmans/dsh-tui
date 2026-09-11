@@ -13,6 +13,15 @@ export type TranscriptEntry =
 export const REASONING_CHAR_LIMIT = 20_000
 
 /**
+ * What the surface calls the model's private thinking.
+ *
+ * The protocol term is `reasoning` and stays that way in the event and block
+ * names this fold reads; this is the word the reader sees, and it is named once
+ * so the row, the key hint and the dump cannot drift apart from each other.
+ */
+export const REASONING_LABEL = 'thinking'
+
+/**
  * Minimal durable-input shape the fold needs.
  *
  * The fold reads events structurally instead of importing a large event union:
@@ -121,15 +130,15 @@ function injectionSummary(data: Record<string, unknown>, text: string): string {
  * assistant text and reasoning apart from them.
  *
  * Durable events own the transcript: the live stream is decoration that a
- * repaint or a resume can drop without changing what the reader sees. Tool
+ * repaint or a resume can drop without changing what the reader sees. Reasoning
+ * rows are settled from the durable message for exactly that reason — the
+ * stream only ever supplies the in-flight row a reader watches arrive. Tool
  * rows come from the tool's own render intent, so the fold never learns a tool
  * name.
  */
 export class TranscriptModel {
   private readonly settled: TranscriptEntry[] = []
   private readonly pending = new Map<string, PendingCall>()
-  /** Thinking already rendered from the stream, so the durable repeat is not doubled. */
-  private readonly streamedReasoning: string[] = []
   private live = ''
   private liveReasoning = ''
   private reasoningStartedAt: number | undefined
@@ -147,7 +156,7 @@ export class TranscriptModel {
       const ranFor = this.reasoningStartedAt === undefined ? undefined : this.now() - this.reasoningStartedAt
       entries.push({
         kind: 'reasoning',
-        summary: `reasoning · ${this.liveReasoning.length} chars${ranFor === undefined ? '' : ` · ${Math.max(1, Math.round(ranFor / 1000))}s`} · streaming`,
+        summary: `${REASONING_LABEL} · ${this.liveReasoning.length} chars${ranFor === undefined ? '' : ` · ${Math.max(1, Math.round(ranFor / 1000))}s`} · streaming`,
         body: this.liveReasoning,
         live: true,
       })
@@ -175,7 +184,6 @@ export class TranscriptModel {
   reset(): void {
     this.settled.length = 0
     this.pending.clear()
-    this.streamedReasoning.length = 0
     this.live = ''
     this.liveReasoning = ''
     this.reasoningStartedAt = undefined
@@ -241,75 +249,50 @@ export class TranscriptModel {
   }
 
   /**
-   * Settle the reasoning streamed so far into a row of its own.
+   * Drop the reasoning streamed so far, without settling a row for it.
    *
-   * The row lands where the reasoning happened, which is before the answer it
-   * produced, so reading order still matches the order the model thought in.
+   * The stream is decoration (see the class doc): the durable message that ends
+   * the step is the one and only source of a settled reasoning row, so what the
+   * stream accumulated is discarded here and re-read from the log moments later.
+   * Painting from both is what doubled a thought, and matching the two copies by
+   * their text to suppress the repeat only moved the failure to the messages
+   * whose reasoning the stream had not carried — the common `reasoning` plus
+   * `tool-call` step, which has no text to match on.
    */
   private settleReasoning(): void {
-    if (this.liveReasoning === '') return
-    const text = this.liveReasoning
-    const ranFor = this.reasoningStartedAt === undefined ? undefined : this.now() - this.reasoningStartedAt
     this.liveReasoning = ''
     this.reasoningStartedAt = undefined
-    this.rememberReasoning(text)
-    this.pushReasoning(text, ranFor)
   }
 
   /**
-   * Append one thinking block as its own row, whatever produced it.
+   * Append one thinking block as its own row.
    *
-   * Both paths land here so a resumed session renders the same rows a live one
-   * did: the stream settles what it watched arrive, and the durable message
-   * settles what the log recorded. The durable path runs second on a live turn,
-   * which is why {@link rememberReasoning} has to recognise the repeat.
+   * Only the durable message settles rows, so a resumed session and a live one
+   * take the same path here and cannot drift apart. The elapsed time a live
+   * reader watched is not available on the durable path, which is why the
+   * duration is optional: the log records what was thought, not how long it took.
    */
   private pushReasoning(text: string, ranFor: number | undefined): void {
     const lines = countLines(text)
     const cut = text.length > REASONING_CHAR_LIMIT ? `\n… truncated at ${REASONING_CHAR_LIMIT} chars` : ''
     this.settled.push({
       kind: 'reasoning',
-      summary: `reasoning · ${lines} line${lines === 1 ? '' : 's'} · ${text.length} chars${ranFor === undefined ? '' : ` · ${Math.max(1, Math.round(ranFor / 1000))}s`}`,
+      summary: `${REASONING_LABEL} · ${lines} line${lines === 1 ? '' : 's'} · ${text.length} chars${ranFor === undefined ? '' : ` · ${Math.max(1, Math.round(ranFor / 1000))}s`}`,
       body: text.slice(0, REASONING_CHAR_LIMIT) + cut,
       live: false,
     })
   }
 
   /**
-   * Record a thinking block already rendered from the stream.
+   * Push the thinking blocks of one durable message.
    *
-   * A live turn sees the same thinking twice — once streamed, once durable —
-   * and rendering it twice would double every thought on screen. The recorded
-   * text is dropped again when the turn's message consumes it, so the set stays
-   * bounded by one step's thinking.
+   * This is the whole reasoning path: a live turn reaches it having just dropped
+   * the streamed copy, and a resumed turn reaches it with nothing streamed at
+   * all. Every block is new here, so there is nothing to recognise and no state
+   * to carry between messages.
    */
-  private rememberReasoning(text: string): void {
-    this.streamedReasoning.push(text)
-  }
-
-  /**
-   * Push the thinking blocks of one durable message, skipping the ones the
-   * stream already settled.
-   *
-   * A live turn reaches this with the streamed copy already consumed by
-   * {@link settleReasoning}, which is what the match below recognises. A
-   * resumed turn never streams at all, so every recorded block is new here —
-   * which is the whole point: the log is the only source a resume has.
-   *
-   * The buffer is cleared whatever this message held, because it can only ever
-   * describe the step that just ended. Keeping stale text would let a later,
-   * unrelated thought that happens to use the same words go unpainted.
-   */
-  private settleDurableReasoning(message: Record<string, unknown> | undefined): void {
-    for (const text of reasoningOfContent(message?.content)) {
-      const alreadyShown = this.streamedReasoning.indexOf(text)
-      if (alreadyShown >= 0) {
-        this.streamedReasoning.splice(alreadyShown, 1)
-        continue
-      }
-      this.pushReasoning(text, undefined)
-    }
-    this.streamedReasoning.length = 0
+  private settleDurableReasoning(content: unknown): void {
+    for (const text of reasoningOfContent(content)) this.pushReasoning(text, undefined)
   }
 
   apply(event: FoldableEvent): void {
@@ -356,10 +339,10 @@ export class TranscriptModel {
       case 'assistant/message': {
         const message = asRecord(data.message)
         const text = textOfContent(message?.content)
-        // The streamed copy settles first so the durable one is recognized as
-        // the same thinking rather than painted a second time.
+        // The streamed copy is dropped before the durable one is read, so the
+        // log is the only thing that ever settles a thought row.
         this.settleReasoning()
-        this.settleDurableReasoning(message)
+        this.settleDurableReasoning(message?.content)
         this.live = ''
         if (text !== '') this.settled.push({ kind: 'assistant', text })
         return

@@ -36,9 +36,16 @@ export function transcriptToText(entries: readonly TranscriptEntry[]): string {
       case 'marker':
         lines.push('', `--- ${displayText(entry.text)} ---`)
         break
-      case 'reasoning':
-        lines.push('', `<!-- ${displayText(entry.summary)} -->`)
+      case 'reasoning': {
+        // The dump is the record, so it keeps the thought whether or not the
+        // screen was showing it. It stays a comment because it is not something
+        // the assistant said: a reader scanning the file for the reply must not
+        // find the model's private reasoning sitting in the middle of it.
+        const header = `<!-- ${displayText(entry.summary)} -->`
+        const body = entry.body === '' ? [] : displayText(entry.body).split('\n').map(line => `<!-- ${line} -->`)
+        lines.push('', header, ...body)
         break
+      }
       case 'tool': {
         const mark = entry.card.failed ? 'ERROR' : 'tool'
         lines.push('', `### ${mark}: ${displayText(entry.card.title)}`, '', '```')

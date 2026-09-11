@@ -35,7 +35,10 @@ function fixture(): { view: TranscriptView; dock: WorkDock; status: StatusBar } 
   model.applyStreamChunk({ type: 'block-end', block: { type: 'reasoning' } })
   model.apply({
     type: 'assistant/message',
-    data: { message: { content: [{ type: 'text', text: 'Done.\n\n- fold the work state\n- render it only when it says something\n\n```ts\nconst dock = new WorkDock(state, theme)\n```' }] } },
+    data: { message: { content: [
+      { type: 'reasoning', text: 'the dock needs the fold\nand the fold needs the events' },
+      { type: 'text', text: 'Done.\n\n- fold the work state\n- render it only when it says something\n\n```ts\nconst dock = new WorkDock(state, theme)\n```' },
+    ] } },
   })
   model.apply({ type: 'tool/call', data: { name: 'bash', arguments: '{"command":"pnpm test"}', callId: 'c1' } })
   model.apply({

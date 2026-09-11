@@ -71,37 +71,45 @@ describe('TranscriptModel rows', () => {
 })
 
 describe('TranscriptModel reasoning', () => {
-  it('shows a live reasoning row, with how long it has been thinking, and settles it ahead of the answer', () => {
+  it('shows a live reasoning row while the thought streams, then settles it from the record', () => {
     let clock = 1_000
     const model = new TranscriptModel(undefined, () => clock)
     model.applyStreamChunk({ type: 'reasoning-delta', text: 'think' })
     model.applyStreamChunk({ type: 'reasoning-delta', text: 'ing' })
     clock = 4_000
     expect(model.entries()).toEqual([
-      { kind: 'reasoning', summary: 'reasoning · 8 chars · 3s · streaming', body: 'thinking', live: true },
+      { kind: 'reasoning', summary: 'thinking · 8 chars · 3s · streaming', body: 'thinking', live: true },
     ])
-    model.apply({ type: 'assistant/message', data: { message: { content: text('answer') } } })
+    model.apply(
+      message([reasoning('thinking'), ...text('answer')]),
+    )
     expect(model.entries()).toEqual([
-      { kind: 'reasoning', summary: 'reasoning · 1 line · 8 chars · 3s', body: 'thinking', live: false },
+      { kind: 'reasoning', summary: 'thinking · 1 line · 8 chars', body: 'thinking', live: false },
       { kind: 'assistant', text: 'answer' },
     ])
   })
 
-  it('settles a completed reasoning block without waiting for the message', () => {
+  it('drops the streamed copy at block end and waits for the record to settle it', () => {
+    // The stream is decoration: settling a row from it as well as from the log
+    // is what painted one thought twice, so a completed block leaves no row
+    // until the durable message that owns it arrives.
     let clock = 0
     const model = new TranscriptModel(undefined, () => clock)
     model.applyStreamChunk({ type: 'reasoning-delta', text: 'a\nb' })
     clock = 2_000
     model.applyStreamChunk({ type: 'block-end', block: { type: 'reasoning' } })
+    expect(model.entries()).toEqual([])
+    model.apply(message([reasoning('a\nb'), ...text('answer')]))
     expect(model.entries()).toEqual([
-      { kind: 'reasoning', summary: 'reasoning · 2 lines · 3 chars · 2s', body: 'a\nb', live: false },
+      { kind: 'reasoning', summary: 'thinking · 2 lines · 3 chars', body: 'a\nb', live: false },
+      { kind: 'assistant', text: 'answer' },
     ])
   })
 
   it('keeps only the head of a runaway thought', () => {
     const model = new TranscriptModel()
-    model.applyStreamChunk({ type: 'reasoning-delta', text: 'x'.repeat(REASONING_CHAR_LIMIT + 10) })
-    model.applyStreamChunk({ type: 'block-end', block: { type: 'reasoning' } })
+    const runaway = 'x'.repeat(REASONING_CHAR_LIMIT + 10)
+    model.apply(message([reasoning(runaway), ...text('answer')]))
     const entry = model.entries()[0]
     expect(entry?.kind).toBe('reasoning')
     const body = entry?.kind === 'reasoning' ? entry.body : ''
@@ -116,7 +124,7 @@ describe('TranscriptModel reasoning', () => {
     const model = new TranscriptModel()
     model.apply(message([reasoning('let me check the registry'), ...text('0.1.2 is published')]))
     expect(model.entries()).toEqual([
-      { kind: 'reasoning', summary: 'reasoning · 1 line · 25 chars', body: 'let me check the registry', live: false },
+      { kind: 'reasoning', summary: 'thinking · 1 line · 25 chars', body: 'let me check the registry', live: false },
       { kind: 'assistant', text: '0.1.2 is published' },
     ])
   })
@@ -127,7 +135,7 @@ describe('TranscriptModel reasoning', () => {
     expect(model.entries()).toEqual([
       {
         kind: 'reasoning',
-        summary: 'reasoning · 2 lines · 39 chars',
+        summary: 'thinking · 2 lines · 39 chars',
         body: 'weighing the options\npicking the second',
         live: false,
       },
@@ -139,9 +147,30 @@ describe('TranscriptModel reasoning', () => {
     model.applyStreamChunk({ type: 'reasoning-delta', text: 'thinking hard' })
     model.apply(message([reasoning('thinking hard'), ...text('the answer')]))
     expect(model.entries()).toEqual([
-      { kind: 'reasoning', summary: 'reasoning · 1 line · 13 chars · 1s', body: 'thinking hard', live: false },
+      { kind: 'reasoning', summary: 'thinking · 1 line · 13 chars', body: 'thinking hard', live: false },
       { kind: 'assistant', text: 'the answer' },
     ])
+  })
+
+  it('paints a thought once when the step that carries it has no answer text', () => {
+    // The shape the log uses most: a step that only thinks and calls a tool.
+    // The old text-matching dedup could only retire a streamed copy against a
+    // later message repeating it, so a step with no text to match on left the
+    // buffer holding text that the step after it painted a second time.
+    const model = new TranscriptModel(undefined, () => 1_000)
+    model.applyStreamChunk({ type: 'reasoning-delta', text: 'T' })
+    model.applyStreamChunk({ type: 'block-end', block: { type: 'reasoning' } })
+    model.apply(message([reasoning('T'), { type: 'tool-call', id: 'c1', name: 'bash', arguments: '{}' }]))
+    model.apply({
+      type: 'tool/result',
+      data: { message: { content: [{ type: 'tool-result', toolCallId: 'c1', text: 'out' }], isError: false } },
+    })
+    model.apply(message([reasoning('T'), ...text('answer')]))
+    expect(model.entries().map(entry => entry.kind)).toEqual(['reasoning', 'tool', 'reasoning', 'assistant'])
+    const thought = model.entries()[0]
+    const later = model.entries()[2]
+    expect(thought?.kind === 'reasoning' && thought.body).toBe('T')
+    expect(later?.kind === 'reasoning' && later.body).toBe('T')
   })
 
   it('still reads the text a tool result carries directly', () => {
@@ -167,12 +196,15 @@ describe('TranscriptModel reasoning', () => {
 
   it('settles a thought the stream ended before its message arrives', () => {
     // The real ordering: the stream closes the block first, then the durable
-    // message carries the same text. Painting both would double the thought.
+    // message carries the same text. The message is the only thing that paints.
     const model = new TranscriptModel(undefined, () => 1_000)
     model.applyStreamChunk({ type: 'reasoning-delta', text: 'thinking hard' })
     model.applyStreamChunk({ type: 'block-end', block: { type: 'reasoning' } })
     model.apply(message([reasoning('thinking hard'), ...text('the answer')]))
-    expect(model.entries().map(entry => entry.kind)).toEqual(['reasoning', 'assistant'])
+    expect(model.entries()).toEqual([
+      { kind: 'reasoning', summary: 'thinking · 1 line · 13 chars', body: 'thinking hard', live: false },
+      { kind: 'assistant', text: 'the answer' },
+    ])
   })
 
   it('keeps two recorded steps apart even when they read the same', () => {

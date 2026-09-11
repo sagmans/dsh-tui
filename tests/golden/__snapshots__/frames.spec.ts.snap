@@ -113,7 +113,7 @@ exports[`golden frames > renders the transcript at 40 columns 1`] = `
   "› add a dock above the editor",
   "· injected dsh-agent-instructions · 3",
   "  lines — <system-reminder>",
-  "▸ reasoning · 2 lines · 53 chars · 3s",
+  "▸ thinking · 2 lines · 53 chars",
   "⏺ Done.",
   "",
   "  - fold the work state",
@@ -134,7 +134,7 @@ exports[`golden frames > renders the transcript at 80 columns 1`] = `
 [
   "› add a dock above the editor",
   "· injected dsh-agent-instructions · 3 lines — <system-reminder>",
-  "▸ reasoning · 2 lines · 53 chars · 3s",
+  "▸ thinking · 2 lines · 53 chars",
   "⏺ Done.",
   "",
   "  - fold the work state",

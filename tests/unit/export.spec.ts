@@ -50,6 +50,42 @@ describe('transcriptToText', () => {
     expect(text.includes('\u001b')).toBe(false)
   })
 
+  it('keeps a thought in the dump, and keeps it out of the reply', () => {
+    // A dump is a record, so it carries the thinking even though the screen
+    // hides it; it stays commented because a reader scanning the file for the
+    // answer must not find the model reasoning to itself in the middle of it.
+    const model = new TranscriptModel()
+    model.apply({
+      type: 'assistant/message',
+      data: { message: { content: [
+        { type: 'reasoning', text: 'let me check\nbefore answering' },
+        { type: 'text', text: 'the answer' },
+      ] } },
+    })
+    const text = transcriptToText(model.entries())
+    expect(text).toContain('<!-- thinking \u00b7 2 lines \u00b7 29 chars -->')
+    expect(text).toContain('<!-- let me check -->')
+    expect(text).toContain('<!-- before answering -->')
+    expect(text).toContain('the answer')
+    // The thought never appears as prose: every line of it is commented out.
+    for (const line of text.split('\n')) {
+      if (line.includes('let me check') || line.includes('before answering')) {
+        expect(line.startsWith('<!--')).toBe(true)
+      }
+    }
+  })
+
+  it('escapes a thought that carries control sequences', () => {
+    const model = new TranscriptModel()
+    model.apply({
+      type: 'assistant/message',
+      data: { message: { content: [{ type: 'reasoning', text: '\u001b[31mthinking' }] } },
+    })
+    const text = transcriptToText(model.entries())
+    expect(text).toContain('\\x1B[31mthinking')
+    expect(text.includes('\u001b')).toBe(false)
+  })
+
   it('says how much of a long card the dump left out', () => {
     const model = new TranscriptModel()
     model.apply({ type: 'tool/call', data: { name: 'bash', arguments: '{}', callId: 'c1' } })
