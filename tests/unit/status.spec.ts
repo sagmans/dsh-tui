@@ -34,11 +34,17 @@ describe('formatTokens', () => {
 })
 
 describe('shortPath', () => {
-  it('keeps the tail of a deep path and abbreviates the reader home', () => {
+  it('abbreviates the reader home without inventing a shallower path', () => {
     expect(shortPath('/Users/dev/src/app', '/Users/dev')).toBe('~/src/app')
-    expect(shortPath('/Users/dev/source/opensource/deepseek-harness/master', '/Users/dev')).toBe('~/deepseek-harness/master')
+    expect(shortPath('/Users/dev/source/me/dsh-tui/main', '/Users/dev')).toBe('~/source/me/dsh-tui/main')
+    expect(shortPath('/Users/dev/source/opensource/deepseek-harness/master', '/Users/dev')).toBe('~/source/opensource/deepseek-harness/master')
     expect(shortPath('/Users/dev', '/Users/dev')).toBe('~/')
+  })
+
+  it('keeps the tail of a deep path outside the home and marks the cut', () => {
     expect(shortPath('/tmp/x', '/Users/dev')).toBe('/tmp/x')
+    expect(shortPath('/tmp/a/b/c/d', '/Users/dev')).toBe('…/c/d')
+    expect(shortPath('/tmp/a/b/c/d', undefined)).toBe('…/c/d')
   })
 })
 
@@ -83,7 +89,7 @@ describe('cacheRate', () => {
 describe('formatStatus', () => {
   it('reads as a sentence about the session', () => {
     expect(formatStatus(facts(), 200, theme)).toBe(
-      '● ready · standard · deepseek-official/deepseek-chat (max) · workspace-write · ctx 12.4k/128k · cache 87% · ~/deepseek-harness/master',
+      '● ready · standard · deepseek-official/deepseek-chat (max) · workspace-write · ctx 12.4k/128k · cache 87% · ~/source/opensource/deepseek-harness/master',
     )
   })
 
@@ -107,7 +113,7 @@ describe('formatStatus', () => {
       200,
       theme,
     )
-    expect(line).toBe('● ready · ~/deepseek-harness/master')
+    expect(line).toBe('● ready · ~/source/opensource/deepseek-harness/master')
   })
 
   it('states the mode before the model it applies to', () => {
