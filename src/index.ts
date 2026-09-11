@@ -178,6 +178,8 @@ export function apply(ctx: Context, config: unknown): void {
   let turnOpen = false
   let turnStartedAt: number | undefined
   let exited = false
+  /** Whether a session was really opened, which is what an exit hint can name. */
+  let sessionOpened = false
   /** Re-read the job board; it is live state, so nothing else can fold it. */
   const refreshJobs = (): void => {
     jobs = agent === undefined || jobDirectory === undefined ? [] : jobDirectory.list(agent.agent)
@@ -219,7 +221,7 @@ export function apply(ctx: Context, config: unknown): void {
   ]))
   tui.setFocus(editor)
 
-  const requestExit = (code: number): void => {
+  const requestExit = (code: number, reason?: string): void => {
     if (exited) return
     exited = true
     clearInterval(statusTicker)
@@ -227,9 +229,16 @@ export function apply(ctx: Context, config: unknown): void {
     // its own title can take over cleanly.
     terminal.write(CLEAR_TITLE)
     restore.restore()
+    // Everything below is written after the release: the alternate screen closes
+    // over whatever was painted on it, and a failure nobody can read is not a
+    // failure that was reported.
+    if (reason !== undefined) terminal.write(`\ndsh-tui: ${reason}\n`)
     // The hint is computed here rather than read from the context because only
     // the surface knows which session it is leaving: a fork or a switch moves it.
-    terminal.write(`\n${resumeHint(String(activeSession), PROFILE_NAME)}\n`)
+    // A run that opened nothing has nothing to offer back: the identity it was
+    // launched with names no log, so pointing at it would send the reader to a
+    // conversation that does not exist.
+    if (sessionOpened) terminal.write(`\n${resumeHint(String(activeSession), PROFILE_NAME)}\n`)
     appExit(code)
   }
 
@@ -531,8 +540,10 @@ export function apply(ctx: Context, config: unknown): void {
   }
 
   const openAgent = async (id: SessionId, resume: boolean, fork?: ForkInheritance): Promise<void> => {
-    if (resume) await replayHistory(id)
+    // Settled before the transcript is touched, so a refusal leaves neither a
+    // half-replayed session nor a half-composed agent behind.
     const preset = await presetFor(id, resume, fork)
+    if (resume) await replayHistory(id)
     const handle = await startAgent(ctx, {
       sessionId: id,
       resume,
@@ -546,6 +557,7 @@ export function apply(ctx: Context, config: unknown): void {
       },
       ...(fork === undefined ? {} : { fork }),
     })
+    sessionOpened = true
     activeSession = id
     viewedSession = id
     agent = handle
@@ -1172,13 +1184,17 @@ export function apply(ctx: Context, config: unknown): void {
     if (requestedPreset !== undefined && agentPresets !== undefined) {
       seat = (await agentPresets.resolve(requestedPreset)).id
     }
+    // A named mode that disagrees with the one this session recorded is refused
+    // here as well as at the open, because the alternate screen closes over
+    // whatever was painted on it: the reader would see the failure, not the
+    // reason. With a picker the session is not known yet, so it waits for one.
+    if (!resolved.resumePicker) await presetFor(resolved.sessionId, resolved.resume, undefined)
     tui.start()
     terminal.write(windowTitle(process.cwd(), 'ready'))
     await boot()
   }
 
   void start().catch((error: unknown) => {
-    terminal.write(`\ndsh-tui: ${error instanceof Error ? error.message : String(error)}\n`)
-    requestExit(1)
+    requestExit(1, error instanceof Error ? error.message : String(error))
   })
 }
