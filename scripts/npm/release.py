@@ -14,7 +14,7 @@ import re
 import sys
 import tarfile
 
-from execution import ReleaseError, mutate, read_json, require, run, setting
+from execution import ReleaseError, mutate, read_json, read_with_retry, require, run, setting
 from github_release import setup_github
 
 REGISTRY = "https://registry.npmjs.org/"
@@ -30,6 +30,39 @@ MAX_MEMBERS = 10000
 MAX_ARTIFACT_BYTES = 100 * 1024 * 1024
 MUTATIONS = ("bootstrap-publish", "configure-trust", "harden-publishing", "setup-github-release")
 ACTIONS = ("preflight", "verify", *MUTATIONS)
+CREATE_PACKAGE = "createPackage"
+CREATE_STAGED_PACKAGE = "createStagedPackage"
+# npmjs.com answers a publish grant with stage publish included; a stage-only grant carries no publish authority.
+EXPECTED_TRUST_PERMISSIONS = frozenset({CREATE_PACKAGE, CREATE_STAGED_PACKAGE})
+TRUST_PERMISSION_LABELS = {"publish": CREATE_PACKAGE, "stage publish": CREATE_STAGED_PACKAGE}
+TRUST_FIELDS = ("type", "file", "repository", "environment")
+PERMISSIONS_FIELD = "permissions"
+EMPTY_CONFIG_VALUES = ("", "undefined", "null")
+
+
+def parse_trust_list(text):
+    """Read npm's human-readable trust output; npm suppresses the browser authentication URL in JSON mode."""
+    configs = []
+    current = {}
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            if current:
+                configs.append(current)
+                current = {}
+            continue
+        key, separator, value = line.partition(":")
+        key, value = key.strip(), value.strip()
+        if not separator or not value:
+            continue
+        if key in TRUST_FIELDS:
+            current[key] = value
+        elif key == PERMISSIONS_FIELD:
+            current[PERMISSIONS_FIELD] = [TRUST_PERMISSION_LABELS.get(label, label)
+                                          for label in (item.strip() for item in value.split(",")) if label]
+    if current:
+        configs.append(current)
+    return configs
 
 
 class Target:
@@ -47,11 +80,12 @@ class Target:
         self.validate_metadata(self.metadata)
 
     def npm_command(self, *args):
-        # Scoped configuration can override the base registry; pin both identities on every call.
-        return [self.npm_bin, *args, f"--registry={REGISTRY}", f"--{self.scope}:registry={REGISTRY}"]
+        # Every call pins the registry; authenticate() rejects a configured redirection, because the scope
+        # key cannot be pinned on the trust commands, which refuse unknown flags.
+        return [self.npm_bin, *args, f"--registry={REGISTRY}"]
 
-    def npm(self, *args, check=True):
-        return run(self.npm_command(*args), check=check)
+    def npm(self, *args, check=True, tty=False):
+        return run(self.npm_command(*args), check=check, tty=tty)
 
     def validate_metadata(self, metadata):
         require(isinstance(metadata, dict), "package metadata must be an object")
@@ -69,12 +103,23 @@ class Target:
         require(all(key in allowed and value == allowed[key] for key, value in config.items()),
                 "unsupported or conflicting publishConfig; review it explicitly")
 
+    def effective_registry(self, key):
+        # Read the configured value without overriding the key under inspection.
+        value = run([self.npm_bin, "config", "get", key]).stdout.strip()
+        return REGISTRY if value in EMPTY_CONFIG_VALUES else value
+
+    def verify_registry(self):
+        require(self.effective_registry("registry") == REGISTRY, "default registry is redirected; fix npm configuration")
+        require(self.effective_registry(f"{self.scope}:registry") == REGISTRY,
+                "scoped registry is redirected; fix npm configuration")
+
     def authenticate(self):
         version = run([self.npm_bin, "--version"]).stdout.strip()
         require(re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version), "unsupported npm version format")
         require(tuple(map(int, version.split("."))) >= MINIMUM_NPM, "npm 11.15.0 or newer required")
         user = setting("NPM_USER", r"[a-z0-9][a-z0-9._-]*")
         require(read_json(self.npm("whoami", "--json").stdout) == user, "npm account does not match NPM_USER")
+        self.verify_registry()
 
     def source(self):
         sha = setting("SOURCE_SHA", SHA_PATTERN)
@@ -110,12 +155,16 @@ class Target:
     def expected_trust(self, configs):
         workflow, environment = self.workflow()
         require(isinstance(configs, list), "unexpected npm trust response schema")
-        return len(configs) == 1 and isinstance(configs[0], dict) and all(
-            configs[0].get(key) == value for key, value in {
-                "type": "github", "file": workflow, "repository": self.repo,
-                "environment": environment, "permissions": ["createPackage"],
-            }.items()
-        )
+        if len(configs) != 1 or not isinstance(configs[0], dict):
+            return False
+        config = configs[0]
+        return all(config.get(key) == value for key, value in {
+            "type": "github", "file": workflow, "repository": self.repo, "environment": environment,
+        }.items()) and set(config.get(PERMISSIONS_FIELD, [])) == EXPECTED_TRUST_PERMISSIONS
+
+    def trust_configs(self):
+        # Colour would wrap the values this parser reads, and the interactive terminal is what lets npm run 2FA.
+        return parse_trust_list(self.npm("trust", "list", self.package, "--color=false", tty=True).stdout)
 
     def registry_metadata(self):
         metadata = read_json(self.npm("view", f"{self.package}@{self.version}", "--json").stdout)
@@ -135,7 +184,8 @@ def bootstrap(target):
     target.artifact()
     mutate("bootstrap-publish", target.npm_command("publish", str(artifact), "--ignore-scripts", "--access=public", "--tag=latest"))
     if os.environ.get("DRY_RUN", "0") != "1":
-        metadata = target.registry_metadata()
+        # A registry read can lag the completed write; the write itself is never retried.
+        metadata = read_with_retry(target.registry_metadata)
         require(metadata.get("dist", {}).get("integrity") == setting("ARTIFACT_INTEGRITY"),
                 "published integrity mismatch; inspect remote state, do not retry")
         print("Published version and integrity verified. This does not prove installation or provenance.")
@@ -144,17 +194,15 @@ def bootstrap(target):
 def configure_trust(target):
     workflow, environment = target.workflow()
     target.registry_metadata()
-    configs = read_json(target.npm("trust", "list", target.package, "--json").stdout)
+    configs = target.trust_configs()
     if configs:
         require(target.expected_trust(configs), "existing trusted publisher conflicts; refusing replacement")
         print("Expected trusted publisher already configured.")
         return
-    require(configs == [], "unexpected npm trust response schema")
     mutate("configure-trust", target.npm_command("trust", "github", target.package, f"--file={workflow}",
            f"--repo={target.repo}", f"--env={environment}", "--allow-publish", "--yes"))
     if os.environ.get("DRY_RUN", "0") != "1":
-        require(target.expected_trust(read_json(target.npm("trust", "list", target.package, "--json").stdout)),
-                "trusted publisher readback mismatch")
+        require(target.expected_trust(target.trust_configs()), "trusted publisher readback mismatch")
 
 
 def verify(target):
@@ -163,8 +211,8 @@ def verify(target):
     require(metadata.get("dist", {}).get("integrity") == setting("ARTIFACT_INTEGRITY"), "registry integrity mismatch")
     access = read_json(target.npm("access", "get", "status", target.package, "--json").stdout)
     require(isinstance(access, dict) and access.get(target.package) == "public", "public package access not verified")
-    require(target.expected_trust(read_json(target.npm("trust", "list", target.package, "--json").stdout)),
-            "trusted publisher does not match expected publish-only identity")
+    require(target.expected_trust(target.trust_configs()),
+            "trusted publisher does not match the expected publish grant")
     print("Package identity, integrity, public access, and trust verified; MFA, installation, and OIDC delivery remain separate checks.")
 
 

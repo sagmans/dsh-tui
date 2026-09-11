@@ -8,9 +8,15 @@ ARGS = sys.argv[1:]
 TOOL = Path(sys.argv[0]).name
 SCENARIO = os.environ.get("SCENARIO", "absent")
 STATE = Path("state.json")
-REGISTRY_FLAGS = ["--registry=https://registry.npmjs.org/", "--@example:registry=https://registry.npmjs.org/"]
+REGISTRY_FLAG = "--registry=https://registry.npmjs.org/"
+COLOR_FLAG = "--color=false"
+GREEN = "\x1b[32m"
+RESET = "\x1b[0m"
+TRUST_FIELDS = ("type", "id", "file", "repository", "environment")
+TRUST_PERMISSION_LABELS = {"createPackage": "publish", "createStagedPackage": "stage publish"}
 TRUST = {"id": "test", "type": "github", "file": "release.yml", "repository": "example/tool",
-         "environment": "npm-release", "permissions": ["createPackage"]}
+         "environment": "npm-release", "permissions": ["createPackage", "createStagedPackage"]}
+CONFIG = {"registry": "https://registry.npmjs.org/", "@example:registry": "undefined"}
 with open(os.environ["CALL_LOG"], "a") as log:
     log.write(json.dumps([TOOL, *ARGS]) + "\n")
 state = json.loads(STATE.read_text()) if STATE.exists() else {}
@@ -23,6 +29,19 @@ def output(value):
 
 def save():
     STATE.write_text(json.dumps(state))
+
+
+def print_trust(configs):
+    # npm colours a terminal's output; the helper must disable that before it reads these values.
+    paint = (lambda value: value) if COLOR_FLAG in ARGS else (lambda value: GREEN + value + RESET)
+    for config in configs:
+        print()
+        for key in TRUST_FIELDS:
+            if key in config:
+                print(f"{key}: {paint(config[key])}")
+        labels = ", ".join(paint(TRUST_PERMISSION_LABELS.get(item, item)) for item in config["permissions"])
+        print(f"permissions: {labels}")
+    print()
 
 
 if TOOL == "git":
@@ -40,19 +59,35 @@ if TOOL == "npm":
     if ARGS == ["--version"]:
         print("10.0.0" if SCENARIO == "old-npm" else "11.15.0")
         sys.exit(0)
-    if not all(flag in ARGS for flag in REGISTRY_FLAGS):
+    if ARGS[:2] == ["config", "get"]:
+        key = ARGS[2]
+        if key == "registry" and SCENARIO == "rogue-registry":
+            print("https://other.example/")
+        elif key == "@example:registry" and SCENARIO == "rogue-scoped-registry":
+            print("https://other.example/")
+        else:
+            print(CONFIG.get(key, "undefined"))
+        sys.exit(0)
+    if REGISTRY_FLAG not in ARGS:
         sys.exit(3)
-    args = [arg for arg in ARGS if arg not in REGISTRY_FLAGS]
+    args = [arg for arg in ARGS if arg not in (REGISTRY_FLAG, COLOR_FLAG)]
     if args == ["whoami", "--json"]:
         if SCENARIO == "auth-error":
             sys.exit(1)
         output("wrong" if SCENARIO == "wrong-user" else "example")
     if args[:2] == ["trust", "list"]:
+        # npm asks for browser authentication, which it only starts on a terminal.
+        if not sys.stdout.isatty():
+            print(json.dumps({"error": {"code": "EOTP", "summary": "This operation requires a one-time password."}}))
+            sys.exit(1)
         if SCENARIO == "extra-permission":
-            TRUST["permissions"].append("stagePackage")
+            TRUST["permissions"].append("deletePackage")
+        if SCENARIO == "stage-only":
+            TRUST["permissions"] = ["createStagedPackage"]
         if SCENARIO == "trust-conflict":
             TRUST["repository"] = "other/repo"
-        output([TRUST] if state.get("trust") or SCENARIO != "absent" else [])
+        print_trust([TRUST] if state.get("trust") or SCENARIO != "absent" else [])
+        sys.exit(0)
     if args[:2] == ["trust", "github"]:
         state["trust"] = True
         save()
@@ -70,6 +105,12 @@ if TOOL == "npm":
             if SCENARIO == "fake-404":
                 print("E404", file=sys.stderr)
                 sys.exit(1)
+            print(json.dumps({"error": {"code": "E404"}}))
+            sys.exit(1)
+        if SCENARIO == "lag" and not state.get("lagged"):
+            # A registry read can trail the write that preceded it.
+            state["lagged"] = True
+            save()
             print(json.dumps({"error": {"code": "E404"}}))
             sys.exit(1)
         metadata = json.loads(Path("package.json").read_text())
