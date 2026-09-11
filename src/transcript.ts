@@ -290,10 +290,18 @@ export class TranscriptModel {
   /**
    * Push the thinking blocks of one durable message, skipping the ones the
    * stream already settled.
+   *
+   * A live turn reaches this with the streamed copy already consumed by
+   * {@link settleReasoning}, which is what the match below recognises. A
+   * resumed turn never streams at all, so every recorded block is new here —
+   * which is the whole point: the log is the only source a resume has.
+   *
+   * The buffer is cleared whatever this message held, because it can only ever
+   * describe the step that just ended. Keeping stale text would let a later,
+   * unrelated thought that happens to use the same words go unpainted.
    */
   private settleDurableReasoning(message: Record<string, unknown> | undefined): void {
-    const blocks = reasoningOfContent(message?.content)
-    for (const text of blocks) {
+    for (const text of reasoningOfContent(message?.content)) {
       const alreadyShown = this.streamedReasoning.indexOf(text)
       if (alreadyShown >= 0) {
         this.streamedReasoning.splice(alreadyShown, 1)
@@ -301,8 +309,7 @@ export class TranscriptModel {
       }
       this.pushReasoning(text, undefined)
     }
-    // A step whose thinking never streamed has nothing left to match against.
-    if (this.liveReasoning === '') this.streamedReasoning.length = 0
+    this.streamedReasoning.length = 0
   }
 
   apply(event: FoldableEvent): void {

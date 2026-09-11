@@ -164,6 +164,23 @@ describe('TranscriptModel reasoning', () => {
     model.apply(message([reasoning('second thought'), ...text('done')]))
     expect(model.entries().map(entry => entry.kind)).toEqual(['tool', 'reasoning', 'reasoning', 'assistant'])
   })
+
+  it('settles a thought the stream ended before its message arrives', () => {
+    // The real ordering: the stream closes the block first, then the durable
+    // message carries the same text. Painting both would double the thought.
+    const model = new TranscriptModel(undefined, () => 1_000)
+    model.applyStreamChunk({ type: 'reasoning-delta', text: 'thinking hard' })
+    model.applyStreamChunk({ type: 'block-end', block: { type: 'reasoning' } })
+    model.apply(message([reasoning('thinking hard'), ...text('the answer')]))
+    expect(model.entries().map(entry => entry.kind)).toEqual(['reasoning', 'assistant'])
+  })
+
+  it('keeps two recorded steps apart even when they read the same', () => {
+    const model = new TranscriptModel()
+    model.apply(message([reasoning('same words'), ...text('one')]))
+    model.apply(message([reasoning('same words'), ...text('two')]))
+    expect(model.entries().filter(entry => entry.kind === 'reasoning')).toHaveLength(2)
+  })
 })
 
 describe('TranscriptModel markers', () => {
