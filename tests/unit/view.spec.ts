@@ -167,6 +167,30 @@ describe('TranscriptView expansion', () => {
     for (const line of thought) expect(line).toContain('\u001b[2;90m')
     expect(answer[0]).not.toContain('\u001b[')
   })
+
+  it('renders a recorded thought as its own row, which is all a resumed session has', () => {
+    // The recorded path is the one a resume replays, and it once folded the
+    // thinking into the answer: this is the end-to-end guard for that.
+    const model = new TranscriptModel()
+    model.apply({
+      type: 'assistant/message',
+      data: { message: { content: [
+        { type: 'reasoning', text: 'the thought itself' },
+        { type: 'text', text: 'the answer' },
+      ] } },
+    })
+    const summary = viewOf(model, { expandCards: false, reasoning: 'summary' }).render(60)
+    expect(summary.some(line => line.startsWith('▸ reasoning'))).toBe(true)
+    expect(summary.some(line => line.includes('the thought itself'))).toBe(false)
+    expect(summary.some(line => line.includes('the answer'))).toBe(true)
+
+    const expanded = viewOf(model, { expandCards: false, reasoning: 'expanded' }).render(60)
+    expect(expanded.some(line => line.trim() === 'the thought itself')).toBe(true)
+
+    const hidden = viewOf(model, { expandCards: false, reasoning: 'hidden' }).render(60)
+    expect(hidden.some(line => line.startsWith('▸ reasoning'))).toBe(false)
+    expect(hidden.some(line => line.includes('the answer'))).toBe(true)
+  })
 })
 
 describe('nextReasoningView', () => {

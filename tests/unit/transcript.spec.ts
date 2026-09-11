@@ -4,6 +4,11 @@ import { REASONING_CHAR_LIMIT, TranscriptModel } from '@/transcript.ts'
 
 const text = (value: string) => [{ type: 'text', text: value }]
 
+const reasoning = (value: string) => ({ type: 'reasoning', text: value })
+
+/** One durable assistant message, in the shape the session log records. */
+const message = (content: unknown[]) => ({ type: 'assistant/message', data: { message: { content } } })
+
 const card = (title: string, detail: string[] = []): ToolCard =>
   ({ kind: 'generic', title, detail, failed: false, totalLines: detail.length })
 
@@ -102,6 +107,62 @@ describe('TranscriptModel reasoning', () => {
     const body = entry?.kind === 'reasoning' ? entry.body : ''
     expect(body.startsWith('x'.repeat(64))).toBe(true)
     expect(body.endsWith(`… truncated at ${REASONING_CHAR_LIMIT} chars`)).toBe(true)
+  })
+
+  it('keeps a recorded thought out of the answer it precedes', () => {
+    // The durable record carries the thinking as a block of its own. Reading
+    // every block for text folded it into the reply, so a resumed session
+    // showed the model's private reasoning as something it had said.
+    const model = new TranscriptModel()
+    model.apply(message([reasoning('let me check the registry'), ...text('0.1.2 is published')]))
+    expect(model.entries()).toEqual([
+      { kind: 'reasoning', summary: 'reasoning · 1 line · 25 chars', body: 'let me check the registry', live: false },
+      { kind: 'assistant', text: '0.1.2 is published' },
+    ])
+  })
+
+  it('renders a recorded thought that never streamed, which is every resumed session', () => {
+    const model = new TranscriptModel()
+    model.apply(message([reasoning('weighing the options\npicking the second')]))
+    expect(model.entries()).toEqual([
+      {
+        kind: 'reasoning',
+        summary: 'reasoning · 2 lines · 39 chars',
+        body: 'weighing the options\npicking the second',
+        live: false,
+      },
+    ])
+  })
+
+  it('paints a thought once when the stream and the record both carry it', () => {
+    const model = new TranscriptModel(undefined, () => 2_000)
+    model.applyStreamChunk({ type: 'reasoning-delta', text: 'thinking hard' })
+    model.apply(message([reasoning('thinking hard'), ...text('the answer')]))
+    expect(model.entries()).toEqual([
+      { kind: 'reasoning', summary: 'reasoning · 1 line · 13 chars · 1s', body: 'thinking hard', live: false },
+      { kind: 'assistant', text: 'the answer' },
+    ])
+  })
+
+  it('still reads the text a tool result carries directly', () => {
+    // A tool-result block holds its text on the block itself rather than under
+    // a nested text block, which is why the reasoning exclusion cannot be an
+    // allow-list of text-bearing types.
+    const model = new TranscriptModel()
+    model.apply({
+      type: 'tool/result',
+      data: { message: { content: [{ type: 'tool-result', toolCallId: 'c1', text: 'file-a\nfile-b' }], isError: false } },
+    })
+    const entry = model.entries()[0]
+    expect(entry?.kind === 'tool' && entry.card.detail).toEqual(['file-a', 'file-b'])
+  })
+
+  it('keeps each step of a multi-step turn in the order it was thought', () => {
+    const model = new TranscriptModel()
+    model.apply({ type: 'tool/call', data: { name: 'bash', arguments: '{}', callId: 'c1' } })
+    model.apply(message([reasoning('first thought'), { type: 'tool-call', id: 'c1', name: 'bash', arguments: '{}' }]))
+    model.apply(message([reasoning('second thought'), ...text('done')]))
+    expect(model.entries().map(entry => entry.kind)).toEqual(['tool', 'reasoning', 'reasoning', 'assistant'])
   })
 })
 
