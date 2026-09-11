@@ -5,13 +5,23 @@ import { TranscriptModel, type TranscriptEntry } from '@/transcript.ts'
 import { MarkdownRenderer } from '@/ui/markdown.ts'
 import type { PickerCard } from '@/ui/picker.ts'
 import { RowCache } from '@/ui/rows.ts'
-import { TranscriptView, type ViewState } from '@/ui/view.ts'
+import { TranscriptView, REASONING_VIEW_ORDER, nextReasoningView, type ViewState } from '@/ui/view.ts'
 
 const theme = createTheme(false)
-const COLLAPSED: ViewState = { expandCards: false, expandReasoning: false }
+const COLLAPSED: ViewState = { expandCards: false, reasoning: 'summary' }
 
 function viewOf(model: TranscriptModel, state: ViewState = COLLAPSED, gate?: GateCard): TranscriptView {
   return new TranscriptView(model, theme, new MarkdownRenderer(theme.markdown), { state: () => state, gate: () => gate })
+}
+
+/** One settled reasoning block, with a clock that only moves when the fixture says so. */
+function reasoningModel(): TranscriptModel {
+  let clock = 0
+  const model = new TranscriptModel(undefined, () => clock)
+  model.applyStreamChunk({ type: 'reasoning-delta', text: 'first thought\nsecond thought' })
+  clock = 5_000
+  model.applyStreamChunk({ type: 'block-end', block: { type: 'reasoning' } })
+  return model
 }
 
 const toolCall = (argumentsJson = '{}') => ({ type: 'tool/call', data: { name: 'bash', arguments: argumentsJson, callId: 'c1' } })
@@ -38,7 +48,7 @@ describe('TranscriptView repaints', () => {
     const rows = new RowCache<TranscriptEntry>()
     const model = new TranscriptModel()
     model.apply({ type: 'user/message', data: { content: [{ type: 'text', text: 'hello there' }], source: { kind: 'user' } } })
-    const state = { expandCards: false, expandReasoning: false }
+    const state: { expandCards: boolean; reasoning: ViewState['reasoning'] } = { expandCards: false, reasoning: 'summary' }
     const view = new TranscriptView(model, theme, new MarkdownRenderer(theme.markdown), { rows, state: () => state })
 
     view.render(80)
@@ -108,25 +118,67 @@ describe('TranscriptView expansion', () => {
   })
 
   it('shows every retained row once cards are expanded', () => {
-    const lines = viewOf(withRows(25), { expandCards: true, expandReasoning: false }).render(60)
+    const lines = viewOf(withRows(25), { expandCards: true, reasoning: 'summary' }).render(60)
     expect(lines.filter(line => line.startsWith('    row '))).toHaveLength(25)
     expect(lines.some(line => line.includes('ctrl+o'))).toBe(false)
   })
 
   it('keeps reasoning folded until it is asked for', () => {
-    let clock = 0
-    const model = new TranscriptModel(undefined, () => clock)
-    model.applyStreamChunk({ type: 'reasoning-delta', text: 'first thought\nsecond thought' })
-    clock = 5_000
-    model.applyStreamChunk({ type: 'block-end', block: { type: 'reasoning' } })
-    const folded = viewOf(model).render(60)
-    expect(folded).toEqual(['▸ reasoning · 2 lines · 28 chars · 5s'])
-    const opened = viewOf(model, { expandCards: false, expandReasoning: true }).render(60)
-    expect(opened).toEqual([
+    const lines = viewOf(reasoningModel()).render(60)
+    expect(lines).toEqual(['▸ reasoning · 2 lines · 28 chars · 5s'])
+  })
+
+  it('shows the thought itself only once reasoning is expanded', () => {
+    const lines = viewOf(reasoningModel(), { expandCards: false, reasoning: 'expanded' }).render(60)
+    expect(lines).toEqual([
       '▸ reasoning · 2 lines · 28 chars · 5s',
       '    first thought',
       '    second thought',
     ])
+  })
+
+  it('leaves no row at all once reasoning is hidden, so the answer still reads as the only reply', () => {
+    const model = reasoningModel()
+    model.apply({ type: 'assistant/message', data: { message: { content: [{ type: 'text', text: 'the answer' }] } } })
+    const lines = viewOf(model, { expandCards: false, reasoning: 'hidden' }).render(60)
+    expect(lines.some(line => line.includes('reasoning'))).toBe(false)
+    expect(lines.some(line => line.includes('first thought'))).toBe(false)
+    expect(lines.some(line => line.includes('the answer'))).toBe(true)
+  })
+
+  it('leaves no row for a thought that is still streaming', () => {
+    const model = new TranscriptModel(undefined, () => 1_000)
+    model.applyStreamChunk({ type: 'reasoning-delta', text: 'mid-thought' })
+    expect(viewOf(model, { expandCards: false, reasoning: 'hidden' }).render(60)).toEqual([])
+  })
+
+  it('marks reasoning with styling the answer does not carry', () => {
+    const styled = createTheme(true)
+    const model = reasoningModel()
+    model.apply({ type: 'assistant/message', data: { message: { content: [{ type: 'text', text: 'the answer' }] } } })
+    const view = new TranscriptView(model, styled, new MarkdownRenderer(styled.markdown), {
+      state: () => ({ expandCards: false, reasoning: 'expanded' } satisfies ViewState),
+    })
+    const lines = view.render(60)
+    const thought = lines.filter(line => /reasoning|thought/.test(line))
+    const answer = lines.filter(line => line.includes('the answer'))
+    expect(thought).toHaveLength(3)
+    expect(answer).toHaveLength(1)
+    for (const line of thought) expect(line).toContain('\u001b[2;90m')
+    expect(answer[0]).not.toContain('\u001b[')
+  })
+})
+
+describe('nextReasoningView', () => {
+  it('walks summary, then the thought itself, then nothing, and back', () => {
+    expect(REASONING_VIEW_ORDER).toEqual(['summary', 'expanded', 'hidden'])
+    expect(nextReasoningView('summary')).toBe('expanded')
+    expect(nextReasoningView('expanded')).toBe('hidden')
+    expect(nextReasoningView('hidden')).toBe('summary')
+  })
+
+  it('settles on the default rather than throwing for a state it cannot place', () => {
+    expect(nextReasoningView('nonsense' as ViewState['reasoning'])).toBe('summary')
   })
 })
 

@@ -121,7 +121,7 @@ dsh --profile tui --no-bell            # do not ring when a long turn finishes
 | Enter | submit the prompt |
 | Ctrl+C | interrupt the running turn, or leave when idle |
 | Ctrl+O | show every line of the tool cards instead of their preview |
-| Ctrl+T | show the reasoning behind an answer instead of its summary |
+| Ctrl+T | step the thinking: its summary, then the thought itself, then nothing |
 | `y` / `n` / Esc | allow once, reject, or cancel a pending approval |
 | digits / space / ↑↓ / Enter / Esc | answer a question: pick or toggle, confirm, or skip one |
 | `/` then Tab | complete commands, including every command this session registered |
@@ -225,6 +225,7 @@ The automated checks drive a real PTY, but they run on this machine's terminal. 
 | inside tmux or screen | wheel scroll and `ctrl+shift+f` search work; dragging selects text |
 | a light terminal and a dark one | the interface follows the terminal's own palette; nothing becomes unreadable |
 | `NO_COLOR=1 dsh --profile tui` | no styling anywhere, layout unchanged |
+| a turn with `Ctrl+T` pressed between states | thinking reads as dimmed grey above the answer, then shows its full text, then disappears entirely while the answer keeps its place; a third press restores the summary |
 | `dsh --profile tui --no-bell` | a turn that runs for minutes still ends silently |
 | `dsh --profile tui --preset ptc`, then a turn | the status line names `ptc`, and the agent reaches its tools through one TypeScript program rather than one shell call at a time |
 | `/preset` on a fresh session | the picker lists four modes, marks the current one, and the switch survives a resume |
@@ -259,6 +260,7 @@ The workflow stores no npm token: the registry trusts `release.yml` on the `npm-
 - Delete is unimplemented: the session store exposes no delete, and the surface does not reach around that seam into its files. `/fork` covers the case that needs it — it branches into a new session and leaves the original alone.
 - Approvals and questions render inline and take the keyboard; a question batch is answered in order.
 - Styling uses the standard 16 ANSI colors and terminal defaults, so light and dark terminals follow their own theme.
+- A model's thinking is dimmed and set off by its own glyph, and `Ctrl+T` steps it through summary, the full thought, and hidden. Hidden leaves no row at all — not even a placeholder — so the answer reads as the only reply; `Ctrl+T` brings it back. The `/export` dump always keeps thinking as an HTML comment, whatever the screen shows.
 - Tool text, model text, and file content are escaped before rendering, so a hostile result cannot inject terminal control sequences; the cost is that a literal tab shows as \x09.
 
 ## License

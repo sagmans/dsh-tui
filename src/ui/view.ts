@@ -11,13 +11,40 @@ import { RowCache } from './rows.ts'
 const DETAIL_INDENT = '    '
 const OPTION_INDENT = '   '
 
+/**
+ * How much of a reasoning block the reader wants to see.
+ *
+ * Three states rather than an expanded flag: the model's thinking is a second
+ * voice in the transcript, and a reader who is done with it wants it gone
+ * rather than summarized, while `summary` keeps the record that it happened.
+ */
+export type ReasoningViewState = 'hidden' | 'summary' | 'expanded'
+
 /** Which rows the reader has opened; one key decides for every row of a kind. */
 export interface ViewState {
   readonly expandCards: boolean
-  readonly expandReasoning: boolean
+  readonly reasoning: ReasoningViewState
 }
 
-const ALL_COLLAPSED: ViewState = { expandCards: false, expandReasoning: false }
+/**
+ * The order one key walks the reasoning states in.
+ *
+ * `summary` is the default and `expanded` its first step, so the key that has
+ * always revealed the detail still does that first; hiding is the third state
+ * because it is the one a reader returns from least often.
+ */
+export const REASONING_VIEW_ORDER: readonly ReasoningViewState[] = ['summary', 'expanded', 'hidden']
+
+/** The state one press of the reasoning key moves to. */
+export function nextReasoningView(current: ReasoningViewState): ReasoningViewState {
+  const position = REASONING_VIEW_ORDER.indexOf(current)
+  return REASONING_VIEW_ORDER[(position + 1) % REASONING_VIEW_ORDER.length] ?? 'summary'
+}
+
+/** One character per state, for the row cache key: `h`idden, `s`ummary, `e`xpanded. */
+const REASONING_VIEW_TAG: Readonly<Record<ReasoningViewState, string>> = { hidden: 'h', summary: 's', expanded: 'e' }
+
+const ALL_COLLAPSED: ViewState = { expandCards: false, reasoning: 'summary' }
 
 /**
  * Renders the transcript rows and any pending gate as terminal lines.
@@ -98,8 +125,12 @@ export class TranscriptView implements Component {
   }
 
   private pushReasoning(lines: string[], entry: Extract<TranscriptEntry, { kind: 'reasoning' }>, width: number): void {
+    const view = this.viewState.reasoning
+    // A hidden block leaves no row at all: the record of the thinking is the
+    // answer it produced, and a placeholder would defeat the point of hiding.
+    if (view === 'hidden') return
     lines.push(this.theme.dim(truncateToWidth(`${this.theme.glyphs.reasoning} ${displayText(entry.summary)}`, width, '')))
-    if (!this.viewState.expandReasoning) return
+    if (view !== 'expanded') return
     for (const line of entry.body.split('\n')) {
       this.pushWrapped(lines, line, width, DETAIL_INDENT, this.theme.dim)
     }
@@ -195,7 +226,7 @@ export class TranscriptView implements Component {
     if (width <= 0) return []
     const { glyphs } = this.theme
     const state = this.viewState
-    const tag = `${width}|${state.expandCards ? 'c' : '-'}${state.expandReasoning ? 'r' : '-'}`
+    const tag = `${width}|${state.expandCards ? 'c' : '-'}${REASONING_VIEW_TAG[state.reasoning]}`
     const lines: string[] = []
     const settled = this.model.settledCount()
     const entries = this.model.entries()

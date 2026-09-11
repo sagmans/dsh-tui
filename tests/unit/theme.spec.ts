@@ -36,4 +36,12 @@ describe('createTheme', () => {
     expect(theme.added('x')).toContain('\u001b[32m')
     expect(theme.removed('x')).toContain('\u001b[31m')
   })
+
+  it('dims with the grey the palette actually renders, not faint alone', () => {
+    // Faint is the attribute terminals most often ignore, so a dim that emits
+    // only `2` reads as ordinary text wherever that happens — which is how the
+    // thinking row silently stops being distinguishable from the answer.
+    const theme = createTheme(true)
+    expect(theme.dim('x')).toContain('\u001b[2;90m')
+  })
 })

@@ -49,7 +49,7 @@ function fixture(): { view: TranscriptView; dock: WorkDock; status: StatusBar } 
     { content: 'verify the dock', status: 'in_progress' },
     { content: 'document the dock', status: 'pending' },
   ] } })
-  const state: ViewState = { expandCards: false, expandReasoning: false }
+  const state: ViewState = { expandCards: false, reasoning: 'summary' }
   const view = new TranscriptView(model, theme, new MarkdownRenderer(theme.markdown), {
     state: () => state,
     gate: () => undefined,

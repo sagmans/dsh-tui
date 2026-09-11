@@ -50,7 +50,7 @@ import { WorkDock } from './ui/dock.ts'
 import { MarkdownRenderer } from './ui/markdown.ts'
 import { PresetPicker, SessionPicker, type PickerAction, type PickerCard } from './ui/picker.ts'
 import { StatusBar, formatTokens } from './ui/status.ts'
-import { TranscriptView } from './ui/view.ts'
+import { TranscriptView, nextReasoningView, type ReasoningViewState } from './ui/view.ts'
 
 export const name = 'tui'
 
@@ -58,7 +58,7 @@ export const name = 'tui'
 export const inject = ['agents']
 
 /** Keys the surface answers itself, listed wherever the reader asks for help. */
-const LOCAL_KEYS = 'ctrl+o tool detail · ctrl+t reasoning · ctrl+b back to this session · ctrl+c interrupt or exit'
+const LOCAL_KEYS = 'ctrl+o tool detail · ctrl+t thinking detail or hidden · ctrl+b back to this session · ctrl+c interrupt or exit'
 
 /** The one thing to say about a view a reader did not open. */
 const LOCAL_KEYS_BACK = 'ctrl+b returns'
@@ -146,8 +146,11 @@ export function apply(ctx: Context, config: unknown): void {
   const roster = new SubagentRoster()
   const subagentControl = createSubagentControl(ctx)
   const markdown = new MarkdownRenderer(theme.markdown)
-  /** Rows the reader has opened. The model stays untouched; only the view reads this. */
-  const viewState = { expandCards: false, expandReasoning: false }
+  /**
+   * Rows the reader has opened. The model stays untouched; only the view reads
+   * this, and it is the surface's own mutable copy of what the view sees.
+   */
+  const viewState: { expandCards: boolean; reasoning: ReasoningViewState } = { expandCards: false, reasoning: 'summary' }
   const restore = createRestoreRegistry()
   const terminal = new ProcessTerminal()
   const tui = new TuiAltScreen(terminal)
@@ -335,7 +338,7 @@ export function apply(ctx: Context, config: unknown): void {
       return { consume: true }
     }
     if (matchesKey(data, 'ctrl+t')) {
-      viewState.expandReasoning = !viewState.expandReasoning
+      viewState.reasoning = nextReasoningView(viewState.reasoning)
       tui.requestRender()
       return { consume: true }
     }
