@@ -1,6 +1,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { StatusFacts } from '../ui/status.ts'
+import { projectionRecord } from './projections.ts'
 
 /** Whether a turn is running and when it started. */
 export interface ActivityState {
@@ -21,11 +22,6 @@ interface SessionRegistry {
 /** The permission-preset directory, described structurally. */
 interface PresetDirectory {
   current?(session: unknown): string
-}
-
-/** The work-state projection registry, described structurally. */
-interface Projections {
-  stateOf?(session: unknown, key: string): unknown
 }
 
 /**
@@ -84,16 +80,6 @@ export interface StatusSources {
 }
 
 export function createStatusFacts(ctx: Context, sources: StatusSources): () => StatusFacts {
-  const projection = (session: unknown, key: string): Record<string, unknown> | undefined => {
-    const projections = ctx.get('sessionProjections') as Projections | undefined
-    if (projections?.stateOf === undefined) return undefined
-    try {
-      return asRecord(projections.stateOf(session, key))
-    } catch {
-      // A projection that is not composed for this session is simply absent.
-      return undefined
-    }
-  }
   return () => {
     const override = sources.override?.()
     const selection = override ?? (ctx.get('agentDefaultModel') as ModelDirectory | undefined)?.currentSelection?.()
@@ -106,8 +92,8 @@ export function createStatusFacts(ctx: Context, sources: StatusSources): () => S
         preset = undefined
       }
     }
-    const pressure = session === undefined ? undefined : projection(session, 'contextPressure')
-    const totals = session === undefined ? undefined : usageTotals(projection(session, 'tokenUsage'))
+    const pressure = session === undefined ? undefined : projectionRecord(ctx, session, 'contextPressure')
+    const totals = session === undefined ? undefined : usageTotals(projectionRecord(ctx, session, 'tokenUsage'))
     const state = sources.activity()
     return {
       activity: state.running ? 'working' : 'idle',

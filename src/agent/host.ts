@@ -43,6 +43,13 @@ export interface StartAgentOptions {
   readonly setup?: (agentCtx: Context) => void
   /** Branch from another session's completed history instead of starting empty. */
   readonly fork?: ForkInheritance
+  /**
+   * Agent preset a NEW session runs, recorded in its header.
+   *
+   * The caller mounts it in `setup`; a resume keeps the preset its own log
+   * recorded, so it never passes one.
+   */
+  readonly preset?: string | undefined
 }
 
 function routeOf(ctx: Context, options: StartAgentOptions): { provider?: string; model?: string } {
@@ -79,9 +86,10 @@ export async function startAgent(ctx: Context, options: StartAgentOptions): Prom
         seed: options.fork.events as readonly SessionEvent[],
         inheritedEventCount: SessionLogOffset(options.fork.events.length),
       }
+  const preset = options.preset === undefined ? {} : { agentPreset: options.preset }
   const identity = options.fork === undefined
-    ? meta
-    : { ...meta, parentSession: options.fork.from, isSeeded: true }
+    ? { ...meta, ...preset }
+    : { ...meta, parentSession: options.fork.from, isSeeded: true, ...preset }
   const handle = options.resume
     ? await ctx.agents
         .resume({ resumeSessionId: options.sessionId, agentOptions, ...setup })

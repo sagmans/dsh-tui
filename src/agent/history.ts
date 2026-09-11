@@ -8,6 +8,14 @@ export interface StoredSession {
   readonly eventCount: number | undefined
 }
 
+/** The persisted header fields this surface reads besides the list columns. */
+export interface StoredHeader {
+  readonly id: string
+  /** Preset the session STARTED with; a later selection is a log event. */
+  readonly agentPreset: string | undefined
+  readonly eventCount: number | undefined
+}
+
 /** One stored event, reduced to what the transcript fold reads. */
 export interface StoredEvent {
   readonly type: string
@@ -20,6 +28,8 @@ export interface SessionHistory {
   list(limit: number): Promise<readonly StoredSession[]>
   /** Read a slice of a session's log; `limit` bounds a title read. */
   read(id: string, options?: { readonly offset?: number; readonly limit?: number }): Promise<readonly StoredEvent[]>
+  /** One session's stored header, or undefined when nothing is stored under that id. */
+  header(id: string): Promise<StoredHeader | undefined>
 }
 
 /** Sessions the picker offers before a menu stops being a menu. */
@@ -31,8 +41,25 @@ export const TITLE_EVENT_LIMIT = 40
 /** Longest session title the picker shows, before the row can no longer hold it. */
 export const TITLE_CHAR_LIMIT = 72
 
+/** Events read to resolve a session's preset: a selection sits in its blank prefix. */
+export const PRESET_EVENT_LIMIT = 40
+
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined
+}
+
+/** One stored header, or undefined when the snapshot carries no usable identity. */
+function headerOf(snapshot: unknown): StoredHeader | undefined {
+  const entry = asRecord(snapshot)
+  const header = asRecord(entry?.header)
+  const id = header?.id
+  if (typeof id !== 'string') return undefined
+  const eventCount = entry?.eventCount
+  return {
+    id,
+    agentPreset: typeof header?.agentPreset === 'string' ? header.agentPreset : undefined,
+    eventCount: typeof eventCount === 'number' ? eventCount : undefined,
+  }
 }
 
 function clip(title: string, limit: number): string {
@@ -93,6 +120,44 @@ export async function readSessionTitle(history: SessionHistory, session: StoredS
 }
 
 /**
+ * The agent preset a stored session runs.
+ *
+ * The creation header names the preset the session STARTED with, and a
+ * selection recorded while it was still blank replaced it. The projection's own
+ * rule is that the last selection wins over the header, so the tail is read
+ * first and the head second: the harness refuses a switch once a turn has run,
+ * which puts any selection in the blank prefix. Reading both keeps this correct
+ * if that rule ever loosens, and the event count bounds the work either way.
+ */
+export async function presetOfStoredSession(history: SessionHistory, id: string): Promise<string | undefined> {
+  const header = await history.header(id)
+  if (header === undefined) return undefined
+  const end = header.eventCount ?? 0
+  if (end > PRESET_EVENT_LIMIT) {
+    const tail = await lastSelection(history, id, end - PRESET_EVENT_LIMIT, PRESET_EVENT_LIMIT)
+    if (tail !== undefined) return tail
+  }
+  return await lastSelection(history, id, 0, PRESET_EVENT_LIMIT) ?? header.agentPreset
+}
+
+/** The last recorded selection inside one slice of a session's log. */
+async function lastSelection(
+  history: SessionHistory,
+  id: string,
+  offset: number,
+  limit: number,
+): Promise<string | undefined> {
+  const events = await history.read(id, { offset, limit })
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index]
+    if (event?.type !== 'agent-preset/selected') continue
+    const preset = asRecord(event.data)?.agentPreset
+    if (typeof preset === 'string' && preset !== '') return preset
+  }
+  return undefined
+}
+
+/**
  * Wrap the persistence service in the little of it a terminal needs.
  *
  * The seam itself is optional here: a composition without durable storage can
@@ -105,6 +170,7 @@ export function createSessionHistory(ctx: Context): SessionHistory | undefined {
     | {
         list(): Promise<unknown>
         open(id: string, access: 'read'): Promise<unknown>
+        stat?(id: string): Promise<unknown>
       }
     | undefined
   if (typeof service?.list !== 'function' || typeof service.open !== 'function') return undefined
@@ -131,6 +197,10 @@ export function createSessionHistory(ctx: Context): SessionHistory | undefined {
   }
   return {
     read,
+    header: async id => {
+      const stat = service.stat
+      return typeof stat === 'function' ? headerOf(await stat.call(service, id)) : undefined
+    },
     list: async limit => {
       const snapshots = await service.list()
       const sessions: StoredSession[] = []
