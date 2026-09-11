@@ -1,3 +1,9 @@
+# Local planning artifacts (never committed)
+.plans/
+
+# TypeScript build output (published from the package, never tracked)
+/lib/
+
 # Logs
 logs
 *.log

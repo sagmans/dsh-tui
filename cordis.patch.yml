@@ -1,0 +1,123 @@
+# dsh-tui — the terminal agent plane, over dsh-base.
+#
+# Every row this bundle INSERTS is owned by the plugin: no row names a package
+# the plugin does not depend on. The rows it DISABLES are the base's global
+# agent rows, because from here on an agent's tools, prompt sections, skills,
+# and planning rows come from the agent preset its own session mounts — the
+# composition the Web bundle composes for the same reason. Leaving them mounted
+# would register the same tool names in two layers, double every prompt section
+# and command they own, and provide the same services twice, which fails.
+#
+# The ids are exactly the base rows the shipped presets supply: standard, ptc,
+# and cordis provide every one of them, while minimal supplies its own
+# persistent-terminal set instead, which is the point of that mode.
+- id: agent-instructions
+  disabled: true
+
+- id: command-compact
+  disabled: true
+
+- id: command-goal
+  disabled: true
+
+- id: compaction-basic
+  disabled: true
+
+- id: plan-mode
+  disabled: true
+
+- id: skill-filesystem
+  disabled: true
+
+- id: tool-bash
+  disabled: true
+
+- id: tool-fs
+  disabled: true
+
+- id: tool-fs-search
+  disabled: true
+
+- id: tool-goal
+  disabled: true
+
+- id: tool-jobs
+  disabled: true
+
+- id: tool-pwsh
+  disabled: true
+
+- id: tool-ralph
+  disabled: true
+
+- id: tool-result-pruner
+  disabled: true
+
+- id: tool-skill
+  disabled: true
+
+- id: tool-subagent
+  disabled: true
+
+- id: tool-subagent-control
+  disabled: true
+
+- id: tool-subagent-fork
+  disabled: true
+
+- id: tool-subagent-list-agents
+  disabled: true
+
+- id: tool-todo
+  disabled: true
+
+- id: tool-web
+  disabled: true
+
+- id: tool-workflow
+  disabled: true
+
+- id: workflow-worker-thread
+  disabled: true
+
+- insert:
+    - id: tui-startup
+      name: '@sagmans/dsh-tui/startup'
+
+    - id: tui
+      name: '@sagmans/dsh-tui'
+      inject: [tuiStartup]
+      config:
+        sessionId: !!js ctx.tuiStartup.sessionId
+        resume: !!js ctx.tuiStartup.resume
+        resumePicker: !!js ctx.tuiStartup.resumePicker
+        model: !!js ctx.tuiStartup.model
+        provider: !!js ctx.tuiStartup.provider
+        preset: !!js ctx.tuiStartup.preset
+        color: !!js ctx.tuiStartup.color
+        bell: !!js ctx.tuiStartup.bell
+
+    # The roster of agent compositions, and the mode a session starts in when
+    # nobody names one. A profile patch may override this row's config.
+    - id: agent-presets
+      name: '@deepseek-ai/dsh-agent-presets'
+      config:
+        default: standard
+
+    # A preset's subagent tool samples its delegation model from this host-owned
+    # settings row. It is host machinery rather than agent plane, which is why
+    # the Web bundle inserts it too instead of leaving it to the preset.
+    - id: subagent-model-selection-settings
+      name: '@deepseek-ai/dsh-tool-subagent/model-selection-settings'
+
+    # Creator mode inspects and re-composes the running harness, which needs the
+    # host half of the dynamic-plugin runner. Only the Web bundle ships this
+    # row, so a terminal profile has to mount it to offer that mode at all.
+    - id: cordis-host-runner
+      name: '@deepseek-ai/dsh-cordis-host-runner'
+
+    # PTC mode runs its programs against a code runtime. The Web bundle mounts
+    # this at host level for the same reason: the runtime is machinery, while
+    # the preset decides whether an agent uses it.
+    - id: code-runtime
+      name: '@deepseek-ai/dsh-code-runtime-worker-thread'

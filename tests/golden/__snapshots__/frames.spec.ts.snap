@@ -1,0 +1,150 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`golden frames > renders a busy dock at 40 columns 1`] = `
+[
+  "◎ goal round 6/256 · complete the plan [0m…[0m",
+  "⏸ plan mode · answer the plan before ed[0m…[0m",
+  "⚇ subagents · 1 running, 1 done",
+  "  ▸ c000cfa3 · spawn · running 4s",
+  "  ✓ f05abce2 · fork · completed 2s",
+  "⛭ jobs · 1 running, 0 done",
+  "  ▸ bash-1 · running 12s — sleep 45 && [0m…[0m",
+  "☰ todos 1/2 done",
+  "  ▸ verify the dock",
+  "  ☑ write the dock",
+]
+`;
+
+exports[`golden frames > renders a busy dock at 80 columns 1`] = `
+[
+  "◎ goal round 6/256 · complete the plan for this dsh-tui plugin",
+  "⏸ plan mode · answer the plan before edits happen",
+  "⚇ subagents · 1 running, 1 done",
+  "  ▸ c000cfa3 · spawn · running 4s",
+  "  ✓ f05abce2 · fork · completed 2s",
+  "⛭ jobs · 1 running, 0 done",
+  "  ▸ bash-1 · running 12s — sleep 45 && echo bg-done",
+  "☰ todos 1/2 done",
+  "  ▸ verify the dock",
+  "  ☑ write the dock",
+]
+`;
+
+exports[`golden frames > renders the dock at 40 columns 1`] = `
+[
+  "⏸ plan mode · answer the plan before ed[0m…[0m",
+  "☰ todos 1/3 done",
+  "  ▸ verify the dock",
+  "  ☐ document the dock",
+  "  ☑ write the dock",
+]
+`;
+
+exports[`golden frames > renders the dock at 80 columns 1`] = `
+[
+  "⏸ plan mode · answer the plan before edits happen",
+  "☰ todos 1/3 done",
+  "  ▸ verify the dock",
+  "  ☐ document the dock",
+  "  ☑ write the dock",
+]
+`;
+
+exports[`golden frames > renders the session picker at 40 columns 1`] = `
+{
+  "above": 0,
+  "below": 0,
+  "filter": "",
+  "hint": "↑↓ move · enter open · esc cancel · type to filter",
+  "note": undefined,
+  "rows": [
+    {
+      "current": true,
+      "description": "/Users/dev/source/opensource/deepseek-harness/master · 4m ago · 22 events",
+      "label": "dock polish",
+    },
+    {
+      "current": false,
+      "description": "/Users/dev/source/opensource/deepseek-harness/master · 15m ago · 41 events",
+      "label": "tui-session-f38b6841-9229-4c2f-8c82-0ced1eee68ea",
+    },
+  ],
+  "title": "resume a session · 2 stored",
+}
+`;
+
+exports[`golden frames > renders the session picker at 80 columns 1`] = `
+{
+  "above": 0,
+  "below": 0,
+  "filter": "",
+  "hint": "↑↓ move · enter open · esc cancel · type to filter",
+  "note": undefined,
+  "rows": [
+    {
+      "current": true,
+      "description": "/Users/dev/source/opensource/deepseek-harness/master · 4m ago · 22 events",
+      "label": "dock polish",
+    },
+    {
+      "current": false,
+      "description": "/Users/dev/source/opensource/deepseek-harness/master · 15m ago · 41 events",
+      "label": "tui-session-f38b6841-9229-4c2f-8c82-0ced1eee68ea",
+    },
+  ],
+  "title": "resume a session · 2 stored",
+}
+`;
+
+exports[`golden frames > renders the status row at 40 columns 1`] = `
+[
+  "● ready · standard · zai-coding-cn/glm-[0m…[0m",
+]
+`;
+
+exports[`golden frames > renders the status row at 80 columns 1`] = `
+[
+  "● ready · standard · zai-coding-cn/glm-5.3 (max) · workspace-write · ctx 17.5k/[0m…[0m",
+]
+`;
+
+exports[`golden frames > renders the transcript at 40 columns 1`] = `
+[
+  "› add a dock above the editor",
+  "· injected dsh-agent-instructions · 3",
+  "  lines — <system-reminder>",
+  "▸ reasoning · 2 lines · 53 chars · 3s",
+  "⏺ Done.",
+  "",
+  "  - fold the work state",
+  "  - render it only when it says",
+  "    something",
+  "",
+  "  \`\`\`ts",
+  "    const dock = new WorkDock(state,",
+  "  theme)",
+  "  \`\`\`",
+  "⚒ bash",
+  "    Tests  154 passed (154)",
+  "⧉ compacted 3 events (≈4200 tokens)",
+]
+`;
+
+exports[`golden frames > renders the transcript at 80 columns 1`] = `
+[
+  "› add a dock above the editor",
+  "· injected dsh-agent-instructions · 3 lines — <system-reminder>",
+  "▸ reasoning · 2 lines · 53 chars · 3s",
+  "⏺ Done.",
+  "",
+  "  - fold the work state",
+  "  - render it only when it says something",
+  "",
+  "  \`\`\`ts",
+  "    const dock = new WorkDock(state, theme)",
+  "  \`\`\`",
+  "⚒ bash",
+  "    Tests  154 passed (154)",
+  "⧉ compacted 3 events (≈4200 tokens)",
+]
+`;
