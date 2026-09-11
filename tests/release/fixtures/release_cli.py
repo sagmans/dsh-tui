@@ -108,13 +108,15 @@ if TOOL == "npm":
             print(json.dumps({"error": {"code": "E404"}}))
             sys.exit(1)
         if SCENARIO == "lag" and not state.get("lagged"):
-            # A registry read can trail the write that preceded it.
+            # A registry read can trail the write that preceded it by minutes.
             state["lagged"] = True
             save()
             print(json.dumps({"error": {"code": "E404"}}))
             sys.exit(1)
         metadata = json.loads(Path("package.json").read_text())
         metadata["dist"] = {"integrity": "bad" if SCENARIO == "bad-integrity" else os.environ["ARTIFACT_INTEGRITY"]}
+        if SCENARIO == "wrong-manifest":
+            metadata["name"] = "other"
         output(metadata)
     if args[0] == "publish":
         if SCENARIO == "publish-error":

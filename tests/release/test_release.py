@@ -128,6 +128,37 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(len(reads), 2)
         self.assertEqual(sum("publish" in call for call in self.calls()), 1)
 
+    def test_bootstrap_does_not_retry_a_mismatched_manifest(self):
+        result = self.run_helper("bootstrap-publish", CONFIRM="bootstrap-publish", SCENARIO="wrong-manifest")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("does not match", result.stderr)
+        reads = [call for call in self.calls() if "@example/tool@1.0.0" in call]
+        self.assertEqual(len(reads), 1)
+
+    def test_read_backoff_repeats_transport_failures_only(self):
+        sys.path.insert(0, str(ROOT / "scripts/npm"))
+        self.addCleanup(sys.path.remove, str(ROOT / "scripts/npm"))
+        from execution import ReadFailure, ReleaseError, read_with_retry
+
+        attempts = []
+
+        def trailing():
+            attempts.append(1)
+            if len(attempts) < 3:
+                raise ReadFailure("not served yet")
+            return "served"
+
+        self.assertEqual(read_with_retry(trailing, attempts=3, backoff=0.001, cap=0.001), "served")
+        self.assertEqual(len(attempts), 3)
+
+        def mismatched():
+            attempts.append(1)
+            raise ReleaseError("wrong shape")
+
+        with self.assertRaises(ReleaseError):
+            read_with_retry(mismatched, attempts=3, backoff=0.001, cap=0.001)
+        self.assertEqual(len(attempts), 4)
+
     def test_publish_failure_is_not_retried(self):
         result = self.run_helper("bootstrap-publish", CONFIRM="bootstrap-publish", SCENARIO="publish-error")
         self.assertNotEqual(result.returncode, 0)
