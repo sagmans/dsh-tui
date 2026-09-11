@@ -6,14 +6,66 @@ Status: **v1 feature-complete, unpublished by choice.** The surface owns the alt
 
 ## Install
 
+A profile keeps this plugin as one bundle layer. Install it from a checkout of this repository, or from the registry once a release is published. Both paths need Node.js >= 22.19 and `pnpm` on `PATH`. Both need a real terminal: stdin and stdout must be TTYs.
+
+### From a plugin checkout
+
+A linked profile loads the package's built entry point. Build the checkout before you add it:
+
+```sh
+cd "$PLUGIN_CHECKOUT"
+CI=true pnpm install && pnpm run build
+dsh plugin --profile tui add "$PWD"
+dsh --profile tui
+```
+
+The `add` command creates the `tui` profile on first use and records a link to the directory. Keep the checkout in place. If you move or delete it, the link breaks, and a later `plugin install` removes the bundle from the layer list (see Troubleshooting).
+
+### From the registry
+
 ```sh
 dsh plugin --profile tui add @sagmans/dsh-tui@latest
 dsh --profile tui
 ```
 
-The first command creates a base-backed `tui` profile and adds this bundle to it. Requires Node.js >= 22.19, a real terminal (stdin and stdout must be TTYs), and `pnpm` on `PATH` for the install step.
+This path needs a published release. No release is published yet, so use a checkout until then.
 
-### Launching from a DSH checkout
+### Confirm the plugin mounted
+
+The profile records its layers in `$DSH_HOME/profiles/tui/package.json` (`~/.dsh` by default). `@sagmans/dsh-tui` must appear in `dsh.profile.bundles`:
+
+```sh
+node -p "require((process.env.DSH_HOME ?? require('node:os').homedir() + '/.dsh') + '/profiles/tui/package.json').dsh.profile.bundles.join('\n')"
+# @deepseek-ai/dsh-base
+# @sagmans/dsh-tui
+```
+
+Then check that the surface is mounted. A pipe is not a terminal, so this command must refuse before it takes the screen over:
+
+```sh
+echo hi | dsh --profile tui
+# dsh-tui: both stdin and stdout must be TTYs; run this profile from a terminal or SSH session
+```
+
+### Update
+
+Rebuild a linked checkout, then start the next session. The link itself does not change:
+
+```sh
+cd "$PLUGIN_CHECKOUT" && git pull && CI=true pnpm install && pnpm run build
+```
+
+A registry install updates with `dsh plugin --profile tui update @sagmans/dsh-tui`.
+
+### Remove
+
+```sh
+dsh plugin --profile tui remove @sagmans/dsh-tui
+```
+
+The profile then keeps `@deepseek-ai/dsh-base` and no application, so `dsh --profile tui` waits with no output. Add the plugin again to use the profile.
+
+### Launching from a harness checkout
 
 `pnpm dsh --profile tui` is the sanctioned launcher, but pnpm verifies that dependencies are current before it runs any script, and a checkout whose `postinstall` refuses to take over a user-owned `core.hooksPath` fails that check — the process exits before the surface starts. Any of these reaches the surface:
 
@@ -21,6 +73,35 @@ The first command creates a base-backed `tui` profile and adds this bundle to it
 pnpm --config.verify-deps-before-run=false dsh --profile tui   # from the checkout
 CI=true pnpm dsh --profile tui                                 # also suppresses the check
 node "$CHECKOUT/apps/cli/lib/bin.js" --profile tui             # needs neither pnpm nor the check
+```
+
+## Troubleshooting
+
+Two facts explain most failures.
+
+**A linked profile is a link, not a copy.** The profile points at a directory, so a checkout that moves or disappears breaks it.
+
+**`dsh plugin install` removes a bundle it cannot resolve, and says nothing.** The command reconciles `dsh.profile.bundles` against the installed dependencies. A bundle whose path does not resolve leaves the list, and the command still exits 0. The next launch composes `@deepseek-ai/dsh-base` alone. No application plugin mounts, so nothing reads the command line: `dsh --profile tui` then prints nothing and never exits, and `--help` waits with it.
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `dsh: cannot resolve profile bundle "@sagmans/dsh-tui" ...` | the linked checkout moved or was deleted | `dsh plugin --profile tui add "$PLUGIN_CHECKOUT"` |
+| `dsh --profile tui` prints nothing and never exits | the bundle left `dsh.profile.bundles`, usually after a broken link and a `plugin install` | confirm the layer list, then run the `add` command again |
+| `dsh-tui: both stdin and stdout must be TTYs` | stdin or stdout is a pipe, a file, or a CI runner | run the command from a terminal |
+| Changes under `src/` have no effect | a linked profile loads `lib/`, not `src/` | `pnpm run build` in the plugin checkout |
+| `pnpm dsh --profile tui` exits before the surface appears | pnpm's dependency check fails on the harness checkout's own postinstall | see [Launching from a harness checkout](#launching-from-a-harness-checkout) |
+| `--preset <id>` is refused, because the session's agent preset is fixed | a session keeps the mode that composed it, and this session already took a turn | `/preset <id>` before the first turn, or resume without `--preset` |
+| `--resume <id>` starts a new session | the id is a bare UUID | pass the stored id, `tui-session-…` included; a bare `--resume` opens the picker |
+| `dsh: profile "tui" does not exist` | the profile is not created yet | the `add` command creates it |
+
+The full recovery from a broken link:
+
+```sh
+cd "$PLUGIN_CHECKOUT" && CI=true pnpm install && pnpm run build
+dsh plugin --profile tui add "$PWD"
+node -p "require((process.env.DSH_HOME ?? require('node:os').homedir() + '/.dsh') + '/profiles/tui/package.json').dsh.profile.bundles.join('\n')"
+# @deepseek-ai/dsh-base
+# @sagmans/dsh-tui
 ```
 
 ## Usage
@@ -139,7 +220,7 @@ The automated checks drive a real PTY, but they run on this machine's terminal. 
 
 | Check | Expected |
 |---|---|
-| `dsh plugin --profile tui add @sagmans/dsh-tui@latest` into a fresh `DSH_HOME` | the profile is created, and `dsh --profile tui` reaches a prompt |
+| `DSH_HOME=$(mktemp -d) dsh plugin --profile tui add "$PWD"` from a built checkout | the profile is created, `dsh.profile.bundles` lists the plugin, and `dsh --profile tui` reaches a prompt |
 | the same over SSH | the interface arrives intact; keys and mouse work on the host, with no local echo doubling |
 | inside tmux or screen | wheel scroll and `ctrl+shift+f` search work; dragging selects text |
 | a light terminal and a dark one | the interface follows the terminal's own palette; nothing becomes unreadable |
