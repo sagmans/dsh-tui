@@ -147,3 +147,7 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# Python bytecode cache (never commit interpreter output)
+__pycache__/
+*.pyc

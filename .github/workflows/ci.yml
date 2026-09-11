@@ -26,6 +26,10 @@ jobs:
         run: pnpm typecheck
       - name: Unit and golden tests
         run: pnpm test
+      # The release guard suite runs on every change because a regression here
+      # would first surface as an unrecoverable registry write.
+      - name: Release helper tests
+        run: pnpm test:release
       # The PTY harness is a development tool: CI proves the artefact packs and
       # its modules parse, and leaves terminal behaviour to a local run.
       - name: Package smoke

@@ -1,38 +1,71 @@
 name: release
 
-# Publishing is a tag, not a laptop: provenance is an OIDC attestation that only
-# a CI provider can issue, so the artefact users install is the one this
-# workflow built and verified.
+# Publication is a tag, not a laptop: provenance is an OIDC attestation that only
+# a CI provider can issue, so the artefact users install is the one this workflow
+# built and verified. No npm token is stored anywhere.
 on:
   push:
     tags: ['v*']
 
+# Least privilege: the verify job only reads source, and the publish job
+# re-declares the id-token scope it needs for npm OIDC trusted publishing.
 permissions:
   contents: read
-  id-token: write
 
 jobs:
-  publish:
+  verify:
+    timeout-minutes: 20
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
         with:
           version: 11
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: '22'
+          node-version: '24'
           cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # RELEASE.md requires the tag and package.json version to match; fail the
+      # release before a mismatched publish can happen.
+      - name: Tag must match package.json version
+        run: test "v$(node -p 'require("./package.json").version')" = "$GITHUB_REF_NAME"
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm test:release
+      - run: node tools/pack-smoke.mjs
+
+  publish:
+    needs: verify
+    # npm requires a package to exist before trusted publishing can be
+    # configured, so the first tag is verified here and bootstrapped by hand
+    # per RELEASE.md.
+    if: github.ref_name != 'v0.1.0'
+    runs-on: ubuntu-latest
+    # Approval gate: this environment requires the release owner's review, so
+    # every publish is an explicit human decision.
+    environment: npm-release
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      # Mints the OIDC token npm exchanges for a short-lived publish credential.
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+        with:
+          version: 11
+      # Node 24 bundles npm >= 11.5.1, the minimum for trusted publishing.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
           registry-url: 'https://registry.npmjs.org'
-      - name: Install
-        run: pnpm install --frozen-lockfile
-      - name: Typecheck
-        run: pnpm typecheck
-      - name: Unit and golden tests
-        run: pnpm test
-      - name: Package smoke
-        run: node tools/pack-smoke.mjs
-      - name: Publish
-        run: pnpm publish --access public --provenance --no-git-checks
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      # devDependencies supply tsc for the prepack build that npm publish runs.
+      - run: pnpm install --frozen-lockfile
+      # --provenance keeps the attestation explicit and fails loudly if the
+      # trusted-publisher match is misconfigured.
+      - run: npm publish --provenance --access public
