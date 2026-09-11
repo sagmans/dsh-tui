@@ -2,11 +2,11 @@
 
 Interactive terminal (TUI) surface for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): use `dsh` in a terminal instead of a browser.
 
-Status: **v1 feature-complete, first release pending.** The surface owns the alternate screen, streams assistant text as markdown, renders every tool's own card, answers approvals and questions, restores and names stored conversations, switches model mid-session, runs any of the four shipped agent modes and switches between them before a session's first turn, reads a child agent's conversation in place, keeps the goal, plan mode, todo list, delegations, and background jobs above the editor with a status line below it, and hands the terminal back on every graceful exit. Publication is tag-driven with GitHub OIDC provenance and no stored npm token; see [RELEASE.md](RELEASE.md).
+Status: **v1 feature-complete; `0.1.0` is published.** The surface owns the alternate screen, streams assistant text as markdown, renders every tool's own card, answers approvals and questions, restores and names stored conversations, switches model mid-session, runs any of the four shipped agent modes and switches between them before a session's first turn, reads a child agent's conversation in place, keeps the goal, plan mode, todo list, delegations, and background jobs above the editor with a status line below it, and hands the terminal back on every graceful exit. Publication is tag-driven with GitHub OIDC provenance and no stored npm token; see [RELEASE.md](RELEASE.md).
 
 ## Install
 
-A profile keeps this plugin as one bundle layer. Install it from a checkout of this repository, or from the registry once a release is published. Both paths need Node.js >= 22.19 and `pnpm` on `PATH`. Both need a real terminal: stdin and stdout must be TTYs.
+A profile keeps this plugin as one bundle layer. Install it from a checkout of this repository, or from the registry (`0.1.0` or later). Both paths need Node.js >= 22.19 and `pnpm` on `PATH`. Both need a real terminal: stdin and stdout must be TTYs.
 
 ### From a plugin checkout
 
@@ -28,7 +28,7 @@ dsh plugin --profile tui add @sagmans/dsh-tui@latest
 dsh --profile tui
 ```
 
-This path needs a published release. No release is published yet, so use a checkout until then.
+`0.1.0` is published, so this path works today. A checkout stays the path for unreleased work.
 
 ### Confirm the plugin mounted
 
@@ -241,11 +241,11 @@ The automated checks drive a real PTY, but they run on this machine's terminal. 
 
 Published artefacts carry a provenance attestation, which only a CI provider can issue, so releases ship from the tag workflow rather than a laptop.
 
-1. Bump `version` in `package.json` and commit it.
-2. `git tag v<version> && git push origin v<version>`.
-3. `.github/workflows/release.yml` re-runs typecheck, tests, and the package smoke, then publishes with `--provenance`.
+1. Bump `version` in `package.json`, land it on `main` through a reviewed PR, and wait for CI to pass on the merged SHA.
+2. Tag that SHA with a signed tag and push it. The tag ruleset admits repository admins only.
+3. `.github/workflows/release.yml` re-runs typecheck, tests, and the package smoke; the publish job then waits for a maintainer's approval on the `npm-release` environment before it publishes with OIDC trusted publishing and automatic provenance.
 
-The workflow needs an `NPM_TOKEN` repository secret with publish rights for the `@sagmans` scope. To publish by hand instead, run `pnpm publish --access public --provenance` from a clean checkout of the tag.
+The workflow stores no npm token: the registry trusts `release.yml` on the `npm-release` environment, and [`scripts/npm/release.py`](scripts/npm/release.py) creates both the environment and that trust. The full runbook is [RELEASE.md](RELEASE.md).
 
 ## Limitations
 

@@ -27,6 +27,10 @@ Per-release values are exported for one release only and are never stored in the
 
 The helper is [`scripts/npm/release.py`](scripts/npm/release.py); [`pnpm test:release`](tests/release) exercises its guards through synthetic CLIs, and CI runs that suite on every change. No helper action writes to npm or GitHub without its own `CONFIRM=<action>` value. `DRY_RUN=1` prints the exact mutation instead of running it. Reading this policy, passing preflight, or exporting a variable is not approval.
 
+The helper rejects a redirected registry before it acts: it reads the effective `registry` and `@sagmans:registry` configuration and fails closed unless both resolve to `https://registry.npmjs.org/`. The trust commands refuse unknown flags, so that check replaces pinning the scoped key on the command line.
+
+Trust reads need an interactive terminal. npm starts its browser two-factor approval only when stdin and stdout are terminals, so the helper gives those reads a pseudo-terminal and mirrors the approval URL to stderr; approve it in a browser when the helper pauses.
+
 Prerequisites: `python3` 3.11 or newer, npm 11.15.0 or newer, authenticated `npm` and `gh` CLIs, repository administration access, and a clean checkout.
 
 ## First publication (`v0.1.0` only)
@@ -54,7 +58,7 @@ DRY_RUN=1 python3 scripts/npm/release.py bootstrap-publish
 CONFIRM=bootstrap-publish python3 scripts/npm/release.py bootstrap-publish
 ```
 
-`bootstrap-publish` refuses an existing package, publishes the reviewed tarball with lifecycle scripts disabled, and verifies the delivered integrity. Local publication cannot generate provenance; provenance begins with the OIDC releases that follow. If the result is ambiguous, inspect the registry before any retry — the helper never retries.
+`bootstrap-publish` refuses an existing package, publishes the reviewed tarball with lifecycle scripts disabled, and verifies the delivered integrity. Local publication cannot generate provenance; provenance begins with the OIDC releases that follow. A registry read can trail the write that precedes it, so the helper retries that read only; a publication is never retried. If the result is ambiguous, inspect the registry before any retry.
 
 ## Recurring release controls (once, after the bootstrap)
 
@@ -72,10 +76,10 @@ CONFIRM=harden-publishing python3 scripts/npm/release.py harden-publishing
 ```
 
 - `setup-github-release` creates the approval-gated `npm-release` environment and an admin-only `v*` tag ruleset. It refuses to overwrite conflicting existing controls.
-- `configure-trust` binds publication to this repository's `release.yml` on the `npm-release` environment, publish-only. An existing conflicting trust is refused, never replaced.
+- `configure-trust` binds publication to this repository's `release.yml` on the `npm-release` environment. The registry answers a publish grant with stage publish included, so that pair is the accepted configuration; a stage-only grant carries no publish authority and is refused, as is any conflicting existing trust.
 - `harden-publishing` requires two-factor authentication for publication and disallows traditional tokens, so the OIDC flow is the only publish path. Confirm the package settings on npmjs.com afterwards; the helper does not claim MFA readback.
 
-Then verify identity, integrity, public access, and the exact trust:
+Then verify identity, integrity, public access, and the exact trust. The trust read asks for browser approval, so run it from an interactive terminal:
 
 ```sh
 DRY_RUN=1 python3 scripts/npm/release.py verify

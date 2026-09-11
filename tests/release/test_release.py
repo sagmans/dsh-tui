@@ -85,9 +85,17 @@ class ReleaseTests(unittest.TestCase):
         calls = self.calls()
         self.assertTrue(any("whoami" in call for call in calls))
         for call in calls:
-            if call[0] == "npm" and "--version" not in call:
+            if call[0] == "npm" and "--version" not in call and call[1:3] != ["config", "get"]:
                 self.assertIn("--registry=" + REGISTRY, call)
-                self.assertIn("--@example:registry=" + REGISTRY, call)
+                self.assertNotIn("--@example:registry=" + REGISTRY, call)
+        self.assert_no_mutation()
+
+    def test_preflight_rejects_a_redirected_registry(self):
+        for scenario in ("rogue-registry", "rogue-scoped-registry"):
+            with self.subTest(scenario=scenario):
+                result = self.run_helper("preflight", SCENARIO=scenario)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("redirected", result.stderr)
         self.assert_no_mutation()
 
     def test_bootstrap_publishes_reviewed_tarball_without_hooks(self):
@@ -112,6 +120,13 @@ class ReleaseTests(unittest.TestCase):
                 result = self.run_helper("bootstrap-publish", CONFIRM="bootstrap-publish", SCENARIO=scenario)
                 self.assertNotEqual(result.returncode, 0)
         self.assert_no_mutation()
+
+    def test_bootstrap_retries_registry_readback_after_write(self):
+        result = self.run_helper("bootstrap-publish", CONFIRM="bootstrap-publish", SCENARIO="lag")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        reads = [call for call in self.calls() if "@example/tool@1.0.0" in call]
+        self.assertEqual(len(reads), 2)
+        self.assertEqual(sum("publish" in call for call in self.calls()), 1)
 
     def test_publish_failure_is_not_retried(self):
         result = self.run_helper("bootstrap-publish", CONFIRM="bootstrap-publish", SCENARIO="publish-error")
@@ -170,12 +185,16 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn("--allow-publish", mutation)
         self.assertNotIn("--allow-stage-publish", mutation)
         self.assertIn("--env=npm-release", mutation)
-        self.assertEqual(sum("list" in call and "trust" in call for call in self.calls()), 2)
+        reads = [call for call in self.calls() if call[1:3] == ["trust", "list"]]
+        self.assertEqual(len(reads), 2)
+        for call in reads:
+            self.assertIn("--color=false", call)
+            self.assertNotIn("--@example:registry=" + REGISTRY, call)
 
     def test_verify_requires_matching_integrity_and_exact_trust(self):
         result = self.run_helper("verify", SCENARIO="published")
         self.assertEqual(result.returncode, 0, result.stderr)
-        for scenario in ("bad-integrity", "trust-conflict", "extra-permission", "private-access"):
+        for scenario in ("bad-integrity", "trust-conflict", "extra-permission", "stage-only", "private-access"):
             with self.subTest(scenario=scenario):
                 self.assertNotEqual(self.run_helper("verify", SCENARIO=scenario).returncode, 0)
         self.assert_no_mutation()

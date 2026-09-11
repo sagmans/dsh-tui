@@ -3,9 +3,16 @@
 import json
 import os
 from pathlib import Path
+import pty
 import re
 import shlex
 import subprocess
+import sys
+import time
+
+PTY_CHUNK_BYTES = 65536
+READ_ATTEMPTS = 5
+READ_BACKOFF_SECONDS = 2
 
 
 class ReleaseError(Exception):
@@ -30,10 +37,56 @@ def read_json(text):
         raise ReleaseError("invalid JSON response or metadata") from error
 
 
-def run(command, *, data=None, check=True):
-    result = subprocess.run(command, input=data, text=True, capture_output=True, check=False)
+def run(command, *, data=None, check=True, tty=False):
+    """Capture a provider call, in a pseudo-terminal when the provider prompts the operator.
+
+    npm starts its browser authentication flow only when stdin and stdout are terminals, so an
+    authentication-gated read would fail with EOTP under a plain pipe instead of asking the operator.
+    """
+    if tty:
+        require(data is None, "interactive capture does not accept standard input")
+        result = _run_in_pty(command)
+    else:
+        result = subprocess.run(command, input=data, text=True, capture_output=True, check=False)
     require(not check or result.returncode == 0, f"{Path(command[0]).name} read failed; inspect authentication and service status privately")
     return result
+
+
+def _run_in_pty(command):
+    master, slave = pty.openpty()
+    try:
+        try:
+            process = subprocess.Popen(command, stdin=slave, stdout=slave, stderr=slave, start_new_session=True)
+        finally:
+            os.close(slave)
+        chunks = []
+        while True:
+            try:
+                chunk = os.read(master, PTY_CHUNK_BYTES)
+            except OSError:
+                break
+            if not chunk:
+                break
+            text = chunk.decode("utf-8", "replace")
+            chunks.append(text)
+            # Mirror the child's output so the operator can see and answer an interactive prompt.
+            print(text, end="", file=sys.stderr, flush=True)
+        returncode = process.wait()
+    finally:
+        os.close(master)
+    captured = "".join(chunks).replace("\r\n", "\n").replace("\r", "\n")
+    return subprocess.CompletedProcess(command, returncode, captured, "")
+
+
+def read_with_retry(operation, *, attempts=READ_ATTEMPTS, backoff=READ_BACKOFF_SECONDS):
+    """Retry a read-only call; a registry read can lag a completed write, and a write is never retried."""
+    for attempt in range(attempts):
+        try:
+            return operation()
+        except ReleaseError:
+            if attempt + 1 == attempts:
+                raise
+            time.sleep(backoff * (attempt + 1))
 
 
 def mutate(action, command, *, data=None):
