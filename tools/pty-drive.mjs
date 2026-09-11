@@ -12,6 +12,8 @@
  *   node tools/pty-drive.mjs --prompt "Run: echo hi" --approve 20 [--permission-mode danger-full-access]
  *   node tools/pty-drive.mjs --prelude "/permission workspace-write" --prompt "Run: echo hi" --approve 15
  *   node tools/pty-drive.mjs --prompt "Ask which colour" --answer "20:1,22:enter"
+ *   node tools/pty-drive.mjs --prelude "/preset " --prompt "" --answer "2:down-press,3:down-release" \
+ *     --expect-last-pattern "❯ ([a-z]+)" --expect-last ptc
  *   node tools/pty-drive.mjs --args "--resume" --prompt "" --answer "4:enter"
  *   node tools/pty-drive.mjs --prompt "say hi" --signal TERM
  *   node tools/pty-drive.mjs --launcher /path/to/dsh/lib/bin.js --prompt "say hi"
@@ -91,7 +93,9 @@ const prelude = option('prelude', '')
 /**
  * Gate answers as "seconds:value" pairs, where a value is literal text or one
  * of the named keys. A question gate needs a pick and a confirm, which one
- * hardcoded approval key cannot express.
+ * hardcoded approval key cannot express. An arrow key is a press and a release
+ * under the keyboard protocol the surface enables, so both forms are nameable:
+ * a handler that acts on the release would step twice per key.
  */
 const NAMED_KEYS = {
   enter: '\r',
@@ -100,6 +104,13 @@ const NAMED_KEYS = {
   down: '\u001b[B',
   esc: '\u001b',
   back: '\u0002',
+  // The surface asks the terminal to report key events, so a real arrow press
+  // arrives as a press followed by a release. A run that only sends the legacy
+  // sequence above cannot see a handler that acts on both.
+  'down-press': '\u001b[1;1B',
+  'down-release': '\u001b[1;1:3B',
+  'up-press': '\u001b[1;1A',
+  'up-release': '\u001b[1;1:3A',
 }
 const answers = option('answer', '')
   .split(',')
@@ -125,6 +136,15 @@ const signal = signalOption === '' || signalOption.startsWith('SIG') ? signalOpt
 const keep = option('log', join(tmpdir(), `dsh-tui-pty-${Date.now()}.log`))
 /** Exit code the run is expected to end with, so a broken boot fails the harness. */
 const expectExit = Number.parseInt(option('expect-exit', '0'), 10)
+/**
+ * A regex whose last match on the final screen must equal `--expect-last`.
+ *
+ * A frame is repainted many times, so searching the whole screen cannot tell a
+ * state from a state the surface has left; the last match is where it settled.
+ * That is how a cursor row is asserted without a screenshot.
+ */
+const expectLastPattern = option('expect-last-pattern', '')
+const expectLast = option('expect-last', '')
 
 /**
  * pnpm re-checks dependencies before it runs a script, and a checkout whose
@@ -219,9 +239,21 @@ function finish() {
   console.log(`--- raw log: ${keep} (${raw.length} bytes) ---`)
   // A run that fails the application must fail the harness: a screen that looks
   // right is not the contract, a clean exit is part of it.
+  const problems = []
   const code = exitInfo?.exitCode
   if (code !== expectExit) {
-    console.error(`pty-drive: expected exit ${expectExit}, got ${code ?? 'no exit before the grace deadline'}`)
+    problems.push(`expected exit ${expectExit}, got ${code ?? 'no exit before the grace deadline'}`)
+  }
+  if (expectLastPattern !== '') {
+    const matches = [...strip(raw).matchAll(new RegExp(expectLastPattern, 'gu'))]
+    const last = matches.at(-1)
+    const seen = last === undefined ? 'no match' : (last[1] ?? last[0])
+    if (seen !== expectLast) {
+      problems.push(`expected the last /${expectLastPattern}/ on screen to be ${JSON.stringify(expectLast)}, saw ${JSON.stringify(seen)}`)
+    }
+  }
+  if (problems.length > 0) {
+    for (const problem of problems) console.error(`pty-drive: ${problem}`)
     process.exit(1)
   }
   process.exit(0)
