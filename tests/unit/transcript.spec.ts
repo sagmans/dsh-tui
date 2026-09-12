@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { type ToolCard, type ToolPresenter } from '@/cards.ts'
+import { rowText, type ToolCard, type ToolPresenter } from '@/cards.ts'
 import { REASONING_CHAR_LIMIT, TranscriptModel } from '@/transcript.ts'
 
 const text = (value: string) => [{ type: 'text', text: value }]
 
 const card = (title: string, detail: string[] = []): ToolCard =>
-  ({ kind: 'generic', title, detail, failed: false, totalLines: detail.length })
+  ({ kind: 'generic', title, detail: detail.map(text => ({ parts: [{ class: 'detail' as const, text }] })), failed: false, totalLines: detail.length })
 
 /** Presenter that records what it was asked, so pairing can be asserted. */
 function recordingPresenter(): ToolPresenter & { readonly calls: string[]; readonly results: string[] } {
@@ -103,6 +103,48 @@ describe('TranscriptModel reasoning', () => {
     expect(body.startsWith('x'.repeat(64))).toBe(true)
     expect(body.endsWith(`… truncated at ${REASONING_CHAR_LIMIT} chars`)).toBe(true)
   })
+
+  it('paints a recorded thought as its own row and keeps it out of the answer', () => {
+    const model = new TranscriptModel()
+    model.apply({
+      type: 'assistant/message',
+      data: {
+        message: {
+          content: [
+            { type: 'reasoning', text: 'weigh the options' },
+            { type: 'text', text: 'the answer' },
+          ],
+        },
+      },
+    })
+    expect(model.entries()).toEqual([
+      { kind: 'reasoning', summary: 'reasoning · 1 line · 17 chars', body: 'weigh the options', live: false },
+      { kind: 'assistant', text: 'the answer' },
+    ])
+  })
+
+  it('does not paint the recorded copy of a thought the stream already settled', () => {
+    let clock = 0
+    const model = new TranscriptModel(undefined, () => clock)
+    model.applyStreamChunk({ type: 'reasoning-delta', text: 'a\nb' })
+    clock = 2_000
+    model.applyStreamChunk({ type: 'block-end', block: { type: 'reasoning' } })
+    model.apply({
+      type: 'assistant/message',
+      data: {
+        message: {
+          content: [
+            { type: 'reasoning', text: 'a\nb' },
+            { type: 'text', text: 'the answer' },
+          ],
+        },
+      },
+    })
+    expect(model.entries()).toEqual([
+      { kind: 'reasoning', summary: 'reasoning · 2 lines · 3 chars · 2s', body: 'a\nb', live: false },
+      { kind: 'assistant', text: 'the answer' },
+    ])
+  })
 })
 
 describe('TranscriptModel markers', () => {
@@ -159,7 +201,7 @@ describe('TranscriptModel tool cards', () => {
       data: { message: { content: [{ type: 'tool-result', toolCallId: 'missing', text: 'orphan' }], isError: false } },
     })
     expect(model.entries()).toEqual([
-      { kind: 'tool', card: { kind: 'generic', title: 'tool', detail: ['orphan'], failed: false, totalLines: 1 } },
+      { kind: 'tool', card: card('tool', ['orphan']) },
     ])
   })
 
@@ -167,7 +209,7 @@ describe('TranscriptModel tool cards', () => {
     const model = new TranscriptModel()
     model.apply({ type: 'tool/call', data: { name: 'grep', arguments: '{"q":"x"}', callId: 'c1' } })
     expect(model.entries()).toEqual([
-      { kind: 'tool', card: { kind: 'generic', title: 'grep', detail: ['{"q":"x"}'], failed: false, totalLines: 1 } },
+      { kind: 'tool', card: card('grep', ['{"q":"x"}']) },
     ])
   })
 
@@ -175,7 +217,7 @@ describe('TranscriptModel tool cards', () => {
     const model = new TranscriptModel()
     model.apply({ type: 'tool/call', data: { name: 'bash', arguments: '{"command":"a\nb"}', callId: 'c1' } })
     const entry = model.entries()[0]
-    expect(entry?.kind === 'tool' && entry.card.detail).toEqual(['{"command":"a', 'b"}'])
+    expect(entry?.kind === 'tool' && entry.card.detail.map(rowText)).toEqual(['{"command":"a', 'b"}'])
   })
 })
 

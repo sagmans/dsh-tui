@@ -148,9 +148,49 @@ dsh --profile tui --no-bell            # do not ring when a long turn finishes
 | `/export [path]` | write the visible transcript as markdown (default `dsh-session-<id>.md`) |
 | `/resume` | open another stored session without leaving the terminal |
 | `/clear` | clear the visible transcript |
+| `/theme` | list every styled element and the value in force |
 | `/quit` | leave and print the resume command |
 
 Any other `/command` goes to the command registry, so `/plan`, `/compact`, `/goal`, and `/feedback` behave as they do on the other surfaces.
+
+## Theme
+
+Every styled element is a named token with a shipped default, so the surface can
+be restyled without touching code. Overrides live in the same user-settings
+document as every other preference (`$DSH_HOME/settings.yaml`), under a
+`dsh-tui:` section:
+
+```yaml
+dsh-tui:
+  palette:
+    muted: '#5c5c5c'          # one shade quiets every receding element
+  tokens:
+    transcript.reasoning.body:
+      fg: '#7a7a7a'
+      italic: true
+    tool.title:
+      fg: accent              # a palette name, a hex value, or an index 0-255
+      bold: true
+    dock.jobs.heading:
+      hidden: true            # the element renders nothing at all
+```
+
+Every field is optional, so a section that changes one shade is enough. The
+document is hot-reloaded: an edit restyles a running session, and `/theme` shows
+each element's effective value and whether it came from an override, the
+palette, or the default.
+
+`fg` and `bg` accept `#rrggbb`, a palette name (`default`, `muted`, `accent`,
+`warn`, `added`, `removed`, `user`, `assistant`), or an index. A colour is
+emitted as 24-bit when the terminal advertises it (`COLORTERM`) and degraded to
+the nearest 256- or 16-colour value otherwise. Muted elements name the palette
+rather than a terminal slot, so their contrast does not depend on what the
+reader's colour scheme maps slot 8 to.
+
+`NO_COLOR` and `--no-color` disable styling entirely, attributes included, and
+outrank everything in this section. A token name the surface does not have is
+refused with the offending name, so a typo fails at load instead of silently
+painting nothing.
 
 ## Modes
 
@@ -258,7 +298,7 @@ The workflow stores no npm token: the registry trusts `release.yml` on the `npm-
 - Reading a child's conversation does not move the terminal: commands, approvals, and the status line stay with the session you launched, and the transcript is the only thing that switches.
 - Delete is unimplemented: the session store exposes no delete, and the surface does not reach around that seam into its files. `/fork` covers the case that needs it — it branches into a new session and leaves the original alone.
 - Approvals and questions render inline and take the keyboard; a question batch is answered in order.
-- Styling uses the standard 16 ANSI colors and terminal defaults, so light and dark terminals follow their own theme.
+- Styling is per element and overridable; see [Theme](#theme). Shipped defaults are emitted as 24-bit colour where the terminal advertises it and degraded to 256 or 16 colours otherwise, so a light or dark terminal still follows its own palette where it has one.
 - Tool text, model text, and file content are escaped before rendering, so a hostile result cannot inject terminal control sequences; the cost is that a literal tab shows as \x09.
 
 ## License

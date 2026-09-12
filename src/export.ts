@@ -1,3 +1,4 @@
+import { rowText } from './cards.ts'
 import { displayText } from './text.ts'
 import type { TranscriptEntry } from './transcript.ts'
 
@@ -15,10 +16,11 @@ export function defaultExportFile(sessionId: string): string {
 /**
  * Render the visible transcript as markdown.
  *
- * The surface's own glyphs are kept so a pasted dump reads like the screen it
- * came from, and every fragment is escaped for display for the same reason a
- * rendered row is: the file may be opened in a terminal, and it is full of
- * model and tool output.
+ * The dump outlives the screen it came from, so each row is given the markdown
+ * construct that carries its meaning rather than whichever mark the surface
+ * happened to draw, and every fragment is escaped for display for the same
+ * reason a rendered row is: the file may be opened in a terminal, and it is
+ * full of model and tool output.
  */
 export function transcriptToText(entries: readonly TranscriptEntry[]): string {
   const lines: string[] = []
@@ -42,7 +44,9 @@ export function transcriptToText(entries: readonly TranscriptEntry[]): string {
       case 'tool': {
         const mark = entry.card.failed ? 'ERROR' : 'tool'
         lines.push('', `### ${mark}: ${displayText(entry.card.title)}`, '', '```')
-        for (const row of entry.card.detail) lines.push(displayText(row))
+        // The dump is the words, not the screen: row classes exist so the
+        // surface can style a line, and a file has no use for them.
+        for (const row of entry.card.detail) lines.push(displayText(rowText(row)))
         if (entry.card.totalLines > entry.card.detail.length) {
           lines.push(`… ${entry.card.totalLines - entry.card.detail.length} more lines`)
         }

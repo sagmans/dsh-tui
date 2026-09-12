@@ -4,7 +4,7 @@ import { createTheme } from '@/theme.ts'
 import { DOCK_TODO_LIMIT, WorkDock } from '@/ui/dock.ts'
 import type { WorkState } from '@/work.ts'
 
-const theme = createTheme(false)
+const theme = createTheme('none')
 const dockOf = (state: WorkState): WorkDock => new WorkDock(() => state, theme)
 
 const EMPTY: WorkState = { planMode: false, todos: undefined, goal: undefined }

@@ -40,6 +40,9 @@ function contentLinesOf(content: unknown): string[] {
   for (const block of content) {
     const record = asRecord(block)
     if (record === undefined) continue
+    // A thought is a row of its own; reading it here would hand the model's
+    // private reasoning to the reader as though it had been said out loud.
+    if (record.type === 'reasoning') continue
     // Any block that carries text counts; a tool-result block also holds its
     // model-facing content one level deeper.
     if (typeof record.text === 'string') lines.push(...record.text.split('\n'))
@@ -50,6 +53,24 @@ function contentLinesOf(content: unknown): string[] {
 
 function textOfContent(content: unknown): string {
   return contentLinesOf(content).join('\n')
+}
+
+/**
+ * The thoughts a durable message carries, in the order they were recorded.
+ *
+ * A recorded thought is the only path a resumed session has to the model's
+ * reasoning, and the live stream does not outlive the turn that produced it.
+ */
+function reasoningTextsOf(content: unknown): string[] {
+  if (!Array.isArray(content)) return []
+  const thoughts: string[] = []
+  for (const block of content) {
+    const record = asRecord(block)
+    if (record === undefined) continue
+    if (record.type === 'reasoning' && typeof record.text === 'string') thoughts.push(record.text)
+    if (Array.isArray(record.content)) thoughts.push(...reasoningTextsOf(record.content))
+  }
+  return thoughts
 }
 
 function sourceKind(data: Record<string, unknown>): string {
@@ -99,6 +120,13 @@ export class TranscriptModel {
   private live = ''
   private liveReasoning = ''
   private reasoningStartedAt: number | undefined
+  /**
+   * Whether this step already painted a thought from the stream.
+   *
+   * A live turn streams the thinking and then records the same text in the
+   * message, so the recorded copy is a repeat rather than a second thought.
+   */
+  private reasoningPaintedThisStep = false
 
   constructor(
     private readonly presenter?: ToolPresenter,
@@ -144,6 +172,7 @@ export class TranscriptModel {
     this.live = ''
     this.liveReasoning = ''
     this.reasoningStartedAt = undefined
+    this.reasoningPaintedThisStep = false
   }
 
   /** Append a surface-local line that is not part of the durable conversation. */
@@ -206,25 +235,32 @@ export class TranscriptModel {
   }
 
   /**
-   * Settle the reasoning streamed so far into a row of its own.
+   * Settle one thought into a row of its own.
    *
    * The row lands where the reasoning happened, which is before the answer it
    * produced, so reading order still matches the order the model thought in.
    */
+  private paintReasoning(text: string, ranFor: number | undefined): void {
+    const lines = countLines(text)
+    const timing = ranFor === undefined ? '' : ` · ${Math.max(1, Math.round(ranFor / 1000))}s`
+    const cut = text.length > REASONING_CHAR_LIMIT ? `\n… truncated at ${REASONING_CHAR_LIMIT} chars` : ''
+    this.settled.push({
+      kind: 'reasoning',
+      summary: `reasoning · ${lines} line${lines === 1 ? '' : 's'} · ${text.length} chars${timing}`,
+      body: text.slice(0, REASONING_CHAR_LIMIT) + cut,
+      live: false,
+    })
+    this.reasoningPaintedThisStep = true
+  }
+
+  /** Settle the reasoning streamed so far into a row of its own. */
   private settleReasoning(): void {
     if (this.liveReasoning === '') return
     const text = this.liveReasoning
     const ranFor = this.reasoningStartedAt === undefined ? undefined : this.now() - this.reasoningStartedAt
     this.liveReasoning = ''
     this.reasoningStartedAt = undefined
-    const lines = countLines(text)
-    const cut = text.length > REASONING_CHAR_LIMIT ? `\n… truncated at ${REASONING_CHAR_LIMIT} chars` : ''
-    this.settled.push({
-      kind: 'reasoning',
-      summary: `reasoning · ${lines} line${lines === 1 ? '' : 's'} · ${text.length} chars${ranFor === undefined ? '' : ` · ${Math.max(1, Math.round(ranFor / 1000))}s`}`,
-      body: text.slice(0, REASONING_CHAR_LIMIT) + cut,
-      live: false,
-    })
+    this.paintReasoning(text, ranFor)
   }
 
   apply(event: FoldableEvent): void {
@@ -240,6 +276,8 @@ export class TranscriptModel {
       }
       case 'turn/end': {
         this.reportTurnEnd(asRecord(data.reason) ?? {})
+        // A step that ended without a message cannot own the next one's thoughts.
+        this.reasoningPaintedThisStep = false
         return
       }
       case 'agent-preset/selected': {
@@ -269,8 +307,16 @@ export class TranscriptModel {
         return
       }
       case 'assistant/message': {
-        const text = textOfContent(asRecord(data.message)?.content)
+        const content = asRecord(data.message)?.content
+        const text = textOfContent(content)
+        // Settle whatever the stream held, then decide whether the recorded
+        // thoughts are news or the same step arriving twice.
         this.settleReasoning()
+        const painted = this.reasoningPaintedThisStep
+        this.reasoningPaintedThisStep = false
+        if (!painted) {
+          for (const thought of reasoningTextsOf(content)) this.paintReasoning(thought, undefined)
+        }
         this.live = ''
         if (text !== '') this.settled.push({ kind: 'assistant', text })
         return

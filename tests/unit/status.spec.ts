@@ -4,7 +4,7 @@ import { createTheme } from '@/theme.ts'
 import { cacheRate, usageTotals } from '@/agent/status.ts'
 import { formatStatus, formatTokens, shortPath, type StatusFacts } from '@/ui/status.ts'
 
-const theme = createTheme(false)
+const theme = createTheme('none')
 
 const facts = (overrides: Partial<StatusFacts> = {}): StatusFacts => ({
   activity: 'idle',

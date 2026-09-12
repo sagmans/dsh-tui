@@ -1,5 +1,6 @@
 import { type Component, truncateToWidth } from '@earendil-works/pi-tui'
 import { displayText } from '../text.ts'
+import type { TuiToken } from '../theme-tokens.ts'
 import type { TuiTheme } from '../theme.ts'
 
 /** Everything the footer states, gathered by the surface around it. */
@@ -68,30 +69,50 @@ function elapsed(ms: number): string {
 /**
  * One line of state, ordered by what a reader asks first: is it working, what is
  * it, how full is the context, and where am I.
+ *
+ * Each segment is its own element, so a reader can quiet the path without
+ * losing the model, and the separator is one too.
  */
 export function formatStatus(facts: StatusFacts, width: number, theme: TuiTheme): string {
+  /** Segments and the text that joins them; a space keeps a value with its label. */
   const parts: string[] = []
+  const push = (token: TuiToken, text: string): void => {
+    if (theme.visible(token)) parts.push(theme.style(token, text))
+  }
+  const separator = (): string => (theme.visible('status.separator') ? theme.style('status.separator', ' · ') : ' · ')
   if (facts.activity === 'working') {
-    parts.push(facts.elapsedMs === undefined ? '▶ working' : `▶ working ${elapsed(facts.elapsedMs)}`)
+    // Elapsed belongs to the activity, so it rides in the same segment and
+    // carries its own token; a separator would read as a separate fact.
+    const ran = facts.elapsedMs === undefined ? '' : ` ${elapsed(facts.elapsedMs)}`
+    const styled = ran === '' || !theme.visible('status.elapsed') ? ran : theme.style('status.elapsed', ran)
+    push('status.activity.working', `▶ working${styled}`)
   } else {
-    parts.push('● ready')
+    push('status.activity.ready', '● ready')
   }
   // The mode comes first: it decides which tools exist at all, so a reader who
   // saw a tool disappear needs it before the model that ran it.
-  if (facts.agentPreset !== undefined && facts.agentPreset !== '') parts.push(facts.agentPreset)
+  if (facts.agentPreset !== undefined && facts.agentPreset !== '') push('status.agentPreset', facts.agentPreset)
   if (facts.model !== undefined && facts.model !== '') {
     const route = facts.provider === undefined || facts.provider === '' ? facts.model : `${facts.provider}/${facts.model}`
-    parts.push(facts.effort === undefined || facts.effort === '' ? route : `${route} (${facts.effort})`)
+    // The effort qualifies the model, so it reads as part of it.
+    const effort = facts.effort === undefined || facts.effort === '' ? '' : ` (${facts.effort})`
+    push('status.model', route)
+    if (effort !== '') push('status.effort', effort)
   }
-  if (facts.preset !== undefined && facts.preset !== '') parts.push(facts.preset)
+  if (facts.preset !== undefined && facts.preset !== '') push('status.permission', facts.preset)
   if (facts.contextTokens !== undefined) {
-    parts.push(facts.contextWindow === undefined
+    push('status.context', facts.contextWindow === undefined
       ? `ctx ${formatTokens(facts.contextTokens)}`
       : `ctx ${formatTokens(facts.contextTokens)}/${formatTokens(facts.contextWindow)}`)
   }
-  if (facts.cacheRate !== undefined) parts.push(`cache ${Math.round(facts.cacheRate * 100)}%`)
-  parts.push(shortPath(facts.cwd, facts.home))
-  return theme.dim(truncateToWidth(displayText(parts.join(' · ')), width, '…'))
+  if (facts.cacheRate !== undefined) push('status.cache', `cache ${Math.round(facts.cacheRate * 100)}%`)
+  push('status.cwd', shortPath(facts.cwd, facts.home))
+  // A segment that begins with a space carries its own joining, so it must not
+  // also receive the separator or the row would read "model · (max)".
+  return truncateToWidth(displayText(parts.reduce(
+    (line, part) => (part.startsWith(' ') ? `${line}${part}` : line === '' ? part : `${line}${separator()}${part}`),
+    '',
+  )), width, '…')
 }
 
 /** A one-row view of the state around the transcript. */

@@ -7,7 +7,7 @@ import type { PickerCard } from '@/ui/picker.ts'
 import { RowCache } from '@/ui/rows.ts'
 import { TranscriptView, type ViewState } from '@/ui/view.ts'
 
-const theme = createTheme(false)
+const theme = createTheme('none')
 const COLLAPSED: ViewState = { expandCards: false, expandReasoning: false }
 
 function viewOf(model: TranscriptModel, state: ViewState = COLLAPSED, gate?: GateCard): TranscriptView {
@@ -52,18 +52,18 @@ describe('TranscriptView repaints', () => {
 })
 
 describe('TranscriptView text', () => {
-  it('renders assistant text as markdown under its glyph', () => {
+  it('renders assistant text as markdown', () => {
     const model = new TranscriptModel()
     model.apply({ type: 'assistant/message', data: { message: { content: [{ type: 'text', text: '# Title\n\nplain **strong**' }] } } })
     const lines = viewOf(model).render(60)
-    expect(lines[0]).toBe('⏺ Title')
+    expect(lines[0]).toBe('Title')
     expect(lines.some(line => line.includes('strong'))).toBe(true)
   })
 
-  it('keeps a human prompt on its own glyph', () => {
+  it('keeps a human prompt on its own row', () => {
     const model = new TranscriptModel()
     model.apply({ type: 'user/message', data: { content: [{ type: 'text', text: 'hello there' }], source: { kind: 'user' } } })
-    expect(viewOf(model).render(40)).toEqual(['› hello there'])
+    expect(viewOf(model).render(40)).toEqual(['hello there'])
   })
 
   it('escapes control sequences out of model and tool text', () => {
@@ -74,6 +74,33 @@ describe('TranscriptView text', () => {
     const rendered = lines.join('\n')
     expect(rendered).toContain('\\x1B[31mred\\x07')
     expect(rendered).not.toContain('\u001b')
+  })
+
+  it('renders a recorded thought, folded or open, dimmed, and leaves the answer alone', () => {
+    const model = new TranscriptModel()
+    model.apply({
+      type: 'assistant/message',
+      data: {
+        message: {
+          content: [
+            { type: 'reasoning', text: 'first thought\nsecond thought' },
+            { type: 'text', text: 'the answer' },
+          ],
+        },
+      },
+    })
+    const colour = createTheme('truecolor')
+    const markdown = new MarkdownRenderer(colour.markdown)
+    const folded = new TranscriptView(model, colour, markdown, { state: () => ({ expandCards: false, expandReasoning: false }) }).render(60)
+    expect(folded).toEqual(expect.arrayContaining([expect.stringContaining('reasoning · 2 lines · 28 chars')]))
+    // The explicit grey, not a palette slot: this is the whole point.
+    expect(folded[0]).toContain('\u001b[38;2;138;138;138m')
+    expect(folded.some(line => line.includes('second thought'))).toBe(false)
+
+    const opened = new TranscriptView(model, colour, markdown, { state: () => ({ expandCards: false, expandReasoning: true }) }).render(60)
+    expect(opened).toHaveLength(4)
+    for (const line of opened.slice(0, 3)) expect(line).toContain('\u001b[38;2;138;138;138m')
+    expect(opened[3]).toBe('the answer')
   })
 
   it('wraps a long line to the width it was given', () => {
@@ -89,7 +116,7 @@ describe('TranscriptView markers', () => {
   it('sets a boundary row apart from what anyone said', () => {
     const model = new TranscriptModel()
     model.marker('compacted 12 events (≈3000 tokens)')
-    expect(viewOf(model).render(60)).toEqual(['⧉ compacted 12 events (≈3000 tokens)'])
+    expect(viewOf(model).render(60)).toEqual(['compacted 12 events (≈3000 tokens)'])
   })
 })
 
@@ -120,10 +147,10 @@ describe('TranscriptView expansion', () => {
     clock = 5_000
     model.applyStreamChunk({ type: 'block-end', block: { type: 'reasoning' } })
     const folded = viewOf(model).render(60)
-    expect(folded).toEqual(['▸ reasoning · 2 lines · 28 chars · 5s'])
+    expect(folded).toEqual(['reasoning · 2 lines · 28 chars · 5s'])
     const opened = viewOf(model, { expandCards: false, expandReasoning: true }).render(60)
     expect(opened).toEqual([
-      '▸ reasoning · 2 lines · 28 chars · 5s',
+      'reasoning · 2 lines · 28 chars · 5s',
       '    first thought',
       '    second thought',
     ])
@@ -148,7 +175,9 @@ describe('TranscriptView picker', () => {
       picker: () => picker,
     })
     const lines = view.render(80)
-    expect(lines).toContain('↻ resume a session · 2 stored')
+    // No glyph by default: the picker's mark is a token now, and the shipped
+    // table ships none, so the heading is its words.
+    expect(lines).toContain('resume a session · 2 stored')
     expect(lines).toContain('    filter: fix')
     expect(lines).toContain('   ❯ fix the parser — /work · 3m ago · 12 events')
     expect(lines).toContain('     tui-session-b — /tmp · 1d ago')

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
 import { createToolPresenter } from '@/agent/present.ts'
+import { rowText } from '@/cards.ts'
 
 /** A tools registry stub: the presenter only ever asks it for a definition. */
 function contextWith(definition: unknown): Context {
@@ -55,6 +56,6 @@ describe('createToolPresenter', () => {
   it('renders the model-facing text when no view is declared for a result', () => {
     const presenter = createToolPresenter(contextWith(undefined))
     const card = presenter.result('bash', { ...input, content: [{ type: 'text', text: 'line one\nline two' }] })
-    expect(card?.detail).toEqual(['line one', 'line two'])
+    expect(card?.detail.map(rowText)).toEqual(['line one', 'line two'])
   })
 })

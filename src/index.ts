@@ -42,7 +42,10 @@ import { BELL, shouldRingBell } from './terminal/bell.ts'
 import { clipboardSequence } from './terminal/clipboard.ts'
 import { CLEAR_TITLE, windowTitle } from './terminal/title.ts'
 import { defaultExportFile, transcriptToText } from './export.ts'
-import { colorEnabled, createTheme } from './theme.ts'
+import { createTheme, type TuiTheme } from './theme.ts'
+import { detectColourMode, type ColourMode } from './theme-capability.ts'
+import { defaultSettings, readScope, toOverrides, TUI_SETTINGS_NAMESPACE, TuiSettingsSchema, type TuiSettings } from './theme-settings.ts'
+import { renderThemeTable } from './theme-command.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { TranscriptModel } from './transcript.ts'
 import { WorkFold, describeTodos } from './work.ts'
@@ -125,7 +128,48 @@ export function apply(ctx: Context, config: unknown): void {
     throw new Error('dsh-tui: the dsh launcher must provide appExit; start this surface with dsh --profile tui')
   }
 
-  const theme = createTheme(colorEnabled(resolved.color))
+  /**
+   * The surface's appearance, rebuilt whenever the reader's settings change.
+   *
+   * Renderers hold this object for the life of the session, so the current
+   * theme is swapped *behind* a stable delegate rather than reassigned: every
+   * row then reads one whole table, and a repaint can never observe a
+   * half-applied one. `--no-color` still outranks anything configured.
+   */
+  const themeMode = (): ColourMode => (resolved.color ? detectColourMode(process.env) : 'none')
+  /**
+   * The reader's section, or nothing when the service is not mounted.
+   *
+   * The service is only readable inside an `inject` scope — asking for it
+   * outside one is a composition error, not a missing value — so this stays a
+   * late-bound read that the injection point and the change event both use.
+   */
+  let readSection = (): TuiSettings => defaultSettings()
+  let current = createTheme(themeMode())
+  const applyTheme = (): void => {
+    current = createTheme(themeMode(), toOverrides(readSection()))
+  }
+  const theme: TuiTheme = {
+    get color() { return current.color },
+    style: (token, text) => current.style(token, text),
+    glyph: token => current.glyph(token),
+    visible: token => current.visible(token),
+    get editor() { return current.editor },
+    get markdown() { return current.markdown },
+  }
+  /**
+   * Own the section, so the harness validates and persists it for the reader.
+   *
+   * Registration is how the document learns the section exists at all; without
+   * it a hand-written `dsh-tui:` block would be dropped on the next save. The
+   * first read happens here too, because this is the only scope the service
+   * may be touched in.
+   */
+  ctx.inject(['settings'], settingsCtx => {
+    const scope = settingsCtx.settings.register(TUI_SETTINGS_NAMESPACE, TuiSettingsSchema)
+    readSection = () => readScope(scope)
+    applyTheme()
+  })
   const model = new TranscriptModel(createToolPresenter(ctx))
   const work = new WorkFold()
   const modelSwitch = new ModelSwitch()
@@ -1050,6 +1094,10 @@ export function apply(ctx: Context, config: unknown): void {
       case 'todo':
         runTodoCommand()
         return
+      case 'theme':
+        for (const line of renderThemeTable(toOverrides(readSection()))) model.notice(line)
+        tui.requestRender()
+        return
       case 'copy':
         runCopyCommand()
         return
@@ -1214,6 +1262,20 @@ export function apply(ctx: Context, config: unknown): void {
     if (payload.agent.id !== activeSession) return
     if (payload.frame.type !== 'chunk') return
     model.applyStreamChunk(payload.frame.chunk)
+    tui.requestRender()
+  }))
+
+  /**
+   * Restyle a running session when the reader's section changes.
+   *
+   * The settings document is hot-reloaded by the host, so a reader watching a
+   * shade land never has to leave the session to see it — which is what makes
+   * tuning one bearable instead of a restart per attempt. The event is
+   * namespace-filtered: another surface's preferences are not our repaint.
+   */
+  disposers.push(ctx.on('settings/updated', ns => {
+    if (String(ns) !== TUI_SETTINGS_NAMESPACE) return
+    applyTheme()
     tui.requestRender()
   }))
 
