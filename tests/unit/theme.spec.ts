@@ -36,4 +36,9 @@ describe('createTheme', () => {
     expect(theme.added('x')).toContain('\u001b[32m')
     expect(theme.removed('x')).toContain('\u001b[31m')
   })
+
+  it('dims to bright black rather than faint alone, which a terminal may drop', () => {
+    const theme = createTheme(true)
+    expect(theme.dim('x')).toBe('\u001b[2;90mx\u001b[0m')
+  })
 })

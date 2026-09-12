@@ -2,6 +2,17 @@ import type { EditorTheme, MarkdownTheme, SelectListTheme } from '@earendil-work
 
 const RESET = '\u001B[0m'
 
+/**
+ * Faint, plus the grey half of the standard palette.
+ *
+ * Faint alone is what "dim" means in the standard, but it is the attribute
+ * terminals most often ignore or render as ordinary text, which silently loses
+ * the contrast secondary text — the model's reasoning above all — depends on.
+ * Bright black is the reliable half of the pair and stays inside the 16-color
+ * promise, so a terminal remaps it with its own palette either way.
+ */
+const DIM_CODES = '2;90'
+
 function sgr(code: string, enabled: boolean): (text: string) => string {
   return enabled ? text => `\u001B[${code}m${text}${RESET}` : text => text
 }
@@ -100,7 +111,7 @@ export function colorEnabled(requested: boolean, env: Record<string, string | un
  * own and the surface needs no theme setting.
  */
 export function createTheme(color: boolean): TuiTheme {
-  const dim = sgr('2', color)
+  const dim = sgr(DIM_CODES, color)
   const bold = sgr('1', color)
   const accent = sgr('36', color)
   const warn = sgr('33', color)

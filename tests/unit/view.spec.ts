@@ -76,6 +76,19 @@ describe('TranscriptView text', () => {
     expect(rendered).not.toContain('\u001b')
   })
 
+  it('renders thinking, folded or open, in the pale-grey dim style', () => {
+    const model = new TranscriptModel()
+    model.applyStreamChunk({ type: 'reasoning-delta', text: 'first thought\nsecond thought' })
+    model.applyStreamChunk({ type: 'block-end', block: { type: 'reasoning' } })
+    const colour = createTheme(true)
+    const view = new TranscriptView(model, colour, new MarkdownRenderer(colour.markdown), {
+      state: () => ({ expandCards: false, expandReasoning: true }),
+    })
+    const lines = view.render(60)
+    expect(lines).toHaveLength(3)
+    for (const line of lines) expect(line).toContain('\u001b[2;90m')
+  })
+
   it('wraps a long line to the width it was given', () => {
     const model = new TranscriptModel()
     model.apply({ type: 'user/message', data: { content: [{ type: 'text', text: 'x'.repeat(50) }], source: { kind: 'user' } } })
