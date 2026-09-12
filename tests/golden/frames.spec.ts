@@ -20,9 +20,7 @@ const WIDTHS = [80, 40]
 const theme = createTheme(false)
 
 function fixture(): { view: TranscriptView; dock: WorkDock; status: StatusBar } {
-  // A clock that only moves when the fixture says so keeps a frame reproducible.
-  let clock = NOW
-  const model = new TranscriptModel(undefined, () => clock)
+  const model = new TranscriptModel()
   const work = new WorkFold()
   const feed = (event: { type: string; data?: unknown }): void => {
     model.apply(event)
@@ -30,12 +28,18 @@ function fixture(): { view: TranscriptView; dock: WorkDock; status: StatusBar } 
   }
   model.apply({ type: 'user/message', data: { content: [{ type: 'text', text: 'add a dock above the editor' }], source: { kind: 'user' } } })
   feed({ type: 'user/message', data: { content: [{ type: 'text', text: '<system-reminder>\nfollow the plan\nkeep it short' }], source: { kind: 'plugin', plugin: 'dsh-agent-instructions' } } })
-  model.applyStreamChunk({ type: 'reasoning-delta', text: 'the dock needs the fold\nand the fold needs the events' })
-  clock = NOW + 3_000
-  model.applyStreamChunk({ type: 'block-end', block: { type: 'reasoning' } })
+  // The thought arrives the way the provider records it — a block of the
+  // message, not a live delta — which is the only path a resume can replay.
   model.apply({
     type: 'assistant/message',
-    data: { message: { content: [{ type: 'text', text: 'Done.\n\n- fold the work state\n- render it only when it says something\n\n```ts\nconst dock = new WorkDock(state, theme)\n```' }] } },
+    data: {
+      message: {
+        content: [
+          { type: 'reasoning', text: 'the dock needs the fold\nand the fold needs the events' },
+          { type: 'text', text: 'Done.\n\n- fold the work state\n- render it only when it says something\n\n```ts\nconst dock = new WorkDock(state, theme)\n```' },
+        ],
+      },
+    },
   })
   model.apply({ type: 'tool/call', data: { name: 'bash', arguments: '{"command":"pnpm test"}', callId: 'c1' } })
   model.apply({

@@ -17,20 +17,9 @@ function sgr(code: string, enabled: boolean): (text: string) => string {
   return enabled ? text => `\u001B[${code}m${text}${RESET}` : text => text
 }
 
-/** Glyph that introduces each transcript row kind. */
-export interface TranscriptGlyphs {
-  readonly user: string
-  readonly assistant: string
-  readonly tool: string
-  readonly notice: string
-  readonly reasoning: string
-  readonly marker: string
-}
-
 /** Styling the surface applies, and the editor/select themes pi-tui needs. */
 export interface TuiTheme {
   readonly color: boolean
-  readonly glyphs: TranscriptGlyphs
   dim(text: string): string
   bold(text: string): string
   tool(text: string): string
@@ -122,7 +111,6 @@ export function createTheme(color: boolean): TuiTheme {
   const strike = sgr('9', color)
   return {
     color,
-    glyphs: { user: '›', assistant: '⏺', tool: '⚒', notice: '·', reasoning: '▸', marker: '⧉' },
     dim,
     bold,
     tool: warn,

@@ -3,7 +3,7 @@ import { cardDetailRows, type ToolCard } from '../cards.ts'
 import type { GateCard } from '../gates.ts'
 import { displayText } from '../text.ts'
 import type { TranscriptEntry, TranscriptModel } from '../transcript.ts'
-import type { TranscriptGlyphs, TuiTheme } from '../theme.ts'
+import type { TuiTheme } from '../theme.ts'
 import type { MarkdownRenderer } from './markdown.ts'
 import type { PickerCard } from './picker.ts'
 import { RowCache } from './rows.ts'
@@ -80,25 +80,22 @@ export class TranscriptView implements Component {
   }
 
   /** Render assistant text as markdown: the model writes structure, the reader reads it. */
-  private pushMarkdown(lines: string[], text: string, width: number, prefix: string): void {
-    const lead = visibleWidth(prefix)
-    const indent = ' '.repeat(lead)
-    const rendered = this.markdown.render(displayText(text), Math.max(1, width - lead))
-    rendered.forEach((line, index) => {
+  private pushMarkdown(lines: string[], text: string, width: number): void {
+    const rendered = this.markdown.render(displayText(text), Math.max(1, width))
+    rendered.forEach(line => {
       // The renderer pads to its width for background styling we do not use.
       const trimmed = line.replace(/[ \t]+$/u, '')
-      // A blank markdown line stays blank: indenting it would leave trailing
-      // spaces in the frame for a row that shows nothing.
+      // A blank markdown line stays blank: it shows nothing, so it holds nothing.
       if (trimmed === '') {
         lines.push('')
         return
       }
-      lines.push(truncateToWidth(`${index === 0 ? prefix : indent}${trimmed}`, width, '…'))
+      lines.push(truncateToWidth(trimmed, width, '…'))
     })
   }
 
   private pushReasoning(lines: string[], entry: Extract<TranscriptEntry, { kind: 'reasoning' }>, width: number): void {
-    lines.push(this.theme.dim(truncateToWidth(`${this.theme.glyphs.reasoning} ${displayText(entry.summary)}`, width, '')))
+    lines.push(this.theme.dim(truncateToWidth(displayText(entry.summary), width, '')))
     if (!this.viewState.expandReasoning) return
     for (const line of entry.body.split('\n')) {
       this.pushWrapped(lines, line, width, DETAIL_INDENT, this.theme.dim)
@@ -108,8 +105,7 @@ export class TranscriptView implements Component {
   private pushCard(lines: string[], card: ToolCard, width: number): void {
     const expanded = this.viewState.expandCards
     const { lines: detail, hidden } = cardDetailRows(card, expanded)
-    const mark = card.failed ? '✗' : '⚒'
-    lines.push(this.theme.tool(truncateToWidth(`${mark} ${displayText(card.title)}`, width, '')))
+    lines.push(this.theme.tool(truncateToWidth(displayText(card.title), width, '')))
     for (const row of detail) {
       const style = row.startsWith('+')
         ? this.theme.added
@@ -168,7 +164,7 @@ export class TranscriptView implements Component {
   }
 
   /** The rows one transcript entry becomes. */
-  private renderEntry(entry: TranscriptEntry, lines: string[], width: number, glyphs: TranscriptGlyphs): void {
+  private renderEntry(entry: TranscriptEntry, lines: string[], width: number): void {
     switch (entry.kind) {
       case 'tool':
         this.pushCard(lines, entry.card, width)
@@ -177,23 +173,22 @@ export class TranscriptView implements Component {
         this.pushReasoning(lines, entry, width)
         return
       case 'assistant':
-        this.pushMarkdown(lines, entry.text, width, `${glyphs.assistant} `)
+        this.pushMarkdown(lines, entry.text, width)
         return
       case 'user':
-        this.pushWrapped(lines, entry.text, width, `${glyphs.user} `, this.theme.bold)
+        this.pushWrapped(lines, entry.text, width, '', this.theme.bold)
         return
       case 'notice':
-        this.pushWrapped(lines, entry.text, width, `${glyphs.notice} `, this.theme.notice)
+        this.pushWrapped(lines, entry.text, width, '', this.theme.notice)
         return
       case 'marker':
-        this.pushWrapped(lines, entry.text, width, `${glyphs.marker} `, this.theme.marker)
+        this.pushWrapped(lines, entry.text, width, '', this.theme.marker)
         return
     }
   }
 
   render(width: number): string[] {
     if (width <= 0) return []
-    const { glyphs } = this.theme
     const state = this.viewState
     const tag = `${width}|${state.expandCards ? 'c' : '-'}${state.expandReasoning ? 'r' : '-'}`
     const lines: string[] = []
@@ -203,7 +198,7 @@ export class TranscriptView implements Component {
       // The in-flight rows change on every frame, so caching them would only
       // fill the cache with objects nobody will ask for again.
       if (index >= settled) {
-        this.renderEntry(entry, lines, width, glyphs)
+        this.renderEntry(entry, lines, width)
         continue
       }
       const cached = this.rows.lookup(entry, tag)
@@ -212,7 +207,7 @@ export class TranscriptView implements Component {
         continue
       }
       const rendered: string[] = []
-      this.renderEntry(entry, rendered, width, glyphs)
+      this.renderEntry(entry, rendered, width)
       this.rows.store(entry, tag, rendered)
       lines.push(...rendered)
     }

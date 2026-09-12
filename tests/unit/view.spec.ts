@@ -52,18 +52,18 @@ describe('TranscriptView repaints', () => {
 })
 
 describe('TranscriptView text', () => {
-  it('renders assistant text as markdown under its glyph', () => {
+  it('renders assistant text as markdown', () => {
     const model = new TranscriptModel()
     model.apply({ type: 'assistant/message', data: { message: { content: [{ type: 'text', text: '# Title\n\nplain **strong**' }] } } })
     const lines = viewOf(model).render(60)
-    expect(lines[0]).toBe('⏺ Title')
+    expect(lines[0]).toBe('Title')
     expect(lines.some(line => line.includes('strong'))).toBe(true)
   })
 
-  it('keeps a human prompt on its own glyph', () => {
+  it('keeps a human prompt on its own row', () => {
     const model = new TranscriptModel()
     model.apply({ type: 'user/message', data: { content: [{ type: 'text', text: 'hello there' }], source: { kind: 'user' } } })
-    expect(viewOf(model).render(40)).toEqual(['› hello there'])
+    expect(viewOf(model).render(40)).toEqual(['hello there'])
   })
 
   it('escapes control sequences out of model and tool text', () => {
@@ -76,17 +76,30 @@ describe('TranscriptView text', () => {
     expect(rendered).not.toContain('\u001b')
   })
 
-  it('renders thinking, folded or open, in the pale-grey dim style', () => {
+  it('renders a recorded thought, folded or open, dimmed, and leaves the answer alone', () => {
     const model = new TranscriptModel()
-    model.applyStreamChunk({ type: 'reasoning-delta', text: 'first thought\nsecond thought' })
-    model.applyStreamChunk({ type: 'block-end', block: { type: 'reasoning' } })
-    const colour = createTheme(true)
-    const view = new TranscriptView(model, colour, new MarkdownRenderer(colour.markdown), {
-      state: () => ({ expandCards: false, expandReasoning: true }),
+    model.apply({
+      type: 'assistant/message',
+      data: {
+        message: {
+          content: [
+            { type: 'reasoning', text: 'first thought\nsecond thought' },
+            { type: 'text', text: 'the answer' },
+          ],
+        },
+      },
     })
-    const lines = view.render(60)
-    expect(lines).toHaveLength(3)
-    for (const line of lines) expect(line).toContain('\u001b[2;90m')
+    const colour = createTheme(true)
+    const markdown = new MarkdownRenderer(colour.markdown)
+    const folded = new TranscriptView(model, colour, markdown, { state: () => ({ expandCards: false, expandReasoning: false }) }).render(60)
+    expect(folded).toEqual(expect.arrayContaining([expect.stringContaining('reasoning · 2 lines · 28 chars')]))
+    expect(folded[0]).toContain('\u001b[2;90m')
+    expect(folded.some(line => line.includes('second thought'))).toBe(false)
+
+    const opened = new TranscriptView(model, colour, markdown, { state: () => ({ expandCards: false, expandReasoning: true }) }).render(60)
+    expect(opened).toHaveLength(4)
+    for (const line of opened.slice(0, 3)) expect(line).toContain('\u001b[2;90m')
+    expect(opened[3]).toBe('the answer')
   })
 
   it('wraps a long line to the width it was given', () => {
@@ -102,7 +115,7 @@ describe('TranscriptView markers', () => {
   it('sets a boundary row apart from what anyone said', () => {
     const model = new TranscriptModel()
     model.marker('compacted 12 events (≈3000 tokens)')
-    expect(viewOf(model).render(60)).toEqual(['⧉ compacted 12 events (≈3000 tokens)'])
+    expect(viewOf(model).render(60)).toEqual(['compacted 12 events (≈3000 tokens)'])
   })
 })
 
@@ -133,10 +146,10 @@ describe('TranscriptView expansion', () => {
     clock = 5_000
     model.applyStreamChunk({ type: 'block-end', block: { type: 'reasoning' } })
     const folded = viewOf(model).render(60)
-    expect(folded).toEqual(['▸ reasoning · 2 lines · 28 chars · 5s'])
+    expect(folded).toEqual(['reasoning · 2 lines · 28 chars · 5s'])
     const opened = viewOf(model, { expandCards: false, expandReasoning: true }).render(60)
     expect(opened).toEqual([
-      '▸ reasoning · 2 lines · 28 chars · 5s',
+      'reasoning · 2 lines · 28 chars · 5s',
       '    first thought',
       '    second thought',
     ])
