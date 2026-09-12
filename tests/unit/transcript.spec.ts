@@ -103,6 +103,48 @@ describe('TranscriptModel reasoning', () => {
     expect(body.startsWith('x'.repeat(64))).toBe(true)
     expect(body.endsWith(`… truncated at ${REASONING_CHAR_LIMIT} chars`)).toBe(true)
   })
+
+  it('paints a recorded thought as its own row and keeps it out of the answer', () => {
+    const model = new TranscriptModel()
+    model.apply({
+      type: 'assistant/message',
+      data: {
+        message: {
+          content: [
+            { type: 'reasoning', text: 'weigh the options' },
+            { type: 'text', text: 'the answer' },
+          ],
+        },
+      },
+    })
+    expect(model.entries()).toEqual([
+      { kind: 'reasoning', summary: 'reasoning · 1 line · 17 chars', body: 'weigh the options', live: false },
+      { kind: 'assistant', text: 'the answer' },
+    ])
+  })
+
+  it('does not paint the recorded copy of a thought the stream already settled', () => {
+    let clock = 0
+    const model = new TranscriptModel(undefined, () => clock)
+    model.applyStreamChunk({ type: 'reasoning-delta', text: 'a\nb' })
+    clock = 2_000
+    model.applyStreamChunk({ type: 'block-end', block: { type: 'reasoning' } })
+    model.apply({
+      type: 'assistant/message',
+      data: {
+        message: {
+          content: [
+            { type: 'reasoning', text: 'a\nb' },
+            { type: 'text', text: 'the answer' },
+          ],
+        },
+      },
+    })
+    expect(model.entries()).toEqual([
+      { kind: 'reasoning', summary: 'reasoning · 2 lines · 3 chars · 2s', body: 'a\nb', live: false },
+      { kind: 'assistant', text: 'the answer' },
+    ])
+  })
 })
 
 describe('TranscriptModel markers', () => {
