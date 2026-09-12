@@ -1,4 +1,5 @@
 import type { EditorTheme, MarkdownTheme, SelectListTheme } from '@earendil-works/pi-tui'
+import type { TuiToken } from './theme-tokens.ts'
 
 const RESET = '\u001B[0m'
 
@@ -32,8 +33,29 @@ export interface TuiTheme {
   /** Structure the reader scans for: headings, links, inline code, list bullets. */
   accent(text: string): string
   italic(text: string): string
+  /** Draw one named element; the token table owns what each one looks like. */
+  style(token: TuiToken, text: string): string
   readonly editor: EditorTheme
   readonly markdown: MarkdownTheme
+}
+
+/**
+ * The token-to-palette mapping the surface still uses its old helpers for.
+ *
+ * This is the bridge while renderers move onto tokens one region at a time;
+ * the token table takes over the decision once every renderer names a token.
+ */
+const TOKEN_HELPER: Readonly<Partial<Record<TuiToken, keyof TuiTheme>>> = {
+  'transcript.user': 'bold',
+  'transcript.notice': 'dim',
+  'transcript.marker': 'dim',
+  'transcript.reasoning.summary': 'dim',
+  'transcript.reasoning.body': 'dim',
+  'tool.title': 'tool',
+  'tool.failed.title': 'tool',
+  'tool.detail': 'dim',
+  'tool.diff.added': 'added',
+  'tool.diff.removed': 'removed',
 }
 
 /**
@@ -109,6 +131,7 @@ export function createTheme(color: boolean): TuiTheme {
   const italic = sgr('3', color)
   const underline = sgr('4', color)
   const strike = sgr('9', color)
+  const helpers: Record<string, (text: string) => string> = { dim, bold, tool: warn, notice: dim, marker: dim, accent, added, removed, italic }
   return {
     color,
     dim,
@@ -120,6 +143,13 @@ export function createTheme(color: boolean): TuiTheme {
     marker: dim,
     accent,
     italic,
+    style: (token, text) => {
+      const helper = TOKEN_HELPER[token]
+      const chosen = helper === undefined ? undefined : helpers[helper]
+      // An unmapped token falls back to plain text rather than to an arbitrary
+      // style: a wrong colour is worse than no colour while the table is filled.
+      return chosen === undefined ? text : chosen(text)
+    },
     editor: { borderColor: dim, selectList: selectListTheme(dim, accent, bold) },
     markdown: markdownTheme({ dim, bold, accent, italic, underline, strike }),
   }

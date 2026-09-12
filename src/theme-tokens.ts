@@ -47,7 +47,7 @@ export interface ResolvedStyle {
 
 /** A row class a tool card can carry, so styling follows what the row means. */
 export const CARD_ROW_CLASSES = [
-  'header', 'hunk', 'added', 'removed', 'line', 'lineNumber', 'path', 'match', 'truncated', 'output', 'cwd', 'status', 'source', 'detail',
+  'header', 'hunk', 'added', 'removed', 'line', 'lineNumber', 'path', 'match', 'truncated', 'output', 'cwd', 'status', 'source', 'url', 'detail',
 ] as const
 
 /** What a tool card row is, which is what decides how it is drawn. */
@@ -190,6 +190,26 @@ export const TUI_TOKENS = [
 
 /** A name for one styled element on the surface. */
 export type TuiToken = (typeof TUI_TOKENS)[number]
+
+/**
+ * Which token draws a card row, by the card's kind and the row's class.
+ *
+ * Two lookups rather than one because `header` means a different element on a
+ * diff than on a read: the kind is half of what a row is.
+ */
+export const CARD_ROW_TOKEN: Readonly<Record<string, Readonly<Partial<Record<CardRowClass, TuiToken>>>>> = {
+  diff: { header: 'tool.diff.header', hunk: 'tool.diff.hunk', added: 'tool.diff.added', removed: 'tool.diff.removed' },
+  read: { header: 'tool.read.header', lineNumber: 'tool.read.lineNumber', line: 'tool.read.line' },
+  search: {
+    path: 'tool.search.path',
+    lineNumber: 'tool.search.lineNumber',
+    match: 'tool.search.match',
+    truncated: 'tool.search.truncated',
+  },
+  terminal: { cwd: 'tool.terminal.cwd', status: 'tool.terminal.status', output: 'tool.terminal.output' },
+  web: { url: 'tool.web.url', source: 'tool.web.source', truncated: 'tool.web.truncated' },
+  generic: { detail: 'tool.generic.detail' },
+}
 
 /** The colours a token can name, so a shade is changed in one place. */
 export const DEFAULT_PALETTE: Readonly<Record<PaletteName, string>> = {

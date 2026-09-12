@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { type ToolCard, type ToolPresenter } from '@/cards.ts'
+import { rowText, type ToolCard, type ToolPresenter } from '@/cards.ts'
 import { REASONING_CHAR_LIMIT, TranscriptModel } from '@/transcript.ts'
 
 const text = (value: string) => [{ type: 'text', text: value }]
 
 const card = (title: string, detail: string[] = []): ToolCard =>
-  ({ kind: 'generic', title, detail, failed: false, totalLines: detail.length })
+  ({ kind: 'generic', title, detail: detail.map(text => ({ parts: [{ class: 'detail' as const, text }] })), failed: false, totalLines: detail.length })
 
 /** Presenter that records what it was asked, so pairing can be asserted. */
 function recordingPresenter(): ToolPresenter & { readonly calls: string[]; readonly results: string[] } {
@@ -201,7 +201,7 @@ describe('TranscriptModel tool cards', () => {
       data: { message: { content: [{ type: 'tool-result', toolCallId: 'missing', text: 'orphan' }], isError: false } },
     })
     expect(model.entries()).toEqual([
-      { kind: 'tool', card: { kind: 'generic', title: 'tool', detail: ['orphan'], failed: false, totalLines: 1 } },
+      { kind: 'tool', card: card('tool', ['orphan']) },
     ])
   })
 
@@ -209,7 +209,7 @@ describe('TranscriptModel tool cards', () => {
     const model = new TranscriptModel()
     model.apply({ type: 'tool/call', data: { name: 'grep', arguments: '{"q":"x"}', callId: 'c1' } })
     expect(model.entries()).toEqual([
-      { kind: 'tool', card: { kind: 'generic', title: 'grep', detail: ['{"q":"x"}'], failed: false, totalLines: 1 } },
+      { kind: 'tool', card: card('grep', ['{"q":"x"}']) },
     ])
   })
 
@@ -217,7 +217,7 @@ describe('TranscriptModel tool cards', () => {
     const model = new TranscriptModel()
     model.apply({ type: 'tool/call', data: { name: 'bash', arguments: '{"command":"a\nb"}', callId: 'c1' } })
     const entry = model.entries()[0]
-    expect(entry?.kind === 'tool' && entry.card.detail).toEqual(['{"command":"a', 'b"}'])
+    expect(entry?.kind === 'tool' && entry.card.detail.map(rowText)).toEqual(['{"command":"a', 'b"}'])
   })
 })
 

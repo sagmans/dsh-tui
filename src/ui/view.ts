@@ -3,6 +3,7 @@ import { cardDetailRows, type ToolCard } from '../cards.ts'
 import type { GateCard } from '../gates.ts'
 import { displayText } from '../text.ts'
 import type { TranscriptEntry, TranscriptModel } from '../transcript.ts'
+import { CARD_ROW_TOKEN, type TuiToken } from '../theme-tokens.ts'
 import type { TuiTheme } from '../theme.ts'
 import type { MarkdownRenderer } from './markdown.ts'
 import type { PickerCard } from './picker.ts'
@@ -107,10 +108,13 @@ export class TranscriptView implements Component {
     const { lines: detail, hidden } = cardDetailRows(card, expanded)
     lines.push(this.theme.tool(truncateToWidth(displayText(card.title), width, '')))
     for (const row of detail) {
-      const style = row.startsWith('+')
-        ? this.theme.added
-        : row.startsWith('-') ? this.theme.removed : this.theme.dim
-      lines.push(style(truncateToWidth(`${DETAIL_INDENT}${displayText(row)}`, width, '')))
+      // The row says what it is, so the renderer never guesses from the text:
+      // a diff line beginning with "+" is an addition because the presenter
+      // said so, not because of its first character.
+      const drawn = row.parts
+        .map(part => this.theme.style(CARD_ROW_TOKEN[card.kind]?.[part.class] ?? 'tool.detail', displayText(part.text)))
+        .join('')
+      lines.push(truncateToWidth(`${DETAIL_INDENT}${drawn}`, width, ''))
     }
     if (hidden > 0) {
       const hint = expanded ? `${hidden} more lines not shown` : `… ${hidden} more lines · ctrl+o shows them`

@@ -1,3 +1,4 @@
+import { rowText } from './cards.ts'
 import { displayText } from './text.ts'
 import type { TranscriptEntry } from './transcript.ts'
 
@@ -43,7 +44,9 @@ export function transcriptToText(entries: readonly TranscriptEntry[]): string {
       case 'tool': {
         const mark = entry.card.failed ? 'ERROR' : 'tool'
         lines.push('', `### ${mark}: ${displayText(entry.card.title)}`, '', '```')
-        for (const row of entry.card.detail) lines.push(displayText(row))
+        // The dump is the words, not the screen: row classes exist so the
+        // surface can style a line, and a file has no use for them.
+        for (const row of entry.card.detail) lines.push(displayText(rowText(row)))
         if (entry.card.totalLines > entry.card.detail.length) {
           lines.push(`… ${entry.card.totalLines - entry.card.detail.length} more lines`)
         }
