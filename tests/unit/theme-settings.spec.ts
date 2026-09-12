@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { createTheme } from '@/theme.ts'
 import { TUI_SETTINGS_NAMESPACE, parseSettings,
   TuiSettingsSchema, defaultSettings, toOverrides } from '@/theme-settings.ts'
 
@@ -36,5 +37,32 @@ describe('the dsh-tui settings section', () => {
   it('lets a palette override win over the shipped palette', () => {
     const overrides = toOverrides(parseSettings({ palette: { muted: '#777777' } }))
     expect(overrides.palette.muted).toBe('#777777')
+  })
+})
+
+describe('a resolved section', () => {
+  it('does not report the schema fill-in as an override', () => {
+    // A registered scope hands back every declared key, empty ones included.
+    // Counting those as overrides blanked the shipped defaults and made
+    // /theme claim every element had been overridden.
+    const written = parseSettings({ tokens: { 'status.cwd': { fg: '#ff00ff' } } })
+    expect(Object.keys(written.tokens)).toEqual(['status.cwd'])
+    expect(written.tokens['status.model']).toBeUndefined()
+  })
+
+  it('does not report the default palette as overridden', () => {
+    const written = parseSettings({ palette: { muted: '#5c5c5c' } })
+    expect(Object.keys(written.palette)).toEqual(['muted'])
+  })
+
+  it('keeps a resolved section round-tripping to the same overrides', () => {
+    const resolved = parseSettings(TuiSettingsSchema({ tokens: { 'status.cwd': { fg: '#ff00ff' } } }))
+    expect(Object.keys(resolved.tokens)).toEqual(['status.cwd'])
+  })
+
+  it('leaves the shipped default reachable for an untouched element', () => {
+    const theme = createTheme('truecolor', toOverrides(parseSettings(TuiSettingsSchema({}))))
+    // An untouched muted element must still be muted, not blanked to plain.
+    expect(theme.style('status.model', 'x')).toContain('38;2;')
   })
 })

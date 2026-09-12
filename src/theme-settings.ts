@@ -103,17 +103,31 @@ export function parseSettings(raw: unknown): TuiSettings {
   const writtenPalette = asRecord(section.palette) ?? {}
   const palette: Record<string, string> = {}
   for (const [name, value] of Object.entries(writtenPalette)) {
-    if (value !== undefined) palette[name] = parsed.palette[name as PaletteName]
+    // Same fill-in problem as the tokens: the schema supplies a default for
+    // every entry, so only a value the reader chose is an override.
+    if (value === undefined || value === DEFAULT_PALETTE[name as PaletteName]) continue
+    palette[name] = parsed.palette[name as PaletteName]
   }
   const writtenTokens = asRecord(section.tokens) ?? {}
   const tokens: Record<string, StyleSpec> = {}
   for (const [name, value] of Object.entries(writtenTokens)) {
-    if (value !== undefined) tokens[name] = parsed.tokens[name] ?? {}
+    // A registered scope hands back every key the schema declares, with an
+    // empty spec for the ones nobody wrote. An empty spec cannot change an
+    // appearance, so keeping it would let the schema's own fill-in shadow the
+    // shipped default and report every element as overridden.
+    if (value === undefined || !hasAnyField(parsed.tokens[name])) continue
+    tokens[name] = parsed.tokens[name] ?? {}
   }
   return {
     palette: palette as Readonly<Partial<Record<PaletteName, string>>>,
     tokens: tokens as Readonly<Partial<Record<TuiToken, StyleSpec>>>,
   }
+}
+
+/** Whether a resolved spec actually asks for anything. */
+function hasAnyField(spec: StyleSpec | undefined): boolean {
+  if (spec === undefined) return false
+  return Object.values(spec).some(value => value !== undefined)
 }
 
 /** What the section holds once parsed: only what the reader wrote. */
