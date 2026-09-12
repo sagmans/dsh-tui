@@ -60,6 +60,15 @@ const SECTION = z.object({
   tokens: TokensSchema.default({}),
 })
 
+/**
+ * The schema the harness registers.
+ *
+ * Exported alongside the parser because registration needs a real schemastery
+ * schema, while reading needs the unknown-token check that a schemastery object
+ * cannot express.
+ */
+export const TuiSettingsSchema = SECTION
+
 const TOKEN_NAMES = new Set<string>(TUI_TOKENS)
 
 /**
@@ -84,7 +93,7 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
 }
 
 /** The reader-facing shape of the `dsh-tui:` section. */
-export function TuiSettingsSchema(raw: unknown): TuiSettings {
+export function parseSettings(raw: unknown): TuiSettings {
   rejectUnknownTokens(raw)
   const section = asRecord(raw) ?? {}
   const parsed = SECTION(section) as { palette: Record<PaletteName, string>; tokens: Record<string, StyleSpec> }
@@ -135,7 +144,7 @@ export function readThemeSettings(ctx: { readonly settings?: { get(namespace: st
   const settings = ctx.settings
   if (settings === undefined) return defaultSettings()
   try {
-    return TuiSettingsSchema(settings.get(TUI_SETTINGS_NAMESPACE) ?? {})
+    return parseSettings(settings.get(TUI_SETTINGS_NAMESPACE) ?? {})
   } catch (error) {
     // Loud on the way past: a silently ignored typo is the failure this whole
     // section exists to prevent.

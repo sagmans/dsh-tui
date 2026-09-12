@@ -44,7 +44,8 @@ import { CLEAR_TITLE, windowTitle } from './terminal/title.ts'
 import { defaultExportFile, transcriptToText } from './export.ts'
 import { createTheme, type TuiTheme } from './theme.ts'
 import { detectColourMode, type ColourMode } from './theme-capability.ts'
-import { readThemeSettings, toOverrides } from './theme-settings.ts'
+import { readThemeSettings, toOverrides, TUI_SETTINGS_NAMESPACE, TuiSettingsSchema } from './theme-settings.ts'
+import { renderThemeTable } from './theme-command.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { TranscriptModel } from './transcript.ts'
 import { WorkFold, describeTodos } from './work.ts'
@@ -148,6 +149,15 @@ export function apply(ctx: Context, config: unknown): void {
     get editor() { return current.editor },
     get markdown() { return current.markdown },
   }
+  /**
+   * Own the section, so the harness validates and persists it for the reader.
+   *
+   * Registration is how the document learns the section exists at all; without
+   * it a hand-written `dsh-tui:` block would be dropped on the next save.
+   */
+  ctx.inject(['settings'], settingsCtx => {
+    settingsCtx.settings.register(TUI_SETTINGS_NAMESPACE, TuiSettingsSchema)
+  })
   const model = new TranscriptModel(createToolPresenter(ctx))
   const work = new WorkFold()
   const modelSwitch = new ModelSwitch()
@@ -1072,6 +1082,10 @@ export function apply(ctx: Context, config: unknown): void {
       case 'todo':
         runTodoCommand()
         return
+      case 'theme':
+        for (const line of renderThemeTable(toOverrides(readThemeSettings(ctx)))) model.notice(line)
+        tui.requestRender()
+        return
       case 'copy':
         runCopyCommand()
         return
@@ -1236,6 +1250,20 @@ export function apply(ctx: Context, config: unknown): void {
     if (payload.agent.id !== activeSession) return
     if (payload.frame.type !== 'chunk') return
     model.applyStreamChunk(payload.frame.chunk)
+    tui.requestRender()
+  }))
+
+  /**
+   * Restyle a running session when the reader's section changes.
+   *
+   * The settings document is hot-reloaded by the host, so a reader watching a
+   * shade land never has to leave the session to see it — which is what makes
+   * tuning one bearable instead of a restart per attempt. The event is
+   * namespace-filtered: another surface's preferences are not our repaint.
+   */
+  disposers.push(ctx.on('settings/updated', ns => {
+    if (String(ns) !== TUI_SETTINGS_NAMESPACE) return
+    applyTheme()
     tui.requestRender()
   }))
 
