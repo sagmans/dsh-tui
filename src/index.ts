@@ -44,7 +44,7 @@ import { CLEAR_TITLE, windowTitle } from './terminal/title.ts'
 import { defaultExportFile, transcriptToText } from './export.ts'
 import { createTheme, type TuiTheme } from './theme.ts'
 import { detectColourMode, type ColourMode } from './theme-capability.ts'
-import { readThemeSettings, toOverrides, TUI_SETTINGS_NAMESPACE, TuiSettingsSchema } from './theme-settings.ts'
+import { defaultSettings, readScope, toOverrides, TUI_SETTINGS_NAMESPACE, TuiSettingsSchema, type TuiSettings } from './theme-settings.ts'
 import { renderThemeTable } from './theme-command.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { TranscriptModel } from './transcript.ts'
@@ -137,9 +137,17 @@ export function apply(ctx: Context, config: unknown): void {
    * half-applied one. `--no-color` still outranks anything configured.
    */
   const themeMode = (): ColourMode => (resolved.color ? detectColourMode(process.env) : 'none')
-  let current = createTheme(themeMode(), toOverrides(readThemeSettings(ctx)))
+  /**
+   * The reader's section, or nothing when the service is not mounted.
+   *
+   * The service is only readable inside an `inject` scope — asking for it
+   * outside one is a composition error, not a missing value — so this stays a
+   * late-bound read that the injection point and the change event both use.
+   */
+  let readSection = (): TuiSettings => defaultSettings()
+  let current = createTheme(themeMode())
   const applyTheme = (): void => {
-    current = createTheme(themeMode(), toOverrides(readThemeSettings(ctx)))
+    current = createTheme(themeMode(), toOverrides(readSection()))
   }
   const theme: TuiTheme = {
     get color() { return current.color },
@@ -153,10 +161,14 @@ export function apply(ctx: Context, config: unknown): void {
    * Own the section, so the harness validates and persists it for the reader.
    *
    * Registration is how the document learns the section exists at all; without
-   * it a hand-written `dsh-tui:` block would be dropped on the next save.
+   * it a hand-written `dsh-tui:` block would be dropped on the next save. The
+   * first read happens here too, because this is the only scope the service
+   * may be touched in.
    */
   ctx.inject(['settings'], settingsCtx => {
-    settingsCtx.settings.register(TUI_SETTINGS_NAMESPACE, TuiSettingsSchema)
+    const scope = settingsCtx.settings.register(TUI_SETTINGS_NAMESPACE, TuiSettingsSchema)
+    readSection = () => readScope(scope)
+    applyTheme()
   })
   const model = new TranscriptModel(createToolPresenter(ctx))
   const work = new WorkFold()
@@ -1083,7 +1095,7 @@ export function apply(ctx: Context, config: unknown): void {
         runTodoCommand()
         return
       case 'theme':
-        for (const line of renderThemeTable(toOverrides(readThemeSettings(ctx)))) model.notice(line)
+        for (const line of renderThemeTable(toOverrides(readSection()))) model.notice(line)
         tui.requestRender()
         return
       case 'copy':

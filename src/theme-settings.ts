@@ -134,20 +134,17 @@ export interface ThemeOverrides {
 }
 
 /**
- * Read the reader's section from the settings service, or nothing at all.
+ * Read a registered scope's section, or nothing when it cannot be read.
  *
- * The service is optional by composition and a malformed section must not cost
- * the reader their session: an unreadable section falls back to the shipped
- * table, which is the appearance the surface had before any of this existed.
+ * A malformed section must not cost the reader their session: an unreadable
+ * one falls back to the shipped table, which is the appearance the surface had
+ * before any of this existed. It is loud on the way past, because a silently
+ * ignored typo is the exact failure this section is meant to prevent.
  */
-export function readThemeSettings(ctx: { readonly settings?: { get(namespace: string): unknown } }): TuiSettings {
-  const settings = ctx.settings
-  if (settings === undefined) return defaultSettings()
+export function readScope(scope: { get(): unknown }): TuiSettings {
   try {
-    return parseSettings(settings.get(TUI_SETTINGS_NAMESPACE) ?? {})
+    return parseSettings(scope.get() ?? {})
   } catch (error) {
-    // Loud on the way past: a silently ignored typo is the failure this whole
-    // section exists to prevent.
     process.stderr.write(`dsh-tui: ignoring ${TUI_SETTINGS_NAMESPACE} settings: ${error instanceof Error ? error.message : String(error)}\n`)
     return defaultSettings()
   }
