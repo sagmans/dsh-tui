@@ -110,7 +110,8 @@ export const TUI_TOKENS = [
   'markdown.italic',
   'markdown.strikethrough',
   'markdown.underline',
-  'markdown.tableHeader',
+  // No markdown.tableHeader: pi-tui styles table headers through the bold hook
+  // it already owns, so a token here would be a setting with no call site.
   // Picker
   'picker.title',
   'picker.glyph',
@@ -226,11 +227,12 @@ export const DEFAULT_PALETTE: Readonly<Record<PaletteName, string>> = {
 /**
  * Muted elements share one shade, which is what makes the surface coherent.
  *
- * No `dim` here on purpose: faint is dropped the moment a colour is named, so
- * carrying it would be a setting that reads as meaningful and does nothing.
- * The explicit grey is what makes these elements recede.
+ * It names the palette entry rather than repeating the hex, so a reader who
+ * changes `palette.muted` once quiets every receding element together instead
+ * of hunting the tokens down. No `dim` either: faint is dropped the moment a
+ * colour is named, so carrying it would be a setting that does nothing.
  */
-const muted: StyleSpec = { fg: MUTED_GREY }
+const muted: StyleSpec = { fg: 'muted' }
 const plain: StyleSpec = {}
 
 /**
@@ -289,7 +291,6 @@ export const DEFAULT_TOKENS: Readonly<Record<TuiToken, StyleSpec>> = {
   'markdown.italic': { italic: true },
   'markdown.strikethrough': { strike: true },
   'markdown.underline': { underline: true },
-  'markdown.tableHeader': { fg: 'accent', bold: true },
 
   'picker.title': { bold: true },
   'picker.glyph': { bold: true },
@@ -401,6 +402,10 @@ export function resolveToken(
   }
   if (merged.hidden === true) return { prefix: '', suffix: '', glyph: '', hidden: true }
 
+  // With no colour capability the whole promise is "emit nothing", which
+  // includes attributes: a bold word is still styling a reader turned off.
+  if (mode === 'none') return { prefix: '', suffix: '', glyph: (merged.glyph as string | undefined) ?? '', hidden: false }
+
   const fg = merged.fg as ColourSpec | undefined
   const dim = merged.dim === true && fg === undefined
   const codes: string[] = []
@@ -409,7 +414,7 @@ export function resolveToken(
   if (merged.italic === true) codes.push('3')
   if (merged.underline === true) codes.push('4')
   if (merged.strike === true) codes.push('9')
-  if (fg !== undefined && mode !== 'none') {
+  if (fg !== undefined) {
     const colour = sgrPrefix(resolveColour(fg, palette), mode)
     if (colour !== '') codes.push(colour.slice('\u001B['.length, -1))
   }

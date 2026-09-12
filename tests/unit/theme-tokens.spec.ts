@@ -25,13 +25,15 @@ describe('the token table', () => {
     }
   })
 
-  it('uses an explicit grey for muted text, not an ANSI index', () => {
+  it('keeps muted text off a terminal palette slot', () => {
     // The bug this feature exists for: the palette slot is whatever the
-    // reader's terminal says, which on their phone was indistinguishable
-    // from ordinary text.
-    expect(DEFAULT_TOKENS['transcript.reasoning.body'].fg).toMatch(/^#/u)
-    expect(DEFAULT_TOKENS['transcript.reasoning.summary'].fg).toMatch(/^#/u)
-    expect(DEFAULT_TOKENS['tool.detail'].fg).toMatch(/^#/u)
+    // reader's terminal says, which on their phone was indistinguishable from
+    // ordinary text. Muted names the palette entry, and that entry is a hex
+    // shade rather than an index, so the surface owns the contrast.
+    expect(DEFAULT_PALETTE.muted).toMatch(/^#/u)
+    for (const token of ['transcript.reasoning.body', 'transcript.reasoning.summary', 'tool.detail'] as const) {
+      expect(DEFAULT_TOKENS[token].fg, `${token} does not follow the muted entry`).toBe('muted')
+    }
   })
 
   it('ships no glyphs by default', () => {
@@ -66,8 +68,8 @@ describe('resolveToken', () => {
 
   it('emits one well-formed SGR sequence with attributes and colour', () => {
     const style = resolveToken(
-      'markdown.tableHeader',
-      overrides({ 'markdown.tableHeader': { fg: '#00ff00', bold: true, italic: true } }),
+      'markdown.heading',
+      overrides({ 'markdown.heading': { fg: '#00ff00', bold: true, italic: true } }),
       DEFAULT_PALETTE,
       'truecolor',
     )
@@ -76,7 +78,7 @@ describe('resolveToken', () => {
   })
 
   it('resolves a palette name through the palette', () => {
-    const style = resolveToken('markdown.tableHeader', overrides({}), DEFAULT_PALETTE, 'truecolor')
+    const style = resolveToken('markdown.heading', overrides({}), DEFAULT_PALETTE, 'truecolor')
     expect(style.prefix).toContain('38;2;')
   })
 

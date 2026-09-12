@@ -17,7 +17,7 @@ import { WorkFold } from '@/work.ts'
  * truncation are where a terminal surface usually breaks.
  */
 const WIDTHS = [80, 40]
-const theme = createTheme(false)
+const theme = createTheme('none')
 
 function fixture(): { view: TranscriptView; dock: WorkDock; status: StatusBar } {
   const model = new TranscriptModel()

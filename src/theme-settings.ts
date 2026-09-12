@@ -125,6 +125,26 @@ export interface ThemeOverrides {
 }
 
 /**
+ * Read the reader's section from the settings service, or nothing at all.
+ *
+ * The service is optional by composition and a malformed section must not cost
+ * the reader their session: an unreadable section falls back to the shipped
+ * table, which is the appearance the surface had before any of this existed.
+ */
+export function readThemeSettings(ctx: { readonly settings?: { get(namespace: string): unknown } }): TuiSettings {
+  const settings = ctx.settings
+  if (settings === undefined) return defaultSettings()
+  try {
+    return TuiSettingsSchema(settings.get(TUI_SETTINGS_NAMESPACE) ?? {})
+  } catch (error) {
+    // Loud on the way past: a silently ignored typo is the failure this whole
+    // section exists to prevent.
+    process.stderr.write(`dsh-tui: ignoring ${TUI_SETTINGS_NAMESPACE} settings: ${error instanceof Error ? error.message : String(error)}\n`)
+    return defaultSettings()
+  }
+}
+
+/**
  * Turn a parsed section into the inputs the resolver takes.
  *
  * Shipped defaults fill anything the reader left out, so a partial section is

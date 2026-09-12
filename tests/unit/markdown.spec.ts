@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createTheme } from '@/theme.ts'
 import { MARKDOWN_CACHE_LIMIT, MarkdownRenderer } from '@/ui/markdown.ts'
 
-const theme = createTheme(false)
+const theme = createTheme('none')
 const renderer = (): MarkdownRenderer => new MarkdownRenderer(theme.markdown)
 
 describe('MarkdownRenderer', () => {

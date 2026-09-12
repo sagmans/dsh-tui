@@ -96,75 +96,95 @@ export class TranscriptView implements Component {
   }
 
   private pushReasoning(lines: string[], entry: Extract<TranscriptEntry, { kind: 'reasoning' }>, width: number): void {
-    lines.push(this.theme.dim(truncateToWidth(displayText(entry.summary), width, '')))
+    if (!this.theme.visible('transcript.reasoning.summary')) return
+    const glyph = this.theme.glyph('transcript.reasoning.summary')
+    const lead = glyph === '' ? '' : `${glyph} `
+    lines.push(this.theme.style('transcript.reasoning.summary', truncateToWidth(`${lead}${displayText(entry.summary)}`, width, '')))
     if (!this.viewState.expandReasoning) return
     for (const line of entry.body.split('\n')) {
-      this.pushWrapped(lines, line, width, DETAIL_INDENT, this.theme.dim)
+      this.pushWrapped(lines, line, width, DETAIL_INDENT, text => this.theme.style('transcript.reasoning.body', text))
     }
   }
 
   private pushCard(lines: string[], card: ToolCard, width: number): void {
     const expanded = this.viewState.expandCards
     const { lines: detail, hidden } = cardDetailRows(card, expanded)
-    lines.push(this.theme.tool(truncateToWidth(displayText(card.title), width, '')))
+    const titleToken = card.failed ? 'tool.failed.title' : 'tool.title'
+    const glyphToken = card.failed ? 'tool.failed.glyph' : 'tool.glyph'
+    if (this.theme.visible(titleToken)) {
+      const glyph = this.theme.glyph(glyphToken)
+      const lead = glyph === '' ? '' : `${glyph} `
+      lines.push(this.theme.style(titleToken, truncateToWidth(`${lead}${displayText(card.title)}`, width, '')))
+    }
     for (const row of detail) {
       // The row says what it is, so the renderer never guesses from the text:
       // a diff line beginning with "+" is an addition because the presenter
       // said so, not because of its first character.
       const drawn = row.parts
-        .map(part => this.theme.style(CARD_ROW_TOKEN[card.kind]?.[part.class] ?? 'tool.detail', displayText(part.text)))
+        .map(part => {
+          const token = CARD_ROW_TOKEN[card.kind]?.[part.class] ?? 'tool.detail'
+          return this.theme.visible(token) ? this.theme.style(token, displayText(part.text)) : ''
+        })
         .join('')
       lines.push(truncateToWidth(`${DETAIL_INDENT}${drawn}`, width, ''))
     }
-    if (hidden > 0) {
+    if (hidden > 0 && this.theme.visible('tool.hint')) {
       const hint = expanded ? `${hidden} more lines not shown` : `… ${hidden} more lines · ctrl+o shows them`
-      lines.push(this.theme.dim(truncateToWidth(`${DETAIL_INDENT}${hint}`, width, '')))
+      lines.push(this.theme.style('tool.hint', truncateToWidth(`${DETAIL_INDENT}${hint}`, width, '')))
     }
   }
 
   private pushPicker(lines: string[], picker: PickerCard, width: number): void {
     lines.push('')
-    lines.push(this.theme.bold(truncateToWidth(`↻ ${displayText(picker.title)}`, width, '')))
+    if (this.theme.visible('picker.title')) {
+      const glyph = this.theme.glyph('picker.glyph')
+      const lead = glyph === '' ? '' : `${glyph} `
+      lines.push(this.theme.style('picker.title', truncateToWidth(`${lead}${displayText(picker.title)}`, width, '')))
+    }
     if (picker.note !== undefined) {
-      this.pushWrapped(lines, picker.note, width, DETAIL_INDENT, this.theme.bold)
+      this.pushWrapped(lines, picker.note, width, DETAIL_INDENT, text => this.theme.style('picker.note', text))
     }
     if (picker.filter !== '') {
-      lines.push(this.theme.dim(truncateToWidth(`${DETAIL_INDENT}filter: ${displayText(picker.filter)}`, width, '')))
+      lines.push(this.theme.style('picker.filter', truncateToWidth(`${DETAIL_INDENT}filter: ${displayText(picker.filter)}`, width, '')))
     }
     if (picker.above > 0) {
-      lines.push(this.theme.dim(truncateToWidth(`${OPTION_INDENT}… ${picker.above} newer`, width, '')))
+      lines.push(this.theme.style('picker.scrollNewer', truncateToWidth(`${OPTION_INDENT}… ${picker.above} newer`, width, '')))
     }
     for (const row of picker.rows) {
-      const cursor = row.current ? '❯' : ' '
+      const cursor = row.current ? this.theme.glyph('picker.cursor') || '❯' : ' '
       const text = row.description === undefined
         ? `${cursor} ${row.label}`
         : `${cursor} ${row.label} — ${row.description}`
-      const style = row.current ? this.theme.bold : (value: string) => value
-      lines.push(style(truncateToWidth(`${OPTION_INDENT}${displayText(text)}`, width, '')))
+      const token = row.current ? 'picker.rowCurrent' : 'picker.row'
+      lines.push(this.theme.style(token, truncateToWidth(`${OPTION_INDENT}${displayText(text)}`, width, '')))
     }
     if (picker.below > 0) {
-      lines.push(this.theme.dim(truncateToWidth(`${OPTION_INDENT}… ${picker.below} older`, width, '')))
+      lines.push(this.theme.style('picker.scrollOlder', truncateToWidth(`${OPTION_INDENT}… ${picker.below} older`, width, '')))
     }
-    lines.push(this.theme.dim(truncateToWidth(`${OPTION_INDENT}${displayText(picker.hint)}`, width, '')))
+    lines.push(this.theme.style('picker.hint', truncateToWidth(`${OPTION_INDENT}${displayText(picker.hint)}`, width, '')))
   }
 
   private pushGate(lines: string[], gate: GateCard, width: number): void {
     lines.push('')
-    lines.push(this.theme.bold(truncateToWidth(`${gate.kind === 'approval' ? '⚠' : '?'} ${displayText(gate.title)}`, width, '')))
+    if (this.theme.visible('gate.title')) {
+      const glyphToken = gate.kind === 'approval' ? 'gate.glyphApproval' : 'gate.glyphQuestion'
+      const glyph = this.theme.glyph(glyphToken) || (gate.kind === 'approval' ? '⚠' : '?')
+      lines.push(this.theme.style('gate.title', truncateToWidth(`${glyph} ${displayText(gate.title)}`, width, '')))
+    }
     for (const detail of gate.detail) {
-      this.pushWrapped(lines, detail, width, DETAIL_INDENT, this.theme.dim)
+      this.pushWrapped(lines, detail, width, DETAIL_INDENT, text => this.theme.style('gate.detail', text))
     }
     gate.options.forEach((option, position) => {
       const box = option.selected ? '[x]' : '[ ]'
-      const cursor = option.current ? '❯' : ' '
+      const cursor = option.current ? this.theme.glyph('gate.cursor') || '❯' : ' '
       const label = displayText(option.label)
       const text = option.description === undefined
         ? `${cursor} ${box} ${position + 1}. ${label}`
         : `${cursor} ${box} ${position + 1}. ${label} — ${displayText(option.description)}`
-      const style = option.current ? this.theme.bold : (value: string) => value
-      lines.push(style(truncateToWidth(`${OPTION_INDENT}${text}`, width, '')))
+      const token = option.current ? 'gate.optionCurrent' : 'gate.option'
+      lines.push(this.theme.style(token, truncateToWidth(`${OPTION_INDENT}${text}`, width, '')))
     })
-    lines.push(this.theme.dim(truncateToWidth(`${OPTION_INDENT}${displayText(gate.hint)}`, width, '')))
+    lines.push(this.theme.style('gate.hint', truncateToWidth(`${OPTION_INDENT}${displayText(gate.hint)}`, width, '')))
   }
 
   /** The rows one transcript entry becomes. */
@@ -180,15 +200,21 @@ export class TranscriptView implements Component {
         this.pushMarkdown(lines, entry.text, width)
         return
       case 'user':
-        this.pushWrapped(lines, entry.text, width, '', this.theme.bold)
+        this.pushWrapped(lines, entry.text, width, this.elementLead('transcript.user'), text => this.theme.style('transcript.user', text))
         return
       case 'notice':
-        this.pushWrapped(lines, entry.text, width, '', this.theme.notice)
+        this.pushWrapped(lines, entry.text, width, this.elementLead('transcript.notice'), text => this.theme.style('transcript.notice', text))
         return
       case 'marker':
-        this.pushWrapped(lines, entry.text, width, '', this.theme.marker)
+        this.pushWrapped(lines, entry.text, width, this.elementLead('transcript.marker'), text => this.theme.style('transcript.marker', text))
         return
     }
+  }
+
+  /** The mark and the space that introduce an element, empty when it has none. */
+  private elementLead(token: TuiToken): string {
+    const glyph = this.theme.visible(token) ? this.theme.glyph(token) : ''
+    return glyph === '' ? '' : `${glyph} `
   }
 
   render(width: number): string[] {

@@ -7,7 +7,7 @@ import type { PickerCard } from '@/ui/picker.ts'
 import { RowCache } from '@/ui/rows.ts'
 import { TranscriptView, type ViewState } from '@/ui/view.ts'
 
-const theme = createTheme(false)
+const theme = createTheme('none')
 const COLLAPSED: ViewState = { expandCards: false, expandReasoning: false }
 
 function viewOf(model: TranscriptModel, state: ViewState = COLLAPSED, gate?: GateCard): TranscriptView {
@@ -89,16 +89,17 @@ describe('TranscriptView text', () => {
         },
       },
     })
-    const colour = createTheme(true)
+    const colour = createTheme('truecolor')
     const markdown = new MarkdownRenderer(colour.markdown)
     const folded = new TranscriptView(model, colour, markdown, { state: () => ({ expandCards: false, expandReasoning: false }) }).render(60)
     expect(folded).toEqual(expect.arrayContaining([expect.stringContaining('reasoning · 2 lines · 28 chars')]))
-    expect(folded[0]).toContain('\u001b[2;90m')
+    // The explicit grey, not a palette slot: this is the whole point.
+    expect(folded[0]).toContain('\u001b[38;2;138;138;138m')
     expect(folded.some(line => line.includes('second thought'))).toBe(false)
 
     const opened = new TranscriptView(model, colour, markdown, { state: () => ({ expandCards: false, expandReasoning: true }) }).render(60)
     expect(opened).toHaveLength(4)
-    for (const line of opened.slice(0, 3)) expect(line).toContain('\u001b[2;90m')
+    for (const line of opened.slice(0, 3)) expect(line).toContain('\u001b[38;2;138;138;138m')
     expect(opened[3]).toBe('the answer')
   })
 
@@ -174,7 +175,9 @@ describe('TranscriptView picker', () => {
       picker: () => picker,
     })
     const lines = view.render(80)
-    expect(lines).toContain('↻ resume a session · 2 stored')
+    // No glyph by default: the picker's mark is a token now, and the shipped
+    // table ships none, so the heading is its words.
+    expect(lines).toContain('resume a session · 2 stored')
     expect(lines).toContain('    filter: fix')
     expect(lines).toContain('   ❯ fix the parser — /work · 3m ago · 12 events')
     expect(lines).toContain('     tui-session-b — /tmp · 1d ago')
