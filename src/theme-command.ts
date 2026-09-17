@@ -35,6 +35,9 @@ function describeToken(token: TuiToken, overrides: ThemeOverrides): { text: stri
   return { text: fields.length === 0 ? 'plain' : fields.join(' '), source }
 }
 
+/** Where the reader edits the section; the home is a variable, not a fixed path. */
+const SETTINGS_HINT = 'edit $DSH_HOME/settings.yaml (default ~/.dsh/settings.yaml) under "dsh-tui:" · /theme shows the result'
+
 /**
  * The effective table, one line per element.
  *
@@ -55,6 +58,6 @@ export function renderThemeTable(overrides: ThemeOverrides): string[] {
     lines.push(`  ${token} = ${text} (${source})`)
   }
   lines.push('', `palette: ${Object.entries(overrides.palette).map(([name, value]) => `${name} ${value}`).join(' · ')}`)
-  lines.push('', 'edit ~/.dsh/settings.yaml under "dsh-tui:" · /theme shows the result')
+  lines.push('', SETTINGS_HINT)
   return lines
 }

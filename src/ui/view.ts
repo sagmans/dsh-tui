@@ -18,6 +18,10 @@ const APPROVAL_MARK = '⚠'
 const QUESTION_MARK = '?'
 const CHECKBOX_ON = '[x]'
 const CHECKBOX_OFF = '[ ]'
+/** A row that a card's kind does not map draws as generic detail. */
+const FALLBACK_ROW_TOKEN: TuiToken = 'tool.detail'
+/** An unselected row has no cursor, and a blank column is not a value to configure. */
+const NO_CURSOR = ' '
 
 /** Which rows the reader has opened; one key decides for every row of a kind. */
 export interface ViewState {
@@ -138,7 +142,7 @@ export class TranscriptView implements Component {
       // said so, not because of its first character.
       const drawn = row.parts
         .map(part => {
-          const token = CARD_ROW_TOKEN[card.kind]?.[part.class] ?? 'tool.detail'
+          const token = CARD_ROW_TOKEN[card.kind]?.[part.class] ?? FALLBACK_ROW_TOKEN
           return this.theme.visible(token) ? this.theme.style(token, displayText(part.text)) : ''
         })
         .join('')
@@ -172,7 +176,7 @@ export class TranscriptView implements Component {
     for (const row of picker.rows) {
       const token = row.current ? 'picker.rowCurrent' : 'picker.row'
       if (!this.theme.visible(token)) continue
-      const cursor = row.current ? this.theme.glyph('picker.cursor') || CURSOR_MARK : ' '
+      const cursor = row.current ? this.theme.glyph('picker.cursor') || CURSOR_MARK : NO_CURSOR
       const text = row.description === undefined
         ? `${cursor} ${row.label}`
         : `${cursor} ${row.label} — ${row.description}`
@@ -202,7 +206,7 @@ export class TranscriptView implements Component {
       const token = option.current ? 'gate.optionCurrent' : 'gate.option'
       if (!this.theme.visible(token)) return
       const box = option.selected ? CHECKBOX_ON : CHECKBOX_OFF
-      const cursor = option.current ? this.theme.glyph('gate.cursor') || CURSOR_MARK : ' '
+      const cursor = option.current ? this.theme.glyph('gate.cursor') || CURSOR_MARK : NO_CURSOR
       const label = displayText(option.label)
       const text = option.description === undefined
         ? `${cursor} ${box} ${position + 1}. ${label}`
