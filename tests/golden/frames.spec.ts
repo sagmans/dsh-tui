@@ -42,8 +42,16 @@ function fixturePresenter(): ReturnType<typeof createToolPresenter> {
       presentResult: () => ({ card: 'terminal', title: `Run ${FIXTURE_COMMAND}`, output: FIXTURE_OUTPUT, exitCode: 0 }),
     },
     read: {
-      presentCall: () => ({ card: 'generic', title: `Read ${FIXTURE_FILE}`, content: [{ type: 'text', text: FIXTURE_FILE_LINES.join('\n') }] }),
-      presentResult: () => ({ card: 'generic', title: `Read ${FIXTURE_FILE}`, content: [{ type: 'text', text: FIXTURE_FILE_LINES.join('\n') }] }),
+      // A read declares its file as a location, which is what gives the card an
+      // argument to colour; the result supplies the lines and the size stats.
+      presentCall: () => ({ card: 'generic', title: `Read ${FIXTURE_FILE}`, kind: 'read', locations: [{ path: FIXTURE_FILE, line: 1 }] }),
+      presentResult: () => ({
+        card: 'read',
+        path: FIXTURE_FILE,
+        offset: 1,
+        lines: FIXTURE_FILE_LINES.map((text, index) => ({ number: index + 1, text })),
+        totalLines: FIXTURE_FILE_LINES.length,
+      }),
     },
   } as Record<string, unknown>
   return createToolPresenter({ tools: { get: (name: string) => tools[name] } } as unknown as Context)

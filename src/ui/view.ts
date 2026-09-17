@@ -1,5 +1,5 @@
 import { type Component, visibleWidth, wrapTextWithAnsi } from '@earendil-works/pi-tui'
-import { cardDetailRows, shellPreviewHint, type CardPreview, type ToolCard } from '../cards.ts'
+import { cardDetailRows, shellPreviewHint, type CardPreview, type CardStat, type CardStatKind, type ToolCard } from '../cards.ts'
 import type { GateCard } from '../gates.ts'
 import { displayText } from '../text.ts'
 import type { TranscriptEntry, TranscriptModel } from '../transcript.ts'
@@ -24,6 +24,23 @@ const FALLBACK_ROW_TOKEN: TuiToken = 'tool.detail'
 const NO_CURSOR = ' '
 /** The words an opened card uses when retention, not the fold, dropped rows. */
 const CARD_HINT_RETAINED = 'more lines not shown'
+/** What separates a card's header from its measured facts, and the facts from each other. */
+const STAT_LEAD = '  '
+const STAT_SEPARATOR = ' · '
+/** The symbol that says what a fact counts; a size needs none. */
+const STAT_SYMBOL: Readonly<Record<CardStatKind, string>> = {
+  added: '+',
+  changed: '~',
+  removed: '-',
+  size: '',
+}
+/** Which colour draws each fact, so added, changed, and removed never share one. */
+const STAT_TOKEN: Readonly<Record<CardStatKind, TuiToken>> = {
+  added: 'tool.stat.added',
+  changed: 'tool.stat.changed',
+  removed: 'tool.stat.removed',
+  size: 'tool.stat.size',
+}
 
 /** Which rows the reader has opened; one key decides for every row of a kind. */
 export interface ViewState {
@@ -140,13 +157,12 @@ export class TranscriptView implements Component {
     const { lines: detail, hidden } = cardDetailRows(card, preview)
     const titleToken = card.failed ? 'tool.failed.title' : 'tool.title'
     const glyphToken = card.failed ? 'tool.failed.glyph' : 'tool.glyph'
-    if (this.theme.visible(titleToken)) {
-      const glyph = this.theme.glyph(glyphToken)
-      const lead = glyph === '' ? '' : `${glyph} `
-      lines.push(this.theme.style(titleToken, this.theme.cut(`${lead}${displayText(card.title)}`, width, '')))
-    }
-    if (card.kind === 'terminal' && card.command !== undefined && card.command !== '' && this.theme.visible('tool.terminal.command')) {
-      lines.push(this.theme.cut(`${DETAIL_INDENT}${this.theme.style('tool.terminal.command', displayText(card.command))}`, width, ''))
+    const head = this.renderHead(card, titleToken, glyphToken)
+    if (head !== '') lines.push(this.theme.cut(head, width, ''))
+    // A terminal argument can be a whole command, so it takes its own row; the
+    // other kinds keep theirs on the header line.
+    if (card.kind === 'terminal' && card.argument !== undefined && card.argument !== '' && this.theme.visible('tool.args')) {
+      lines.push(this.theme.cut(`${DETAIL_INDENT}${this.theme.style('tool.args', displayText(card.argument))}`, width, ''))
     }
     for (const row of detail) {
       // The row says what it is, so the renderer never guesses from the text:
@@ -177,6 +193,32 @@ export class TranscriptView implements Component {
       : `${hidden} ${CARD_HINT_RETAINED}`
     if (hint === undefined) return
     lines.push(this.theme.style('tool.hint', this.theme.cut(`${DETAIL_INDENT}${hint}`, width, '')))
+  }
+
+  /**
+   * A card's header: its label, its argument, and its measured facts.
+   *
+   * A terminal's argument is left out because it needs a row of its own — it is
+   * the one argument that can be a whole command rather than a word.
+   */
+  private renderHead(card: ToolCard, titleToken: TuiToken, glyphToken: TuiToken): string {
+    const glyph = this.theme.visible(titleToken) ? this.theme.glyph(glyphToken) : ''
+    const lead = glyph === '' ? '' : `${glyph} `
+    let head = this.theme.visible(titleToken) ? `${lead}${this.theme.style(titleToken, displayText(card.title))}` : ''
+    if (card.kind !== 'terminal' && card.argument !== undefined && card.argument !== '' && this.theme.visible('tool.args')) {
+      head += `${head === '' ? '' : ' '}${this.theme.style('tool.args', displayText(card.argument))}`
+    }
+    return head + this.renderStats(card.stats)
+  }
+
+  /** The measured facts, each in its own colour, or nothing when none is visible. */
+  private renderStats(stats: readonly CardStat[] | undefined): string {
+    if (stats === undefined || stats.length === 0) return ''
+    const drawn = stats
+      .filter(stat => this.theme.visible(STAT_TOKEN[stat.kind]))
+      .map(stat => this.theme.style(STAT_TOKEN[stat.kind], `${STAT_SYMBOL[stat.kind]}${displayText(stat.text)}`))
+    if (drawn.length === 0) return ''
+    return `${STAT_LEAD}${drawn.join(this.theme.style('tool.stat.separator', STAT_SEPARATOR))}`
   }
 
   private pushPicker(lines: string[], picker: PickerCard, width: number): void {

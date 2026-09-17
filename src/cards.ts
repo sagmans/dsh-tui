@@ -13,6 +13,7 @@ import type {
   WebResultView,
 } from '@deepseek-ai/dsh-tools'
 import type { CardRowClass } from './theme-tokens.ts'
+import { countTokens, formatTokens } from './tokens.ts'
 
 /** What a tool's result presenter receives, plus the call arguments it was asked with. */
 export interface ToolResultInput {
@@ -63,17 +64,35 @@ export function rowText(row: CardRow): string {
   return row.parts.map(part => part.text).join('')
 }
 
+/** What a measured fact on a card is, which decides its colour and symbol. */
+export type CardStatKind = 'added' | 'changed' | 'removed' | 'size'
+
+/** One measured fact a card reports beside its header, e.g. a change or size count. */
+export interface CardStat {
+  readonly kind: CardStatKind
+  /** The number or phrase; the renderer supplies the symbol and the styling. */
+  readonly text: string
+}
+
 /** One renderable tool row: a header plus the detail rows kept for rendering. */
 export interface ToolCard {
   readonly kind: ToolCardKind
+  /**
+   * The card's label: the tool's own name when it has an argument, else the
+   * title its presenter declared.
+   */
   readonly title: string
   /**
-   * The command a terminal card ran, drawn under its header in every fold.
+   * The salient argument the call was made with — a path or a command.
    *
-   * A shell card names its tool in the header, so the command is what the
-   * reader came for and cannot be a row the fold may hide.
+   * The surface cannot know which argument matters, so the presenter names it
+   * through its locations or its terminal title. It is a field rather than part
+   * of the title so it can carry its own colour, and it is drawn outside the
+   * fold because what ran is never a detail.
    */
-  readonly command?: string
+  readonly argument?: string
+  /** Measured facts to report beside the header, e.g. changed or read lines. */
+  readonly stats?: readonly CardStat[]
   /**
    * The exit pill of a terminal card, drawn outside the fold with its output.
    *
@@ -140,6 +159,73 @@ function bound(rows: readonly CardRow[]): { detail: CardRow[]; totalLines: numbe
  */
 function boundTail(rows: readonly CardRow[]): { detail: CardRow[]; totalLines: number } {
   return { detail: rows.slice(-CARD_DETAIL_MAX).map(clipRow), totalLines: rows.length }
+}
+
+/** How many lines a text holds, ignoring the newline that only terminates the last one. */
+function lineCount(text: string): number {
+  const trimmed = text.replace(/\n+$/, '')
+  return trimmed === '' ? 0 : trimmed.split('\n').length
+}
+
+/**
+ * The size of a text a card presents, in lines and in tokens.
+ *
+ * A reader deciding whether to open a file cares about both: lines say how tall
+ * it is, tokens say what it cost to put in the conversation.
+ */
+function sizeStats(text: string): readonly CardStat[] {
+  const lines = lineCount(text)
+  const tokens = countTokens(text.replace(/\n+$/, ''))
+  const stats: CardStat[] = []
+  if (lines > 0) stats.push({ kind: 'size', text: `${lines} line${lines === 1 ? '' : 's'}` })
+  if (tokens > 0) stats.push({ kind: 'size', text: `${formatTokens(tokens)} tok` })
+  return stats
+}
+
+/**
+ * A file change's split into added, changed, and removed lines.
+ *
+ * A replacement is one changed line, not an add plus a remove, so the smaller
+ * of the two sides is the changed count and only the excess counts as pure
+ * additions or deletions — otherwise every edit reads as twice its size.
+ */
+function changeStats(diffs: readonly FileDiff[]): readonly CardStat[] {
+  let added = 0
+  let removed = 0
+  for (const diff of diffs) {
+    for (const row of renderFileDiff(diff)) {
+      const cls = row.parts[0]?.class
+      if (cls === 'added') added += 1
+      else if (cls === 'removed') removed += 1
+    }
+  }
+  const changed = Math.min(added, removed)
+  const stats: CardStat[] = []
+  if (added - changed > 0) stats.push({ kind: 'added', text: String(added - changed) })
+  if (changed > 0) stats.push({ kind: 'changed', text: String(changed) })
+  if (removed - changed > 0) stats.push({ kind: 'removed', text: String(removed - changed) })
+  return stats
+}
+
+/** The window a read returned: its line range, how many lines, and their token size. */
+function readStats(read: ReadResultView): readonly CardStat[] {
+  if (read.lines.length === 0) return [{ kind: 'size', text: '0 lines' }]
+  const start = read.offset
+  const end = read.offset + read.lines.length - 1
+  const count = read.lines.length
+  const stats: CardStat[] = [
+    { kind: 'size', text: start === end ? `L${start}` : `L${start}–${end}` },
+    { kind: 'size', text: `${count} line${count === 1 ? '' : 's'}` },
+  ]
+  const tokens = countTokens(read.lines.map(line => line.text).join('\n'))
+  if (tokens > 0) stats.push({ kind: 'size', text: `${formatTokens(tokens)} tok` })
+  return stats
+}
+
+/** A diff's measured facts: a creation reports its size, an edit its line changes. */
+function diffStats(diffs: readonly FileDiff[]): readonly CardStat[] {
+  const created = diffs.length > 0 && diffs.every(diff => diff.oldText === null)
+  return created ? sizeStats(diffs.map(diff => diff.newText).join('\n')) : changeStats(diffs)
 }
 
 /**
@@ -217,16 +303,17 @@ export function mergeCards(call: ToolCard | undefined, result: ToolCard | undefi
   if (base === undefined) throw new Error('mergeCards requires at least one card')
   if (call === undefined || result === undefined) return base
   const kind = result.kind === 'generic' ? call.kind : result.kind
-  // The command belongs to the call, and the result mostly has none; a merge
-  // that only kept result rows would drop the one row a folded shell card must
-  // always show. It is attached only to a terminal card so a shell field can
-  // never leak onto a card that has no command line.
-  const command = kind === 'terminal' ? call.command ?? result.command : undefined
+  // The result, when it names one, knows the argument that was actually acted
+  // on; a terminal result omits it, so the pending call's command is kept. The
+  // result also owns the measured facts, because only it knows the outcome.
+  const argument = result.argument ?? call.argument
+  const stats = result.stats ?? call.stats
   const status = result.status ?? call.status
   return {
     kind,
     title: call.title,
-    ...(command === undefined ? {} : { command }),
+    ...(argument === undefined ? {} : { argument }),
+    ...(stats === undefined ? {} : { stats }),
     ...(status === undefined ? {} : { status }),
     detail: result.detail.length > 0 ? result.detail : call.detail,
     failed: result.failed,
@@ -299,13 +386,12 @@ export function cardOfCall(view: ToolCallView | undefined, fallbackName: string)
       if (terminal.description !== undefined && terminal.description !== '') rows.push(cardRow('output', terminal.description))
       if (terminal.cwd !== undefined && terminal.cwd !== '') rows.push(cardRow('cwd', `cwd ${terminal.cwd}`))
       // The header names the tool so the command can sit on its own row: a
-      // terminal view's own title IS the command, and a one-line fold must not
-      // be able to hide what was run.
+      // terminal view's own title IS the command, and a fold must not hide it.
       const command = terminal.title?.trim() ?? ''
       return {
         kind: 'terminal',
         title: fallbackName,
-        ...(command === '' ? {} : { command }),
+        ...(command === '' ? {} : { argument: command }),
         detail: bound(rows).detail,
         failed: false,
         totalLines: 0,
@@ -314,7 +400,18 @@ export function cardOfCall(view: ToolCallView | undefined, fallbackName: string)
     case 'diff': {
       const diff = view as DiffCallView
       const bounded = bound(diff.diffs.flatMap(renderFileDiff))
-      return { kind: 'diff', title: title(diff, fallbackName), detail: bounded.detail, failed: false, totalLines: bounded.totalLines }
+      const path = diff.diffs[0]?.path
+      if (path === undefined || path === '') {
+        return { kind: 'diff', title: title(diff, fallbackName), detail: bounded.detail, failed: false, totalLines: bounded.totalLines }
+      }
+      return {
+        kind: 'diff',
+        title: fallbackName,
+        argument: path,
+        detail: bounded.detail,
+        failed: false,
+        totalLines: bounded.totalLines,
+      }
     }
     default: {
       const generic = view as GenericCallView
@@ -323,7 +420,20 @@ export function cardOfCall(view: ToolCallView | undefined, fallbackName: string)
         lines.push(typeof generic.rawInput === 'string' ? generic.rawInput : JSON.stringify(generic.rawInput))
       }
       const bounded = bound(lines.map(line => cardRow('detail', line)))
-      return { kind: 'generic', title: title(generic, fallbackName), detail: bounded.detail, failed: false, totalLines: bounded.totalLines }
+      // A call that names a file has an argument worth its own colour; one that
+      // does not keeps its declared title, which is already the label.
+      const location = generic.locations?.[0]?.path
+      if (location === undefined || location === '') {
+        return { kind: 'generic', title: title(generic, fallbackName), detail: bounded.detail, failed: false, totalLines: bounded.totalLines }
+      }
+      return {
+        kind: 'generic',
+        title: fallbackName,
+        argument: location,
+        detail: bounded.detail,
+        failed: false,
+        totalLines: bounded.totalLines,
+      }
     }
   }
 }
@@ -359,7 +469,7 @@ export function cardOfResult(
       return {
         kind: 'terminal',
         title: input.fallbackTitle,
-        ...(command === '' ? {} : { command }),
+        ...(command === '' ? {} : { argument: command }),
         ...(status === undefined ? {} : { status }),
         detail: bounded.detail,
         failed,
@@ -369,7 +479,27 @@ export function cardOfResult(
     case 'diff': {
       const diff = view as DiffResultView
       const bounded = bound(diff.diffs.flatMap(renderFileDiff))
-      return { kind: 'diff', title: title(diff, input.fallbackTitle), detail: bounded.detail, failed, totalLines: bounded.totalLines }
+      const path = diff.diffs[0]?.path
+      const stats = diffStats(diff.diffs)
+      if (path === undefined || path === '') {
+        return {
+          kind: 'diff',
+          title: title(diff, input.fallbackTitle),
+          ...(stats.length === 0 ? {} : { stats }),
+          detail: bounded.detail,
+          failed,
+          totalLines: bounded.totalLines,
+        }
+      }
+      return {
+        kind: 'diff',
+        title: input.fallbackTitle,
+        argument: path,
+        ...(stats.length === 0 ? {} : { stats }),
+        detail: bounded.detail,
+        failed,
+        totalLines: bounded.totalLines,
+      }
     }
     case 'search': {
       const search = view as SearchResultView
@@ -382,14 +512,25 @@ export function cardOfResult(
     }
     case 'read': {
       const read = view as ReadResultView
-      const rows: CardRow[] = [cardRow('header', `${read.path} (from line ${read.offset}, ${read.totalLines} total)`)]
+      // The header now carries the path and the size stats, so the detail rows
+      // are only the numbered lines themselves.
+      const rows: CardRow[] = []
       if (read.lines.length > 0) {
         for (const line of read.lines) rows.push(readLine(line.number, line.text))
       } else {
         for (const line of contentLines(read.content)) rows.push(cardRow('line', line))
       }
       const bounded = bound(rows)
-      return { kind: 'read', title: title(read, input.fallbackTitle), detail: bounded.detail, failed, totalLines: bounded.totalLines }
+      const stats = readStats(read)
+      return {
+        kind: 'read',
+        title: input.fallbackTitle,
+        ...(read.path === '' ? {} : { argument: read.path }),
+        ...(stats.length === 0 ? {} : { stats }),
+        detail: bounded.detail,
+        failed,
+        totalLines: bounded.totalLines,
+      }
     }
     case 'web': {
       const web = view as WebResultView

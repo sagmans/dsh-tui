@@ -181,13 +181,15 @@ each element's effective value and whether it came from an override, the
 palette, or the default.
 
 `fg` and `bg` accept `#rrggbb`, a palette name (`default`, `muted`, `accent`,
-`warn`, `added`, `removed`, `user`, `assistant`), or an index. A colour is
+`arg`, `warn`, `added`, `removed`, `user`, `assistant`), or an index. A colour is
 emitted as 24-bit when the terminal advertises it (`COLORTERM`) and degraded to
 the nearest 256-colour entry or 16-colour slot otherwise; a hue keeps its family
 there, so an addition stays green instead of collapsing to black. Muted elements
 name the palette rather than a terminal slot, so on anything but a 16-colour
 terminal their contrast does not depend on what the reader's colour scheme maps
-slot 8 to.
+slot 8 to. `arg` is the pale blue a card gives the argument it was called with,
+so `tool.args` is restyled on its own and stays distinct from the tool's own
+label and from its output.
 
 `NO_COLOR` and `--no-color` disable styling entirely, attributes included, and
 outrank everything in this section. A token or palette name the surface does not
@@ -234,6 +236,8 @@ The package is a Cordis plugin bundle that stacks over `@deepseek-ai/dsh-base`:
 The fold is durable-only: the live stream decorates the row that is still being written, and everything else — cards, reasoning, work state, compaction markers — comes from the log, so a resumed session renders what the live one did. Subagent start and finish are the exception: they arrive as service events, and the transcript shows them as decoration because the durable record of a delegation is the tool call that asked for it.
 
 Tool cards are folded by default: a card draws its header and nothing else, so a long read, diff, or search cannot bury the conversation. A shell card is the exception, because its output is the answer the reader asked for: it names the tool in its header, always shows the command that ran, keeps the last 20 output rows, and adds a hint naming the rows it dropped. `Ctrl+O` opens every card to its header plus every retained row.
+
+A card's header names the tool, then the argument the call was made with — a path or a command — in the `tool.args` colour, then the facts the result measured: a read reports its line range, line count, and token size; a write reports the lines and tokens it wrote; an edit reports added, changed, and removed lines as `+n ~n -n` in green, yellow, and red. Each stat is its own token, so any of them can be recoloured or hidden independently.
 
 The bundle also takes the base's global agent rows out of the composition, twenty-three of them. Every one is a row the shipped modes supply per session instead, so leaving it mounted registers the same tool names in two layers and doubles each prompt section it owns. What stays mounted is the host: sessions, storage, models, permissions, jobs, and the command registry.
 

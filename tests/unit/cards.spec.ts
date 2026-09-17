@@ -49,15 +49,23 @@ describe('cardOfCall', () => {
   it('names the tool in the header and keeps the command as its own field', () => {
     const card = cardOfCall({ card: 'terminal', title: 'ls -la', description: 'list files', cwd: '/tmp' }, 'bash')
     expect(card.title).toBe('bash')
-    expect(card.command).toBe('ls -la')
+    expect(card.argument).toBe('ls -la')
     expect(texts(card.detail)).toEqual(['list files', 'cwd /tmp'])
     expect(card.detail.map(line => line.parts[0]?.class)).toEqual(['output', 'cwd'])
   })
 
-  it('maps a diff call to bounded diff lines', () => {
+  it('names a file call by its tool and puts the path in the argument', () => {
     const card = cardOfCall({ card: 'diff', title: 'Write a.txt', diffs: [{ path: 'a.txt', oldText: null, newText: 'x' }] }, 'write')
     expect(card.kind).toBe('diff')
+    expect(card.title).toBe('write')
+    expect(card.argument).toBe('a.txt')
     expect(texts(card.detail)).toEqual(['a.txt  new', '+x'])
+  })
+
+  it('takes a generic call path from its declared locations', () => {
+    const card = cardOfCall({ card: 'generic', title: 'Read a.ts (from line 5)', kind: 'read', locations: [{ path: 'a.ts', line: 5 }] }, 'read')
+    expect(card.title).toBe('read')
+    expect(card.argument).toBe('a.ts')
   })
 
   it('uses the declared title and counts every presented row', () => {
@@ -122,7 +130,7 @@ describe('cardOfResult', () => {
     // The header is the tool, the result title is the command fallback, and the
     // pill is its own field so it never consumes a folded output slot.
     expect(card.title).toBe('bash')
-    expect(card.command).toBe('ls')
+    expect(card.argument).toBe('ls')
     expect(card.status).toBe('exit 0')
     expect(texts(card.detail)).toEqual(['a', 'b'])
   })
@@ -173,13 +181,58 @@ describe('cardOfResult', () => {
     expect(texts(card.detail)).toEqual(['a.ts', 'b.ts'])
   })
 
-  it('renders a read result with its range header', () => {
+  it('reports a read result as its path, range, size, and numbered lines', () => {
     const card = cardOfResult(
       { card: 'read', path: 'a.ts', offset: 5, lines: [{ number: 5, text: 'x' }], totalLines: 20 },
       { fallbackTitle: 'read', failed: false, contentLines: [] },
     )
-    expect(texts(card.detail)).toEqual(['a.ts (from line 5, 20 total)', '5: x'])
-    expect(card.detail[1]?.parts.map(part => part.class)).toEqual(['lineNumber', 'line'])
+    expect(card.title).toBe('read')
+    expect(card.argument).toBe('a.ts')
+    expect(card.stats).toEqual([
+      { kind: 'size', text: 'L5' },
+      { kind: 'size', text: '1 line' },
+      { kind: 'size', text: '1 tok' },
+    ])
+    expect(texts(card.detail)).toEqual(['5: x'])
+    expect(card.detail[0]?.parts.map(part => part.class)).toEqual(['lineNumber', 'line'])
+  })
+
+  it('reports the whole range a multi-line read spans', () => {
+    const card = cardOfResult(
+      { card: 'read', path: 'a.ts', offset: 5, lines: [{ number: 5, text: 'x' }, { number: 6, text: 'y' }, { number: 7, text: 'z' }], totalLines: 20 },
+      { fallbackTitle: 'read', failed: false, contentLines: [] },
+    )
+    expect(card.stats?.slice(0, 2)).toEqual([{ kind: 'size', text: 'L5–7' }, { kind: 'size', text: '3 lines' }])
+  })
+
+  it('reports a new file by its line and token size', () => {
+    const card = cardOfResult(
+      { card: 'diff', diffs: [{ path: 'a.txt', oldText: null, newText: 'one\ntwo\nthree' }] },
+      { fallbackTitle: 'write', failed: false, contentLines: [] },
+    )
+    expect(card.title).toBe('write')
+    expect(card.argument).toBe('a.txt')
+    expect(card.stats).toEqual([
+      { kind: 'size', text: '3 lines' },
+      { kind: 'size', text: '4 tok' },
+    ])
+  })
+
+  it('reports an edit as one changed line, not an add plus a remove', () => {
+    const card = cardOfResult(
+      { card: 'diff', diffs: [{ path: 'a.ts', oldText: 'keep\nold\ntail', newText: 'keep\nnew\ntail' }] },
+      { fallbackTitle: 'edit', failed: false, contentLines: [] },
+    )
+    expect(card.stats).toEqual([{ kind: 'changed', text: '1' }])
+  })
+
+  it('separates pure additions from replacements', () => {
+    const card = cardOfResult(
+      { card: 'diff', diffs: [{ path: 'a.ts', oldText: 'a\nb', newText: 'a\nx\ny' }] },
+      { fallbackTitle: 'edit', failed: false, contentLines: [] },
+    )
+    // `b -> x` is a change and `y` is the only pure addition.
+    expect(card.stats).toEqual([{ kind: 'added', text: '1' }, { kind: 'changed', text: '1' }])
   })
 
   it('renders both web shapes', () => {
@@ -204,14 +257,14 @@ describe('cardOfResult', () => {
 })
 
 describe('mergeCards', () => {
-  const call: ToolCard = { kind: 'terminal', title: 'bash', command: 'ls -la', detail: [row('cwd', 'cwd /tmp')], failed: false, totalLines: 1 }
+  const call: ToolCard = { kind: 'terminal', title: 'bash', argument: 'ls -la', detail: [row('cwd', 'cwd /tmp')], failed: false, totalLines: 1 }
 
   it('keeps the call header and command while swapping in the result', () => {
     const result: ToolCard = { kind: 'terminal', title: 'bash', detail: [row('output', 'a'), row('output', 'b')], failed: false, totalLines: 2 }
     expect(mergeCards(call, result)).toEqual({
       kind: 'terminal',
       title: 'bash',
-      command: 'ls -la',
+      argument: 'ls -la',
       detail: [row('output', 'a'), row('output', 'b')],
       failed: false,
       totalLines: 2,
@@ -223,25 +276,26 @@ describe('mergeCards', () => {
     expect(mergeCards(call, result)).toEqual({
       kind: 'terminal',
       title: 'bash',
-      command: 'ls -la',
+      argument: 'ls -la',
       detail: [row('cwd', 'cwd /tmp')],
       failed: true,
       totalLines: 1,
     })
   })
 
-  it('carries the result status onto the merged terminal card', () => {
-    const result: ToolCard = { kind: 'terminal', title: 'bash', status: 'exit 2', detail: [row('output', 'boom')], failed: true, totalLines: 1 }
+  it('carries the result status and stats onto the merged card', () => {
+    const result: ToolCard = { kind: 'terminal', title: 'bash', status: 'exit 2', stats: [{ kind: 'size', text: '3 lines' }], detail: [row('output', 'boom')], failed: true, totalLines: 1 }
     expect(mergeCards(call, result).status).toBe('exit 2')
+    expect(mergeCards(call, result).stats).toEqual([{ kind: 'size', text: '3 lines' }])
   })
 
-  it('drops a shell command when the merged kind is not a terminal', () => {
-    // A result that changes the card's kind must not leave a command line on a
-    // card that has no command.
-    const result: ToolCard = { kind: 'diff', title: 'Edit a.ts', detail: [row('added', '+x')], failed: false, totalLines: 1 }
+  it("prefers the result's argument when the merged kind changes", () => {
+    // A diff result knows the file it changed; the pending command must not
+    // stand in for it on a card that is no longer a terminal.
+    const result: ToolCard = { kind: 'diff', title: 'edit', argument: 'a.ts', detail: [row('added', '+x')], failed: false, totalLines: 1 }
     const merged = mergeCards(call, result)
     expect(merged.kind).toBe('diff')
-    expect(merged.command).toBeUndefined()
+    expect(merged.argument).toBe('a.ts')
   })
 
   it('returns the single available card when only one side exists', () => {

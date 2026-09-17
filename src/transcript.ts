@@ -1,4 +1,8 @@
 import { cardFromLines, mergeCards, type ToolCard, type ToolPresenter } from './cards.ts'
+import { countTokens } from './tokens.ts'
+
+/** Kept exported here for the callers that read a thought's size through the transcript. */
+export { CHARS_PER_TOKEN, countTokens } from './tokens.ts'
 
 /** One renderable transcript row. */
 export type TranscriptEntry =
@@ -11,20 +15,6 @@ export type TranscriptEntry =
 
 /** Reasoning kept per settled block, so one runaway thought cannot grow the transcript without bound. */
 export const REASONING_CHAR_LIMIT = 20_000
-
-/**
- * Characters a provider bills as one token.
- *
- * The exact count needs the tokenizer the provider used, which a terminal does
- * not have; four characters per token is the estimate a reader can compare
- * against, and it is the unit they spend rather than lines or characters.
- */
-export const CHARS_PER_TOKEN = 4
-
-/** A thought's size in tokens, rounded up so a non-empty thought never reads as zero. */
-export function countTokens(text: string): number {
-  return Math.ceil(text.length / CHARS_PER_TOKEN)
-}
 
 /** The token count with its noun, because "1 tokens" reads as a bug. */
 function describeTokens(text: string): string {
@@ -393,7 +383,7 @@ export class TranscriptModel {
       const base = call ?? cardFromLines('generic', name, [], false)
       const rebuilt = reported.length === 0
         ? { ...base, failed: isError }
-        : { ...cardFromLines(base.kind, base.title, reported, isError), ...(base.command === undefined ? {} : { command: base.command }) }
+        : { ...cardFromLines(base.kind, base.title, reported, isError), ...(base.argument === undefined ? {} : { argument: base.argument }) }
       this.settled[pending.index] = { kind: 'tool', card: rebuilt }
       return
     }

@@ -129,7 +129,7 @@ exports[`golden frames > renders the transcript at 40 columns 1`] = `
   "    Run pnpm test",
   "    Tests  154 passed (154)",
   "    exit 0",
-  "Read src/ui/view.ts",
+  "read src/ui/view.ts  L1–3 · 3 lines · 23",
   "compacted 3 events (≈4200 tokens)",
 ]
 `;
@@ -153,7 +153,7 @@ exports[`golden frames > renders the transcript at 80 columns 1`] = `
   "    Run pnpm test",
   "    Tests  154 passed (154)",
   "    exit 0",
-  "Read src/ui/view.ts",
+  "read src/ui/view.ts  L1–3 · 3 lines · 23 tok",
   "compacted 3 events (≈4200 tokens)",
 ]
 `;
@@ -195,10 +195,10 @@ exports[`styled golden frames > renders the transcript with its escapes 1`] = `
   "  const dock = new WorkDock(state, theme)",
   "[38;2;138;138;138m\`\`\`[0m",
   "[38;2;215;175;95mbash[0m",
-  "    Run pnpm test",
+  "    [38;2;141;179;217mRun pnpm test[0m",
   "    [38;2;138;138;138mTests  154 passed (154)[0m",
   "    [38;2;138;138;138mexit 0[0m",
-  "[38;2;215;175;95mRead src/ui/view.ts[0m",
+  "[38;2;215;175;95mread[0m [38;2;141;179;217msrc/ui/view.ts[0m  [38;2;138;138;138mL1–3[0m[38;2;138;138;138m · [0m[38;2;138;138;138m3 lines[0m[38;2;138;138;138m · [0m[38;2;138;138;138m23 tok[0m",
   "[38;2;138;138;138mcompacted 3 events (≈4200 tokens)[0m",
 ]
 `;

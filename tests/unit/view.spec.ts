@@ -373,3 +373,64 @@ describe('TranscriptView theming', () => {
     expect(view.render(60).join('\n')).toContain('38;2;255;0;0')
   })
 })
+
+describe('TranscriptView tool args and stats', () => {
+  /** Fold one call and result through a presenter, so the merge is what renders. */
+  const folded = (name: string, presenter: ToolPresenter): string[] => {
+    const model = new TranscriptModel(presenter)
+    model.apply({ type: 'tool/call', data: { name, arguments: '{}', callId: 'c1' } })
+    model.apply({ type: 'tool/result', data: { message: { content: [{ type: 'tool-result', toolCallId: 'c1', text: 'body' }], isError: false } } })
+    return viewOf(model).render(80)
+  }
+
+  it('shows a read path with its range, size, and tokens on the folded line', () => {
+    const presenter: ToolPresenter = {
+      call: name => cardOfCall({ card: 'generic', title: 'Read a.ts (from line 5)', kind: 'read', locations: [{ path: 'a.ts', line: 5 }] }, name),
+      result: (name, input) => cardOfResult(
+        { card: 'read', path: 'a.ts', offset: 5, lines: [{ number: 5, text: 'x' }, { number: 6, text: 'y' }], totalLines: 20 },
+        { fallbackTitle: name, failed: input.isError, contentLines: contentLines(input.content) },
+      ),
+    }
+    expect(folded('read', presenter)).toEqual(['read a.ts  L5–6 · 2 lines · 1 tok'])
+  })
+
+  it('shows a new file by its line and token size', () => {
+    const presenter: ToolPresenter = {
+      call: name => cardOfCall({ card: 'diff', title: 'Write a.txt', diffs: [{ path: 'a.txt', oldText: null, newText: 'one\ntwo\nthree' }] }, name),
+      result: (name, input) => cardOfResult(
+        { card: 'diff', diffs: [{ path: 'a.txt', oldText: null, newText: 'one\ntwo\nthree' }] },
+        { fallbackTitle: name, failed: input.isError, contentLines: contentLines(input.content) },
+      ),
+    }
+    expect(folded('write', presenter)).toEqual(['write a.txt  3 lines · 4 tok'])
+  })
+
+  it('shows an edit split into added and changed lines', () => {
+    const diffs = [{ path: 'a.ts', oldText: 'a\nb', newText: 'a\nx\ny' }]
+    const presenter: ToolPresenter = {
+      call: name => cardOfCall({ card: 'diff', title: 'Edit a.ts', diffs }, name),
+      result: (name, input) => cardOfResult(
+        { card: 'diff', diffs },
+        { fallbackTitle: name, failed: input.isError, contentLines: contentLines(input.content) },
+      ),
+    }
+    expect(folded('edit', presenter)).toEqual(['edit a.ts  +1 · ~1'])
+  })
+
+  it('hides a stat whose token the reader turned off', () => {
+    const diffs = [{ path: 'a.ts', oldText: 'a\nb', newText: 'a\nx\ny' }]
+    const presenter: ToolPresenter = {
+      call: name => cardOfCall({ card: 'diff', title: 'Edit a.ts', diffs }, name),
+      result: (name, input) => cardOfResult(
+        { card: 'diff', diffs },
+        { fallbackTitle: name, failed: input.isError, contentLines: contentLines(input.content) },
+      ),
+    }
+    const model = new TranscriptModel(presenter)
+    model.apply({ type: 'tool/call', data: { name: 'edit', arguments: '{}', callId: 'c1' } })
+    model.apply({ type: 'tool/result', data: { message: { content: [{ type: 'tool-result', toolCallId: 'c1', text: 'body' }], isError: false } } })
+    const muted = createTheme('none', { palette: DEFAULT_PALETTE, tokens: new Map([['tool.stat.added', { hidden: true }]]) })
+    const lines = new TranscriptView(model, muted, new MarkdownRenderer(muted.markdown), { state: () => COLLAPSED }).render(80)
+    expect(lines).toEqual(['edit a.ts  ~1'])
+  })
+})

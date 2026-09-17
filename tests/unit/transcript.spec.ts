@@ -240,9 +240,9 @@ describe('TranscriptModel tool cards', () => {
 
   it("keeps a shell card's command when no result presenter answers", () => {
     // The command belongs to the call, so a declined result must not drop the
-    // one row a folded shell card always shows.
+    // one thing a folded shell card always shows.
     const presenter: ToolPresenter = {
-      call: () => ({ kind: 'terminal', title: 'bash', command: 'echo hi', detail: [], failed: false, totalLines: 0 }),
+      call: () => ({ kind: 'terminal', title: 'bash', argument: 'echo hi', detail: [], failed: false, totalLines: 0 }),
       result: () => undefined,
     }
     const model = new TranscriptModel(presenter)
@@ -252,7 +252,7 @@ describe('TranscriptModel tool cards', () => {
       data: { message: { content: [{ type: 'tool-result', toolCallId: 'c1', text: 'hi' }], isError: false } },
     })
     const entry = model.entries()[0]
-    expect(entry?.kind === 'tool' && entry.card.command).toBe('echo hi')
+    expect(entry?.kind === 'tool' && entry.card.argument).toBe('echo hi')
     expect(entry?.kind === 'tool' && entry.card.detail.map(rowText)).toEqual(['hi'])
   })
 
