@@ -1,4 +1,4 @@
-import { type Component, truncateToWidth } from '@earendil-works/pi-tui'
+import { type Component, visibleWidth } from '@earendil-works/pi-tui'
 import { displayText } from '../text.ts'
 import type { TuiToken } from '../theme-tokens.ts'
 import type { TuiTheme } from '../theme.ts'
@@ -34,6 +34,18 @@ const SECOND_MS = 1000
 const MINUTE_MS = 60 * SECOND_MS
 /** Path segments kept for a directory outside the home; a terminal row is not a file browser. */
 const PATH_SEGMENTS = 2
+/** What sits between two facts that do not qualify each other. */
+const SEPARATOR_TEXT = ' · '
+/** Marks the point where a row was cut; the reader must know something is missing. */
+const ELLIPSIS = '…'
+
+/** One row segment: what it is, what it says, and how it joins the previous one. */
+interface Segment {
+  readonly token: TuiToken
+  readonly text: string
+  /** A qualifier attaches to the segment before it instead of standing alone. */
+  readonly join: boolean
+}
 
 /** Compact a token count, because the exact number changes nothing a reader decides. */
 export function formatTokens(count: number): string {
@@ -74,18 +86,22 @@ function elapsed(ms: number): string {
  * losing the model, and the separator is one too.
  */
 export function formatStatus(facts: StatusFacts, width: number, theme: TuiTheme): string {
-  /** Segments and the text that joins them; a space keeps a value with its label. */
-  const parts: string[] = []
-  const push = (token: TuiToken, text: string): void => {
-    if (theme.visible(token)) parts.push(theme.style(token, text))
+  const segments: Segment[] = []
+  /**
+   * Content is escaped as it is collected, and styling is applied only after the
+   * row has been cut to width. Styling earlier would put generated control
+   * characters in reach of `displayText`, which exists to make control
+   * characters visible, so a segment would print its own colour as text.
+   */
+  const push = (token: TuiToken, text: string, join = false): void => {
+    if (!theme.visible(token)) return
+    segments.push({ token, text: displayText(text), join })
   }
-  const separator = (): string => (theme.visible('status.separator') ? theme.style('status.separator', ' · ') : ' · ')
   if (facts.activity === 'working') {
-    // Elapsed belongs to the activity, so it rides in the same segment and
-    // carries its own token; a separator would read as a separate fact.
-    const ran = facts.elapsedMs === undefined ? '' : ` ${elapsed(facts.elapsedMs)}`
-    const styled = ran === '' || !theme.visible('status.elapsed') ? ran : theme.style('status.elapsed', ran)
-    push('status.activity.working', `▶ working${styled}`)
+    push('status.activity.working', '▶ working')
+    // Elapsed carries its own token so it can be toned apart from the activity,
+    // but it qualifies that activity, so it attaches rather than standing alone.
+    if (facts.elapsedMs !== undefined) push('status.elapsed', ` ${elapsed(facts.elapsedMs)}`, true)
   } else {
     push('status.activity.ready', '● ready')
   }
@@ -94,10 +110,9 @@ export function formatStatus(facts: StatusFacts, width: number, theme: TuiTheme)
   if (facts.agentPreset !== undefined && facts.agentPreset !== '') push('status.agentPreset', facts.agentPreset)
   if (facts.model !== undefined && facts.model !== '') {
     const route = facts.provider === undefined || facts.provider === '' ? facts.model : `${facts.provider}/${facts.model}`
-    // The effort qualifies the model, so it reads as part of it.
-    const effort = facts.effort === undefined || facts.effort === '' ? '' : ` (${facts.effort})`
     push('status.model', route)
-    if (effort !== '') push('status.effort', effort)
+    // The effort qualifies the model, so it reads as part of it.
+    if (facts.effort !== undefined && facts.effort !== '') push('status.effort', ` (${facts.effort})`, true)
   }
   if (facts.preset !== undefined && facts.preset !== '') push('status.permission', facts.preset)
   if (facts.contextTokens !== undefined) {
@@ -107,12 +122,40 @@ export function formatStatus(facts: StatusFacts, width: number, theme: TuiTheme)
   }
   if (facts.cacheRate !== undefined) push('status.cache', `cache ${Math.round(facts.cacheRate * 100)}%`)
   push('status.cwd', shortPath(facts.cwd, facts.home))
-  // A segment that begins with a space carries its own joining, so it must not
-  // also receive the separator or the row would read "model · (max)".
-  return truncateToWidth(displayText(parts.reduce(
-    (line, part) => (part.startsWith(' ') ? `${line}${part}` : line === '' ? part : `${line}${separator()}${part}`),
-    '',
-  )), width, '…')
+  return renderSegments(segments, width, theme)
+}
+
+/**
+ * Join styled segments into one row, cutting it to width first.
+ *
+ * The cut runs on unstyled text so it can never land inside a style and leave
+ * one open, and each segment is trimmed to the room left rather than dropped:
+ * a reader loses the tail of the last fact, not the fact, and the ellipsis
+ * still says that something was left out.
+ */
+function renderSegments(segments: readonly Segment[], width: number, theme: TuiTheme): string {
+  const separator = theme.visible('status.separator') ? theme.style('status.separator', SEPARATOR_TEXT) : SEPARATOR_TEXT
+  const ellipsisWidth = visibleWidth(ELLIPSIS)
+  let out = ''
+  let budget = width
+  for (const [index, segment] of segments.entries()) {
+    const joining = index === 0 || segment.join
+    const lead = joining ? 0 : visibleWidth(SEPARATOR_TEXT)
+    // A separator is drawn only alongside text, so there must be room for the
+    // separator and at least the mark that something was cut.
+    if (budget - lead < ellipsisWidth) break
+    const room = budget - lead
+    const textWidth = visibleWidth(segment.text)
+    if (textWidth > room) {
+      // Not the last segment: the rest is omitted, so the row must show it.
+      const cut = theme.cut(segment.text, room, ELLIPSIS)
+      out += `${lead > 0 ? separator : ''}${theme.style(segment.token, cut)}`
+      return out
+    }
+    out += `${lead > 0 ? separator : ''}${theme.style(segment.token, segment.text)}`
+    budget -= lead + textWidth
+  }
+  return out === '' ? theme.cut('', Math.max(0, width), ELLIPSIS) : out
 }
 
 /** A one-row view of the state around the transcript. */
