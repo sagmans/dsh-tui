@@ -54,6 +54,22 @@ describe('TranscriptModel rows', () => {
     expect(model.entries()).toEqual([{ kind: 'assistant', text: 'kept' }])
   })
 
+  it('keeps streamed text visible when its block ends before the recorded message', () => {
+    const model = new TranscriptModel()
+    model.applyStreamChunk({ type: 'text-delta', text: 'partial answer' })
+    model.applyStreamChunk({ type: 'block-end', block: { type: 'text' } })
+    // The message that makes it durable has not arrived, so the text stays up
+    // instead of flickering to nothing on the next repaint.
+    expect(model.entries()).toEqual([{ kind: 'assistant', text: 'partial answer' }])
+  })
+
+  it('drops streamed text a turn ends without recording', () => {
+    const model = new TranscriptModel()
+    model.applyStreamChunk({ type: 'text-delta', text: 'partial' })
+    model.apply({ type: 'turn/end', data: { reason: { kind: 'aborted' } } })
+    expect(model.entries().some(entry => entry.kind === 'assistant')).toBe(false)
+  })
+
   it('ignores unrelated events and resets to an empty transcript', () => {
     const model = new TranscriptModel()
     model.apply({ type: 'turn/start', data: { turn: 1 } })

@@ -200,8 +200,9 @@ export class TranscriptModel {
         return
       case 'block-end': {
         const block = asRecord(record.block)
-        // A settled block supersedes the transient text it streamed.
-        if (block?.type === 'text') this.live = ''
+        // A settled reasoning block becomes a row now. A settled text block keeps
+        // its streamed text on screen, because dropping it would blank the answer
+        // on every repaint until the recorded message arrives.
         if (block?.type === 'reasoning') this.settleReasoning()
         return
       }
@@ -276,6 +277,9 @@ export class TranscriptModel {
       }
       case 'turn/end': {
         this.reportTurnEnd(asRecord(data.reason) ?? {})
+        // A turn that ended without a recorded message must not leave streamed
+        // text on screen as though it had settled.
+        this.live = ''
         // A step that ended without a message cannot own the next one's thoughts.
         this.reasoningPaintedThisStep = false
         return
