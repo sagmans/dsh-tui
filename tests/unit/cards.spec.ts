@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
   cardDetailRows,
-  CARD_DETAIL_LIMIT,
   CARD_DETAIL_MAX,
+  CARD_SHELL_PREVIEW,
   cardOfCall,
   cardOfResult,
   mergeCards,
   renderFileDiff,
   rowText,
+  shellPreviewHint,
   type CardRow,
   type ToolCard,
 } from '@/cards.ts'
@@ -71,28 +72,43 @@ describe('cardOfCall', () => {
 })
 
 describe('cardDetailRows', () => {
-  const card = (rows: number): ToolCard => ({
-    kind: 'generic',
+  const card = (rows: number, kind: ToolCard['kind'] = 'generic'): ToolCard => ({
+    kind,
     title: 'flood',
     detail: Array.from({ length: rows }, (_, index) => row('detail', `line ${index}`)),
     failed: false,
     totalLines: rows,
   })
 
-  it('shows a preview and counts the rest while collapsed', () => {
-    const shown = cardDetailRows(card(25), false)
-    expect(shown.lines).toHaveLength(CARD_DETAIL_LIMIT)
-    expect(shown.hidden).toBe(25 - CARD_DETAIL_LIMIT)
+  it('draws no detail row while a card is folded to its title', () => {
+    const shown = cardDetailRows(card(25), { expanded: false, preview: 'title' })
+    expect(shown.lines).toHaveLength(0)
+    expect(shown.hidden).toBe(25)
+  })
+
+  it('keeps the tail of a folded shell card and counts the rows before it', () => {
+    const shown = cardDetailRows(card(25, 'terminal'), { expanded: false, preview: 'shellTail' })
+    expect(texts(shown.lines).at(0)).toBe(`line ${25 - CARD_SHELL_PREVIEW}`)
+    expect(texts(shown.lines).at(-1)).toBe('line 24')
+    expect(shown.hidden).toBe(25 - CARD_SHELL_PREVIEW)
+    expect(shellPreviewHint(shown.hidden)).toBe('… 5 earlier lines · ctrl+o shows them')
+  })
+
+  it("keeps a shell card's whole output when it fits the preview", () => {
+    const shown = cardDetailRows(card(3, 'terminal'), { expanded: false, preview: 'shellTail' })
+    expect(shown.lines).toHaveLength(3)
+    expect(shown.hidden).toBe(0)
+    expect(shellPreviewHint(shown.hidden)).toBeUndefined()
   })
 
   it('shows every retained row while expanded', () => {
-    const shown = cardDetailRows(card(25), true)
+    const shown = cardDetailRows(card(25), { expanded: true })
     expect(shown.lines).toHaveLength(25)
     expect(shown.hidden).toBe(0)
   })
 
   it('stays bounded for a card that streamed far more than it keeps', () => {
-    const shown = cardDetailRows({ ...card(0), detail: [], totalLines: 5000 }, true)
+    const shown = cardDetailRows({ ...card(0), detail: [], totalLines: 5000 }, { expanded: true })
     expect(shown.lines).toHaveLength(0)
     expect(shown.hidden).toBe(5000)
   })

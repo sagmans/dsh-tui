@@ -74,9 +74,6 @@ export interface ToolCard {
   readonly totalLines: number
 }
 
-/** Detail rows a settled card shows before it is summarized. */
-export const CARD_DETAIL_LIMIT = 10
-
 /**
  * Detail rows retained on a card at all.
  *
@@ -85,6 +82,19 @@ export const CARD_DETAIL_LIMIT = 10
  * memory for a reader who will never scroll that far.
  */
 export const CARD_DETAIL_MAX = 200
+
+/**
+ * Output rows a folded shell card keeps on screen, counted from the end.
+ *
+ * A shell command is the one card whose output is the result the reader asked
+ * for, so folding it to its header would hide the answer. The tail is the part
+ * that carries the outcome of a long run, and the retention cap still bounds
+ * what ctrl+o can reveal.
+ */
+export const CARD_SHELL_PREVIEW = 20
+
+/** The tail of the hint a folded shell card draws when it dropped rows. */
+const CARD_HINT_EARLIER = 'earlier lines · ctrl+o shows them'
 
 /** Character budget for one detail row, so a minified file cannot flood the viewport. */
 export const CARD_LINE_LIMIT = 200
@@ -102,14 +112,34 @@ function bound(rows: readonly CardRow[]): { detail: CardRow[]; totalLines: numbe
 }
 
 /**
+ * How much of a card the reader has asked for.
+ *
+ * The folded state names its own treatment because the two kinds of card are
+ * not equally readable folded: a shell card's output is the answer, while every
+ * other card's rows restate what its title already says.
+ */
+export type CardPreview =
+  | { readonly expanded: true }
+  | { readonly expanded: false; readonly preview: 'title' | 'shellTail' }
+
+/**
  * The rows a card shows right now, and how many the reader is not seeing.
  *
  * Expansion is a view decision rather than a card field so one key press can
  * change every card at once without rebuilding the transcript.
  */
-export function cardDetailRows(card: ToolCard, expanded: boolean): { lines: readonly CardRow[]; hidden: number } {
-  const lines = card.detail.slice(0, expanded ? CARD_DETAIL_MAX : CARD_DETAIL_LIMIT)
+export function cardDetailRows(card: ToolCard, preview: CardPreview): { lines: readonly CardRow[]; hidden: number } {
+  const lines = preview.expanded
+    ? card.detail.slice(0, CARD_DETAIL_MAX)
+    : preview.preview === 'shellTail'
+      ? card.detail.slice(-CARD_SHELL_PREVIEW)
+      : []
   return { lines, hidden: Math.max(0, card.totalLines - lines.length) }
+}
+
+/** The hint row for a folded shell card, or undefined when it dropped nothing. */
+export function shellPreviewHint(hidden: number): string | undefined {
+  return hidden <= 0 ? undefined : `… ${hidden} ${CARD_HINT_EARLIER}`
 }
 
 /**

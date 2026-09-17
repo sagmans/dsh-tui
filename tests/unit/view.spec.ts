@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { cardOfCall, cardOfResult, cardRow, contentLines, CARD_SHELL_PREVIEW, type ToolPresenter } from '@/cards.ts'
 import type { GateCard } from '@/gates.ts'
 import { createTheme, forwardEditorTheme, forwardMarkdownTheme, type TuiTheme } from '@/theme.ts'
 import { DEFAULT_PALETTE } from '@/theme-tokens.ts'
@@ -68,9 +69,14 @@ describe('TranscriptView text', () => {
   })
 
   it('escapes control sequences out of model and tool text', () => {
-    const model = new TranscriptModel()
+    // Any control sequence the presenter hands over has to be neutralized; the
+    // row it lands on can be the header, which is what a folded card shows.
+    const model = new TranscriptModel({
+      call: () => ({ kind: 'generic', title: '\u001b[31mred\u0007', detail: [], failed: false, totalLines: 0 }),
+      result: () => undefined,
+    })
     model.apply(toolCall())
-    model.apply(toolResult('\u001b[31mred\u0007'))
+    model.apply(toolResult('plain'))
     const lines = viewOf(model).render(60)
     const rendered = lines.join('\n')
     expect(rendered).toContain('\\x1B[31mred\\x07')
@@ -122,23 +128,78 @@ describe('TranscriptView markers', () => {
 })
 
 describe('TranscriptView expansion', () => {
-  const withRows = (rows: number): TranscriptModel => {
-    const model = new TranscriptModel()
-    model.apply(toolCall())
-    model.apply(toolResult(Array.from({ length: rows }, (_, index) => `row ${index}`).join('\n')))
+  /** A tool card of `rows` lines, from a tool that presents shell output only when asked. */
+  const withRows = (rows: number, name = 'read'): TranscriptModel => {
+    const lines = Array.from({ length: rows }, (_, index) => `row ${index}`)
+    const presenter: ToolPresenter = {
+      call: (toolName, argumentsJson) => cardOfCall(
+        toolName === 'bash'
+          ? { card: 'terminal', title: 'Run echo rows' }
+          : { card: 'generic', title: `Read ${argumentsJson}` },
+        toolName,
+      ),
+      result: (toolName, input) => cardOfResult(
+        toolName === 'bash'
+          ? { card: 'terminal', title: 'Run echo rows', output: contentLines(input.content).join('\n'), exitCode: 0 }
+          : { card: 'generic', title: `Read ${name}` },
+        { fallbackTitle: toolName, failed: input.isError, contentLines: contentLines(input.content) },
+      ),
+    }
+    const model = new TranscriptModel(presenter)
+    model.apply({ type: 'tool/call', data: { name, arguments: '{"path":"a.ts"}', callId: 'c1' } })
+    model.apply({
+      type: 'tool/result',
+      data: { message: { content: [{ type: 'tool-result', toolCallId: 'c1', text: lines.join('\n') }], isError: false } },
+    })
     return model
   }
 
-  it('previews a long card and says how to open it', () => {
-    const lines = viewOf(withRows(25)).render(60)
-    expect(lines.filter(line => line.startsWith('    row '))).toHaveLength(10)
-    expect(lines.at(-1)).toContain('ctrl+o')
+  it('folds a tool card to its title and says nothing about a body it can still open', () => {
+    // One line, and not even a hint: a card that keeps no row has nothing to
+    // count, so the fold is silent about a body ctrl+o can still open.
+    expect(viewOf(withRows(25)).render(60)).toEqual(['Read {"path":"a.ts"}'])
   })
 
-  it('shows every retained row once cards are expanded', () => {
+  it('shows every row once a folded card is opened with ctrl+o', () => {
     const lines = viewOf(withRows(25), { expandCards: true, expandReasoning: false }).render(60)
     expect(lines.filter(line => line.startsWith('    row '))).toHaveLength(25)
     expect(lines.some(line => line.includes('ctrl+o'))).toBe(false)
+  })
+
+  it("keeps a shell card's output tail and names the rows it dropped", () => {
+    const lines = viewOf(withRows(25, 'bash')).render(60)
+    expect(lines[0]).toBe('Run echo rows')
+    // The window is counted in rows, so the exit status shares it: 19 output
+    // rows plus the pill make the last 20 the card keeps, and the 6 before them
+    // are what the hint names.
+    expect(lines.filter(line => line.startsWith('    row '))).toHaveLength(CARD_SHELL_PREVIEW - 1)
+    expect(lines.some(line => line.startsWith('    row 4'))).toBe(false)
+    expect(lines).toContain('    exit 0')
+    expect(lines.at(-1)).toContain('… 6 earlier lines · ctrl+o')
+  })
+
+  it('shows a shell card whole once it is opened, and a short one without a hint', () => {
+    const opened = viewOf(withRows(25, 'bash'), { expandCards: true, expandReasoning: false }).render(60)
+    expect(opened.filter(line => line.startsWith('    row '))).toHaveLength(25)
+    expect(opened.some(line => line.includes('earlier lines'))).toBe(false)
+    const short = viewOf(withRows(3, 'bash')).render(60)
+    expect(short.filter(line => line.startsWith('    row '))).toHaveLength(3)
+    // The command, three output rows, and the exit status.
+    expect(short).toHaveLength(5)
+    expect(short.at(-1)).toBe('    exit 0')
+  })
+
+  it("keeps a failed shell card's tail and its failed title", () => {
+    const failing: ToolPresenter = {
+      call: () => ({ kind: 'terminal', title: 'Run rm', detail: [], failed: false, totalLines: 0 }),
+      result: () => ({ kind: 'terminal', title: 'Run rm', detail: [cardRow('output', 'boom')], failed: true, totalLines: 1 }),
+    }
+    const model = new TranscriptModel(failing)
+    model.apply({ type: 'tool/call', data: { name: 'bash', arguments: '{}', callId: 'c1' } })
+    model.apply({ type: 'tool/result', data: { message: { content: [{ type: 'tool-result', toolCallId: 'c1', text: 'boom' }], isError: true } } })
+    const lines = viewOf(model).render(60)
+    expect(lines[0]).toBe('Run rm')
+    expect(lines).toContain('    boom')
   })
 
   it('names where the thought is when the row is folded', () => {

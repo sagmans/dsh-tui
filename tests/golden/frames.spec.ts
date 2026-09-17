@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import type { Context } from '@deepseek-ai/cordis'
+import { createToolPresenter } from '@/agent/present.ts'
 import { createTheme } from '@/theme.ts'
 import { TranscriptModel } from '@/transcript.ts'
 import { MarkdownRenderer } from '@/ui/markdown.ts'
@@ -19,8 +21,36 @@ import { WorkFold } from '@/work.ts'
 const WIDTHS = [80, 40]
 const theme = createTheme('none')
 
+/** The rows this frame pins: a shell command whose output is kept, and a file read. */
+const FIXTURE_COMMAND = 'pnpm test'
+const FIXTURE_OUTPUT = 'Tests  154 passed (154)'
+const FIXTURE_FILE = 'src/ui/view.ts'
+const FIXTURE_FILE_LINES = ['const expanded = this.viewState.expandCards', 'const preview = cardDetailRows(card, expanded)', '…']
+
+/**
+ * Each tool's declared render intent, as the real tools declare it.
+ *
+ * A frame built without a presenter would fold a plain generic card and pin a
+ * surface nobody runs: how a card reads is the tool's own declaration.
+ */
+function fixturePresenter(): ReturnType<typeof createToolPresenter> {
+  const tools = {
+    // The real thing: bash declares a terminal card, which is why its output
+    // stays in the frame while every other card folds to its header.
+    bash: {
+      presentCall: (args: { command?: string }) => ({ card: 'terminal', title: `Run ${args.command ?? ''}` }),
+      presentResult: () => ({ card: 'terminal', title: `Run ${FIXTURE_COMMAND}`, output: FIXTURE_OUTPUT, exitCode: 0 }),
+    },
+    read: {
+      presentCall: () => ({ card: 'generic', title: `Read ${FIXTURE_FILE}`, content: [{ type: 'text', text: FIXTURE_FILE_LINES.join('\n') }] }),
+      presentResult: () => ({ card: 'generic', title: `Read ${FIXTURE_FILE}`, content: [{ type: 'text', text: FIXTURE_FILE_LINES.join('\n') }] }),
+    },
+  } as Record<string, unknown>
+  return createToolPresenter({ tools: { get: (name: string) => tools[name] } } as unknown as Context)
+}
+
 function fixture(frameTheme = theme): { view: TranscriptView; dock: WorkDock; status: StatusBar } {
-  const model = new TranscriptModel()
+  const model = new TranscriptModel(fixturePresenter())
   const work = new WorkFold()
   const feed = (event: { type: string; data?: unknown }): void => {
     model.apply(event)
@@ -41,10 +71,17 @@ function fixture(frameTheme = theme): { view: TranscriptView; dock: WorkDock; st
       },
     },
   })
-  model.apply({ type: 'tool/call', data: { name: 'bash', arguments: '{"command":"pnpm test"}', callId: 'c1' } })
+  model.apply({ type: 'tool/call', data: { name: 'bash', arguments: `{"command":"${FIXTURE_COMMAND}"}`, callId: 'c1' } })
   model.apply({
     type: 'tool/result',
-    data: { message: { content: [{ type: 'tool-result', toolCallId: 'c1', text: 'Tests  154 passed (154)' }], isError: false } },
+    data: { message: { content: [{ type: 'tool-result', toolCallId: 'c1', text: FIXTURE_OUTPUT }], isError: false } },
+  })
+  // A card whose rows the reader has not asked for: folded, only its header
+  // survives, which is what keeps a long file out of the conversation.
+  model.apply({ type: 'tool/call', data: { name: 'read', arguments: `{"path":"${FIXTURE_FILE}"}`, callId: 'c2' } })
+  model.apply({
+    type: 'tool/result',
+    data: { message: { content: [{ type: 'tool-result', toolCallId: 'c2', text: FIXTURE_FILE_LINES.join('\n') }], isError: false } },
   })
   model.apply({ type: 'compaction/summary', data: { shadowedSeqs: [1, 2, 3], shadowedTokenCount: 4200 } })
   feed({ type: 'plan/mode', data: { active: true } })

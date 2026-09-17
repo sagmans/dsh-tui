@@ -1,5 +1,5 @@
 import { type Component, visibleWidth, wrapTextWithAnsi } from '@earendil-works/pi-tui'
-import { cardDetailRows, type ToolCard } from '../cards.ts'
+import { cardDetailRows, shellPreviewHint, type CardPreview, type ToolCard } from '../cards.ts'
 import type { GateCard } from '../gates.ts'
 import { displayText } from '../text.ts'
 import type { TranscriptEntry, TranscriptModel } from '../transcript.ts'
@@ -128,7 +128,13 @@ export class TranscriptView implements Component {
 
   private pushCard(lines: string[], card: ToolCard, width: number): void {
     const expanded = this.viewState.expandCards
-    const { lines: detail, hidden } = cardDetailRows(card, expanded)
+    // A card whose kind declares its call IS a command keeps its output tail
+    // while folded: that output is the answer the reader asked for, so it
+    // outranks the one-line rule every other card follows.
+    const preview: CardPreview = expanded
+      ? { expanded: true }
+      : { expanded: false, preview: card.kind === 'terminal' ? 'shellTail' : 'title' }
+    const { lines: detail, hidden } = cardDetailRows(card, preview)
     const titleToken = card.failed ? 'tool.failed.title' : 'tool.title'
     const glyphToken = card.failed ? 'tool.failed.glyph' : 'tool.glyph'
     if (this.theme.visible(titleToken)) {
@@ -151,10 +157,15 @@ export class TranscriptView implements Component {
       if (drawn === '') continue
       lines.push(this.theme.cut(`${DETAIL_INDENT}${drawn}`, width, ''))
     }
-    if (hidden > 0 && this.theme.visible('tool.hint')) {
-      const hint = expanded ? `${hidden} more lines not shown` : `… ${hidden} more lines · ctrl+o shows them`
-      lines.push(this.theme.style('tool.hint', this.theme.cut(`${DETAIL_INDENT}${hint}`, width, '')))
-    }
+    if (hidden <= 0 || !this.theme.visible('tool.hint')) return
+    // An opened card is bounded by what was retained; a folded shell card is
+    // bounded by its preview window, and there the hint has to name the rows it
+    // dropped rather than the ones memory refused to keep.
+    const hint = !preview.expanded
+      ? preview.preview === 'shellTail' ? shellPreviewHint(hidden) : undefined
+      : `${hidden} more lines not shown`
+    if (hint === undefined) return
+    lines.push(this.theme.style('tool.hint', this.theme.cut(`${DETAIL_INDENT}${hint}`, width, '')))
   }
 
   private pushPicker(lines: string[], picker: PickerCard, width: number): void {
