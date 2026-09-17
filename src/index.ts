@@ -57,8 +57,14 @@ import { TranscriptView } from './ui/view.ts'
 
 export const name = 'tui'
 
-/** `agents` is the only service the surface cannot run without. */
-export const inject = ['agents']
+/**
+ * Services the surface cannot run without.
+ *
+ * `tools` is what lets a card read its tool's own render intent; a context that
+ * has not injected it throws on the property read, which silently degraded
+ * every card to a bare generic row.
+ */
+export const inject = ['agents', 'tools']
 
 /** Keys the surface answers itself, listed wherever the reader asks for help. */
 const LOCAL_KEYS = 'ctrl+o tool detail · ctrl+t reasoning · ctrl+b back to this session · ctrl+c interrupt or exit'
@@ -177,7 +183,16 @@ export function apply(ctx: Context, config: unknown): void {
     readSection = () => readScope(scope, message => { pendingSettingsProblem = message })
     applyTheme()
   })
-  const model = new TranscriptModel(createToolPresenter(ctx))
+  /**
+   * The agent scope the tool presenter resolves against.
+   *
+   * Tools are registered in the scoped world the session's preset mounts, so a
+   * card can only read its tool's own render intent while this names that
+   * agent. It follows whatever session the transcript is folding, because a
+   * child on screen reads through the child's scope, not the parent's.
+   */
+  let presentScope: Agent | undefined
+  const model = new TranscriptModel(createToolPresenter(ctx, () => presentScope))
   const work = new WorkFold()
   const modelSwitch = new ModelSwitch()
   const agentPresets = createPresetRoster(ctx)
@@ -238,6 +253,11 @@ export function apply(ctx: Context, config: unknown): void {
   })
   const editor = new Editor(tui, theme.editor)
   const disposers: Array<() => void> = []
+  // The presenter closure outlives the composition's own teardown, so it must
+  // not keep an agent alive after its world unwinds.
+  disposers.push(() => {
+    presentScope = undefined
+  })
   let agent: TuiAgent | undefined
   let turnOpen = false
   let turnStartedAt: number | undefined
@@ -556,6 +576,9 @@ export function apply(ctx: Context, config: unknown): void {
     (ctx.get('sessions') as { get?: (id: SessionId) => { snapshotEvents?: () => readonly ForkEvent[] } | undefined } | undefined)?.get?.(id)
 
   const foldHistory = async (id: SessionId): Promise<number> => {
+    // Resolved before the fold so every card reads its tool through the scope
+    // that actually registered it; a stored session nobody runs has none.
+    presentScope = ctx.agents?.get(id)
     const inMemory = liveSession(id)?.snapshotEvents?.()
     if (inMemory !== undefined) {
       for (const event of inMemory) applyEvent(event)
@@ -666,7 +689,6 @@ export function apply(ctx: Context, config: unknown): void {
     // Settled before the transcript is touched, so a refusal leaves neither a
     // half-replayed session nor a half-composed agent behind.
     const preset = await presetFor(id, resume, fork)
-    if (resume) await replayHistory(id)
     const handle = await startAgent(ctx, {
       sessionId: id,
       resume,
@@ -684,6 +706,13 @@ export function apply(ctx: Context, config: unknown): void {
     activeSession = id
     viewedSession = id
     agent = handle
+    // A session with no history to fold still has to present its first live
+    // card through the right scope, so the scope is set before any event can.
+    presentScope = handle.agent
+    // Replayed only once the agent exists, because the fold reads every card
+    // through the scope the preset mounted; a fold before that scope existed
+    // degraded each replayed card to a bare generic row.
+    if (resume) await replayHistory(id)
     // A branch inherits the conversation the reader was already reading, so it
     // opens on that history rather than on an empty screen.
     if (fork !== undefined) await foldHistory(id)
@@ -699,6 +728,9 @@ export function apply(ctx: Context, config: unknown): void {
   const switchSession = async (id: SessionId): Promise<void> => {
     const previous = agent
     agent = undefined
+    // Drop the outgoing scope before its agent is disposed, so no card folded
+    // during the transition can read a torn-down world.
+    presentScope = undefined
     turnOpen = false
     model.reset()
     work.reset()
@@ -1185,6 +1217,7 @@ export function apply(ctx: Context, config: unknown): void {
       }
     }
     if (session.id !== viewedSession) return
+    presentScope = ctx.agents?.get(session.id)
     applyEvent(event)
     tui.requestRender()
   }))
