@@ -79,6 +79,11 @@ describe('cardOfCall', () => {
   it('falls back to the tool name when a view declares no title', () => {
     expect(cardOfCall({ card: 'generic', title: '  ' }, 'grep').title).toBe('grep')
   })
+
+  it('drops a presenter verb that only restates the call', () => {
+    const card = cardOfCall({ card: 'generic', title: 'Load skill project-skill', kind: 'read', rawInput: 'project-skill' }, 'skill')
+    expect(card.title).toBe('skill project-skill')
+  })
 })
 
 describe('cardDetailRows', () => {

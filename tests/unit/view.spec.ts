@@ -468,6 +468,14 @@ describe('TranscriptView tool args and stats', () => {
     expect(flat).toContain('1tok')
   })
 
+  it('shows a skill card without the presenter verb in front of it', () => {
+    const presenter: ToolPresenter = {
+      call: name => cardOfCall({ card: 'generic', title: 'Load skill project-skill', kind: 'read', rawInput: 'project-skill' }, name),
+      result: () => undefined,
+    }
+    expect(folded('skill', presenter)).toEqual(['skill project-skill'])
+  })
+
   it('measures a wrapped command by its visible width, not its escape bytes', () => {
     // A styled argument carries escapes through the wrap; if those count as
     // columns the card overflows the terminal it was cut for.

@@ -353,9 +353,20 @@ export function renderFileDiff(diff: FileDiff): CardRow[] {
   return rows
 }
 
+/**
+ * Verbs a presenter may open its title with that only restate the call.
+ *
+ * The subject a reader scans for is what follows the verb, so the surface draws
+ * the card from there: "skill project-skill" rather than "Load skill
+ * project-skill".
+ */
+const REDUNDANT_TITLE_LEADS = ['Load '] as const
+
 function title(view: { title?: string }, fallback: string): string {
   const declared = view.title?.trim() ?? ''
-  return declared === '' ? fallback : declared
+  const lead = REDUNDANT_TITLE_LEADS.find(prefix => declared.startsWith(prefix))
+  const shown = lead === undefined ? declared : declared.slice(lead.length).trim()
+  return shown === '' ? fallback : shown
 }
 
 /** A read line keeps its number apart from its text, because they read differently. */
