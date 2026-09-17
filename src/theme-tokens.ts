@@ -3,6 +3,17 @@ import { type ColourMode, sgrPrefix } from './theme-capability.ts'
 const RESET = '\u001B[0m'
 
 /**
+ * The reset sequence, for the code that has to recognise one.
+ *
+ * pi-tui closes a truncated row with a reset whether or not it opened a style,
+ * so a renderer that turns styling off still has to remove the ones it did not
+ * ask for.
+ */
+export function resetSequence(): string {
+  return RESET
+}
+
+/**
  * The muted shade every receding element shares.
  *
  * An explicit grey rather than a palette slot: slot 8 is whatever the reader's

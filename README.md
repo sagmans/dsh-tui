@@ -192,6 +192,13 @@ outrank everything in this section. A token name the surface does not have is
 refused with the offending name, so a typo fails at load instead of silently
 painting nothing.
 
+One residual escapes that promise, and it is not the surface's to close. After a
+component returns its rows, the framework appends a reset to each row and closes
+the hyperlink it wraps them in, so a session can still receive a bare `ESC[0m`
+with colour off. It paints nothing. It is recorded here because "no escapes at
+all" is otherwise the claim, and because the surface cannot make good on it
+alone.
+
 ## Modes
 
 A mode is an **agent preset**: the plugin composition an agent's own scope joins. It decides that agent's tools, prompt sections, skills, and planning rows, which is why a mode is fixed once a session has produced a turn — it is what composed the agent that answered.

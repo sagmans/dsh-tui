@@ -17,6 +17,28 @@ describe('createTheme', () => {
     expect(theme.color).toBe(false)
   })
 
+  /**
+   * The width helper closes a cut with a reset whether or not it opened a style,
+   * so a row would carry escapes with colour off and break the one promise the
+   * mode makes. Guarding here keeps it a property of the theme rather than
+   * something each renderer has to remember.
+   */
+  it('cuts a row without leaving an escape behind when colour is off', () => {
+    const theme = createTheme('none')
+    const cut = theme.cut('a row far too long for the width it was given', 10, '…')
+    expect(cut).not.toContain('\u001B')
+    expect(cut).toContain('…')
+  })
+
+  it('still closes a cut when colour is on, so no style outlives its row', () => {
+    const theme = createTheme('truecolor')
+    const cut = theme.cut(theme.style('transcript.user', 'a row far too long for its width'), 10, '…')
+    // A cut lands inside an open style, so the row has to end closed or the
+    // colour would bleed into whatever the surface draws after it.
+    expect(cut.endsWith('\u001B[0m')).toBe(true)
+    expect(cut).toContain('…')
+  })
+
   it('paints muted elements an explicit grey, not a palette slot', () => {
     const theme = createTheme('truecolor')
     expect(theme.style('transcript.reasoning.body', 'x')).toBe('\u001B[38;2;138;138;138mx\u001B[0m')

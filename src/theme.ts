@@ -1,6 +1,6 @@
-import type { EditorTheme, MarkdownTheme, SelectListTheme } from '@earendil-works/pi-tui'
+import { truncateToWidth, type EditorTheme, type MarkdownTheme, type SelectListTheme } from '@earendil-works/pi-tui'
 import { detectColourMode, type ColourMode } from './theme-capability.ts'
-import { DEFAULT_PALETTE, DEFAULT_TOKENS, resolveToken, type ResolvedStyle, type TuiToken } from './theme-tokens.ts'
+import { DEFAULT_PALETTE, DEFAULT_TOKENS, resetSequence, resolveToken, type ResolvedStyle, type TuiToken } from './theme-tokens.ts'
 import type { ThemeOverrides } from './theme-settings.ts'
 
 /** What a caller gets when it has written no settings at all. */
@@ -16,6 +16,8 @@ export interface TuiTheme {
   readonly color: boolean
   /** Draw one named element. */
   style(token: TuiToken, text: string): string
+  /** Cut a row to a width, so no renderer has to reach for the raw helper. */
+  cut(text: string, width: number, ellipsis?: string): string
   /** The mark that introduces an element, empty unless the reader set one. */
   glyph(token: TuiToken): string
   /** Whether an element is drawn at all. */
@@ -79,9 +81,22 @@ export function createTheme(mode: ColourMode = detectColourMode(process.env), ov
     const { prefix, suffix } = resolve(token)
     return prefix === '' ? text : `${prefix}${text}${suffix}`
   }
+  /**
+   * Truncate to a width, honouring the promise that `none` emits nothing.
+   *
+   * pi-tui closes a cut by writing a reset unconditionally, whether or not the
+   * text carried any styling, so a truncated row leaks escapes even when
+   * colour is off. Those resets close styles this surface never opened, so
+   * dropping them restores the contract without changing what is drawn.
+   */
+  const cut = (text: string, width: number, ellipsis = ''): string => {
+    const truncated = truncateToWidth(text, width, ellipsis)
+    return mode === 'none' ? truncated.replaceAll(resetSequence(), '') : truncated
+  }
   return {
     color: mode !== 'none',
     style,
+    cut,
     glyph: token => resolve(token).glyph,
     visible: token => !resolve(token).hidden,
     editor: editorTheme(style),

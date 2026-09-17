@@ -152,6 +152,7 @@ export function apply(ctx: Context, config: unknown): void {
   const theme: TuiTheme = {
     get color() { return current.color },
     style: (token, text) => current.style(token, text),
+    cut: (text, width, ellipsis) => current.cut(text, width, ellipsis),
     glyph: token => current.glyph(token),
     visible: token => current.visible(token),
     get editor() { return current.editor },

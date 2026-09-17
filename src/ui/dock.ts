@@ -1,4 +1,4 @@
-import { type Component, truncateToWidth } from '@earendil-works/pi-tui'
+import { type Component } from '@earendil-works/pi-tui'
 import { DOCK_JOB_LIMIT, describeJob, isLive, type JobSummary } from '../jobs.ts'
 import { DOCK_SUBAGENT_LIMIT, describeSubagent, type SubagentRun } from '../subagents.ts'
 import { displayText } from '../text.ts'
@@ -52,44 +52,44 @@ export class WorkDock implements Component {
 
   private pushTodos(lines: string[], todos: readonly TodoEntry[], width: number): void {
     const done = todos.filter(todo => todo.status === 'completed').length
-    lines.push(this.theme.style('dock.todos.heading', truncateToWidth(`☰ todos ${done}/${todos.length} done`, width, '…')))
+    lines.push(this.theme.style('dock.todos.heading', this.theme.cut(`☰ todos ${done}/${todos.length} done`, width, '…')))
     const ordered = orderTodos(todos)
     for (const todo of ordered.slice(0, DOCK_TODO_LIMIT)) {
       const token = TODO_TOKENS[todo.status]
       const glyph = TODO_GLYPHS[todo.status]
-      lines.push(this.theme.style(token, truncateToWidth(`  ${glyph} ${displayText(todo.content)}`, width, '…')))
+      lines.push(this.theme.style(token, this.theme.cut(`  ${glyph} ${displayText(todo.content)}`, width, '…')))
     }
     if (ordered.length > DOCK_TODO_LIMIT) {
-      lines.push(this.theme.style('dock.todos.overflow', truncateToWidth(`  … ${ordered.length - DOCK_TODO_LIMIT} more`, width, '…')))
+      lines.push(this.theme.style('dock.todos.overflow', this.theme.cut(`  … ${ordered.length - DOCK_TODO_LIMIT} more`, width, '…')))
     }
   }
 
   private pushSubagents(lines: string[], runs: readonly SubagentRun[], width: number): void {
     const running = runs.filter(run => run.status === 'running').length
-    lines.push(this.theme.style('dock.subagents.heading', truncateToWidth(`⚇ subagents · ${running} running, ${runs.length - running} done`, width, '…')))
+    lines.push(this.theme.style('dock.subagents.heading', this.theme.cut(`⚇ subagents · ${running} running, ${runs.length - running} done`, width, '…')))
     const now = this.now()
     for (const run of runs.slice(0, DOCK_SUBAGENT_LIMIT)) {
       const glyph = run.status === 'running' ? '▸' : run.status === 'completed' ? '✓' : '✗'
-      lines.push(this.theme.style('dock.subagents.running', truncateToWidth(`  ${glyph} ${displayText(describeSubagent(run, now))}`, width, '…')))
+      lines.push(this.theme.style('dock.subagents.running', this.theme.cut(`  ${glyph} ${displayText(describeSubagent(run, now))}`, width, '…')))
     }
     if (runs.length > DOCK_SUBAGENT_LIMIT) {
-      lines.push(this.theme.style('dock.subagents.overflow', truncateToWidth(`  … ${runs.length - DOCK_SUBAGENT_LIMIT} more`, width, '…')))
+      lines.push(this.theme.style('dock.subagents.overflow', this.theme.cut(`  … ${runs.length - DOCK_SUBAGENT_LIMIT} more`, width, '…')))
     }
   }
 
   private pushJobs(lines: string[], jobs: readonly JobSummary[], width: number): void {
     const live = jobs.filter(job => isLive(job.status)).length
-    lines.push(this.theme.style('dock.jobs.heading', truncateToWidth(`⛭ jobs · ${live} running, ${jobs.length - live} done`, width, '…')))
+    lines.push(this.theme.style('dock.jobs.heading', this.theme.cut(`⛭ jobs · ${live} running, ${jobs.length - live} done`, width, '…')))
     // Work still holding resources first, then the most recent.
     const ordered = [...jobs].sort((left, right) =>
       Number(isLive(right.status)) - Number(isLive(left.status)) || right.startedAt - left.startedAt)
     const now = this.now()
     for (const job of ordered.slice(0, DOCK_JOB_LIMIT)) {
       const glyph = isLive(job.status) ? '▸' : job.status === 'completed' ? '✓' : '✗'
-      lines.push(this.theme.style('dock.jobs.running', truncateToWidth(`  ${glyph} ${displayText(describeJob(job, now))}`, width, '…')))
+      lines.push(this.theme.style('dock.jobs.running', this.theme.cut(`  ${glyph} ${displayText(describeJob(job, now))}`, width, '…')))
     }
     if (ordered.length > DOCK_JOB_LIMIT) {
-      lines.push(this.theme.style('dock.jobs.overflow', truncateToWidth(`  … ${ordered.length - DOCK_JOB_LIMIT} more`, width, '…')))
+      lines.push(this.theme.style('dock.jobs.overflow', this.theme.cut(`  … ${ordered.length - DOCK_JOB_LIMIT} more`, width, '…')))
     }
   }
 
@@ -104,10 +104,10 @@ export class WorkDock implements Component {
       // The row itself decides where a long objective ends, so the reader
       // always sees that something was left out.
       const objective = state.goal.objective.replace(/\s+/gu, ' ')
-      lines.push(this.theme.style('dock.goal', truncateToWidth(`◎ goal ${rounds} · ${displayText(objective)}`, width, '…')))
+      lines.push(this.theme.style('dock.goal', this.theme.cut(`◎ goal ${rounds} · ${displayText(objective)}`, width, '…')))
     }
     if (state.planMode) {
-      lines.push(this.theme.style('dock.planMode', truncateToWidth('⏸ plan mode · answer the plan before edits happen', width, '…')))
+      lines.push(this.theme.style('dock.planMode', this.theme.cut('⏸ plan mode · answer the plan before edits happen', width, '…')))
     }
     const subagents = this.subagents()
     if (subagents.length > 0) this.pushSubagents(lines, subagents, width)

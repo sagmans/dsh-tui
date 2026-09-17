@@ -2,13 +2,13 @@
 
 exports[`golden frames > renders a busy dock at 40 columns 1`] = `
 [
-  "◎ goal round 6/256 · complete the plan [0m…[0m",
-  "⏸ plan mode · answer the plan before ed[0m…[0m",
+  "◎ goal round 6/256 · complete the plan …",
+  "⏸ plan mode · answer the plan before ed…",
   "⚇ subagents · 1 running, 1 done",
   "  ▸ c000cfa3 · spawn · running 4s",
   "  ✓ f05abce2 · fork · completed 2s",
   "⛭ jobs · 1 running, 0 done",
-  "  ▸ bash-1 · running 12s — sleep 45 && [0m…[0m",
+  "  ▸ bash-1 · running 12s — sleep 45 && …",
   "☰ todos 1/2 done",
   "  ▸ verify the dock",
   "  ☑ write the dock",
@@ -32,7 +32,7 @@ exports[`golden frames > renders a busy dock at 80 columns 1`] = `
 
 exports[`golden frames > renders the dock at 40 columns 1`] = `
 [
-  "⏸ plan mode · answer the plan before ed[0m…[0m",
+  "⏸ plan mode · answer the plan before ed…",
   "☰ todos 1/3 done",
   "  ▸ verify the dock",
   "  ☐ document the dock",
@@ -98,13 +98,13 @@ exports[`golden frames > renders the session picker at 80 columns 1`] = `
 
 exports[`golden frames > renders the status row at 40 columns 1`] = `
 [
-  "● ready · standard · zai-coding-cn/glm-[0m…[0m",
+  "● ready · standard · zai-coding-cn/glm-…",
 ]
 `;
 
 exports[`golden frames > renders the status row at 80 columns 1`] = `
 [
-  "● ready · standard · zai-coding-cn/glm-5.3 (max) · workspace-write · ctx 17.5k/[0m…[0m",
+  "● ready · standard · zai-coding-cn/glm-5.3 (max) · workspace-write · ctx 17.5k/…",
 ]
 `;
 
