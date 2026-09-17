@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { detectColourMode, parseColour, sgrPrefix } from '@/theme-capability.ts'
+import { detectColourMode, parseColour, sgrBackgroundPrefix, sgrPrefix } from '@/theme-capability.ts'
 
 describe('detectColourMode', () => {
   it('prefers truecolor when COLORTERM says so', () => {
@@ -53,5 +53,37 @@ describe('sgrPrefix', () => {
   it('emits nothing when colour is off', () => {
     expect(sgrPrefix('#808080', 'none')).toBe('')
     expect(sgrPrefix(8, 'none')).toBe('')
+  })
+})
+
+describe('sgrBackgroundPrefix', () => {
+  it('addresses the background layer on every budget', () => {
+    expect(sgrBackgroundPrefix('#808080', 'truecolor')).toBe('\u001B[48;2;128;128;128m')
+    expect(sgrBackgroundPrefix(8, '256')).toBe('\u001B[48;5;8m')
+    expect(sgrBackgroundPrefix(8, '16')).toBe('\u001B[100m')
+    expect(sgrBackgroundPrefix('#808080', 'none')).toBe('')
+  })
+})
+
+describe('degrading a colour to 16 slots', () => {
+  it('addresses a 256 index instead of emitting an invalid SGR code', () => {
+    // Index 200 used to fall through to ansi16 and emit ESC[282m, which no
+    // terminal understands.
+    expect(sgrPrefix(200, 'truecolor')).toBe('\u001B[38;5;200m')
+    expect(sgrPrefix(200, '256')).toBe('\u001B[38;5;200m')
+    const code = Number(sgrPrefix(200, '16').slice(2, -1))
+    expect(code).toBeGreaterThanOrEqual(30)
+    expect(code).toBeLessThanOrEqual(97)
+  })
+
+  it('keeps a colour in its hue family instead of collapsing it to black', () => {
+    // The muted addition green used to average under the threshold and become
+    // slot 0 — black on a dark terminal.
+    expect(sgrPrefix('#5faf5f', '16')).toBe('\u001B[32m')
+    expect(sgrPrefix('#d75f5f', '16')).toBe('\u001B[91m')
+  })
+
+  it('keeps a receding grey apart from ordinary text', () => {
+    expect(sgrPrefix('#8a8a8a', '16')).not.toBe(sgrPrefix('#d0d0d0', '16'))
   })
 })
