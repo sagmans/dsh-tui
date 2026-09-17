@@ -30,7 +30,7 @@ describe('WorkDock', () => {
     expect(dockOf({ ...EMPTY, planMode: true }).render(80)).toEqual(['⏸ plan mode · answer the plan before edits happen'])
   })
 
-  it('orders the todos by what needs attention and counts the done ones', () => {
+  it('shows only the todos still to do, most urgent first', () => {
     const todos = [
       { content: 'done thing', status: 'completed' as const },
       { content: 'next thing', status: 'pending' as const },
@@ -38,11 +38,15 @@ describe('WorkDock', () => {
     ]
     const lines = dockOf({ ...EMPTY, todos }).render(80)
     expect(lines).toEqual([
-      '☰ todos 1/3 done',
+      '☰ todos · 2 left',
       '  ▸ now thing',
       '  ☐ next thing',
-      '  ☑ done thing',
     ])
+  })
+
+  it('drops the todo list once every item is done', () => {
+    const todos = [{ content: 'done thing', status: 'completed' as const }]
+    expect(dockOf({ ...EMPTY, todos }).render(80)).toEqual([])
   })
 
   it('bounds a long list and counts what it left out', () => {
@@ -52,15 +56,23 @@ describe('WorkDock', () => {
     expect(lines.at(-1)).toBe('  … 3 more')
   })
 
-  it('shows live jobs first and counts them', () => {
+  it('shows only the jobs still running', () => {
     const jobs = [
       { id: 'bash-1', kind: 'bash', label: 'build', status: 'completed' as const, startedAt: 1_000, finishedAt: 2_000 },
       { id: 'bash-2', kind: 'bash', label: 'test', status: 'running' as const, startedAt: Date.now(), finishedAt: undefined },
     ]
     const lines = new WorkDock(() => EMPTY, theme, () => jobs).render(80)
-    expect(lines[0]).toBe('⛭ jobs · 1 running, 1 done')
+    expect(lines).toHaveLength(2)
+    expect(lines[0]).toBe('⛭ jobs · 1 running')
     expect(lines[1]).toContain('▸ bash-2 · running')
-    expect(lines[2]).toContain('✓ bash-1 · completed')
+  })
+
+  it('drops the job board once every job has settled', () => {
+    const jobs = [
+      { id: 'bash-1', kind: 'bash', label: 'build', status: 'completed' as const, startedAt: 1_000, finishedAt: 2_000 },
+      { id: 'bash-3', kind: 'bash', label: 'deploy', status: 'failed' as const, startedAt: 1_000, finishedAt: 2_000 },
+    ]
+    expect(new WorkDock(() => EMPTY, theme, () => jobs).render(80)).toEqual([])
   })
 
   it('lists delegations with their provider and age', () => {
@@ -97,9 +109,10 @@ describe('WorkDock theming', () => {
     expect(lines.some(line => line.includes('jobs ·'))).toBe(false)
   })
 
-  it('styles a finished job with its own element', () => {
+  it('keeps a settled job off screen however its element is styled', () => {
+    // The row is gone once the job settles, so no styling of its element can
+    // bring it back.
     const finished = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['dock.jobs.completed', { fg: '#ff0000' }]]) })
-    const lines = new WorkDock(() => EMPTY, finished, () => job('completed')).render(80)
-    expect(lines.find(line => line.includes('bash-1'))).toContain('38;2;255;0;0')
+    expect(new WorkDock(() => EMPTY, finished, () => job('completed')).render(80)).toEqual([])
   })
 })

@@ -1,5 +1,5 @@
 import { type Component } from '@earendil-works/pi-tui'
-import { DOCK_JOB_LIMIT, describeJob, isLive, type JobStatus, type JobSummary } from '../jobs.ts'
+import { DOCK_JOB_LIMIT, describeJob, isLive, type JobSummary } from '../jobs.ts'
 import { DOCK_SUBAGENT_LIMIT, describeSubagent, type SubagentRun } from '../subagents.ts'
 import { displayText } from '../text.ts'
 import type { TuiToken } from '../theme-tokens.ts'
@@ -42,17 +42,6 @@ const SUBAGENT_TOKENS: Readonly<Record<SubagentRun['status'], TuiToken>> = {
   failed: 'dock.subagents.failed',
 }
 
-/** A job is only ever live, finished, or stopped, and the last two read the same to a reader. */
-function jobOutcome(status: JobStatus): 'running' | 'completed' | 'failed' {
-  if (isLive(status)) return 'running'
-  return status === 'completed' ? 'completed' : 'failed'
-}
-const JOB_TOKENS: Readonly<Record<'running' | 'completed' | 'failed', TuiToken>> = {
-  running: 'dock.jobs.running',
-  completed: 'dock.jobs.completed',
-  failed: 'dock.jobs.failed',
-}
-
 /** What the reader most needs to see first: work in flight, then work left. */
 function orderTodos(todos: readonly TodoEntry[]): readonly TodoEntry[] {
   const rank: Record<TodoEntry['status'], number> = { in_progress: 0, pending: 1, completed: 2 }
@@ -82,11 +71,15 @@ export class WorkDock implements Component {
   }
 
   private pushTodos(lines: string[], todos: readonly TodoEntry[], width: number): void {
-    const done = todos.filter(todo => todo.status === 'completed').length
+    // Settled items leave the dock: it reports what is still to do, and a row
+    // that stayed after its item finished would only grow the list as the turn
+    // went on.
+    const open = todos.filter(todo => todo.status !== 'completed')
+    if (open.length === 0) return
     if (this.theme.visible('dock.todos.heading')) {
-      lines.push(this.theme.style('dock.todos.heading', this.theme.cut(`${TODOS_MARK} todos ${done}/${todos.length} done`, width, '…')))
+      lines.push(this.theme.style('dock.todos.heading', this.theme.cut(`${TODOS_MARK} todos · ${open.length} left`, width, '…')))
     }
-    const ordered = orderTodos(todos)
+    const ordered = orderTodos(open)
     for (const todo of ordered.slice(0, DOCK_TODO_LIMIT)) {
       const token = TODO_TOKENS[todo.status]
       if (!this.theme.visible(token)) continue
@@ -114,19 +107,19 @@ export class WorkDock implements Component {
   }
 
   private pushJobs(lines: string[], jobs: readonly JobSummary[], width: number): void {
-    const live = jobs.filter(job => isLive(job.status)).length
+    // Only work still holding resources earns a row: a settled job is a fact the
+    // reader no longer has to watch, and its row would otherwise linger after
+    // the outcome it reported had been read.
+    const live = jobs.filter(job => isLive(job.status))
+    if (live.length === 0) return
     if (this.theme.visible('dock.jobs.heading')) {
-      lines.push(this.theme.style('dock.jobs.heading', this.theme.cut(`${JOBS_MARK} jobs · ${live} running, ${jobs.length - live} done`, width, '…')))
+      lines.push(this.theme.style('dock.jobs.heading', this.theme.cut(`${JOBS_MARK} jobs · ${live.length} running`, width, '…')))
     }
-    // Work still holding resources first, then the most recent.
-    const ordered = [...jobs].sort((left, right) =>
-      Number(isLive(right.status)) - Number(isLive(left.status)) || right.startedAt - left.startedAt)
+    const ordered = [...live].sort((left, right) => right.startedAt - left.startedAt)
     const now = this.now()
     for (const job of ordered.slice(0, DOCK_JOB_LIMIT)) {
-      const outcome = jobOutcome(job.status)
-      const token = JOB_TOKENS[outcome]
-      if (!this.theme.visible(token)) continue
-      lines.push(this.theme.style(token, this.theme.cut(`  ${RUN_GLYPHS[outcome]} ${displayText(describeJob(job, now))}`, width, '…')))
+      if (!this.theme.visible('dock.jobs.running')) continue
+      lines.push(this.theme.style('dock.jobs.running', this.theme.cut(`  ${RUN_GLYPHS.running} ${displayText(describeJob(job, now))}`, width, '…')))
     }
     if (ordered.length > DOCK_JOB_LIMIT && this.theme.visible('dock.jobs.overflow')) {
       lines.push(this.theme.style('dock.jobs.overflow', this.theme.cut(`  … ${ordered.length - DOCK_JOB_LIMIT} more`, width, '…')))
