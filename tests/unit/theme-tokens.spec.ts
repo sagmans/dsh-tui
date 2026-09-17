@@ -92,6 +92,29 @@ describe('resolveToken', () => {
     expect(style.prefix).toContain('1')
   })
 
+  it('takes the inherited fields instead of the token default', () => {
+    // tool.title's own default is warn; the inherited token is the muted grey,
+    // and inheriting means that field wins over the token's default.
+    const style = resolveToken(
+      'tool.title',
+      overrides({ 'tool.title': { inherit: 'transcript.marker', bold: true } }),
+      DEFAULT_PALETTE,
+      'truecolor',
+    )
+    expect(style.prefix).toBe('\u001B[1;38;2;138;138;138m')
+  })
+
+  it('emits a background colour beside the foreground', () => {
+    const style = resolveToken(
+      'transcript.user',
+      overrides({ 'transcript.user': { fg: '#00ff00', bg: '#ff0000' } }),
+      DEFAULT_PALETTE,
+      'truecolor',
+    )
+    expect(style.prefix).toContain('38;2;0;255;0')
+    expect(style.prefix).toContain('48;2;255;0;0')
+  })
+
   it('stops on an inherit cycle instead of hanging', () => {
     const cyclic = overrides({
       'tool.title': { inherit: 'tool.detail' },

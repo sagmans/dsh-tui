@@ -1,30 +1,37 @@
 import type { ThemeOverrides } from './theme-settings.ts'
-import { DEFAULT_PALETTE, DEFAULT_TOKENS, TUI_TOKENS, type TuiToken } from './theme-tokens.ts'
+import { mergeTokenSpec, PALETTE_NAMES, TUI_TOKENS, type ColourSpec, type PaletteName, type TuiToken } from './theme-tokens.ts'
 
 /** Where a token's value came from, which is what a reader debugging it needs. */
 type Source = 'override' | 'palette' | 'default'
+
+/** A colour as the reader would see it applied, with a palette name resolved. */
+function showColour(spec: ColourSpec, palette: Readonly<Record<PaletteName, string>>): string {
+  if (typeof spec === 'string' && (PALETTE_NAMES as readonly string[]).includes(spec)) {
+    return palette[spec as PaletteName]
+  }
+  return String(spec)
+}
 
 /**
  * Describe one token's effective value and its origin.
  *
  * A settings file that does nothing looks exactly like one that works, so the
  * reader needs to see which layer won: an override they wrote, the palette it
- * named, or the shipped default it never touched.
+ * named, or the shipped default it never touched. The value is the merged one a
+ * renderer would apply, not the fragment the reader happened to write.
  */
 function describeToken(token: TuiToken, overrides: ThemeOverrides): { text: string; source: Source } {
-  const override = overrides.tokens.get(token)
-  const spec = override ?? DEFAULT_TOKENS[token]
+  const spec = mergeTokenSpec(token, overrides.tokens)
   const fields: string[] = []
-  if (spec.fg !== undefined) fields.push(String(spec.fg))
-  if (spec.bg !== undefined) fields.push(`bg ${String(spec.bg)}`)
+  if (spec.fg !== undefined) fields.push(showColour(spec.fg, overrides.palette))
+  if (spec.bg !== undefined) fields.push(`bg ${showColour(spec.bg, overrides.palette)}`)
   for (const attribute of ['bold', 'dim', 'italic', 'underline', 'strike'] as const) {
     if (spec[attribute] === true) fields.push(attribute)
   }
   if (spec.glyph !== undefined && spec.glyph !== '') fields.push(`glyph ${JSON.stringify(spec.glyph)}`)
   if (spec.hidden === true) fields.push('hidden')
-  if (spec.inherit !== undefined) fields.push(`inherit ${spec.inherit}`)
-  const named = typeof spec.fg === 'string' && spec.fg in DEFAULT_PALETTE && !spec.fg.startsWith('#')
-  const source: Source = override !== undefined ? 'override' : named ? 'palette' : 'default'
+  const named = typeof spec.fg === 'string' && (PALETTE_NAMES as readonly string[]).includes(spec.fg)
+  const source: Source = overrides.tokens.has(token) ? 'override' : named ? 'palette' : 'default'
   return { text: fields.length === 0 ? 'plain' : fields.join(' '), source }
 }
 

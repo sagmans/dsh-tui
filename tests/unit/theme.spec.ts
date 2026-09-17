@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createTheme } from '@/theme.ts'
+import { createTheme, forwardEditorTheme, forwardMarkdownTheme } from '@/theme.ts'
 import type { ThemeOverrides } from '@/theme-settings.ts'
 import { DEFAULT_PALETTE, type StyleSpec, type TuiToken } from '@/theme-tokens.ts'
 
@@ -48,7 +48,7 @@ describe('createTheme', () => {
 
   it('leaves the answer text alone while the thinking is styled', () => {
     const theme = createTheme('truecolor')
-    expect(theme.style('markdown.text', 'the answer')).toBe('the answer')
+    expect(theme.style('markdown.codeBlock', 'the answer')).toBe('the answer')
     expect(theme.style('transcript.reasoning.body', 'a thought')).not.toBe('a thought')
   })
 
@@ -102,5 +102,28 @@ describe('createTheme', () => {
     const first = theme.style('transcript.reasoning.body', 'a')
     const second = theme.style('transcript.reasoning.body', 'b')
     expect(first.replace('a', 'b')).toBe(second)
+  })
+})
+
+describe('theme identity', () => {
+  it('gives each table a revision, so a cache can tell them apart', () => {
+    expect(createTheme('none').revision).not.toBe(createTheme('none').revision)
+  })
+
+  it('forwards the editor theme to a source that moves', () => {
+    let active = createTheme('truecolor', overrides({ 'editor.border': { fg: '#ff0000' } }))
+    const editor = forwardEditorTheme(() => active.editor)
+    expect(editor.borderColor('x')).toContain('38;2;255;0;0')
+    active = createTheme('truecolor', overrides({ 'editor.border': { fg: '#00ff00' } }))
+    // The editor keeps the object it was built with, so it has to follow.
+    expect(editor.borderColor('x')).toContain('38;2;0;255;0')
+  })
+
+  it('forwards the markdown theme to a source that moves', () => {
+    let active = createTheme('truecolor', overrides({ 'markdown.heading': { fg: '#ff0000' } }))
+    const markdown = forwardMarkdownTheme(() => active.markdown)
+    expect(markdown.heading('h')).toContain('38;2;255;0;0')
+    active = createTheme('truecolor', overrides({ 'markdown.heading': { fg: '#00ff00' } }))
+    expect(markdown.heading('h')).toContain('38;2;0;255;0')
   })
 })

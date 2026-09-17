@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createTheme } from '@/theme.ts'
 import { TUI_SETTINGS_NAMESPACE, parseSettings,
-  TuiSettingsSchema, defaultSettings, toOverrides } from '@/theme-settings.ts'
+  TuiSettingsSchema, defaultSettings, readScope, toOverrides } from '@/theme-settings.ts'
 
 describe('the dsh-tui settings section', () => {
   it('owns the namespace the reader writes in settings.yaml', () => {
@@ -19,6 +19,19 @@ describe('the dsh-tui settings section', () => {
 
   it('rejects a colour that is not a colour', () => {
     expect(() => parseSettings({ tokens: { 'transcript.user': { fg: 'chartreuse' } } })).toThrow()
+  })
+
+  it('rejects a palette entry the surface does not have', () => {
+    // Schemastery ignores undeclared palette keys, so a misspelling would
+    // otherwise be accepted and do nothing at all.
+    expect(() => parseSettings({ palette: { mutd: '#555555' } })).toThrow(/palette/)
+  })
+
+  it('reports a refused section to the caller, not only to stderr', () => {
+    const problems: string[] = []
+    const settings = readScope({ get: () => ({ tokens: { 'transcript.reasoning.bdy': { fg: '#fff' } } }) }, message => problems.push(message))
+    expect(settings).toEqual({ palette: {}, tokens: {} })
+    expect(problems[0]).toContain('transcript.reasoning.bdy')
   })
 
   it('accepts hex, a palette name, and an index', () => {

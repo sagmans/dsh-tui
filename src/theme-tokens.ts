@@ -1,4 +1,4 @@
-import { type ColourMode, sgrPrefix } from './theme-capability.ts'
+import { type ColourMode, sgrBackgroundPrefix, sgrPrefix } from './theme-capability.ts'
 
 const RESET = '\u001B[0m'
 
@@ -79,7 +79,7 @@ export const TUI_TOKENS = [
   'transcript.reasoning.summary',
   'transcript.reasoning.body',
   'transcript.reasoning.hint',
-  'transcript.assistant',
+  // A reply is markdown, so the markdown tokens are what address it.
   // Tool cards: the generic layer
   'tool.title',
   'tool.glyph',
@@ -107,7 +107,6 @@ export const TUI_TOKENS = [
   'tool.web.truncated',
   'tool.generic.detail',
   // Markdown
-  'markdown.text',
   'markdown.heading',
   'markdown.link',
   'markdown.linkUrl',
@@ -131,7 +130,6 @@ export const TUI_TOKENS = [
   'picker.filter',
   'picker.row',
   'picker.rowCurrent',
-  'picker.rowDescription',
   'picker.scrollNewer',
   'picker.scrollOlder',
   'picker.hint',
@@ -143,46 +141,29 @@ export const TUI_TOKENS = [
   'gate.detail',
   'gate.option',
   'gate.optionCurrent',
-  'gate.optionLabel',
-  'gate.optionDescription',
-  'gate.checkboxOn',
-  'gate.checkboxOff',
   'gate.cursor',
   'gate.hint',
   // Dock
   'dock.goal',
-  'dock.goalGlyph',
   'dock.planMode',
-  'dock.planModeGlyph',
   'dock.todos.heading',
-  'dock.todos.glyphPending',
-  'dock.todos.glyphInProgress',
-  'dock.todos.glyphCompleted',
   'dock.todos.pending',
   'dock.todos.inProgress',
   'dock.todos.completed',
   'dock.todos.overflow',
   'dock.subagents.heading',
-  'dock.subagents.glyphRunning',
-  'dock.subagents.glyphCompleted',
-  'dock.subagents.glyphFailed',
   'dock.subagents.running',
   'dock.subagents.completed',
   'dock.subagents.failed',
   'dock.subagents.overflow',
   'dock.jobs.heading',
-  'dock.jobs.glyphRunning',
-  'dock.jobs.glyphCompleted',
-  'dock.jobs.glyphFailed',
   'dock.jobs.running',
   'dock.jobs.completed',
   'dock.jobs.failed',
   'dock.jobs.overflow',
   // Status bar
-  'status.row',
   'status.activity.working',
   'status.activity.ready',
-  'status.activityGlyph',
   'status.elapsed',
   'status.agentPreset',
   'status.model',
@@ -261,7 +242,6 @@ export const DEFAULT_TOKENS: Readonly<Record<TuiToken, StyleSpec>> = {
   'transcript.reasoning.summary': muted,
   'transcript.reasoning.body': muted,
   'transcript.reasoning.hint': muted,
-  'transcript.assistant': plain,
 
   'tool.title': { fg: 'warn' },
   'tool.glyph': { fg: 'warn' },
@@ -289,7 +269,6 @@ export const DEFAULT_TOKENS: Readonly<Record<TuiToken, StyleSpec>> = {
   'tool.web.truncated': muted,
   'tool.generic.detail': muted,
 
-  'markdown.text': plain,
   'markdown.heading': { fg: 'accent', bold: true },
   'markdown.link': { fg: 'accent', underline: true },
   'markdown.linkUrl': muted,
@@ -311,7 +290,6 @@ export const DEFAULT_TOKENS: Readonly<Record<TuiToken, StyleSpec>> = {
   'picker.filter': muted,
   'picker.row': plain,
   'picker.rowCurrent': { bold: true },
-  'picker.rowDescription': plain,
   'picker.scrollNewer': muted,
   'picker.scrollOlder': muted,
   'picker.hint': muted,
@@ -323,46 +301,29 @@ export const DEFAULT_TOKENS: Readonly<Record<TuiToken, StyleSpec>> = {
   'gate.detail': muted,
   'gate.option': plain,
   'gate.optionCurrent': { bold: true },
-  'gate.optionLabel': plain,
-  'gate.optionDescription': plain,
-  'gate.checkboxOn': plain,
-  'gate.checkboxOff': plain,
   'gate.cursor': plain,
   'gate.hint': muted,
 
   'dock.goal': { bold: true },
-  'dock.goalGlyph': { bold: true },
   'dock.planMode': { bold: true },
-  'dock.planModeGlyph': { bold: true },
   'dock.todos.heading': { bold: true },
-  'dock.todos.glyphPending': muted,
-  'dock.todos.glyphInProgress': muted,
-  'dock.todos.glyphCompleted': muted,
   'dock.todos.pending': muted,
   'dock.todos.inProgress': muted,
   'dock.todos.completed': muted,
   'dock.todos.overflow': muted,
   'dock.subagents.heading': { bold: true },
-  'dock.subagents.glyphRunning': muted,
-  'dock.subagents.glyphCompleted': muted,
-  'dock.subagents.glyphFailed': muted,
   'dock.subagents.running': muted,
   'dock.subagents.completed': muted,
   'dock.subagents.failed': muted,
   'dock.subagents.overflow': muted,
   'dock.jobs.heading': { bold: true },
-  'dock.jobs.glyphRunning': muted,
-  'dock.jobs.glyphCompleted': muted,
-  'dock.jobs.glyphFailed': muted,
   'dock.jobs.running': muted,
   'dock.jobs.completed': muted,
   'dock.jobs.failed': muted,
   'dock.jobs.overflow': muted,
 
-  'status.row': muted,
   'status.activity.working': muted,
   'status.activity.ready': muted,
-  'status.activityGlyph': muted,
   'status.elapsed': muted,
   'status.agentPreset': muted,
   'status.model': muted,
@@ -389,12 +350,55 @@ function resolveColour(spec: ColourSpec, palette: Readonly<Record<PaletteName, s
   return spec as string | number
 }
 
+/** Drop the routing field, so a merged spec carries only what it draws. */
+function withoutInherit(spec: StyleSpec): StyleSpec {
+  const { inherit: _routing, ...rest } = spec
+  return rest
+}
+
+/** The fields an override really wrote, so an explicit `undefined` cannot shadow a default. */
+function writtenFields(spec: StyleSpec | undefined): StyleSpec {
+  if (spec === undefined) return {}
+  const written: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(spec)) {
+    if (value !== undefined) written[key] = value
+  }
+  return written as StyleSpec
+}
+
+/**
+ * Merge one token's default, its `inherit` target, and the reader's override.
+ *
+ * The inherited token's fields replace this token's defaults, because that is
+ * what "start from another token" means; the reader's own fields still win.
+ * A path-scoped set turns a cycle into a stop, and still lets two branches
+ * inherit one token rather than sharing a single visit.
+ */
+export function mergeTokenSpec(token: TuiToken, overrides: ReadonlyMap<TuiToken, StyleSpec>): StyleSpec {
+  const visiting = new Set<TuiToken>()
+  const merge = (name: TuiToken): StyleSpec => {
+    if (visiting.has(name)) return {}
+    visiting.add(name)
+    const own = DEFAULT_TOKENS[name]
+    const override = overrides.get(name)
+    const parent = override?.inherit ?? own.inherit
+    const inherited = parent === undefined ? {} : merge(parent)
+    visiting.delete(name)
+    return { ...withoutInherit(own), ...inherited, ...withoutInherit(writtenFields(override)) }
+  }
+  return merge(token)
+}
+
+/** Turn a colour SGR sequence into the parameter list it belongs to. */
+function colourParams(sequence: string): string | undefined {
+  return sequence === '' ? undefined : sequence.slice('\u001B['.length, -1)
+}
+
 /**
  * Resolve one token into the escapes a renderer needs.
  *
- * Nearest token in an `inherit` chain wins, and a visited set turns a cycle into
- * a stop rather than a hang. Faint is dropped once a colour is chosen: stacking
- * it on a deliberate grey is what made the old output differ per terminal.
+ * Faint is dropped once a colour is chosen: stacking it on a deliberate grey is
+ * what made the old output differ per terminal.
  */
 export function resolveToken(
   token: TuiToken,
@@ -402,17 +406,7 @@ export function resolveToken(
   palette: Readonly<Record<PaletteName, string>>,
   mode: ColourMode,
 ): ResolvedStyle {
-  const merged: Record<string, unknown> = {}
-  const seen = new Set<TuiToken>()
-  let current: TuiToken | undefined = token
-  while (current !== undefined && !seen.has(current)) {
-    seen.add(current)
-    const spec: StyleSpec = { ...DEFAULT_TOKENS[current], ...overrides.get(current) }
-    for (const [key, value] of Object.entries(spec)) {
-      if (value !== undefined && merged[key] === undefined) merged[key] = value
-    }
-    current = spec.inherit
-  }
+  const merged = mergeTokenSpec(token, overrides) as Record<string, unknown>
   if (merged.hidden === true) return { prefix: '', suffix: '', glyph: '', hidden: true }
 
   // With no colour capability the whole promise is "emit nothing", which
@@ -420,18 +414,20 @@ export function resolveToken(
   if (mode === 'none') return { prefix: '', suffix: '', glyph: (merged.glyph as string | undefined) ?? '', hidden: false }
 
   const fg = merged.fg as ColourSpec | undefined
-  const dim = merged.dim === true && fg === undefined
+  const bg = merged.bg as ColourSpec | undefined
   const codes: string[] = []
   if (merged.bold === true) codes.push('1')
-  if (dim) codes.push('2')
+  if (merged.dim === true && fg === undefined) codes.push('2')
   if (merged.italic === true) codes.push('3')
   if (merged.underline === true) codes.push('4')
   if (merged.strike === true) codes.push('9')
-  if (fg !== undefined) {
-    const colour = sgrPrefix(resolveColour(fg, palette), mode)
-    if (colour !== '') codes.push(colour.slice('\u001B['.length, -1))
+  for (const params of [
+    fg === undefined ? undefined : colourParams(sgrPrefix(resolveColour(fg, palette), mode)),
+    bg === undefined ? undefined : colourParams(sgrBackgroundPrefix(resolveColour(bg, palette), mode)),
+  ]) {
+    if (params !== undefined) codes.push(params)
   }
-  // One sequence for attributes and colour together: two escapes in a row would
+  // One sequence for attributes and colours together: two escapes in a row would
   // let a renderer that re-orders them drop half the style.
   const prefix = codes.length === 0 ? '' : `\u001B[${codes.join(';')}m`
   return { prefix, suffix: prefix === '' ? '' : RESET, glyph: (merged.glyph as string | undefined) ?? '', hidden: false }
