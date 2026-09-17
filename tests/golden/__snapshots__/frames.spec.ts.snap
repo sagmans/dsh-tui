@@ -4,9 +4,8 @@ exports[`golden frames > renders a busy dock at 40 columns 1`] = `
 [
   "◎ goal round 6/256 · complete the plan …",
   "⏸ plan mode · answer the plan before ed…",
-  "⚇ subagents · 1 running, 1 done",
+  "⚇ subagents · 1 running",
   "  ▸ c000cfa3 · spawn · running 4s",
-  "  ✓ f05abce2 · fork · completed 2s",
   "⛭ jobs · 1 running",
   "  ▸ bash-1 · running 12s — sleep 45 && …",
   "☰ todos · 1 left",
@@ -18,9 +17,8 @@ exports[`golden frames > renders a busy dock at 80 columns 1`] = `
 [
   "◎ goal round 6/256 · complete the plan for this dsh-tui plugin",
   "⏸ plan mode · answer the plan before edits happen",
-  "⚇ subagents · 1 running, 1 done",
+  "⚇ subagents · 1 running",
   "  ▸ c000cfa3 · spawn · running 4s",
-  "  ✓ f05abce2 · fork · completed 2s",
   "⛭ jobs · 1 running",
   "  ▸ bash-1 · running 12s — sleep 45 && echo bg-done",
   "☰ todos · 1 left",
@@ -159,9 +157,8 @@ exports[`styled golden frames > renders the busy dock with its escapes 1`] = `
 [
   "[1m◎ goal round 6/256 · complete the plan for this dsh-tui plugin[0m",
   "[1m⏸ plan mode · answer the plan before edits happen[0m",
-  "[1m⚇ subagents · 1 running, 1 done[0m",
+  "[1m⚇ subagents · 1 running[0m",
   "[38;2;138;138;138m  ▸ c000cfa3 · spawn · running 4s[0m",
-  "[38;2;138;138;138m  ✓ f05abce2 · fork · completed 2s[0m",
   "[1m⛭ jobs · 1 running[0m",
   "[38;2;138;138;138m  ▸ bash-1 · running 12s — sleep 45 && echo bg-done[0m",
   "[1m☰ todos · 1 left[0m",

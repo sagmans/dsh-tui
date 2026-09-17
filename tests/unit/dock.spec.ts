@@ -75,15 +75,22 @@ describe('WorkDock', () => {
     expect(new WorkDock(() => EMPTY, theme, () => jobs).render(80)).toEqual([])
   })
 
-  it('lists delegations with their provider and age', () => {
+  it('lists only the delegations still running', () => {
     const runs = [
       { runId: 'r1', provider: 'spawn', id: 'child-abcdef', startedAt: Date.now() - 4_000, status: 'running' as const },
       { runId: 'r2', provider: 'fork', id: 'child-2', startedAt: 1_000, status: 'failed' as const, finishedAt: 2_000 },
     ]
     const lines = new WorkDock(() => EMPTY, theme, () => [], () => runs).render(80)
-    expect(lines[0]).toBe('⚇ subagents · 1 running, 1 done')
+    expect(lines).toHaveLength(2)
+    expect(lines[0]).toBe('⚇ subagents · 1 running')
     expect(lines[1]).toContain('▸ child-ab · spawn · running')
-    expect(lines[2]).toContain('✗ child-2 · fork · failed')
+  })
+
+  it('drops the subagent board once every delegation has settled', () => {
+    const runs = [
+      { runId: 'r2', provider: 'fork', id: 'child-2', startedAt: 1_000, status: 'failed' as const, finishedAt: 2_000 },
+    ]
+    expect(new WorkDock(() => EMPTY, theme, () => [], () => runs).render(80)).toEqual([])
   })
 
   it('takes no rows when no job is running', () => {
