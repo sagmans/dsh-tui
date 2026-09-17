@@ -1,7 +1,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { SessionLogOffset, type SessionEvent, type SessionId } from '@deepseek-ai/dsh-session'
-import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import { ReasoningEffortId, createUserMessage } from '@deepseek-ai/dsh-llm'
 
 /** Everything the terminal surface needs to own one interactive agent. */
 export interface TuiAgent {
@@ -52,7 +52,18 @@ export interface StartAgentOptions {
   readonly preset?: string | undefined
 }
 
-function routeOf(ctx: Context, options: StartAgentOptions): { provider?: string; model?: string } {
+/**
+ * The route an agent starts on.
+ *
+ * A launch flag is explicit, so it stands alone; otherwise the deployment
+ * default supplies the whole selection, effort included. The effort has to
+ * travel with the route here because an absent one is what the reader sees in
+ * the status line but never reaches a request.
+ */
+export function agentRoute(
+  ctx: Context,
+  options: Pick<StartAgentOptions, 'model' | 'provider'>,
+): { provider?: string; model?: string; reasoningEffort?: ReasoningEffortId } {
   if (options.model !== undefined || options.provider !== undefined) {
     return {
       ...(options.provider === undefined ? {} : { provider: options.provider }),
@@ -60,7 +71,15 @@ function routeOf(ctx: Context, options: StartAgentOptions): { provider?: string;
     }
   }
   const selection = ctx.get('agentDefaultModel')?.currentSelection()
-  return selection === undefined ? {} : { provider: selection.provider, model: selection.model }
+  return selection === undefined
+    ? {}
+    : {
+        provider: selection.provider,
+        model: selection.model,
+        ...(selection.reasoningEffort === undefined
+          ? {}
+          : { reasoningEffort: ReasoningEffortId(selection.reasoningEffort) }),
+      }
 }
 
 function userMessage(text: string) {
@@ -75,7 +94,7 @@ function userMessage(text: string) {
  * session is not an error the user should see, so creation is the fallback.
  */
 export async function startAgent(ctx: Context, options: StartAgentOptions): Promise<TuiAgent> {
-  const agentOptions = routeOf(ctx, options)
+  const agentOptions = agentRoute(ctx, options)
   const meta = { cwd: options.cwd }
   const setup = options.setup === undefined ? {} : { setup: options.setup }
   // A branch inherits a prefix of its parent's log, so the child is marked as

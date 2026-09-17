@@ -53,7 +53,15 @@ import { TranscriptModel } from './transcript.ts'
 import { WorkFold, describeTodos } from './work.ts'
 import { WorkDock } from './ui/dock.ts'
 import { MarkdownRenderer } from './ui/markdown.ts'
-import { PresetPicker, SessionPicker, type PickerAction, type PickerCard } from './ui/picker.ts'
+import {
+  EffortPicker,
+  PROVIDER_DEFAULT_EFFORT_ID,
+  PresetPicker,
+  SessionPicker,
+  effortChoices,
+  type PickerAction,
+  type PickerCard,
+} from './ui/picker.ts'
 import { StatusBar } from './ui/status.ts'
 import { ALL_COLLAPSED, TranscriptView } from './ui/view.ts'
 
@@ -69,7 +77,7 @@ export const name = 'tui'
 export const inject = ['agents', 'tools']
 
 /** Keys the surface answers itself, listed wherever the reader asks for help. */
-const LOCAL_KEYS = 'ctrl+o tool detail · ctrl+t reasoning · ctrl+b back to this session · ctrl+c interrupt or exit'
+const LOCAL_KEYS = 'ctrl+o tool detail · shift+tab reasoning · ctrl+t reasoning effort · ctrl+b back to this session · ctrl+c interrupt or exit'
 
 /** The one thing to say about a view a reader did not open. */
 const LOCAL_KEYS_BACK = 'ctrl+b returns'
@@ -412,9 +420,13 @@ export function apply(ctx: Context, config: unknown): void {
       tui.requestRender()
       return { consume: true }
     }
-    if (matchesKey(data, 'ctrl+t')) {
+    if (matchesKey(data, 'shift+tab')) {
       viewState.expandReasoning = !viewState.expandReasoning
       tui.requestRender()
+      return { consume: true }
+    }
+    if (matchesKey(data, 'ctrl+t')) {
+      void openEffortPicker()
       return { consume: true }
     }
     if (matchesKey(data, 'ctrl+b')) {
@@ -1013,7 +1025,7 @@ export function apply(ctx: Context, config: unknown): void {
           ? `${facts.model ?? 'unset'}${facts.effort === undefined ? '' : ` (${facts.effort})`} · composition default`
           : `${current.provider}/${current.model}${current.reasoningEffort === undefined ? '' : ` (${current.reasoningEffort})`}`
         const providers = catalog.providers().map(provider => provider.id)
-        model.notice(`model ${route} · providers: ${providers.length === 0 ? 'none' : providers.join(', ')} · /model <provider>/<model> switches, /model <provider> lists its models`)
+        model.notice(`model ${route} · providers: ${providers.length === 0 ? 'none' : providers.join(', ')} · /model <provider>/<model>[/<effort>] switches, /model <provider> lists its models`)
         tui.requestRender()
         return
       }
@@ -1028,11 +1040,37 @@ export function apply(ctx: Context, config: unknown): void {
           tui.requestRender()
         })
         return
-      case 'switch':
-        modelSwitch.choose(command.choice)
-        model.notice(`model set to ${command.choice.provider}/${command.choice.model} for the next step`)
-        tui.requestRender()
+      case 'switch': {
+        const choice = command.choice
+        if (choice.reasoningEffort === undefined) {
+          modelSwitch.choose(choice)
+          model.notice(`model set to ${choice.provider}/${choice.model} for the next step`)
+          tui.requestRender()
+          return
+        }
+        // The route decides which efforts exist, so an explicit one is checked
+        // against the adapter before it is put in force: a typo must not become
+        // a request the provider rejects.
+        void (async () => {
+          try {
+            const info = await catalog.efforts(choice.provider, choice.model)
+            const efforts = info?.efforts ?? []
+            if (!efforts.some(effort => effort.id === choice.reasoningEffort)) {
+              model.notice(efforts.length === 0
+                ? `/model: ${choice.provider}/${choice.model} advertises no reasoning efforts`
+                : `/model: ${choice.provider}/${choice.model} does not offer reasoning effort "${choice.reasoningEffort}" — offers: ${efforts.map(effort => effort.id).join(' ')}`)
+              tui.requestRender()
+              return
+            }
+            modelSwitch.choose(choice)
+            model.notice(`model set to ${choice.provider}/${choice.model} (${choice.reasoningEffort}) for the next step`)
+          } catch (error) {
+            model.notice(`/model: could not read reasoning efforts: ${error instanceof Error ? error.message : String(error)}`)
+          }
+          tui.requestRender()
+        })()
         return
+      }
       case 'invalid':
         model.notice(`/model: ${command.reason}`)
         tui.requestRender()
@@ -1040,6 +1078,58 @@ export function apply(ctx: Context, config: unknown): void {
     }
   }
 
+  /** Whether a route's effort list is being read, so a second key cannot race it. */
+  let openingEfforts = false
+
+  /** Put the reader's effort choice in force for the next step. */
+  const applyEffort = (provider: string, modelId: string, effortId: string): void => {
+    modelSwitch.choose(effortId === PROVIDER_DEFAULT_EFFORT_ID
+      ? { provider, model: modelId }
+      : { provider, model: modelId, reasoningEffort: effortId })
+    model.notice(`reasoning effort for ${provider}/${modelId} set to ${effortId === PROVIDER_DEFAULT_EFFORT_ID ? 'provider default' : effortId} for the next step`)
+    tui.requestRender()
+  }
+
+  /**
+   * Offer the efforts the route in force advertises.
+   *
+   * The list is read before the picker opens because the rows are the route's
+   * own metadata; a menu painted before that arrived could offer a level the
+   * request would then be refused for.
+   */
+  const openEffortPicker = async (): Promise<void> => {
+    if (catalog === undefined) {
+      model.notice('this profile has no llm service, so reasoning efforts cannot be read')
+      tui.requestRender()
+      return
+    }
+    const facts = statusFacts()
+    if (facts.provider === undefined || facts.model === undefined) {
+      model.notice('no model route is in use; /model <provider>/<model> picks one first')
+      tui.requestRender()
+      return
+    }
+    if (openingEfforts) return
+    openingEfforts = true
+    try {
+      const info = await catalog.efforts(facts.provider, facts.model)
+      const efforts = info?.efforts ?? []
+      if (efforts.length === 0) {
+        model.notice(`${facts.provider}/${facts.model} advertises no reasoning efforts`)
+        return
+      }
+      const picked = await openPicker(new EffortPicker(
+        () => effortChoices(efforts, facts.effort),
+        `reasoning effort · ${facts.provider}/${facts.model}`,
+      ))
+      if (picked !== undefined) applyEffort(facts.provider, facts.model, picked)
+    } catch (error) {
+      model.notice(`could not read reasoning efforts: ${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      openingEfforts = false
+      tui.requestRender()
+    }
+  }
 
   /**
    * Show or choose the mode this session runs.
@@ -1122,6 +1212,25 @@ export function apply(ctx: Context, config: unknown): void {
     }).catch((error: unknown) => {
       model.notice(`/${name} failed: ${error instanceof Error ? error.message : String(error)}`)
       tui.requestRender()
+    })
+  }
+
+  /**
+   * Put the deployment default in force before the first turn.
+   *
+   * The agent is created before the settings file has been read, so the route
+   * its loop captured is the composition placeholder; the reader's default —
+   * effort included — only exists by the time they can type. Adopting it here
+   * is what makes the status line's route the one the request actually uses.
+   */
+  const adoptDefaultRoute = (): void => {
+    if (modelSwitch.current() !== undefined) return
+    const facts = statusFacts()
+    if (facts.provider === undefined || facts.model === undefined) return
+    modelSwitch.adopt({
+      provider: facts.provider,
+      model: facts.model,
+      ...(facts.effort === undefined ? {} : { reasoningEffort: facts.effort }),
     })
   }
 
@@ -1215,7 +1324,10 @@ export function apply(ctx: Context, config: unknown): void {
         }
         // While a turn is running the human is steering it, not opening another.
         if (turnOpen) agent.steer(submission.text)
-        else agent.submit(submission.text)
+        else {
+          adoptDefaultRoute()
+          agent.submit(submission.text)
+        }
     }
   }
 

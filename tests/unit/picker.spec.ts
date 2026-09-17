@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { StoredSession } from '@/agent/history.ts'
-import { PICKER_WINDOW, SessionPicker, describeAge } from '@/ui/picker.ts'
+import { PICKER_WINDOW, EffortPicker, SessionPicker, describeAge, effortChoices, type EffortChoice } from '@/ui/picker.ts'
 
 const session = (id: string, overrides: Partial<StoredSession> = {}): StoredSession => ({
   id,
@@ -92,5 +92,53 @@ describe('SessionPicker', () => {
     expect(card.rows[0]?.label).toBe('latest work')
     expect(card.rows[0]?.description).toBe('/work · just now · 12 events')
     expect(card.title).toBe('resume a session · 2 stored')
+  })
+})
+
+const EFFORTS: readonly EffortChoice[] = [
+  { id: '', name: 'provider default', description: 'clear the explicit effort', current: false },
+  { id: 'low', name: 'Low', current: false },
+  { id: 'high', name: 'High', description: 'thorough', current: true },
+]
+
+const effortPicker = (): EffortPicker =>
+  new EffortPicker(() => EFFORTS, 'reasoning effort · kimi-coding/k2')
+
+describe('EffortPicker', () => {
+  it('picks the row under the cursor, including the provider default', () => {
+    expect(effortPicker().handleKey('\r')).toEqual({ kind: 'pick', id: '' })
+    const moved = effortPicker()
+    moved.handleKey('\u001b[B')
+    expect(moved.handleKey('\r')).toEqual({ kind: 'pick', id: 'low' })
+  })
+
+  it('names the effort in force and what the default row clears', () => {
+    const rows = effortPicker().card().rows
+    expect(rows.find(row => row.label === 'High')?.description).toContain('current')
+    expect(rows.find(row => row.label === 'provider default')?.description).toContain('clear')
+  })
+
+  it('filters by effort name or id', () => {
+    const picker = effortPicker()
+    picker.handleKey('h')
+    picker.handleKey('i')
+    expect(picker.visible().map(choice => choice.id)).toEqual(['high'])
+    const byDefault = effortPicker()
+    byDefault.handleKey('d')
+    expect(byDefault.visible().map(choice => choice.id)).toEqual([''])
+  })
+})
+
+describe('effortChoices', () => {
+  it('leads with the provider default and marks the effort in force', () => {
+    expect(effortChoices([{ id: 'low', name: 'Low' }, { id: 'high', name: 'High', description: 'thorough' }], 'high')).toEqual([
+      { id: '', name: 'provider default', description: 'clear the explicit effort', current: false },
+      { id: 'low', name: 'Low', current: false },
+      { id: 'high', name: 'High', description: 'thorough', current: true },
+    ])
+  })
+
+  it('marks the provider default when no effort is in force', () => {
+    expect(effortChoices([{ id: 'low', name: 'Low' }], undefined)[0]?.current).toBe(true)
   })
 })
