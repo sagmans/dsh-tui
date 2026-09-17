@@ -22,6 +22,8 @@ const CHECKBOX_OFF = '[ ]'
 const FALLBACK_ROW_TOKEN: TuiToken = 'tool.detail'
 /** An unselected row has no cursor, and a blank column is not a value to configure. */
 const NO_CURSOR = ' '
+/** The words an opened card uses when retention, not the fold, dropped rows. */
+const CARD_HINT_RETAINED = 'more lines not shown'
 
 /** Which rows the reader has opened; one key decides for every row of a kind. */
 export interface ViewState {
@@ -130,7 +132,8 @@ export class TranscriptView implements Component {
     const expanded = this.viewState.expandCards
     // A card whose kind declares its call IS a command keeps its output tail
     // while folded: that output is the answer the reader asked for, so it
-    // outranks the one-line rule every other card follows.
+    // outranks the one-line rule every other card follows. Its command is drawn
+    // outside the fold entirely, because what ran is never a detail.
     const preview: CardPreview = expanded
       ? { expanded: true }
       : { expanded: false, preview: card.kind === 'terminal' ? 'shellTail' : 'title' }
@@ -141,6 +144,9 @@ export class TranscriptView implements Component {
       const glyph = this.theme.glyph(glyphToken)
       const lead = glyph === '' ? '' : `${glyph} `
       lines.push(this.theme.style(titleToken, this.theme.cut(`${lead}${displayText(card.title)}`, width, '')))
+    }
+    if (card.kind === 'terminal' && card.command !== undefined && card.command !== '' && this.theme.visible('tool.terminal.command')) {
+      lines.push(this.theme.cut(`${DETAIL_INDENT}${this.theme.style('tool.terminal.command', displayText(card.command))}`, width, ''))
     }
     for (const row of detail) {
       // The row says what it is, so the renderer never guesses from the text:
@@ -157,13 +163,18 @@ export class TranscriptView implements Component {
       if (drawn === '') continue
       lines.push(this.theme.cut(`${DETAIL_INDENT}${drawn}`, width, ''))
     }
+    // The pill is not output, so it draws after the preview window rather than
+    // inside it: a run bounded to its tail still reports how it ended.
+    if (card.kind === 'terminal' && card.status !== undefined && this.theme.visible('tool.terminal.status')) {
+      lines.push(this.theme.cut(`${DETAIL_INDENT}${this.theme.style('tool.terminal.status', displayText(card.status))}`, width, ''))
+    }
     if (hidden <= 0 || !this.theme.visible('tool.hint')) return
     // An opened card is bounded by what was retained; a folded shell card is
     // bounded by its preview window, and there the hint has to name the rows it
     // dropped rather than the ones memory refused to keep.
     const hint = !preview.expanded
       ? preview.preview === 'shellTail' ? shellPreviewHint(hidden) : undefined
-      : `${hidden} more lines not shown`
+      : `${hidden} ${CARD_HINT_RETAINED}`
     if (hint === undefined) return
     lines.push(this.theme.style('tool.hint', this.theme.cut(`${DETAIL_INDENT}${hint}`, width, '')))
   }

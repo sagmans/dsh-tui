@@ -391,12 +391,10 @@ export class TranscriptModel {
       // and a reader without it would see a tool row that never reported back.
       const reported = contentLinesOf(message?.content)
       const base = call ?? cardFromLines('generic', name, [], false)
-      this.settled[pending.index] = {
-        kind: 'tool',
-        card: reported.length === 0
-          ? { ...base, failed: isError }
-          : { ...cardFromLines(base.kind, base.title, reported, isError) },
-      }
+      const rebuilt = reported.length === 0
+        ? { ...base, failed: isError }
+        : { ...cardFromLines(base.kind, base.title, reported, isError), ...(base.command === undefined ? {} : { command: base.command }) }
+      this.settled[pending.index] = { kind: 'tool', card: rebuilt }
       return
     }
     this.settled[pending.index] = { kind: 'tool', card: mergeCards(call, { ...result, failed: isError }) }

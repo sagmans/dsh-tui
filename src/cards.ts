@@ -67,6 +67,20 @@ export function rowText(row: CardRow): string {
 export interface ToolCard {
   readonly kind: ToolCardKind
   readonly title: string
+  /**
+   * The command a terminal card ran, drawn under its header in every fold.
+   *
+   * A shell card names its tool in the header, so the command is what the
+   * reader came for and cannot be a row the fold may hide.
+   */
+  readonly command?: string
+  /**
+   * The exit pill of a terminal card, drawn outside the fold with its output.
+   *
+   * The pill is not output, so it must not consume a slot of the folded preview
+   * window nor be the first row a bounded tail drops.
+   */
+  readonly status?: string
   /** Rows retained for rendering, already capped at CARD_DETAIL_MAX. */
   readonly detail: readonly CardRow[]
   readonly failed: boolean
@@ -93,8 +107,14 @@ export const CARD_DETAIL_MAX = 200
  */
 export const CARD_SHELL_PREVIEW = 20
 
-/** The tail of the hint a folded shell card draws when it dropped rows. */
-const CARD_HINT_EARLIER = 'earlier lines · ctrl+o shows them'
+/**
+ * The tail of the hint a folded shell card draws when it dropped rows.
+ *
+ * "more" rather than "them": retention caps detail rows, so a command that
+ * printed thousands of lines cannot promise ctrl+o will reveal every dropped
+ * one.
+ */
+const CARD_HINT_EARLIER = 'earlier lines · ctrl+o shows more'
 
 /** Character budget for one detail row, so a minified file cannot flood the viewport. */
 export const CARD_LINE_LIMIT = 200
@@ -109,6 +129,17 @@ function clipRow(row: CardRow): CardRow {
 
 function bound(rows: readonly CardRow[]): { detail: CardRow[]; totalLines: number } {
   return { detail: rows.slice(0, CARD_DETAIL_MAX).map(clipRow), totalLines: rows.length }
+}
+
+/**
+ * Bound a card to its retained rows from the END.
+ *
+ * A command's answer is its last lines, so keeping the head would show a long
+ * run's middle and lose the ending the reader asked for; the tail is also what
+ * a folded shell card tails again.
+ */
+function boundTail(rows: readonly CardRow[]): { detail: CardRow[]; totalLines: number } {
+  return { detail: rows.slice(-CARD_DETAIL_MAX).map(clipRow), totalLines: rows.length }
 }
 
 /**
@@ -185,9 +216,18 @@ export function mergeCards(call: ToolCard | undefined, result: ToolCard | undefi
   const base = call ?? result
   if (base === undefined) throw new Error('mergeCards requires at least one card')
   if (call === undefined || result === undefined) return base
+  const kind = result.kind === 'generic' ? call.kind : result.kind
+  // The command belongs to the call, and the result mostly has none; a merge
+  // that only kept result rows would drop the one row a folded shell card must
+  // always show. It is attached only to a terminal card so a shell field can
+  // never leak onto a card that has no command line.
+  const command = kind === 'terminal' ? call.command ?? result.command : undefined
+  const status = result.status ?? call.status
   return {
-    kind: result.kind === 'generic' ? call.kind : result.kind,
+    kind,
     title: call.title,
+    ...(command === undefined ? {} : { command }),
+    ...(status === undefined ? {} : { status }),
     detail: result.detail.length > 0 ? result.detail : call.detail,
     failed: result.failed,
     totalLines: result.detail.length > 0 ? result.totalLines : call.totalLines,
@@ -258,7 +298,18 @@ export function cardOfCall(view: ToolCallView | undefined, fallbackName: string)
       const rows: CardRow[] = []
       if (terminal.description !== undefined && terminal.description !== '') rows.push(cardRow('output', terminal.description))
       if (terminal.cwd !== undefined && terminal.cwd !== '') rows.push(cardRow('cwd', `cwd ${terminal.cwd}`))
-      return { kind: 'terminal', title: title(terminal, fallbackName), detail: bound(rows).detail, failed: false, totalLines: 0 }
+      // The header names the tool so the command can sit on its own row: a
+      // terminal view's own title IS the command, and a one-line fold must not
+      // be able to hide what was run.
+      const command = terminal.title?.trim() ?? ''
+      return {
+        kind: 'terminal',
+        title: fallbackName,
+        ...(command === '' ? {} : { command }),
+        detail: bound(rows).detail,
+        failed: false,
+        totalLines: 0,
+      }
     }
     case 'diff': {
       const diff = view as DiffCallView
@@ -290,13 +341,30 @@ export function cardOfResult(
   switch (view.card) {
     case 'terminal': {
       const terminal = view as TerminalResultView
-      const rows = (terminal.output ?? '').split('\n').map(line => cardRow('output', line))
+      // A terminating newline is the shell's, not a row: keeping it would spend
+      // one slot of the preview window on a blank line the renderer then drops.
+      const raw = (terminal.output ?? '').replace(/\n+$/, '')
+      const rows = raw === '' ? [] : raw.split('\n').map(line => cardRow('output', line))
       const status = terminal.signal !== undefined && terminal.signal !== ''
         ? `signal ${terminal.signal}`
         : terminal.exitCode === undefined ? undefined : `exit ${terminal.exitCode}`
-      if (status !== undefined) rows.push(cardRow('status', status))
-      const bounded = bound(rows)
-      return { kind: 'terminal', title: title(terminal, input.fallbackTitle), detail: bounded.detail, failed, totalLines: bounded.totalLines }
+      // The output is bounded from its END: a command that printed far more
+      // than retention keeps must still show how it finished, and the folded
+      // preview tails what is retained again.
+      const bounded = boundTail(rows)
+      // A terminal result mostly omits the title, because the pending call
+      // already carried the command; it is only a fallback for a resumed fold
+      // that never saw the call.
+      const command = terminal.title?.trim() ?? ''
+      return {
+        kind: 'terminal',
+        title: input.fallbackTitle,
+        ...(command === '' ? {} : { command }),
+        ...(status === undefined ? {} : { status }),
+        detail: bounded.detail,
+        failed,
+        totalLines: bounded.totalLines,
+      }
     }
     case 'diff': {
       const diff = view as DiffResultView

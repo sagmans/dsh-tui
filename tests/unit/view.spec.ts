@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cardOfCall, cardOfResult, cardRow, contentLines, CARD_SHELL_PREVIEW, type ToolPresenter } from '@/cards.ts'
+import { cardOfCall, cardOfResult, contentLines, CARD_SHELL_PREVIEW, type ToolPresenter } from '@/cards.ts'
 import type { GateCard } from '@/gates.ts'
 import { createTheme, forwardEditorTheme, forwardMarkdownTheme, type TuiTheme } from '@/theme.ts'
 import { DEFAULT_PALETTE } from '@/theme-tokens.ts'
@@ -166,40 +166,49 @@ describe('TranscriptView expansion', () => {
     expect(lines.some(line => line.includes('ctrl+o'))).toBe(false)
   })
 
-  it("keeps a shell card's output tail and names the rows it dropped", () => {
+  it("keeps a shell card's command and output tail and names the rows it dropped", () => {
     const lines = viewOf(withRows(25, 'bash')).render(60)
-    expect(lines[0]).toBe('Run echo rows')
-    // The window is counted in rows, so the exit status shares it: 19 output
-    // rows plus the pill make the last 20 the card keeps, and the 6 before them
-    // are what the hint names.
-    expect(lines.filter(line => line.startsWith('    row '))).toHaveLength(CARD_SHELL_PREVIEW - 1)
+    // The tool label and the command sit outside the fold, so the preview is
+    // free to spend its whole window on output and still report how it ended.
+    expect(lines[0]).toBe('bash')
+    expect(lines[1]).toBe('    Run echo rows')
+    expect(lines.filter(line => line.startsWith('    row '))).toHaveLength(CARD_SHELL_PREVIEW)
     expect(lines.some(line => line.startsWith('    row 4'))).toBe(false)
     expect(lines).toContain('    exit 0')
-    expect(lines.at(-1)).toContain('… 6 earlier lines · ctrl+o')
+    expect(lines.at(-1)).toContain('… 5 earlier lines · ctrl+o')
   })
 
   it('shows a shell card whole once it is opened, and a short one without a hint', () => {
     const opened = viewOf(withRows(25, 'bash'), { expandCards: true, expandReasoning: false }).render(60)
+    expect(opened[0]).toBe('bash')
+    expect(opened[1]).toBe('    Run echo rows')
     expect(opened.filter(line => line.startsWith('    row '))).toHaveLength(25)
     expect(opened.some(line => line.includes('earlier lines'))).toBe(false)
     const short = viewOf(withRows(3, 'bash')).render(60)
     expect(short.filter(line => line.startsWith('    row '))).toHaveLength(3)
-    // The command, three output rows, and the exit status.
-    expect(short).toHaveLength(5)
+    // The label, the command, three output rows, and the exit status.
+    expect(short).toHaveLength(6)
     expect(short.at(-1)).toBe('    exit 0')
   })
 
-  it("keeps a failed shell card's tail and its failed title", () => {
+  it("keeps a failed shell card's command, tail, and failed title", () => {
+    // Built through the real card mappers so the assertion covers the shell
+    // shape a failing command actually produces, not a hand-made card.
     const failing: ToolPresenter = {
-      call: () => ({ kind: 'terminal', title: 'Run rm', detail: [], failed: false, totalLines: 0 }),
-      result: () => ({ kind: 'terminal', title: 'Run rm', detail: [cardRow('output', 'boom')], failed: true, totalLines: 1 }),
+      call: name => cardOfCall({ card: 'terminal', title: 'rm -rf /tmp/x' }, name),
+      result: (name, input) => cardOfResult(
+        { card: 'terminal', output: 'boom', exitCode: 1 },
+        { fallbackTitle: name, failed: input.isError, contentLines: contentLines(input.content) },
+      ),
     }
     const model = new TranscriptModel(failing)
     model.apply({ type: 'tool/call', data: { name: 'bash', arguments: '{}', callId: 'c1' } })
     model.apply({ type: 'tool/result', data: { message: { content: [{ type: 'tool-result', toolCallId: 'c1', text: 'boom' }], isError: true } } })
     const lines = viewOf(model).render(60)
-    expect(lines[0]).toBe('Run rm')
+    expect(lines[0]).toBe('bash')
+    expect(lines[1]).toBe('    rm -rf /tmp/x')
     expect(lines).toContain('    boom')
+    expect(lines).toContain('    exit 1')
   })
 
   it('names where the thought is when the row is folded', () => {

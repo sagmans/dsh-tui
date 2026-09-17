@@ -238,6 +238,24 @@ describe('TranscriptModel tool cards', () => {
     ])
   })
 
+  it("keeps a shell card's command when no result presenter answers", () => {
+    // The command belongs to the call, so a declined result must not drop the
+    // one row a folded shell card always shows.
+    const presenter: ToolPresenter = {
+      call: () => ({ kind: 'terminal', title: 'bash', command: 'echo hi', detail: [], failed: false, totalLines: 0 }),
+      result: () => undefined,
+    }
+    const model = new TranscriptModel(presenter)
+    model.apply({ type: 'tool/call', data: { name: 'bash', arguments: '{}', callId: 'c1' } })
+    model.apply({
+      type: 'tool/result',
+      data: { message: { content: [{ type: 'tool-result', toolCallId: 'c1', text: 'hi' }], isError: false } },
+    })
+    const entry = model.entries()[0]
+    expect(entry?.kind === 'tool' && entry.card.command).toBe('echo hi')
+    expect(entry?.kind === 'tool' && entry.card.detail.map(rowText)).toEqual(['hi'])
+  })
+
   it('shows every line of a multi-line call that no presenter described', () => {
     const model = new TranscriptModel()
     model.apply({ type: 'tool/call', data: { name: 'bash', arguments: '{"command":"a\nb"}', callId: 'c1' } })

@@ -46,8 +46,10 @@ describe('cardOfCall', () => {
     expect(cardOfCall(undefined, 'mystery')).toEqual({ kind: 'generic', title: 'mystery', detail: [], failed: false, totalLines: 0 })
   })
 
-  it('maps a terminal call to its command and working directory', () => {
+  it('names the tool in the header and keeps the command as its own field', () => {
     const card = cardOfCall({ card: 'terminal', title: 'ls -la', description: 'list files', cwd: '/tmp' }, 'bash')
+    expect(card.title).toBe('bash')
+    expect(card.command).toBe('ls -la')
     expect(texts(card.detail)).toEqual(['list files', 'cwd /tmp'])
     expect(card.detail.map(line => line.parts[0]?.class)).toEqual(['output', 'cwd'])
   })
@@ -91,7 +93,7 @@ describe('cardDetailRows', () => {
     expect(texts(shown.lines).at(0)).toBe(`line ${25 - CARD_SHELL_PREVIEW}`)
     expect(texts(shown.lines).at(-1)).toBe('line 24')
     expect(shown.hidden).toBe(25 - CARD_SHELL_PREVIEW)
-    expect(shellPreviewHint(shown.hidden)).toBe('… 5 earlier lines · ctrl+o shows them')
+    expect(shellPreviewHint(shown.hidden)).toBe('… 5 earlier lines · ctrl+o shows more')
   })
 
   it("keeps a shell card's whole output when it fits the preview", () => {
@@ -115,10 +117,37 @@ describe('cardDetailRows', () => {
 })
 
 describe('cardOfResult', () => {
-  it('renders a terminal result with its exit status', () => {
+  it('renders a terminal result with its exit status kept out of the output rows', () => {
     const card = cardOfResult({ card: 'terminal', title: 'ls', output: 'a\nb', exitCode: 0 }, { fallbackTitle: 'bash', failed: false, contentLines: [] })
-    expect(texts(card.detail)).toEqual(['a', 'b', 'exit 0'])
-    expect(card.detail.map(line => line.parts[0]?.class)).toEqual(['output', 'output', 'status'])
+    // The header is the tool, the result title is the command fallback, and the
+    // pill is its own field so it never consumes a folded output slot.
+    expect(card.title).toBe('bash')
+    expect(card.command).toBe('ls')
+    expect(card.status).toBe('exit 0')
+    expect(texts(card.detail)).toEqual(['a', 'b'])
+  })
+
+  it('does not spend a preview row on a terminating newline', () => {
+    const card = cardOfResult({ card: 'terminal', output: 'a\nb\n', exitCode: 0 }, { fallbackTitle: 'bash', failed: false, contentLines: [] })
+    expect(texts(card.detail)).toEqual(['a', 'b'])
+    expect(card.totalLines).toBe(2)
+  })
+
+  it('keeps the true tail and the status of output far past retention', () => {
+    const flood = Array.from({ length: 5000 }, (_, index) => `row ${index}`)
+    const card = cardOfResult(
+      { card: 'terminal', output: flood.join('\n'), exitCode: 3 },
+      { fallbackTitle: 'bash', failed: false, contentLines: [] },
+    )
+    expect(card.detail).toHaveLength(CARD_DETAIL_MAX)
+    expect(rowText(card.detail.at(-1) as CardRow)).toBe('row 4999')
+    expect(card.status).toBe('exit 3')
+    expect(card.totalLines).toBe(5000)
+    // Folded, the preview is the run's real tail, not the end of a retained head.
+    const shown = cardDetailRows(card, { expanded: false, preview: 'shellTail' })
+    expect(texts(shown.lines).at(0)).toBe(`row ${5000 - CARD_SHELL_PREVIEW}`)
+    expect(texts(shown.lines).at(-1)).toBe('row 4999')
+    expect(shown.hidden).toBe(5000 - CARD_SHELL_PREVIEW)
   })
 
   it('marks a failed result so the reader sees it without expanding', () => {
@@ -175,13 +204,14 @@ describe('cardOfResult', () => {
 })
 
 describe('mergeCards', () => {
-  const call: ToolCard = { kind: 'terminal', title: 'ls -la', detail: [row('cwd', 'cwd /tmp')], failed: false, totalLines: 1 }
+  const call: ToolCard = { kind: 'terminal', title: 'bash', command: 'ls -la', detail: [row('cwd', 'cwd /tmp')], failed: false, totalLines: 1 }
 
-  it('keeps the call header and swaps in the result', () => {
-    const result: ToolCard = { kind: 'terminal', title: 'ls', detail: [row('output', 'a'), row('output', 'b')], failed: false, totalLines: 2 }
+  it('keeps the call header and command while swapping in the result', () => {
+    const result: ToolCard = { kind: 'terminal', title: 'bash', detail: [row('output', 'a'), row('output', 'b')], failed: false, totalLines: 2 }
     expect(mergeCards(call, result)).toEqual({
       kind: 'terminal',
-      title: 'ls -la',
+      title: 'bash',
+      command: 'ls -la',
       detail: [row('output', 'a'), row('output', 'b')],
       failed: false,
       totalLines: 2,
@@ -192,11 +222,26 @@ describe('mergeCards', () => {
     const result: ToolCard = { kind: 'generic', title: 'ls', detail: [], failed: true, totalLines: 0 }
     expect(mergeCards(call, result)).toEqual({
       kind: 'terminal',
-      title: 'ls -la',
+      title: 'bash',
+      command: 'ls -la',
       detail: [row('cwd', 'cwd /tmp')],
       failed: true,
       totalLines: 1,
     })
+  })
+
+  it('carries the result status onto the merged terminal card', () => {
+    const result: ToolCard = { kind: 'terminal', title: 'bash', status: 'exit 2', detail: [row('output', 'boom')], failed: true, totalLines: 1 }
+    expect(mergeCards(call, result).status).toBe('exit 2')
+  })
+
+  it('drops a shell command when the merged kind is not a terminal', () => {
+    // A result that changes the card's kind must not leave a command line on a
+    // card that has no command.
+    const result: ToolCard = { kind: 'diff', title: 'Edit a.ts', detail: [row('added', '+x')], failed: false, totalLines: 1 }
+    const merged = mergeCards(call, result)
+    expect(merged.kind).toBe('diff')
+    expect(merged.command).toBeUndefined()
   })
 
   it('returns the single available card when only one side exists', () => {

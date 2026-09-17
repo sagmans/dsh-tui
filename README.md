@@ -120,7 +120,7 @@ dsh --profile tui --no-bell            # do not ring when a long turn finishes
 |---|---|
 | Enter | submit the prompt |
 | Ctrl+C | interrupt the running turn, or leave when idle |
-| Ctrl+O | open every tool card: its header plus every retained row. Folded, a card is one line, and a shell card keeps the last 20 rows of its command output with a hint naming what it dropped |
+| Ctrl+O | open every tool card: its header plus every retained row. Folded, a card is one line, and a shell card keeps its command plus the last 20 rows of output with a hint naming what it dropped |
 | Ctrl+T | show the reasoning behind an answer instead of its summary |
 | `y` / `n` / Esc | allow once, reject, or cancel a pending approval |
 | digits / space / ↑↓ / Enter / Esc | answer a question: pick or toggle, confirm, or skip one |
@@ -233,7 +233,7 @@ The package is a Cordis plugin bundle that stacks over `@deepseek-ai/dsh-base`:
 
 The fold is durable-only: the live stream decorates the row that is still being written, and everything else — cards, reasoning, work state, compaction markers — comes from the log, so a resumed session renders what the live one did. Subagent start and finish are the exception: they arrive as service events, and the transcript shows them as decoration because the durable record of a delegation is the tool call that asked for it.
 
-Tool cards are folded by default: a card draws its header and nothing else, so a long read, diff, or search cannot bury the conversation. A shell card is the exception, because its output is the answer the reader asked for — it keeps the last 20 rows and a hint naming the rows it dropped. `Ctrl+O` opens every card to its header plus every retained row.
+Tool cards are folded by default: a card draws its header and nothing else, so a long read, diff, or search cannot bury the conversation. A shell card is the exception, because its output is the answer the reader asked for: it names the tool in its header, always shows the command that ran, keeps the last 20 output rows, and adds a hint naming the rows it dropped. `Ctrl+O` opens every card to its header plus every retained row.
 
 The bundle also takes the base's global agent rows out of the composition, twenty-three of them. Every one is a row the shipped modes supply per session instead, so leaving it mounted registers the same tool names in two layers and doubles each prompt section it owns. What stays mounted is the host: sessions, storage, models, permissions, jobs, and the command registry.
 
