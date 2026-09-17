@@ -73,6 +73,9 @@ const GREY_WHITE_MAX = 224
 export function detectColourMode(env: Record<string, string | undefined>): ColourMode {
   const noColor = env.NO_COLOR
   if (noColor !== undefined && noColor !== '') return 'none'
+  // `dumb` declares a terminal with no capabilities at all, so nothing below
+  // can be trusted; NO_COLOR is not the only way to say "no styling here".
+  if ((env.TERM ?? '') === 'dumb') return 'none'
   const colorterm = env.COLORTERM ?? ''
   if (colorterm === 'truecolor' || colorterm === '24bit') return 'truecolor'
   if ((env.TERM ?? '').includes('256color')) return '256'

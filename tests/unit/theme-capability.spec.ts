@@ -21,6 +21,10 @@ describe('detectColourMode', () => {
   it('treats an empty NO_COLOR as unset, as the convention says', () => {
     expect(detectColourMode({ NO_COLOR: '', TERM: 'xterm-256color' })).toBe('256')
   })
+
+  it('treats a dumb terminal as no colour even without NO_COLOR', () => {
+    expect(detectColourMode({ TERM: 'dumb' })).toBe('none')
+  })
 })
 
 describe('parseColour', () => {
