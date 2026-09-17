@@ -104,6 +104,9 @@ const NAMED_KEYS = {
   down: '\u001b[B',
   esc: '\u001b',
   back: '\u0002',
+  'ctrl+t': '\u0014',
+  // Shift+Tab is CBT (CSI Z), distinct from the plain Tab an editor completes on.
+  'shift+tab': '\u001b[Z',
   // The surface asks the terminal to report key events, so a real arrow press
   // arrives as a press followed by a release. A run that only sends the legacy
   // sequence above cannot see a handler that acts on both.

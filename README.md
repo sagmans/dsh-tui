@@ -122,7 +122,8 @@ dsh --profile tui --no-bell            # do not ring when a long turn finishes
 | Enter | submit the prompt |
 | Ctrl+C | interrupt the running turn, or leave when idle |
 | Ctrl+O | open every tool card: its header plus every retained row. Folded, a card is one line, and a shell card keeps its command plus the last 20 rows of output with a hint naming what it dropped |
-| Ctrl+T | expand or fold the reasoning behind an answer: folded, the row names itself, its token count, and the key; opened, it adds the thought |
+| Shift+Tab | expand or fold the reasoning behind an answer: folded, the row names itself, its token count, and the key; opened, it adds the thought |
+| Ctrl+T | pick the reasoning effort for the next step |
 | `y` / `n` / Esc | allow once, reject, or cancel a pending approval |
 | digits / space / ↑↓ / Enter / Esc | answer a question: pick or toggle, confirm, or skip one |
 | `/` then Tab | complete commands, including every command this session registered |
@@ -137,6 +138,7 @@ dsh --profile tui --no-bell            # do not ring when a long turn finishes
 | `/model` | show the route the next step will use, and the providers available |
 | `/model <provider>` | list that provider's advertised models |
 | `/model <provider>/<model>` | use that route from the next step on (session only, nothing is written to settings) |
+| `/model <provider>/<model>/<effort>` | use that route and reasoning effort (the effort must be one the route advertises) |
 | `/preset` | pick the agent mode for this session from the roster |
 | `/preset <id>` | switch to that mode, while the session is still blank |
 | `/jobs` | list background jobs with their state and duration |
@@ -306,7 +308,7 @@ The workflow stores no npm token: the registry trusts `release.yml` on the `npm-
 ## Limitations
 
 - Two different things are called a preset. The agent mode (`--preset`, `/preset`) is fixed once a session has produced a turn; the permission preset (`/permission <preset>`, named in the status line) can change at any time.
-- `/model` changes the route for the running session only. Catalog membership is advisory — an adapter may accept an id it does not advertise.
+- `/model` changes the route and reasoning effort for the running session only. Catalog membership is advisory — an adapter may accept an id it does not advertise, while an explicit effort is checked against the route's own levels before it is applied.
 - Scrolling is the mouse wheel, or the terminal's own scrollback keys where it offers them.
 - A turn that ran longer than ten seconds rings the terminal bell when it ends, because the reader may have walked away; `--no-bell` turns that off.
 - The dock shows the goal, plan mode, the todo items still to do, and any background job or delegation still running; a settled item leaves rather than turns into a completed row. The transcript marks where older history was compacted away. `/plan` toggles plan mode; `/plan <message>` also steers that message, which is the base command's own behaviour.
