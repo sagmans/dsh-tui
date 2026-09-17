@@ -59,4 +59,33 @@ describe('transcriptToText', () => {
     })
     expect(transcriptToText(model.entries())).toContain('more lines')
   })
+
+  it('dumps the reasoning body, not only its count', () => {
+    const model = new TranscriptModel()
+    model.apply({ type: 'assistant/message', data: { message: { content: [
+      { type: 'reasoning', text: 'weigh the options' },
+      { type: 'text', text: 'the answer' },
+    ] } } })
+    const text = transcriptToText(model.entries())
+    expect(text).toContain('weigh the options')
+    expect(text).toContain('the answer')
+  })
+
+  it('cannot let a backtick run in tool output close the code block early', () => {
+    const model = new TranscriptModel()
+    model.apply({ type: 'tool/call', data: { name: 'bash', arguments: '{}', callId: 'c1' } })
+    model.apply({ type: 'tool/result', data: { message: { content: [{ type: 'tool-result', toolCallId: 'c1', text: 'before\n```\nafter' }], isError: false } } })
+    const text = transcriptToText(model.entries())
+    // The fence is longer than the run inside it, so the block survives.
+    expect(text).toContain('````')
+    expect(text).toContain('after')
+  })
+
+  it('cannot let a notice close its own comment', () => {
+    const model = new TranscriptModel()
+    model.notice('before --> after')
+    const text = transcriptToText(model.entries())
+    expect(text).toContain('--&gt;')
+    expect(text).not.toContain('<!-- before --> after -->')
+  })
 })

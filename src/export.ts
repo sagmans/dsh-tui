@@ -8,9 +8,33 @@ export const DEFAULT_EXPORT_PREFIX = 'dsh-session'
 /** Id characters kept in a file name, so a session id cannot escape the directory. */
 const UNSAFE_NAME = /[^A-Za-z0-9._-]/gu
 
+/** The shortest code fence; a longer backtick run in the body needs a longer one. */
+const MIN_FENCE = 3
+const BACKTICK_RUN = /`+/gu
+/** A comment body must not close the comment that carries it. */
+const COMMENT_CLOSE = '-->'
+const COMMENT_CLOSE_DEFUSED = '--&gt;'
+
 /** Default file for a dump: the session's own name, in the working directory. */
 export function defaultExportFile(sessionId: string): string {
   return `${DEFAULT_EXPORT_PREFIX}-${sessionId.replace(UNSAFE_NAME, '_')}.md`
+}
+
+/**
+ * A fence the body cannot close early.
+ *
+ * Tool output and thinking are arbitrary text, and a run of three backticks in
+ * either would end the block and spill the rest into the document as prose.
+ */
+function fenceFor(text: string): string {
+  let longest = 0
+  for (const run of text.match(BACKTICK_RUN) ?? []) longest = Math.max(longest, run.length)
+  return '`'.repeat(Math.max(MIN_FENCE, longest + 1))
+}
+
+/** Comment text with any closing marker defused, so the comment stays one. */
+function commentBody(text: string): string {
+  return displayText(text).replaceAll(COMMENT_CLOSE, COMMENT_CLOSE_DEFUSED)
 }
 
 /**
@@ -33,24 +57,34 @@ export function transcriptToText(entries: readonly TranscriptEntry[]): string {
         lines.push('', displayText(entry.text))
         break
       case 'notice':
-        lines.push('', `<!-- ${displayText(entry.text)} -->`)
+        lines.push('', `<!-- ${commentBody(entry.text)} -->`)
         break
       case 'marker':
         lines.push('', `--- ${displayText(entry.text)} ---`)
         break
-      case 'reasoning':
-        lines.push('', `<!-- ${displayText(entry.summary)} -->`)
+      case 'reasoning': {
+        // The thought is on screen now, so it belongs in the dump; only the
+        // count is metadata, and the body is the part a reader came for.
+        const body = entry.body.split('\n').map(displayText)
+        const fence = fenceFor(body.join('\n'))
+        lines.push('', `<!-- ${commentBody(entry.summary)} -->`, `${fence}reasoning`)
+        lines.push(...body)
+        lines.push(fence)
         break
+      }
       case 'tool': {
         const mark = entry.card.failed ? 'ERROR' : 'tool'
-        lines.push('', `### ${mark}: ${displayText(entry.card.title)}`, '', '```')
         // The dump is the words, not the screen: row classes exist so the
         // surface can style a line, and a file has no use for them.
-        for (const row of entry.card.detail) lines.push(displayText(rowText(row)))
-        if (entry.card.totalLines > entry.card.detail.length) {
-          lines.push(`… ${entry.card.totalLines - entry.card.detail.length} more lines`)
-        }
-        lines.push('```')
+        const rows = entry.card.detail.map(row => displayText(rowText(row)))
+        const more = entry.card.totalLines > entry.card.detail.length
+          ? `… ${entry.card.totalLines - entry.card.detail.length} more lines`
+          : undefined
+        const fence = fenceFor([displayText(entry.card.title), ...rows, more ?? ''].join('\n'))
+        lines.push('', `### ${mark}: ${displayText(entry.card.title)}`, '', fence)
+        lines.push(...rows)
+        if (more !== undefined) lines.push(more)
+        lines.push(fence)
         break
       }
     }
