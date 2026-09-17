@@ -42,7 +42,10 @@ import { BELL, shouldRingBell } from './terminal/bell.ts'
 import { clipboardSequence } from './terminal/clipboard.ts'
 import { CLEAR_TITLE, windowTitle } from './terminal/title.ts'
 import { defaultExportFile, transcriptToText } from './export.ts'
-import { colorEnabled, createTheme } from './theme.ts'
+import { createTheme, forwardEditorTheme, forwardMarkdownTheme, type TuiTheme } from './theme.ts'
+import { detectColourMode, type ColourMode } from './theme-capability.ts'
+import { defaultSettings, readScope, toOverrides, TUI_SETTINGS_NAMESPACE, TuiSettingsSchema, type TuiSettings } from './theme-settings.ts'
+import { renderThemeTable } from './theme-command.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { TranscriptModel } from './transcript.ts'
 import { WorkFold, describeTodos } from './work.ts'
@@ -125,7 +128,55 @@ export function apply(ctx: Context, config: unknown): void {
     throw new Error('dsh-tui: the dsh launcher must provide appExit; start this surface with dsh --profile tui')
   }
 
-  const theme = createTheme(colorEnabled(resolved.color))
+  /**
+   * The surface's appearance, rebuilt whenever the reader's settings change.
+   *
+   * Renderers hold this object for the life of the session, so the current
+   * theme is swapped *behind* a stable delegate rather than reassigned: every
+   * row then reads one whole table, and a repaint can never observe a
+   * half-applied one. `--no-color` still outranks anything configured.
+   */
+  const themeMode = (): ColourMode => (resolved.color ? detectColourMode(process.env) : 'none')
+  /**
+   * The reader's section, or nothing when the service is not mounted.
+   *
+   * The service is only readable inside an `inject` scope — asking for it
+   * outside one is a composition error, not a missing value — so this stays a
+   * late-bound read that the injection point and the change event both use.
+   */
+  let readSection = (): TuiSettings => defaultSettings()
+  /** A refused settings edit, kept until the surface can show it: stderr is behind the alt screen. */
+  let pendingSettingsProblem: string | undefined
+  let current = createTheme(themeMode())
+  const applyTheme = (): void => {
+    current = createTheme(themeMode(), toOverrides(readSection()))
+  }
+  const theme: TuiTheme = {
+    get revision() { return current.revision },
+    get color() { return current.color },
+    style: (token, text) => current.style(token, text),
+    cut: (text, width, ellipsis) => current.cut(text, width, ellipsis),
+    glyph: token => current.glyph(token),
+    visible: token => current.visible(token),
+    // Forwarded rather than read, because the editor and the markdown view keep
+    // the theme object they were built with: a settings change has to reach them
+    // through a stable delegate or they would keep the boot appearance.
+    editor: forwardEditorTheme(() => current.editor),
+    markdown: forwardMarkdownTheme(() => current.markdown),
+  }
+  /**
+   * Own the section, so the harness validates and persists it for the reader.
+   *
+   * Registration is how the document learns the section exists at all; without
+   * it a hand-written `dsh-tui:` block would be dropped on the next save. The
+   * first read happens here too, because this is the only scope the service
+   * may be touched in.
+   */
+  ctx.inject(['settings'], settingsCtx => {
+    const scope = settingsCtx.settings.register(TUI_SETTINGS_NAMESPACE, TuiSettingsSchema)
+    readSection = () => readScope(scope, message => { pendingSettingsProblem = message })
+    applyTheme()
+  })
   const model = new TranscriptModel(createToolPresenter(ctx))
   const work = new WorkFold()
   const modelSwitch = new ModelSwitch()
@@ -146,8 +197,12 @@ export function apply(ctx: Context, config: unknown): void {
   const roster = new SubagentRoster()
   const subagentControl = createSubagentControl(ctx)
   const markdown = new MarkdownRenderer(theme.markdown)
-  /** Rows the reader has opened. The model stays untouched; only the view reads this. */
-  const viewState = { expandCards: false, expandReasoning: false }
+  /**
+   * Rows the reader has opened. The model stays untouched; only the view reads
+   * this. Reasoning starts open: a reader asking to see the model think is not
+   * served by a row that names only a character count and hides the thought.
+   */
+  const viewState = { expandCards: false, expandReasoning: true }
   const restore = createRestoreRegistry()
   const terminal = new ProcessTerminal()
   const tui = new TuiAltScreen(terminal)
@@ -1050,6 +1105,10 @@ export function apply(ctx: Context, config: unknown): void {
       case 'todo':
         runTodoCommand()
         return
+      case 'theme':
+        for (const line of renderThemeTable(toOverrides(readSection()))) model.notice(line)
+        tui.requestRender()
+        return
       case 'copy':
         runCopyCommand()
         return
@@ -1217,6 +1276,29 @@ export function apply(ctx: Context, config: unknown): void {
     tui.requestRender()
   }))
 
+  /**
+   * Restyle a running session when the reader's section changes.
+   *
+   * The settings document is hot-reloaded by the host, so a reader watching a
+   * shade land never has to leave the session to see it — which is what makes
+   * tuning one bearable instead of a restart per attempt. The event is
+   * namespace-filtered: another surface's preferences are not our repaint.
+   */
+  disposers.push(ctx.on('settings/updated', ns => {
+    if (String(ns) !== TUI_SETTINGS_NAMESPACE) return
+    pendingSettingsProblem = undefined
+    applyTheme()
+    // Both caches hold rows under the old table, so they have to be told the
+    // table moved; a repaint alone would reuse what they already stored.
+    markdown.invalidate()
+    view.invalidate()
+    if (pendingSettingsProblem !== undefined) {
+      model.notice(`dsh-tui settings: ${pendingSettingsProblem}`)
+      pendingSettingsProblem = undefined
+    }
+    tui.requestRender()
+  }))
+
   const degraded = describeMissingOptional(probe)
   if (degraded !== undefined) model.notice(degraded)
 
@@ -1259,6 +1341,12 @@ export function apply(ctx: Context, config: unknown): void {
     if (!resolved.resumePicker) await presetFor(resolved.sessionId, resolved.resume, undefined)
     tui.start()
     terminal.write(windowTitle(process.cwd(), 'ready'))
+    // A refused settings edit is only visible now that the surface owns the
+    // screen; a bare stderr line would have been hidden behind it.
+    if (pendingSettingsProblem !== undefined) {
+      model.notice(`dsh-tui settings: ${pendingSettingsProblem}`)
+      pendingSettingsProblem = undefined
+    }
     await boot()
   }
 

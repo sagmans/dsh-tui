@@ -1,10 +1,11 @@
 import { visibleWidth } from '@earendil-works/pi-tui'
 import { describe, expect, it } from 'vitest'
 import { createTheme } from '@/theme.ts'
+import { DEFAULT_PALETTE } from '@/theme-tokens.ts'
 import { cacheRate, usageTotals } from '@/agent/status.ts'
 import { formatStatus, formatTokens, shortPath, type StatusFacts } from '@/ui/status.ts'
 
-const theme = createTheme(false)
+const theme = createTheme('none')
 
 const facts = (overrides: Partial<StatusFacts> = {}): StatusFacts => ({
   activity: 'idle',
@@ -124,5 +125,75 @@ describe('formatStatus', () => {
   it('never overflows the row it was given', () => {
     // Escape sequences are not columns, so the row is measured, not counted.
     expect(visibleWidth(formatStatus(facts(), 20, theme))).toBeLessThanOrEqual(20)
+  })
+
+  /**
+   * The footer styles segments and then joins them, so it is the one renderer
+   * that could hand its own generated escapes to the escaper that exists for
+   * untrusted text. A `\x1B` on screen is exactly that mistake.
+   */
+  describe('with colour on', () => {
+    const colourTheme = createTheme('truecolor')
+    const working = (): StatusFacts => facts({ activity: 'working', elapsedMs: 22_000 })
+
+    it('never prints an escape as literal text', () => {
+      const line = formatStatus(working(), 200, colourTheme)
+      expect(line).not.toContain('\\x1B')
+      expect(line).not.toContain('\\u001B')
+    })
+
+    it('opens one styled run per element and closes it again', () => {
+      const line = formatStatus(working(), 200, colourTheme)
+      // The reset is itself a sequence beginning with `ESC[`, so opens are
+      // counted as sequences that are not the reset.
+      const sequences = line.match(/\u001B\[[0-9;]*m/gu) ?? []
+      const opens = sequences.filter(sequence => sequence !== '\u001B[0m').length
+      const resets = sequences.filter(sequence => sequence === '\u001B[0m').length
+      expect(opens).toBeGreaterThan(0)
+      expect(resets).toBe(opens)
+    })
+
+    it('leaves no styling open when it truncates', () => {
+      const line = formatStatus(working(), 24, colourTheme)
+      // A row cut mid-style bleeds colour into whatever the surface draws next.
+      expect(line.endsWith('\u001B[0m')).toBe(true)
+    })
+
+    it('styles the elapsed time as its own element without nesting it', () => {
+      const line = formatStatus(working(), 200, colourTheme)
+      // Elapsed must stay separately addressable, so it is its own styled run
+      // rather than text folded into the activity's. Nesting two runs is what
+      // produced a doubled reset and an escape printed as text.
+      expect(line).toContain('\u001B[38;2;138;138;138m▶ working\u001B[0m')
+      expect(line).toContain('\u001B[38;2;138;138;138m 22s\u001B[0m')
+      expect(line).not.toContain('\u001B[0m\u001B[0m')
+    })
+
+    it('reads the same with colour on as it does with colour off', () => {
+      // Styling may not change the words, only how they are drawn.
+      const coloured = formatStatus(working(), 200, colourTheme)
+      const plain = formatStatus(working(), 200, theme)
+      expect(coloured.replace(/\u001B\[[0-9;]*m/gu, '')).toBe(plain)
+    })
+
+    it('keeps the row the width it was given once escapes are discounted', () => {
+      expect(visibleWidth(formatStatus(working(), 40, colourTheme))).toBeLessThanOrEqual(40)
+    })
+  })
+})
+
+describe('formatStatus theming', () => {
+  it('draws no separator when the separator element is hidden', () => {
+    // Hiding the separator used to fall back to a plain one, which is the
+    // opposite of what hidden promises.
+    const hidden = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['status.separator', { hidden: true }]]) })
+    const line = formatStatus(facts(), 200, hidden)
+    expect(line).not.toContain('·')
+    expect(line).toContain('deepseek-chat')
+  })
+
+  it('omits a hidden fact entirely', () => {
+    const hidden = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['status.cwd', { hidden: true }]]) })
+    expect(formatStatus(facts(), 200, hidden)).not.toContain('source/opensource')
   })
 })

@@ -67,6 +67,16 @@ const INSERTED_ROWS = [
  */
 const HOST_PROVIDED_PACKAGES = ['@deepseek-ai/dsh-tool-subagent/model-selection-settings']
 
+/**
+ * First-party packages this bundle links against without mounting.
+ *
+ * The guard below exists to catch the patch drifting away from the manifest.
+ * A schema builder is a library, not a cordis plugin, so it has no row to
+ * mount; naming it here keeps that distinction explicit instead of loosening
+ * the check for every package at once.
+ */
+const LIBRARY_PACKAGES = ['@deepseek-ai/schemastery']
+
 /** The mode a flagless run joins, which has to be one the roster actually ships. */
 const ROSTER_DEFAULT = 'standard'
 
@@ -146,7 +156,9 @@ describe('the bundle patch', () => {
       if (HOST_PROVIDED_PACKAGES.includes(name)) continue
       expect(manifest.dependencies?.[name], `${name} is mounted but not a dependency`).toBeDefined()
     }
-    const declared = Object.keys(manifest.dependencies ?? {}).filter(name => name.startsWith('@deepseek-ai/'))
+    const declared = Object.keys(manifest.dependencies ?? {})
+      .filter(name => name.startsWith('@deepseek-ai/'))
+      .filter(name => !LIBRARY_PACKAGES.includes(name))
     for (const name of declared) {
       expect(mounted, `${name} is a dependency but no row mounts it`).toContain(name)
     }

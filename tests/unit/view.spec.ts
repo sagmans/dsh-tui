@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import type { GateCard } from '@/gates.ts'
-import { createTheme } from '@/theme.ts'
+import { createTheme, forwardEditorTheme, forwardMarkdownTheme, type TuiTheme } from '@/theme.ts'
+import { DEFAULT_PALETTE } from '@/theme-tokens.ts'
 import { TranscriptModel, type TranscriptEntry } from '@/transcript.ts'
 import { MarkdownRenderer } from '@/ui/markdown.ts'
 import type { PickerCard } from '@/ui/picker.ts'
 import { RowCache } from '@/ui/rows.ts'
 import { TranscriptView, type ViewState } from '@/ui/view.ts'
 
-const theme = createTheme(false)
+const theme = createTheme('none')
 const COLLAPSED: ViewState = { expandCards: false, expandReasoning: false }
 
 function viewOf(model: TranscriptModel, state: ViewState = COLLAPSED, gate?: GateCard): TranscriptView {
@@ -52,18 +53,18 @@ describe('TranscriptView repaints', () => {
 })
 
 describe('TranscriptView text', () => {
-  it('renders assistant text as markdown under its glyph', () => {
+  it('renders assistant text as markdown', () => {
     const model = new TranscriptModel()
     model.apply({ type: 'assistant/message', data: { message: { content: [{ type: 'text', text: '# Title\n\nplain **strong**' }] } } })
     const lines = viewOf(model).render(60)
-    expect(lines[0]).toBe('⏺ Title')
+    expect(lines[0]).toBe('Title')
     expect(lines.some(line => line.includes('strong'))).toBe(true)
   })
 
-  it('keeps a human prompt on its own glyph', () => {
+  it('keeps a human prompt on its own row', () => {
     const model = new TranscriptModel()
     model.apply({ type: 'user/message', data: { content: [{ type: 'text', text: 'hello there' }], source: { kind: 'user' } } })
-    expect(viewOf(model).render(40)).toEqual(['› hello there'])
+    expect(viewOf(model).render(40)).toEqual(['hello there'])
   })
 
   it('escapes control sequences out of model and tool text', () => {
@@ -74,6 +75,33 @@ describe('TranscriptView text', () => {
     const rendered = lines.join('\n')
     expect(rendered).toContain('\\x1B[31mred\\x07')
     expect(rendered).not.toContain('\u001b')
+  })
+
+  it('renders a recorded thought, folded or open, dimmed, and leaves the answer alone', () => {
+    const model = new TranscriptModel()
+    model.apply({
+      type: 'assistant/message',
+      data: {
+        message: {
+          content: [
+            { type: 'reasoning', text: 'first thought\nsecond thought' },
+            { type: 'text', text: 'the answer' },
+          ],
+        },
+      },
+    })
+    const colour = createTheme('truecolor')
+    const markdown = new MarkdownRenderer(colour.markdown)
+    const folded = new TranscriptView(model, colour, markdown, { state: () => ({ expandCards: false, expandReasoning: false }) }).render(60)
+    expect(folded).toEqual(expect.arrayContaining([expect.stringContaining('reasoning · 7 tokens')]))
+    // The explicit grey, not a palette slot: this is the whole point.
+    expect(folded[0]).toContain('\u001b[38;2;138;138;138m')
+    expect(folded.some(line => line.includes('second thought'))).toBe(false)
+
+    const opened = new TranscriptView(model, colour, markdown, { state: () => ({ expandCards: false, expandReasoning: true }) }).render(60)
+    expect(opened).toHaveLength(4)
+    for (const line of opened.slice(0, 3)) expect(line).toContain('\u001b[38;2;138;138;138m')
+    expect(opened[3]).toBe('the answer')
   })
 
   it('wraps a long line to the width it was given', () => {
@@ -89,7 +117,7 @@ describe('TranscriptView markers', () => {
   it('sets a boundary row apart from what anyone said', () => {
     const model = new TranscriptModel()
     model.marker('compacted 12 events (≈3000 tokens)')
-    expect(viewOf(model).render(60)).toEqual(['⧉ compacted 12 events (≈3000 tokens)'])
+    expect(viewOf(model).render(60)).toEqual(['compacted 12 events (≈3000 tokens)'])
   })
 })
 
@@ -113,17 +141,22 @@ describe('TranscriptView expansion', () => {
     expect(lines.some(line => line.includes('ctrl+o'))).toBe(false)
   })
 
-  it('keeps reasoning folded until it is asked for', () => {
+  it('names where the thought is when the row is folded', () => {
     let clock = 0
     const model = new TranscriptModel(undefined, () => clock)
     model.applyStreamChunk({ type: 'reasoning-delta', text: 'first thought\nsecond thought' })
     clock = 5_000
     model.applyStreamChunk({ type: 'block-end', block: { type: 'reasoning' } })
     const folded = viewOf(model).render(60)
-    expect(folded).toEqual(['▸ reasoning · 2 lines · 28 chars · 5s'])
+    // The row must say the body exists: a count with no way to reach the text
+    // reads the same as the text never having arrived.
+    expect(folded).toEqual([
+      'reasoning · 7 tokens · 5s',
+      '    ctrl+t shows it',
+    ])
     const opened = viewOf(model, { expandCards: false, expandReasoning: true }).render(60)
     expect(opened).toEqual([
-      '▸ reasoning · 2 lines · 28 chars · 5s',
+      'reasoning · 7 tokens · 5s',
       '    first thought',
       '    second thought',
     ])
@@ -148,7 +181,9 @@ describe('TranscriptView picker', () => {
       picker: () => picker,
     })
     const lines = view.render(80)
-    expect(lines).toContain('↻ resume a session · 2 stored')
+    // No glyph by default: the picker's mark is a token now, and the shipped
+    // table ships none, so the heading is its words.
+    expect(lines).toContain('resume a session · 2 stored')
     expect(lines).toContain('    filter: fix')
     expect(lines).toContain('   ❯ fix the parser — /work · 3m ago · 12 events')
     expect(lines).toContain('     tui-session-b — /tmp · 1d ago')
@@ -171,7 +206,7 @@ describe('TranscriptView picker', () => {
       picker: () => picker,
     })
     const lines = view.render(60)
-    const heading = lines.findIndex(line => line.includes('↻ resume a session'))
+    const heading = lines.findIndex(line => line.includes('resume a session'))
     const row = lines.findIndex(line => line.includes('❯ tui-session-a'))
     // A reason that does not fit has to keep going rather than be cut off.
     const note = lines.slice(heading + 1, row).join(' ').replace(/\s+/gu, ' ')
@@ -211,5 +246,60 @@ describe('TranscriptView gate', () => {
     expect(lines).toContain('? which target?  (1/2)')
     expect(lines).toContain('   ❯ [x] 1. staging — safe')
     expect(lines).toContain('     [ ] 2. production')
+  })
+})
+
+describe('TranscriptView theming', () => {
+  const userModel = (): TranscriptModel => {
+    const model = new TranscriptModel()
+    model.apply({ type: 'user/message', data: { content: [{ type: 'text', text: 'hello there' }], source: { kind: 'user' } } })
+    return model
+  }
+
+  it('draws nothing for a hidden element', () => {
+    const hidden = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['transcript.user', { hidden: true }]]) })
+    const lines = new TranscriptView(userModel(), hidden, new MarkdownRenderer(hidden.markdown), { state: () => COLLAPSED }).render(60)
+    expect(lines.join('\n')).not.toContain('hello')
+  })
+
+  it('draws no empty indented row when every part of a card row is hidden', () => {
+    const model = new TranscriptModel()
+    model.apply(toolCall())
+    model.apply(toolResult('boom'))
+    const hidden = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['tool.generic.detail', { hidden: true }]]) })
+    const lines = new TranscriptView(model, hidden, new MarkdownRenderer(hidden.markdown), { state: () => COLLAPSED }).render(60)
+    expect(lines.filter(line => line.trim() === '' && line !== '')).toEqual([])
+  })
+
+  it('hides a reasoning body without hiding its summary', () => {
+    const model = new TranscriptModel()
+    model.apply({ type: 'assistant/message', data: {
+      message: { content: [{ type: 'reasoning', text: 'secret thought' }, { type: 'text', text: 'the answer' }] },
+    } })
+    const hidden = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['transcript.reasoning.body', { hidden: true }]]) })
+    const lines = new TranscriptView(model, hidden, new MarkdownRenderer(hidden.markdown), {
+      state: () => ({ expandCards: false, expandReasoning: true }),
+    }).render(60)
+    expect(lines.join('\n')).not.toContain('secret thought')
+    expect(lines.join('\n')).toContain('reasoning ·')
+  })
+
+  it('rebuilds cached rows when the theme revision moves', () => {
+    let active = createTheme('truecolor')
+    const delegate: TuiTheme = {
+      get revision() { return active.revision },
+      get color() { return active.color },
+      style: (token, text) => active.style(token, text),
+      cut: (text, width, ellipsis) => active.cut(text, width, ellipsis),
+      glyph: token => active.glyph(token),
+      visible: token => active.visible(token),
+      editor: forwardEditorTheme(() => active.editor),
+      markdown: forwardMarkdownTheme(() => active.markdown),
+    }
+    const view = new TranscriptView(userModel(), delegate, new MarkdownRenderer(delegate.markdown), { state: () => COLLAPSED })
+    expect(view.render(60).join('\n')).toContain('38;2;208;208;208')
+    active = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['transcript.user', { fg: '#ff0000' }]]) })
+    // The row cache is keyed to the old revision, so a plain repaint re-draws it.
+    expect(view.render(60).join('\n')).toContain('38;2;255;0;0')
   })
 })

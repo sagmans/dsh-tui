@@ -30,4 +30,16 @@ export class MarkdownRenderer {
     this.parsed.set(text, message)
     return message.render(Math.max(1, Math.floor(width)))
   }
+
+  /**
+   * Drop parsed messages after a theme change.
+   *
+   * A `Markdown` caches the lines it rendered for a width, so keeping the
+   * instance would keep the old escapes; the reader's new shade would land
+   * everywhere except the answer.
+   */
+  invalidate(): void {
+    for (const message of this.parsed.values()) message.invalidate()
+    this.parsed.clear()
+  }
 }
