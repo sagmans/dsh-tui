@@ -42,7 +42,7 @@ import { BELL, shouldRingBell } from './terminal/bell.ts'
 import { clipboardSequence } from './terminal/clipboard.ts'
 import { CLEAR_TITLE, windowTitle } from './terminal/title.ts'
 import { defaultExportFile, transcriptToText } from './export.ts'
-import { createTheme, type TuiTheme } from './theme.ts'
+import { createTheme, forwardEditorTheme, forwardMarkdownTheme, type TuiTheme } from './theme.ts'
 import { detectColourMode, type ColourMode } from './theme-capability.ts'
 import { defaultSettings, readScope, toOverrides, TUI_SETTINGS_NAMESPACE, TuiSettingsSchema, type TuiSettings } from './theme-settings.ts'
 import { renderThemeTable } from './theme-command.ts'
@@ -145,18 +145,24 @@ export function apply(ctx: Context, config: unknown): void {
    * late-bound read that the injection point and the change event both use.
    */
   let readSection = (): TuiSettings => defaultSettings()
+  /** A refused settings edit, kept until the surface can show it: stderr is behind the alt screen. */
+  let pendingSettingsProblem: string | undefined
   let current = createTheme(themeMode())
   const applyTheme = (): void => {
     current = createTheme(themeMode(), toOverrides(readSection()))
   }
   const theme: TuiTheme = {
+    get revision() { return current.revision },
     get color() { return current.color },
     style: (token, text) => current.style(token, text),
     cut: (text, width, ellipsis) => current.cut(text, width, ellipsis),
     glyph: token => current.glyph(token),
     visible: token => current.visible(token),
-    get editor() { return current.editor },
-    get markdown() { return current.markdown },
+    // Forwarded rather than read, because the editor and the markdown view keep
+    // the theme object they were built with: a settings change has to reach them
+    // through a stable delegate or they would keep the boot appearance.
+    editor: forwardEditorTheme(() => current.editor),
+    markdown: forwardMarkdownTheme(() => current.markdown),
   }
   /**
    * Own the section, so the harness validates and persists it for the reader.
@@ -168,7 +174,7 @@ export function apply(ctx: Context, config: unknown): void {
    */
   ctx.inject(['settings'], settingsCtx => {
     const scope = settingsCtx.settings.register(TUI_SETTINGS_NAMESPACE, TuiSettingsSchema)
-    readSection = () => readScope(scope)
+    readSection = () => readScope(scope, message => { pendingSettingsProblem = message })
     applyTheme()
   })
   const model = new TranscriptModel(createToolPresenter(ctx))
@@ -1280,7 +1286,16 @@ export function apply(ctx: Context, config: unknown): void {
    */
   disposers.push(ctx.on('settings/updated', ns => {
     if (String(ns) !== TUI_SETTINGS_NAMESPACE) return
+    pendingSettingsProblem = undefined
     applyTheme()
+    // Both caches hold rows under the old table, so they have to be told the
+    // table moved; a repaint alone would reuse what they already stored.
+    markdown.invalidate()
+    view.invalidate()
+    if (pendingSettingsProblem !== undefined) {
+      model.notice(`dsh-tui settings: ${pendingSettingsProblem}`)
+      pendingSettingsProblem = undefined
+    }
     tui.requestRender()
   }))
 
@@ -1326,6 +1341,12 @@ export function apply(ctx: Context, config: unknown): void {
     if (!resolved.resumePicker) await presetFor(resolved.sessionId, resolved.resume, undefined)
     tui.start()
     terminal.write(windowTitle(process.cwd(), 'ready'))
+    // A refused settings edit is only visible now that the surface owns the
+    // screen; a bare stderr line would have been hidden behind it.
+    if (pendingSettingsProblem !== undefined) {
+      model.notice(`dsh-tui settings: ${pendingSettingsProblem}`)
+      pendingSettingsProblem = undefined
+    }
     await boot()
   }
 

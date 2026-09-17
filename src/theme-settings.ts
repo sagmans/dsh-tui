@@ -20,7 +20,6 @@ export const TUI_SETTINGS_NAMESPACE = 'dsh-tui'
  * the session.
  */
 const ColourSchema = z.union([
-  z.const('#000000'),
   z.string().pattern(/^#[0-9a-fA-F]{6}$/u),
   z.union([...PALETTE_NAMES]),
   z.number().min(0).max(255),
@@ -70,21 +69,26 @@ const SECTION = z.object({
 export const TuiSettingsSchema = SECTION
 
 const TOKEN_NAMES = new Set<string>(TUI_TOKENS)
+const PALETTE_NAME_SET = new Set<string>(PALETTE_NAMES)
 
 /**
- * Validate the raw section, refusing a token name the surface does not have.
+ * Validate the raw section, refusing a name the surface does not have.
  *
- * Schemastery's object schema ignores undeclared keys, so a misspelled token
- * would otherwise parse cleanly and do nothing at all — the one outcome a
- * reader could not debug from the screen. The names are therefore checked
- * against the union before validation.
+ * Schemastery's object schema ignores undeclared keys, so a misspelled token or
+ * palette entry would otherwise parse cleanly and do nothing at all — the one
+ * outcome a reader could not debug from the screen. Both halves are therefore
+ * checked against their declared names before validation.
  */
-function rejectUnknownTokens(raw: unknown): void {
-  const tokens = asRecord(asRecord(raw)?.tokens)
-  if (tokens === undefined) return
-  const unknown = Object.keys(tokens).filter(name => !TOKEN_NAMES.has(name))
-  if (unknown.length > 0) {
-    throw new Error(`unknown ${TUI_SETTINGS_NAMESPACE} token${unknown.length === 1 ? '' : 's'}: ${unknown.join(', ')}`)
+function rejectUnknownKeys(raw: unknown): void {
+  const section = asRecord(raw)
+  if (section === undefined) return
+  const unknownTokens = Object.keys(asRecord(section.tokens) ?? {}).filter(name => !TOKEN_NAMES.has(name))
+  if (unknownTokens.length > 0) {
+    throw new Error(`unknown ${TUI_SETTINGS_NAMESPACE} token${unknownTokens.length === 1 ? '' : 's'}: ${unknownTokens.join(', ')}`)
+  }
+  const unknownPalette = Object.keys(asRecord(section.palette) ?? {}).filter(name => !PALETTE_NAME_SET.has(name))
+  if (unknownPalette.length > 0) {
+    throw new Error(`unknown ${TUI_SETTINGS_NAMESPACE} palette entr${unknownPalette.length === 1 ? 'y' : 'ies'}: ${unknownPalette.join(', ')}`)
   }
 }
 
@@ -94,7 +98,7 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
 
 /** The reader-facing shape of the `dsh-tui:` section. */
 export function parseSettings(raw: unknown): TuiSettings {
-  rejectUnknownTokens(raw)
+  rejectUnknownKeys(raw)
   const section = asRecord(raw) ?? {}
   const parsed = SECTION(section) as { palette: Record<PaletteName, string>; tokens: Record<string, StyleSpec> }
   // Only what the reader actually wrote is an override: the schema fills every
@@ -152,14 +156,17 @@ export interface ThemeOverrides {
  *
  * A malformed section must not cost the reader their session: an unreadable
  * one falls back to the shipped table, which is the appearance the surface had
- * before any of this existed. It is loud on the way past, because a silently
- * ignored typo is the exact failure this section is meant to prevent.
+ * before any of this existed. The caller is told on the way past, because a
+ * silently ignored typo is the exact failure this section is meant to prevent;
+ * stderr alone is invisible under the alternate screen.
  */
-export function readScope(scope: { get(): unknown }): TuiSettings {
+export function readScope(scope: { get(): unknown }, onProblem?: (message: string) => void): TuiSettings {
   try {
     return parseSettings(scope.get() ?? {})
   } catch (error) {
-    process.stderr.write(`dsh-tui: ignoring ${TUI_SETTINGS_NAMESPACE} settings: ${error instanceof Error ? error.message : String(error)}\n`)
+    const message = `ignoring ${TUI_SETTINGS_NAMESPACE} settings: ${error instanceof Error ? error.message : String(error)}`
+    if (onProblem === undefined) process.stderr.write(`dsh-tui: ${message}\n`)
+    else onProblem(message)
     return defaultSettings()
   }
 }

@@ -7,12 +7,21 @@ import type { ThemeOverrides } from './theme-settings.ts'
 const NO_OVERRIDES: ThemeOverrides = { palette: DEFAULT_PALETTE, tokens: new Map() }
 
 /**
+ * Distinguishes one theme table from the next.
+ *
+ * A renderer caches rows against the theme that produced them, so the revision
+ * is how a cache learns its rows were drawn under a table that is now stale.
+ */
+let themeRevision = 0
+
+/**
  * Styling the surface applies, and the editor/select themes pi-tui needs.
  *
  * Every element is drawn by naming its token, so a reader's override reaches
  * it without the renderer knowing what the element is for.
  */
 export interface TuiTheme {
+  readonly revision: number
   readonly color: boolean
   /** Draw one named element. */
   style(token: TuiToken, text: string): string
@@ -94,6 +103,7 @@ export function createTheme(mode: ColourMode = detectColourMode(process.env), ov
     return mode === 'none' ? truncated.replaceAll(resetSequence(), '') : truncated
   }
   return {
+    revision: ++themeRevision,
     color: mode !== 'none',
     style,
     cut,
@@ -101,5 +111,45 @@ export function createTheme(mode: ColourMode = detectColourMode(process.env), ov
     visible: token => !resolve(token).hidden,
     editor: editorTheme(style),
     markdown: markdownTheme(style),
+  }
+}
+
+/**
+ * An editor theme that follows a moving source.
+ *
+ * The editor keeps the theme it was built with for the life of the session, so
+ * a settings change has to reach it through a stable object instead of by
+ * replacing the one it captured.
+ */
+export function forwardEditorTheme(source: () => EditorTheme): EditorTheme {
+  return {
+    borderColor: text => source().borderColor(text),
+    selectList: {
+      selectedPrefix: text => source().selectList.selectedPrefix(text),
+      selectedText: text => source().selectList.selectedText(text),
+      description: text => source().selectList.description(text),
+      scrollInfo: text => source().selectList.scrollInfo(text),
+      noMatch: text => source().selectList.noMatch(text),
+    } satisfies SelectListTheme,
+  }
+}
+
+/** The markdown counterpart of {@link forwardEditorTheme}. */
+export function forwardMarkdownTheme(source: () => MarkdownTheme): MarkdownTheme {
+  return {
+    heading: text => source().heading(text),
+    link: text => source().link(text),
+    linkUrl: text => source().linkUrl(text),
+    code: text => source().code(text),
+    codeBlock: text => source().codeBlock(text),
+    codeBlockBorder: text => source().codeBlockBorder(text),
+    quote: text => source().quote(text),
+    quoteBorder: text => source().quoteBorder(text),
+    hr: text => source().hr(text),
+    listBullet: text => source().listBullet(text),
+    bold: text => source().bold(text),
+    italic: text => source().italic(text),
+    strikethrough: text => source().strikethrough(text),
+    underline: text => source().underline(text),
   }
 }

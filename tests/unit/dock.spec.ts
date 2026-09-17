@@ -1,6 +1,7 @@
 import { visibleWidth } from '@earendil-works/pi-tui'
 import { describe, expect, it } from 'vitest'
 import { createTheme } from '@/theme.ts'
+import { DEFAULT_PALETTE } from '@/theme-tokens.ts'
 import { DOCK_TODO_LIMIT, WorkDock } from '@/ui/dock.ts'
 import type { WorkState } from '@/work.ts'
 
@@ -80,5 +81,25 @@ describe('WorkDock', () => {
   it('never overflows its row', () => {
     const state: WorkState = { ...EMPTY, todos: [{ content: 'y'.repeat(200), status: 'pending' }] }
     for (const line of dockOf(state).render(30)) expect(visibleWidth(line)).toBeLessThanOrEqual(30)
+  })
+})
+
+describe('WorkDock theming', () => {
+  const job = (status: 'running' | 'completed' | 'failed') => [
+    { id: 'bash-1', kind: 'bash', label: 'build', status, startedAt: 1_000, finishedAt: status === 'running' ? undefined : 2_000 },
+  ]
+
+  it('draws nothing for a hidden section', () => {
+    // The jobs heading is the example the README uses, and it used to render
+    // anyway because the dock never asked whether the element was visible.
+    const hidden = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['dock.jobs.heading', { hidden: true }]]) })
+    const lines = new WorkDock(() => EMPTY, hidden, () => job('running')).render(80)
+    expect(lines.some(line => line.includes('jobs ·'))).toBe(false)
+  })
+
+  it('styles a finished job with its own element', () => {
+    const finished = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['dock.jobs.completed', { fg: '#ff0000' }]]) })
+    const lines = new WorkDock(() => EMPTY, finished, () => job('completed')).render(80)
+    expect(lines.find(line => line.includes('bash-1'))).toContain('38;2;255;0;0')
   })
 })

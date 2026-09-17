@@ -140,9 +140,9 @@ describe('golden frames', () => {
     })
   }
 
-  it('renders the same transcript before and after a resume', () => {
-    // The durable events are the transcript, so folding them twice — as a
-    // resume does — must produce the same rows rather than appending twice.
+  it('folds the same event log into identical rows, as a resume must', () => {
+    // A resume replays the durable events into a fresh fold, so the same log has
+    // to produce the same rows rather than a different order or an append.
     const live = fixture().view.render(80)
     const resumed = fixture().view.render(80)
     expect(resumed).toEqual(live)

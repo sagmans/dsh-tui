@@ -12,6 +12,13 @@ import { RowCache } from './rows.ts'
 const DETAIL_INDENT = '    '
 const OPTION_INDENT = '   '
 
+/** The mark a cursor falls back to when the reader has not set one, so no literal lives in a template. */
+const CURSOR_MARK = '❯'
+const APPROVAL_MARK = '⚠'
+const QUESTION_MARK = '?'
+const CHECKBOX_ON = '[x]'
+const CHECKBOX_OFF = '[ ]'
+
 /** Which rows the reader has opened; one key decides for every row of a kind. */
 export interface ViewState {
   readonly expandCards: boolean
@@ -109,6 +116,7 @@ export class TranscriptView implements Component {
       }
       return
     }
+    if (!this.theme.visible('transcript.reasoning.body')) return
     for (const line of entry.body.split('\n')) {
       this.pushWrapped(lines, line, width, DETAIL_INDENT, text => this.theme.style('transcript.reasoning.body', text))
     }
@@ -149,50 +157,58 @@ export class TranscriptView implements Component {
       const lead = glyph === '' ? '' : `${glyph} `
       lines.push(this.theme.style('picker.title', this.theme.cut(`${lead}${displayText(picker.title)}`, width, '')))
     }
-    if (picker.note !== undefined) {
+    if (picker.note !== undefined && this.theme.visible('picker.note')) {
       this.pushWrapped(lines, picker.note, width, DETAIL_INDENT, text => this.theme.style('picker.note', text))
     }
-    if (picker.filter !== '') {
+    if (picker.filter !== '' && this.theme.visible('picker.filter')) {
       lines.push(this.theme.style('picker.filter', this.theme.cut(`${DETAIL_INDENT}filter: ${displayText(picker.filter)}`, width, '')))
     }
-    if (picker.above > 0) {
+    if (picker.above > 0 && this.theme.visible('picker.scrollNewer')) {
       lines.push(this.theme.style('picker.scrollNewer', this.theme.cut(`${OPTION_INDENT}… ${picker.above} newer`, width, '')))
     }
     for (const row of picker.rows) {
-      const cursor = row.current ? this.theme.glyph('picker.cursor') || '❯' : ' '
+      const token = row.current ? 'picker.rowCurrent' : 'picker.row'
+      if (!this.theme.visible(token)) continue
+      const cursor = row.current ? this.theme.glyph('picker.cursor') || CURSOR_MARK : ' '
       const text = row.description === undefined
         ? `${cursor} ${row.label}`
         : `${cursor} ${row.label} — ${row.description}`
-      const token = row.current ? 'picker.rowCurrent' : 'picker.row'
       lines.push(this.theme.style(token, this.theme.cut(`${OPTION_INDENT}${displayText(text)}`, width, '')))
     }
-    if (picker.below > 0) {
+    if (picker.below > 0 && this.theme.visible('picker.scrollOlder')) {
       lines.push(this.theme.style('picker.scrollOlder', this.theme.cut(`${OPTION_INDENT}… ${picker.below} older`, width, '')))
     }
-    lines.push(this.theme.style('picker.hint', this.theme.cut(`${OPTION_INDENT}${displayText(picker.hint)}`, width, '')))
+    if (this.theme.visible('picker.hint')) {
+      lines.push(this.theme.style('picker.hint', this.theme.cut(`${OPTION_INDENT}${displayText(picker.hint)}`, width, '')))
+    }
   }
 
   private pushGate(lines: string[], gate: GateCard, width: number): void {
     lines.push('')
     if (this.theme.visible('gate.title')) {
       const glyphToken = gate.kind === 'approval' ? 'gate.glyphApproval' : 'gate.glyphQuestion'
-      const glyph = this.theme.glyph(glyphToken) || (gate.kind === 'approval' ? '⚠' : '?')
+      const glyph = this.theme.glyph(glyphToken) || (gate.kind === 'approval' ? APPROVAL_MARK : QUESTION_MARK)
       lines.push(this.theme.style('gate.title', this.theme.cut(`${glyph} ${displayText(gate.title)}`, width, '')))
     }
-    for (const detail of gate.detail) {
-      this.pushWrapped(lines, detail, width, DETAIL_INDENT, text => this.theme.style('gate.detail', text))
+    if (this.theme.visible('gate.detail')) {
+      for (const detail of gate.detail) {
+        this.pushWrapped(lines, detail, width, DETAIL_INDENT, text => this.theme.style('gate.detail', text))
+      }
     }
     gate.options.forEach((option, position) => {
-      const box = option.selected ? '[x]' : '[ ]'
-      const cursor = option.current ? this.theme.glyph('gate.cursor') || '❯' : ' '
+      const token = option.current ? 'gate.optionCurrent' : 'gate.option'
+      if (!this.theme.visible(token)) return
+      const box = option.selected ? CHECKBOX_ON : CHECKBOX_OFF
+      const cursor = option.current ? this.theme.glyph('gate.cursor') || CURSOR_MARK : ' '
       const label = displayText(option.label)
       const text = option.description === undefined
         ? `${cursor} ${box} ${position + 1}. ${label}`
         : `${cursor} ${box} ${position + 1}. ${label} — ${displayText(option.description)}`
-      const token = option.current ? 'gate.optionCurrent' : 'gate.option'
       lines.push(this.theme.style(token, this.theme.cut(`${OPTION_INDENT}${text}`, width, '')))
     })
-    lines.push(this.theme.style('gate.hint', this.theme.cut(`${OPTION_INDENT}${displayText(gate.hint)}`, width, '')))
+    if (this.theme.visible('gate.hint')) {
+      lines.push(this.theme.style('gate.hint', this.theme.cut(`${OPTION_INDENT}${displayText(gate.hint)}`, width, '')))
+    }
   }
 
   /** The rows one transcript entry becomes. */
@@ -208,12 +224,15 @@ export class TranscriptView implements Component {
         this.pushMarkdown(lines, entry.text, width)
         return
       case 'user':
+        if (!this.theme.visible('transcript.user')) return
         this.pushWrapped(lines, entry.text, width, this.elementLead('transcript.user'), text => this.theme.style('transcript.user', text))
         return
       case 'notice':
+        if (!this.theme.visible('transcript.notice')) return
         this.pushWrapped(lines, entry.text, width, this.elementLead('transcript.notice'), text => this.theme.style('transcript.notice', text))
         return
       case 'marker':
+        if (!this.theme.visible('transcript.marker')) return
         this.pushWrapped(lines, entry.text, width, this.elementLead('transcript.marker'), text => this.theme.style('transcript.marker', text))
         return
     }
@@ -228,7 +247,10 @@ export class TranscriptView implements Component {
   render(width: number): string[] {
     if (width <= 0) return []
     const state = this.viewState
-    const tag = `${width}|${state.expandCards ? 'c' : '-'}${state.expandReasoning ? 'r' : '-'}`
+    // The revision is part of the key: rows drawn under an older theme table
+    // must miss, or a settings change would restyle only the rows that happened
+    // to be redrawn for another reason.
+    const tag = `${width}|${state.expandCards ? 'c' : '-'}${state.expandReasoning ? 'r' : '-'}|${this.theme.revision}`
     const lines: string[] = []
     const settled = this.model.settledCount()
     const entries = this.model.entries()

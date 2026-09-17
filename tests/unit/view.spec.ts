@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { GateCard } from '@/gates.ts'
-import { createTheme } from '@/theme.ts'
+import { createTheme, forwardEditorTheme, forwardMarkdownTheme, type TuiTheme } from '@/theme.ts'
+import { DEFAULT_PALETTE } from '@/theme-tokens.ts'
 import { TranscriptModel, type TranscriptEntry } from '@/transcript.ts'
 import { MarkdownRenderer } from '@/ui/markdown.ts'
 import type { PickerCard } from '@/ui/picker.ts'
@@ -205,7 +206,7 @@ describe('TranscriptView picker', () => {
       picker: () => picker,
     })
     const lines = view.render(60)
-    const heading = lines.findIndex(line => line.includes('↻ resume a session'))
+    const heading = lines.findIndex(line => line.includes('resume a session'))
     const row = lines.findIndex(line => line.includes('❯ tui-session-a'))
     // A reason that does not fit has to keep going rather than be cut off.
     const note = lines.slice(heading + 1, row).join(' ').replace(/\s+/gu, ' ')
@@ -245,5 +246,51 @@ describe('TranscriptView gate', () => {
     expect(lines).toContain('? which target?  (1/2)')
     expect(lines).toContain('   ❯ [x] 1. staging — safe')
     expect(lines).toContain('     [ ] 2. production')
+  })
+})
+
+describe('TranscriptView theming', () => {
+  const userModel = (): TranscriptModel => {
+    const model = new TranscriptModel()
+    model.apply({ type: 'user/message', data: { content: [{ type: 'text', text: 'hello there' }], source: { kind: 'user' } } })
+    return model
+  }
+
+  it('draws nothing for a hidden element', () => {
+    const hidden = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['transcript.user', { hidden: true }]]) })
+    const lines = new TranscriptView(userModel(), hidden, new MarkdownRenderer(hidden.markdown), { state: () => COLLAPSED }).render(60)
+    expect(lines.join('\n')).not.toContain('hello')
+  })
+
+  it('hides a reasoning body without hiding its summary', () => {
+    const model = new TranscriptModel()
+    model.apply({ type: 'assistant/message', data: {
+      message: { content: [{ type: 'reasoning', text: 'secret thought' }, { type: 'text', text: 'the answer' }] },
+    } })
+    const hidden = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['transcript.reasoning.body', { hidden: true }]]) })
+    const lines = new TranscriptView(model, hidden, new MarkdownRenderer(hidden.markdown), {
+      state: () => ({ expandCards: false, expandReasoning: true }),
+    }).render(60)
+    expect(lines.join('\n')).not.toContain('secret thought')
+    expect(lines.join('\n')).toContain('reasoning ·')
+  })
+
+  it('rebuilds cached rows when the theme revision moves', () => {
+    let active = createTheme('truecolor')
+    const delegate: TuiTheme = {
+      get revision() { return active.revision },
+      get color() { return active.color },
+      style: (token, text) => active.style(token, text),
+      cut: (text, width, ellipsis) => active.cut(text, width, ellipsis),
+      glyph: token => active.glyph(token),
+      visible: token => active.visible(token),
+      editor: forwardEditorTheme(() => active.editor),
+      markdown: forwardMarkdownTheme(() => active.markdown),
+    }
+    const view = new TranscriptView(userModel(), delegate, new MarkdownRenderer(delegate.markdown), { state: () => COLLAPSED })
+    expect(view.render(60).join('\n')).toContain('38;2;208;208;208')
+    active = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['transcript.user', { fg: '#ff0000' }]]) })
+    // The row cache is keyed to the old revision, so a plain repaint re-draws it.
+    expect(view.render(60).join('\n')).toContain('38;2;255;0;0')
   })
 })

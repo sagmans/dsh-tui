@@ -1,6 +1,7 @@
 import { visibleWidth } from '@earendil-works/pi-tui'
 import { describe, expect, it } from 'vitest'
 import { createTheme } from '@/theme.ts'
+import { DEFAULT_PALETTE } from '@/theme-tokens.ts'
 import { cacheRate, usageTotals } from '@/agent/status.ts'
 import { formatStatus, formatTokens, shortPath, type StatusFacts } from '@/ui/status.ts'
 
@@ -178,5 +179,21 @@ describe('formatStatus', () => {
     it('keeps the row the width it was given once escapes are discounted', () => {
       expect(visibleWidth(formatStatus(working(), 40, colourTheme))).toBeLessThanOrEqual(40)
     })
+  })
+})
+
+describe('formatStatus theming', () => {
+  it('draws no separator when the separator element is hidden', () => {
+    // Hiding the separator used to fall back to a plain one, which is the
+    // opposite of what hidden promises.
+    const hidden = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['status.separator', { hidden: true }]]) })
+    const line = formatStatus(facts(), 200, hidden)
+    expect(line).not.toContain('·')
+    expect(line).toContain('deepseek-chat')
+  })
+
+  it('omits a hidden fact entirely', () => {
+    const hidden = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['status.cwd', { hidden: true }]]) })
+    expect(formatStatus(facts(), 200, hidden)).not.toContain('source/opensource')
   })
 })

@@ -38,6 +38,9 @@ const PATH_SEGMENTS = 2
 const SEPARATOR_TEXT = ' · '
 /** Marks the point where a row was cut; the reader must know something is missing. */
 const ELLIPSIS = '…'
+/** The mark that says which of the two activities the session is in. */
+const WORKING_MARK = '▶'
+const READY_MARK = '●'
 
 /** One row segment: what it is, what it says, and how it joins the previous one. */
 interface Segment {
@@ -98,12 +101,12 @@ export function formatStatus(facts: StatusFacts, width: number, theme: TuiTheme)
     segments.push({ token, text: displayText(text), join })
   }
   if (facts.activity === 'working') {
-    push('status.activity.working', '▶ working')
+    push('status.activity.working', `${WORKING_MARK} working`)
     // Elapsed carries its own token so it can be toned apart from the activity,
     // but it qualifies that activity, so it attaches rather than standing alone.
     if (facts.elapsedMs !== undefined) push('status.elapsed', ` ${elapsed(facts.elapsedMs)}`, true)
   } else {
-    push('status.activity.ready', '● ready')
+    push('status.activity.ready', `${READY_MARK} ready`)
   }
   // The mode comes first: it decides which tools exist at all, so a reader who
   // saw a tool disappear needs it before the model that ran it.
@@ -134,13 +137,16 @@ export function formatStatus(facts: StatusFacts, width: number, theme: TuiTheme)
  * still says that something was left out.
  */
 function renderSegments(segments: readonly Segment[], width: number, theme: TuiTheme): string {
-  const separator = theme.visible('status.separator') ? theme.style('status.separator', SEPARATOR_TEXT) : SEPARATOR_TEXT
+  // Hiding the separator means drawing no separator, not drawing a plain one:
+  // "hidden" is the one promise the reader cannot see half-kept.
+  const showSeparator = theme.visible('status.separator')
+  const separator = showSeparator ? theme.style('status.separator', SEPARATOR_TEXT) : ''
   const ellipsisWidth = visibleWidth(ELLIPSIS)
   let out = ''
   let budget = width
   for (const [index, segment] of segments.entries()) {
     const joining = index === 0 || segment.join
-    const lead = joining ? 0 : visibleWidth(SEPARATOR_TEXT)
+    const lead = joining || !showSeparator ? 0 : visibleWidth(SEPARATOR_TEXT)
     // A separator is drawn only alongside text, so there must be room for the
     // separator and at least the mark that something was cut.
     if (budget - lead < ellipsisWidth) break
