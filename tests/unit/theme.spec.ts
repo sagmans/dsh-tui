@@ -96,6 +96,11 @@ describe('createTheme', () => {
     expect(theme.editor.selectList.description('d')).toContain('38;2;')
   })
 
+  it('removes the editor border when the border element is hidden', () => {
+    const theme = createTheme('truecolor', overrides({ 'editor.border': { hidden: true } }))
+    expect(theme.editor.borderColor('x')).toBe('')
+  })
+
   it('resolves a token once per theme rather than per call', () => {
     // A repaint walks every row, so the palette chain must not be re-walked.
     const theme = createTheme('truecolor')

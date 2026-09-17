@@ -56,9 +56,16 @@ function markdownTheme(style: (token: TuiToken, text: string) => string): Markdo
 }
 
 /** The editor keeps only a border colour and a select list, so both come from tokens. */
-function editorTheme(style: (token: TuiToken, text: string) => string): EditorTheme {
+function editorTheme(
+  style: (token: TuiToken, text: string) => string,
+  visible: (token: TuiToken) => boolean,
+): EditorTheme {
   return {
-    borderColor: text => style('editor.border', text),
+    // Hiding the border has to remove it: returning the text unstyled would draw
+    // it louder than the muted default the reader was trying to remove.
+    borderColor: text => (visible('editor.border') ? style('editor.border', text) : ''),
+    // A select-list row is framework-owned text, so a hidden entry can only be
+    // unstyled rather than absent; the README records that limit.
     selectList: {
       selectedPrefix: text => style('editor.selectList.selectedPrefix', text),
       selectedText: text => style('editor.selectList.selectedText', text),
@@ -102,14 +109,15 @@ export function createTheme(mode: ColourMode = detectColourMode(process.env), ov
     const truncated = truncateToWidth(text, width, ellipsis)
     return mode === 'none' ? truncated.replaceAll(resetSequence(), '') : truncated
   }
+  const visible = (token: TuiToken): boolean => !resolve(token).hidden
   return {
     revision: ++themeRevision,
     color: mode !== 'none',
     style,
     cut,
     glyph: token => resolve(token).glyph,
-    visible: token => !resolve(token).hidden,
-    editor: editorTheme(style),
+    visible,
+    editor: editorTheme(style, visible),
     markdown: markdownTheme(style),
   }
 }
