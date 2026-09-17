@@ -183,14 +183,16 @@ palette, or the default.
 `fg` and `bg` accept `#rrggbb`, a palette name (`default`, `muted`, `accent`,
 `warn`, `added`, `removed`, `user`, `assistant`), or an index. A colour is
 emitted as 24-bit when the terminal advertises it (`COLORTERM`) and degraded to
-the nearest 256- or 16-colour value otherwise. Muted elements name the palette
-rather than a terminal slot, so their contrast does not depend on what the
-reader's colour scheme maps slot 8 to.
+the nearest 256-colour entry or 16-colour slot otherwise; a hue keeps its family
+there, so an addition stays green instead of collapsing to black. Muted elements
+name the palette rather than a terminal slot, so on anything but a 16-colour
+terminal their contrast does not depend on what the reader's colour scheme maps
+slot 8 to.
 
 `NO_COLOR` and `--no-color` disable styling entirely, attributes included, and
-outrank everything in this section. A token name the surface does not have is
-refused with the offending name, so a typo fails at load instead of silently
-painting nothing.
+outrank everything in this section. A token or palette name the surface does not
+have is refused with the offending name, and the surface prints the refusal as a
+notice when the document loads, so a typo cannot quietly paint nothing.
 
 One residual escapes that promise, and it is not the surface's to close. After a
 component returns its rows, the framework appends a reset to each row and closes
