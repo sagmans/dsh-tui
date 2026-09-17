@@ -110,6 +110,24 @@ export class TranscriptView implements Component {
     })
   }
 
+  /**
+   * Wrap one already-styled block under a prefix.
+   *
+   * A card header mixes tokens — title, argument, stats — in a single string, so
+   * it cannot go through {@link pushWrapped}, which escapes and restyles plain
+   * text. Its width still has to fold at the screen edge rather than be cut,
+   * because the argument is the part a reader scans for and a silently dropped
+   * command is worse than a taller card.
+   */
+  private pushStyledWrapped(lines: string[], content: string, width: number, prefix: string): void {
+    const lead = visibleWidth(prefix)
+    const indent = ' '.repeat(lead)
+    const wrapped = wrapTextWithAnsi(content, Math.max(1, width - lead))
+    wrapped.forEach((line, index) => {
+      lines.push(this.theme.cut(`${index === 0 ? prefix : indent}${line}`, width, ''))
+    })
+  }
+
   /** Render assistant text as markdown: the model writes structure, the reader reads it. */
   private pushMarkdown(lines: string[], text: string, width: number): void {
     const rendered = this.markdown.render(displayText(text), Math.max(1, width))
@@ -157,12 +175,12 @@ export class TranscriptView implements Component {
     const { lines: detail, hidden } = cardDetailRows(card, preview)
     const titleToken = card.failed ? 'tool.failed.title' : 'tool.title'
     const glyphToken = card.failed ? 'tool.failed.glyph' : 'tool.glyph'
-    const head = this.renderHead(card, titleToken, glyphToken)
-    if (head !== '') lines.push(this.theme.cut(head, width, ''))
-    // A terminal argument can be a whole command, so it takes its own row; the
-    // other kinds keep theirs on the header line.
+    const { lead, body } = this.renderHead(card, titleToken, glyphToken)
+    // A header that folds keeps the argument and its stats; a terminal command
+    // can be longer than the screen, so it wraps under its own indent.
+    if (body !== '') this.pushStyledWrapped(lines, body, width, lead)
     if (card.kind === 'terminal' && card.argument !== undefined && card.argument !== '' && this.theme.visible('tool.args')) {
-      lines.push(this.theme.cut(`${DETAIL_INDENT}${this.theme.style('tool.args', displayText(card.argument))}`, width, ''))
+      this.pushStyledWrapped(lines, this.theme.style('tool.args', displayText(card.argument)), width, DETAIL_INDENT)
     }
     for (const row of detail) {
       // The row says what it is, so the renderer never guesses from the text:
@@ -198,17 +216,19 @@ export class TranscriptView implements Component {
   /**
    * A card's header: its label, its argument, and its measured facts.
    *
-   * A terminal's argument is left out because it needs a row of its own — it is
-   * the one argument that can be a whole command rather than a word.
+   * The glyph is returned apart from the body so a wrapped continuation can
+   * align under the label rather than under the mark. A terminal's argument is
+   * left out because it needs a row of its own — it is the one argument that can
+   * be a whole command rather than a word.
    */
-  private renderHead(card: ToolCard, titleToken: TuiToken, glyphToken: TuiToken): string {
+  private renderHead(card: ToolCard, titleToken: TuiToken, glyphToken: TuiToken): { lead: string; body: string } {
     const glyph = this.theme.visible(titleToken) ? this.theme.glyph(glyphToken) : ''
     const lead = glyph === '' ? '' : `${glyph} `
-    let head = this.theme.visible(titleToken) ? `${lead}${this.theme.style(titleToken, displayText(card.title))}` : ''
+    let body = this.theme.visible(titleToken) ? this.theme.style(titleToken, displayText(card.title)) : ''
     if (card.kind !== 'terminal' && card.argument !== undefined && card.argument !== '' && this.theme.visible('tool.args')) {
-      head += `${head === '' ? '' : ' '}${this.theme.style('tool.args', displayText(card.argument))}`
+      body += `${body === '' ? '' : ' '}${this.theme.style('tool.args', displayText(card.argument))}`
     }
-    return head + this.renderStats(card.stats)
+    return { lead, body: body + this.renderStats(card.stats) }
   }
 
   /** The measured facts, each in its own colour, or nothing when none is visible. */

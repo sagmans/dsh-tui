@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { stripTerminalSequences, visibleWidth } from '@earendil-works/pi-tui'
 import { cardOfCall, cardOfResult, contentLines, CARD_SHELL_PREVIEW, type ToolPresenter } from '@/cards.ts'
 import type { GateCard } from '@/gates.ts'
 import { createTheme, forwardEditorTheme, forwardMarkdownTheme, type TuiTheme } from '@/theme.ts'
@@ -376,11 +377,11 @@ describe('TranscriptView theming', () => {
 
 describe('TranscriptView tool args and stats', () => {
   /** Fold one call and result through a presenter, so the merge is what renders. */
-  const folded = (name: string, presenter: ToolPresenter): string[] => {
+  const folded = (name: string, presenter: ToolPresenter, width = 80): string[] => {
     const model = new TranscriptModel(presenter)
     model.apply({ type: 'tool/call', data: { name, arguments: '{}', callId: 'c1' } })
     model.apply({ type: 'tool/result', data: { message: { content: [{ type: 'tool-result', toolCallId: 'c1', text: 'body' }], isError: false } } })
-    return viewOf(model).render(80)
+    return viewOf(model).render(width)
   }
 
   it('shows a read path with its range, size, and tokens on the folded line', () => {
@@ -432,5 +433,58 @@ describe('TranscriptView tool args and stats', () => {
     const muted = createTheme('none', { palette: DEFAULT_PALETTE, tokens: new Map([['tool.stat.added', { hidden: true }]]) })
     const lines = new TranscriptView(model, muted, new MarkdownRenderer(muted.markdown), { state: () => COLLAPSED }).render(80)
     expect(lines).toEqual(['edit a.ts  ~1'])
+  })
+
+  it('wraps a command wider than the screen instead of cutting it', () => {
+    const command = `/bin/echo ${'x'.repeat(60)}`
+    const presenter: ToolPresenter = {
+      call: name => cardOfCall({ card: 'terminal', title: command }, name),
+      result: (name, input) => cardOfResult(
+        { card: 'terminal', output: 'ok', exitCode: 0 },
+        { fallbackTitle: name, failed: input.isError, contentLines: contentLines(input.content) },
+      ),
+    }
+    const lines = folded('bash', presenter, 40)
+    for (const line of lines) expect(line.length).toBeLessThanOrEqual(40)
+    // Word wrapping drops the whitespace it broke on, so compare without it.
+    expect(lines.join('').replace(/\s+/gu, '')).toContain(command.replace(/\s+/gu, ''))
+  })
+
+  it('wraps a long argument and keeps its stats instead of cutting the tail', () => {
+    const path = `/tmp/${'nested/'.repeat(8)}file.ts`
+    const presenter: ToolPresenter = {
+      call: name => cardOfCall({ card: 'generic', title: 'Read', kind: 'read', locations: [{ path }] }, name),
+      result: (name, input) => cardOfResult(
+        { card: 'read', path, offset: 1, lines: [{ number: 1, text: 'x' }], totalLines: 1 },
+        { fallbackTitle: name, failed: input.isError, contentLines: contentLines(input.content) },
+      ),
+    }
+    const lines = folded('read', presenter, 40)
+    for (const line of lines) expect(line.length).toBeLessThanOrEqual(40)
+    // The stats are as much the fold's answer as the path is, so neither may be
+    // dropped at the edge the way a plain cut dropped them.
+    const flat = lines.join('').replace(/\s+/gu, '')
+    expect(flat).toContain(path)
+    expect(flat).toContain('1tok')
+  })
+
+  it('measures a wrapped command by its visible width, not its escape bytes', () => {
+    // A styled argument carries escapes through the wrap; if those count as
+    // columns the card overflows the terminal it was cut for.
+    const command = `/bin/echo ${'x'.repeat(60)}`
+    const presenter: ToolPresenter = {
+      call: name => cardOfCall({ card: 'terminal', title: command }, name),
+      result: (name, input) => cardOfResult(
+        { card: 'terminal', output: 'ok', exitCode: 0 },
+        { fallbackTitle: name, failed: input.isError, contentLines: contentLines(input.content) },
+      ),
+    }
+    const colour = createTheme('truecolor')
+    const model = new TranscriptModel(presenter)
+    model.apply({ type: 'tool/call', data: { name: 'bash', arguments: '{}', callId: 'c1' } })
+    model.apply({ type: 'tool/result', data: { message: { content: [{ type: 'tool-result', toolCallId: 'c1', text: 'ok' }], isError: false } } })
+    const lines = new TranscriptView(model, colour, new MarkdownRenderer(colour.markdown), { state: () => COLLAPSED }).render(40)
+    for (const line of lines) expect(visibleWidth(line)).toBeLessThanOrEqual(40)
+    expect(stripTerminalSequences(lines.join('')).replace(/\s+/gu, '')).toContain(command.replace(/\s+/gu, ''))
   })
 })

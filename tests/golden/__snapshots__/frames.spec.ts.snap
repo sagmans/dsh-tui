@@ -130,6 +130,7 @@ exports[`golden frames > renders the transcript at 40 columns 1`] = `
   "    Tests  154 passed (154)",
   "    exit 0",
   "read src/ui/view.ts  L1–3 · 3 lines · 23",
+  "tok",
   "compacted 3 events (≈4200 tokens)",
 ]
 `;
