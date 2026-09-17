@@ -262,6 +262,15 @@ describe('TranscriptView theming', () => {
     expect(lines.join('\n')).not.toContain('hello')
   })
 
+  it('draws no empty indented row when every part of a card row is hidden', () => {
+    const model = new TranscriptModel()
+    model.apply(toolCall())
+    model.apply(toolResult('boom'))
+    const hidden = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['tool.generic.detail', { hidden: true }]]) })
+    const lines = new TranscriptView(model, hidden, new MarkdownRenderer(hidden.markdown), { state: () => COLLAPSED }).render(60)
+    expect(lines.filter(line => line.trim() === '' && line !== '')).toEqual([])
+  })
+
   it('hides a reasoning body without hiding its summary', () => {
     const model = new TranscriptModel()
     model.apply({ type: 'assistant/message', data: {

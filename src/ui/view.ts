@@ -142,6 +142,9 @@ export class TranscriptView implements Component {
           return this.theme.visible(token) ? this.theme.style(token, displayText(part.text)) : ''
         })
         .join('')
+      // A row whose every part is hidden draws nothing, and nothing must not
+      // cost a line: the indent would read as an empty row the card does not have.
+      if (drawn === '') continue
       lines.push(this.theme.cut(`${DETAIL_INDENT}${drawn}`, width, ''))
     }
     if (hidden > 0 && this.theme.visible('tool.hint')) {
