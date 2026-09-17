@@ -53,7 +53,9 @@ function fixture(): { view: TranscriptView; dock: WorkDock; status: StatusBar } 
     { content: 'verify the dock', status: 'in_progress' },
     { content: 'document the dock', status: 'pending' },
   ] } })
-  const state: ViewState = { expandCards: false, expandReasoning: false }
+  // The shipped default: cards folded, reasoning open, so the frame pins what a
+  // reader actually gets rather than a state they would have to ask for.
+  const state: ViewState = { expandCards: false, expandReasoning: true }
   const view = new TranscriptView(model, theme, new MarkdownRenderer(theme.markdown), {
     state: () => state,
     gate: () => undefined,

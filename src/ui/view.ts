@@ -100,7 +100,15 @@ export class TranscriptView implements Component {
     const glyph = this.theme.glyph('transcript.reasoning.summary')
     const lead = glyph === '' ? '' : `${glyph} `
     lines.push(this.theme.style('transcript.reasoning.summary', this.theme.cut(`${lead}${displayText(entry.summary)}`, width, '')))
-    if (!this.viewState.expandReasoning) return
+    if (!this.viewState.expandReasoning) {
+      // The row says thinking happened; without this the reader has no way to
+      // learn the body is there, which reads as the text having been dropped.
+      if (this.theme.visible('transcript.reasoning.hint') && entry.body !== '') {
+        const hint = `${DETAIL_INDENT}ctrl+t shows it`
+        lines.push(this.theme.style('transcript.reasoning.hint', this.theme.cut(hint, width, '')))
+      }
+      return
+    }
     for (const line of entry.body.split('\n')) {
       this.pushWrapped(lines, line, width, DETAIL_INDENT, text => this.theme.style('transcript.reasoning.body', text))
     }

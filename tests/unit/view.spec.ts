@@ -140,14 +140,19 @@ describe('TranscriptView expansion', () => {
     expect(lines.some(line => line.includes('ctrl+o'))).toBe(false)
   })
 
-  it('keeps reasoning folded until it is asked for', () => {
+  it('names where the thought is when the row is folded', () => {
     let clock = 0
     const model = new TranscriptModel(undefined, () => clock)
     model.applyStreamChunk({ type: 'reasoning-delta', text: 'first thought\nsecond thought' })
     clock = 5_000
     model.applyStreamChunk({ type: 'block-end', block: { type: 'reasoning' } })
     const folded = viewOf(model).render(60)
-    expect(folded).toEqual(['reasoning · 2 lines · 28 chars · 5s'])
+    // The row must say the body exists: a count with no way to reach the text
+    // reads the same as the text never having arrived.
+    expect(folded).toEqual([
+      'reasoning · 2 lines · 28 chars · 5s',
+      '    ctrl+t shows it',
+    ])
     const opened = viewOf(model, { expandCards: false, expandReasoning: true }).render(60)
     expect(opened).toEqual([
       'reasoning · 2 lines · 28 chars · 5s',

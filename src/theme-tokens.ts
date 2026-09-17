@@ -78,6 +78,7 @@ export const TUI_TOKENS = [
   'transcript.marker',
   'transcript.reasoning.summary',
   'transcript.reasoning.body',
+  'transcript.reasoning.hint',
   'transcript.assistant',
   // Tool cards: the generic layer
   'tool.title',
@@ -259,6 +260,7 @@ export const DEFAULT_TOKENS: Readonly<Record<TuiToken, StyleSpec>> = {
   'transcript.marker': muted,
   'transcript.reasoning.summary': muted,
   'transcript.reasoning.body': muted,
+  'transcript.reasoning.hint': muted,
   'transcript.assistant': plain,
 
   'tool.title': { fg: 'warn' },

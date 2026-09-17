@@ -191,8 +191,12 @@ export function apply(ctx: Context, config: unknown): void {
   const roster = new SubagentRoster()
   const subagentControl = createSubagentControl(ctx)
   const markdown = new MarkdownRenderer(theme.markdown)
-  /** Rows the reader has opened. The model stays untouched; only the view reads this. */
-  const viewState = { expandCards: false, expandReasoning: false }
+  /**
+   * Rows the reader has opened. The model stays untouched; only the view reads
+   * this. Reasoning starts open: a reader asking to see the model think is not
+   * served by a row that names only a character count and hides the thought.
+   */
+  const viewState = { expandCards: false, expandReasoning: true }
   const restore = createRestoreRegistry()
   const terminal = new ProcessTerminal()
   const tui = new TuiAltScreen(terminal)
