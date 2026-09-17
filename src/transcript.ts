@@ -13,6 +13,26 @@ export type TranscriptEntry =
 export const REASONING_CHAR_LIMIT = 20_000
 
 /**
+ * Characters a provider bills as one token.
+ *
+ * The exact count needs the tokenizer the provider used, which a terminal does
+ * not have; four characters per token is the estimate a reader can compare
+ * against, and it is the unit they spend rather than lines or characters.
+ */
+export const CHARS_PER_TOKEN = 4
+
+/** A thought's size in tokens, rounded up so a non-empty thought never reads as zero. */
+export function countTokens(text: string): number {
+  return Math.ceil(text.length / CHARS_PER_TOKEN)
+}
+
+/** The token count with its noun, because "1 tokens" reads as a bug. */
+function describeTokens(text: string): string {
+  const tokens = countTokens(text)
+  return `${tokens} token${tokens === 1 ? '' : 's'}`
+}
+
+/**
  * Minimal durable-input shape the fold needs.
  *
  * The fold reads events structurally instead of importing a large event union:
@@ -77,10 +97,6 @@ function sourceKind(data: Record<string, unknown>): string {
   return asRecord(data.source)?.kind === 'user' ? 'user' : 'plugin'
 }
 
-function countLines(text: string): number {
-  return text === '' ? 0 : text.split('\n').length
-}
-
 function messageOf(value: unknown): string {
   const record = asRecord(value)
   if (record === undefined) return ''
@@ -141,7 +157,7 @@ export class TranscriptModel {
       const ranFor = this.reasoningStartedAt === undefined ? undefined : this.now() - this.reasoningStartedAt
       entries.push({
         kind: 'reasoning',
-        summary: `reasoning · ${this.liveReasoning.length} chars${ranFor === undefined ? '' : ` · ${Math.max(1, Math.round(ranFor / 1000))}s`} · streaming`,
+        summary: `reasoning · ${describeTokens(this.liveReasoning)}${ranFor === undefined ? '' : ` · ${Math.max(1, Math.round(ranFor / 1000))}s`} · streaming`,
         body: this.liveReasoning,
         live: true,
       })
@@ -242,12 +258,11 @@ export class TranscriptModel {
    * produced, so reading order still matches the order the model thought in.
    */
   private paintReasoning(text: string, ranFor: number | undefined): void {
-    const lines = countLines(text)
     const timing = ranFor === undefined ? '' : ` · ${Math.max(1, Math.round(ranFor / 1000))}s`
     const cut = text.length > REASONING_CHAR_LIMIT ? `\n… truncated at ${REASONING_CHAR_LIMIT} chars` : ''
     this.settled.push({
       kind: 'reasoning',
-      summary: `reasoning · ${lines} line${lines === 1 ? '' : 's'} · ${text.length} chars${timing}`,
+      summary: `reasoning · ${describeTokens(text)}${timing}`,
       body: text.slice(0, REASONING_CHAR_LIMIT) + cut,
       live: false,
     })

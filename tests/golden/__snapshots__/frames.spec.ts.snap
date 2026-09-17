@@ -113,7 +113,7 @@ exports[`golden frames > renders the transcript at 40 columns 1`] = `
   "add a dock above the editor",
   "injected dsh-agent-instructions · 3",
   "lines — <system-reminder>",
-  "reasoning · 2 lines · 53 chars",
+  "reasoning · 14 tokens",
   "    the dock needs the fold",
   "    and the fold needs the events",
   "Done.",
@@ -135,7 +135,7 @@ exports[`golden frames > renders the transcript at 80 columns 1`] = `
 [
   "add a dock above the editor",
   "injected dsh-agent-instructions · 3 lines — <system-reminder>",
-  "reasoning · 2 lines · 53 chars",
+  "reasoning · 14 tokens",
   "    the dock needs the fold",
   "    and the fold needs the events",
   "Done.",
@@ -177,7 +177,7 @@ exports[`styled golden frames > renders the transcript with its escapes 1`] = `
 [
   "[1;38;2;208;208;208madd a dock above the editor[0m",
   "[38;2;138;138;138minjected dsh-agent-instructions · 3 lines — <system-reminder>[0m",
-  "[38;2;138;138;138mreasoning · 2 lines · 53 chars[0m",
+  "[38;2;138;138;138mreasoning · 14 tokens[0m",
   "[38;2;138;138;138m    the dock needs the fold[0m",
   "[38;2;138;138;138m    and the fold needs the events[0m",
   "Done.",

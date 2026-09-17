@@ -93,7 +93,7 @@ describe('TranscriptView text', () => {
     const colour = createTheme('truecolor')
     const markdown = new MarkdownRenderer(colour.markdown)
     const folded = new TranscriptView(model, colour, markdown, { state: () => ({ expandCards: false, expandReasoning: false }) }).render(60)
-    expect(folded).toEqual(expect.arrayContaining([expect.stringContaining('reasoning · 2 lines · 28 chars')]))
+    expect(folded).toEqual(expect.arrayContaining([expect.stringContaining('reasoning · 7 tokens')]))
     // The explicit grey, not a palette slot: this is the whole point.
     expect(folded[0]).toContain('\u001b[38;2;138;138;138m')
     expect(folded.some(line => line.includes('second thought'))).toBe(false)
@@ -151,12 +151,12 @@ describe('TranscriptView expansion', () => {
     // The row must say the body exists: a count with no way to reach the text
     // reads the same as the text never having arrived.
     expect(folded).toEqual([
-      'reasoning · 2 lines · 28 chars · 5s',
+      'reasoning · 7 tokens · 5s',
       '    ctrl+t shows it',
     ])
     const opened = viewOf(model, { expandCards: false, expandReasoning: true }).render(60)
     expect(opened).toEqual([
-      'reasoning · 2 lines · 28 chars · 5s',
+      'reasoning · 7 tokens · 5s',
       '    first thought',
       '    second thought',
     ])

@@ -89,11 +89,11 @@ describe('TranscriptModel reasoning', () => {
     model.applyStreamChunk({ type: 'reasoning-delta', text: 'ing' })
     clock = 4_000
     expect(model.entries()).toEqual([
-      { kind: 'reasoning', summary: 'reasoning · 8 chars · 3s · streaming', body: 'thinking', live: true },
+      { kind: 'reasoning', summary: 'reasoning · 2 tokens · 3s · streaming', body: 'thinking', live: true },
     ])
     model.apply({ type: 'assistant/message', data: { message: { content: text('answer') } } })
     expect(model.entries()).toEqual([
-      { kind: 'reasoning', summary: 'reasoning · 1 line · 8 chars · 3s', body: 'thinking', live: false },
+      { kind: 'reasoning', summary: 'reasoning · 2 tokens · 3s', body: 'thinking', live: false },
       { kind: 'assistant', text: 'answer' },
     ])
   })
@@ -105,7 +105,7 @@ describe('TranscriptModel reasoning', () => {
     clock = 2_000
     model.applyStreamChunk({ type: 'block-end', block: { type: 'reasoning' } })
     expect(model.entries()).toEqual([
-      { kind: 'reasoning', summary: 'reasoning · 2 lines · 3 chars · 2s', body: 'a\nb', live: false },
+      { kind: 'reasoning', summary: 'reasoning · 1 token · 2s', body: 'a\nb', live: false },
     ])
   })
 
@@ -134,9 +134,18 @@ describe('TranscriptModel reasoning', () => {
       },
     })
     expect(model.entries()).toEqual([
-      { kind: 'reasoning', summary: 'reasoning · 1 line · 17 chars', body: 'weigh the options', live: false },
+      { kind: 'reasoning', summary: 'reasoning · 5 tokens', body: 'weigh the options', live: false },
       { kind: 'assistant', text: 'the answer' },
     ])
+  })
+
+  it('reports a thought in tokens, rounding a fraction up', () => {
+    const model = new TranscriptModel()
+    // Five characters is 1.25 tokens at four per token; a reader is billed for two.
+    model.apply({ type: 'assistant/message', data: {
+      message: { content: [{ type: 'reasoning', text: 'abcde' }, { type: 'text', text: 'a' }] },
+    } })
+    expect(model.entries()[0]).toMatchObject({ summary: 'reasoning · 2 tokens' })
   })
 
   it('does not paint the recorded copy of a thought the stream already settled', () => {
@@ -157,7 +166,7 @@ describe('TranscriptModel reasoning', () => {
       },
     })
     expect(model.entries()).toEqual([
-      { kind: 'reasoning', summary: 'reasoning · 2 lines · 3 chars · 2s', body: 'a\nb', live: false },
+      { kind: 'reasoning', summary: 'reasoning · 1 token · 2s', body: 'a\nb', live: false },
       { kind: 'assistant', text: 'the answer' },
     ])
   })
