@@ -151,3 +151,45 @@ exports[`golden frames > renders the transcript at 80 columns 1`] = `
   "compacted 3 events (≈4200 tokens)",
 ]
 `;
+
+exports[`styled golden frames > renders the busy dock with its escapes 1`] = `
+[
+  "[1m◎ goal round 6/256 · complete the plan for this dsh-tui plugin[0m",
+  "[1m⏸ plan mode · answer the plan before edits happen[0m",
+  "[1m⚇ subagents · 1 running, 1 done[0m",
+  "[38;2;138;138;138m  ▸ c000cfa3 · spawn · running 4s[0m",
+  "[38;2;138;138;138m  ✓ f05abce2 · fork · completed 2s[0m",
+  "[1m⛭ jobs · 1 running, 0 done[0m",
+  "[38;2;138;138;138m  ▸ bash-1 · running 12s — sleep 45 && echo bg-done[0m",
+  "[1m☰ todos 1/2 done[0m",
+  "[38;2;138;138;138m  ▸ verify the dock[0m",
+  "[38;2;138;138;138m  ☑ write the dock[0m",
+]
+`;
+
+exports[`styled golden frames > renders the status row with its escapes 1`] = `
+[
+  "[38;2;138;138;138m● ready[0m[38;2;138;138;138m · [0m[38;2;138;138;138mstandard[0m[38;2;138;138;138m · [0m[38;2;138;138;138mzai-coding-cn/glm-5.3[0m[38;2;138;138;138m (max)[0m[38;2;138;138;138m · [0m[38;2;138;138;138mworkspace-write[0m[38;2;138;138;138m · [0m[38;2;138;138;138mctx 17.5k/[0m…[0m[0m",
+]
+`;
+
+exports[`styled golden frames > renders the transcript with its escapes 1`] = `
+[
+  "[1;38;2;208;208;208madd a dock above the editor[0m",
+  "[38;2;138;138;138minjected dsh-agent-instructions · 3 lines — <system-reminder>[0m",
+  "[38;2;138;138;138mreasoning · 2 lines · 53 chars[0m",
+  "[38;2;138;138;138m    the dock needs the fold[0m",
+  "[38;2;138;138;138m    and the fold needs the events[0m",
+  "Done.",
+  "",
+  "[38;2;95;175;215m- [0mfold the work state",
+  "[38;2;95;175;215m- [0mrender it only when it says something",
+  "",
+  "[38;2;138;138;138m\`\`\`ts[0m",
+  "  const dock = new WorkDock(state, theme)",
+  "[38;2;138;138;138m\`\`\`[0m",
+  "[38;2;215;175;95mbash[0m",
+  "    [38;2;138;138;138mTests  154 passed (154)[0m",
+  "[38;2;138;138;138mcompacted 3 events (≈4200 tokens)[0m",
+]
+`;

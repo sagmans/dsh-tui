@@ -19,7 +19,7 @@ import { WorkFold } from '@/work.ts'
 const WIDTHS = [80, 40]
 const theme = createTheme('none')
 
-function fixture(): { view: TranscriptView; dock: WorkDock; status: StatusBar } {
+function fixture(frameTheme = theme): { view: TranscriptView; dock: WorkDock; status: StatusBar } {
   const model = new TranscriptModel()
   const work = new WorkFold()
   const feed = (event: { type: string; data?: unknown }): void => {
@@ -56,14 +56,14 @@ function fixture(): { view: TranscriptView; dock: WorkDock; status: StatusBar } 
   // The shipped default: cards folded, reasoning open, so the frame pins what a
   // reader actually gets rather than a state they would have to ask for.
   const state: ViewState = { expandCards: false, expandReasoning: true }
-  const view = new TranscriptView(model, theme, new MarkdownRenderer(theme.markdown), {
+  const view = new TranscriptView(model, frameTheme, new MarkdownRenderer(frameTheme.markdown), {
     state: () => state,
     gate: () => undefined,
     picker: () => undefined,
   })
   return {
     view,
-    dock: new WorkDock(() => work.state(), theme),
+    dock: new WorkDock(() => work.state(), frameTheme),
     status: new StatusBar(() => ({
       activity: 'idle',
       elapsedMs: undefined,
@@ -79,14 +79,14 @@ function fixture(): { view: TranscriptView; dock: WorkDock; status: StatusBar } 
       outputTokens: 3_100,
       cwd: '/Users/dev/source/opensource/deepseek-harness/master',
       home: '/Users/dev',
-    }), theme),
+    }), frameTheme),
   }
 }
 
 /** One frozen moment, so a frame with elapsed times is still a stable artefact. */
 const NOW = 1_700_000_000_000
 
-function busyDock(): WorkDock {
+function busyDock(frameTheme = theme): WorkDock {
   const work = new WorkFold()
   work.apply({ type: 'plan/mode', data: { active: true } })
   work.apply({ type: 'todo/write', data: { todos: [
@@ -101,7 +101,7 @@ function busyDock(): WorkDock {
     { runId: 'r1', provider: 'spawn', id: 'c000cfa3-1111-2222', startedAt: NOW - 4_000, status: 'running' as const },
     { runId: 'r2', provider: 'fork', id: 'f05abce2-3333-4444', startedAt: NOW - 30_000, status: 'completed' as const, finishedAt: NOW - 28_000 },
   ]
-  return new WorkDock(() => work.state(), theme, () => jobs, () => runs, () => NOW)
+  return new WorkDock(() => work.state(), frameTheme, () => jobs, () => runs, () => NOW)
 }
 
 function pickerCard(): SessionPicker {
@@ -146,5 +146,28 @@ describe('golden frames', () => {
     const live = fixture().view.render(80)
     const resumed = fixture().view.render(80)
     expect(resumed).toEqual(live)
+  })
+})
+
+/**
+ * Styled frames.
+ *
+ * The plain snapshots prove layout, not that a token reached the screen: with
+ * colour off, every escape is dropped. These pin the emitted sequences, which is
+ * the only place a wrong slot or a dropped reset would show up in CI.
+ */
+describe('styled golden frames', () => {
+  const styled = createTheme('truecolor')
+
+  it('renders the transcript with its escapes', () => {
+    expect(fixture(styled).view.render(80)).toMatchSnapshot()
+  })
+
+  it('renders the status row with its escapes', () => {
+    expect(fixture(styled).status.render(80)).toMatchSnapshot()
+  })
+
+  it('renders the busy dock with its escapes', () => {
+    expect(busyDock(styled).render(80)).toMatchSnapshot()
   })
 })
