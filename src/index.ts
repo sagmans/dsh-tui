@@ -78,7 +78,7 @@ export const name = 'tui'
 export const inject = ['agents', 'tools']
 
 /** Keys the surface answers itself, listed wherever the reader asks for help. */
-const LOCAL_KEYS = 'ctrl+o tool detail · ctrl+p nested calls · shift+tab reasoning · ctrl+t reasoning effort · ctrl+b back to this session · ctrl+c interrupt or exit'
+const LOCAL_KEYS = 'ctrl+o tool detail · ctrl+y nested calls · shift+tab reasoning · ctrl+t reasoning effort · ctrl+b back to this session · ctrl+c interrupt or exit'
 
 /** The one thing to say about a view a reader did not open. */
 const LOCAL_KEYS_BACK = 'ctrl+b returns'
@@ -446,7 +446,7 @@ export function apply(ctx: Context, config: unknown): void {
       tui.requestRender()
       return { consume: true }
     }
-    if (matchesKey(data, 'ctrl+p')) {
+    if (matchesKey(data, 'ctrl+y')) {
       viewState.expandSubCalls = !viewState.expandSubCalls
       tui.requestRender()
       return { consume: true }
