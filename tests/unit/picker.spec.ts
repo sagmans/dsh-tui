@@ -46,6 +46,12 @@ describe('SessionPicker', () => {
     expect(picker.visible().map(entry => entry.id)).toEqual(['b'])
   })
 
+  it('filters from a pasted run instead of dropping it', () => {
+    const picker = pickerOf([session('a', { cwd: '/one' }), session('b', { cwd: '/two' })], { a: 'fix the parser' })
+    expect(picker.handleKey('\u001b[200~parser\u001b[201~')).toBeUndefined()
+    expect(picker.visible().map(entry => entry.id)).toEqual(['a'])
+  })
+
   it('never highlights a row that does not exist', () => {
     const picker = pickerOf([session('a')])
     picker.handleKey('\u001b[B')

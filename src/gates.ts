@@ -1,4 +1,5 @@
 import { matchesKey } from '@earendil-works/pi-tui'
+import { pastedText } from './input.ts'
 
 /** The outcome vocabulary the approval seam accepts from an answerer. */
 export type ApprovalOutcome = 'allowed-once' | 'rejected' | 'cancelled'
@@ -71,6 +72,7 @@ export class ApprovalGate {
 export interface GateQuestion {
   readonly id: string
   readonly question: string
+  readonly header: string | undefined
   readonly detail: string | undefined
   readonly options: readonly { readonly label: string; readonly description: string | undefined }[]
   readonly multiSelect: boolean
@@ -111,12 +113,25 @@ export function toGateQuestions(request: unknown): GateQuestion[] {
     questions.push({
       id: entry.id,
       question: typeof entry.question === 'string' ? entry.question : 'question',
+      header: typeof entry.header === 'string' ? entry.header : undefined,
       detail: typeof entry.detail === 'string' ? entry.detail : undefined,
       options,
       multiSelect: entry.multiSelect === true,
     })
   }
   return questions
+}
+
+/** How many option rows a question shows at once, so a catalog-sized list leaves the editor in view. */
+const QUESTION_WINDOW = 12
+
+/** Drawn after a typed answer, so an empty question still shows where its text goes. */
+const ANSWER_CURSOR = '▌'
+
+/** One option with the position it answers for, so filtering can drop rows and keep the meaning. */
+interface PositionedOption {
+  readonly option: GateQuestion['options'][number]
+  readonly position: number
 }
 
 /**
@@ -150,26 +165,72 @@ export class QuestionGate {
     return this.questions[this.index]
   }
 
+  /** Options the typed filter leaves, in the order they were listed. */
+  private matched(question: GateQuestion): PositionedOption[] {
+    const needle = this.typed.trim().toLowerCase()
+    return question.options
+      .map((option, position) => ({ option, position }))
+      .filter(({ option }) => needle === ''
+        || option.label.toLowerCase().includes(needle)
+        || (option.description ?? '').toLowerCase().includes(needle))
+  }
+
+  /**
+   * The rows the keys and the card agree on: the filter, then a window around
+   * the cursor, because a list as long as a provider catalog would otherwise
+   * push the editor off the screen.
+   */
+  private windowed(question: GateQuestion): { rows: PositionedOption[]; start: number; cursor: number } {
+    const matched = this.matched(question)
+    const cursor = Math.min(this.cursor, Math.max(0, matched.length - 1))
+    const start = Math.max(0, Math.min(cursor - Math.floor(QUESTION_WINDOW / 2), matched.length - QUESTION_WINDOW))
+    return { rows: matched.slice(start, start + QUESTION_WINDOW), start, cursor }
+  }
+
+  /** The row under the cursor, as the filter leaves it. */
+  private currentRow(question: GateQuestion): PositionedOption | undefined {
+    const matched = this.matched(question)
+    return matched[Math.min(this.cursor, Math.max(0, matched.length - 1))]
+  }
+
+  /** Take or drop one source option, by single-select replacement or multi-select toggle. */
+  private pick(position: number): void {
+    const question = this.current
+    const option = question?.options[position]
+    if (question === undefined || option === undefined) return
+    const chosen = this.chosen[this.index] ?? []
+    this.chosen[this.index] = chosen.includes(option.label)
+      ? chosen.filter(label => label !== option.label)
+      : question.multiSelect === true ? [...chosen, option.label] : [option.label]
+  }
+
+  /** Add text to the filter, or to the answer a question without options collects. */
+  private absorb(text: string): void {
+    if (this.current === undefined || text === '') return
+    this.typed += text
+    this.cursor = 0
+  }
+
   /** Apply one key press; returns the batch answer the first time it completes. */
   handleKey(data: string): GateAnswer[] | undefined {
     const question = this.current
     if (this.finished || question === undefined) return undefined
+    const paste = pastedText(data)
+    if (paste !== undefined) {
+      this.absorb(paste)
+      return undefined
+    }
     if (matchesKey(data, 'up')) {
       this.cursor = Math.max(0, this.cursor - 1)
       return undefined
     }
     if (matchesKey(data, 'down')) {
-      this.cursor = Math.min(Math.max(0, question.options.length - 1), this.cursor + 1)
+      this.cursor = Math.min(Math.max(0, this.matched(question).length - 1), this.cursor + 1)
       return undefined
     }
     if (question.options.length > 0 && matchesKey(data, 'space')) {
-      const option = question.options[this.cursor]
-      if (option !== undefined) {
-        const chosen = this.chosen[this.index] ?? []
-        this.chosen[this.index] = chosen.includes(option.label)
-          ? chosen.filter(label => label !== option.label)
-          : question.multiSelect ? [...chosen, option.label] : [option.label]
-      }
+      const row = this.currentRow(question)
+      if (row !== undefined) this.pick(row.position)
       return undefined
     }
     if (matchesKey(data, 'escape')) {
@@ -177,36 +238,43 @@ export class QuestionGate {
       return this.result()
     }
     if (matchesKey(data, 'enter')) {
+      const chosen = this.chosen[this.index] ?? []
+      if (question.options.length > 0 && chosen.length === 0) {
+        // A reader who typed enough to narrow the list is naming the row it
+        // left under the cursor; one who typed an id the list does not hold is
+        // naming that instead, which is why the typed text becomes the answer.
+        const row = this.currentRow(question)
+        if (row !== undefined) this.pick(row.position)
+        else if (this.typed.trim() !== '') this.custom[this.index] = this.typed.trim()
+      }
       this.confirm()
       return this.result()
     }
     if (matchesKey(data, 'backspace')) {
       this.typed = this.typed.slice(0, -1)
+      this.cursor = 0
       return undefined
     }
     if (matchesKey(data, 'space')) {
-      this.typed += ' '
+      this.absorb(' ')
       return undefined
     }
-    if (/^[1-9]$/u.test(data)) {
-      const option = question.options[Number.parseInt(data, 10) - 1]
-      if (option !== undefined) {
-        const chosen = this.chosen[this.index] ?? []
-        this.chosen[this.index] = chosen.includes(option.label)
-          ? chosen.filter(label => label !== option.label)
-          : question.multiSelect ? [...chosen, option.label] : [option.label]
-      }
+    if (question.options.length > 0 && /^[1-9]$/u.test(data)) {
+      const row = this.windowed(question).rows[Number.parseInt(data, 10) - 1]
+      if (row !== undefined) this.pick(row.position)
       return undefined
     }
-    if (data.length === 1 && data >= ' ') this.typed += data
+    if (data.length === 1 && data >= ' ') this.absorb(data)
     return undefined
   }
 
   private confirm(): void {
     const question = this.current
     if (question === undefined) return
-    const typed = this.typed.trim()
-    if (typed !== '') this.custom[this.index] = typed
+    if (question.options.length === 0) {
+      const typed = this.typed.trim()
+      if (typed !== '') this.custom[this.index] = typed
+    }
     this.typed = ''
     this.cursor = 0
     this.index += 1
@@ -232,20 +300,35 @@ export class QuestionGate {
     }
     const chosen = this.chosen[this.index] ?? []
     const detail = question.detail === undefined ? [] : lines(question.detail)
-    if (this.typed !== '') detail.push(`typed: ${this.typed}`)
+    const heading = question.header === undefined ? '' : question.header + ' · '
+    const title = `${heading}${question.question}${this.questions.length > 1 ? `  (${this.index + 1}/${this.questions.length})` : ''}`
+    if (question.options.length === 0) {
+      // The row is the only place the text lands, so it is drawn even while
+      // empty: a question answered by typing needs somewhere to paste a key.
+      detail.push(`answer: ${this.typed}${ANSWER_CURSOR}`)
+      return {
+        kind: 'question',
+        title,
+        detail,
+        options: [],
+        hint: 'type or paste an answer · enter confirm · esc skip',
+      }
+    }
+    if (this.typed !== '') detail.push(`filter: ${this.typed}`)
+    const matched = this.matched(question)
+    const { rows, start, cursor } = this.windowed(question)
+    if (rows.length < matched.length) detail.push(`showing ${start + 1}–${start + rows.length} of ${matched.length}`)
     return {
       kind: 'question',
-      title: `${question.question}${this.questions.length > 1 ? `  (${this.index + 1}/${this.questions.length})` : ''}`,
+      title,
       detail,
-      options: question.options.map((option, position) => ({
+      options: rows.map(({ option }, position) => ({
         label: option.label,
         description: option.description,
-        current: position === this.cursor,
+        current: start + position === cursor,
         selected: chosen.includes(option.label),
       })),
-      hint: question.options.length === 0
-        ? 'type an answer · enter confirm · esc skip'
-        : `${question.multiSelect ? 'space toggle' : 'space select'} · digits pick · enter confirm · esc skip`,
+      hint: `${question.multiSelect ? 'space toggle' : 'space select'} · digits pick · type to filter · enter confirm · esc skip`,
     }
   }
 }
