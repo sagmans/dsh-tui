@@ -37,6 +37,7 @@ import { ApprovalGate, QuestionGate, toGateQuestions, type GateAnswer } from './
 import { createCompletionProvider } from './input/completion.ts'
 import { LOCAL_COMMANDS, classifySubmission } from './input/submission.ts'
 import { resolveConfig } from './config.ts'
+import { FoldCursor } from './fold-cursor.ts'
 import { createRestoreRegistry } from './terminal/restore.ts'
 import { BELL, shouldRingBell } from './terminal/bell.ts'
 import { clipboardSequence } from './terminal/clipboard.ts'
@@ -575,19 +576,37 @@ export function apply(ctx: Context, config: unknown): void {
   const liveSession = (id: SessionId): { snapshotEvents?: () => readonly ForkEvent[] } | undefined =>
     (ctx.get('sessions') as { get?: (id: SessionId) => { snapshotEvents?: () => readonly ForkEvent[] } | undefined } | undefined)?.get?.(id)
 
+  /**
+   * The fold's place in the viewed session's durable sequence.
+   *
+   * A resumed session is folded while its agent's loop is already live, so the
+   * same event can reach the surface twice: once on the stream and once from the
+   * log the fold is reading. The sequence number every durable event carries is
+   * what tells the two apart.
+   */
+  const foldCursor = new FoldCursor()
+
+  /** Feed one durable event to the model, unless a fold has already folded it. */
+  const applyDurable = (event: ForkEvent): void => {
+    if (foldCursor.accept(event)) applyEvent(event)
+  }
+
   const foldHistory = async (id: SessionId): Promise<number> => {
     // Resolved before the fold so every card reads its tool through the scope
     // that actually registered it; a stored session nobody runs has none.
     presentScope = ctx.agents?.get(id)
+    // Every fold starts a cleared transcript, so this session's own numbering is
+    // where the cursor begins rather than the previous session's.
+    foldCursor.reset()
     const inMemory = liveSession(id)?.snapshotEvents?.()
     if (inMemory !== undefined) {
-      for (const event of inMemory) applyEvent(event)
+      for (const event of inMemory) applyDurable(event)
       return inMemory.length
     }
     const history = createSessionHistory(ctx)
     if (history === undefined) return 0
     const events = await history.read(id)
-    for (const event of events) applyEvent(event)
+    for (const event of events) applyDurable(event)
     return events.length
   }
 
@@ -711,7 +730,9 @@ export function apply(ctx: Context, config: unknown): void {
     presentScope = handle.agent
     // Replayed only once the agent exists, because the fold reads every card
     // through the scope the preset mounted; a fold before that scope existed
-    // degraded each replayed card to a bare generic row.
+    // degraded each replayed card to a bare generic row. The agent's loop is
+    // live by now, so the fold and the stream race over the same events; the
+    // durable sequence number is what keeps one event from landing twice.
     if (resume) await replayHistory(id)
     // A branch inherits the conversation the reader was already reading, so it
     // opens on that history rather than on an empty screen.
@@ -1218,7 +1239,7 @@ export function apply(ctx: Context, config: unknown): void {
     }
     if (session.id !== viewedSession) return
     presentScope = ctx.agents?.get(session.id)
-    applyEvent(event)
+    applyDurable(event)
     tui.requestRender()
   }))
 
