@@ -418,7 +418,9 @@ export function renderFileDiff(diff: FileDiff): CardRow[] {
  *
  * The subject a reader scans for is what follows the verb, so the surface draws
  * the card from there: "skill project-skill" rather than "Load skill
- * project-skill".
+ * project-skill". Only a declared title is normalized — a path or a command is
+ * the call's own data, and shortening that would misreport what ran — and the
+ * list stays literal because inferring a verb could cut a real title short.
  */
 const REDUNDANT_TITLE_LEADS = ['Load '] as const
 
