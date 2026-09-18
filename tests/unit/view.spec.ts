@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { stripTerminalSequences, visibleWidth } from '@earendil-works/pi-tui'
-import { cardOfCall, cardOfResult, contentLines, CARD_DETAIL_MAX, CARD_SHELL_PREVIEW, type ToolPresenter } from '@/cards.ts'
+import { cardOfCall, cardOfResult, contentLines, CARD_DETAIL_MAX, CARD_SHELL_PREVIEW, SUBCALL_MAX, type ToolPresenter } from '@/cards.ts'
 import type { GateCard } from '@/gates.ts'
 import { createTheme, forwardEditorTheme, forwardMarkdownTheme, type TuiTheme } from '@/theme.ts'
 import { DEFAULT_PALETTE } from '@/theme-tokens.ts'
@@ -11,7 +11,7 @@ import { RowCache } from '@/ui/rows.ts'
 import { TranscriptView, type ViewState } from '@/ui/view.ts'
 
 const theme = createTheme('none')
-const COLLAPSED: ViewState = { expandCards: false, expandReasoning: false }
+const COLLAPSED: ViewState = { expandCards: false, expandReasoning: false, expandSubCalls: false }
 
 function viewOf(model: TranscriptModel, state: ViewState = COLLAPSED, gate?: GateCard): TranscriptView {
   return new TranscriptView(model, theme, new MarkdownRenderer(theme.markdown), { state: () => state, gate: () => gate })
@@ -41,7 +41,7 @@ describe('TranscriptView repaints', () => {
     const rows = new RowCache<TranscriptEntry>()
     const model = new TranscriptModel()
     model.apply({ type: 'user/message', data: { content: [{ type: 'text', text: 'hello there' }], source: { kind: 'user' } } })
-    const state = { expandCards: false, expandReasoning: false }
+    const state = { expandCards: false, expandReasoning: false, expandSubCalls: false }
     const view = new TranscriptView(model, theme, new MarkdownRenderer(theme.markdown), { rows, state: () => state })
 
     view.render(80)
@@ -51,6 +51,11 @@ describe('TranscriptView repaints', () => {
     state.expandCards = true
     view.render(40)
     expect(rows.stats().misses).toBe(3)
+    // The nested-call flag is part of the tag too, or a toggle would reuse the
+    // rows drawn before the calls were meant to be on screen.
+    state.expandSubCalls = true
+    view.render(40)
+    expect(rows.stats().misses).toBe(4)
   })
 })
 
@@ -99,13 +104,13 @@ describe('TranscriptView text', () => {
     })
     const colour = createTheme('truecolor')
     const markdown = new MarkdownRenderer(colour.markdown)
-    const folded = new TranscriptView(model, colour, markdown, { state: () => ({ expandCards: false, expandReasoning: false }) }).render(60)
+    const folded = new TranscriptView(model, colour, markdown, { state: () => ({ expandCards: false, expandReasoning: false, expandSubCalls: false }) }).render(60)
     expect(folded).toEqual(expect.arrayContaining([expect.stringContaining('reasoning · 7 tokens')]))
     // The explicit grey, not a palette slot: this is the whole point.
     expect(folded[0]).toContain('\u001b[38;2;138;138;138m')
     expect(folded.some(line => line.includes('second thought'))).toBe(false)
 
-    const opened = new TranscriptView(model, colour, markdown, { state: () => ({ expandCards: false, expandReasoning: true }) }).render(60)
+    const opened = new TranscriptView(model, colour, markdown, { state: () => ({ expandCards: false, expandReasoning: true, expandSubCalls: false }) }).render(60)
     expect(opened).toHaveLength(4)
     for (const line of opened.slice(0, 3)) expect(line).toContain('\u001b[38;2;138;138;138m')
     expect(opened[3]).toBe('the answer')
@@ -162,7 +167,7 @@ describe('TranscriptView expansion', () => {
   })
 
   it('shows every row once a folded card is opened with ctrl+o', () => {
-    const lines = viewOf(withRows(25), { expandCards: true, expandReasoning: false }).render(60)
+    const lines = viewOf(withRows(25), { expandCards: true, expandReasoning: false, expandSubCalls: false }).render(60)
     expect(lines.filter(line => line.startsWith('    row '))).toHaveLength(25)
     expect(lines.some(line => line.includes('ctrl+o'))).toBe(false)
   })
@@ -180,7 +185,7 @@ describe('TranscriptView expansion', () => {
   })
 
   it('shows a shell card whole once it is opened, and a short one without a hint', () => {
-    const opened = viewOf(withRows(25, 'bash'), { expandCards: true, expandReasoning: false }).render(60)
+    const opened = viewOf(withRows(25, 'bash'), { expandCards: true, expandReasoning: false, expandSubCalls: false }).render(60)
     expect(opened[0]).toBe('bash')
     expect(opened[1]).toBe('    Run echo rows')
     expect(opened.filter(line => line.startsWith('    row '))).toHaveLength(25)
@@ -196,7 +201,7 @@ describe('TranscriptView expansion', () => {
     // Retention keeps the tail, so opening a run past the cap reveals its end
     // and hides its beginning; a neutral count would point the reader past the
     // last row on screen for rows that are above it.
-    const opened = viewOf(withRows(250, 'bash'), { expandCards: true, expandReasoning: false }).render(60)
+    const opened = viewOf(withRows(250, 'bash'), { expandCards: true, expandReasoning: false, expandSubCalls: false }).render(60)
     expect(opened.filter(line => line.startsWith('    row '))).toHaveLength(CARD_DETAIL_MAX)
     expect(opened).toContain('    exit 0')
     expect(opened.at(-1)).toBe('    … 50 earlier lines not shown')
@@ -235,7 +240,7 @@ describe('TranscriptView expansion', () => {
     expect(folded).toEqual([
       'reasoning · 7 tokens · 5s (shift+tab)',
     ])
-    const opened = viewOf(model, { expandCards: false, expandReasoning: true }).render(60)
+    const opened = viewOf(model, { expandCards: false, expandReasoning: true, expandSubCalls: false }).render(60)
     expect(opened).toEqual([
       'reasoning · 7 tokens · 5s',
       '    first thought',
@@ -359,7 +364,7 @@ describe('TranscriptView theming', () => {
     } })
     const hidden = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['transcript.reasoning.body', { hidden: true }]]) })
     const lines = new TranscriptView(model, hidden, new MarkdownRenderer(hidden.markdown), {
-      state: () => ({ expandCards: false, expandReasoning: true }),
+      state: () => ({ expandCards: false, expandReasoning: true, expandSubCalls: false }),
     }).render(60)
     expect(lines.join('\n')).not.toContain('secret thought')
     expect(lines.join('\n')).toContain('reasoning ·')
@@ -507,5 +512,76 @@ describe('TranscriptView tool args and stats', () => {
     const lines = new TranscriptView(model, colour, new MarkdownRenderer(colour.markdown), { state: () => COLLAPSED }).render(40)
     for (const line of lines) expect(visibleWidth(line)).toBeLessThanOrEqual(40)
     expect(stripTerminalSequences(lines.join('')).replace(/\s+/gu, '')).toContain(command.replace(/\s+/gu, ''))
+  })
+})
+
+describe('TranscriptView nested PTC calls', () => {
+  /** Declares each nested call the way the real tools do, so its row is the tool's own header. */
+  const nestedPresenter: ToolPresenter = {
+    call: (name, argumentsJson) => {
+      if (name === 'run_code') return cardOfCall({ card: 'generic', title: 'search the tree' }, name)
+      const args = JSON.parse(argumentsJson) as Record<string, unknown>
+      if (typeof args.command === 'string') return cardOfCall({ card: 'terminal', title: args.command }, name)
+      return cardOfCall({ card: 'generic', title: 'Read', kind: 'read', locations: [{ path: String(args.file_path ?? '') }] }, name)
+    },
+    result: () => undefined,
+  }
+
+  /** One run_code program, its dispatches, and its result, in the order the log records them. */
+  const foldedProgram = (calls: readonly { readonly name: string; readonly args: Record<string, unknown>; readonly failed?: boolean }[]): TranscriptModel => {
+    const model = new TranscriptModel(nestedPresenter)
+    model.apply({ type: 'tool/call', data: { name: 'run_code', arguments: '{"description":"search the tree"}', callId: 'root' } })
+    calls.forEach((call, at) => {
+      const subCallId = `root:ptc:${at + 1}`
+      model.apply({ type: 'tool/ptc-dispatch-start', data: { rootCallId: 'root', parentCallId: 'root', subCallId, name: call.name, arguments: call.args } })
+      model.apply({ type: 'tool/ptc-dispatch', data: { rootCallId: 'root', parentCallId: 'root', subCallId, name: call.name, arguments: call.args, isError: call.failed === true, content: [] } })
+    })
+    model.apply({ type: 'tool/result', data: { message: { content: [{ type: 'tool-result', toolCallId: 'root', text: 'done' }], isError: false } } })
+    return model
+  }
+
+  const INLINE: ViewState = { expandCards: false, expandReasoning: false, expandSubCalls: true }
+
+  it('keeps the calls out of the folded card until the reader asks', () => {
+    const lines = viewOf(foldedProgram([{ name: 'read', args: { file_path: 'src/x.ts' } }])).render(60)
+    expect(lines[0]).toBe('search the tree')
+    expect(lines.some(line => line.includes('src/x.ts'))).toBe(false)
+  })
+
+  it('draws each call on one two-space-indented line under the header', () => {
+    const model = foldedProgram([
+      { name: 'read', args: { file_path: 'src/x.ts' } },
+      { name: 'bash', args: { command: 'git status' } },
+    ])
+    expect(viewOf(model, INLINE).render(60)).toEqual(['search the tree', '  read src/x.ts', '  bash git status'])
+  })
+
+  it('marks a failed call in the failed colour without hiding it', () => {
+    const colour = createTheme('truecolor')
+    const model = foldedProgram([{ name: 'bash', args: { command: 'exit 1' }, failed: true }])
+    const lines = new TranscriptView(model, colour, new MarkdownRenderer(colour.markdown), { state: () => INLINE }).render(60)
+    expect(stripTerminalSequences(lines[1] ?? '')).toBe('  bash exit 1')
+    // Derived rather than repeated: this is about the failure colour, not a shade.
+    const removed = [1, 3, 5].map(at => Number.parseInt(DEFAULT_PALETTE.removed.slice(at, at + 2), 16))
+    expect(lines[1]).toContain(`38;2;${removed.join(';')}`)
+  })
+
+  it('reports the calls retention dropped', () => {
+    const calls = Array.from({ length: SUBCALL_MAX + 1 }, (_, at) => ({ name: 'read', args: { file_path: `src/${at}.ts` } }))
+    const lines = viewOf(foldedProgram(calls), INLINE).render(60)
+    expect(lines.at(-1)).toBe('  … 1 more calls')
+  })
+
+  it('wraps a long call under its own indent on a narrow terminal', () => {
+    const model = foldedProgram([{ name: 'bash', args: { command: `echo ${'x'.repeat(80)}` } }])
+    const lines = viewOf(model, INLINE).render(40)
+    // One call still costs one entry; the argument is folded rather than cut,
+    // so nothing the reader was scanning for disappears.
+    expect(lines.length).toBeGreaterThan(2)
+    expect(lines[1]).toMatch(/^ {2}bash echo/)
+    for (const line of lines.slice(1)) expect(line.startsWith('  ')).toBe(true)
+    for (const line of lines) expect(visibleWidth(line)).toBeLessThanOrEqual(40)
+    expect(lines.slice(1).join('').split('x')).toHaveLength(81)
+    expect(lines.join('')).not.toContain('…')
   })
 })

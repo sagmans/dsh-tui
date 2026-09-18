@@ -111,6 +111,8 @@ export const TUI_TOKENS = [
   'tool.hint',
   'tool.failed.title',
   'tool.failed.glyph',
+  'tool.subcall.title',
+  'tool.subcall.args',
   // Tool cards: per kind
   'tool.diff.header',
   'tool.diff.hunk',
@@ -275,6 +277,8 @@ export const DEFAULT_TOKENS: Readonly<Record<TuiToken, StyleSpec>> = {
   'tool.hint': muted,
   'tool.failed.title': { fg: 'removed' },
   'tool.failed.glyph': { fg: 'removed' },
+  'tool.subcall.title': muted,
+  'tool.subcall.args': { fg: 'arg' },
 
   'tool.diff.header': muted,
   'tool.diff.hunk': muted,

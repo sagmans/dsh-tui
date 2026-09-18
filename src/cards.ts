@@ -74,6 +74,18 @@ export interface CardStat {
   readonly text: string
 }
 
+/**
+ * One nested call a PTC program dispatched, as the single row it draws.
+ *
+ * The row is the tool's own call header — the title and the salient argument
+ * its presenter declared — so the surface still learns no tool name.
+ */
+export interface ToolSubCall {
+  readonly title: string
+  readonly argument?: string
+  readonly failed: boolean
+}
+
 /** One renderable tool row: a header plus the detail rows kept for rendering. */
 export interface ToolCard {
   readonly kind: ToolCardKind
@@ -105,6 +117,16 @@ export interface ToolCard {
   readonly failed: boolean
   /** Rows the tool actually presented, which retention may have cut short. */
   readonly totalLines: number
+  /**
+   * The calls a PTC program dispatched through this card, in dispatch order.
+   *
+   * A program reaches every tool through one card, so those calls are the
+   * card's own children rather than rows of their own, capped the way detail
+   * rows are.
+   */
+  readonly subCalls?: readonly ToolSubCall[]
+  /** Calls the program dispatched at all, which retention may have cut short. */
+  readonly subCallsTotal?: number
 }
 
 /**
@@ -125,6 +147,15 @@ export const CARD_DETAIL_MAX = 200
  * what ctrl+o can reveal.
  */
 export const CARD_SHELL_PREVIEW = 20
+
+/**
+ * Nested calls retained on one PTC card.
+ *
+ * A program can dispatch in a loop, and one line each is small but not free;
+ * the cap keeps a card bounded while {@link ToolCard.subCallsTotal} still
+ * reports everything the program ran.
+ */
+export const SUBCALL_MAX = 100
 
 /**
  * The tail of the hint a folded shell card draws when it dropped rows.
@@ -149,6 +180,21 @@ export const CARD_LINE_LIMIT = 200
 
 function clipLine(text: string): string {
   return text.length <= CARD_LINE_LIMIT ? text : `${text.slice(0, CARD_LINE_LIMIT - 1)}…`
+}
+
+/**
+ * The one-line row for one nested call.
+ *
+ * A tool that declares a call view is drawn exactly as its own header would be;
+ * only a tool with no view at all falls back to its registry name and raw call,
+ * because the surface cannot name a salient argument for a schema it never saw.
+ */
+export function subCallOf(name: string, argumentsJson: string, view: ToolCard | undefined): ToolSubCall {
+  if (view !== undefined) {
+    return { title: view.title, ...(view.argument === undefined ? {} : { argument: view.argument }), failed: false }
+  }
+  const raw = argumentsJson === '' ? '' : clipLine(argumentsJson)
+  return { title: name, ...(raw === '' ? {} : { argument: raw }), failed: false }
 }
 
 function clipRow(row: CardRow): CardRow {
@@ -339,15 +385,17 @@ export function contentLines(content: unknown): string[] {
  * The header fields a rebuilt card must keep.
  *
  * Replacing a card's rows says nothing about what the call was made with, what
- * it measured, or how it ended, so those fields travel with the rebuild:
- * dropping the argument is how a shell card loses its command the moment a
- * presenter declines the result.
+ * it measured, how it ended, or which calls it dispatched, so those fields
+ * travel with the rebuild: dropping the argument is how a shell card loses its
+ * command the moment a presenter declines the result.
  */
-export function carriedFields(card: ToolCard): Pick<ToolCard, 'argument' | 'stats' | 'status'> {
+export function carriedFields(card: ToolCard): Pick<ToolCard, 'argument' | 'stats' | 'status' | 'subCalls' | 'subCallsTotal'> {
   return {
     ...(card.argument === undefined ? {} : { argument: card.argument }),
     ...(card.stats === undefined ? {} : { stats: card.stats }),
     ...(card.status === undefined ? {} : { status: card.status }),
+    ...(card.subCalls === undefined ? {} : { subCalls: card.subCalls }),
+    ...(card.subCallsTotal === undefined ? {} : { subCallsTotal: card.subCallsTotal }),
   }
 }
 
@@ -369,12 +417,18 @@ export function mergeCards(call: ToolCard | undefined, result: ToolCard | undefi
   const argument = result.argument ?? call.argument
   const stats = result.stats ?? call.stats
   const status = result.status ?? call.status
+  // The nested calls belong to the call, not the outcome: a result never carries
+  // them, so the merge has to hand the call's own list through.
+  const subCalls = result.subCalls ?? call.subCalls
+  const subCallsTotal = result.subCallsTotal ?? call.subCallsTotal
   return {
     kind,
     title: call.title,
     ...(argument === undefined ? {} : { argument }),
     ...(stats === undefined ? {} : { stats }),
     ...(status === undefined ? {} : { status }),
+    ...(subCalls === undefined ? {} : { subCalls }),
+    ...(subCallsTotal === undefined ? {} : { subCallsTotal }),
     detail: result.detail.length > 0 ? result.detail : call.detail,
     failed: result.failed,
     totalLines: result.detail.length > 0 ? result.totalLines : call.totalLines,

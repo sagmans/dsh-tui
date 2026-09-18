@@ -1,4 +1,4 @@
-import { cardFromLines, carriedFields, mergeCards, type ToolCard, type ToolPresenter } from './cards.ts'
+import { cardFromLines, carriedFields, mergeCards, subCallOf, SUBCALL_MAX, type ToolCard, type ToolPresenter } from './cards.ts'
 import { countTokens } from './tokens.ts'
 
 /** One renderable transcript row. */
@@ -35,10 +35,22 @@ interface PendingCall {
   readonly name: string
   readonly argumentsJson: string
   readonly index: number
+  /** Sub-calls this call dispatched, so its settle can drop their bookkeeping. */
+  readonly subs: string[]
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined
+}
+
+/** The arguments a nested call was made with, as the shape a presenter is asked with. */
+function argumentsJsonOf(value: unknown): string {
+  if (value === undefined) return ''
+  try {
+    return JSON.stringify(value) ?? ''
+  } catch {
+    return ''
+  }
 }
 
 function contentLinesOf(content: unknown): string[] {
@@ -120,6 +132,13 @@ function injectionSummary(data: Record<string, unknown>, text: string): string {
 export class TranscriptModel {
   private readonly settled: TranscriptEntry[] = []
   private readonly pending = new Map<string, PendingCall>()
+  /**
+   * Where each nested call landed on its root card.
+   *
+   * A dispatch logs a start and then a settle, so the second event has to find
+   * the row the first one drew instead of adding a second line for one call.
+   */
+  private readonly pendingSub = new Map<string, { readonly rootIndex: number; readonly childIndex: number }>()
   private live = ''
   private liveReasoning = ''
   private reasoningStartedAt: number | undefined
@@ -337,7 +356,15 @@ export class TranscriptModel {
           card: card ?? cardFromLines('generic', name, argumentsJson === '' ? [] : argumentsJson.split('\n'), false),
         })
         const callId = typeof data.callId === 'string' ? data.callId : ''
-        if (callId !== '') this.pending.set(callId, { name, argumentsJson, index: this.settled.length - 1 })
+        if (callId !== '') this.pending.set(callId, { name, argumentsJson, index: this.settled.length - 1, subs: [] })
+        return
+      }
+      case 'tool/ptc-dispatch-start': {
+        this.applySubCall(data, false)
+        return
+      }
+      case 'tool/ptc-dispatch': {
+        this.applySubCall(data, true)
         return
       }
       case 'tool/result': {
@@ -349,12 +376,57 @@ export class TranscriptModel {
     }
   }
 
+  /**
+   * Fold one nested PTC call onto the card of the run_code call that dispatched it.
+   *
+   * Dispatches are logged while the program runs, so the root is still pending;
+   * a dispatch whose root is not in this fold belongs to a window that starts
+   * mid-run, and attaching it to another card would claim a call that card
+   * never made.
+   */
+  private applySubCall(data: Record<string, unknown>, settled: boolean): void {
+    const rootCallId = typeof data.rootCallId === 'string' ? data.rootCallId : ''
+    const subCallId = typeof data.subCallId === 'string' ? data.subCallId : ''
+    const root = rootCallId === '' ? undefined : this.pending.get(rootCallId)
+    if (root === undefined || subCallId === '') return
+    const entry = this.settled[root.index]
+    const card = entry !== undefined && entry.kind === 'tool' ? entry.card : undefined
+    if (card === undefined) return
+    const known = this.pendingSub.get(subCallId)
+    if (known !== undefined) {
+      // A settle only restates the row its start already drew, and only when the
+      // call failed; nothing else about the row can change.
+      if (!settled || known.childIndex < 0 || data.isError !== true) return
+      const subCalls = (card.subCalls ?? []).map((call, at) => (at === known.childIndex ? { ...call, failed: true } : call))
+      this.settled[root.index] = { kind: 'tool', card: { ...card, subCalls } }
+      return
+    }
+    const name = typeof data.name === 'string' ? data.name : 'tool'
+    const argumentsJson = argumentsJsonOf(data.arguments)
+    const call = { ...subCallOf(name, argumentsJson, this.presenter?.call(name, argumentsJson)), failed: settled && data.isError === true }
+    const kept = card.subCalls ?? []
+    const total = (card.subCallsTotal ?? 0) + 1
+    if (kept.length >= SUBCALL_MAX) {
+      // Retention keeps the head, where the calls that shaped the program are;
+      // the count still reports everything it dispatched.
+      this.pendingSub.set(subCallId, { rootIndex: root.index, childIndex: -1 })
+      this.settled[root.index] = { kind: 'tool', card: { ...card, subCallsTotal: total } }
+      return
+    }
+    root.subs.push(subCallId)
+    this.pendingSub.set(subCallId, { rootIndex: root.index, childIndex: kept.length })
+    this.settled[root.index] = { kind: 'tool', card: { ...card, subCalls: [...kept, call], subCallsTotal: total } }
+  }
+
   private settleToolResult(data: Record<string, unknown>): void {
     const message = asRecord(data.message)
     const firstBlock = Array.isArray(message?.content) ? asRecord(message.content[0]) : undefined
     const callId = typeof firstBlock?.toolCallId === 'string' ? firstBlock.toolCallId : ''
     const pending = callId === '' ? undefined : this.pending.get(callId)
     if (callId !== '') this.pending.delete(callId)
+    // The root is done dispatching, so its bookkeeping goes with it; the rows it
+    // already drew stay on the card.
+    if (pending !== undefined) for (const sub of pending.subs) this.pendingSub.delete(sub)
     const name = pending?.name ?? 'tool'
     const isError = message?.isError === true
     const result = this.presenter?.result(name, {

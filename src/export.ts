@@ -5,6 +5,9 @@ import type { TranscriptEntry } from './transcript.ts'
 /** Directory-relative default the reader can find without being told. */
 export const DEFAULT_EXPORT_PREFIX = 'dsh-session'
 
+/** How the dump marks a nested call that returned an error, which the screen carried as colour. */
+const SUBCALL_FAILED_SUFFIX = ' (failed)'
+
 /** Id characters kept in a file name, so a session id cannot escape the directory. */
 const UNSAFE_NAME = /[^A-Za-z0-9._-]/gu
 
@@ -81,7 +84,17 @@ export function transcriptToText(entries: readonly TranscriptEntry[]): string {
           ? `… ${entry.card.totalLines - entry.card.detail.length} more lines`
           : undefined
         const fence = fenceFor([displayText(entry.card.title), ...rows, more ?? ''].join('\n'))
-        lines.push('', `### ${mark}: ${displayText(entry.card.title)}`, '', fence)
+        lines.push('', `### ${mark}: ${displayText(entry.card.title)}`)
+        // The calls are what the reader saw under the card, so a dump that
+        // dropped them would lose the only record of what the program reached.
+        const subCalls = entry.card.subCalls ?? []
+        for (const call of subCalls) {
+          const text = call.argument === undefined ? call.title : `${call.title} ${call.argument}`
+          lines.push(`- ${displayText(text)}${call.failed ? SUBCALL_FAILED_SUFFIX : ''}`)
+        }
+        const dropped = (entry.card.subCallsTotal ?? subCalls.length) - subCalls.length
+        if (dropped > 0) lines.push(`- … ${dropped} more calls`)
+        lines.push('', fence)
         lines.push(...rows)
         if (more !== undefined) lines.push(more)
         lines.push(fence)

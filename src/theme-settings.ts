@@ -54,9 +54,16 @@ const TokensSchema = z.object(Object.fromEntries(
   TUI_TOKENS.map(token => [token, StyleSpecSchema]),
 ))
 
+/** How nested PTC calls draw: nothing beyond the card, or one indented line per dispatched call. */
+export type SubCallDisplay = 'collapsed' | 'inline'
+
+/** The values the `subcalls` key accepts, declared once for the schema and the refusal message. */
+const SUBCALL_DISPLAYS = ['collapsed', 'inline'] as const
+
 const SECTION = z.object({
   palette: PaletteSchema.default({}),
   tokens: TokensSchema.default({}),
+  subcalls: z.union([...SUBCALL_DISPLAYS]).default('inline'),
 })
 
 /**
@@ -71,17 +78,24 @@ export const TuiSettingsSchema = SECTION
 const TOKEN_NAMES = new Set<string>(TUI_TOKENS)
 const PALETTE_NAME_SET = new Set<string>(PALETTE_NAMES)
 
+/** The section's own keys: schemastery keeps what it does not declare, so a misspelling has to be refused here. */
+const SECTION_KEYS = new Set(['palette', 'tokens', 'subcalls'])
+
 /**
  * Validate the raw section, refusing a name the surface does not have.
  *
- * Schemastery's object schema ignores undeclared keys, so a misspelled token or
- * palette entry would otherwise parse cleanly and do nothing at all — the one
- * outcome a reader could not debug from the screen. Both halves are therefore
- * checked against their declared names before validation.
+ * Schemastery's object schema ignores undeclared keys, so a misspelled token,
+ * palette entry, or key would otherwise parse cleanly and do nothing at all —
+ * the one outcome a reader could not debug from the screen. Every level is
+ * therefore checked against its declared names before validation.
  */
 function rejectUnknownKeys(raw: unknown): void {
   const section = asRecord(raw)
   if (section === undefined) return
+  const unknownKeys = Object.keys(section).filter(name => !SECTION_KEYS.has(name))
+  if (unknownKeys.length > 0) {
+    throw new Error(`unknown ${TUI_SETTINGS_NAMESPACE} key${unknownKeys.length === 1 ? '' : 's'}: ${unknownKeys.join(', ')}`)
+  }
   const unknownTokens = Object.keys(asRecord(section.tokens) ?? {}).filter(name => !TOKEN_NAMES.has(name))
   if (unknownTokens.length > 0) {
     throw new Error(`unknown ${TUI_SETTINGS_NAMESPACE} token${unknownTokens.length === 1 ? '' : 's'}: ${unknownTokens.join(', ')}`)
@@ -100,7 +114,7 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
 export function parseSettings(raw: unknown): TuiSettings {
   rejectUnknownKeys(raw)
   const section = asRecord(raw) ?? {}
-  const parsed = SECTION(section) as { palette: Record<PaletteName, string>; tokens: Record<string, StyleSpec> }
+  const parsed = SECTION(section) as { palette: Record<PaletteName, string>; tokens: Record<string, StyleSpec>; subcalls: SubCallDisplay }
   // Only what the reader actually wrote is an override: the schema fills every
   // field so validation can see a whole section, but returning those fills
   // would turn a one-line override into a table of empty entries.
@@ -125,6 +139,7 @@ export function parseSettings(raw: unknown): TuiSettings {
   return {
     palette: palette as Readonly<Partial<Record<PaletteName, string>>>,
     tokens: tokens as Readonly<Partial<Record<TuiToken, StyleSpec>>>,
+    subcalls: parsed.subcalls,
   }
 }
 
@@ -138,11 +153,12 @@ function hasAnyField(spec: StyleSpec | undefined): boolean {
 export interface TuiSettings {
   readonly palette: Readonly<Partial<Record<PaletteName, string>>>
   readonly tokens: Readonly<Partial<Record<TuiToken, StyleSpec>>>
+  readonly subcalls: SubCallDisplay
 }
 
 /** The section as it reads when the reader has written nothing. */
 export function defaultSettings(): TuiSettings {
-  return { palette: {}, tokens: {} }
+  return { palette: {}, tokens: {}, subcalls: 'inline' }
 }
 
 /** The theme inputs a parsed section implies. */
