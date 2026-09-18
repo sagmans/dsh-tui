@@ -47,18 +47,25 @@ describe('ApprovalGate', () => {
 })
 
 describe('toGateQuestions', () => {
-  it('reads questions, options, and multi-select flags', () => {
+  it('reads questions, options, multi-select flags, and the caller heading', () => {
     const questions = toGateQuestions({
-      questions: [{ id: 'q1', question: 'which?', detail: 'pick one', options: [{ label: 'a', description: 'first' }], multiSelect: true }],
+      questions: [{
+        id: 'q1',
+        question: 'which?',
+        header: 'Sign in',
+        detail: 'pick one',
+        options: [{ label: 'a', description: 'first' }],
+        multiSelect: true,
+      }],
     })
     expect(questions).toEqual([
-      { id: 'q1', question: 'which?', detail: 'pick one', options: [{ label: 'a', description: 'first' }], multiSelect: true },
+      { id: 'q1', question: 'which?', header: 'Sign in', detail: 'pick one', options: [{ label: 'a', description: 'first' }], multiSelect: true },
     ])
   })
 
   it('skips malformed entries and keeps option-less questions answerable by typing', () => {
     const questions = toGateQuestions({ questions: [{ question: 'no id' }, { id: 'q2', question: 'free form' }] })
-    expect(questions).toEqual([{ id: 'q2', question: 'free form', detail: undefined, options: [], multiSelect: false }])
+    expect(questions).toEqual([{ id: 'q2', question: 'free form', header: undefined, detail: undefined, options: [], multiSelect: false }])
   })
 
   it('returns nothing for a request with no question list', () => {
@@ -189,7 +196,7 @@ describe('QuestionGate filtering', () => {
     expect(gate.handleKey(ENTER)).toEqual([{ id: 'q1', selected: [], custom: 'sk-2' }])
   })
 
-  it('shows a window of a list longer than the screen', () => {
+  it('shows a window of a list longer than the screen, and says which part it shows', () => {
     const many = toGateQuestions({
       questions: [{
         id: 'q1',
@@ -199,6 +206,7 @@ describe('QuestionGate filtering', () => {
     })
     const gate = new QuestionGate(many)
     expect(gate.card().options.length).toBe(12)
+    expect(gate.card().detail.join('\n')).toContain('showing 1–12 of 30')
     gate.handleKey('1')
     expect(gate.handleKey(ENTER)).toEqual([{ id: 'q1', selected: ['option 1'] }])
   })
@@ -224,5 +232,10 @@ describe('QuestionGate paste', () => {
     const gate = new QuestionGate(toGateQuestions({ questions: [{ id: 'q1', question: 'key?' }] }))
     expect(gate.card().detail.join('\n')).toContain('answer: ▌')
     expect(gate.card().hint).toContain('paste')
+  })
+
+  it('leads with the heading the caller sent, which the seam promises and a plugin relies on', () => {
+    const gate = new QuestionGate(toGateQuestions({ questions: [{ id: 'q1', question: 'why?', header: 'Sign in' }] }))
+    expect(gate.card().title).toBe('Sign in · why?')
   })
 })

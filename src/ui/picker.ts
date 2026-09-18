@@ -1,4 +1,5 @@
 import { matchesKey } from '@earendil-works/pi-tui'
+import { pastedText } from '../input.ts'
 import type { StoredSession } from '../agent/history.ts'
 import { describePreset, type PresetSummary } from '../agent/presets.ts'
 
@@ -126,8 +127,9 @@ export class ListPicker<Row> {
       this.cursor = 0
       return undefined
     }
-    if (data.length === 1 && data >= ' ') {
-      this.filter += data
+    const text = pastedText(data) ?? (data.length === 1 && data >= ' ' ? data : undefined)
+    if (text !== undefined) {
+      this.filter += text
       this.cursor = 0
     }
     return undefined

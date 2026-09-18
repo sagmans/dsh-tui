@@ -1,4 +1,5 @@
 import { matchesKey } from '@earendil-works/pi-tui'
+import { pastedText } from './input.ts'
 
 /** The outcome vocabulary the approval seam accepts from an answerer. */
 export type ApprovalOutcome = 'allowed-once' | 'rejected' | 'cancelled'
@@ -71,6 +72,7 @@ export class ApprovalGate {
 export interface GateQuestion {
   readonly id: string
   readonly question: string
+  readonly header: string | undefined
   readonly detail: string | undefined
   readonly options: readonly { readonly label: string; readonly description: string | undefined }[]
   readonly multiSelect: boolean
@@ -111,6 +113,7 @@ export function toGateQuestions(request: unknown): GateQuestion[] {
     questions.push({
       id: entry.id,
       question: typeof entry.question === 'string' ? entry.question : 'question',
+      header: typeof entry.header === 'string' ? entry.header : undefined,
       detail: typeof entry.detail === 'string' ? entry.detail : undefined,
       options,
       multiSelect: entry.multiSelect === true,
@@ -119,30 +122,11 @@ export function toGateQuestions(request: unknown): GateQuestion[] {
   return questions
 }
 
-/** The markers the surface wraps a paste in once the terminal reports one. */
-const PASTE_START = '\x1b[200~'
-const PASTE_END = '\x1b[201~'
-
 /** How many option rows a question shows at once, so a catalog-sized list leaves the editor in view. */
 const QUESTION_WINDOW = 12
 
 /** Drawn after a typed answer, so an empty question still shows where its text goes. */
 const ANSWER_CURSOR = '▌'
-
-/**
- * The text a bracketed paste carries, or undefined when the input is a key press.
- *
- * Control bytes are the terminal's, not the reader's: a copied key arrives with
- * the newline that copied it, and keeping that newline would confirm the
- * question before the reader saw what landed.
- */
-function pastedText(data: string): string | undefined {
-  const start = data.indexOf(PASTE_START)
-  if (start === -1) return undefined
-  const rest = data.slice(start + PASTE_START.length)
-  const end = rest.indexOf(PASTE_END)
-  return (end === -1 ? rest : rest.slice(0, end)).replace(/[\u0000-\u001f\u007f]/gu, '')
-}
 
 /** One option with the position it answers for, so filtering can drop rows and keep the meaning. */
 interface PositionedOption {
@@ -316,7 +300,8 @@ export class QuestionGate {
     }
     const chosen = this.chosen[this.index] ?? []
     const detail = question.detail === undefined ? [] : lines(question.detail)
-    const title = `${question.question}${this.questions.length > 1 ? `  (${this.index + 1}/${this.questions.length})` : ''}`
+    const heading = question.header === undefined ? '' : question.header + ' · '
+    const title = `${heading}${question.question}${this.questions.length > 1 ? `  (${this.index + 1}/${this.questions.length})` : ''}`
     if (question.options.length === 0) {
       // The row is the only place the text lands, so it is drawn even while
       // empty: a question answered by typing needs somewhere to paste a key.
@@ -330,7 +315,9 @@ export class QuestionGate {
       }
     }
     if (this.typed !== '') detail.push(`filter: ${this.typed}`)
+    const matched = this.matched(question)
     const { rows, start, cursor } = this.windowed(question)
+    if (rows.length < matched.length) detail.push(`showing ${start + 1}–${start + rows.length} of ${matched.length}`)
     return {
       kind: 'question',
       title,
