@@ -196,9 +196,10 @@ A reply whose fenced block names `mermaid` is drawn as terminal box art instead
 of source, laid out at the width the transcript has. `mermaid: streaming` (the
 default) draws a diagram while the reply is still arriving, `final` waits for
 the turn to end, and `off` leaves every fence exactly as written. A diagram
-wider than the terminal, or one the renderer cannot draw at all, stays as the
-source fence rather than being truncated; a settled diagram whose source was only
-partly readable keeps the fence and names what was dropped. The drawing is
+wider than the terminal, one the renderer cannot draw at all, or one whose source
+is larger than a frame can lay out stays as the source fence rather than being
+truncated; a settled diagram whose source was only partly readable keeps the
+fence and names what was dropped. The drawing is
 restyleable like anything else through `markdown.diagram.border`,
 `.text`, `.edge`, `.edgeLabel`, `.title`, and `.warning`, so `/theme`
 lists it with the rest. Nothing is lost by drawing: `/export` and the session
