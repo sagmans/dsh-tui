@@ -237,7 +237,7 @@ The fold is durable-only: the live stream decorates the row that is still being 
 
 Tool cards are folded by default: a card draws its header and nothing else, so a long read, diff, or search cannot bury the conversation. A shell card is the exception, because its output is the answer the reader asked for: it names the tool in its header, always shows the command that ran, keeps the last 20 output rows, and adds a hint naming the rows it dropped. `Ctrl+O` opens every card to its header plus every retained row.
 
-A card's header names the tool, then the argument the call was made with — a path or a command — in the `tool.args` colour, then the facts the result measured: a read reports its line range, line count, and token size; a write reports the lines and tokens it wrote; an edit reports added, changed, and removed lines as `+n ~n -n` in green, yellow, and red. Each stat is its own token, so any of them can be recoloured or hidden independently.
+A card's header names the tool, then the argument the call was made with — a path or a command — in the `tool.args` colour, then the facts the result measured: a read reports its line range, line count, and token size; a file change that carried no prior content to compare against reports its lines and tokens; one that did reports added, changed, and removed lines as `+n ~n -n` in green, yellow, and red. Each stat is its own token, so any of them can be recoloured or hidden independently.
 
 The bundle also takes the base's global agent rows out of the composition, twenty-three of them. Every one is a row the shipped modes supply per session instead, so leaving it mounted registers the same tool names in two layers and doubles each prompt section it owns. What stays mounted is the host: sessions, storage, models, permissions, jobs, and the command registry.
 
@@ -308,8 +308,9 @@ The workflow stores no npm token: the registry trusts `release.yml` on the `npm-
 - `/model` changes the route for the running session only. Catalog membership is advisory — an adapter may accept an id it does not advertise.
 - Scrolling is the mouse wheel, or the terminal's own scrollback keys where it offers them.
 - A turn that ran longer than ten seconds rings the terminal bell when it ends, because the reader may have walked away; `--no-bell` turns that off.
-- The dock shows the goal, plan mode, the todo list, and any background job still running; the transcript marks where older history was compacted away. `/plan` toggles plan mode; `/plan <message>` also steers that message, which is the base command's own behaviour.
+- The dock shows the goal, plan mode, the todo items still to do, and any background job or delegation still running; a settled item leaves rather than turns into a completed row. The transcript marks where older history was compacted away. `/plan` toggles plan mode; `/plan <message>` also steers that message, which is the base command's own behaviour.
 - Background jobs and subagent runs are live process state, not durable events: they disappear when the run ends, and a resumed session starts with an empty board and roster.
+- A card reads its tool's own render intent through the agent whose session is on screen, so a stored session with no live agent — one this process is not running, or a child that has already finished — folds to the generic card instead of the tool's own.
 - Reading a child's conversation does not move the terminal: commands, approvals, and the status line stay with the session you launched, and the transcript is the only thing that switches.
 - Delete is unimplemented: the session store exposes no delete, and the surface does not reach around that seam into its files. `/fork` covers the case that needs it — it branches into a new session and leaves the original alone.
 - Approvals and questions render inline and take the keyboard; a question batch is answered in order.
