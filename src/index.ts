@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { ProcessTerminal, ScrollView, TuiAltScreen, VStack, isKeyRelease, matchesKey } from '@earendil-works/pi-tui'
+import { ProcessTerminal, ScrollView, VStack, isKeyRelease, matchesKey } from '@earendil-works/pi-tui'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 // Type-only: the command registry publishes the change event this surface
@@ -39,6 +39,7 @@ import { LOCAL_COMMANDS, classifySubmission } from './input/submission.ts'
 import { resolveConfig } from './config.ts'
 import { FoldCursor } from './fold-cursor.ts'
 import { createRestoreRegistry } from './terminal/restore.ts'
+import { WarningSafeTui } from './terminal/warning-screen.ts'
 import { BELL, shouldRingBell } from './terminal/bell.ts'
 import { clipboardSequence } from './terminal/clipboard.ts'
 import { CLEAR_TITLE, windowTitle } from './terminal/title.ts'
@@ -254,7 +255,7 @@ export function apply(ctx: Context, config: unknown): void {
   const markdown = new MarkdownRenderer(theme.markdown)
   const restore = createRestoreRegistry()
   const terminal = new ProcessTerminal()
-  const tui = new TuiAltScreen(terminal)
+  const tui = new WarningSafeTui(terminal)
   /** The one gate a terminal can present at a time, and how it settles its caller. */
   type PendingGate =
     | { readonly kind: 'approval'; readonly gate: ApprovalGate; readonly settle: (outcome: ApprovalOutcome) => void }
