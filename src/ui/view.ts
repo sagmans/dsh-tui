@@ -339,9 +339,10 @@ export class TranscriptView implements Component {
       const box = option.selected ? CHECKBOX_ON : CHECKBOX_OFF
       const cursor = option.current ? this.theme.glyph('gate.cursor') || CURSOR_MARK : NO_CURSOR
       const label = displayText(option.label)
+      const number = gate.optionOffset + position + 1
       const text = option.description === undefined
-        ? `${cursor} ${box} ${position + 1}. ${label}`
-        : `${cursor} ${box} ${position + 1}. ${label} — ${displayText(option.description)}`
+        ? `${cursor} ${box} ${number}. ${label}`
+        : `${cursor} ${box} ${number}. ${label} — ${displayText(option.description)}`
       lines.push(this.theme.style(token, this.theme.cut(`${OPTION_INDENT}${text}`, width, '')))
     })
     if (this.theme.visible('gate.hint')) {

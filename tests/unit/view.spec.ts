@@ -308,6 +308,7 @@ describe('TranscriptView gate', () => {
       kind: 'approval',
       title: 'approval needed · bash',
       detail: ['write outside the workspace'],
+      optionOffset: 0,
       options: [],
       hint: 'y allow once · n reject · esc cancel',
     }
@@ -317,11 +318,12 @@ describe('TranscriptView gate', () => {
     expect(lines.some(line => line.includes('y allow once'))).toBe(true)
   })
 
-  it('renders question options with their cursor and selection', () => {
+  it('numbers a windowed row by where it sits in the list, not by where it landed on screen', () => {
     const gate: GateCard = {
       kind: 'question',
       title: 'which target?  (1/2)',
       detail: [],
+      optionOffset: 4,
       options: [
         { label: 'staging', description: 'safe', current: true, selected: true },
         { label: 'production', description: undefined, current: false, selected: false },
@@ -330,8 +332,8 @@ describe('TranscriptView gate', () => {
     }
     const lines = viewOf(new TranscriptModel(), COLLAPSED, gate).render(60)
     expect(lines).toContain('? which target?  (1/2)')
-    expect(lines).toContain('   ❯ [x] 1. staging — safe')
-    expect(lines).toContain('     [ ] 2. production')
+    expect(lines).toContain('   ❯ [x] 5. staging — safe')
+    expect(lines).toContain('     [ ] 6. production')
   })
 })
 
