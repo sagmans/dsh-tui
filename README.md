@@ -192,7 +192,8 @@ name the palette rather than a terminal slot, so on anything but a 16-colour
 terminal their contrast does not depend on what the reader's colour scheme maps
 slot 8 to. `arg` is the pale blue a card gives the argument it was called with,
 so `tool.args` is restyled on its own and stays distinct from the tool's own
-label and from its output.
+label and from its output. `user` is the rose a submitted prompt takes, so a
+reader's own turns stand apart from the reply without reading either.
 
 `NO_COLOR` and `--no-color` disable styling entirely, attributes included, and
 outrank everything in this section. A token or palette name the surface does not

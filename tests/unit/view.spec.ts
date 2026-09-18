@@ -378,7 +378,10 @@ describe('TranscriptView theming', () => {
       markdown: forwardMarkdownTheme(() => active.markdown),
     }
     const view = new TranscriptView(userModel(), delegate, new MarkdownRenderer(delegate.markdown), { state: () => COLLAPSED })
-    expect(view.render(60).join('\n')).toContain('38;2;208;208;208')
+    // Derived rather than repeated: this test is about the cache rebuilding,
+    // not about which shade the prompt wears.
+    const shipped = [1, 3, 5].map(at => Number.parseInt(DEFAULT_PALETTE.user.slice(at, at + 2), 16))
+    expect(view.render(60).join('\n')).toContain(`38;2;${shipped.join(';')}`)
     active = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['transcript.user', { fg: '#ff0000' }]]) })
     // The row cache is keyed to the old revision, so a plain repaint re-draws it.
     expect(view.render(60).join('\n')).toContain('38;2;255;0;0')
