@@ -155,6 +155,8 @@ dsh --profile tui --no-bell            # do not ring when a long turn finishes
 | `/theme` | list every styled element and the value in force |
 | `/quit` | leave and print the resume command |
 
+While a turn runs, a prompt submitted into the editor waits in the agent's own inbox instead of disappearing: it is drawn above the editor in the input bar's own frame, faint and italic, and moves into the transcript when the agent takes it. `editor.queued` and `editor.queued.more` restyle or hide those rows.
+
 Any other `/command` goes to the command registry, so `/plan`, `/compact`, `/goal`, and `/feedback` behave as they do on the other surfaces.
 
 ## Theme

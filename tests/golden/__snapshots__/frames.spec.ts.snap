@@ -115,6 +115,32 @@ exports[`golden frames > renders the dock at 80 columns 1`] = `
 ]
 `;
 
+exports[`golden frames > renders the queued prompts at 40 columns 1`] = `
+[
+  "╭──────────────────────────────────────╮",
+  "│ also mention the queue in the        │",
+  "│ summary                              │",
+  "╰──────────────────────────────────────╯",
+  "╭──────────────────────────────────────╮",
+  "│ and keep the README sentence short,  │",
+  "│ with the same shape the bar above    │",
+  "│ the editor draws                     │",
+  "╰──────────────────────────────────────╯",
+]
+`;
+
+exports[`golden frames > renders the queued prompts at 80 columns 1`] = `
+[
+  "╭──────────────────────────────────────────────────────────────────────────────╮",
+  "│ also mention the queue in the summary                                        │",
+  "╰──────────────────────────────────────────────────────────────────────────────╯",
+  "╭──────────────────────────────────────────────────────────────────────────────╮",
+  "│ and keep the README sentence short, with the same shape the bar above the    │",
+  "│ editor draws                                                                 │",
+  "╰──────────────────────────────────────────────────────────────────────────────╯",
+]
+`;
+
 exports[`golden frames > renders the session picker at 40 columns 1`] = `
 {
   "above": 0,
@@ -230,6 +256,18 @@ exports[`styled golden frames > renders the busy dock with its escapes 1`] = `
   "[38;2;138;138;138m  ▸ bash-1 · running 12s — sleep 45 && echo bg-done[0m",
   "[1m☰ todos · 1 left[0m",
   "[38;2;138;138;138m  ▸ verify the dock[0m",
+]
+`;
+
+exports[`styled golden frames > renders the queued prompts with their escapes 1`] = `
+[
+  "[38;2;138;138;138m╭──────────────────────────────────────────────────────────────────────────────╮[0m",
+  "[38;2;138;138;138m│[0m [2;3malso mention the queue in the summary[0m                                        [38;2;138;138;138m│[0m",
+  "[38;2;138;138;138m╰──────────────────────────────────────────────────────────────────────────────╯[0m",
+  "[38;2;138;138;138m╭──────────────────────────────────────────────────────────────────────────────╮[0m",
+  "[38;2;138;138;138m│[0m [2;3mand keep the README sentence short, with the same shape the bar above the[0m    [38;2;138;138;138m│[0m",
+  "[38;2;138;138;138m│[0m [2;3meditor draws[0m                                                                 [38;2;138;138;138m│[0m",
+  "[38;2;138;138;138m╰──────────────────────────────────────────────────────────────────────────────╯[0m",
 ]
 `;
 

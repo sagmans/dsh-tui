@@ -47,6 +47,7 @@ import { defaultExportFile, transcriptToText } from './export.ts'
 import { createTheme, forwardEditorTheme, forwardMarkdownTheme, type TuiTheme } from './theme.ts'
 import { detectColourMode, type ColourMode } from './theme-capability.ts'
 import { defaultSettings, readScope, toOverrides, TUI_SETTINGS_NAMESPACE, TuiSettingsSchema, type MermaidMode, type TuiSettings } from './theme-settings.ts'
+import { pendingPrompts } from './queue.ts'
 import { renderThemeTable } from './theme-command.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { formatTokens } from './tokens.ts'
@@ -65,6 +66,7 @@ import {
   type PickerAction,
   type PickerCard,
 } from './ui/picker.ts'
+import { QueueBar } from './ui/queue.ts'
 import { StatusBar } from './ui/status.ts'
 import { DEFAULT_VIEW_STATE, TranscriptView } from './ui/view.ts'
 
@@ -324,6 +326,9 @@ export function apply(ctx: Context, config: unknown): void {
   })
   const statusBar = new StatusBar(statusFacts, theme)
   const dock = new WorkDock(() => work.state(), theme, () => jobs, () => roster.list())
+  // The queue is read from the agent this terminal drives rather than from the
+  // session on screen, because it sits on the editor that submits to that agent.
+  const queue = new QueueBar(() => pendingPrompts(ctx, liveSession(activeSession)), theme)
   // Only a running turn has anything to say over time, so the clock stops with it.
   const statusTicker: ReturnType<typeof setInterval> = setInterval(() => {
     if (turnOpen) tui.requestRender()
@@ -346,6 +351,10 @@ export function apply(ctx: Context, config: unknown): void {
     // Work state earns rows only when there is some: a dock that always
     // occupied a row would cost every conversation one line of transcript.
     { component: dock, basis: 'auto', shrink: 0, minSize: 0 },
+    // Queued input earns rows only while something is waiting, and it gives
+    // them up before the editor does: the bar being typed in outranks what is
+    // waiting behind it.
+    { component: queue, basis: 'auto', shrink: 2, minSize: 0 },
     { component: new VStack([{ component: editor, basis: 'auto', shrink: 1, minSize: 1 }]), basis: 'auto', shrink: 1, minSize: 1 },
     { component: statusBar, basis: 'auto', shrink: 0, minSize: 1 },
   ]))
@@ -1390,6 +1399,9 @@ export function apply(ctx: Context, config: unknown): void {
         // something else, and nothing else refreshes a live board.
         refreshJobs()
       }
+      // A claim or a discard changes what is queued, and that belongs to this
+      // session even while the transcript shows a child's conversation.
+      if (event.type === 'agent/inbox/spliced') tui.requestRender()
     }
     if (session.id !== viewedSession) return
     presentScope = ctx.agents?.get(session.id)
