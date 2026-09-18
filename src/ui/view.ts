@@ -1,5 +1,5 @@
 import { type Component, visibleWidth, wrapTextWithAnsi } from '@earendil-works/pi-tui'
-import { cardDetailRows, type ToolCard } from '../cards.ts'
+import { cardDetailRows, shellFoldHint, shellRetentionHint, type CardPreview, type CardStat, type CardStatKind, type ToolCard } from '../cards.ts'
 import type { GateCard } from '../gates.ts'
 import { displayText } from '../text.ts'
 import type { TranscriptEntry, TranscriptModel } from '../transcript.ts'
@@ -22,6 +22,27 @@ const CHECKBOX_OFF = '[ ]'
 const FALLBACK_ROW_TOKEN: TuiToken = 'tool.detail'
 /** An unselected row has no cursor, and a blank column is not a value to configure. */
 const NO_CURSOR = ' '
+/** The words an opened card uses when retention, not the fold, dropped rows. */
+const CARD_HINT_RETAINED = 'more lines not shown'
+/** The key a folded reasoning row names, so a hidden thought stays reachable. */
+const REASONING_FOLD_HINT = 'ctrl+t'
+/** What separates a card's header from its measured facts, and the facts from each other. */
+const STAT_LEAD = '  '
+const STAT_SEPARATOR = ' · '
+/** The symbol that says what a fact counts; a size needs none. */
+const STAT_SYMBOL: Readonly<Record<CardStatKind, string>> = {
+  added: '+',
+  changed: '~',
+  removed: '-',
+  size: '',
+}
+/** Which colour draws each fact, so added, changed, and removed never share one. */
+const STAT_TOKEN: Readonly<Record<CardStatKind, TuiToken>> = {
+  added: 'tool.stat.added',
+  changed: 'tool.stat.changed',
+  removed: 'tool.stat.removed',
+  size: 'tool.stat.size',
+}
 
 /** Which rows the reader has opened; one key decides for every row of a kind. */
 export interface ViewState {
@@ -29,7 +50,8 @@ export interface ViewState {
   readonly expandReasoning: boolean
 }
 
-const ALL_COLLAPSED: ViewState = { expandCards: false, expandReasoning: false }
+/** The state a reader gets before opening anything, and the view's own fallback. */
+export const ALL_COLLAPSED: ViewState = { expandCards: false, expandReasoning: false }
 
 /**
  * Renders the transcript rows and any pending gate as terminal lines.
@@ -91,6 +113,24 @@ export class TranscriptView implements Component {
     })
   }
 
+  /**
+   * Wrap one already-styled block under a prefix.
+   *
+   * A card header mixes tokens — title, argument, stats — in a single string, so
+   * it cannot go through {@link pushWrapped}, which escapes and restyles plain
+   * text. Its width still has to fold at the screen edge rather than be cut,
+   * because the argument is the part a reader scans for and a silently dropped
+   * command is worse than a taller card.
+   */
+  private pushStyledWrapped(lines: string[], content: string, width: number, prefix: string): void {
+    const lead = visibleWidth(prefix)
+    const indent = ' '.repeat(lead)
+    const wrapped = wrapTextWithAnsi(content, Math.max(1, width - lead))
+    wrapped.forEach((line, index) => {
+      lines.push(this.theme.cut(`${index === 0 ? prefix : indent}${line}`, width, ''))
+    })
+  }
+
   /** Render assistant text as markdown: the model writes structure, the reader reads it. */
   private pushMarkdown(lines: string[], text: string, width: number): void {
     const rendered = this.markdown.render(displayText(text), Math.max(1, width))
@@ -110,16 +150,18 @@ export class TranscriptView implements Component {
     if (!this.theme.visible('transcript.reasoning.summary')) return
     const glyph = this.theme.glyph('transcript.reasoning.summary')
     const lead = glyph === '' ? '' : `${glyph} `
-    lines.push(this.theme.style('transcript.reasoning.summary', this.theme.cut(`${lead}${displayText(entry.summary)}`, width, '')))
-    if (!this.viewState.expandReasoning) {
-      // The row says thinking happened; without this the reader has no way to
-      // learn the body is there, which reads as the text having been dropped.
-      if (this.theme.visible('transcript.reasoning.hint') && entry.body !== '') {
-        const hint = `${DETAIL_INDENT}ctrl+t shows it`
-        lines.push(this.theme.style('transcript.reasoning.hint', this.theme.cut(hint, width, '')))
-      }
-      return
-    }
+    // A folded row carries the key that opens it, because a count with no way to
+    // reach the text reads the same as the text never having arrived. The key
+    // rides the row rather than a line of its own, so naming the hidden body
+    // costs no vertical space.
+    const suffix = !this.viewState.expandReasoning && entry.body !== '' && this.theme.visible('transcript.reasoning.hint')
+      ? ` (${REASONING_FOLD_HINT})`
+      : ''
+    // The key is kept whole: the summary is the part that gives up room.
+    const room = Math.max(1, width - visibleWidth(suffix))
+    const summary = this.theme.style('transcript.reasoning.summary', this.theme.cut(`${lead}${displayText(entry.summary)}`, room, ''))
+    lines.push(suffix === '' ? summary : `${summary}${this.theme.style('transcript.reasoning.hint', suffix)}`)
+    if (!this.viewState.expandReasoning) return
     if (!this.theme.visible('transcript.reasoning.body')) return
     for (const line of entry.body.split('\n')) {
       this.pushWrapped(lines, line, width, DETAIL_INDENT, text => this.theme.style('transcript.reasoning.body', text))
@@ -128,13 +170,22 @@ export class TranscriptView implements Component {
 
   private pushCard(lines: string[], card: ToolCard, width: number): void {
     const expanded = this.viewState.expandCards
-    const { lines: detail, hidden } = cardDetailRows(card, expanded)
+    // A card whose kind declares its call IS a command keeps its output tail
+    // while folded: that output is the answer the reader asked for, so it
+    // outranks the one-line rule every other card follows. Its command is drawn
+    // outside the fold entirely, because what ran is never a detail.
+    const preview: CardPreview = expanded
+      ? { expanded: true }
+      : { expanded: false, preview: card.kind === 'terminal' ? 'shellTail' : 'title' }
+    const { lines: detail, hidden } = cardDetailRows(card, preview)
     const titleToken = card.failed ? 'tool.failed.title' : 'tool.title'
     const glyphToken = card.failed ? 'tool.failed.glyph' : 'tool.glyph'
-    if (this.theme.visible(titleToken)) {
-      const glyph = this.theme.glyph(glyphToken)
-      const lead = glyph === '' ? '' : `${glyph} `
-      lines.push(this.theme.style(titleToken, this.theme.cut(`${lead}${displayText(card.title)}`, width, '')))
+    const { lead, body } = this.renderHead(card, titleToken, glyphToken)
+    // A header that folds keeps the argument and its stats; a terminal command
+    // can be longer than the screen, so it wraps under its own indent.
+    if (body !== '') this.pushStyledWrapped(lines, body, width, lead)
+    if (card.kind === 'terminal' && card.argument !== undefined && card.argument !== '' && this.theme.visible('tool.args')) {
+      this.pushStyledWrapped(lines, this.theme.style('tool.args', displayText(card.argument)), width, DETAIL_INDENT)
     }
     for (const row of detail) {
       // The row says what it is, so the renderer never guesses from the text:
@@ -151,10 +202,50 @@ export class TranscriptView implements Component {
       if (drawn === '') continue
       lines.push(this.theme.cut(`${DETAIL_INDENT}${drawn}`, width, ''))
     }
-    if (hidden > 0 && this.theme.visible('tool.hint')) {
-      const hint = expanded ? `${hidden} more lines not shown` : `… ${hidden} more lines · ctrl+o shows them`
-      lines.push(this.theme.style('tool.hint', this.theme.cut(`${DETAIL_INDENT}${hint}`, width, '')))
+    // The pill is not output, so it draws after the preview window rather than
+    // inside it: a run bounded to its tail still reports how it ended.
+    if (card.kind === 'terminal' && card.status !== undefined && this.theme.visible('tool.terminal.status')) {
+      lines.push(this.theme.cut(`${DETAIL_INDENT}${this.theme.style('tool.terminal.status', displayText(card.status))}`, width, ''))
     }
+    if (hidden <= 0 || !this.theme.visible('tool.hint')) return
+    // A shell card's rows are kept from the end, so a hidden count always names
+    // the rows *before* what is on screen and the hint has to say so; every
+    // other card keeps its head, where a neutral count is enough. A folded shell
+    // card is bounded by its preview window, an opened one by retention, so the
+    // opened hint promises no more than memory kept.
+    const hint = card.kind === 'terminal'
+      ? preview.expanded ? shellRetentionHint(hidden) : shellFoldHint(hidden)
+      : preview.expanded ? `${hidden} ${CARD_HINT_RETAINED}` : undefined
+    if (hint === undefined) return
+    lines.push(this.theme.style('tool.hint', this.theme.cut(`${DETAIL_INDENT}${hint}`, width, '')))
+  }
+
+  /**
+   * A card's header: its label, its argument, and its measured facts.
+   *
+   * The glyph is returned apart from the body so a wrapped continuation can
+   * align under the label rather than under the mark. A terminal's argument is
+   * left out because it needs a row of its own — it is the one argument that can
+   * be a whole command rather than a word.
+   */
+  private renderHead(card: ToolCard, titleToken: TuiToken, glyphToken: TuiToken): { lead: string; body: string } {
+    const glyph = this.theme.visible(titleToken) ? this.theme.glyph(glyphToken) : ''
+    const lead = glyph === '' ? '' : `${glyph} `
+    let body = this.theme.visible(titleToken) ? this.theme.style(titleToken, displayText(card.title)) : ''
+    if (card.kind !== 'terminal' && card.argument !== undefined && card.argument !== '' && this.theme.visible('tool.args')) {
+      body += `${body === '' ? '' : ' '}${this.theme.style('tool.args', displayText(card.argument))}`
+    }
+    return { lead, body: body + this.renderStats(card.stats) }
+  }
+
+  /** The measured facts, each in its own colour, or nothing when none is visible. */
+  private renderStats(stats: readonly CardStat[] | undefined): string {
+    if (stats === undefined || stats.length === 0) return ''
+    const drawn = stats
+      .filter(stat => this.theme.visible(STAT_TOKEN[stat.kind]))
+      .map(stat => this.theme.style(STAT_TOKEN[stat.kind], `${STAT_SYMBOL[stat.kind]}${displayText(stat.text)}`))
+    if (drawn.length === 0) return ''
+    return `${STAT_LEAD}${drawn.join(this.theme.style('tool.stat.separator', STAT_SEPARATOR))}`
   }
 
   private pushPicker(lines: string[], picker: PickerCard, width: number): void {

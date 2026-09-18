@@ -1,5 +1,6 @@
 import { type Component, visibleWidth } from '@earendil-works/pi-tui'
 import { displayText } from '../text.ts'
+import { formatTokens } from '../tokens.ts'
 import type { TuiToken } from '../theme-tokens.ts'
 import type { TuiTheme } from '../theme.ts'
 
@@ -27,9 +28,6 @@ export interface StatusFacts {
   readonly home: string | undefined
 }
 
-const THOUSAND = 1000
-const HUNDRED_THOUSAND = 100 * THOUSAND
-const MILLION = 1_000_000
 const SECOND_MS = 1000
 const MINUTE_MS = 60 * SECOND_MS
 /** Path segments kept for a directory outside the home; a terminal row is not a file browser. */
@@ -51,13 +49,6 @@ interface Segment {
 }
 
 /** Compact a token count, because the exact number changes nothing a reader decides. */
-export function formatTokens(count: number): string {
-  if (count >= MILLION) return `${(count / MILLION).toFixed(1)}M`
-  // A decimal on a five-digit count is noise: 128.0k reads worse than 128k.
-  if (count >= HUNDRED_THOUSAND) return `${Math.round(count / THOUSAND)}k`
-  if (count >= THOUSAND) return `${(count / THOUSAND).toFixed(1)}k`
-  return String(count)
-}
 
 /**
  * Shorten an absolute path for the footer: the reader's own home becomes `~`,

@@ -22,8 +22,17 @@ export function resetSequence(): string {
  */
 export const MUTED_GREY = '#8a8a8a'
 
+/**
+ * The shade a tool's argument takes.
+ *
+ * A call's argument is the one part of a card the reader scans for, and it must
+ * read as neither the tool's own label (warn) nor ordinary output (the default
+ * foreground); a pale blue sits between them without competing for attention.
+ */
+export const ARGUMENT_BLUE = '#8db3d9'
+
 /** Palette entries a token may name instead of a literal colour. */
-export const PALETTE_NAMES = ['default', 'muted', 'accent', 'warn', 'added', 'removed', 'user', 'assistant'] as const
+export const PALETTE_NAMES = ['default', 'muted', 'accent', 'arg', 'warn', 'added', 'removed', 'user', 'assistant'] as const
 
 /** A named palette entry. */
 export type PaletteName = (typeof PALETTE_NAMES)[number]
@@ -83,6 +92,12 @@ export const TUI_TOKENS = [
   // Tool cards: the generic layer
   'tool.title',
   'tool.glyph',
+  'tool.args',
+  'tool.stat.added',
+  'tool.stat.changed',
+  'tool.stat.removed',
+  'tool.stat.size',
+  'tool.stat.separator',
   'tool.detail',
   'tool.hint',
   'tool.failed.title',
@@ -149,17 +164,12 @@ export const TUI_TOKENS = [
   'dock.todos.heading',
   'dock.todos.pending',
   'dock.todos.inProgress',
-  'dock.todos.completed',
   'dock.todos.overflow',
   'dock.subagents.heading',
   'dock.subagents.running',
-  'dock.subagents.completed',
-  'dock.subagents.failed',
   'dock.subagents.overflow',
   'dock.jobs.heading',
   'dock.jobs.running',
-  'dock.jobs.completed',
-  'dock.jobs.failed',
   'dock.jobs.overflow',
   // Status bar
   'status.activity.working',
@@ -210,6 +220,7 @@ export const DEFAULT_PALETTE: Readonly<Record<PaletteName, string>> = {
   default: '#d0d0d0',
   muted: MUTED_GREY,
   accent: '#5fafd7',
+  arg: ARGUMENT_BLUE,
   warn: '#d7af5f',
   added: '#5faf5f',
   removed: '#d75f5f',
@@ -245,6 +256,12 @@ export const DEFAULT_TOKENS: Readonly<Record<TuiToken, StyleSpec>> = {
 
   'tool.title': { fg: 'warn' },
   'tool.glyph': { fg: 'warn' },
+  'tool.args': { fg: 'arg' },
+  'tool.stat.added': { fg: 'added' },
+  'tool.stat.changed': { fg: 'warn' },
+  'tool.stat.removed': { fg: 'removed' },
+  'tool.stat.size': muted,
+  'tool.stat.separator': muted,
   'tool.detail': muted,
   'tool.hint': muted,
   'tool.failed.title': { fg: 'removed' },
@@ -309,17 +326,12 @@ export const DEFAULT_TOKENS: Readonly<Record<TuiToken, StyleSpec>> = {
   'dock.todos.heading': { bold: true },
   'dock.todos.pending': muted,
   'dock.todos.inProgress': muted,
-  'dock.todos.completed': muted,
   'dock.todos.overflow': muted,
   'dock.subagents.heading': { bold: true },
   'dock.subagents.running': muted,
-  'dock.subagents.completed': muted,
-  'dock.subagents.failed': muted,
   'dock.subagents.overflow': muted,
   'dock.jobs.heading': { bold: true },
   'dock.jobs.running': muted,
-  'dock.jobs.completed': muted,
-  'dock.jobs.failed': muted,
   'dock.jobs.overflow': muted,
 
   'status.activity.working': muted,

@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import {
   cardDetailRows,
-  CARD_DETAIL_LIMIT,
   CARD_DETAIL_MAX,
+  CARD_SHELL_PREVIEW,
   cardOfCall,
   cardOfResult,
+  carriedFields,
   mergeCards,
   renderFileDiff,
   rowText,
+  shellFoldHint,
+  shellRetentionHint,
   type CardRow,
   type ToolCard,
 } from '@/cards.ts'
@@ -45,16 +48,26 @@ describe('cardOfCall', () => {
     expect(cardOfCall(undefined, 'mystery')).toEqual({ kind: 'generic', title: 'mystery', detail: [], failed: false, totalLines: 0 })
   })
 
-  it('maps a terminal call to its command and working directory', () => {
+  it('names the tool in the header and keeps the command as its own field', () => {
     const card = cardOfCall({ card: 'terminal', title: 'ls -la', description: 'list files', cwd: '/tmp' }, 'bash')
+    expect(card.title).toBe('bash')
+    expect(card.argument).toBe('ls -la')
     expect(texts(card.detail)).toEqual(['list files', 'cwd /tmp'])
     expect(card.detail.map(line => line.parts[0]?.class)).toEqual(['output', 'cwd'])
   })
 
-  it('maps a diff call to bounded diff lines', () => {
+  it('names a file call by its tool and puts the path in the argument', () => {
     const card = cardOfCall({ card: 'diff', title: 'Write a.txt', diffs: [{ path: 'a.txt', oldText: null, newText: 'x' }] }, 'write')
     expect(card.kind).toBe('diff')
+    expect(card.title).toBe('write')
+    expect(card.argument).toBe('a.txt')
     expect(texts(card.detail)).toEqual(['a.txt  new', '+x'])
+  })
+
+  it('takes a generic call path from its declared locations', () => {
+    const card = cardOfCall({ card: 'generic', title: 'Read a.ts (from line 5)', kind: 'read', locations: [{ path: 'a.ts', line: 5 }] }, 'read')
+    expect(card.title).toBe('read')
+    expect(card.argument).toBe('a.ts')
   })
 
   it('uses the declared title and counts every presented row', () => {
@@ -68,41 +81,95 @@ describe('cardOfCall', () => {
   it('falls back to the tool name when a view declares no title', () => {
     expect(cardOfCall({ card: 'generic', title: '  ' }, 'grep').title).toBe('grep')
   })
+
+  it('drops a presenter verb that only restates the call', () => {
+    const card = cardOfCall({ card: 'generic', title: 'Load skill project-skill', kind: 'read', rawInput: 'project-skill' }, 'skill')
+    expect(card.title).toBe('skill project-skill')
+  })
 })
 
 describe('cardDetailRows', () => {
-  const card = (rows: number): ToolCard => ({
-    kind: 'generic',
+  const card = (rows: number, kind: ToolCard['kind'] = 'generic'): ToolCard => ({
+    kind,
     title: 'flood',
     detail: Array.from({ length: rows }, (_, index) => row('detail', `line ${index}`)),
     failed: false,
     totalLines: rows,
   })
 
-  it('shows a preview and counts the rest while collapsed', () => {
-    const shown = cardDetailRows(card(25), false)
-    expect(shown.lines).toHaveLength(CARD_DETAIL_LIMIT)
-    expect(shown.hidden).toBe(25 - CARD_DETAIL_LIMIT)
+  it('draws no detail row while a card is folded to its title', () => {
+    const shown = cardDetailRows(card(25), { expanded: false, preview: 'title' })
+    expect(shown.lines).toHaveLength(0)
+    expect(shown.hidden).toBe(25)
+  })
+
+  it('keeps the tail of a folded shell card and counts the rows before it', () => {
+    const shown = cardDetailRows(card(25, 'terminal'), { expanded: false, preview: 'shellTail' })
+    expect(texts(shown.lines).at(0)).toBe(`line ${25 - CARD_SHELL_PREVIEW}`)
+    expect(texts(shown.lines).at(-1)).toBe('line 24')
+    expect(shown.hidden).toBe(25 - CARD_SHELL_PREVIEW)
+    expect(shellFoldHint(shown.hidden)).toBe('… 5 earlier lines · ctrl+o shows more')
+  })
+
+  it('names an opened shell card\'s dropped rows as the earlier ones', () => {
+    // Retention keeps the tail, so an opened card is missing its beginning; a
+    // hint that only counts rows sends the reader past the end of the output.
+    expect(shellRetentionHint(4800)).toBe('… 4800 earlier lines not shown')
+    expect(shellRetentionHint(0)).toBeUndefined()
+  })
+
+  it("keeps a shell card's whole output when it fits the preview", () => {
+    const shown = cardDetailRows(card(3, 'terminal'), { expanded: false, preview: 'shellTail' })
+    expect(shown.lines).toHaveLength(3)
+    expect(shown.hidden).toBe(0)
+    expect(shellFoldHint(shown.hidden)).toBeUndefined()
   })
 
   it('shows every retained row while expanded', () => {
-    const shown = cardDetailRows(card(25), true)
+    const shown = cardDetailRows(card(25), { expanded: true })
     expect(shown.lines).toHaveLength(25)
     expect(shown.hidden).toBe(0)
   })
 
   it('stays bounded for a card that streamed far more than it keeps', () => {
-    const shown = cardDetailRows({ ...card(0), detail: [], totalLines: 5000 }, true)
+    const shown = cardDetailRows({ ...card(0), detail: [], totalLines: 5000 }, { expanded: true })
     expect(shown.lines).toHaveLength(0)
     expect(shown.hidden).toBe(5000)
   })
 })
 
 describe('cardOfResult', () => {
-  it('renders a terminal result with its exit status', () => {
+  it('renders a terminal result with its exit status kept out of the output rows', () => {
     const card = cardOfResult({ card: 'terminal', title: 'ls', output: 'a\nb', exitCode: 0 }, { fallbackTitle: 'bash', failed: false, contentLines: [] })
-    expect(texts(card.detail)).toEqual(['a', 'b', 'exit 0'])
-    expect(card.detail.map(line => line.parts[0]?.class)).toEqual(['output', 'output', 'status'])
+    // The header is the tool, the result title is the command fallback, and the
+    // pill is its own field so it never consumes a folded output slot.
+    expect(card.title).toBe('bash')
+    expect(card.argument).toBe('ls')
+    expect(card.status).toBe('exit 0')
+    expect(texts(card.detail)).toEqual(['a', 'b'])
+  })
+
+  it('does not spend a preview row on a terminating newline', () => {
+    const card = cardOfResult({ card: 'terminal', output: 'a\nb\n', exitCode: 0 }, { fallbackTitle: 'bash', failed: false, contentLines: [] })
+    expect(texts(card.detail)).toEqual(['a', 'b'])
+    expect(card.totalLines).toBe(2)
+  })
+
+  it('keeps the true tail and the status of output far past retention', () => {
+    const flood = Array.from({ length: 5000 }, (_, index) => `row ${index}`)
+    const card = cardOfResult(
+      { card: 'terminal', output: flood.join('\n'), exitCode: 3 },
+      { fallbackTitle: 'bash', failed: false, contentLines: [] },
+    )
+    expect(card.detail).toHaveLength(CARD_DETAIL_MAX)
+    expect(rowText(card.detail.at(-1) as CardRow)).toBe('row 4999')
+    expect(card.status).toBe('exit 3')
+    expect(card.totalLines).toBe(5000)
+    // Folded, the preview is the run's real tail, not the end of a retained head.
+    const shown = cardDetailRows(card, { expanded: false, preview: 'shellTail' })
+    expect(texts(shown.lines).at(0)).toBe(`row ${5000 - CARD_SHELL_PREVIEW}`)
+    expect(texts(shown.lines).at(-1)).toBe('row 4999')
+    expect(shown.hidden).toBe(5000 - CARD_SHELL_PREVIEW)
   })
 
   it('marks a failed result so the reader sees it without expanding', () => {
@@ -128,13 +195,99 @@ describe('cardOfResult', () => {
     expect(texts(card.detail)).toEqual(['a.ts', 'b.ts'])
   })
 
-  it('renders a read result with its range header', () => {
+  it('reports a read result as its path, range, size, and numbered lines', () => {
     const card = cardOfResult(
       { card: 'read', path: 'a.ts', offset: 5, lines: [{ number: 5, text: 'x' }], totalLines: 20 },
       { fallbackTitle: 'read', failed: false, contentLines: [] },
     )
-    expect(texts(card.detail)).toEqual(['a.ts (from line 5, 20 total)', '5: x'])
-    expect(card.detail[1]?.parts.map(part => part.class)).toEqual(['lineNumber', 'line'])
+    expect(card.title).toBe('read')
+    expect(card.argument).toBe('a.ts')
+    expect(card.stats).toEqual([
+      { kind: 'size', text: 'L5' },
+      { kind: 'size', text: '1 line' },
+      { kind: 'size', text: '1 tok' },
+    ])
+    expect(texts(card.detail)).toEqual(['5: x'])
+    expect(card.detail[0]?.parts.map(part => part.class)).toEqual(['lineNumber', 'line'])
+  })
+
+  it('reports the whole range a multi-line read spans', () => {
+    const card = cardOfResult(
+      { card: 'read', path: 'a.ts', offset: 5, lines: [{ number: 5, text: 'x' }, { number: 6, text: 'y' }, { number: 7, text: 'z' }], totalLines: 20 },
+      { fallbackTitle: 'read', failed: false, contentLines: [] },
+    )
+    expect(card.stats?.slice(0, 2)).toEqual([{ kind: 'size', text: 'L5–7' }, { kind: 'size', text: '3 lines' }])
+  })
+
+  it('keeps a read window\'s offset when it returned no lines', () => {
+    // The view preserves the offset for exactly this case, so the card must not
+    // drop it and leave the reader without a place to continue from.
+    const card = cardOfResult(
+      { card: 'read', path: 'a.ts', offset: 400, lines: [], totalLines: 900 },
+      { fallbackTitle: 'read', failed: false, contentLines: [] },
+    )
+    expect(card.stats).toEqual([{ kind: 'size', text: 'L400' }, { kind: 'size', text: '0 lines' }])
+  })
+
+  it('measures the content a read falls back to drawing', () => {
+    // A read with no numbered window still draws its model-facing content, so a
+    // size of zero would contradict the rows under the header.
+    const card = cardOfResult(
+      { card: 'read', path: 'a.ts', offset: 1, lines: [], totalLines: 3, content: [{ type: 'text', text: 'one\ntwo' }] },
+      { fallbackTitle: 'read', failed: false, contentLines: [] },
+    )
+    expect(card.stats).toEqual([
+      { kind: 'size', text: 'L1–2' },
+      { kind: 'size', text: '2 lines' },
+      { kind: 'size', text: '2 tok' },
+    ])
+    expect(texts(card.detail)).toEqual(['one', 'two'])
+  })
+
+  it('reports a new file by its line and token size', () => {
+    const card = cardOfResult(
+      { card: 'diff', diffs: [{ path: 'a.txt', oldText: null, newText: 'one\ntwo\nthree' }] },
+      { fallbackTitle: 'write', failed: false, contentLines: [] },
+    )
+    expect(card.title).toBe('write')
+    expect(card.argument).toBe('a.txt')
+    expect(card.stats).toEqual([
+      { kind: 'size', text: '3 lines' },
+      { kind: 'size', text: '4 tok' },
+    ])
+  })
+
+  it('reports an edit as one changed line, not an add plus a remove', () => {
+    const card = cardOfResult(
+      { card: 'diff', diffs: [{ path: 'a.ts', oldText: 'keep\nold\ntail', newText: 'keep\nnew\ntail' }] },
+      { fallbackTitle: 'edit', failed: false, contentLines: [] },
+    )
+    expect(card.stats).toEqual([{ kind: 'changed', text: '1' }])
+  })
+
+  it('separates pure additions from replacements', () => {
+    const card = cardOfResult(
+      { card: 'diff', diffs: [{ path: 'a.ts', oldText: 'a\nb', newText: 'a\nx\ny' }] },
+      { fallbackTitle: 'edit', failed: false, contentLines: [] },
+    )
+    // `b -> x` is a change and `y` is the only pure addition.
+    expect(card.stats).toEqual([{ kind: 'added', text: '1' }, { kind: 'changed', text: '1' }])
+  })
+
+  it("nets each file's change on its own", () => {
+    // One file's additions must not cancel another's deletions: netting across
+    // files would report a two-file change as a rewrite of neither.
+    const card = cardOfResult(
+      {
+        card: 'diff',
+        diffs: [
+          { path: 'a.ts', oldText: 'keep', newText: 'keep\none\ntwo' },
+          { path: 'b.ts', oldText: 'keep\none\ntwo', newText: 'keep' },
+        ],
+      },
+      { fallbackTitle: 'edit', failed: false, contentLines: [] },
+    )
+    expect(card.stats).toEqual([{ kind: 'added', text: '2' }, { kind: 'removed', text: '2' }])
   })
 
   it('renders both web shapes', () => {
@@ -159,13 +312,14 @@ describe('cardOfResult', () => {
 })
 
 describe('mergeCards', () => {
-  const call: ToolCard = { kind: 'terminal', title: 'ls -la', detail: [row('cwd', 'cwd /tmp')], failed: false, totalLines: 1 }
+  const call: ToolCard = { kind: 'terminal', title: 'bash', argument: 'ls -la', detail: [row('cwd', 'cwd /tmp')], failed: false, totalLines: 1 }
 
-  it('keeps the call header and swaps in the result', () => {
-    const result: ToolCard = { kind: 'terminal', title: 'ls', detail: [row('output', 'a'), row('output', 'b')], failed: false, totalLines: 2 }
+  it('keeps the call header and command while swapping in the result', () => {
+    const result: ToolCard = { kind: 'terminal', title: 'bash', detail: [row('output', 'a'), row('output', 'b')], failed: false, totalLines: 2 }
     expect(mergeCards(call, result)).toEqual({
       kind: 'terminal',
-      title: 'ls -la',
+      title: 'bash',
+      argument: 'ls -la',
       detail: [row('output', 'a'), row('output', 'b')],
       failed: false,
       totalLines: 2,
@@ -176,11 +330,27 @@ describe('mergeCards', () => {
     const result: ToolCard = { kind: 'generic', title: 'ls', detail: [], failed: true, totalLines: 0 }
     expect(mergeCards(call, result)).toEqual({
       kind: 'terminal',
-      title: 'ls -la',
+      title: 'bash',
+      argument: 'ls -la',
       detail: [row('cwd', 'cwd /tmp')],
       failed: true,
       totalLines: 1,
     })
+  })
+
+  it('carries the result status and stats onto the merged card', () => {
+    const result: ToolCard = { kind: 'terminal', title: 'bash', status: 'exit 2', stats: [{ kind: 'size', text: '3 lines' }], detail: [row('output', 'boom')], failed: true, totalLines: 1 }
+    expect(mergeCards(call, result).status).toBe('exit 2')
+    expect(mergeCards(call, result).stats).toEqual([{ kind: 'size', text: '3 lines' }])
+  })
+
+  it("prefers the result's argument when the merged kind changes", () => {
+    // A diff result knows the file it changed; the pending command must not
+    // stand in for it on a card that is no longer a terminal.
+    const result: ToolCard = { kind: 'diff', title: 'edit', argument: 'a.ts', detail: [row('added', '+x')], failed: false, totalLines: 1 }
+    const merged = mergeCards(call, result)
+    expect(merged.kind).toBe('diff')
+    expect(merged.argument).toBe('a.ts')
   })
 
   it('returns the single available card when only one side exists', () => {
@@ -190,5 +360,32 @@ describe('mergeCards', () => {
 
   it('refuses to merge two absent cards', () => {
     expect(() => mergeCards(undefined, undefined)).toThrow(/at least one card/)
+  })
+})
+
+describe('carriedFields', () => {
+  it('keeps the header fields a rebuilt card would otherwise lose', () => {
+    // A rebuild replaces the rows and says nothing about the command, the facts,
+    // or the outcome, so all three have to travel with it.
+    const card: ToolCard = {
+      kind: 'terminal',
+      title: 'bash',
+      argument: 'ls -la',
+      stats: [{ kind: 'size', text: '3 lines' }],
+      status: 'exit 0',
+      detail: [],
+      failed: false,
+      totalLines: 0,
+    }
+    expect(carriedFields(card)).toEqual({
+      argument: 'ls -la',
+      stats: [{ kind: 'size', text: '3 lines' }],
+      status: 'exit 0',
+    })
+  })
+
+  it('omits a field the card never had', () => {
+    const card: ToolCard = { kind: 'generic', title: 'read', detail: [], failed: false, totalLines: 0 }
+    expect(carriedFields(card)).toEqual({})
   })
 })

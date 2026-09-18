@@ -30,7 +30,7 @@ describe('WorkDock', () => {
     expect(dockOf({ ...EMPTY, planMode: true }).render(80)).toEqual(['⏸ plan mode · answer the plan before edits happen'])
   })
 
-  it('orders the todos by what needs attention and counts the done ones', () => {
+  it('shows only the todos still to do, most urgent first', () => {
     const todos = [
       { content: 'done thing', status: 'completed' as const },
       { content: 'next thing', status: 'pending' as const },
@@ -38,11 +38,15 @@ describe('WorkDock', () => {
     ]
     const lines = dockOf({ ...EMPTY, todos }).render(80)
     expect(lines).toEqual([
-      '☰ todos 1/3 done',
+      '☰ todos · 2 left',
       '  ▸ now thing',
       '  ☐ next thing',
-      '  ☑ done thing',
     ])
+  })
+
+  it('drops the todo list once every item is done', () => {
+    const todos = [{ content: 'done thing', status: 'completed' as const }]
+    expect(dockOf({ ...EMPTY, todos }).render(80)).toEqual([])
   })
 
   it('bounds a long list and counts what it left out', () => {
@@ -52,26 +56,41 @@ describe('WorkDock', () => {
     expect(lines.at(-1)).toBe('  … 3 more')
   })
 
-  it('shows live jobs first and counts them', () => {
+  it('shows only the jobs still running', () => {
     const jobs = [
       { id: 'bash-1', kind: 'bash', label: 'build', status: 'completed' as const, startedAt: 1_000, finishedAt: 2_000 },
       { id: 'bash-2', kind: 'bash', label: 'test', status: 'running' as const, startedAt: Date.now(), finishedAt: undefined },
     ]
     const lines = new WorkDock(() => EMPTY, theme, () => jobs).render(80)
-    expect(lines[0]).toBe('⛭ jobs · 1 running, 1 done')
+    expect(lines).toHaveLength(2)
+    expect(lines[0]).toBe('⛭ jobs · 1 running')
     expect(lines[1]).toContain('▸ bash-2 · running')
-    expect(lines[2]).toContain('✓ bash-1 · completed')
   })
 
-  it('lists delegations with their provider and age', () => {
+  it('drops the job board once every job has settled', () => {
+    const jobs = [
+      { id: 'bash-1', kind: 'bash', label: 'build', status: 'completed' as const, startedAt: 1_000, finishedAt: 2_000 },
+      { id: 'bash-3', kind: 'bash', label: 'deploy', status: 'failed' as const, startedAt: 1_000, finishedAt: 2_000 },
+    ]
+    expect(new WorkDock(() => EMPTY, theme, () => jobs).render(80)).toEqual([])
+  })
+
+  it('lists only the delegations still running', () => {
     const runs = [
       { runId: 'r1', provider: 'spawn', id: 'child-abcdef', startedAt: Date.now() - 4_000, status: 'running' as const },
       { runId: 'r2', provider: 'fork', id: 'child-2', startedAt: 1_000, status: 'failed' as const, finishedAt: 2_000 },
     ]
     const lines = new WorkDock(() => EMPTY, theme, () => [], () => runs).render(80)
-    expect(lines[0]).toBe('⚇ subagents · 1 running, 1 done')
+    expect(lines).toHaveLength(2)
+    expect(lines[0]).toBe('⚇ subagents · 1 running')
     expect(lines[1]).toContain('▸ child-ab · spawn · running')
-    expect(lines[2]).toContain('✗ child-2 · fork · failed')
+  })
+
+  it('drops the subagent board once every delegation has settled', () => {
+    const runs = [
+      { runId: 'r2', provider: 'fork', id: 'child-2', startedAt: 1_000, status: 'failed' as const, finishedAt: 2_000 },
+    ]
+    expect(new WorkDock(() => EMPTY, theme, () => [], () => runs).render(80)).toEqual([])
   })
 
   it('takes no rows when no job is running', () => {
@@ -97,9 +116,12 @@ describe('WorkDock theming', () => {
     expect(lines.some(line => line.includes('jobs ·'))).toBe(false)
   })
 
-  it('styles a finished job with its own element', () => {
-    const finished = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['dock.jobs.completed', { fg: '#ff0000' }]]) })
-    const lines = new WorkDock(() => EMPTY, finished, () => job('completed')).render(80)
-    expect(lines.find(line => line.includes('bash-1'))).toContain('38;2;255;0;0')
+  it('keeps a settled job off screen however the live job element is styled', () => {
+    // A settled job has no element of its own any more, because no element can
+    // reach a row the dock refuses to draw; styling the live one must not
+    // resurrect it either.
+    const styled = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['dock.jobs.running', { fg: '#ff0000' }]]) })
+    expect(new WorkDock(() => EMPTY, styled, () => job('completed')).render(80)).toEqual([])
+    expect(new WorkDock(() => EMPTY, styled, () => job('running')).render(80)[1]).toContain('38;2;255;0;0')
   })
 })

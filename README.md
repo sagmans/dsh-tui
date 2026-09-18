@@ -88,6 +88,7 @@ Two facts explain most failures.
 | `dsh: cannot resolve profile bundle "@sagmans/dsh-tui" ...` | the linked checkout moved or was deleted | `dsh plugin --profile tui add "$PLUGIN_CHECKOUT"` |
 | `dsh --profile tui` prints nothing and never exits | the bundle left `dsh.profile.bundles`, usually after a broken link and a `plugin install` | confirm the layer list, then run the `add` command again |
 | `dsh-tui: both stdin and stdout must be TTYs` | stdin or stdout is a pipe, a file, or a CI runner | run the command from a terminal |
+| An `ExperimentalWarning: stripTypeScriptTypes …` line appears inside the interface | a PTC program makes the code runtime call Node's experimental type-strip on the main thread, and Node writes that warning to the same terminal the surface owns | start with `NODE_OPTIONS=--disable-warning=ExperimentalWarning dsh --profile tui` |
 | Changes under `src/` have no effect | a linked profile loads `lib/`, not `src/` | `pnpm run build` in the plugin checkout |
 | `pnpm dsh --profile tui` exits before the surface appears | pnpm's dependency check fails on the harness checkout's own postinstall | see [Launching from a harness checkout](#launching-from-a-harness-checkout) |
 | `--preset <id>` is refused, because the session's agent preset is fixed | a session keeps the mode that composed it, and this session already took a turn | `/preset <id>` before the first turn, or resume without `--preset` |
@@ -120,8 +121,8 @@ dsh --profile tui --no-bell            # do not ring when a long turn finishes
 |---|---|
 | Enter | submit the prompt |
 | Ctrl+C | interrupt the running turn, or leave when idle |
-| Ctrl+O | show every line of the tool cards instead of their preview |
-| Ctrl+T | show the reasoning behind an answer instead of its summary |
+| Ctrl+O | open every tool card: its header plus every retained row. Folded, a card is one line, and a shell card keeps its command plus the last 20 rows of output with a hint naming what it dropped |
+| Ctrl+T | expand or fold the reasoning behind an answer: folded, the row names itself, its token count, and the key; opened, it adds the thought |
 | `y` / `n` / Esc | allow once, reject, or cancel a pending approval |
 | digits / space / ↑↓ / Enter / Esc | answer a question: pick or toggle, confirm, or skip one |
 | `/` then Tab | complete commands, including every command this session registered |
@@ -181,13 +182,15 @@ each element's effective value and whether it came from an override, the
 palette, or the default.
 
 `fg` and `bg` accept `#rrggbb`, a palette name (`default`, `muted`, `accent`,
-`warn`, `added`, `removed`, `user`, `assistant`), or an index. A colour is
+`arg`, `warn`, `added`, `removed`, `user`, `assistant`), or an index. A colour is
 emitted as 24-bit when the terminal advertises it (`COLORTERM`) and degraded to
 the nearest 256-colour entry or 16-colour slot otherwise; a hue keeps its family
 there, so an addition stays green instead of collapsing to black. Muted elements
 name the palette rather than a terminal slot, so on anything but a 16-colour
 terminal their contrast does not depend on what the reader's colour scheme maps
-slot 8 to.
+slot 8 to. `arg` is the pale blue a card gives the argument it was called with,
+so `tool.args` is restyled on its own and stays distinct from the tool's own
+label and from its output.
 
 `NO_COLOR` and `--no-color` disable styling entirely, attributes included, and
 outrank everything in this section. A token or palette name the surface does not
@@ -232,6 +235,10 @@ The package is a Cordis plugin bundle that stacks over `@deepseek-ai/dsh-base`:
 - `@sagmans/dsh-tui` owns the terminal: it creates or resumes one agent through `ctx.agents`, folds `session/event` into transcript rows and work state, renders them with `@earendil-works/pi-tui`, and releases the terminal on exit, on a boot failure, and on a signal.
 
 The fold is durable-only: the live stream decorates the row that is still being written, and everything else — cards, reasoning, work state, compaction markers — comes from the log, so a resumed session renders what the live one did. Subagent start and finish are the exception: they arrive as service events, and the transcript shows them as decoration because the durable record of a delegation is the tool call that asked for it.
+
+Tool cards are folded by default: a card draws its header and nothing else, so a long read, diff, or search cannot bury the conversation. A shell card is the exception, because its output is the answer the reader asked for: it names the tool in its header, always shows the command that ran, keeps the last 20 output rows, and adds a hint naming the rows it dropped. `Ctrl+O` opens every card to its header plus every retained row.
+
+A card's header names the tool, then the argument the call was made with — a path or a command — in the `tool.args` colour, then the facts the result measured: a read reports its line range, line count, and token size; a file change that carried no prior content to compare against reports its lines and tokens; one that did reports added, changed, and removed lines as `+n ~n -n` in green, yellow, and red. Each stat is its own token, so any of them can be recoloured or hidden independently.
 
 The bundle also takes the base's global agent rows out of the composition, twenty-three of them. Every one is a row the shipped modes supply per session instead, so leaving it mounted registers the same tool names in two layers and doubles each prompt section it owns. What stays mounted is the host: sessions, storage, models, permissions, jobs, and the command registry.
 
@@ -302,8 +309,9 @@ The workflow stores no npm token: the registry trusts `release.yml` on the `npm-
 - `/model` changes the route for the running session only. Catalog membership is advisory — an adapter may accept an id it does not advertise.
 - Scrolling is the mouse wheel, or the terminal's own scrollback keys where it offers them.
 - A turn that ran longer than ten seconds rings the terminal bell when it ends, because the reader may have walked away; `--no-bell` turns that off.
-- The dock shows the goal, plan mode, the todo list, and any background job still running; the transcript marks where older history was compacted away. `/plan` toggles plan mode; `/plan <message>` also steers that message, which is the base command's own behaviour.
+- The dock shows the goal, plan mode, the todo items still to do, and any background job or delegation still running; a settled item leaves rather than turns into a completed row. The transcript marks where older history was compacted away. `/plan` toggles plan mode; `/plan <message>` also steers that message, which is the base command's own behaviour.
 - Background jobs and subagent runs are live process state, not durable events: they disappear when the run ends, and a resumed session starts with an empty board and roster.
+- A card reads its tool's own render intent through the agent whose session is on screen, so a stored session with no live agent — one this process is not running, or a child that has already finished — folds to the generic card instead of the tool's own.
 - Reading a child's conversation does not move the terminal: commands, approvals, and the status line stay with the session you launched, and the transcript is the only thing that switches.
 - Delete is unimplemented: the session store exposes no delete, and the surface does not reach around that seam into its files. `/fork` covers the case that needs it — it branches into a new session and leaves the original alone.
 - Approvals and questions render inline and take the keyboard; a question batch is answered in order.

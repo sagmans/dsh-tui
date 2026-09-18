@@ -13,6 +13,7 @@ import type {
   WebResultView,
 } from '@deepseek-ai/dsh-tools'
 import type { CardRowClass } from './theme-tokens.ts'
+import { countTokens, formatTokens } from './tokens.ts'
 
 /** What a tool's result presenter receives, plus the call arguments it was asked with. */
 export interface ToolResultInput {
@@ -63,19 +64,48 @@ export function rowText(row: CardRow): string {
   return row.parts.map(part => part.text).join('')
 }
 
+/** What a measured fact on a card is, which decides its colour and symbol. */
+export type CardStatKind = 'added' | 'changed' | 'removed' | 'size'
+
+/** One measured fact a card reports beside its header, e.g. a change or size count. */
+export interface CardStat {
+  readonly kind: CardStatKind
+  /** The number or phrase; the renderer supplies the symbol and the styling. */
+  readonly text: string
+}
+
 /** One renderable tool row: a header plus the detail rows kept for rendering. */
 export interface ToolCard {
   readonly kind: ToolCardKind
+  /**
+   * The card's label: the tool's own name when it has an argument, else the
+   * title its presenter declared.
+   */
   readonly title: string
+  /**
+   * The salient argument the call was made with — a path or a command.
+   *
+   * The surface cannot know which argument matters, so the presenter names it
+   * through its locations or its terminal title. It is a field rather than part
+   * of the title so it can carry its own colour, and it is drawn outside the
+   * fold because what ran is never a detail.
+   */
+  readonly argument?: string
+  /** Measured facts to report beside the header, e.g. changed or read lines. */
+  readonly stats?: readonly CardStat[]
+  /**
+   * The exit pill of a terminal card, drawn outside the fold with its output.
+   *
+   * The pill is not output, so it must not consume a slot of the folded preview
+   * window nor be the first row a bounded tail drops.
+   */
+  readonly status?: string
   /** Rows retained for rendering, already capped at CARD_DETAIL_MAX. */
   readonly detail: readonly CardRow[]
   readonly failed: boolean
   /** Rows the tool actually presented, which retention may have cut short. */
   readonly totalLines: number
 }
-
-/** Detail rows a settled card shows before it is summarized. */
-export const CARD_DETAIL_LIMIT = 10
 
 /**
  * Detail rows retained on a card at all.
@@ -85,6 +115,34 @@ export const CARD_DETAIL_LIMIT = 10
  * memory for a reader who will never scroll that far.
  */
 export const CARD_DETAIL_MAX = 200
+
+/**
+ * Output rows a folded shell card keeps on screen, counted from the end.
+ *
+ * A shell command is the one card whose output is the result the reader asked
+ * for, so folding it to its header would hide the answer. The tail is the part
+ * that carries the outcome of a long run, and the retention cap still bounds
+ * what ctrl+o can reveal.
+ */
+export const CARD_SHELL_PREVIEW = 20
+
+/**
+ * The tail of the hint a folded shell card draws when it dropped rows.
+ *
+ * "more" rather than "them": retention caps detail rows, so a command that
+ * printed thousands of lines cannot promise ctrl+o will reveal every dropped
+ * one.
+ */
+const CARD_HINT_EARLIER = 'earlier lines · ctrl+o shows more'
+
+/**
+ * The tail of the hint an opened shell card draws when retention dropped rows.
+ *
+ * Retention keeps the tail of a run, so the rows it refused are always the
+ * beginning; a hint that only counted them would send the reader looking past
+ * the end of the output for rows that are not there.
+ */
+const CARD_HINT_UNRETAINED_EARLIER = 'earlier lines not shown'
 
 /** Character budget for one detail row, so a minified file cannot flood the viewport. */
 export const CARD_LINE_LIMIT = 200
@@ -102,14 +160,147 @@ function bound(rows: readonly CardRow[]): { detail: CardRow[]; totalLines: numbe
 }
 
 /**
+ * Bound a card to its retained rows from the END.
+ *
+ * A command's answer is its last lines, so keeping the head would show a long
+ * run's middle and lose the ending the reader asked for; the tail is also what
+ * a folded shell card tails again.
+ */
+function boundTail(rows: readonly CardRow[]): { detail: CardRow[]; totalLines: number } {
+  return { detail: rows.slice(-CARD_DETAIL_MAX).map(clipRow), totalLines: rows.length }
+}
+
+/** A text with the newline that only terminates its last line removed. */
+function withoutTrailingBreaks(text: string): string {
+  return text.replace(/\n+$/, '')
+}
+
+/** How many lines a text holds, ignoring the newline that only terminates the last one. */
+function lineCount(text: string): number {
+  const body = withoutTrailingBreaks(text)
+  return body === '' ? 0 : body.split('\n').length
+}
+
+/**
+ * The size of a text a card presents, in lines and in tokens.
+ *
+ * A reader deciding whether to open a file cares about both: lines say how tall
+ * it is, tokens say what it cost to put in the conversation.
+ */
+function sizeStats(text: string): readonly CardStat[] {
+  const body = withoutTrailingBreaks(text)
+  const lines = lineCount(body)
+  const tokens = countTokens(body)
+  const stats: CardStat[] = []
+  if (lines > 0) stats.push({ kind: 'size', text: `${lines} line${lines === 1 ? '' : 's'}` })
+  if (tokens > 0) stats.push({ kind: 'size', text: `${formatTokens(tokens)} tok` })
+  return stats
+}
+
+/**
+ * A file change's split into added, changed, and removed lines.
+ *
+ * A replacement is one changed line, not an add plus a remove, so the smaller
+ * of the two sides is the changed count and only the excess counts as pure
+ * additions or deletions — otherwise every edit reads as twice its size. Each
+ * file is netted on its own for the same reason: one file's additions must not
+ * cancel another file's deletions, or a change to two files reads as a rewrite
+ * of neither.
+ */
+function changeStats(diffs: readonly FileDiff[]): readonly CardStat[] {
+  let added = 0
+  let changed = 0
+  let removed = 0
+  for (const diff of diffs) {
+    let fileAdded = 0
+    let fileRemoved = 0
+    for (const row of renderFileDiff(diff)) {
+      const cls = row.parts[0]?.class
+      if (cls === 'added') fileAdded += 1
+      else if (cls === 'removed') fileRemoved += 1
+    }
+    const fileChanged = Math.min(fileAdded, fileRemoved)
+    added += fileAdded - fileChanged
+    changed += fileChanged
+    removed += fileRemoved - fileChanged
+  }
+  const stats: CardStat[] = []
+  if (added > 0) stats.push({ kind: 'added', text: String(added) })
+  if (changed > 0) stats.push({ kind: 'changed', text: String(changed) })
+  if (removed > 0) stats.push({ kind: 'removed', text: String(removed) })
+  return stats
+}
+
+/**
+ * The window a read returned: its line range, how many lines, and their token size.
+ *
+ * An empty window still names the offset it starts at, because the view keeps it
+ * for exactly that case, and counts the model-facing content the card falls back
+ * to drawing rather than reporting a size of zero.
+ */
+function readStats(read: ReadResultView): readonly CardStat[] {
+  const text = read.lines.length > 0
+    ? read.lines.map(line => line.text).join('\n')
+    : contentLines(read.content).join('\n')
+  const count = read.lines.length > 0 ? read.lines.length : lineCount(text)
+  const start = read.offset
+  const stats: CardStat[] = [
+    { kind: 'size', text: count <= 1 ? `L${start}` : `L${start}–${start + count - 1}` },
+    { kind: 'size', text: `${count} line${count === 1 ? '' : 's'}` },
+  ]
+  const tokens = countTokens(withoutTrailingBreaks(text))
+  if (tokens > 0) stats.push({ kind: 'size', text: `${formatTokens(tokens)} tok` })
+  return stats
+}
+
+/**
+ * A diff's measured facts: a change with no prior content reports its size,
+ * while one that carried prior content reports its line changes.
+ *
+ * `oldText === null` means the prior content was unavailable at call time — a
+ * new file, or a whole-file overwrite — so no diff can be counted and the size
+ * is the only honest fact; naming that a *creation* would misread every
+ * overwrite as a new file.
+ */
+function diffStats(diffs: readonly FileDiff[]): readonly CardStat[] {
+  const withoutPrior = diffs.length > 0 && diffs.every(diff => diff.oldText === null)
+  return withoutPrior ? sizeStats(diffs.map(diff => diff.newText).join('\n')) : changeStats(diffs)
+}
+
+/**
+ * How much of a card the reader has asked for.
+ *
+ * The folded state names its own treatment because the two kinds of card are
+ * not equally readable folded: a shell card's output is the answer, while every
+ * other card's rows restate what its title already says.
+ */
+export type CardPreview =
+  | { readonly expanded: true }
+  | { readonly expanded: false; readonly preview: 'title' | 'shellTail' }
+
+/**
  * The rows a card shows right now, and how many the reader is not seeing.
  *
  * Expansion is a view decision rather than a card field so one key press can
  * change every card at once without rebuilding the transcript.
  */
-export function cardDetailRows(card: ToolCard, expanded: boolean): { lines: readonly CardRow[]; hidden: number } {
-  const lines = card.detail.slice(0, expanded ? CARD_DETAIL_MAX : CARD_DETAIL_LIMIT)
+export function cardDetailRows(card: ToolCard, preview: CardPreview): { lines: readonly CardRow[]; hidden: number } {
+  const lines = preview.expanded
+    ? card.detail.slice(0, CARD_DETAIL_MAX)
+    : preview.preview === 'shellTail'
+      ? card.detail.slice(-CARD_SHELL_PREVIEW)
+      : []
   return { lines, hidden: Math.max(0, card.totalLines - lines.length) }
+}
+
+/** The hint row for a folded shell card, or undefined when its preview dropped nothing. */
+export function shellFoldHint(hidden: number): string | undefined {
+  return hidden <= 0 ? undefined : `… ${hidden} ${CARD_HINT_EARLIER}`
+}
+
+/** The hint row for an opened shell card whose retention dropped the run's earlier rows. */
+export function shellRetentionHint(hidden: number): string | undefined {
+  return hidden <= 0 ? undefined : `… ${hidden} ${CARD_HINT_UNRETAINED_EARLIER}`
 }
 
 /**
@@ -145,6 +336,22 @@ export function contentLines(content: unknown): string[] {
 }
 
 /**
+ * The header fields a rebuilt card must keep.
+ *
+ * Replacing a card's rows says nothing about what the call was made with, what
+ * it measured, or how it ended, so those fields travel with the rebuild:
+ * dropping the argument is how a shell card loses its command the moment a
+ * presenter declines the result.
+ */
+export function carriedFields(card: ToolCard): Pick<ToolCard, 'argument' | 'stats' | 'status'> {
+  return {
+    ...(card.argument === undefined ? {} : { argument: card.argument }),
+    ...(card.stats === undefined ? {} : { stats: card.stats }),
+    ...(card.status === undefined ? {} : { status: card.status }),
+  }
+}
+
+/**
  * Collapse one call and its result into the single row the reader sees.
  *
  * The pending row already told the reader what the tool is doing, so the
@@ -155,9 +362,19 @@ export function mergeCards(call: ToolCard | undefined, result: ToolCard | undefi
   const base = call ?? result
   if (base === undefined) throw new Error('mergeCards requires at least one card')
   if (call === undefined || result === undefined) return base
+  const kind = result.kind === 'generic' ? call.kind : result.kind
+  // The result, when it names one, knows the argument that was actually acted
+  // on; a terminal result omits it, so the pending call's command is kept. The
+  // result also owns the measured facts, because only it knows the outcome.
+  const argument = result.argument ?? call.argument
+  const stats = result.stats ?? call.stats
+  const status = result.status ?? call.status
   return {
-    kind: result.kind === 'generic' ? call.kind : result.kind,
+    kind,
     title: call.title,
+    ...(argument === undefined ? {} : { argument }),
+    ...(stats === undefined ? {} : { stats }),
+    ...(status === undefined ? {} : { status }),
     detail: result.detail.length > 0 ? result.detail : call.detail,
     failed: result.failed,
     totalLines: result.detail.length > 0 ? result.totalLines : call.totalLines,
@@ -196,9 +413,22 @@ export function renderFileDiff(diff: FileDiff): CardRow[] {
   return rows
 }
 
+/**
+ * Verbs a presenter may open its title with that only restate the call.
+ *
+ * The subject a reader scans for is what follows the verb, so the surface draws
+ * the card from there: "skill project-skill" rather than "Load skill
+ * project-skill". Only a declared title is normalized — a path or a command is
+ * the call's own data, and shortening that would misreport what ran — and the
+ * list stays literal because inferring a verb could cut a real title short.
+ */
+const REDUNDANT_TITLE_LEADS = ['Load '] as const
+
 function title(view: { title?: string }, fallback: string): string {
   const declared = view.title?.trim() ?? ''
-  return declared === '' ? fallback : declared
+  const lead = REDUNDANT_TITLE_LEADS.find(prefix => declared.startsWith(prefix))
+  const shown = lead === undefined ? declared : declared.slice(lead.length).trim()
+  return shown === '' ? fallback : shown
 }
 
 /** A read line keeps its number apart from its text, because they read differently. */
@@ -228,12 +458,33 @@ export function cardOfCall(view: ToolCallView | undefined, fallbackName: string)
       const rows: CardRow[] = []
       if (terminal.description !== undefined && terminal.description !== '') rows.push(cardRow('output', terminal.description))
       if (terminal.cwd !== undefined && terminal.cwd !== '') rows.push(cardRow('cwd', `cwd ${terminal.cwd}`))
-      return { kind: 'terminal', title: title(terminal, fallbackName), detail: bound(rows).detail, failed: false, totalLines: 0 }
+      // The header names the tool so the command can sit on its own row: a
+      // terminal view's own title IS the command, and a fold must not hide it.
+      const command = terminal.title?.trim() ?? ''
+      return {
+        kind: 'terminal',
+        title: fallbackName,
+        ...(command === '' ? {} : { argument: command }),
+        detail: bound(rows).detail,
+        failed: false,
+        totalLines: 0,
+      }
     }
     case 'diff': {
       const diff = view as DiffCallView
       const bounded = bound(diff.diffs.flatMap(renderFileDiff))
-      return { kind: 'diff', title: title(diff, fallbackName), detail: bounded.detail, failed: false, totalLines: bounded.totalLines }
+      const path = diff.diffs[0]?.path
+      if (path === undefined || path === '') {
+        return { kind: 'diff', title: title(diff, fallbackName), detail: bounded.detail, failed: false, totalLines: bounded.totalLines }
+      }
+      return {
+        kind: 'diff',
+        title: fallbackName,
+        argument: path,
+        detail: bounded.detail,
+        failed: false,
+        totalLines: bounded.totalLines,
+      }
     }
     default: {
       const generic = view as GenericCallView
@@ -242,7 +493,20 @@ export function cardOfCall(view: ToolCallView | undefined, fallbackName: string)
         lines.push(typeof generic.rawInput === 'string' ? generic.rawInput : JSON.stringify(generic.rawInput))
       }
       const bounded = bound(lines.map(line => cardRow('detail', line)))
-      return { kind: 'generic', title: title(generic, fallbackName), detail: bounded.detail, failed: false, totalLines: bounded.totalLines }
+      // A call that names a file has an argument worth its own colour; one that
+      // does not keeps its declared title, which is already the label.
+      const location = generic.locations?.[0]?.path
+      if (location === undefined || location === '') {
+        return { kind: 'generic', title: title(generic, fallbackName), detail: bounded.detail, failed: false, totalLines: bounded.totalLines }
+      }
+      return {
+        kind: 'generic',
+        title: fallbackName,
+        argument: location,
+        detail: bounded.detail,
+        failed: false,
+        totalLines: bounded.totalLines,
+      }
     }
   }
 }
@@ -260,18 +524,55 @@ export function cardOfResult(
   switch (view.card) {
     case 'terminal': {
       const terminal = view as TerminalResultView
-      const rows = (terminal.output ?? '').split('\n').map(line => cardRow('output', line))
+      // A terminating newline is the shell's, not a row: keeping it would spend
+      // one slot of the preview window on a blank line the renderer then drops.
+      const raw = (terminal.output ?? '').replace(/\n+$/, '')
+      const rows = raw === '' ? [] : raw.split('\n').map(line => cardRow('output', line))
       const status = terminal.signal !== undefined && terminal.signal !== ''
         ? `signal ${terminal.signal}`
         : terminal.exitCode === undefined ? undefined : `exit ${terminal.exitCode}`
-      if (status !== undefined) rows.push(cardRow('status', status))
-      const bounded = bound(rows)
-      return { kind: 'terminal', title: title(terminal, input.fallbackTitle), detail: bounded.detail, failed, totalLines: bounded.totalLines }
+      // The output is bounded from its END: a command that printed far more
+      // than retention keeps must still show how it finished, and the folded
+      // preview tails what is retained again.
+      const bounded = boundTail(rows)
+      // A terminal result mostly omits the title, because the pending call
+      // already carried the command; it is only a fallback for a resumed fold
+      // that never saw the call.
+      const command = terminal.title?.trim() ?? ''
+      return {
+        kind: 'terminal',
+        title: input.fallbackTitle,
+        ...(command === '' ? {} : { argument: command }),
+        ...(status === undefined ? {} : { status }),
+        detail: bounded.detail,
+        failed,
+        totalLines: bounded.totalLines,
+      }
     }
     case 'diff': {
       const diff = view as DiffResultView
       const bounded = bound(diff.diffs.flatMap(renderFileDiff))
-      return { kind: 'diff', title: title(diff, input.fallbackTitle), detail: bounded.detail, failed, totalLines: bounded.totalLines }
+      const path = diff.diffs[0]?.path
+      const stats = diffStats(diff.diffs)
+      if (path === undefined || path === '') {
+        return {
+          kind: 'diff',
+          title: title(diff, input.fallbackTitle),
+          ...(stats.length === 0 ? {} : { stats }),
+          detail: bounded.detail,
+          failed,
+          totalLines: bounded.totalLines,
+        }
+      }
+      return {
+        kind: 'diff',
+        title: input.fallbackTitle,
+        argument: path,
+        ...(stats.length === 0 ? {} : { stats }),
+        detail: bounded.detail,
+        failed,
+        totalLines: bounded.totalLines,
+      }
     }
     case 'search': {
       const search = view as SearchResultView
@@ -284,14 +585,25 @@ export function cardOfResult(
     }
     case 'read': {
       const read = view as ReadResultView
-      const rows: CardRow[] = [cardRow('header', `${read.path} (from line ${read.offset}, ${read.totalLines} total)`)]
+      // The header now carries the path and the size stats, so the detail rows
+      // are only the numbered lines themselves.
+      const rows: CardRow[] = []
       if (read.lines.length > 0) {
         for (const line of read.lines) rows.push(readLine(line.number, line.text))
       } else {
         for (const line of contentLines(read.content)) rows.push(cardRow('line', line))
       }
       const bounded = bound(rows)
-      return { kind: 'read', title: title(read, input.fallbackTitle), detail: bounded.detail, failed, totalLines: bounded.totalLines }
+      const stats = readStats(read)
+      return {
+        kind: 'read',
+        title: input.fallbackTitle,
+        ...(read.path === '' ? {} : { argument: read.path }),
+        ...(stats.length === 0 ? {} : { stats }),
+        detail: bounded.detail,
+        failed,
+        totalLines: bounded.totalLines,
+      }
     }
     case 'web': {
       const web = view as WebResultView

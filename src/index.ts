@@ -37,6 +37,7 @@ import { ApprovalGate, QuestionGate, toGateQuestions, type GateAnswer } from './
 import { createCompletionProvider } from './input/completion.ts'
 import { LOCAL_COMMANDS, classifySubmission } from './input/submission.ts'
 import { resolveConfig } from './config.ts'
+import { FoldCursor } from './fold-cursor.ts'
 import { createRestoreRegistry } from './terminal/restore.ts'
 import { BELL, shouldRingBell } from './terminal/bell.ts'
 import { clipboardSequence } from './terminal/clipboard.ts'
@@ -47,18 +48,25 @@ import { detectColourMode, type ColourMode } from './theme-capability.ts'
 import { defaultSettings, readScope, toOverrides, TUI_SETTINGS_NAMESPACE, TuiSettingsSchema, type TuiSettings } from './theme-settings.ts'
 import { renderThemeTable } from './theme-command.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
+import { formatTokens } from './tokens.ts'
 import { TranscriptModel } from './transcript.ts'
 import { WorkFold, describeTodos } from './work.ts'
 import { WorkDock } from './ui/dock.ts'
 import { MarkdownRenderer } from './ui/markdown.ts'
 import { PresetPicker, SessionPicker, type PickerAction, type PickerCard } from './ui/picker.ts'
-import { StatusBar, formatTokens } from './ui/status.ts'
-import { TranscriptView } from './ui/view.ts'
+import { StatusBar } from './ui/status.ts'
+import { ALL_COLLAPSED, TranscriptView } from './ui/view.ts'
 
 export const name = 'tui'
 
-/** `agents` is the only service the surface cannot run without. */
-export const inject = ['agents']
+/**
+ * Services the surface cannot run without.
+ *
+ * `tools` is what lets a card read its tool's own render intent; a context that
+ * has not injected it throws on the property read, which silently degraded
+ * every card to a bare generic row.
+ */
+export const inject = ['agents', 'tools']
 
 /** Keys the surface answers itself, listed wherever the reader asks for help. */
 const LOCAL_KEYS = 'ctrl+o tool detail · ctrl+t reasoning · ctrl+b back to this session · ctrl+c interrupt or exit'
@@ -177,7 +185,16 @@ export function apply(ctx: Context, config: unknown): void {
     readSection = () => readScope(scope, message => { pendingSettingsProblem = message })
     applyTheme()
   })
-  const model = new TranscriptModel(createToolPresenter(ctx))
+  /**
+   * The agent scope the tool presenter resolves against.
+   *
+   * Tools are registered in the scoped world the session's preset mounts, so a
+   * card can only read its tool's own render intent while this names that
+   * agent. It follows whatever session the transcript is folding, because a
+   * child on screen reads through the child's scope, not the parent's.
+   */
+  let presentScope: Agent | undefined
+  const model = new TranscriptModel(createToolPresenter(ctx, () => presentScope))
   const work = new WorkFold()
   const modelSwitch = new ModelSwitch()
   const agentPresets = createPresetRoster(ctx)
@@ -199,10 +216,11 @@ export function apply(ctx: Context, config: unknown): void {
   const markdown = new MarkdownRenderer(theme.markdown)
   /**
    * Rows the reader has opened. The model stays untouched; only the view reads
-   * this. Reasoning starts open: a reader asking to see the model think is not
-   * served by a row that names only a character count and hides the thought.
+   * this. Everything starts folded: a thought is the longest, least scannable
+   * row in the transcript, so leaving it open pushes the answer a reader came
+   * for off the screen. A folded row still names itself and its key.
    */
-  const viewState = { expandCards: false, expandReasoning: true }
+  const viewState = { ...ALL_COLLAPSED }
   const restore = createRestoreRegistry()
   const terminal = new ProcessTerminal()
   const tui = new TuiAltScreen(terminal)
@@ -238,6 +256,11 @@ export function apply(ctx: Context, config: unknown): void {
   })
   const editor = new Editor(tui, theme.editor)
   const disposers: Array<() => void> = []
+  // The presenter closure outlives the composition's own teardown, so it must
+  // not keep an agent alive after its world unwinds.
+  disposers.push(() => {
+    presentScope = undefined
+  })
   let agent: TuiAgent | undefined
   let turnOpen = false
   let turnStartedAt: number | undefined
@@ -555,16 +578,37 @@ export function apply(ctx: Context, config: unknown): void {
   const liveSession = (id: SessionId): { snapshotEvents?: () => readonly ForkEvent[] } | undefined =>
     (ctx.get('sessions') as { get?: (id: SessionId) => { snapshotEvents?: () => readonly ForkEvent[] } | undefined } | undefined)?.get?.(id)
 
+  /**
+   * The fold's place in the viewed session's durable sequence.
+   *
+   * A resumed session is folded while its agent's loop is already live, so the
+   * same event can reach the surface twice: once on the stream and once from the
+   * log the fold is reading. The sequence number every durable event carries is
+   * what tells the two apart.
+   */
+  const foldCursor = new FoldCursor()
+
+  /** Feed one durable event to the model, unless a fold has already folded it. */
+  const applyDurable = (event: ForkEvent): void => {
+    if (foldCursor.accept(event)) applyEvent(event)
+  }
+
   const foldHistory = async (id: SessionId): Promise<number> => {
+    // Resolved before the fold so every card reads its tool through the scope
+    // that actually registered it; a stored session nobody runs has none.
+    presentScope = ctx.agents?.get(id)
+    // Every fold starts a cleared transcript, so this session's own numbering is
+    // where the cursor begins rather than the previous session's.
+    foldCursor.reset()
     const inMemory = liveSession(id)?.snapshotEvents?.()
     if (inMemory !== undefined) {
-      for (const event of inMemory) applyEvent(event)
+      for (const event of inMemory) applyDurable(event)
       return inMemory.length
     }
     const history = createSessionHistory(ctx)
     if (history === undefined) return 0
     const events = await history.read(id)
-    for (const event of events) applyEvent(event)
+    for (const event of events) applyDurable(event)
     return events.length
   }
 
@@ -666,7 +710,6 @@ export function apply(ctx: Context, config: unknown): void {
     // Settled before the transcript is touched, so a refusal leaves neither a
     // half-replayed session nor a half-composed agent behind.
     const preset = await presetFor(id, resume, fork)
-    if (resume) await replayHistory(id)
     const handle = await startAgent(ctx, {
       sessionId: id,
       resume,
@@ -684,6 +727,15 @@ export function apply(ctx: Context, config: unknown): void {
     activeSession = id
     viewedSession = id
     agent = handle
+    // A session with no history to fold still has to present its first live
+    // card through the right scope, so the scope is set before any event can.
+    presentScope = handle.agent
+    // Replayed only once the agent exists, because the fold reads every card
+    // through the scope the preset mounted; a fold before that scope existed
+    // degraded each replayed card to a bare generic row. The agent's loop is
+    // live by now, so the fold and the stream race over the same events; the
+    // durable sequence number is what keeps one event from landing twice.
+    if (resume) await replayHistory(id)
     // A branch inherits the conversation the reader was already reading, so it
     // opens on that history rather than on an empty screen.
     if (fork !== undefined) await foldHistory(id)
@@ -699,6 +751,9 @@ export function apply(ctx: Context, config: unknown): void {
   const switchSession = async (id: SessionId): Promise<void> => {
     const previous = agent
     agent = undefined
+    // Drop the outgoing scope before its agent is disposed, so no card folded
+    // during the transition can read a torn-down world.
+    presentScope = undefined
     turnOpen = false
     model.reset()
     work.reset()
@@ -1185,7 +1240,8 @@ export function apply(ctx: Context, config: unknown): void {
       }
     }
     if (session.id !== viewedSession) return
-    applyEvent(event)
+    presentScope = ctx.agents?.get(session.id)
+    applyDurable(event)
     tui.requestRender()
   }))
 

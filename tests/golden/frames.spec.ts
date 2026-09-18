@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import type { Context } from '@deepseek-ai/cordis'
+import { createToolPresenter } from '@/agent/present.ts'
 import { createTheme } from '@/theme.ts'
 import { TranscriptModel } from '@/transcript.ts'
 import { MarkdownRenderer } from '@/ui/markdown.ts'
 import { StatusBar } from '@/ui/status.ts'
-import { TranscriptView, type ViewState } from '@/ui/view.ts'
+import { ALL_COLLAPSED, TranscriptView } from '@/ui/view.ts'
 import { WorkDock } from '@/ui/dock.ts'
 import { SessionPicker } from '@/ui/picker.ts'
 import { WorkFold } from '@/work.ts'
@@ -19,8 +21,46 @@ import { WorkFold } from '@/work.ts'
 const WIDTHS = [80, 40]
 const theme = createTheme('none')
 
+/** The rows this frame pins: a shell command whose output is kept, and a file read. */
+const FIXTURE_COMMAND = 'pnpm test'
+const FIXTURE_OUTPUT = 'Tests  154 passed (154)'
+const FIXTURE_FILE = 'src/ui/view.ts'
+const FIXTURE_FILE_LINES = ['const expanded = this.viewState.expandCards', 'const preview = cardDetailRows(card, expanded)', '…']
+
+/**
+ * Each tool's declared render intent, as the real tools declare it.
+ *
+ * A frame built without a presenter would fold a plain generic card and pin a
+ * surface nobody runs: how a card reads is the tool's own declaration.
+ */
+function fixturePresenter(): ReturnType<typeof createToolPresenter> {
+  const tools = {
+    // The real thing: bash declares a terminal card, which is why its output
+    // stays in the frame while every other card folds to its header. Its title
+    // IS the command, so the frame pins the command a reader would run rather
+    // than a decorated phrase around it.
+    bash: {
+      presentCall: (args: { command?: string }) => ({ card: 'terminal', title: args.command ?? '' }),
+      presentResult: () => ({ card: 'terminal', title: FIXTURE_COMMAND, output: FIXTURE_OUTPUT, exitCode: 0 }),
+    },
+    read: {
+      // A read declares its file as a location, which is what gives the card an
+      // argument to colour; the result supplies the lines and the size stats.
+      presentCall: () => ({ card: 'generic', title: `Read ${FIXTURE_FILE}`, kind: 'read', locations: [{ path: FIXTURE_FILE, line: 1 }] }),
+      presentResult: () => ({
+        card: 'read',
+        path: FIXTURE_FILE,
+        offset: 1,
+        lines: FIXTURE_FILE_LINES.map((text, index) => ({ number: index + 1, text })),
+        totalLines: FIXTURE_FILE_LINES.length,
+      }),
+    },
+  } as Record<string, unknown>
+  return createToolPresenter({ tools: { get: (name: string) => tools[name] } } as unknown as Context)
+}
+
 function fixture(frameTheme = theme): { view: TranscriptView; dock: WorkDock; status: StatusBar } {
-  const model = new TranscriptModel()
+  const model = new TranscriptModel(fixturePresenter())
   const work = new WorkFold()
   const feed = (event: { type: string; data?: unknown }): void => {
     model.apply(event)
@@ -41,10 +81,17 @@ function fixture(frameTheme = theme): { view: TranscriptView; dock: WorkDock; st
       },
     },
   })
-  model.apply({ type: 'tool/call', data: { name: 'bash', arguments: '{"command":"pnpm test"}', callId: 'c1' } })
+  model.apply({ type: 'tool/call', data: { name: 'bash', arguments: `{"command":"${FIXTURE_COMMAND}"}`, callId: 'c1' } })
   model.apply({
     type: 'tool/result',
-    data: { message: { content: [{ type: 'tool-result', toolCallId: 'c1', text: 'Tests  154 passed (154)' }], isError: false } },
+    data: { message: { content: [{ type: 'tool-result', toolCallId: 'c1', text: FIXTURE_OUTPUT }], isError: false } },
+  })
+  // A card whose rows the reader has not asked for: folded, only its header
+  // survives, which is what keeps a long file out of the conversation.
+  model.apply({ type: 'tool/call', data: { name: 'read', arguments: `{"path":"${FIXTURE_FILE}"}`, callId: 'c2' } })
+  model.apply({
+    type: 'tool/result',
+    data: { message: { content: [{ type: 'tool-result', toolCallId: 'c2', text: FIXTURE_FILE_LINES.join('\n') }], isError: false } },
   })
   model.apply({ type: 'compaction/summary', data: { shadowedSeqs: [1, 2, 3], shadowedTokenCount: 4200 } })
   feed({ type: 'plan/mode', data: { active: true } })
@@ -53,9 +100,9 @@ function fixture(frameTheme = theme): { view: TranscriptView; dock: WorkDock; st
     { content: 'verify the dock', status: 'in_progress' },
     { content: 'document the dock', status: 'pending' },
   ] } })
-  // The shipped default: cards folded, reasoning open, so the frame pins what a
+  // The shipped default is the folded view for both, so the frame pins what a
   // reader actually gets rather than a state they would have to ask for.
-  const state: ViewState = { expandCards: false, expandReasoning: true }
+  const state = ALL_COLLAPSED
   const view = new TranscriptView(model, frameTheme, new MarkdownRenderer(frameTheme.markdown), {
     state: () => state,
     gate: () => undefined,

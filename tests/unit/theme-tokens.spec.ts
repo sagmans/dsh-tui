@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  ARGUMENT_BLUE,
   DEFAULT_PALETTE,
   DEFAULT_TOKENS,
   PALETTE_NAMES,
@@ -80,6 +81,12 @@ describe('resolveToken', () => {
   it('resolves a palette name through the palette', () => {
     const style = resolveToken('markdown.heading', overrides({}), DEFAULT_PALETTE, 'truecolor')
     expect(style.prefix).toContain('38;2;')
+  })
+
+  it('gives tool arguments their own pale-blue shade', () => {
+    expect(DEFAULT_PALETTE.arg).toBe(ARGUMENT_BLUE)
+    const style = resolveToken('tool.args', overrides({}), DEFAULT_PALETTE, 'truecolor')
+    expect(style.prefix).toBe('\u001B[38;2;141;179;217m')
   })
 
   it('resolves an inherit chain', () => {
