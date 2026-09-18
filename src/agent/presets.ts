@@ -71,7 +71,13 @@ export function describePreset(preset: PresetSummary, currentId: string | undefi
 
 /** The roster this surface reads, described structurally. */
 export interface PresetRoster {
-  /** The preset a session starts on when nobody names one. */
+  /**
+   * The preset a session starts on when nobody names one.
+   *
+   * Read per call rather than captured: the harness resolves it through the
+   * hot-reloaded settings document, so a default chosen while this surface is
+   * already running still reaches the next session it opens.
+   */
   readonly defaultId: string
   list(): Promise<readonly PresetSummary[]>
   resolve(id: string | undefined): Promise<PresetSummary>
@@ -148,10 +154,14 @@ function numberOr(value: unknown): number | undefined {
 export function createPresetRoster(ctx: Context): PresetRoster | undefined {
   const service = ctx.get('agentPresets') as RosterService | undefined
   if (typeof service?.list !== 'function' || typeof service.mount !== 'function') return undefined
-  const defaultId = textOr(service.defaultId)
-  if (defaultId === undefined) return undefined
+  const fallbackId = textOr(service.defaultId)
+  if (fallbackId === undefined) return undefined
   return {
-    defaultId,
+    // The harness answers a configured id on every read; the captured one is
+    // only there for a service that momentarily answers nothing.
+    get defaultId() {
+      return textOr(service.defaultId) ?? fallbackId
+    },
     list: async () => {
       const rows = await service.list?.() ?? []
       return rows.flatMap(row => toSummary(row) ?? [])

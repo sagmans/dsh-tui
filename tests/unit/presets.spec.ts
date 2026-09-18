@@ -80,6 +80,17 @@ describe('createPresetRoster', () => {
     expect((await roster?.list())?.map(preset => preset.id)).toEqual(['standard', 'ptc'])
   })
 
+  it('reads the default per call, so a settings change reaches the next session', () => {
+    const service = rosterService()
+    const roster = createPresetRoster(fakeContext({ agentPresets: service }))
+    expect(roster?.defaultId).toBe('standard')
+    service.defaultId = 'ptc'
+    expect(roster?.defaultId).toBe('ptc')
+    // A service that momentarily answers nothing keeps the id it named first.
+    service.defaultId = undefined
+    expect(roster?.defaultId).toBe('standard')
+  })
+
   it('refuses a resolve that answered nothing usable', async () => {
     const roster = createPresetRoster(fakeContext({ agentPresets: rosterService({ resolve: vi.fn(async () => undefined) }) }))
     await expect(roster?.resolve('ptc')).rejects.toThrow('resolved')

@@ -206,16 +206,26 @@ export function apply(ctx: Context, config: unknown): void {
   const work = new WorkFold()
   const modelSwitch = new ModelSwitch()
   const agentPresets = createPresetRoster(ctx)
+  /** The mode named on the command line, which is the only one that may conflict. */
+  const requestedPreset = resolved.preset
   /**
    * The mode a session the reader starts from here on joins.
    *
    * A launch flag seeds it and a successful switch updates it, so `/new` and
    * `/fork` land in the mode the reader last chose; nothing is written to
    * settings, because the mode of a session is not a property of the machine.
+   * Unset means nobody chose, which is where the roster's default applies.
    */
-  /** The mode named on the command line, which is the only one that may conflict. */
-  const requestedPreset = resolved.preset
-  let seat = requestedPreset ?? agentPresets?.defaultId
+  let seat = requestedPreset
+  /**
+   * The mode a session takes its seat in: the reader's latest choice, or the
+   * roster's default read at this moment.
+   *
+   * The default cannot be captured when this row applies: it comes from the
+   * settings document, which may be read after that, so a captured copy would
+   * pin every later session to the mode the bundle happened to ship.
+   */
+  const seatMode = (): string | undefined => seat ?? agentPresets?.defaultId
   const catalog = createModelCatalog(ctx)
   const jobDirectory = createJobDirectory(ctx)
   let jobs: readonly JobSummary[] = []
@@ -686,11 +696,11 @@ export function apply(ctx: Context, config: unknown): void {
    */
   const presetFor = async (id: SessionId, resume: boolean, fork: ForkInheritance | undefined): Promise<string | undefined> => {
     if (agentPresets === undefined) return undefined
-    if (fork !== undefined) return agentPresets.current(liveSession(fork.from)) ?? seat
-    if (!resume) return seat
+    if (fork !== undefined) return agentPresets.current(liveSession(fork.from)) ?? seatMode()
+    if (!resume) return seatMode()
     const history = createSessionHistory(ctx)
     const stored = history === undefined ? undefined : await presetOfStoredSession(history, id)
-    if (stored === undefined) return seat
+    if (stored === undefined) return seatMode()
     const resolvedStored = await resolveStored(id, stored)
     if (resolvedStored === undefined) {
       // The composition this session recorded is gone. Naming one explicitly is
