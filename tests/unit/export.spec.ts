@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { SUBCALL_MAX, type ToolPresenter } from '@/cards.ts'
 import { defaultExportFile, transcriptToText } from '@/export.ts'
 import { TranscriptModel } from '@/transcript.ts'
 
@@ -87,5 +88,43 @@ describe('transcriptToText', () => {
     const text = transcriptToText(model.entries())
     expect(text).toContain('--&gt;')
     expect(text).not.toContain('<!-- before --> after -->')
+  })
+
+  it('lists the calls a PTC program dispatched under its card', () => {
+    const presenter: ToolPresenter = {
+      call: (name, argumentsJson) => {
+        const args = JSON.parse(argumentsJson) as { file_path?: string; command?: string }
+        if (name === 'run_code') return { kind: 'generic', title: 'search the tree', detail: [], failed: false, totalLines: 0 }
+        if (name === 'bash') {
+          return { kind: 'terminal', title: 'bash', ...(args.command === undefined ? {} : { argument: args.command }), detail: [], failed: false, totalLines: 0 }
+        }
+        return { kind: 'generic', title: name, ...(args.file_path === undefined ? {} : { argument: args.file_path }), detail: [], failed: false, totalLines: 0 }
+      },
+      result: () => undefined,
+    }
+    const model = new TranscriptModel(presenter)
+    model.apply({ type: 'tool/call', data: { name: 'run_code', arguments: '{"description":"search the tree"}', callId: 'root' } })
+    model.apply({ type: 'tool/ptc-dispatch-start', data: { rootCallId: 'root', parentCallId: 'root', subCallId: 'root:ptc:1', name: 'read', arguments: { file_path: 'src/x.ts' } } })
+    model.apply({ type: 'tool/ptc-dispatch', data: { rootCallId: 'root', parentCallId: 'root', subCallId: 'root:ptc:1', name: 'read', arguments: { file_path: 'src/x.ts' }, isError: false, content: [] } })
+    model.apply({ type: 'tool/ptc-dispatch-start', data: { rootCallId: 'root', parentCallId: 'root', subCallId: 'root:ptc:2', name: 'bash', arguments: { command: 'exit 1' } } })
+    model.apply({ type: 'tool/ptc-dispatch', data: { rootCallId: 'root', parentCallId: 'root', subCallId: 'root:ptc:2', name: 'bash', arguments: { command: 'exit 1' }, isError: true, content: [] } })
+    model.apply({ type: 'tool/result', data: { message: { content: [{ type: 'tool-result', toolCallId: 'root', text: 'done' }], isError: false } } })
+    const text = transcriptToText(model.entries())
+    expect(text).toContain('### tool: search the tree')
+    expect(text).toContain('- read src/x.ts')
+    expect(text).toContain('- bash exit 1 (failed)')
+  })
+
+  it('counts the calls the dump left out', () => {
+    const presenter: ToolPresenter = {
+      call: name => ({ kind: 'generic', title: name, detail: [], failed: false, totalLines: 0 }),
+      result: () => undefined,
+    }
+    const model = new TranscriptModel(presenter)
+    model.apply({ type: 'tool/call', data: { name: 'run_code', arguments: '{"description":"x"}', callId: 'root' } })
+    for (let index = 1; index <= SUBCALL_MAX + 2; index += 1) {
+      model.apply({ type: 'tool/ptc-dispatch-start', data: { rootCallId: 'root', parentCallId: 'root', subCallId: `root:ptc:${index}`, name: 'read', arguments: { file_path: `${index}.ts` } } })
+    }
+    expect(transcriptToText(model.entries())).toContain('- … 2 more calls')
   })
 })
