@@ -36,10 +36,12 @@ const FIXTURE_FILE_LINES = ['const expanded = this.viewState.expandCards', 'cons
 function fixturePresenter(): ReturnType<typeof createToolPresenter> {
   const tools = {
     // The real thing: bash declares a terminal card, which is why its output
-    // stays in the frame while every other card folds to its header.
+    // stays in the frame while every other card folds to its header. Its title
+    // IS the command, so the frame pins the command a reader would run rather
+    // than a decorated phrase around it.
     bash: {
-      presentCall: (args: { command?: string }) => ({ card: 'terminal', title: `Run ${args.command ?? ''}` }),
-      presentResult: () => ({ card: 'terminal', title: `Run ${FIXTURE_COMMAND}`, output: FIXTURE_OUTPUT, exitCode: 0 }),
+      presentCall: (args: { command?: string }) => ({ card: 'terminal', title: args.command ?? '' }),
+      presentResult: () => ({ card: 'terminal', title: FIXTURE_COMMAND, output: FIXTURE_OUTPUT, exitCode: 0 }),
     },
     read: {
       // A read declares its file as a location, which is what gives the card an
