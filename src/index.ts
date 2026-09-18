@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { Editor, ProcessTerminal, ScrollView, TuiAltScreen, VStack, isKeyRelease, matchesKey } from '@earendil-works/pi-tui'
+import { ProcessTerminal, ScrollView, TuiAltScreen, VStack, isKeyRelease, matchesKey } from '@earendil-works/pi-tui'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 // Type-only: the command registry publishes the change event this surface
@@ -52,6 +52,7 @@ import { formatTokens } from './tokens.ts'
 import { TranscriptModel } from './transcript.ts'
 import { WorkFold, describeTodos } from './work.ts'
 import { WorkDock } from './ui/dock.ts'
+import { BoxedEditor } from './ui/editor.ts'
 import { MarkdownRenderer } from './ui/markdown.ts'
 import {
   EffortPicker,
@@ -272,7 +273,7 @@ export function apply(ctx: Context, config: unknown): void {
     gate: () => pending?.gate.card(),
     picker: () => pendingPicker?.picker.card(),
   })
-  const editor = new Editor(tui, theme.editor)
+  const editor = new BoxedEditor(tui, theme.editor)
   const disposers: Array<() => void> = []
   // The presenter closure outlives the composition's own teardown, so it must
   // not keep an agent alive after its world unwinds.
