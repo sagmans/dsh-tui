@@ -64,7 +64,7 @@ import {
   type PickerCard,
 } from './ui/picker.ts'
 import { StatusBar } from './ui/status.ts'
-import { ALL_COLLAPSED, TranscriptView } from './ui/view.ts'
+import { DEFAULT_VIEW_STATE, TranscriptView } from './ui/view.ts'
 
 export const name = 'tui'
 
@@ -183,11 +183,13 @@ export function apply(ctx: Context, config: unknown): void {
   }
   /**
    * Rows the reader has opened. The model stays untouched; only the view reads
-   * this. Everything starts folded: a thought is the longest, least scannable
-   * row in the transcript, so leaving it open pushes the answer a reader came
-   * for off the screen. A folded row still names itself and its key.
+   * this. A thought starts folded: it is the longest, least scannable row in the
+   * transcript, so leaving it open pushes the answer a reader came for off the
+   * screen, and a folded row still names itself and its key. A PTC card's calls
+   * start open for the opposite reason: each is one clipped line under a header
+   * that already names the program.
    */
-  const viewState = { ...ALL_COLLAPSED }
+  const viewState = { ...DEFAULT_VIEW_STATE }
   /**
    * Seed the nested-call display the reader configured.
    *

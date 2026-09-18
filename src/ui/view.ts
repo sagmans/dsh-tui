@@ -54,8 +54,15 @@ export interface ViewState {
   readonly expandSubCalls: boolean
 }
 
-/** The state a reader gets before opening anything, and the view's own fallback. */
-export const ALL_COLLAPSED: ViewState = { expandCards: false, expandReasoning: false, expandSubCalls: false }
+/**
+ * The state a reader gets before opening anything, and the view's own fallback.
+ *
+ * Cards and thoughts start folded because either can be long enough to push the
+ * answer off the screen. A program's calls are the opposite case: one clipped
+ * line each, under a header that already names them, so folding them costs a
+ * reader the very thing the card stands for.
+ */
+export const DEFAULT_VIEW_STATE: ViewState = { expandCards: false, expandReasoning: false, expandSubCalls: true }
 
 /**
  * Renders the transcript rows and any pending gate as terminal lines.
@@ -87,7 +94,7 @@ export class TranscriptView implements Component {
   }
 
   private get viewState(): ViewState {
-    return this.options.state?.() ?? ALL_COLLAPSED
+    return this.options.state?.() ?? DEFAULT_VIEW_STATE
   }
 
   /** The cache's own account of the work it avoided; a test reads this. */

@@ -63,7 +63,7 @@ const SUBCALL_DISPLAYS = ['collapsed', 'inline'] as const
 const SECTION = z.object({
   palette: PaletteSchema.default({}),
   tokens: TokensSchema.default({}),
-  subcalls: z.union([...SUBCALL_DISPLAYS]).default('collapsed'),
+  subcalls: z.union([...SUBCALL_DISPLAYS]).default('inline'),
 })
 
 /**
@@ -158,7 +158,7 @@ export interface TuiSettings {
 
 /** The section as it reads when the reader has written nothing. */
 export function defaultSettings(): TuiSettings {
-  return { palette: {}, tokens: {}, subcalls: 'collapsed' }
+  return { palette: {}, tokens: {}, subcalls: 'inline' }
 }
 
 /** The theme inputs a parsed section implies. */
