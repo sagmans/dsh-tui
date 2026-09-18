@@ -78,7 +78,7 @@ export const name = 'tui'
 export const inject = ['agents', 'tools']
 
 /** Keys the surface answers itself, listed wherever the reader asks for help. */
-const LOCAL_KEYS = 'ctrl+o tool detail · shift+tab reasoning · ctrl+t reasoning effort · ctrl+b back to this session · ctrl+c interrupt or exit'
+const LOCAL_KEYS = 'ctrl+o tool detail · ctrl+p nested calls · shift+tab reasoning · ctrl+t reasoning effort · ctrl+b back to this session · ctrl+c interrupt or exit'
 
 /** The one thing to say about a view a reader did not open. */
 const LOCAL_KEYS_BACK = 'ctrl+b returns'
@@ -182,6 +182,22 @@ export function apply(ctx: Context, config: unknown): void {
     markdown: forwardMarkdownTheme(() => current.markdown),
   }
   /**
+   * Rows the reader has opened. The model stays untouched; only the view reads
+   * this. Everything starts folded: a thought is the longest, least scannable
+   * row in the transcript, so leaving it open pushes the answer a reader came
+   * for off the screen. A folded row still names itself and its key.
+   */
+  const viewState = { ...ALL_COLLAPSED }
+  /**
+   * Seed the nested-call display the reader configured.
+   *
+   * The key toggles it for one session, but a settings edit is a deliberate act,
+   * so it re-seeds and becomes the new starting point.
+   */
+  const applyDisplay = (): void => {
+    viewState.expandSubCalls = readSection().subcalls === 'inline'
+  }
+  /**
    * Own the section, so the harness validates and persists it for the reader.
    *
    * Registration is how the document learns the section exists at all; without
@@ -193,6 +209,7 @@ export function apply(ctx: Context, config: unknown): void {
     const scope = settingsCtx.settings.register(TUI_SETTINGS_NAMESPACE, TuiSettingsSchema)
     readSection = () => readScope(scope, message => { pendingSettingsProblem = message })
     applyTheme()
+    applyDisplay()
   })
   /**
    * The agent scope the tool presenter resolves against.
@@ -233,13 +250,6 @@ export function apply(ctx: Context, config: unknown): void {
   const roster = new SubagentRoster()
   const subagentControl = createSubagentControl(ctx)
   const markdown = new MarkdownRenderer(theme.markdown)
-  /**
-   * Rows the reader has opened. The model stays untouched; only the view reads
-   * this. Everything starts folded: a thought is the longest, least scannable
-   * row in the transcript, so leaving it open pushes the answer a reader came
-   * for off the screen. A folded row still names itself and its key.
-   */
-  const viewState = { ...ALL_COLLAPSED }
   const restore = createRestoreRegistry()
   const terminal = new ProcessTerminal()
   const tui = new TuiAltScreen(terminal)
@@ -433,6 +443,11 @@ export function apply(ctx: Context, config: unknown): void {
     }
     if (matchesKey(data, 'shift+tab')) {
       viewState.expandReasoning = !viewState.expandReasoning
+      tui.requestRender()
+      return { consume: true }
+    }
+    if (matchesKey(data, 'ctrl+p')) {
+      viewState.expandSubCalls = !viewState.expandSubCalls
       tui.requestRender()
       return { consume: true }
     }
@@ -1467,6 +1482,7 @@ export function apply(ctx: Context, config: unknown): void {
     if (String(ns) !== TUI_SETTINGS_NAMESPACE) return
     pendingSettingsProblem = undefined
     applyTheme()
+    applyDisplay()
     // Both caches hold rows under the old table, so they have to be told the
     // table moved; a repaint alone would reuse what they already stored.
     markdown.invalidate()

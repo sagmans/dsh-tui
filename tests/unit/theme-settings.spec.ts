@@ -10,7 +10,20 @@ describe('the dsh-tui settings section', () => {
 
   it('accepts an empty section, because every token has a default', () => {
     // Nothing written means nothing overridden; the shipped table fills the rest.
-    expect(parseSettings({})).toEqual({ palette: {}, tokens: {} })
+    expect(parseSettings({})).toEqual({ palette: {}, tokens: {}, subcalls: 'collapsed' })
+  })
+
+  it('shows nested PTC calls only when the reader asks', () => {
+    expect(parseSettings({}).subcalls).toBe('collapsed')
+    expect(parseSettings({ subcalls: 'inline' }).subcalls).toBe('inline')
+  })
+
+  it('rejects a display value the surface does not have', () => {
+    expect(() => parseSettings({ subcalls: 'expanded' })).toThrow()
+  })
+
+  it('rejects an unknown section key so a typo fails loudly', () => {
+    expect(() => parseSettings({ subcall: 'inline' })).toThrow(/subcall/)
   })
 
   it('rejects an unknown token so a typo fails loudly', () => {
@@ -30,7 +43,7 @@ describe('the dsh-tui settings section', () => {
   it('reports a refused section to the caller, not only to stderr', () => {
     const problems: string[] = []
     const settings = readScope({ get: () => ({ tokens: { 'transcript.reasoning.bdy': { fg: '#fff' } } }) }, message => problems.push(message))
-    expect(settings).toEqual({ palette: {}, tokens: {} })
+    expect(settings).toEqual({ palette: {}, tokens: {}, subcalls: 'collapsed' })
     expect(problems[0]).toContain('transcript.reasoning.bdy')
   })
 
