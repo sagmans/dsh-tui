@@ -1,5 +1,5 @@
 import { type Component, visibleWidth, wrapTextWithAnsi } from '@earendil-works/pi-tui'
-import { cardDetailRows, shellPreviewHint, type CardPreview, type CardStat, type CardStatKind, type ToolCard } from '../cards.ts'
+import { cardDetailRows, shellFoldHint, shellRetentionHint, type CardPreview, type CardStat, type CardStatKind, type ToolCard } from '../cards.ts'
 import type { GateCard } from '../gates.ts'
 import { displayText } from '../text.ts'
 import type { TranscriptEntry, TranscriptModel } from '../transcript.ts'
@@ -203,12 +203,14 @@ export class TranscriptView implements Component {
       lines.push(this.theme.cut(`${DETAIL_INDENT}${this.theme.style('tool.terminal.status', displayText(card.status))}`, width, ''))
     }
     if (hidden <= 0 || !this.theme.visible('tool.hint')) return
-    // An opened card is bounded by what was retained; a folded shell card is
-    // bounded by its preview window, and there the hint has to name the rows it
-    // dropped rather than the ones memory refused to keep.
-    const hint = !preview.expanded
-      ? preview.preview === 'shellTail' ? shellPreviewHint(hidden) : undefined
-      : `${hidden} ${CARD_HINT_RETAINED}`
+    // A shell card's rows are kept from the end, so a hidden count always names
+    // the rows *before* what is on screen and the hint has to say so; every
+    // other card keeps its head, where a neutral count is enough. A folded shell
+    // card is bounded by its preview window, an opened one by retention, so the
+    // opened hint promises no more than memory kept.
+    const hint = card.kind === 'terminal'
+      ? preview.expanded ? shellRetentionHint(hidden) : shellFoldHint(hidden)
+      : preview.expanded ? `${hidden} ${CARD_HINT_RETAINED}` : undefined
     if (hint === undefined) return
     lines.push(this.theme.style('tool.hint', this.theme.cut(`${DETAIL_INDENT}${hint}`, width, '')))
   }

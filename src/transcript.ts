@@ -1,4 +1,4 @@
-import { cardFromLines, mergeCards, type ToolCard, type ToolPresenter } from './cards.ts'
+import { cardFromLines, carriedFields, mergeCards, type ToolCard, type ToolPresenter } from './cards.ts'
 import { countTokens } from './tokens.ts'
 
 /** Kept exported here for the callers that read a thought's size through the transcript. */
@@ -383,7 +383,7 @@ export class TranscriptModel {
       const base = call ?? cardFromLines('generic', name, [], false)
       const rebuilt = reported.length === 0
         ? { ...base, failed: isError }
-        : { ...cardFromLines(base.kind, base.title, reported, isError), ...(base.argument === undefined ? {} : { argument: base.argument }) }
+        : { ...cardFromLines(base.kind, base.title, reported, isError), ...carriedFields(base) }
       this.settled[pending.index] = { kind: 'tool', card: rebuilt }
       return
     }

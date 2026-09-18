@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { stripTerminalSequences, visibleWidth } from '@earendil-works/pi-tui'
-import { cardOfCall, cardOfResult, contentLines, CARD_SHELL_PREVIEW, type ToolPresenter } from '@/cards.ts'
+import { cardOfCall, cardOfResult, contentLines, CARD_DETAIL_MAX, CARD_SHELL_PREVIEW, type ToolPresenter } from '@/cards.ts'
 import type { GateCard } from '@/gates.ts'
 import { createTheme, forwardEditorTheme, forwardMarkdownTheme, type TuiTheme } from '@/theme.ts'
 import { DEFAULT_PALETTE } from '@/theme-tokens.ts'
@@ -190,6 +190,16 @@ describe('TranscriptView expansion', () => {
     // The label, the command, three output rows, and the exit status.
     expect(short).toHaveLength(6)
     expect(short.at(-1)).toBe('    exit 0')
+  })
+
+  it("names an opened shell card's dropped rows as the earlier ones", () => {
+    // Retention keeps the tail, so opening a run past the cap reveals its end
+    // and hides its beginning; a neutral count would point the reader past the
+    // last row on screen for rows that are above it.
+    const opened = viewOf(withRows(250, 'bash'), { expandCards: true, expandReasoning: false }).render(60)
+    expect(opened.filter(line => line.startsWith('    row '))).toHaveLength(CARD_DETAIL_MAX)
+    expect(opened).toContain('    exit 0')
+    expect(opened.at(-1)).toBe('    … 50 earlier lines not shown')
   })
 
   it("keeps a failed shell card's command, tail, and failed title", () => {

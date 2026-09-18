@@ -135,6 +135,15 @@ export const CARD_SHELL_PREVIEW = 20
  */
 const CARD_HINT_EARLIER = 'earlier lines · ctrl+o shows more'
 
+/**
+ * The tail of the hint an opened shell card draws when retention dropped rows.
+ *
+ * Retention keeps the tail of a run, so the rows it refused are always the
+ * beginning; a hint that only counted them would send the reader looking past
+ * the end of the output for rows that are not there.
+ */
+const CARD_HINT_UNRETAINED_EARLIER = 'earlier lines not shown'
+
 /** Character budget for one detail row, so a minified file cannot flood the viewport. */
 export const CARD_LINE_LIMIT = 200
 
@@ -161,10 +170,15 @@ function boundTail(rows: readonly CardRow[]): { detail: CardRow[]; totalLines: n
   return { detail: rows.slice(-CARD_DETAIL_MAX).map(clipRow), totalLines: rows.length }
 }
 
+/** A text with the newline that only terminates its last line removed. */
+function withoutTrailingBreaks(text: string): string {
+  return text.replace(/\n+$/, '')
+}
+
 /** How many lines a text holds, ignoring the newline that only terminates the last one. */
 function lineCount(text: string): number {
-  const trimmed = text.replace(/\n+$/, '')
-  return trimmed === '' ? 0 : trimmed.split('\n').length
+  const body = withoutTrailingBreaks(text)
+  return body === '' ? 0 : body.split('\n').length
 }
 
 /**
@@ -174,8 +188,9 @@ function lineCount(text: string): number {
  * it is, tokens say what it cost to put in the conversation.
  */
 function sizeStats(text: string): readonly CardStat[] {
-  const lines = lineCount(text)
-  const tokens = countTokens(text.replace(/\n+$/, ''))
+  const body = withoutTrailingBreaks(text)
+  const lines = lineCount(body)
+  const tokens = countTokens(body)
   const stats: CardStat[] = []
   if (lines > 0) stats.push({ kind: 'size', text: `${lines} line${lines === 1 ? '' : 's'}` })
   if (tokens > 0) stats.push({ kind: 'size', text: `${formatTokens(tokens)} tok` })
@@ -187,45 +202,69 @@ function sizeStats(text: string): readonly CardStat[] {
  *
  * A replacement is one changed line, not an add plus a remove, so the smaller
  * of the two sides is the changed count and only the excess counts as pure
- * additions or deletions — otherwise every edit reads as twice its size.
+ * additions or deletions — otherwise every edit reads as twice its size. Each
+ * file is netted on its own for the same reason: one file's additions must not
+ * cancel another file's deletions, or a change to two files reads as a rewrite
+ * of neither.
  */
 function changeStats(diffs: readonly FileDiff[]): readonly CardStat[] {
   let added = 0
+  let changed = 0
   let removed = 0
   for (const diff of diffs) {
+    let fileAdded = 0
+    let fileRemoved = 0
     for (const row of renderFileDiff(diff)) {
       const cls = row.parts[0]?.class
-      if (cls === 'added') added += 1
-      else if (cls === 'removed') removed += 1
+      if (cls === 'added') fileAdded += 1
+      else if (cls === 'removed') fileRemoved += 1
     }
+    const fileChanged = Math.min(fileAdded, fileRemoved)
+    added += fileAdded - fileChanged
+    changed += fileChanged
+    removed += fileRemoved - fileChanged
   }
-  const changed = Math.min(added, removed)
   const stats: CardStat[] = []
-  if (added - changed > 0) stats.push({ kind: 'added', text: String(added - changed) })
+  if (added > 0) stats.push({ kind: 'added', text: String(added) })
   if (changed > 0) stats.push({ kind: 'changed', text: String(changed) })
-  if (removed - changed > 0) stats.push({ kind: 'removed', text: String(removed - changed) })
+  if (removed > 0) stats.push({ kind: 'removed', text: String(removed) })
   return stats
 }
 
-/** The window a read returned: its line range, how many lines, and their token size. */
+/**
+ * The window a read returned: its line range, how many lines, and their token size.
+ *
+ * An empty window still names the offset it starts at, because the view keeps it
+ * for exactly that case, and counts the model-facing content the card falls back
+ * to drawing rather than reporting a size of zero.
+ */
 function readStats(read: ReadResultView): readonly CardStat[] {
-  if (read.lines.length === 0) return [{ kind: 'size', text: '0 lines' }]
+  const text = read.lines.length > 0
+    ? read.lines.map(line => line.text).join('\n')
+    : contentLines(read.content).join('\n')
+  const count = read.lines.length > 0 ? read.lines.length : lineCount(text)
   const start = read.offset
-  const end = read.offset + read.lines.length - 1
-  const count = read.lines.length
   const stats: CardStat[] = [
-    { kind: 'size', text: start === end ? `L${start}` : `L${start}–${end}` },
+    { kind: 'size', text: count <= 1 ? `L${start}` : `L${start}–${start + count - 1}` },
     { kind: 'size', text: `${count} line${count === 1 ? '' : 's'}` },
   ]
-  const tokens = countTokens(read.lines.map(line => line.text).join('\n'))
+  const tokens = countTokens(withoutTrailingBreaks(text))
   if (tokens > 0) stats.push({ kind: 'size', text: `${formatTokens(tokens)} tok` })
   return stats
 }
 
-/** A diff's measured facts: a creation reports its size, an edit its line changes. */
+/**
+ * A diff's measured facts: a change with no prior content reports its size,
+ * while one that carried prior content reports its line changes.
+ *
+ * `oldText === null` means the prior content was unavailable at call time — a
+ * new file, or a whole-file overwrite — so no diff can be counted and the size
+ * is the only honest fact; naming that a *creation* would misread every
+ * overwrite as a new file.
+ */
 function diffStats(diffs: readonly FileDiff[]): readonly CardStat[] {
-  const created = diffs.length > 0 && diffs.every(diff => diff.oldText === null)
-  return created ? sizeStats(diffs.map(diff => diff.newText).join('\n')) : changeStats(diffs)
+  const withoutPrior = diffs.length > 0 && diffs.every(diff => diff.oldText === null)
+  return withoutPrior ? sizeStats(diffs.map(diff => diff.newText).join('\n')) : changeStats(diffs)
 }
 
 /**
@@ -254,9 +293,14 @@ export function cardDetailRows(card: ToolCard, preview: CardPreview): { lines: r
   return { lines, hidden: Math.max(0, card.totalLines - lines.length) }
 }
 
-/** The hint row for a folded shell card, or undefined when it dropped nothing. */
-export function shellPreviewHint(hidden: number): string | undefined {
+/** The hint row for a folded shell card, or undefined when its preview dropped nothing. */
+export function shellFoldHint(hidden: number): string | undefined {
   return hidden <= 0 ? undefined : `… ${hidden} ${CARD_HINT_EARLIER}`
+}
+
+/** The hint row for an opened shell card whose retention dropped the run's earlier rows. */
+export function shellRetentionHint(hidden: number): string | undefined {
+  return hidden <= 0 ? undefined : `… ${hidden} ${CARD_HINT_UNRETAINED_EARLIER}`
 }
 
 /**
@@ -289,6 +333,22 @@ export function contentLines(content: unknown): string[] {
     if (Array.isArray(record.content)) lines.push(...contentLines(record.content))
   }
   return lines
+}
+
+/**
+ * The header fields a rebuilt card must keep.
+ *
+ * Replacing a card's rows says nothing about what the call was made with, what
+ * it measured, or how it ended, so those fields travel with the rebuild:
+ * dropping the argument is how a shell card loses its command the moment a
+ * presenter declines the result.
+ */
+export function carriedFields(card: ToolCard): Pick<ToolCard, 'argument' | 'stats' | 'status'> {
+  return {
+    ...(card.argument === undefined ? {} : { argument: card.argument }),
+    ...(card.stats === undefined ? {} : { stats: card.stats }),
+    ...(card.status === undefined ? {} : { status: card.status }),
+  }
 }
 
 /**

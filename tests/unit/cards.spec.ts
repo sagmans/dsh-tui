@@ -5,10 +5,12 @@ import {
   CARD_SHELL_PREVIEW,
   cardOfCall,
   cardOfResult,
+  carriedFields,
   mergeCards,
   renderFileDiff,
   rowText,
-  shellPreviewHint,
+  shellFoldHint,
+  shellRetentionHint,
   type CardRow,
   type ToolCard,
 } from '@/cards.ts'
@@ -106,14 +108,21 @@ describe('cardDetailRows', () => {
     expect(texts(shown.lines).at(0)).toBe(`line ${25 - CARD_SHELL_PREVIEW}`)
     expect(texts(shown.lines).at(-1)).toBe('line 24')
     expect(shown.hidden).toBe(25 - CARD_SHELL_PREVIEW)
-    expect(shellPreviewHint(shown.hidden)).toBe('… 5 earlier lines · ctrl+o shows more')
+    expect(shellFoldHint(shown.hidden)).toBe('… 5 earlier lines · ctrl+o shows more')
+  })
+
+  it('names an opened shell card\'s dropped rows as the earlier ones', () => {
+    // Retention keeps the tail, so an opened card is missing its beginning; a
+    // hint that only counts rows sends the reader past the end of the output.
+    expect(shellRetentionHint(4800)).toBe('… 4800 earlier lines not shown')
+    expect(shellRetentionHint(0)).toBeUndefined()
   })
 
   it("keeps a shell card's whole output when it fits the preview", () => {
     const shown = cardDetailRows(card(3, 'terminal'), { expanded: false, preview: 'shellTail' })
     expect(shown.lines).toHaveLength(3)
     expect(shown.hidden).toBe(0)
-    expect(shellPreviewHint(shown.hidden)).toBeUndefined()
+    expect(shellFoldHint(shown.hidden)).toBeUndefined()
   })
 
   it('shows every retained row while expanded', () => {
@@ -210,6 +219,31 @@ describe('cardOfResult', () => {
     expect(card.stats?.slice(0, 2)).toEqual([{ kind: 'size', text: 'L5–7' }, { kind: 'size', text: '3 lines' }])
   })
 
+  it('keeps a read window\'s offset when it returned no lines', () => {
+    // The view preserves the offset for exactly this case, so the card must not
+    // drop it and leave the reader without a place to continue from.
+    const card = cardOfResult(
+      { card: 'read', path: 'a.ts', offset: 400, lines: [], totalLines: 900 },
+      { fallbackTitle: 'read', failed: false, contentLines: [] },
+    )
+    expect(card.stats).toEqual([{ kind: 'size', text: 'L400' }, { kind: 'size', text: '0 lines' }])
+  })
+
+  it('measures the content a read falls back to drawing', () => {
+    // A read with no numbered window still draws its model-facing content, so a
+    // size of zero would contradict the rows under the header.
+    const card = cardOfResult(
+      { card: 'read', path: 'a.ts', offset: 1, lines: [], totalLines: 3, content: [{ type: 'text', text: 'one\ntwo' }] },
+      { fallbackTitle: 'read', failed: false, contentLines: [] },
+    )
+    expect(card.stats).toEqual([
+      { kind: 'size', text: 'L1–2' },
+      { kind: 'size', text: '2 lines' },
+      { kind: 'size', text: '2 tok' },
+    ])
+    expect(texts(card.detail)).toEqual(['one', 'two'])
+  })
+
   it('reports a new file by its line and token size', () => {
     const card = cardOfResult(
       { card: 'diff', diffs: [{ path: 'a.txt', oldText: null, newText: 'one\ntwo\nthree' }] },
@@ -238,6 +272,22 @@ describe('cardOfResult', () => {
     )
     // `b -> x` is a change and `y` is the only pure addition.
     expect(card.stats).toEqual([{ kind: 'added', text: '1' }, { kind: 'changed', text: '1' }])
+  })
+
+  it("nets each file's change on its own", () => {
+    // One file's additions must not cancel another's deletions: netting across
+    // files would report a two-file change as a rewrite of neither.
+    const card = cardOfResult(
+      {
+        card: 'diff',
+        diffs: [
+          { path: 'a.ts', oldText: 'keep', newText: 'keep\none\ntwo' },
+          { path: 'b.ts', oldText: 'keep\none\ntwo', newText: 'keep' },
+        ],
+      },
+      { fallbackTitle: 'edit', failed: false, contentLines: [] },
+    )
+    expect(card.stats).toEqual([{ kind: 'added', text: '2' }, { kind: 'removed', text: '2' }])
   })
 
   it('renders both web shapes', () => {
@@ -310,5 +360,32 @@ describe('mergeCards', () => {
 
   it('refuses to merge two absent cards', () => {
     expect(() => mergeCards(undefined, undefined)).toThrow(/at least one card/)
+  })
+})
+
+describe('carriedFields', () => {
+  it('keeps the header fields a rebuilt card would otherwise lose', () => {
+    // A rebuild replaces the rows and says nothing about the command, the facts,
+    // or the outcome, so all three have to travel with it.
+    const card: ToolCard = {
+      kind: 'terminal',
+      title: 'bash',
+      argument: 'ls -la',
+      stats: [{ kind: 'size', text: '3 lines' }],
+      status: 'exit 0',
+      detail: [],
+      failed: false,
+      totalLines: 0,
+    }
+    expect(carriedFields(card)).toEqual({
+      argument: 'ls -la',
+      stats: [{ kind: 'size', text: '3 lines' }],
+      status: 'exit 0',
+    })
+  })
+
+  it('omits a field the card never had', () => {
+    const card: ToolCard = { kind: 'generic', title: 'read', detail: [], failed: false, totalLines: 0 }
+    expect(carriedFields(card)).toEqual({})
   })
 })
