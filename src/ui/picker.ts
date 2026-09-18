@@ -214,3 +214,78 @@ export class PresetPicker extends ListPicker<PresetSummary> {
     )
   }
 }
+
+/**
+ * The pick id that clears an explicit effort.
+ *
+ * An absent effort is a real choice — it restores the model's own default — so
+ * it needs an id, and no adapter-owned effort may be empty.
+ */
+export const PROVIDER_DEFAULT_EFFORT_ID = ''
+
+/** One reasoning level a route offers, as the picker shows it. */
+export interface EffortChoice {
+  readonly id: string
+  readonly name: string
+  readonly description?: string
+  /** Whether this is the effort in force, which the row says in words. */
+  readonly current: boolean
+}
+
+/**
+ * Turn a route's advertised levels into picker rows.
+ *
+ * The provider default always leads, because clearing an explicit effort is a
+ * choice in its own right: the reader who raised it must be able to put it back
+ * without knowing what the adapter would otherwise send.
+ */
+export function effortChoices(
+  efforts: readonly { readonly id: string; readonly name: string; readonly description?: string }[],
+  effective: string | undefined,
+): readonly EffortChoice[] {
+  return [
+    {
+      id: PROVIDER_DEFAULT_EFFORT_ID,
+      name: 'provider default',
+      description: 'clear the explicit effort',
+      current: effective === undefined,
+    },
+    ...efforts.map(effort => ({
+      id: effort.id,
+      name: effort.name,
+      ...(effort.description === undefined ? {} : { description: effort.description }),
+      current: effort.id === effective,
+    })),
+  ]
+}
+
+/**
+ * One reasoning effort chosen by key press.
+ *
+ * The levels are fixed once the reader asks for the list, because they come
+ * from the route that was in force when the picker opened; the route itself
+ * cannot change while the list owns the keyboard.
+ */
+export class EffortPicker extends ListPicker<EffortChoice> {
+  constructor(choices: () => readonly EffortChoice[], heading: string) {
+    super(
+      choices,
+      () => heading,
+      choice => choice.id,
+      choice => ({
+        label: choice.name,
+        description: [
+          choice.description,
+          choice.id !== choice.name ? choice.id : undefined,
+          choice.current ? 'current' : undefined,
+        ].filter(part => part !== undefined && part !== '').join(' · ') || undefined,
+        current: choice.current,
+      }),
+      choice => [choice.name, choice.id, choice.description ?? ''].join(' '),
+      {
+        empty: 'nothing matches · backspace to widen · esc cancel',
+        listed: '↑↓ move · enter apply · esc cancel · type to filter',
+      },
+    )
+  }
+}

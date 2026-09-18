@@ -29,6 +29,10 @@ export type ModelCommand =
  * lists that provider's models, `provider/model` switches, and anything else is
  * taken as a model id inside the route already in use, because a reader
  * switching between two models of one provider should not have to repeat it.
+ * A complete route may carry one more segment, the reasoning effort, so
+ * `provider/model/effort` selects both at once: the last segment is the effort
+ * and the model is everything between it and the provider, which reads a model
+ * id containing a slash as an effort the adapters in use do not mint.
  */
 export function parseModelArgument(
   argument: string,
@@ -39,7 +43,16 @@ export function parseModelArgument(
   if (trimmed === '') return { kind: 'current' }
   const slash = trimmed.indexOf('/')
   if (slash > 0 && slash < trimmed.length - 1) {
-    return { kind: 'switch', choice: { provider: trimmed.slice(0, slash), model: trimmed.slice(slash + 1) } }
+    const provider = trimmed.slice(0, slash)
+    const rest = trimmed.slice(slash + 1)
+    const effortSlash = rest.lastIndexOf('/')
+    if (effortSlash > 0 && effortSlash < rest.length - 1) {
+      return {
+        kind: 'switch',
+        choice: { provider, model: rest.slice(0, effortSlash), reasoningEffort: rest.slice(effortSlash + 1) },
+      }
+    }
+    return { kind: 'switch', choice: { provider, model: rest } }
   }
   if (providers.some(provider => provider.id === trimmed)) return { kind: 'list-models', provider: trimmed }
   if (current === undefined) {
@@ -89,6 +102,20 @@ export class ModelSwitch {
     }
   }
 
+  /**
+   * Take the deployment default as this session's route, unless the reader
+   * already named one.
+   *
+   * The default is settings-backed and only trustworthy once it is read, which
+   * is after the agent was created; adopting it here is what makes the effort
+   * the status line shows reach the request, and a reader's own `/model` or
+   * picker choice must never be overwritten by it.
+   */
+  adopt(choice: ModelChoice): void {
+    if (this.selection.current !== undefined) return
+    this.choose(choice)
+  }
+
   /** Forget the choice, so the session returns to the composition default. */
   reset(): void {
     this.selection.current = undefined
@@ -101,16 +128,29 @@ export class ModelSwitch {
   }
 }
 
+/** The reasoning levels one exact route offers, described structurally. */
+export interface ModelEfforts {
+  readonly efforts: readonly { readonly id: string; readonly name: string; readonly description?: string }[]
+  readonly defaultEffort?: string
+}
+
 /** The model directory, described structurally. */
 interface LlmDirectory {
   listProviders?(): readonly { readonly id?: string; readonly name?: string }[]
   listModels?(provider: string): Promise<readonly { readonly id?: string; readonly name?: string }[]>
+  resolveModelInfo?(provider: string, model: string): Promise<{
+    readonly reasoning?: {
+      readonly efforts?: readonly { readonly id?: string; readonly name?: string; readonly description?: string }[]
+      readonly defaultEffort?: unknown
+    }
+  }>
 }
 
 /** Read the advisory catalog of routes this composition can reach. */
 export function createModelCatalog(ctx: Context): {
   providers(): readonly ProviderEntry[]
   models(provider: string): Promise<readonly { readonly id: string; readonly name: string }[]>
+  efforts(provider: string, model: string): Promise<ModelEfforts | undefined>
 } | undefined {
   const llm = ctx.get('llm') as LlmDirectory | undefined
   if (typeof llm?.listProviders !== 'function') return undefined
@@ -124,6 +164,22 @@ export function createModelCatalog(ctx: Context): {
       return models.flatMap(entry => typeof entry.id === 'string'
         ? [{ id: entry.id, name: typeof entry.name === 'string' ? entry.name : entry.id }]
         : [])
+    },
+    efforts: async (provider, model) => {
+      if (typeof llm.resolveModelInfo !== 'function') return undefined
+      const reasoning = (await llm.resolveModelInfo(provider, model)).reasoning
+      if (reasoning === undefined) return undefined
+      const efforts = (reasoning.efforts ?? []).flatMap(entry => typeof entry.id === 'string'
+        ? [{
+            id: entry.id,
+            name: typeof entry.name === 'string' ? entry.name : entry.id,
+            ...(typeof entry.description === 'string' ? { description: entry.description } : {}),
+          }]
+        : [])
+      return {
+        efforts,
+        ...(typeof reasoning.defaultEffort === 'string' ? { defaultEffort: reasoning.defaultEffort } : {}),
+      }
     },
   }
 }

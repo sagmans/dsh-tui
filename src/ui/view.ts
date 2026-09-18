@@ -25,7 +25,7 @@ const NO_CURSOR = ' '
 /** The words an opened card uses when retention, not the fold, dropped rows. */
 const CARD_HINT_RETAINED = 'more lines not shown'
 /** The key a folded reasoning row names, so a hidden thought stays reachable. */
-const REASONING_FOLD_HINT = 'ctrl+t'
+const REASONING_FOLD_HINT = 'shift+tab'
 /** What separates a card's header from its measured facts, and the facts from each other. */
 const STAT_LEAD = '  '
 const STAT_SEPARATOR = ' · '

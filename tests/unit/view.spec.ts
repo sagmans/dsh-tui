@@ -233,7 +233,7 @@ describe('TranscriptView expansion', () => {
     // reads the same as the text never having arrived. The key rides the row so
     // naming it costs no line.
     expect(folded).toEqual([
-      'reasoning · 7 tokens · 5s (ctrl+t)',
+      'reasoning · 7 tokens · 5s (shift+tab)',
     ])
     const opened = viewOf(model, { expandCards: false, expandReasoning: true }).render(60)
     expect(opened).toEqual([
