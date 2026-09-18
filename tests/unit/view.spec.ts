@@ -572,11 +572,16 @@ describe('TranscriptView nested PTC calls', () => {
     expect(lines.at(-1)).toBe('  … 1 more calls')
   })
 
-  it('clips a long call to one line on a narrow terminal', () => {
+  it('wraps a long call under its own indent on a narrow terminal', () => {
     const model = foldedProgram([{ name: 'bash', args: { command: `echo ${'x'.repeat(80)}` } }])
     const lines = viewOf(model, INLINE).render(40)
-    expect(lines).toHaveLength(2)
-    expect(lines[1]?.endsWith('…')).toBe(true)
+    // One call still costs one entry; the argument is folded rather than cut,
+    // so nothing the reader was scanning for disappears.
+    expect(lines.length).toBeGreaterThan(2)
+    expect(lines[1]).toMatch(/^ {2}bash echo/)
+    for (const line of lines.slice(1)) expect(line.startsWith('  ')).toBe(true)
     for (const line of lines) expect(visibleWidth(line)).toBeLessThanOrEqual(40)
+    expect(lines.slice(1).join('').split('x')).toHaveLength(81)
+    expect(lines.join('')).not.toContain('…')
   })
 })

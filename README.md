@@ -122,7 +122,7 @@ dsh --profile tui --no-bell            # do not ring when a long turn finishes
 | Enter | submit the prompt |
 | Ctrl+C | interrupt the running turn, or leave when idle |
 | Ctrl+O | open every tool card: its header plus every retained row. Folded, a card is one line, and a shell card keeps its command plus the last 20 rows of output with a hint naming what it dropped |
-| Ctrl+Y | show or hide the calls a PTC program dispatched: one two-space-indented line per call under its `run_code` card, drawn from the tool's own header; shown by default |
+| Ctrl+Y | show or hide the calls a PTC program dispatched: one two-space-indented entry per call under its `run_code` card, named and argued from the tool's own header and wrapped at the screen edge; shown by default |
 | Shift+Tab | expand or fold the reasoning behind an answer: folded, the row names itself, its token count, and the key; opened, it adds the thought |
 | Ctrl+T | pick the reasoning effort for the next step |
 | `y` / `n` / Esc | allow once, reject, or cancel a pending approval |
@@ -249,7 +249,7 @@ The fold is durable-only: the live stream decorates the row that is still being 
 
 Tool cards are folded by default: a card draws its header and nothing else, so a long read, diff, or search cannot bury the conversation. A shell card is the exception, because its output is the answer the reader asked for: it names the tool in its header, always shows the command that ran, keeps the last 20 output rows, and adds a hint naming the rows it dropped. `Ctrl+O` opens every card to its header plus every retained row.
 
-A PTC card is the one card with children: every call the `run_code` program dispatched hangs off the card that made it, and each draws as one clipped line under the header — the tool's own name and argument. `Ctrl+Y` folds them away again, and `subcalls: collapsed` starts every session folded; see [Theme](#theme).
+A PTC card is the one card with children: every call the `run_code` program dispatched hangs off the card that made it, and each draws under the header as the tool's own name and argument, wrapping rather than being cut. `Ctrl+Y` folds them away again, and `subcalls: collapsed` starts every session folded; see [Theme](#theme).
 
 A card's header names the tool, then the argument the call was made with — a path or a command — in the `tool.args` colour, then the facts the result measured: a read reports its line range, line count, and token size; a file change that carried no prior content to compare against reports its lines and tokens; one that did reports added, changed, and removed lines as `+n ~n -n` in green, yellow, and red. Each stat is its own token, so any of them can be recoloured or hidden independently.
 
@@ -296,7 +296,8 @@ The automated checks drive a real PTY, but they run on this machine's terminal. 
 | `NO_COLOR=1 dsh --profile tui` | no styling anywhere, layout unchanged |
 | `dsh --profile tui --no-bell` | a turn that runs for minutes still ends silently |
 | `dsh --profile tui --preset ptc`, then a turn | the status line names `ptc`, and the agent reaches its tools through one TypeScript program rather than one shell call at a time |
-| a PTC turn | one line per dispatched call draws two spaces indented under the `run_code` header, from the first frame and with no keypress |
+| a PTC turn | one entry per dispatched call draws two spaces indented under the `run_code` header, from the first frame and with no keypress |
+| that turn in a terminal narrower than a call's own argument | the argument wraps onto continuation rows indented to the same two spaces, with no ellipsis |
 | that same turn, then `ctrl+y` | the lines fold away; `ctrl+y` again draws them back |
 | `dsh-tui: { subcalls: collapsed }` in `$DSH_HOME/settings.yaml`, then a PTC turn | the card arrives alone, and editing the document to `inline` unfolds a running session |
 | `/preset` on a fresh session | the picker lists four modes, marks the current one, and the switch survives a resume |

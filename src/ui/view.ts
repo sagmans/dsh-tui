@@ -233,11 +233,12 @@ export class TranscriptView implements Component {
   }
 
   /**
-   * The calls one card dispatched, one clipped line each.
+   * The calls one card dispatched, one entry each.
    *
-   * A nested call is a signpost rather than a card of its own: it stays on one
-   * line so a program that read five files does not push the answer away, and
-   * the argument is cut rather than wrapped for the same reason.
+   * A nested call is a signpost rather than a card of its own, so it keeps one
+   * entry per call; a long argument still wraps under that entry rather than
+   * being cut, because the argument is the part a reader scans for and a
+   * silently shortened path reads as the one that ran.
    */
   private pushSubCalls(lines: string[], card: ToolCard, width: number): void {
     const subCalls = card.subCalls ?? []
@@ -251,7 +252,7 @@ export class TranscriptView implements Component {
       // A row whose every part is hidden draws nothing, and nothing must not
       // cost a line the card does not have.
       if (drawn === '') continue
-      lines.push(this.theme.cut(`${SUBCALL_INDENT}${drawn}`, width, '…'))
+      this.pushStyledWrapped(lines, drawn, width, SUBCALL_INDENT)
     }
     const hidden = (card.subCallsTotal ?? subCalls.length) - subCalls.length
     if (hidden > 0 && this.theme.visible('tool.hint')) {
