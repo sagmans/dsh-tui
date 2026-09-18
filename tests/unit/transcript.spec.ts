@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { rowText, type ToolCard, type ToolPresenter } from '@/cards.ts'
+import { rowText, SUBCALL_MAX, type ToolCard, type ToolPresenter } from '@/cards.ts'
 import { REASONING_CHAR_LIMIT, TranscriptModel } from '@/transcript.ts'
 
 const text = (value: string) => [{ type: 'text', text: value }]
@@ -331,5 +331,81 @@ describe('TranscriptModel outcomes', () => {
     expect(notice.startsWith('injected p · 1 lines — ')).toBe(true)
     expect(notice.endsWith('…')).toBe(true)
     expect(notice.length).toBeLessThan(120)
+  })
+})
+
+describe('TranscriptModel nested PTC calls', () => {
+  const runCall = { type: 'tool/call', data: { name: 'run_code', arguments: '{"code":"x","description":"search"}', callId: 'root' } }
+  const runResult = {
+    type: 'tool/result',
+    data: { message: { content: [{ type: 'tool-result', toolCallId: 'root', text: 'done' }], isError: false } },
+  }
+  const start = (subCallId: string, name: string, args: unknown, rootCallId = 'root') => ({
+    type: 'tool/ptc-dispatch-start',
+    data: { rootCallId, parentCallId: rootCallId, subCallId, name, arguments: args },
+  })
+  const settle = (subCallId: string, name: string, args: unknown, isError: boolean) => ({
+    type: 'tool/ptc-dispatch',
+    data: { rootCallId: 'root', parentCallId: 'root', subCallId, name, arguments: args, isError, content: [] },
+  })
+
+  it('draws a nested call on the card that dispatched it, and restates it with its outcome', () => {
+    const presenter = recordingPresenter()
+    const model = new TranscriptModel(presenter)
+    model.apply(runCall)
+    model.apply(start('root:ptc:1', 'read', { file_path: 'src/x.ts' }))
+    const opened = model.entries()[0]
+    expect(opened?.kind === 'tool' && opened.card.subCalls).toEqual([{ title: 'read pending', failed: false }])
+    expect(presenter.calls).toEqual(['run_code:{"code":"x","description":"search"}', 'read:{"file_path":"src/x.ts"}'])
+
+    model.apply(settle('root:ptc:1', 'read', { file_path: 'src/x.ts' }, true))
+    const failed = model.entries()[0]
+    expect(failed?.kind === 'tool' && failed.card.subCalls).toEqual([{ title: 'read pending', failed: true }])
+
+    model.apply(runResult)
+    const settled = model.entries()[0]
+    expect(settled?.kind === 'tool' && settled.card.subCalls).toEqual([{ title: 'read pending', failed: true }])
+  })
+
+  it('keeps the calls in dispatch order and counts every one', () => {
+    const model = new TranscriptModel(recordingPresenter())
+    model.apply(runCall)
+    model.apply(start('root:ptc:1', 'read', { file_path: 'a.ts' }))
+    model.apply(settle('root:ptc:1', 'read', { file_path: 'a.ts' }, false))
+    model.apply(start('root:ptc:2', 'bash', { command: 'ls' }))
+    const card = model.entries()[0]
+    const subCalls = card?.kind === 'tool' ? card.card.subCalls : undefined
+    expect(subCalls?.map(call => call.title)).toEqual(['read pending', 'bash pending'])
+    expect(card?.kind === 'tool' && card.card.subCallsTotal).toBe(2)
+  })
+
+  it('caps retained calls and still reports how many ran', () => {
+    const model = new TranscriptModel(recordingPresenter())
+    model.apply(runCall)
+    for (let index = 1; index <= SUBCALL_MAX + 1; index += 1) {
+      model.apply(start(`root:ptc:${index}`, 'read', { file_path: `${index}.ts` }))
+    }
+    const card = model.entries()[0]
+    expect(card?.kind === 'tool' && card.card.subCalls).toHaveLength(SUBCALL_MAX)
+    expect(card?.kind === 'tool' && card.card.subCallsTotal).toBe(SUBCALL_MAX + 1)
+  })
+
+  it('ignores a dispatch whose root call is not in this fold', () => {
+    const model = new TranscriptModel(recordingPresenter())
+    model.apply(start('other:ptc:1', 'read', { file_path: 'x.ts' }, 'other'))
+    expect(model.entries()).toEqual([])
+  })
+
+  it('keeps the nested calls when the result presenter declines', () => {
+    const presenter: ToolPresenter = {
+      call: name => ({ kind: 'generic', title: name, detail: [], failed: false, totalLines: 0 }),
+      result: () => undefined,
+    }
+    const model = new TranscriptModel(presenter)
+    model.apply(runCall)
+    model.apply(start('root:ptc:1', 'read', { file_path: 'x.ts' }))
+    model.apply(runResult)
+    const card = model.entries()[0]
+    expect(card?.kind === 'tool' && card.card.subCalls).toHaveLength(1)
   })
 })

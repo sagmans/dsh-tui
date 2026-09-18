@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   cardDetailRows,
   CARD_DETAIL_MAX,
+  CARD_LINE_LIMIT,
   CARD_SHELL_PREVIEW,
   cardOfCall,
   cardOfResult,
@@ -11,6 +12,7 @@ import {
   rowText,
   shellFoldHint,
   shellRetentionHint,
+  subCallOf,
   type CardRow,
   type ToolCard,
 } from '@/cards.ts'
@@ -387,5 +389,38 @@ describe('carriedFields', () => {
   it('omits a field the card never had', () => {
     const card: ToolCard = { kind: 'generic', title: 'read', detail: [], failed: false, totalLines: 0 }
     expect(carriedFields(card)).toEqual({})
+  })
+
+  it('carries the nested calls a PTC program dispatched', () => {
+    const card: ToolCard = {
+      kind: 'generic',
+      title: 'run_code',
+      detail: [],
+      failed: false,
+      totalLines: 0,
+      subCalls: [{ title: 'read', argument: 'a.ts', failed: false }],
+      subCallsTotal: 1,
+    }
+    expect(carriedFields(card)).toEqual({
+      subCalls: [{ title: 'read', argument: 'a.ts', failed: false }],
+      subCallsTotal: 1,
+    })
+  })
+})
+
+describe('subCallOf', () => {
+  it('draws the tool view the presenter declared', () => {
+    const view: ToolCard = { kind: 'terminal', title: 'bash', argument: 'git status', detail: [], failed: false, totalLines: 0 }
+    expect(subCallOf('bash', '{"command":"git status"}', view)).toEqual({ title: 'bash', argument: 'git status', failed: false })
+  })
+
+  it('falls back to the registry name and the raw call when no view answers', () => {
+    expect(subCallOf('mystery', '{"a":1}', undefined)).toEqual({ title: 'mystery', argument: '{"a":1}', failed: false })
+    expect(subCallOf('mystery', '', undefined)).toEqual({ title: 'mystery', failed: false })
+  })
+
+  it('clips a raw call so an oversized argument cannot fill the row', () => {
+    const call = subCallOf('mystery', `{"a":"${'x'.repeat(500)}"}`, undefined)
+    expect(call.argument?.length).toBeLessThanOrEqual(CARD_LINE_LIMIT)
   })
 })
