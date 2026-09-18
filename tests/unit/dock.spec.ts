@@ -116,10 +116,12 @@ describe('WorkDock theming', () => {
     expect(lines.some(line => line.includes('jobs ·'))).toBe(false)
   })
 
-  it('keeps a settled job off screen however its element is styled', () => {
-    // The row is gone once the job settles, so no styling of its element can
-    // bring it back.
-    const finished = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['dock.jobs.completed', { fg: '#ff0000' }]]) })
-    expect(new WorkDock(() => EMPTY, finished, () => job('completed')).render(80)).toEqual([])
+  it('keeps a settled job off screen however the live job element is styled', () => {
+    // A settled job has no element of its own any more, because no element can
+    // reach a row the dock refuses to draw; styling the live one must not
+    // resurrect it either.
+    const styled = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['dock.jobs.running', { fg: '#ff0000' }]]) })
+    expect(new WorkDock(() => EMPTY, styled, () => job('completed')).render(80)).toEqual([])
+    expect(new WorkDock(() => EMPTY, styled, () => job('running')).render(80)[1]).toContain('38;2;255;0;0')
   })
 })

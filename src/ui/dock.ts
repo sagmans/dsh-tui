@@ -16,25 +16,32 @@ const TODOS_MARK = '☰'
 const SUBAGENTS_MARK = '⚇'
 const JOBS_MARK = '⛭'
 
+/** A todo state the dock draws: a settled item is not work left, so it is not one. */
+type OpenTodoStatus = Exclude<TodoEntry['status'], 'completed'>
+
+/** A todo that is still to do, with the state narrowed to the ones the dock draws. */
+type OpenTodo = TodoEntry & { readonly status: OpenTodoStatus }
+
+/** Whether a todo is still owed to the reader, narrowing it to the states the dock draws. */
+const isOpenTodo = (todo: TodoEntry): todo is OpenTodo => todo.status !== 'completed'
+
 /** The row marks, by the state the row reports. */
-const TODO_GLYPHS: Readonly<Record<TodoEntry['status'], string>> = {
+const TODO_GLYPHS: Readonly<Record<OpenTodoStatus, string>> = {
   pending: '☐',
   in_progress: '▸',
-  completed: '☑',
 }
 /** The mark a row that is still in flight carries, for a job and a delegation alike. */
 const RUNNING_MARK = '▸'
 
 /** Each todo state is its own element, so one can be toned without the others. */
-const TODO_TOKENS: Readonly<Record<TodoEntry['status'], TuiToken>> = {
+const TODO_TOKENS: Readonly<Record<OpenTodoStatus, TuiToken>> = {
   pending: 'dock.todos.pending',
   in_progress: 'dock.todos.inProgress',
-  completed: 'dock.todos.completed',
 }
 
 /** What the reader most needs to see first: work in flight, then work left. */
-function orderTodos(todos: readonly TodoEntry[]): readonly TodoEntry[] {
-  const rank: Record<TodoEntry['status'], number> = { in_progress: 0, pending: 1, completed: 2 }
+function orderTodos(todos: readonly OpenTodo[]): readonly OpenTodo[] {
+  const rank: Record<OpenTodoStatus, number> = { in_progress: 0, pending: 1 }
   return [...todos].sort((left, right) => rank[left.status] - rank[right.status])
 }
 
@@ -64,7 +71,7 @@ export class WorkDock implements Component {
     // Settled items leave the dock: it reports what is still to do, and a row
     // that stayed after its item finished would only grow the list as the turn
     // went on.
-    const open = todos.filter(todo => todo.status !== 'completed')
+    const open = todos.filter(isOpenTodo)
     if (open.length === 0) return
     if (this.theme.visible('dock.todos.heading')) {
       lines.push(this.theme.style('dock.todos.heading', this.theme.cut(`${TODOS_MARK} todos · ${open.length} left`, width, '…')))
