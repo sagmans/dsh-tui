@@ -1,7 +1,6 @@
-import { type Component, wrapTextWithAnsi } from '@earendil-works/pi-tui'
-import { displayText } from '../text.ts'
+import type { Component } from '@earendil-works/pi-tui'
 import type { TuiTheme } from '../theme.ts'
-import { FRAME_COLUMNS, FRAME_GLYPHS, MIN_BOX_WIDTH, frameRule, textRow, textWidth } from './frame.ts'
+import { canFrame, frameText } from './frame.ts'
 
 /** Queued prompts the bar draws; everything older becomes one count above them. */
 export const QUEUE_LIMIT = 3
@@ -28,19 +27,13 @@ export class QueueBar implements Component {
 
   /** One queued prompt as the editor bar's own box, drawn in the queued face. */
   private box(text: string, width: number, framed: boolean): string[] {
-    const inside = framed ? width - FRAME_COLUMNS : width
-    const wrapped = wrapTextWithAnsi(displayText(text), textWidth(inside))
     // A prompt can be longer than the screen; the reader needs to see that it is
     // waiting, not to re-read all of it, so the first rows stand for the whole.
-    const body = wrapped.slice(0, QUEUE_TEXT_ROWS)
-    const rows = body.map(line => textRow(this.theme.style('editor.queued', line), inside))
-    if (!framed) return rows
-    const side = this.theme.editor.borderColor(FRAME_GLYPHS.side)
-    return [
-      this.theme.editor.borderColor(`${FRAME_GLYPHS.topLeft}${frameRule(inside, 0)}${FRAME_GLYPHS.topRight}`),
-      ...rows.map(row => `${side}${row}${side}`),
-      this.theme.editor.borderColor(`${FRAME_GLYPHS.bottomLeft}${frameRule(inside, wrapped.length - body.length)}${FRAME_GLYPHS.bottomRight}`),
-    ]
+    return frameText(text, width, {
+      text: line => this.theme.style('editor.queued', line),
+      border: rule => this.theme.editor.borderColor(rule),
+      framed,
+    }, QUEUE_TEXT_ROWS)
   }
 
   render(width: number): string[] {
@@ -50,7 +43,7 @@ export class QueueBar implements Component {
     // Hiding the face hides the rows: a frame around text the reader cannot read
     // would look like an empty prompt waiting to be typed into.
     if (!this.theme.visible('editor.queued')) return []
-    const framed = width >= MIN_BOX_WIDTH && this.theme.visible('editor.border')
+    const framed = canFrame(width, this.theme.visible('editor.border'))
     const shown = prompts.slice(-QUEUE_LIMIT)
     const lines: string[] = []
     // The reader typed the newest prompt last, so that is the row that must stay

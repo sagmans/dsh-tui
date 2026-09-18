@@ -1,11 +1,13 @@
-import { visibleWidth } from '@earendil-works/pi-tui'
+import { visibleWidth, wrapTextWithAnsi } from '@earendil-works/pi-tui'
+import { displayText } from '../text.ts'
 
 /**
- * The frame both input bars are closed into.
+ * The frame every prompt is closed into.
  *
- * The editor and the queued prompts waiting above it draw the same glyphs at
- * the same width, so a queued prompt reads as the same object as the line it
- * will become; keeping the shape here is what stops the two from drifting.
+ * The editor, the prompts queued above it, and the prompts already submitted
+ * draw the same glyphs at the same width, so one prompt reads as the same object
+ * through its whole life; keeping the shape here is what stops the three from
+ * drifting.
  */
 export const FRAME_GLYPHS = { topLeft: '╭', topRight: '╮', bottomLeft: '╰', bottomRight: '╯', side: '│' } as const
 
@@ -50,4 +52,41 @@ export function frameRule(innerWidth: number, hiddenRows: number): string {
   if (visibleWidth(indicator) <= width) return indicator + '─'.repeat(width - visibleWidth(indicator))
   const ellipsis = '...'.slice(0, width)
   return indicator.slice(0, Math.max(0, width - ellipsis.length)) + ellipsis
+}
+
+/** How one block of text paints itself inside the bar that carries it. */
+export interface FrameFaces {
+  /** Paints one row of the block's own text. */
+  readonly text: (line: string) => string
+  /** Paints the frame's rules and its two sides. */
+  readonly border: (rule: string) => string
+  /** Whether the frame may be drawn at all. */
+  readonly framed: boolean
+}
+
+/** Whether a bar has the width, and the visible border, to close a frame. */
+export function canFrame(width: number, borderVisible: boolean): boolean {
+  return borderVisible && width >= MIN_BOX_WIDTH
+}
+
+/**
+ * One block of text as a bar draws it: wrapped to the frame's own width, and
+ * closed into it when the frame can be drawn.
+ *
+ * A block with a limit is a preview, and the rows it drops are counted on the
+ * closing rule: a reader who cannot see the whole text still has to see that it
+ * continues. A block without a limit is the prompt itself, which is never cut.
+ */
+export function frameText(text: string, width: number, faces: FrameFaces, limit = Number.POSITIVE_INFINITY): string[] {
+  const inside = faces.framed ? width - FRAME_COLUMNS : width
+  const wrapped = wrapTextWithAnsi(displayText(text), textWidth(inside))
+  const body = wrapped.slice(0, Math.max(0, limit))
+  const rows = body.map(line => textRow(faces.text(line), inside))
+  if (!faces.framed) return rows
+  const side = faces.border(FRAME_GLYPHS.side)
+  return [
+    faces.border(`${FRAME_GLYPHS.topLeft}${frameRule(inside, 0)}${FRAME_GLYPHS.topRight}`),
+    ...rows.map(row => `${side}${row}${side}`),
+    faces.border(`${FRAME_GLYPHS.bottomLeft}${frameRule(inside, wrapped.length - body.length)}${FRAME_GLYPHS.bottomRight}`),
+  ]
 }
