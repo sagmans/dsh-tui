@@ -204,6 +204,8 @@ export const TUI_TOKENS = [
   'status.separator',
   // Editor
   'editor.border',
+  'editor.queued',
+  'editor.queued.more',
   'editor.selectList.selectedPrefix',
   'editor.selectList.selectedText',
   'editor.selectList.description',
@@ -266,7 +268,7 @@ const plain: StyleSpec = {}
  * A test asserts every token in {@link TUI_TOKENS} appears here.
  */
 export const DEFAULT_TOKENS: Readonly<Record<TuiToken, StyleSpec>> = {
-  'transcript.user': { fg: 'user', bold: true },
+  'transcript.user': { fg: 'user' },
   'transcript.notice': muted,
   'transcript.marker': muted,
   'transcript.reasoning.summary': muted,
@@ -374,6 +376,10 @@ export const DEFAULT_TOKENS: Readonly<Record<TuiToken, StyleSpec>> = {
   'status.separator': muted,
 
   'editor.border': muted,
+  // No colour: a faint is dropped the moment a colour is named, and faint is
+  // what makes queued text read as not-yet-sent rather than as being typed.
+  'editor.queued': { dim: true, italic: true },
+  'editor.queued.more': muted,
   'editor.selectList.selectedPrefix': { fg: 'accent' },
   'editor.selectList.selectedText': { bold: true },
   'editor.selectList.description': muted,

@@ -93,7 +93,7 @@ describe('resolveToken', () => {
   it('gives a submitted prompt its own rose shade', () => {
     expect(DEFAULT_PALETTE.user).toBe(USER_PROMPT_ROSE)
     const style = resolveToken('transcript.user', overrides({}), DEFAULT_PALETTE, 'truecolor')
-    expect(style.prefix).toBe('\u001B[1;38;2;252;202;240m')
+    expect(style.prefix).toBe('\u001B[38;2;252;202;240m')
   })
 
   it('resolves an inherit chain', () => {

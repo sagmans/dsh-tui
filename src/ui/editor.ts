@@ -6,20 +6,7 @@ import {
   type TuiMouseEvent,
   type TuiMouseEventResult,
 } from '@earendil-works/pi-tui'
-
-/** The frame the input bar is closed into: two corners per edge, one glyph per side. */
-const TOP_LEFT = '╭'
-const TOP_RIGHT = '╮'
-const BOTTOM_LEFT = '╰'
-const BOTTOM_RIGHT = '╯'
-const SIDE = '│'
-
-/** The frame costs one column each side, so the text wraps that much narrower. */
-const FRAME_COLUMNS = 2
-/** One column of air inside the frame, so a full line never touches the border. */
-const PADDING_X = 1
-/** A box needs both edges, both paddings, and one column left to type in. */
-const MIN_BOX_WIDTH = FRAME_COLUMNS + PADDING_X * 2 + 1
+import { FRAME_COLUMNS, FRAME_GLYPHS, MIN_BOX_WIDTH, PADDING_X } from './frame.ts'
 
 /**
  * Marks the rule that closes the input while one render is in flight.
@@ -64,7 +51,7 @@ export class BoxedEditor extends Editor {
   }
 
   override render(width: number): string[] {
-    const side = this.borderColor(SIDE)
+    const side = this.borderColor(FRAME_GLYPHS.side)
     // A frame narrower than its own furniture would eat the text it exists to
     // hold, and a hidden border token asks for no frame at all: both cases keep
     // the plain rules rather than reserve columns for what nobody can see.
@@ -84,9 +71,9 @@ export class BoxedEditor extends Editor {
     this.boxed = true
     // The menu keeps the page's own width; only its rows moved above the box.
     const lines = menu.map(row => row + ' '.repeat(FRAME_COLUMNS))
-    lines.push(this.edge(TOP_LEFT, TOP_RIGHT, rows[0] ?? ''))
+    lines.push(this.edge(FRAME_GLYPHS.topLeft, FRAME_GLYPHS.topRight, rows[0] ?? ''))
     for (const row of text) lines.push(`${side}${row}${side}`)
-    lines.push(this.edge(BOTTOM_LEFT, BOTTOM_RIGHT, rows[closing]!.replace(CLOSING_TAG, '')))
+    lines.push(this.edge(FRAME_GLYPHS.bottomLeft, FRAME_GLYPHS.bottomRight, rows[closing]!.replace(CLOSING_TAG, '')))
     return lines
   }
 

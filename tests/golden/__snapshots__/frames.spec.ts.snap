@@ -115,6 +115,32 @@ exports[`golden frames > renders the dock at 80 columns 1`] = `
 ]
 `;
 
+exports[`golden frames > renders the queued prompts at 40 columns 1`] = `
+[
+  "╭──────────────────────────────────────╮",
+  "│ also mention the queue in the        │",
+  "│ summary                              │",
+  "╰──────────────────────────────────────╯",
+  "╭──────────────────────────────────────╮",
+  "│ and keep the README sentence short,  │",
+  "│ with the same shape the bar above    │",
+  "│ the editor draws                     │",
+  "╰──────────────────────────────────────╯",
+]
+`;
+
+exports[`golden frames > renders the queued prompts at 80 columns 1`] = `
+[
+  "╭──────────────────────────────────────────────────────────────────────────────╮",
+  "│ also mention the queue in the summary                                        │",
+  "╰──────────────────────────────────────────────────────────────────────────────╯",
+  "╭──────────────────────────────────────────────────────────────────────────────╮",
+  "│ and keep the README sentence short, with the same shape the bar above the    │",
+  "│ editor draws                                                                 │",
+  "╰──────────────────────────────────────────────────────────────────────────────╯",
+]
+`;
+
 exports[`golden frames > renders the session picker at 40 columns 1`] = `
 {
   "above": 0,
@@ -175,7 +201,9 @@ exports[`golden frames > renders the status row at 80 columns 1`] = `
 
 exports[`golden frames > renders the transcript at 40 columns 1`] = `
 [
-  "add a dock above the editor",
+  "╭──────────────────────────────────────╮",
+  "│ add a dock above the editor          │",
+  "╰──────────────────────────────────────╯",
   "injected dsh-agent-instructions · 3",
   "lines — <system-reminder>",
   "reasoning · 14 tokens (shift+tab)",
@@ -200,7 +228,9 @@ exports[`golden frames > renders the transcript at 40 columns 1`] = `
 
 exports[`golden frames > renders the transcript at 80 columns 1`] = `
 [
-  "add a dock above the editor",
+  "╭──────────────────────────────────────────────────────────────────────────────╮",
+  "│ add a dock above the editor                                                  │",
+  "╰──────────────────────────────────────────────────────────────────────────────╯",
   "injected dsh-agent-instructions · 3 lines — <system-reminder>",
   "reasoning · 14 tokens (shift+tab)",
   "Done.",
@@ -233,6 +263,18 @@ exports[`styled golden frames > renders the busy dock with its escapes 1`] = `
 ]
 `;
 
+exports[`styled golden frames > renders the queued prompts with their escapes 1`] = `
+[
+  "[38;2;138;138;138m╭──────────────────────────────────────────────────────────────────────────────╮[0m",
+  "[38;2;138;138;138m│[0m [2;3malso mention the queue in the summary[0m                                        [38;2;138;138;138m│[0m",
+  "[38;2;138;138;138m╰──────────────────────────────────────────────────────────────────────────────╯[0m",
+  "[38;2;138;138;138m╭──────────────────────────────────────────────────────────────────────────────╮[0m",
+  "[38;2;138;138;138m│[0m [2;3mand keep the README sentence short, with the same shape the bar above the[0m    [38;2;138;138;138m│[0m",
+  "[38;2;138;138;138m│[0m [2;3meditor draws[0m                                                                 [38;2;138;138;138m│[0m",
+  "[38;2;138;138;138m╰──────────────────────────────────────────────────────────────────────────────╯[0m",
+]
+`;
+
 exports[`styled golden frames > renders the status row with its escapes 1`] = `
 [
   "[38;2;138;138;138m● ready[0m[38;2;138;138;138m · [0m[38;2;138;138;138mstandard[0m[38;2;138;138;138m · [0m[38;2;138;138;138mzai-coding-cn/glm-5.3[0m[38;2;138;138;138m (max)[0m[38;2;138;138;138m · [0m[38;2;138;138;138mworkspace-write[0m[38;2;138;138;138m · [0m[38;2;138;138;138mctx 17.5k/[0m…[0m[0m",
@@ -241,7 +283,9 @@ exports[`styled golden frames > renders the status row with its escapes 1`] = `
 
 exports[`styled golden frames > renders the transcript with its escapes 1`] = `
 [
-  "[1;38;2;252;202;240madd a dock above the editor[0m",
+  "[38;2;138;138;138m╭──────────────────────────────────────────────────────────────────────────────╮[0m",
+  "[38;2;138;138;138m│[0m [38;2;252;202;240madd a dock above the editor[0m                                                  [38;2;138;138;138m│[0m",
+  "[38;2;138;138;138m╰──────────────────────────────────────────────────────────────────────────────╯[0m",
   "[38;2;138;138;138minjected dsh-agent-instructions · 3 lines — <system-reminder>[0m",
   "[38;2;138;138;138mreasoning · 14 tokens[0m[38;2;138;138;138m (shift+tab)[0m",
   "Done.",

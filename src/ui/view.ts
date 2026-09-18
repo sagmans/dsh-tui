@@ -5,6 +5,7 @@ import { displayText } from '../text.ts'
 import type { TranscriptEntry, TranscriptModel } from '../transcript.ts'
 import { CARD_ROW_TOKEN, type TuiToken } from '../theme-tokens.ts'
 import type { TuiTheme } from '../theme.ts'
+import { canFrame, frameText } from './frame.ts'
 import type { MarkdownRenderer } from './markdown.ts'
 import type { PickerCard } from './picker.ts'
 import { RowCache } from './rows.ts'
@@ -364,7 +365,13 @@ export class TranscriptView implements Component {
         return
       case 'user':
         if (!this.theme.visible('transcript.user')) return
-        this.pushWrapped(lines, entry.text, width, this.elementLead('transcript.user'), text => this.theme.style('transcript.user', text))
+        // A prompt is boxed wherever it is read, so the row it left in the queue
+        // and the row it becomes here are recognisably the same object.
+        lines.push(...frameText(entry.text, width, {
+          text: text => this.theme.style('transcript.user', text),
+          border: rule => this.theme.editor.borderColor(rule),
+          framed: canFrame(width, this.theme.visible('editor.border')),
+        }))
         return
       case 'notice':
         if (!this.theme.visible('transcript.notice')) return

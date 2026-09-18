@@ -9,6 +9,7 @@ import { StatusBar } from '@/ui/status.ts'
 import { DEFAULT_VIEW_STATE, TranscriptView } from '@/ui/view.ts'
 import { WorkDock } from '@/ui/dock.ts'
 import { SessionPicker } from '@/ui/picker.ts'
+import { QueueBar } from '@/ui/queue.ts'
 import { WorkFold } from '@/work.ts'
 
 /**
@@ -181,6 +182,21 @@ function busyDock(frameTheme = theme): WorkDock {
   return new WorkDock(() => work.state(), frameTheme, () => jobs, () => runs, () => NOW)
 }
 
+/**
+ * The queue a running turn leaves behind: prompts the agent has not taken yet.
+ *
+ * The second is longer than one row at the cramped width, so the frame, the
+ * wrapping, and the count on the closing rule are all pinned here.
+ */
+const QUEUED_PROMPTS = [
+  'also mention the queue in the summary',
+  'and keep the README sentence short, with the same shape the bar above the editor draws',
+]
+
+function queued(frameTheme = theme): QueueBar {
+  return new QueueBar(() => QUEUED_PROMPTS, frameTheme)
+}
+
 function pickerCard(): SessionPicker {
   return new SessionPicker(
     [
@@ -204,6 +220,10 @@ describe('golden frames', () => {
 
     it(`renders the status row at ${width} columns`, () => {
       expect(fixture().status.render(width)).toMatchSnapshot()
+    })
+
+    it(`renders the queued prompts at ${width} columns`, () => {
+      expect(queued().render(width)).toMatchSnapshot()
     })
   }
 
@@ -262,5 +282,9 @@ describe('styled golden frames', () => {
 
   it('renders the busy dock with its escapes', () => {
     expect(busyDock(styled).render(80)).toMatchSnapshot()
+  })
+
+  it('renders the queued prompts with their escapes', () => {
+    expect(queued(styled).render(80)).toMatchSnapshot()
   })
 })
