@@ -268,7 +268,7 @@ const plain: StyleSpec = {}
  * A test asserts every token in {@link TUI_TOKENS} appears here.
  */
 export const DEFAULT_TOKENS: Readonly<Record<TuiToken, StyleSpec>> = {
-  'transcript.user': { fg: 'user', bold: true },
+  'transcript.user': { fg: 'user' },
   'transcript.notice': muted,
   'transcript.marker': muted,
   'transcript.reasoning.summary': muted,

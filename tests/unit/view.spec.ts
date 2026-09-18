@@ -68,10 +68,22 @@ describe('TranscriptView text', () => {
     expect(lines.some(line => line.includes('strong'))).toBe(true)
   })
 
-  it('keeps a human prompt on its own row', () => {
+  it("closes a human prompt into the editor's own frame", () => {
     const model = new TranscriptModel()
     model.apply({ type: 'user/message', data: { content: [{ type: 'text', text: 'hello there' }], source: { kind: 'user' } } })
-    expect(viewOf(model).render(40)).toEqual(['hello there'])
+    // The box the editor and the queued prompts draw, so a submitted prompt reads
+    // as the object it was typed into rather than as one more paragraph.
+    expect(viewOf(model).render(40)).toEqual([
+      `╭${'─'.repeat(38)}╮`,
+      `│ hello there${' '.repeat(25)} │`,
+      `╰${'─'.repeat(38)}╯`,
+    ])
+  })
+
+  it('leaves a surface notice outside the frame', () => {
+    const model = new TranscriptModel()
+    model.notice('compacted 12 events')
+    expect(viewOf(model).render(40)).toEqual(['compacted 12 events'])
   })
 
   it('escapes control sequences out of model and tool text', () => {
@@ -122,6 +134,20 @@ describe('TranscriptView text', () => {
     const lines = viewOf(model).render(20)
     expect(lines.length).toBeGreaterThan(1)
     for (const line of lines) expect(line.length).toBeLessThanOrEqual(20)
+  })
+
+  it('wraps a long prompt inside its frame instead of cutting it', () => {
+    const model = new TranscriptModel()
+    model.apply({ type: 'user/message', data: { content: [{ type: 'text', text: 'x'.repeat(50) }], source: { kind: 'user' } } })
+    const lines = viewOf(model).render(40)
+    expect(lines).toHaveLength(4)
+    for (const line of lines) expect(visibleWidth(line)).toBe(40)
+    expect(lines[0]?.startsWith('╭')).toBe(true)
+    expect(lines[3]?.startsWith('╰')).toBe(true)
+    // Every column of the prompt survives the fold: the frame costs the text
+    // width, it never costs the reader a line.
+    const body = lines.slice(1, 3).map(line => line.slice(2, -2).trimEnd()).join('')
+    expect(body).toBe('x'.repeat(50))
   })
 })
 
@@ -343,6 +369,22 @@ describe('TranscriptView theming', () => {
     model.apply({ type: 'user/message', data: { content: [{ type: 'text', text: 'hello there' }], source: { kind: 'user' } } })
     return model
   }
+
+  it('dresses a prompt in its rose shade without the weight', () => {
+    const colour = createTheme('truecolor')
+    const lines = new TranscriptView(userModel(), colour, new MarkdownRenderer(colour.markdown), { state: () => COLLAPSED }).render(40)
+    expect(lines.join('\n')).toContain('\u001b[38;2;252;202;240mhello there\u001b[0m')
+    expect(lines.join('\n')).not.toContain('\u001b[1;')
+  })
+
+  it('draws a prompt bare when the frame is hidden', () => {
+    const bare = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['editor.border', { hidden: true }]]) })
+    const lines = new TranscriptView(userModel(), bare, new MarkdownRenderer(bare.markdown), { state: () => COLLAPSED }).render(40)
+    expect(lines).toHaveLength(1)
+    // No frame, but the text keeps the column the frame's own air gave it, so a
+    // theme that hides the border does not move the prompt.
+    expect(lines[0]?.trimEnd()).toBe(' \u001b[38;2;252;202;240mhello there\u001b[0m')
+  })
 
   it('draws nothing for a hidden element', () => {
     const hidden = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['transcript.user', { hidden: true }]]) })
