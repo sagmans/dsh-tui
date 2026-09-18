@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   ARGUMENT_BLUE,
   DEFAULT_PALETTE,
+  USER_PROMPT_ROSE,
   DEFAULT_TOKENS,
   PALETTE_NAMES,
   TUI_TOKENS,
@@ -87,6 +88,12 @@ describe('resolveToken', () => {
     expect(DEFAULT_PALETTE.arg).toBe(ARGUMENT_BLUE)
     const style = resolveToken('tool.args', overrides({}), DEFAULT_PALETTE, 'truecolor')
     expect(style.prefix).toBe('\u001B[38;2;141;179;217m')
+  })
+
+  it('gives a submitted prompt its own rose shade', () => {
+    expect(DEFAULT_PALETTE.user).toBe(USER_PROMPT_ROSE)
+    const style = resolveToken('transcript.user', overrides({}), DEFAULT_PALETTE, 'truecolor')
+    expect(style.prefix).toBe('\u001B[1;38;2;252;202;240m')
   })
 
   it('resolves an inherit chain', () => {

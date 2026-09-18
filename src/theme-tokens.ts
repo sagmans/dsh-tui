@@ -31,6 +31,15 @@ export const MUTED_GREY = '#8a8a8a'
  */
 export const ARGUMENT_BLUE = '#8db3d9'
 
+/**
+ * The shade a submitted prompt takes.
+ *
+ * A reader's own turns and the assistant's reply both shipped on the default
+ * foreground, so telling the two apart meant reading them; a rose separates
+ * them at a glance while staying quieter than the warn-coloured tool label.
+ */
+export const USER_PROMPT_ROSE = '#FCCAF0'
+
 /** Palette entries a token may name instead of a literal colour. */
 export const PALETTE_NAMES = ['default', 'muted', 'accent', 'arg', 'warn', 'added', 'removed', 'user', 'assistant'] as const
 
@@ -224,7 +233,7 @@ export const DEFAULT_PALETTE: Readonly<Record<PaletteName, string>> = {
   warn: '#d7af5f',
   added: '#5faf5f',
   removed: '#d75f5f',
-  user: '#d0d0d0',
+  user: USER_PROMPT_ROSE,
   assistant: '#d0d0d0',
 }
 
