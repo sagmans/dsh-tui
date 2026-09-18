@@ -46,7 +46,7 @@ import { CLEAR_TITLE, windowTitle } from './terminal/title.ts'
 import { defaultExportFile, transcriptToText } from './export.ts'
 import { createTheme, forwardEditorTheme, forwardMarkdownTheme, type TuiTheme } from './theme.ts'
 import { detectColourMode, type ColourMode } from './theme-capability.ts'
-import { defaultSettings, readScope, toOverrides, TUI_SETTINGS_NAMESPACE, TuiSettingsSchema, type TuiSettings } from './theme-settings.ts'
+import { defaultSettings, readScope, toOverrides, TUI_SETTINGS_NAMESPACE, TuiSettingsSchema, type MermaidMode, type TuiSettings } from './theme-settings.ts'
 import { renderThemeTable } from './theme-command.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { formatTokens } from './tokens.ts'
@@ -55,6 +55,7 @@ import { WorkFold, describeTodos } from './work.ts'
 import { WorkDock } from './ui/dock.ts'
 import { BoxedEditor } from './ui/editor.ts'
 import { MarkdownRenderer } from './ui/markdown.ts'
+import { createMermaidTransform } from './ui/mermaid.ts'
 import {
   EffortPicker,
   PROVIDER_DEFAULT_EFFORT_ID,
@@ -192,13 +193,23 @@ export function apply(ctx: Context, config: unknown): void {
    */
   const viewState = { ...DEFAULT_VIEW_STATE }
   /**
-   * Seed the nested-call display the reader configured.
+   * How a reply's mermaid fences draw, seeded from the reader's section.
    *
-   * The key toggles it for one session, but a settings edit is a deliberate act,
-   * so it re-seeds and becomes the new starting point.
+   * The transform reads this per render instead of capturing it, because the
+   * settings document is hot-reloaded and a session already on screen has to
+   * follow the edit.
+   */
+  let mermaidMode: MermaidMode = defaultSettings().mermaid
+  /**
+   * Seed the display the reader configured.
+   *
+   * The key toggles nested calls for one session, but a settings edit is a
+   * deliberate act, so it re-seeds and becomes the new starting point; the
+   * mermaid mode has no key of its own and only ever comes from the document.
    */
   const applyDisplay = (): void => {
     viewState.expandSubCalls = readSection().subcalls === 'inline'
+    mermaidMode = readSection().mermaid
   }
   /**
    * Own the section, so the harness validates and persists it for the reader.
@@ -252,7 +263,7 @@ export function apply(ctx: Context, config: unknown): void {
   let jobs: readonly JobSummary[] = []
   const roster = new SubagentRoster()
   const subagentControl = createSubagentControl(ctx)
-  const markdown = new MarkdownRenderer(theme.markdown)
+  const markdown = new MarkdownRenderer(theme.markdown, createMermaidTransform({ theme, mode: () => mermaidMode }))
   const restore = createRestoreRegistry()
   const terminal = new ProcessTerminal()
   const tui = new WarningSafeTui(terminal)

@@ -10,7 +10,7 @@ describe('the dsh-tui settings section', () => {
 
   it('accepts an empty section, because every token has a default', () => {
     // Nothing written means nothing overridden; the shipped table fills the rest.
-    expect(parseSettings({})).toEqual({ palette: {}, tokens: {}, subcalls: 'inline' })
+    expect(parseSettings({})).toEqual({ palette: {}, tokens: {}, subcalls: 'inline', mermaid: 'streaming' })
   })
 
   it('draws nested PTC calls until the reader folds them', () => {
@@ -20,6 +20,16 @@ describe('the dsh-tui settings section', () => {
 
   it('rejects a display value the surface does not have', () => {
     expect(() => parseSettings({ subcalls: 'expanded' })).toThrow()
+  })
+
+  it('draws mermaid fences as diagrams until the reader says otherwise', () => {
+    expect(parseSettings({}).mermaid).toBe('streaming')
+    expect(parseSettings({ mermaid: 'off' }).mermaid).toBe('off')
+    expect(parseSettings({ mermaid: 'final' }).mermaid).toBe('final')
+  })
+
+  it('rejects a mermaid mode the surface does not have', () => {
+    expect(() => parseSettings({ mermaid: 'sometimes' })).toThrow()
   })
 
   it('rejects an unknown section key so a typo fails loudly', () => {
@@ -43,7 +53,7 @@ describe('the dsh-tui settings section', () => {
   it('reports a refused section to the caller, not only to stderr', () => {
     const problems: string[] = []
     const settings = readScope({ get: () => ({ tokens: { 'transcript.reasoning.bdy': { fg: '#fff' } } }) }, message => problems.push(message))
-    expect(settings).toEqual({ palette: {}, tokens: {}, subcalls: 'inline' })
+    expect(settings).toEqual({ palette: {}, tokens: {}, subcalls: 'inline', mermaid: 'streaming' })
     expect(problems[0]).toContain('transcript.reasoning.bdy')
   })
 

@@ -33,6 +33,54 @@ describe('MarkdownRenderer', () => {
     expect(markdown.render('message 0', 40).join('')).toContain('message 0')
   })
 
+  it('keeps the live and the settled rendering of one message apart', () => {
+    // A streaming reply can settle on the same text, and the two renderings
+    // differ: only the settled one is allowed to report what the drawing lost.
+    const calls: Array<{ readonly live: boolean }> = []
+    const markdown = new MarkdownRenderer(theme.markdown, (_text, _width, live) => {
+      calls.push({ live })
+      return live ? 'live view' : 'settled view'
+    })
+    expect(markdown.render('a mermaid reply', 60, true).join('\n')).toContain('live view')
+    expect(markdown.render('a mermaid reply', 60, false).join('\n')).toContain('settled view')
+    expect(calls).toEqual([{ live: true }, { live: false }])
+  })
+
+  it('hands the transform the width the message has', () => {
+    const widths: number[] = []
+    const markdown = new MarkdownRenderer(theme.markdown, (_text, width) => {
+      widths.push(width)
+      return 'drawing'
+    })
+    markdown.render('a mermaid reply', 64, false)
+    expect(widths).toEqual([64])
+  })
+
+  it('does not call the transform again while the message and width hold', () => {
+    let renders = 0
+    const markdown = new MarkdownRenderer(theme.markdown, () => {
+      renders += 1
+      return 'drawing'
+    })
+    markdown.render('a mermaid reply', 60, true)
+    markdown.render('a mermaid reply', 60, true)
+    expect(renders).toBe(1)
+  })
+
+  it('drops both renderings when invalidate is called', () => {
+    let renders = 0
+    const markdown = new MarkdownRenderer(theme.markdown, () => {
+      renders += 1
+      return 'drawing'
+    })
+    markdown.render('a mermaid reply', 60, true)
+    markdown.render('a mermaid reply', 60, false)
+    markdown.invalidate()
+    markdown.render('a mermaid reply', 60, true)
+    markdown.render('a mermaid reply', 60, false)
+    expect(renders).toBe(4)
+  })
+
   it('re-renders a message from the moved theme after invalidate', () => {
     // A Markdown caches the lines it drew for a width, so the renderer has to
     // drop them or a settings change would never reach the answer.

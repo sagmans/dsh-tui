@@ -75,7 +75,8 @@
     "@deepseek-ai/dsh-cordis-host-runner": "0.1.5-rc.1",
     "@deepseek-ai/schemastery": "3.18.2",
     "@earendil-works/pi-tui": "0.85.1",
-    "commander": "^15.0.0"
+    "commander": "^15.0.0",
+    "lovely-mermaid": "0.3.3"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
