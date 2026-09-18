@@ -9,6 +9,13 @@ export interface GateCard {
   readonly kind: 'approval' | 'question'
   readonly title: string
   readonly detail: readonly string[]
+  /**
+   * The number the first drawn option answers for. A list longer than the
+   * screen shows a window of itself, and a window that restarts at one every
+   * scroll hides where the reader is and contradicts the digits that pick by
+   * that same number.
+   */
+  readonly optionOffset: number
   readonly options: readonly GateOption[]
   readonly hint: string
 }
@@ -62,6 +69,7 @@ export class ApprovalGate {
       kind: 'approval',
       title: `approval needed · ${this.toolName}`,
       detail: this.reason === undefined ? [] : lines(this.reason),
+      optionOffset: 0,
       options: [],
       hint: this.outcome === undefined ? 'y allow once · n reject · esc cancel' : 'decided',
     }
@@ -127,6 +135,38 @@ const QUESTION_WINDOW = 12
 
 /** Drawn after a typed answer, so an empty question still shows where its text goes. */
 const ANSWER_CURSOR = '▌'
+
+/** The row label a question earns when it asks for something that identifies its owner. */
+const SECRET_LABEL = 'API KEY'
+
+/** The row label for every other typed answer, where the text is the answer itself. */
+const ANSWER_LABEL = 'answer'
+
+/**
+ * Words that mark a question as one whose answer is a secret. A plugin cannot
+ * say so through the seam yet, and the question is where it already says it:
+ * a person who loses a key to a shoulder loses an account, so the row keeps the
+ * value out of sight rather than trusting every question to be harmless.
+ */
+const SECRET_WORDS = ['key', 'token', 'secret', 'password', 'passphrase', 'credential'] as const
+
+const SECRET_PATTERN = new RegExp('\\b(?:' + SECRET_WORDS.join('|') + ')', 'iu')
+
+/** How much of a secret stays readable, at each end, so its owner can recognize it. */
+const MASK_HEAD = 4
+const MASK_TAIL = 4
+const MASK_CHAR = '*'
+
+/** The words a question uses when it wants a secret rather than an answer. */
+function asksForSecret(question: GateQuestion): boolean {
+  return SECRET_PATTERN.test(question.question) || (question.header !== undefined && SECRET_PATTERN.test(question.header))
+}
+
+/** A secret with both ends readable: a field for its owner, and nothing for a bystander. */
+function masked(value: string): string {
+  if (value.length <= MASK_HEAD + MASK_TAIL) return value
+  return value.slice(0, MASK_HEAD) + MASK_CHAR.repeat(value.length - MASK_HEAD - MASK_TAIL) + value.slice(-MASK_TAIL)
+}
 
 /** One option with the position it answers for, so filtering can drop rows and keep the meaning. */
 interface PositionedOption {
@@ -260,7 +300,7 @@ export class QuestionGate {
       return undefined
     }
     if (question.options.length > 0 && /^[1-9]$/u.test(data)) {
-      const row = this.windowed(question).rows[Number.parseInt(data, 10) - 1]
+      const row = this.matched(question)[Number.parseInt(data, 10) - 1]
       if (row !== undefined) this.pick(row.position)
       return undefined
     }
@@ -296,7 +336,7 @@ export class QuestionGate {
   card(): GateCard {
     const question = this.current
     if (question === undefined) {
-      return { kind: 'question', title: 'question', detail: [], options: [], hint: 'finishing' }
+      return { kind: 'question', title: 'question', detail: [], optionOffset: 0, options: [], hint: 'finishing' }
     }
     const chosen = this.chosen[this.index] ?? []
     const detail = question.detail === undefined ? [] : lines(question.detail)
@@ -305,11 +345,13 @@ export class QuestionGate {
     if (question.options.length === 0) {
       // The row is the only place the text lands, so it is drawn even while
       // empty: a question answered by typing needs somewhere to paste a key.
-      detail.push(`answer: ${this.typed}${ANSWER_CURSOR}`)
+      const secret = asksForSecret(question)
+      detail.push(`${secret ? SECRET_LABEL : ANSWER_LABEL}: ${secret ? masked(this.typed) : this.typed}${ANSWER_CURSOR}`)
       return {
         kind: 'question',
         title,
         detail,
+        optionOffset: 0,
         options: [],
         hint: 'type or paste an answer · enter confirm · esc skip',
       }
@@ -322,6 +364,7 @@ export class QuestionGate {
       kind: 'question',
       title,
       detail,
+      optionOffset: start,
       options: rows.map(({ option }, position) => ({
         label: option.label,
         description: option.description,
