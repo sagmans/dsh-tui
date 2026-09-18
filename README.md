@@ -122,7 +122,7 @@ dsh --profile tui --no-bell            # do not ring when a long turn finishes
 | Enter | submit the prompt |
 | Ctrl+C | interrupt the running turn, or leave when idle |
 | Ctrl+O | open every tool card: its header plus every retained row. Folded, a card is one line, and a shell card keeps its command plus the last 20 rows of output with a hint naming what it dropped |
-| Ctrl+T | expand or fold the reasoning behind an answer: folded, the row names itself and its token count; opened, it adds the thought |
+| Ctrl+T | expand or fold the reasoning behind an answer: folded, the row names itself, its token count, and the key; opened, it adds the thought |
 | `y` / `n` / Esc | allow once, reject, or cancel a pending approval |
 | digits / space / ↑↓ / Enter / Esc | answer a question: pick or toggle, confirm, or skip one |
 | `/` then Tab | complete commands, including every command this session registered |

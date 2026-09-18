@@ -24,6 +24,8 @@ const FALLBACK_ROW_TOKEN: TuiToken = 'tool.detail'
 const NO_CURSOR = ' '
 /** The words an opened card uses when retention, not the fold, dropped rows. */
 const CARD_HINT_RETAINED = 'more lines not shown'
+/** The key a folded reasoning row names, so a hidden thought stays reachable. */
+const REASONING_FOLD_HINT = 'ctrl+t'
 /** What separates a card's header from its measured facts, and the facts from each other. */
 const STAT_LEAD = '  '
 const STAT_SEPARATOR = ' · '
@@ -148,16 +150,18 @@ export class TranscriptView implements Component {
     if (!this.theme.visible('transcript.reasoning.summary')) return
     const glyph = this.theme.glyph('transcript.reasoning.summary')
     const lead = glyph === '' ? '' : `${glyph} `
-    lines.push(this.theme.style('transcript.reasoning.summary', this.theme.cut(`${lead}${displayText(entry.summary)}`, width, '')))
-    if (!this.viewState.expandReasoning) {
-      // The row says thinking happened; without this the reader has no way to
-      // learn the body is there, which reads as the text having been dropped.
-      if (this.theme.visible('transcript.reasoning.hint') && entry.body !== '') {
-        const hint = `${DETAIL_INDENT}ctrl+t shows it`
-        lines.push(this.theme.style('transcript.reasoning.hint', this.theme.cut(hint, width, '')))
-      }
-      return
-    }
+    // A folded row carries the key that opens it, because a count with no way to
+    // reach the text reads the same as the text never having arrived. The key
+    // rides the row rather than a line of its own, so naming the hidden body
+    // costs no vertical space.
+    const suffix = !this.viewState.expandReasoning && entry.body !== '' && this.theme.visible('transcript.reasoning.hint')
+      ? ` (${REASONING_FOLD_HINT})`
+      : ''
+    // The key is kept whole: the summary is the part that gives up room.
+    const room = Math.max(1, width - visibleWidth(suffix))
+    const summary = this.theme.style('transcript.reasoning.summary', this.theme.cut(`${lead}${displayText(entry.summary)}`, room, ''))
+    lines.push(suffix === '' ? summary : `${summary}${this.theme.style('transcript.reasoning.hint', suffix)}`)
+    if (!this.viewState.expandReasoning) return
     if (!this.theme.visible('transcript.reasoning.body')) return
     for (const line of entry.body.split('\n')) {
       this.pushWrapped(lines, line, width, DETAIL_INDENT, text => this.theme.style('transcript.reasoning.body', text))

@@ -230,10 +230,10 @@ describe('TranscriptView expansion', () => {
     model.applyStreamChunk({ type: 'block-end', block: { type: 'reasoning' } })
     const folded = viewOf(model).render(60)
     // The row must say the body exists: a count with no way to reach the text
-    // reads the same as the text never having arrived.
+    // reads the same as the text never having arrived. The key rides the row so
+    // naming it costs no line.
     expect(folded).toEqual([
-      'reasoning · 7 tokens · 5s',
-      '    ctrl+t shows it',
+      'reasoning · 7 tokens · 5s (ctrl+t)',
     ])
     const opened = viewOf(model, { expandCards: false, expandReasoning: true }).render(60)
     expect(opened).toEqual([
