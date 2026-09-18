@@ -111,7 +111,7 @@ node -p "require((process.env.DSH_HOME ?? require('node:os').homedir() + '/.dsh'
 dsh --profile tui                      # new session in the current directory
 dsh --profile tui --resume             # pick a stored session, titled by its first prompt
 dsh --profile tui --resume <session-id>
-dsh --profile tui --preset ptc             # start in one of the shipped agent modes
+dsh --profile tui --preset minimal          # start in a shipped mode other than the default (PTC)
 dsh --profile tui --model deepseek-chat
 dsh --profile tui --no-color
 dsh --profile tui --no-bell            # do not ring when a long turn finishes
@@ -214,8 +214,8 @@ Four ship, under the ids a session log records:
 
 | `--preset` | Mode | What the agent gets |
 |---|---|---|
+| `ptc` | PTC (default) | the same agent, reaching its tools through one TypeScript program |
 | `standard` | standard | full agent: editing, shell, search, skills, planning, goals, subagents, workflows |
-| `ptc` | PTC | the same agent, reaching its tools through one TypeScript program |
 | `minimal` | minimal | one tool: a persistent shell |
 | `cordis` | creator | harness authoring: runtime inspection and composition guidance |
 
@@ -223,7 +223,7 @@ A session takes its mode from the first of these that applies:
 
 1. `--preset <id>`, refused before the terminal is taken over when the roster does not ship that id.
 2. `/preset` while the session is still blank: a bare command opens the picker, `/preset <id>` switches directly, and the choice is written to the log.
-3. The roster's default, `standard`, when nobody names one.
+3. The roster's default, `ptc`, when nobody names one.
 
 The mode is re-read rather than remembered: resuming mounts what that session's own log recorded, resuming with a `--preset` that disagrees with it is refused instead of silently ignored, and forking inherits the mode of the conversation being branched. The status line names the mode, and `/status` lists it with the rest.
 

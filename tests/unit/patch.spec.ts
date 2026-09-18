@@ -78,7 +78,7 @@ const HOST_PROVIDED_PACKAGES = ['@deepseek-ai/dsh-tool-subagent/model-selection-
 const LIBRARY_PACKAGES = ['@deepseek-ai/schemastery']
 
 /** The mode a flagless run joins, which has to be one the roster actually ships. */
-const ROSTER_DEFAULT = 'standard'
+const ROSTER_DEFAULT = 'ptc'
 
 /** The row list before the patch's single `insert:` block. */
 function patchHead(text: string): { id: string; disabled: boolean }[] {

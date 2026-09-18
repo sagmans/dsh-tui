@@ -98,11 +98,13 @@
         bell: !!js ctx.tuiStartup.bell
 
     # The roster of agent compositions, and the mode a session starts in when
-    # nobody names one. A profile patch may override this row's config.
+    # nobody names one. PTC leads because a flagless run should reach every tool
+    # through one program rather than one shell call at a time. A profile patch
+    # may override this row's config.
     - id: agent-presets
       name: '@deepseek-ai/dsh-agent-presets'
       config:
-        default: standard
+        default: ptc
 
     # A preset's subagent tool samples its delegation model from this host-owned
     # settings row. It is host machinery rather than agent plane, which is why
