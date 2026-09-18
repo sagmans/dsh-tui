@@ -5,7 +5,7 @@ import { createTheme } from '@/theme.ts'
 import { TranscriptModel } from '@/transcript.ts'
 import { MarkdownRenderer } from '@/ui/markdown.ts'
 import { StatusBar } from '@/ui/status.ts'
-import { TranscriptView, type ViewState } from '@/ui/view.ts'
+import { ALL_COLLAPSED, TranscriptView } from '@/ui/view.ts'
 import { WorkDock } from '@/ui/dock.ts'
 import { SessionPicker } from '@/ui/picker.ts'
 import { WorkFold } from '@/work.ts'
@@ -100,9 +100,9 @@ function fixture(frameTheme = theme): { view: TranscriptView; dock: WorkDock; st
     { content: 'verify the dock', status: 'in_progress' },
     { content: 'document the dock', status: 'pending' },
   ] } })
-  // The shipped default: cards folded, reasoning open, so the frame pins what a
+  // The shipped default is the folded view for both, so the frame pins what a
   // reader actually gets rather than a state they would have to ask for.
-  const state: ViewState = { expandCards: false, expandReasoning: true }
+  const state = ALL_COLLAPSED
   const view = new TranscriptView(model, frameTheme, new MarkdownRenderer(frameTheme.markdown), {
     state: () => state,
     gate: () => undefined,

@@ -55,7 +55,7 @@ import { WorkDock } from './ui/dock.ts'
 import { MarkdownRenderer } from './ui/markdown.ts'
 import { PresetPicker, SessionPicker, type PickerAction, type PickerCard } from './ui/picker.ts'
 import { StatusBar } from './ui/status.ts'
-import { TranscriptView } from './ui/view.ts'
+import { ALL_COLLAPSED, TranscriptView } from './ui/view.ts'
 
 export const name = 'tui'
 
@@ -216,10 +216,11 @@ export function apply(ctx: Context, config: unknown): void {
   const markdown = new MarkdownRenderer(theme.markdown)
   /**
    * Rows the reader has opened. The model stays untouched; only the view reads
-   * this. Reasoning starts open: a reader asking to see the model think is not
-   * served by a row that names only a character count and hides the thought.
+   * this. Everything starts folded: a thought is the longest, least scannable
+   * row in the transcript, so leaving it open pushes the answer a reader came
+   * for off the screen. A folded row still names itself and its key.
    */
-  const viewState = { expandCards: false, expandReasoning: true }
+  const viewState = { ...ALL_COLLAPSED }
   const restore = createRestoreRegistry()
   const terminal = new ProcessTerminal()
   const tui = new TuiAltScreen(terminal)

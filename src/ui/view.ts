@@ -48,7 +48,8 @@ export interface ViewState {
   readonly expandReasoning: boolean
 }
 
-const ALL_COLLAPSED: ViewState = { expandCards: false, expandReasoning: false }
+/** The state a reader gets before opening anything, and the view's own fallback. */
+export const ALL_COLLAPSED: ViewState = { expandCards: false, expandReasoning: false }
 
 /**
  * Renders the transcript rows and any pending gate as terminal lines.
