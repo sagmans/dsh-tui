@@ -11,6 +11,8 @@ import { RowCache } from './rows.ts'
 
 const DETAIL_INDENT = '    '
 const OPTION_INDENT = '   '
+/** A nested call is a signpost under its card, so it sits one step shallower than that card's detail. */
+const SUBCALL_INDENT = '  '
 
 /** The mark a cursor falls back to when the reader has not set one, so no literal lives in a template. */
 const CURSOR_MARK = '❯'
@@ -48,10 +50,12 @@ const STAT_TOKEN: Readonly<Record<CardStatKind, TuiToken>> = {
 export interface ViewState {
   readonly expandCards: boolean
   readonly expandReasoning: boolean
+  /** Whether the calls a PTC program dispatched draw under the card that made them. */
+  readonly expandSubCalls: boolean
 }
 
 /** The state a reader gets before opening anything, and the view's own fallback. */
-export const ALL_COLLAPSED: ViewState = { expandCards: false, expandReasoning: false }
+export const ALL_COLLAPSED: ViewState = { expandCards: false, expandReasoning: false, expandSubCalls: false }
 
 /**
  * Renders the transcript rows and any pending gate as terminal lines.
@@ -184,6 +188,7 @@ export class TranscriptView implements Component {
     // A header that folds keeps the argument and its stats; a terminal command
     // can be longer than the screen, so it wraps under its own indent.
     if (body !== '') this.pushStyledWrapped(lines, body, width, lead)
+    if (this.viewState.expandSubCalls) this.pushSubCalls(lines, card, width)
     if (card.kind === 'terminal' && card.argument !== undefined && card.argument !== '' && this.theme.visible('tool.args')) {
       this.pushStyledWrapped(lines, this.theme.style('tool.args', displayText(card.argument)), width, DETAIL_INDENT)
     }
@@ -218,6 +223,33 @@ export class TranscriptView implements Component {
       : preview.expanded ? `${hidden} ${CARD_HINT_RETAINED}` : undefined
     if (hint === undefined) return
     lines.push(this.theme.style('tool.hint', this.theme.cut(`${DETAIL_INDENT}${hint}`, width, '')))
+  }
+
+  /**
+   * The calls one card dispatched, one clipped line each.
+   *
+   * A nested call is a signpost rather than a card of its own: it stays on one
+   * line so a program that read five files does not push the answer away, and
+   * the argument is cut rather than wrapped for the same reason.
+   */
+  private pushSubCalls(lines: string[], card: ToolCard, width: number): void {
+    const subCalls = card.subCalls ?? []
+    for (const call of subCalls) {
+      const titleToken = call.failed ? 'tool.failed.title' : 'tool.subcall.title'
+      const title = this.theme.visible(titleToken) ? this.theme.style(titleToken, displayText(call.title)) : ''
+      const argument = call.argument === undefined || !this.theme.visible('tool.subcall.args')
+        ? ''
+        : ` ${this.theme.style('tool.subcall.args', displayText(call.argument))}`
+      const drawn = `${title}${argument}`
+      // A row whose every part is hidden draws nothing, and nothing must not
+      // cost a line the card does not have.
+      if (drawn === '') continue
+      lines.push(this.theme.cut(`${SUBCALL_INDENT}${drawn}`, width, '…'))
+    }
+    const hidden = (card.subCallsTotal ?? subCalls.length) - subCalls.length
+    if (hidden > 0 && this.theme.visible('tool.hint')) {
+      lines.push(this.theme.style('tool.hint', this.theme.cut(`${SUBCALL_INDENT}… ${hidden} more calls`, width, '')))
+    }
   }
 
   /**
@@ -348,7 +380,7 @@ export class TranscriptView implements Component {
     // The revision is part of the key: rows drawn under an older theme table
     // must miss, or a settings change would restyle only the rows that happened
     // to be redrawn for another reason.
-    const tag = `${width}|${state.expandCards ? 'c' : '-'}${state.expandReasoning ? 'r' : '-'}|${this.theme.revision}`
+    const tag = `${width}|${state.expandCards ? 'c' : '-'}${state.expandReasoning ? 'r' : '-'}${state.expandSubCalls ? 'p' : '-'}|${this.theme.revision}`
     const lines: string[] = []
     const settled = this.model.settledCount()
     const entries = this.model.entries()
