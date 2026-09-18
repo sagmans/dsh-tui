@@ -1,9 +1,6 @@
 import { cardFromLines, carriedFields, mergeCards, type ToolCard, type ToolPresenter } from './cards.ts'
 import { countTokens } from './tokens.ts'
 
-/** Kept exported here for the callers that read a thought's size through the transcript. */
-export { CHARS_PER_TOKEN, countTokens } from './tokens.ts'
-
 /** One renderable transcript row. */
 export type TranscriptEntry =
   | { readonly kind: 'user'; readonly text: string }

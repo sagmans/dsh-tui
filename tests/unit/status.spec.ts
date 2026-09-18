@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest'
 import { createTheme } from '@/theme.ts'
 import { DEFAULT_PALETTE } from '@/theme-tokens.ts'
 import { cacheRate, usageTotals } from '@/agent/status.ts'
-import { formatStatus, formatTokens, shortPath, type StatusFacts } from '@/ui/status.ts'
+import { formatTokens } from '@/tokens.ts'
+import { formatStatus, shortPath, type StatusFacts } from '@/ui/status.ts'
 
 const theme = createTheme('none')
 

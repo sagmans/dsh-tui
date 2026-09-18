@@ -4,8 +4,6 @@ import { formatTokens } from '../tokens.ts'
 import type { TuiToken } from '../theme-tokens.ts'
 import type { TuiTheme } from '../theme.ts'
 
-export { formatTokens }
-
 /** Everything the footer states, gathered by the surface around it. */
 export interface StatusFacts {
   readonly activity: 'idle' | 'working'
