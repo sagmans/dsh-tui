@@ -167,6 +167,7 @@ document as every other preference (`$DSH_HOME/settings.yaml`), under a
 ```yaml
 dsh-tui:
   subcalls: collapsed         # fold the calls a PTC program dispatched (default inline)
+  mermaid: streaming          # draw a reply's mermaid fences: off, final, or streaming (default streaming)
   palette:
     muted: '#5c5c5c'          # one shade quiets every receding element
   tokens:
@@ -190,6 +191,18 @@ program dispatched under their card, and `subcalls: collapsed` starts with the
 card alone instead. `Ctrl+Y` toggles the same choice for the current session,
 and an edit to the document re-seeds it. An unknown key or value is
 refused with a notice naming it, so a typo cannot quietly do nothing.
+
+A reply whose fenced block names `mermaid` is drawn as terminal box art instead
+of source, laid out at the width the transcript has. `mermaid: streaming` (the
+default) draws a diagram while the reply is still arriving, `final` waits for
+the turn to end, and `off` leaves every fence exactly as written. A diagram
+wider than the terminal, or one the renderer cannot draw at all, stays as the
+source fence rather than being truncated; a settled diagram whose source was only
+partly readable keeps the fence and names what was dropped. The drawing is
+restyleable like anything else through `markdown.diagram.border`,
+`.text`, `.edge`, `.edgeLabel`, `.title`, and `.warning`, so `/theme`
+lists it with the rest. Nothing is lost by drawing: `/export` and the session
+file keep the reply exactly as the model wrote it.
 
 `fg` and `bg` accept `#rrggbb`, a palette name (`default`, `muted`, `accent`,
 `arg`, `warn`, `added`, `removed`, `user`, `assistant`), or an index. A colour is
@@ -300,6 +313,9 @@ The automated checks drive a real PTY, but they run on this machine's terminal. 
 | that turn in a terminal narrower than a call's own argument | the argument wraps onto continuation rows indented to the same two spaces, with no ellipsis |
 | that same turn, then `ctrl+y` | the lines fold away; `ctrl+y` again draws them back |
 | `dsh-tui: { subcalls: collapsed }` in `$DSH_HOME/settings.yaml`, then a PTC turn | the card arrives alone, and editing the document to `inline` unfolds a running session |
+| a reply carrying a mermaid fence | it draws as box art at the transcript width, with the prose around it untouched |
+| that reply in a terminal narrower than the drawing | the fence stays source, and widening the window draws it without a new turn |
+| `dsh-tui: { mermaid: off }` in `$DSH_HOME/settings.yaml`, then a mermaid reply | the fence stays source; editing the value to `streaming` draws a settled reply without a restart |
 | `/preset` on a fresh session | the picker lists four modes, marks the current one, and the switch survives a resume |
 | `/preset minimal` after a turn | refused, naming the reason; the session keeps the mode it composed with |
 | `--resume --preset <mode>` and then picking a session that runs another mode | the list stays open and says why that row cannot be taken; `esc` leaves the picker |
@@ -334,6 +350,7 @@ The workflow stores no npm token: the registry trusts `release.yml` on the `npm-
 - Approvals and questions render inline and take the keyboard; a question batch is answered in order.
 - Styling is per element and overridable; see [Theme](#theme). Shipped defaults are emitted as 24-bit colour where the terminal advertises it and degraded to 256 or 16 colours otherwise, so a light or dark terminal still follows its own palette where it has one.
 - Tool text, model text, and file content are escaped before rendering, so a hostile result cannot inject terminal control sequences; the cost is that a literal tab shows as \x09.
+- Mermaid fences draw in assistant replies only, and only at the top level of one: a fence nested in a list, quoted inside another fence, or carried by a prompt, a thought, or a tool card stays source. Author `:::class` styling and diagram links are ignored — the renderer reports what each run is, and the theme decides how it looks.
 
 ## License
 
