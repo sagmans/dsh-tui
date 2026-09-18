@@ -143,8 +143,8 @@ export class TranscriptView implements Component {
   }
 
   /** Render assistant text as markdown: the model writes structure, the reader reads it. */
-  private pushMarkdown(lines: string[], text: string, width: number): void {
-    const rendered = this.markdown.render(displayText(text), Math.max(1, width))
+  private pushMarkdown(lines: string[], text: string, width: number, live: boolean): void {
+    const rendered = this.markdown.render(displayText(text), Math.max(1, width), live)
     rendered.forEach(line => {
       // The renderer pads to its width for background styling we do not use.
       const trimmed = line.replace(/[ \t]+$/u, '')
@@ -349,8 +349,8 @@ export class TranscriptView implements Component {
     }
   }
 
-  /** The rows one transcript entry becomes. */
-  private renderEntry(entry: TranscriptEntry, lines: string[], width: number): void {
+  /** The rows one transcript entry becomes; `live` marks the entry the turn is still writing. */
+  private renderEntry(entry: TranscriptEntry, lines: string[], width: number, live: boolean): void {
     switch (entry.kind) {
       case 'tool':
         this.pushCard(lines, entry.card, width)
@@ -359,7 +359,7 @@ export class TranscriptView implements Component {
         this.pushReasoning(lines, entry, width)
         return
       case 'assistant':
-        this.pushMarkdown(lines, entry.text, width)
+        this.pushMarkdown(lines, entry.text, width, live)
         return
       case 'user':
         if (!this.theme.visible('transcript.user')) return
@@ -396,7 +396,7 @@ export class TranscriptView implements Component {
       // The in-flight rows change on every frame, so caching them would only
       // fill the cache with objects nobody will ask for again.
       if (index >= settled) {
-        this.renderEntry(entry, lines, width)
+        this.renderEntry(entry, lines, width, true)
         continue
       }
       const cached = this.rows.lookup(entry, tag)
@@ -405,7 +405,7 @@ export class TranscriptView implements Component {
         continue
       }
       const rendered: string[] = []
-      this.renderEntry(entry, rendered, width)
+      this.renderEntry(entry, rendered, width, false)
       this.rows.store(entry, tag, rendered)
       lines.push(...rendered)
     }

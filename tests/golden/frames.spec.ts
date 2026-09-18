@@ -4,6 +4,7 @@ import { createToolPresenter } from '@/agent/present.ts'
 import { createTheme } from '@/theme.ts'
 import { TranscriptModel } from '@/transcript.ts'
 import { MarkdownRenderer } from '@/ui/markdown.ts'
+import { createMermaidTransform } from '@/ui/mermaid.ts'
 import { StatusBar } from '@/ui/status.ts'
 import { DEFAULT_VIEW_STATE, TranscriptView } from '@/ui/view.ts'
 import { WorkDock } from '@/ui/dock.ts'
@@ -130,6 +131,35 @@ function fixture(frameTheme = theme): { view: TranscriptView; dock: WorkDock; st
   }
 }
 
+/**
+ * A reply whose diagram is the answer at a comfortable width and the source at
+ * a cramped one: the drawing is 43 columns, which is exactly the boundary a
+ * terminal can be on either side of.
+ */
+const FIXTURE_DIAGRAM = [
+  '```mermaid',
+  'flowchart TB',
+  '  A["read the event log"] --> B["fold settled entries"]',
+  '  B --> C{"cursor moved?"}',
+  '  C -->|"yes"| D["rebuild the rows"]',
+  '  C -->|"no"| E["reuse the cache"]',
+  '```',
+].join('\n')
+
+function mermaidFixture(frameTheme = theme): TranscriptView {
+  const model = new TranscriptModel()
+  model.apply({
+    type: 'assistant/message',
+    data: { message: { content: [{ type: 'text', text: `The fold keeps a session small.\n\n${FIXTURE_DIAGRAM}\n\nSettled rows are cached.` }] } },
+  })
+  const mermaid = createMermaidTransform({ theme: frameTheme, mode: () => 'streaming' })
+  return new TranscriptView(model, frameTheme, new MarkdownRenderer(frameTheme.markdown, mermaid), {
+    state: () => DEFAULT_VIEW_STATE,
+    gate: () => undefined,
+    picker: () => undefined,
+  })
+}
+
 /** One frozen moment, so a frame with elapsed times is still a stable artefact. */
 const NOW = 1_700_000_000_000
 
@@ -193,6 +223,22 @@ describe('golden frames', () => {
     const live = fixture().view.render(80)
     const resumed = fixture().view.render(80)
     expect(resumed).toEqual(live)
+  })
+})
+
+/**
+ * A drawn diagram is layout, not only text: these frames pin the box art and the
+ * source a narrow terminal falls back to, which unit tests cannot see.
+ */
+describe('a mermaid reply', () => {
+  for (const width of WIDTHS) {
+    it(`renders the diagram at ${width} columns`, () => {
+      expect(mermaidFixture().render(width)).toMatchSnapshot()
+    })
+  }
+
+  it('renders the diagram with its escapes', () => {
+    expect(mermaidFixture(createTheme('truecolor')).render(80)).toMatchSnapshot()
   })
 })
 

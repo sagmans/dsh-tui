@@ -147,6 +147,14 @@ export const TUI_TOKENS = [
   'markdown.italic',
   'markdown.strikethrough',
   'markdown.underline',
+  // A drawn mermaid diagram: the renderer reports what each run *is*, so every
+  // role a drawing can be made of is addressable on its own.
+  'markdown.diagram.border',
+  'markdown.diagram.text',
+  'markdown.diagram.edge',
+  'markdown.diagram.edgeLabel',
+  'markdown.diagram.title',
+  'markdown.diagram.warning',
   // No markdown.tableHeader: pi-tui styles table headers through the bold hook
   // it already owns, so a token here would be a setting with no call site.
   // Picker
@@ -313,6 +321,12 @@ export const DEFAULT_TOKENS: Readonly<Record<TuiToken, StyleSpec>> = {
   'markdown.italic': { italic: true },
   'markdown.strikethrough': { strike: true },
   'markdown.underline': { underline: true },
+  'markdown.diagram.border': muted,
+  'markdown.diagram.text': plain,
+  'markdown.diagram.edge': { fg: 'accent' },
+  'markdown.diagram.edgeLabel': muted,
+  'markdown.diagram.title': { fg: 'accent', bold: true },
+  'markdown.diagram.warning': { fg: 'warn' },
 
   'picker.title': { bold: true },
   'picker.glyph': { bold: true },
