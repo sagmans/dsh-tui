@@ -16,6 +16,8 @@
  *     --expect-last-pattern "❯ ([a-z]+)" --expect-last ptc
  *   node tools/pty-drive.mjs --args "--resume" --prompt "" --answer "4:enter"
  *   node tools/pty-drive.mjs --cols 40 --prompt "Ask which colour" --answer "20:0,22:teal,24:enter"
+ *   node tools/pty-drive.mjs --prompt "" --answer "8:0,9:eu-central,11:left,12:left,13:X,15:enter" \
+ *     --args "--patch /tmp/ask.patch.yml"   # edit a typed answer mid-text
  *   node tools/pty-drive.mjs --prompt "say hi" --signal TERM
  *   node tools/pty-drive.mjs --launcher /path/to/dsh/lib/bin.js --prompt "say hi"
  *
@@ -106,6 +108,10 @@ const NAMED_KEYS = {
   space: ' ',
   up: '\u001b[A',
   down: '\u001b[B',
+  // Movement keys decide whether an answer is edited where the cursor is or
+  // only at its end, which is the difference between a field and a text buffer.
+  left: '\u001b[D',
+  right: '\u001b[C',
   esc: '\u001b',
   back: '\u0002',
   'ctrl+t': '\u0014',
@@ -120,13 +126,22 @@ const NAMED_KEYS = {
   'up-press': '\u001b[1;1A',
   'up-release': '\u001b[1;1:3A',
 }
+/**
+ * Marker that wraps the rest of an answer in a bracketed paste, so a run can
+ * prove a pasted block arrives whole instead of as the characters a reader
+ * would have typed one at a time.
+ */
+const PASTE_PREFIX = 'paste:'
 const answers = option('answer', '')
   .split(',')
   .filter(entry => entry !== '')
   .map(entry => {
     const [seconds, ...rest] = entry.split(':')
-    const value = rest.join(':')
-    return { at: Number.parseInt(seconds, 10), value: NAMED_KEYS[value] ?? value }
+    const text = rest.join(':')
+    const value = text.startsWith(PASTE_PREFIX)
+      ? `\u001b[200~${text.slice(PASTE_PREFIX.length)}\u001b[201~`
+      : NAMED_KEYS[text] ?? text
+    return { at: Number.parseInt(seconds, 10), value }
   })
 /**
  * Drive the child at the policy a user gets, not the one this harness inherits:
