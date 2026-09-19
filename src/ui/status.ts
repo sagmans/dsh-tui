@@ -6,6 +6,8 @@ import type { TuiTheme } from '../theme.ts'
 
 /** Everything the footer states, gathered by the surface around it. */
 export interface StatusFacts {
+  /** The chord waiting for its second key, when one is armed. */
+  readonly chord: string | undefined
   readonly activity: 'idle' | 'working'
   /** How long the running turn has been running, when one is. */
   readonly elapsedMs: number | undefined
@@ -91,6 +93,9 @@ export function formatStatus(facts: StatusFacts, width: number, theme: TuiTheme)
     if (!theme.visible(token)) return
     segments.push({ token, text: displayText(text), join })
   }
+  // An armed chord is transient and needs the reader's eye now, so it leads the
+  // row: a row cut to width loses its tail, never what is about to happen.
+  if (facts.chord !== undefined && facts.chord !== '') push('status.prefix', facts.chord)
   if (facts.activity === 'working') {
     push('status.activity.working', `${WORKING_MARK} working`)
     // Elapsed carries its own token so it can be toned apart from the activity,

@@ -1,5 +1,7 @@
+import type { KeyId } from '@earendil-works/pi-tui'
 import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-settings'
+import { DEFAULT_PREFIX_KEY, DEFAULT_PREFIX_WINDOW_S, validatePrefix } from './input/keymap.ts'
 import {
   DEFAULT_PALETTE,
   PALETTE_NAMES,
@@ -67,11 +69,18 @@ export type MermaidMode = (typeof MERMAID_MODES)[number]
 /** The shipped mode: a diagram draws itself while the reply arrives, without waiting for the turn. */
 const DEFAULT_MERMAID_MODE: MermaidMode = 'streaming'
 
+/** Longest chord window a reader may ask for, so a typo cannot arm one for an hour. */
+const MAX_PREFIX_WINDOW_S = 60
+
 const SECTION = z.object({
   palette: PaletteSchema.default({}),
   tokens: TokensSchema.default({}),
   subcalls: z.union([...SUBCALL_DISPLAYS]).default('inline'),
   mermaid: z.union([...MERMAID_MODES]).default(DEFAULT_MERMAID_MODE),
+  // A free string rather than an enumerated union: the keymap module owns which
+  // keys exist, and its refusal is the message a reader can act on.
+  prefix: z.string().default(DEFAULT_PREFIX_KEY),
+  prefixWindow: z.number().min(0).max(MAX_PREFIX_WINDOW_S).default(DEFAULT_PREFIX_WINDOW_S),
 })
 
 /**
@@ -87,7 +96,7 @@ const TOKEN_NAMES = new Set<string>(TUI_TOKENS)
 const PALETTE_NAME_SET = new Set<string>(PALETTE_NAMES)
 
 /** The section's own keys: schemastery keeps what it does not declare, so a misspelling has to be refused here. */
-const SECTION_KEYS = new Set(['palette', 'tokens', 'subcalls', 'mermaid'])
+const SECTION_KEYS = new Set(['palette', 'tokens', 'subcalls', 'mermaid', 'prefix', 'prefixWindow'])
 
 /**
  * Validate the raw section, refusing a name the surface does not have.
@@ -122,7 +131,14 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
 export function parseSettings(raw: unknown): TuiSettings {
   rejectUnknownKeys(raw)
   const section = asRecord(raw) ?? {}
-  const parsed = SECTION(section) as { palette: Record<PaletteName, string>; tokens: Record<string, StyleSpec>; subcalls: SubCallDisplay; mermaid: MermaidMode }
+  const parsed = SECTION(section) as {
+    palette: Record<PaletteName, string>
+    tokens: Record<string, StyleSpec>
+    subcalls: SubCallDisplay
+    mermaid: MermaidMode
+    prefix: string
+    prefixWindow: number
+  }
   // Only what the reader actually wrote is an override: the schema fills every
   // field so validation can see a whole section, but returning those fills
   // would turn a one-line override into a table of empty entries.
@@ -149,6 +165,10 @@ export function parseSettings(raw: unknown): TuiSettings {
     tokens: tokens as Readonly<Partial<Record<TuiToken, StyleSpec>>>,
     subcalls: parsed.subcalls,
     mermaid: parsed.mermaid,
+    // Validated here rather than in the schema because the refusal depends on
+    // the surface's own keys, which the schema has no way to see.
+    prefix: validatePrefix(parsed.prefix),
+    prefixWindow: parsed.prefixWindow,
   }
 }
 
@@ -164,11 +184,22 @@ export interface TuiSettings {
   readonly tokens: Readonly<Partial<Record<TuiToken, StyleSpec>>>
   readonly subcalls: SubCallDisplay
   readonly mermaid: MermaidMode
+  /** The key that starts a chord; a key the surface answers itself is refused at parse. */
+  readonly prefix: KeyId
+  /** How long an armed chord waits for its second key, in seconds; zero waits for the next key. */
+  readonly prefixWindow: number
 }
 
 /** The section as it reads when the reader has written nothing. */
 export function defaultSettings(): TuiSettings {
-  return { palette: {}, tokens: {}, subcalls: 'inline', mermaid: DEFAULT_MERMAID_MODE }
+  return {
+    palette: {},
+    tokens: {},
+    subcalls: 'inline',
+    mermaid: DEFAULT_MERMAID_MODE,
+    prefix: DEFAULT_PREFIX_KEY,
+    prefixWindow: DEFAULT_PREFIX_WINDOW_S,
+  }
 }
 
 /** The theme inputs a parsed section implies. */

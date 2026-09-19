@@ -118,6 +118,9 @@ const NAMED_KEYS = {
   back: '\u007f',
   'ctrl+t': '\u0014',
   'ctrl+y': '\u0019',
+  // The chord prefix has no printable byte: it arrives as the control the
+  // terminal sends for the letter, which is what makes a two-key run drivable.
+  'ctrl+x': '\u0018',
   // Shift+Tab is CBT (CSI Z), distinct from the plain Tab an editor completes on.
   'shift+tab': '\u001b[Z',
   // The surface asks the terminal to report key events, so a real arrow press

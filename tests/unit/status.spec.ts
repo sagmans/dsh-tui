@@ -9,6 +9,7 @@ import { formatStatus, shortPath, type StatusFacts } from '@/ui/status.ts'
 const theme = createTheme('none')
 
 const facts = (overrides: Partial<StatusFacts> = {}): StatusFacts => ({
+  chord: undefined,
   activity: 'idle',
   elapsedMs: undefined,
   provider: 'deepseek-official',
@@ -24,6 +25,18 @@ const facts = (overrides: Partial<StatusFacts> = {}): StatusFacts => ({
   cwd: '/Users/dev/source/opensource/deepseek-harness/master',
   home: '/Users/dev',
   ...overrides,
+})
+
+describe('an armed chord', () => {
+  it('leads the row, so a narrow terminal cuts the tail and not the chord', () => {
+    expect(formatStatus(facts({ chord: 'ctrl+x' }), 200, theme))
+      .toMatch(/^ctrl\+x/)
+    expect(formatStatus(facts({ chord: 'ctrl+x' }), 20, theme)).toContain('ctrl+x')
+  })
+
+  it('is absent until a prefix is pressed', () => {
+    expect(formatStatus(facts(), 200, theme)).not.toContain('ctrl+x')
+  })
 })
 
 describe('formatTokens', () => {

@@ -10,7 +10,14 @@ describe('the dsh-tui settings section', () => {
 
   it('accepts an empty section, because every token has a default', () => {
     // Nothing written means nothing overridden; the shipped table fills the rest.
-    expect(parseSettings({})).toEqual({ palette: {}, tokens: {}, subcalls: 'inline', mermaid: 'streaming' })
+    expect(parseSettings({})).toEqual({
+      palette: {},
+      tokens: {},
+      subcalls: 'inline',
+      mermaid: 'streaming',
+      prefix: 'ctrl+x',
+      prefixWindow: 2,
+    })
   })
 
   it('draws nested PTC calls until the reader folds them', () => {
@@ -30,6 +37,26 @@ describe('the dsh-tui settings section', () => {
 
   it('rejects a mermaid mode the surface does not have', () => {
     expect(() => parseSettings({ mermaid: 'sometimes' })).toThrow()
+  })
+
+  it('starts a chord with ctrl+x and waits two seconds for its second key', () => {
+    expect(parseSettings({}).prefix).toBe('ctrl+x')
+    expect(parseSettings({}).prefixWindow).toBe(2)
+  })
+
+  it('takes another prefix key, and a window the reader chooses', () => {
+    expect(parseSettings({ prefix: 'alt+x' }).prefix).toBe('alt+x')
+    expect(parseSettings({ prefix: 'ctrl+shift+m' }).prefix).toBe('ctrl+shift+m')
+    expect(parseSettings({ prefixWindow: 0 }).prefixWindow).toBe(0)
+    expect(parseSettings({ prefixWindow: 5 }).prefixWindow).toBe(5)
+  })
+
+  it('rejects a prefix the reader could never use, naming why', () => {
+    expect(() => parseSettings({ prefix: 'x' })).toThrow(/modifier chord/)
+    expect(() => parseSettings({ prefix: 'ctrl+c' })).toThrow(/surface/)
+    expect(() => parseSettings({ prefix: 'ctrl+s' })).toThrow(/terminal/)
+    expect(() => parseSettings({ prefixWindow: -1 })).toThrow()
+    expect(() => parseSettings({ prefixWindow: 600 })).toThrow()
   })
 
   it('rejects an unknown section key so a typo fails loudly', () => {
@@ -53,7 +80,14 @@ describe('the dsh-tui settings section', () => {
   it('reports a refused section to the caller, not only to stderr', () => {
     const problems: string[] = []
     const settings = readScope({ get: () => ({ tokens: { 'transcript.reasoning.bdy': { fg: '#fff' } } }) }, message => problems.push(message))
-    expect(settings).toEqual({ palette: {}, tokens: {}, subcalls: 'inline', mermaid: 'streaming' })
+    expect(settings).toEqual({
+      palette: {},
+      tokens: {},
+      subcalls: 'inline',
+      mermaid: 'streaming',
+      prefix: 'ctrl+x',
+      prefixWindow: 2,
+    })
     expect(problems[0]).toContain('transcript.reasoning.bdy')
   })
 

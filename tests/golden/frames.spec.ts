@@ -120,6 +120,7 @@ function fixture(frameTheme = theme): { view: TranscriptView; dock: WorkDock; st
     view,
     dock: new WorkDock(() => work.state(), frameTheme),
     status: new StatusBar(() => ({
+      chord: undefined,
       activity: 'idle',
       elapsedMs: undefined,
       provider: 'zai-coding-cn',

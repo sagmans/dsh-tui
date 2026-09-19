@@ -35,7 +35,16 @@ import type { ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
 import type { AskUserQuestionAnswer } from '@deepseek-ai/dsh-user-questions'
 import { ApprovalGate, QuestionGate, toGateQuestions, type GateAnswer } from './gates.ts'
 import { createCompletionProvider } from './input/completion.ts'
-import { LOCAL_COMMANDS, classifySubmission } from './input/submission.ts'
+import { LOCAL_COMMANDS, classifySubmission, type Submission } from './input/submission.ts'
+import {
+  ChordReader,
+  DEFAULT_PREFIX_KEY,
+  DEFAULT_PREFIX_WINDOW_S,
+  SURFACE_KEYS,
+  chordKeysLine,
+  surfaceKeysLine,
+  type SurfaceKeyId,
+} from './input/keymap.ts'
 import { resolveConfig } from './config.ts'
 import { FoldCursor } from './fold-cursor.ts'
 import { createRestoreRegistry } from './terminal/restore.ts'
@@ -83,8 +92,8 @@ export const name = 'tui'
  */
 export const inject = ['agents', 'tools']
 
-/** Keys the surface answers itself, listed wherever the reader asks for help. */
-const LOCAL_KEYS = 'ctrl+o tool detail · ctrl+y nested calls · shift+tab reasoning · ctrl+t reasoning effort · ctrl+b back to this session · ctrl+c interrupt or exit'
+/** One second in the unit a chord window is scheduled in. */
+const MS_PER_SECOND = 1000
 
 /** The one thing to say about a view a reader did not open. */
 const LOCAL_KEYS_BACK = 'ctrl+b returns'
@@ -204,6 +213,18 @@ export function apply(ctx: Context, config: unknown): void {
    * follow the edit.
    */
   let mermaidMode: MermaidMode = defaultSettings().mermaid
+  /** The key that starts a chord, and how long it waits; the settings document owns both. */
+  let prefixKey = DEFAULT_PREFIX_KEY
+  let prefixWindowMs = DEFAULT_PREFIX_WINDOW_S * MS_PER_SECOND
+  /**
+   * The chord between a prefix and the action that follows it.
+   *
+   * Built here, before the terminal exists, because the settings scope applies
+   * first and has to be able to end a chord armed under the keymap it replaced.
+   * The repaint the window also wants is late-bound: only a key press reaches
+   * it, and no key can arrive before the surface has started.
+   */
+  const keyChord = new ChordReader(() => prefixKey, () => prefixWindowMs, () => tui.requestRender())
   /**
    * Seed the display the reader configured.
    *
@@ -212,8 +233,13 @@ export function apply(ctx: Context, config: unknown): void {
    * mermaid mode has no key of its own and only ever comes from the document.
    */
   const applyDisplay = (): void => {
-    viewState.expandSubCalls = readSection().subcalls === 'inline'
-    mermaidMode = readSection().mermaid
+    const section = readSection()
+    viewState.expandSubCalls = section.subcalls === 'inline'
+    mermaidMode = section.mermaid
+    prefixKey = section.prefix
+    prefixWindowMs = section.prefixWindow * MS_PER_SECOND
+    // A chord armed under the keymap the reader just replaced is not their chord.
+    keyChord.disarm()
   }
   /**
    * Own the section, so the harness validates and persists it for the reader.
@@ -328,6 +354,7 @@ export function apply(ctx: Context, config: unknown): void {
     activity: () => ({ running: turnOpen, startedAt: turnStartedAt }),
     override: () => modelSwitch.current(),
     home: process.env.HOME,
+    chord: () => keyChord.hint(),
   })
   const statusBar = new StatusBar(statusFacts, theme)
   const dock = new WorkDock(() => work.state(), theme, () => jobs, () => roster.list())
@@ -339,6 +366,8 @@ export function apply(ctx: Context, config: unknown): void {
     if (turnOpen) tui.requestRender()
   }, STATUS_TICK_MS)
   disposers.push(() => clearInterval(statusTicker))
+  // A window that outlived the surface would repaint a screen that is gone.
+  disposers.push(() => keyChord.disarm())
 
   restore.add(() => tui.stop())
   ctx.effect(() => () => {
@@ -408,6 +437,50 @@ export function apply(ctx: Context, config: unknown): void {
     tui.requestRender()
   }
 
+  /**
+   * What each key the surface answers itself does; false hands the press back.
+   *
+   * Keyed by the table's own ids, so a key added to {@link SURFACE_KEYS}
+   * without a handler here fails to compile rather than doing nothing.
+   */
+  const surfaceActions: Readonly<Record<SurfaceKeyId, () => boolean>> = {
+    toolDetail: () => {
+      viewState.expandCards = !viewState.expandCards
+      tui.requestRender()
+      return true
+    },
+    subCalls: () => {
+      viewState.expandSubCalls = !viewState.expandSubCalls
+      tui.requestRender()
+      return true
+    },
+    reasoning: () => {
+      viewState.expandReasoning = !viewState.expandReasoning
+      tui.requestRender()
+      return true
+    },
+    effort: () => {
+      void openEffortPicker()
+      return true
+    },
+    back: () => {
+      if (viewedSession !== activeSession) void showAgentSession()
+      return true
+    },
+    interrupt: () => {
+      // In raw mode Ctrl+C never reaches the process as SIGINT, so the surface
+      // decides: stop the work in flight, or leave when there is none.
+      if (!turnOpen) {
+        requestExit(0)
+        return true
+      }
+      agent?.interrupt()
+      model.notice('interrupt requested')
+      tui.requestRender()
+      return true
+    },
+  }
+
   disposers.push(tui.addInputListener(data => {
     // A key arrives as a press and a release once the surface asks the terminal
     // to report key events, and this library drops the release only for the
@@ -475,42 +548,21 @@ export function apply(ctx: Context, config: unknown): void {
       })()
       return { consume: true }
     }
-    // Detail the reader asked for is always available, even mid-turn: the
+    // A chord is the surface's second key: the prefix is consumed and the
+    // footer names what may follow, while a key that finishes nothing is handed
+    // on. Detail the reader asked for is always available, even mid-turn: the
     // collapsed view is a default, not the only state.
-    if (matchesKey(data, 'ctrl+o')) {
-      viewState.expandCards = !viewState.expandCards
+    const chorded = keyChord.handle(data)
+    if (chorded !== undefined) {
+      if (chorded.kind === 'action') runSubmission(chorded.binding.submission)
       tui.requestRender()
       return { consume: true }
     }
-    if (matchesKey(data, 'shift+tab')) {
-      viewState.expandReasoning = !viewState.expandReasoning
-      tui.requestRender()
-      return { consume: true }
+    for (const entry of SURFACE_KEYS) {
+      if (!matchesKey(data, entry.key)) continue
+      return surfaceActions[entry.id]() ? { consume: true } : undefined
     }
-    if (matchesKey(data, 'ctrl+y')) {
-      viewState.expandSubCalls = !viewState.expandSubCalls
-      tui.requestRender()
-      return { consume: true }
-    }
-    if (matchesKey(data, 'ctrl+t')) {
-      void openEffortPicker()
-      return { consume: true }
-    }
-    if (matchesKey(data, 'ctrl+b')) {
-      if (viewedSession !== activeSession) void showAgentSession()
-      return { consume: true }
-    }
-    // In raw mode Ctrl+C never reaches the process as SIGINT, so the surface
-    // decides: stop the work in flight, or leave when there is none.
-    if (!matchesKey(data, 'ctrl+c')) return undefined
-    if (turnOpen) {
-      agent?.interrupt()
-      model.notice('interrupt requested')
-      tui.requestRender()
-      return { consume: true }
-    }
-    requestExit(0)
-    return { consume: true }
+    return undefined
   }))
 
   const registry = (): CommandRegistry | undefined => ctx.get('commands') as CommandRegistry | undefined
@@ -1364,7 +1416,7 @@ export function apply(ctx: Context, config: unknown): void {
       ? []
       : registry()?.list(current).map(command => `/${command.name}`) ?? []
     const commands = registered.length === 0 ? 'none registered yet' : registered.join(' ')
-    return `commands: ${commands} · surface: ${LOCAL_COMMANDS.join(' ')} · keys: ${LOCAL_KEYS}`
+    return `commands: ${commands} · surface: ${LOCAL_COMMANDS.join(' ')} · keys: ${surfaceKeysLine()} · ${chordKeysLine(prefixKey)}`
   }
 
   const runCommand = (name: string, line: string): void => {
@@ -1411,8 +1463,13 @@ export function apply(ctx: Context, config: unknown): void {
     })
   }
 
-  editor.onSubmit = text => {
-    const submission = classifySubmission(text)
+  /**
+   * Carry out one classified line, wherever it was asked for.
+   *
+   * A chord asks for the same things the command line does, so both arrive
+   * here: a chord cannot behave differently from the command it stands for.
+   */
+  const runSubmission = (submission: Submission): void => {
     switch (submission.kind) {
       case 'empty':
         return
@@ -1507,6 +1564,8 @@ export function apply(ctx: Context, config: unknown): void {
         }
     }
   }
+
+  editor.onSubmit = text => runSubmission(classifySubmission(text))
 
   disposers.push(ctx.on('session/event', (session, event) => {
     // The surface state — activity, timer, title, bell, job board — belongs to
