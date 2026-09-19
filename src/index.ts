@@ -54,7 +54,7 @@ import { formatTokens } from './tokens.ts'
 import { TranscriptModel } from './transcript.ts'
 import { WorkFold, describeTodos } from './work.ts'
 import { WorkDock } from './ui/dock.ts'
-import { BoxedEditor } from './ui/editor.ts'
+import { GateInputBar } from './ui/gate-input.ts'
 import { PromptBar } from './ui/prompt.ts'
 import { MarkdownRenderer } from './ui/markdown.ts'
 import { createMermaidTransform } from './ui/mermaid.ts'
@@ -301,7 +301,7 @@ export function apply(ctx: Context, config: unknown): void {
     gate: () => pending?.gate.card(),
     picker: () => pendingPicker?.picker.card(),
   })
-  const editor = new BoxedEditor(tui, theme.editor)
+  const editor = new GateInputBar(tui, theme.editor)
   // Answers are written in the reader's own editor, which is why a question
   // borrows the bar instead of drawing a second one beside it.
   const promptBar = new PromptBar(editor)

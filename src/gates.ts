@@ -43,6 +43,8 @@ export interface GateCard {
  * has to adapt it. Every key the gate does not claim — movement, deletion,
  * undo, a pasted block — reaches the answer through this.
  */
+export type GateInputMode = 'answer' | 'secret'
+
 export interface GateInput {
   /** The answer as written, with a pasted block expanded back to its text. */
   getExpandedText(): string
@@ -52,6 +54,11 @@ export interface GateInput {
   render(width: number): string[]
   /** Take a key the gate itself did not claim. */
   handleInput(data: string): void
+  /**
+   * How the surface shows the answer it is collecting, absent on an editor
+   * that has no way to hide one.
+   */
+  setMode?(mode: GateInputMode): void
 }
 
 /** One selectable row of a question gate. */
@@ -194,6 +201,22 @@ const CUSTOM_ROW_SHORTHAND = `${CUSTOM_ROW_NUMBER} answer freely`
 /** The keys that answer the free-text row, where typing is the answer rather than a filter. */
 const CUSTOM_HINT = 'type or paste an answer · enter confirm · ↑↓ or esc back to options'
 
+/**
+ * The question-id suffix that declares a typed answer a credential. The seam
+ * has no field for it, so a caller marks its own id and the gate reads that
+ * declaration rather than the wording: ids are caller-owned, and a question
+ * that merely mentions a key must still show the answer its author meant read.
+ */
+const SECRET_ID_SUFFIX = ':secret'
+
+/** The free-text row's label when the answer is a credential, so the reader sees what they hand over. */
+const SECRET_ROW_LABEL = 'API KEY'
+
+/** Whether a question declares its typed answer a credential through its id. */
+function declaresSecret(id: string): boolean {
+  return id.endsWith(SECRET_ID_SUFFIX)
+}
+
 /** One option with the position it answers for, so filtering can drop rows and keep the meaning. */
 interface PositionedOption {
   readonly option: GateQuestion['options'][number]
@@ -244,10 +267,13 @@ export class QuestionGate {
    *
    * The editor belongs to the surface and outlives one question, so an answer
    * must never cross from the last question into the next — or from a gate that
-   * was abandoned into the one that follows it.
+   * was abandoned into the one that follows it. Its mode follows the question
+   * for the same reason: a credential must not be shown because the last
+   * question was not one.
    */
   private resetInput(): void {
     this.input.setText('')
+    this.input.setMode?.(this.current !== undefined && declaresSecret(this.current.id) ? 'secret' : 'answer')
   }
 
   get resolved(): boolean {
@@ -512,6 +538,7 @@ export class QuestionGate {
     // The editor holds the answer, so whether one has been written is its own
     // answer to give; the card only decides where to draw it.
     const written = this.input.getExpandedText() !== ''
+    const secret = declaresSecret(question.id)
     const matched = this.matched(question)
     const { rows, start, cursor } = this.windowed(question)
     if (rows.length < matched.length) detail.push(`showing ${start + 1}–${start + rows.length} of ${matched.length}`)
@@ -529,7 +556,7 @@ export class QuestionGate {
         selected: chosen.includes(option.label),
       })),
       custom: {
-        label: CUSTOM_ROW_LABEL,
+        label: secret ? SECRET_ROW_LABEL : CUSTOM_ROW_LABEL,
         description: CUSTOM_ROW_DESCRIPTION,
         current: this.atCustom,
         selected: this.atCustom || written,
