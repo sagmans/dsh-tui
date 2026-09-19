@@ -15,6 +15,7 @@
  *   node tools/pty-drive.mjs --prelude "/preset " --prompt "" --answer "2:down-press,3:down-release" \
  *     --expect-last-pattern "❯ ([a-z]+)" --expect-last ptc
  *   node tools/pty-drive.mjs --args "--resume" --prompt "" --answer "4:enter"
+ *   node tools/pty-drive.mjs --cols 40 --prompt "Ask which colour" --answer "20:0,22:teal,24:enter"
  *   node tools/pty-drive.mjs --prompt "say hi" --signal TERM
  *   node tools/pty-drive.mjs --launcher /path/to/dsh/lib/bin.js --prompt "say hi"
  *
@@ -88,6 +89,9 @@ const home = option('home', undefined)
 const launcher = option('launcher', '')
 const seconds = Number.parseInt(option('seconds', '45'), 10)
 const approve = Number.parseInt(option('approve', '0'), 10)
+/** The terminal size the child sees, so a report can pin a surface a laptop screen would not show. */
+const cols = Number.parseInt(option('cols', '100'), 10)
+const rows = Number.parseInt(option('rows', '30'), 10)
 /** A slash command sent before the prompt, for reaching a state the prompt assumes. */
 const prelude = option('prelude', '')
 /**
@@ -164,8 +168,8 @@ const launcherArgs = launcher === ''
 
 const child = pty.spawn(command, launcherArgs, {
   name: 'xterm-256color',
-  cols: 100,
-  rows: 30,
+  cols,
+  rows,
   cwd: DSH_CHECKOUT,
   env: {
     ...process.env,
