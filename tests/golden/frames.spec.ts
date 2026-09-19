@@ -1,10 +1,13 @@
+import { type TUI } from '@earendil-works/pi-tui'
 import { describe, expect, it } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
 import { createToolPresenter } from '@/agent/present.ts'
+import type { GateCard } from '@/gates.ts'
 import { createTheme } from '@/theme.ts'
 import { TranscriptModel } from '@/transcript.ts'
 import { MarkdownRenderer } from '@/ui/markdown.ts'
 import { createMermaidTransform } from '@/ui/mermaid.ts'
+import { BoxedEditor } from '@/ui/editor.ts'
 import { StatusBar } from '@/ui/status.ts'
 import { DEFAULT_VIEW_STATE, TranscriptView } from '@/ui/view.ts'
 import { WorkDock } from '@/ui/dock.ts'
@@ -22,6 +25,9 @@ import { WorkFold } from '@/work.ts'
  */
 const WIDTHS = [80, 40]
 const theme = createTheme('none')
+
+/** The terminal the gate's bar renders against; a golden frame reads its rows only. */
+const STUB_TUI = { requestRender: () => {}, terminal: { rows: 24, cols: 80 } } as unknown as TUI
 
 /** The rows this frame pins: a shell command whose output is kept, and a file read. */
 const FIXTURE_COMMAND = 'pnpm test'
@@ -220,6 +226,39 @@ function modelPickerCard(): ModelPicker {
   )
 }
 
+/**
+ * A pending question whose option is longer than a cramped terminal holds.
+ *
+ * A decision is only answerable when its rows are readable, so this frame pins
+ * wrapping in place of truncation, the free-text row every question with
+ * options carries, and the input bar that row opens.
+ */
+function gateCard(typed = ''): TranscriptView {
+  const typing = typed !== ''
+  const bar = new BoxedEditor(STUB_TUI, theme.editor)
+  bar.setText(typed)
+  const gate: GateCard = {
+    kind: 'question',
+    title: 'which deployment target?  (1/2)',
+    detail: ['showing 1–2 of 9'],
+    optionOffset: 0,
+    options: [
+      { label: 'staging-eu-west-1', description: 'canary the rollout behind an audit window', current: !typing, selected: false },
+      { label: 'production', description: undefined, current: false, selected: false },
+    ],
+    custom: { label: 'other', description: 'type your own answer', current: typing, selected: typing },
+    answerInput: typing ? bar : undefined,
+    hint: typing
+      ? 'type or paste an answer · enter confirm · ↑↓ or esc back to options'
+      : 'space select · digits pick · 0 answer freely · type to filter · enter confirm · esc skip',
+  }
+  return new TranscriptView(new TranscriptModel(), theme, new MarkdownRenderer(theme.markdown), {
+    state: () => DEFAULT_VIEW_STATE,
+    gate: () => gate,
+    picker: () => undefined,
+  })
+}
+
 describe('golden frames', () => {
   for (const width of WIDTHS) {
     it(`renders the transcript at ${width} columns`, () => {
@@ -236,6 +275,14 @@ describe('golden frames', () => {
 
     it(`renders the queued prompts at ${width} columns`, () => {
       expect(queued().render(width)).toMatchSnapshot()
+    })
+
+    it(`renders a question gate at ${width} columns`, () => {
+      expect(gateCard().render(width)).toMatchSnapshot()
+    })
+
+    it(`renders a question gate collecting a typed answer at ${width} columns`, () => {
+      expect(gateCard('the eu-central cluster').render(width)).toMatchSnapshot()
     })
   }
 

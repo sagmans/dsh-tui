@@ -18,7 +18,40 @@ export interface GateCard {
    */
   readonly optionOffset: number
   readonly options: readonly GateOption[]
+  /**
+   * The row that answers with typed text. A question with no options is answered
+   * by typing anyway, so it has no such row to draw.
+   */
+  readonly custom: GateCustomRow | undefined
+  /**
+   * The editor the answer is written in, drawn under the row that fills it.
+   *
+   * A question says nothing about its answer until someone writes one, so the
+   * rows come from the surface's own editor rather than from text composed
+   * here: the reader gets the cursor movement, deletion, undo, and paste the
+   * prompt bar already has.
+   */
+  readonly answerInput: GateInput | undefined
   readonly hint: string
+}
+
+/**
+ * The editor a question collects typed text with.
+ *
+ * These are the editor's own members rather than a vocabulary invented here, so
+ * the surface hands in the component the prompt bar already uses and nothing
+ * has to adapt it. Every key the gate does not claim — movement, deletion,
+ * undo, a pasted block — reaches the answer through this.
+ */
+export interface GateInput {
+  /** The answer as written, with a pasted block expanded back to its text. */
+  getExpandedText(): string
+  /** Replace the answer, so the next question of a batch does not inherit one. */
+  setText(text: string): void
+  /** Lay the answer out for this width; its rows are drawn under the free-text row. */
+  render(width: number): string[]
+  /** Take a key the gate itself did not claim. */
+  handleInput(data: string): void
 }
 
 /** One selectable row of a question gate. */
@@ -26,6 +59,16 @@ export interface GateOption {
   readonly label: string
   readonly description: string | undefined
   readonly current: boolean
+  readonly selected: boolean
+}
+
+/** The row that answers with typed text instead of a listed label. */
+export interface GateCustomRow {
+  readonly label: string
+  readonly description: string | undefined
+  /** Whether the cursor is on this row, which is what makes typing the answer. */
+  readonly current: boolean
+  /** Whether a custom answer is being formed or already holds text. */
   readonly selected: boolean
 }
 
@@ -70,8 +113,10 @@ export class ApprovalGate {
       kind: 'approval',
       title: `approval needed · ${this.toolName}`,
       detail: this.reason === undefined ? [] : lines(this.reason),
+      answerInput: undefined,
       optionOffset: 0,
       options: [],
+      custom: undefined,
       hint: this.outcome === undefined ? 'y allow once · n reject · esc cancel' : 'decided',
     }
   }
@@ -134,40 +179,20 @@ export function toGateQuestions(request: unknown): GateQuestion[] {
 /** How many option rows a question shows at once, so a catalog-sized list leaves the editor in view. */
 const QUESTION_WINDOW = 12
 
-/** Drawn after a typed answer, so an empty question still shows where its text goes. */
-const ANSWER_CURSOR = '▌'
+/** The number the free-text row answers for. It sits below the window, so drawn numbering runs 1..n then 0. */
+export const CUSTOM_ROW_NUMBER = 0
 
-/** The row label a question earns when it asks for something that identifies its owner. */
-const SECRET_LABEL = 'API KEY'
+/** The label a question earns for an answer the model did not list. */
+const CUSTOM_ROW_LABEL = 'other'
 
-/** The row label for every other typed answer, where the text is the answer itself. */
-const ANSWER_LABEL = 'answer'
+/** What the free-text row does, said where the reader decides. */
+const CUSTOM_ROW_DESCRIPTION = 'type your own answer'
 
-/**
- * Words that mark a question as one whose answer is a secret. A plugin cannot
- * say so through the seam yet, and the question is where it already says it:
- * a person who loses a key to a shoulder loses an account, so the row keeps the
- * value out of sight rather than trusting every question to be harmless.
- */
-const SECRET_WORDS = ['key', 'token', 'secret', 'password', 'passphrase', 'credential'] as const
+/** How the list hint names that row, which the row itself already labels. */
+const CUSTOM_ROW_SHORTHAND = `${CUSTOM_ROW_NUMBER} answer freely`
 
-const SECRET_PATTERN = new RegExp('\\b(?:' + SECRET_WORDS.join('|') + ')', 'iu')
-
-/** How much of a secret stays readable, at each end, so its owner can recognize it. */
-const MASK_HEAD = 4
-const MASK_TAIL = 4
-const MASK_CHAR = '*'
-
-/** The words a question uses when it wants a secret rather than an answer. */
-function asksForSecret(question: GateQuestion): boolean {
-  return SECRET_PATTERN.test(question.question) || (question.header !== undefined && SECRET_PATTERN.test(question.header))
-}
-
-/** A secret with both ends readable: a field for its owner, and nothing for a bystander. */
-function masked(value: string): string {
-  if (value.length <= MASK_HEAD + MASK_TAIL) return value
-  return value.slice(0, MASK_HEAD) + MASK_CHAR.repeat(value.length - MASK_HEAD - MASK_TAIL) + value.slice(-MASK_TAIL)
-}
+/** The keys that answer the free-text row, where typing is the answer rather than a filter. */
+const CUSTOM_HINT = 'type or paste an answer · enter confirm · ↑↓ or esc back to options'
 
 /** One option with the position it answers for, so filtering can drop rows and keep the meaning. */
 interface PositionedOption {
@@ -187,15 +212,42 @@ export class QuestionGate {
   private index = 0
   private cursor = 0
   private typed = ''
+  /** Whether the cursor is on the free-text row. */
+  private atCustom = false
+  /**
+   * The row an escape from the free-text row returns to.
+   *
+   * It is the row the reader last acted on — walked to, picked by its number, or
+   * toggled — because that is the option they were looking at when they decided
+   * to answer freely, and it is not always the row the cursor still stands on: a
+   * digit picks by number without walking anywhere.
+   */
+  private customFrom = 0
   private readonly chosen: string[][] = []
   private readonly custom: (string | undefined)[] = []
   private finished = false
 
-  constructor(private readonly questions: readonly GateQuestion[]) {
+  constructor(
+    private readonly questions: readonly GateQuestion[],
+    /** The editor every typed answer is written in, whichever row asks for it. */
+    private readonly input: GateInput,
+  ) {
     for (const _ of questions) {
       this.chosen.push([])
       this.custom.push(undefined)
     }
+    this.resetInput()
+  }
+
+  /**
+   * Empty the editor for the question now under the cursor.
+   *
+   * The editor belongs to the surface and outlives one question, so an answer
+   * must never cross from the last question into the next — or from a gate that
+   * was abandoned into the one that follows it.
+   */
+  private resetInput(): void {
+    this.input.setText('')
   }
 
   get resolved(): boolean {
@@ -248,11 +300,29 @@ export class QuestionGate {
       : question.multiSelect === true ? [...chosen, option.label] : [option.label]
   }
 
-  /** Add text to the filter, or to the answer a question without options collects. */
+  /**
+   * Whether a keystroke is answer text rather than a filter.
+   *
+   * A question without options has no list to filter, and the free-text row is
+   * where a question with options collects an answer the model did not list.
+   */
+  private typingAnswer(question: GateQuestion): boolean {
+    return question.options.length === 0 || this.atCustom
+  }
+
+  /** Add text to the filter, or to the answer the current row collects. */
   private absorb(text: string): void {
-    if (this.current === undefined || text === '') return
+    const question = this.current
+    if (question === undefined || text === '') return
+    if (this.typingAnswer(question)) {
+      // The editor decides what an insertion is: a paste arrives as one edit,
+      // and a multi-character chunk is one undo step rather than many.
+      this.input.handleInput(text)
+      return
+    }
     this.typed += text
     this.cursor = 0
+    this.customFrom = 0
   }
 
   /** Apply one key press; returns the batch answer the first time it completes. */
@@ -261,24 +331,40 @@ export class QuestionGate {
     if (this.finished || question === undefined) return undefined
     const paste = pastedText(data)
     if (paste !== undefined) {
-      this.absorb(paste)
+      // An answer takes the paste sequence itself, because the editor reads it;
+      // a filter takes the text inside it, because nothing else would.
+      this.absorb(this.typingAnswer(question) ? data : paste)
       return undefined
     }
+    // The free-text row is a text field, so the keys that walk or pick a list
+    // would otherwise take the very characters an answer is made of.
+    if (this.atCustom) return this.handleCustomKey(data)
+
+    const matched = this.matched(question)
     if (matchesKey(data, 'up')) {
       this.cursor = Math.max(0, this.cursor - 1)
+      this.customFrom = this.cursor
       return undefined
     }
     if (matchesKey(data, 'down')) {
-      this.cursor = Math.min(Math.max(0, this.matched(question).length - 1), this.cursor + 1)
+      // Below the last option sits the free-text row, which is the second way
+      // to reach it; a list with nothing left to show steps straight onto it.
+      if (this.cursor >= matched.length - 1) {
+        this.atCustom = true
+      } else {
+        this.cursor += 1
+        this.customFrom = this.cursor
+      }
       return undefined
     }
     if (question.options.length > 0 && matchesKey(data, 'space')) {
       const row = this.currentRow(question)
       if (row !== undefined) this.pick(row.position)
+      this.customFrom = this.cursor
       return undefined
     }
     if (matchesKey(data, 'escape')) {
-      this.confirm()
+      this.advance()
       return this.result()
     }
     if (matchesKey(data, 'enter')) {
@@ -295,6 +381,12 @@ export class QuestionGate {
       return this.result()
     }
     if (matchesKey(data, 'backspace')) {
+      // The same routing typing follows: a question without options has no
+      // filter to erase, and the delete belongs to the answer it collected.
+      if (this.typingAnswer(question)) {
+        this.input.handleInput(data)
+        return undefined
+      }
       this.typed = this.typed.slice(0, -1)
       this.cursor = 0
       return undefined
@@ -303,26 +395,82 @@ export class QuestionGate {
       this.absorb(' ')
       return undefined
     }
-    if (question.options.length > 0 && /^[1-9]$/u.test(data)) {
-      const row = this.matched(question)[Number.parseInt(data, 10) - 1]
-      if (row !== undefined) this.pick(row.position)
+    if (question.options.length > 0 && /^[0-9]$/u.test(data)) {
+      const digit = Number.parseInt(data, 10)
+      if (digit === CUSTOM_ROW_NUMBER) {
+        this.atCustom = true
+        return undefined
+      }
+      const row = matched[digit - 1]
+      if (row !== undefined) {
+        this.pick(row.position)
+        this.customFrom = digit - 1
+      }
       return undefined
     }
     if (data.length === 1 && data >= ' ') this.absorb(data)
     return undefined
   }
 
+  /**
+   * One key press while the free-text row holds the cursor.
+   *
+   * Walking back to the list keeps whatever was typed, so a reader who changes
+   * their mind about answering freely has not lost the text yet. An escape
+   * leaves the row the same way, because a question skipped by accident is a
+   * question the reader has to answer again: from the list, where every other
+   * question is skipped, an escape skips this one too.
+   */
+  private handleCustomKey(data: string): GateAnswer[] | undefined {
+    if (matchesKey(data, 'up') || matchesKey(data, 'down')) {
+      this.atCustom = false
+      return undefined
+    }
+    if (matchesKey(data, 'escape')) {
+      const question = this.current
+      const rows = question === undefined ? 0 : this.matched(question).length
+      this.atCustom = false
+      this.cursor = Math.min(this.customFrom, Math.max(0, rows - 1))
+      return undefined
+    }
+    if (matchesKey(data, 'enter')) {
+      this.confirm()
+      return this.result()
+    }
+    // Anything else is the editor's: movement, deletion, undo, and the keys
+    // that insert a character this gate has no business knowing about.
+    this.input.handleInput(data)
+    return undefined
+  }
+
+  /** Take the answer the reader confirmed, then leave the question. */
   private confirm(): void {
     const question = this.current
     if (question === undefined) return
-    if (question.options.length === 0) {
-      const typed = this.typed.trim()
-      if (typed !== '') this.custom[this.index] = typed
+    const text = this.input.getExpandedText().trim()
+    if (text !== '') {
+      this.custom[this.index] = text
+      // The seam reads a single-select custom as the answer itself, so a label
+      // picked before it would be a second answer the caller has to reconcile.
+      if (question.multiSelect !== true) this.chosen[this.index] = []
     }
+    this.advance()
+  }
+
+  /**
+   * Leave the current question for the next one.
+   *
+   * Typed text belongs to the question being left, so it never crosses into the
+   * next one — which is why a skipped question reports no typed answer at all.
+   */
+  private advance(): void {
     this.typed = ''
+    this.atCustom = false
+    this.customFrom = 0
     this.cursor = 0
     this.index += 1
     if (this.index >= this.questions.length) this.finished = true
+    this.resetInput()
   }
 
   private result(): GateAnswer[] | undefined {
@@ -340,27 +488,30 @@ export class QuestionGate {
   card(): GateCard {
     const question = this.current
     if (question === undefined) {
-      return { kind: 'question', title: 'question', detail: [], optionOffset: 0, options: [], hint: 'finishing' }
+      return { kind: 'question', title: 'question', detail: [], optionOffset: 0, options: [], custom: undefined, answerInput: undefined, hint: 'finishing' }
     }
     const chosen = this.chosen[this.index] ?? []
     const detail = question.detail === undefined ? [] : lines(question.detail)
     const heading = question.header === undefined ? '' : question.header + ' · '
     const title = `${heading}${question.question}${this.questions.length > 1 ? `  (${this.index + 1}/${this.questions.length})` : ''}`
     if (question.options.length === 0) {
-      // The row is the only place the text lands, so it is drawn even while
-      // empty: a question answered by typing needs somewhere to paste a key.
-      const secret = asksForSecret(question)
-      detail.push(`${secret ? SECRET_LABEL : ANSWER_LABEL}: ${secret ? masked(this.typed) : this.typed}${ANSWER_CURSOR}`)
       return {
         kind: 'question',
         title,
         detail,
         optionOffset: 0,
         options: [],
+        custom: undefined,
+        // The editor is the only place the text lands, so it is drawn even while
+        // empty: a question answered by typing needs somewhere to paste a key.
+        answerInput: this.input,
         hint: 'type or paste an answer · enter confirm · esc skip',
       }
     }
     if (this.typed !== '') detail.push(`filter: ${this.typed}`)
+    // The editor holds the answer, so whether one has been written is its own
+    // answer to give; the card only decides where to draw it.
+    const written = this.input.getExpandedText() !== ''
     const matched = this.matched(question)
     const { rows, start, cursor } = this.windowed(question)
     if (rows.length < matched.length) detail.push(`showing ${start + 1}–${start + rows.length} of ${matched.length}`)
@@ -372,10 +523,23 @@ export class QuestionGate {
       options: rows.map(({ option }, position) => ({
         label: option.label,
         description: option.description,
-        current: start + position === cursor,
+        // The free-text row wears the cursor when it holds it: a mark on a row
+        // the reader is not pointing at is a mark that lies.
+        current: !this.atCustom && start + position === cursor,
         selected: chosen.includes(option.label),
       })),
-      hint: `${question.multiSelect ? 'space toggle' : 'space select'} · digits pick · type to filter · enter confirm · esc skip`,
+      custom: {
+        label: CUSTOM_ROW_LABEL,
+        description: CUSTOM_ROW_DESCRIPTION,
+        current: this.atCustom,
+        selected: this.atCustom || written,
+      },
+      // A written answer stays in view whether or not the cursor is on the row,
+      // because it is what an enter is about to send.
+      answerInput: this.atCustom || written ? this.input : undefined,
+      hint: this.atCustom
+        ? CUSTOM_HINT
+        : `${question.multiSelect ? 'space toggle' : 'space select'} · digits pick · ${CUSTOM_ROW_SHORTHAND} · type to filter · enter confirm · esc skip`,
     }
   }
 }

@@ -126,7 +126,7 @@ dsh --profile tui --no-bell            # do not ring when a long turn finishes
 | Shift+Tab | expand or fold the reasoning behind an answer: folded, the row names itself, its token count, and the key; opened, it adds the thought |
 | Ctrl+T | pick the reasoning effort for the next step |
 | `y` / `n` / Esc | allow once, reject, or cancel a pending approval |
-| digits / space / ↑↓ / Enter / Esc | answer a question: pick or toggle, confirm, or skip one |
+| digits / space / ↑↓ / Enter / Esc | answer a question: pick or toggle, confirm, or skip one; `0` answers with your own text in the input bar |
 | typing in any picker or question | narrow the rows by fragment (`glm53` finds `GLM-5.3`); backspace widens, `esc` or Ctrl+C leaves |
 | `/` then Tab | complete commands, including every command this session registered |
 | `@` or a path then Tab | complete workspace file references |
@@ -155,6 +155,8 @@ dsh --profile tui --no-bell            # do not ring when a long turn finishes
 | `/clear` | clear the visible transcript |
 | `/theme` | list every styled element and the value in force |
 | `/quit` | leave and print the resume command |
+
+An approval or a question draws inline above the editor and takes the keyboard. A question that lists options always adds row `0. other — type your own answer`: type or paste an answer the model did not offer, and the seam receives it as that question's free text — replacing a single-select choice, or supplementing a multi-select one. `0`, or `↓` past the last option, reaches the row; `↑` walks back to the list with the text kept, and `esc` does the same from that row, because a question skipped by accident is a question answered twice — an escape from the list skips it. Free text is written in the prompt bar's own editor, drawn under that row: movement, word and line deletion, undo, completion, and multi-line paste are all the editor the reader already uses, and the prompt bar steps aside while a question is open, so a prompt written but not sent comes back untouched once the question is answered. No question hides its answer — the reader is the one who has to check what they are about to send. Every gate row wraps at the screen edge under its own label, so a long option or question is readable rather than cut.
 
 While a turn runs, a prompt submitted into the editor waits in the agent's own inbox instead of disappearing: it is drawn above the editor in the input bar's own frame, faint and italic, and moves into the transcript when the agent takes it — where it keeps that frame in the prompt's own rose shade, so what the reader typed is never mistaken for what the agent said. `editor.queued` and `editor.queued.more` restyle or hide the waiting rows; `transcript.user` restyles the submitted prompt.
 
@@ -327,7 +329,10 @@ The automated checks drive a real PTY, but they run on this machine's terminal. 
 | `dsh --profile tui --preset nope` | exits non-zero naming the modes that do exist, before the alternate screen appears |
 | arrow keys in a picker, or on a question's options, in a terminal that reports key events (Kitty, WezTerm, Ghostty, iTerm2) | one press moves one row, and holding a key still repeats; a terminal that sends only the legacy sequence behaves the same |
 | resize the window mid-turn | the transcript rewraps; the dock, editor, and status row stay put |
-| a 40-column terminal | rows end in `…` instead of wrapping into the next line |
+| a 40-column terminal | transcript and card rows end in `…` instead of wrapping into the next line |
+| a question with a long option at 40 columns | the option wraps onto rows indented under its label, and `0. other — type your own answer` sits under the list |
+| press `0` on a question, type an answer, press Enter | the editor under row `0` shows the text as it is edited, and the model receives it as that question's answer |
+| type a prompt without sending it, then answer a question | the prompt bar steps aside while the question is open and holds the same prompt again afterwards |
 | `echo hi \| dsh --profile tui` | refuses with a non-zero exit and a message naming the TTY requirement |
 | `/quit`, Ctrl+C while idle, `kill -TERM <pid>` | the shell returns with cursor, echo, mouse, and title restored |
 
@@ -352,7 +357,7 @@ The workflow stores no npm token: the registry trusts `release.yml` on the `npm-
 - A card reads its tool's own render intent through the agent whose session is on screen, so a stored session with no live agent — one this process is not running, or a child that has already finished — folds to the generic card instead of the tool's own.
 - Reading a child's conversation does not move the terminal: commands, approvals, and the status line stay with the session you launched, and the transcript is the only thing that switches.
 - Delete is unimplemented: the session store exposes no delete, and the surface does not reach around that seam into its files. `/fork` covers the case that needs it — it branches into a new session and leaves the original alone.
-- Approvals and questions render inline and take the keyboard; a question batch is answered in order.
+- Approvals and questions render inline and take the keyboard; a question batch is answered in order, and a question that lists options can always be answered with free text on row `0`.
 - Styling is per element and overridable; see [Theme](#theme). Shipped defaults are emitted as 24-bit colour where the terminal advertises it and degraded to 256 or 16 colours otherwise, so a light or dark terminal still follows its own palette where it has one.
 - Tool text, model text, and file content are escaped before rendering, so a hostile result cannot inject terminal control sequences; the cost is that a literal tab shows as \x09.
 - Mermaid fences draw in assistant replies only, and only at the top level of one: a fence nested in a list, quoted inside another fence, or carried by a prompt, a thought, or a tool card stays source. Author `:::class` styling and diagram links are ignored — the renderer reports what each run is, and the theme decides how it looks.

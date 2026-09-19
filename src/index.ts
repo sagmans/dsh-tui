@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { ProcessTerminal, ScrollView, VStack, isKeyRelease, matchesKey } from '@earendil-works/pi-tui'
+import { type Component, ProcessTerminal, ScrollView, VStack, isKeyRelease, matchesKey } from '@earendil-works/pi-tui'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 // Type-only: the command registry publishes the change event this surface
@@ -55,6 +55,7 @@ import { TranscriptModel } from './transcript.ts'
 import { WorkFold, describeTodos } from './work.ts'
 import { WorkDock } from './ui/dock.ts'
 import { BoxedEditor } from './ui/editor.ts'
+import { PromptBar } from './ui/prompt.ts'
 import { MarkdownRenderer } from './ui/markdown.ts'
 import { createMermaidTransform } from './ui/mermaid.ts'
 import {
@@ -301,6 +302,9 @@ export function apply(ctx: Context, config: unknown): void {
     picker: () => pendingPicker?.picker.card(),
   })
   const editor = new BoxedEditor(tui, theme.editor)
+  // Answers are written in the reader's own editor, which is why a question
+  // borrows the bar instead of drawing a second one beside it.
+  const promptBar = new PromptBar(editor)
   const disposers: Array<() => void> = []
   // The presenter closure outlives the composition's own teardown, so it must
   // not keep an agent alive after its world unwinds.
@@ -356,7 +360,7 @@ export function apply(ctx: Context, config: unknown): void {
     // them up before the editor does: the bar being typed in outranks what is
     // waiting behind it.
     { component: queue, basis: 'auto', shrink: 2, minSize: 0 },
-    { component: new VStack([{ component: editor, basis: 'auto', shrink: 1, minSize: 1 }]), basis: 'auto', shrink: 1, minSize: 1 },
+    { component: new VStack([{ component: promptBar, basis: 'auto', shrink: 1, minSize: 1 }]), basis: 'auto', shrink: 1, minSize: 0 },
     { component: statusBar, basis: 'auto', shrink: 0, minSize: 1 },
   ]))
   tui.setFocus(editor)
@@ -387,12 +391,19 @@ export function apply(ctx: Context, config: unknown): void {
     // A gate owns the keyboard: the editor must not collect the decision keys.
     editor.disableSubmit = true
     tui.setFocus(null)
+    // A question is answered in this editor, which the gate draws under the row
+    // being answered, so the hardware cursor belongs to it while it is borrowed.
+    // It is set after the focus is cleared, which unmarks the component it left.
+    editor.focused = next.kind === 'question'
     tui.requestRender()
   }
 
   const closeGate = (): void => {
     pending = undefined
     editor.disableSubmit = false
+    // The question is answered or skipped, so the reader gets their prompt back
+    // in the bar they left it in.
+    promptBar.giveBack()
     tui.setFocus(editor)
     tui.requestRender()
   }
@@ -1575,7 +1586,7 @@ export function apply(ctx: Context, config: unknown): void {
     const questions = toGateQuestions(request)
     if (questions.length === 0) return next()
     return new Promise<AskUserQuestionAnswer>(resolve => {
-      const gate = new QuestionGate(questions)
+      const gate = promptBar.borrow(() => new QuestionGate(questions, editor))
       // The seam takes mutable selection arrays and an optional custom field, so
       // the read-only gate answer is copied into that exact shape here.
       openGate({

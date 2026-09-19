@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { stripTerminalSequences, visibleWidth } from '@earendil-works/pi-tui'
+import { stripTerminalSequences, type TUI, visibleWidth } from '@earendil-works/pi-tui'
 import { cardOfCall, cardOfResult, contentLines, CARD_DETAIL_MAX, CARD_SHELL_PREVIEW, SUBCALL_MAX, type ToolPresenter } from '@/cards.ts'
 import type { GateCard } from '@/gates.ts'
 import { createTheme, forwardEditorTheme, forwardMarkdownTheme, type TuiTheme } from '@/theme.ts'
@@ -8,9 +8,20 @@ import { TranscriptModel, type TranscriptEntry } from '@/transcript.ts'
 import { MarkdownRenderer } from '@/ui/markdown.ts'
 import type { PickerCard } from '@/ui/picker.ts'
 import { RowCache } from '@/ui/rows.ts'
+import { BoxedEditor } from '@/ui/editor.ts'
 import { TranscriptView, type ViewState } from '@/ui/view.ts'
 
 const theme = createTheme('none')
+
+/** The terminal the bar under test renders against; these tests read its rows only. */
+const STUB_TUI = { requestRender: () => {}, terminal: { rows: 24, cols: 80 } } as unknown as TUI
+
+/** The editor a gate answers in, which is the surface's own prompt bar. */
+const answerBar = (text: string): BoxedEditor => {
+  const bar = new BoxedEditor(STUB_TUI, theme.editor)
+  bar.setText(text)
+  return bar
+}
 const COLLAPSED: ViewState = { expandCards: false, expandReasoning: false, expandSubCalls: false }
 
 function viewOf(model: TranscriptModel, state: ViewState = COLLAPSED, gate?: GateCard): TranscriptView {
@@ -336,6 +347,8 @@ describe('TranscriptView gate', () => {
       detail: ['write outside the workspace'],
       optionOffset: 0,
       options: [],
+      custom: undefined,
+      answerInput: undefined,
       hint: 'y allow once · n reject · esc cancel',
     }
     const lines = viewOf(new TranscriptModel(), COLLAPSED, gate).render(60)
@@ -354,12 +367,116 @@ describe('TranscriptView gate', () => {
         { label: 'staging', description: 'safe', current: true, selected: true },
         { label: 'production', description: undefined, current: false, selected: false },
       ],
+      custom: undefined,
+      answerInput: undefined,
       hint: 'space select · digits pick · enter confirm · esc skip',
     }
     const lines = viewOf(new TranscriptModel(), COLLAPSED, gate).render(60)
     expect(lines).toContain('? which target?  (1/2)')
     expect(lines).toContain('   ❯ [x] 5. staging — safe')
     expect(lines).toContain('     [ ] 6. production')
+  })
+
+  it('wraps an option that runs past the screen instead of cutting it', () => {
+    const gate: GateCard = {
+      kind: 'question',
+      title: 'which target?',
+      detail: [],
+      optionOffset: 0,
+      options: [
+        { label: 'staging-eu-west-1', description: 'the full canary rollout behind an audit window', current: true, selected: false },
+      ],
+      custom: undefined,
+      answerInput: undefined,
+      hint: 'space select · digits pick · enter confirm · esc skip',
+    }
+    const lines = viewOf(new TranscriptModel(), COLLAPSED, gate).render(40)
+    const first = lines.findIndex(line => line.includes('1. staging-eu-west-1'))
+    expect(first).toBeGreaterThan(-1)
+    // The tail has to stay readable, because the description is what tells two
+    // targets apart when their labels look alike.
+    const wrapped = lines.slice(first, first + 3)
+    expect(wrapped.join(' ')).toContain('audit window')
+    // The continuation aligns under the label, not under the cursor mark: a
+    // wrap that lands in the marker column reads as another row.
+    expect(wrapped[1]).toMatch(/^ {12}\S/u)
+    expect(lines.every(line => visibleWidth(line) <= 40)).toBe(true)
+  })
+
+  it('draws row 0 under the windowed options, marked while the cursor is on it', () => {
+    const gate: GateCard = {
+      kind: 'question',
+      title: 'which target?  (1/2)',
+      detail: [],
+      optionOffset: 4,
+      options: [{ label: 'staging', description: undefined, current: false, selected: false }],
+      custom: { label: 'other', description: 'type your own answer', current: true, selected: true },
+      answerInput: undefined,
+      hint: 'space select · digits pick · 0 answer freely · type to filter · enter confirm · esc skip',
+    }
+    const lines = viewOf(new TranscriptModel(), COLLAPSED, gate).render(60)
+    const row = lines.findIndex(line => line.includes('0. other'))
+    expect(lines[row]).toBe('   ❯ [x] 0. other — type your own answer')
+    // Row 0 sits under the window, so the window's own numbering is never interrupted.
+    expect(lines.findIndex(line => line.includes('5. staging'))).toBeLessThan(row)
+  })
+
+  it('draws the typed answer under row 0, above the keys that name it', () => {
+    const gate: GateCard = {
+      kind: 'question',
+      title: 'which target?',
+      detail: ['showing 1–2 of 9'],
+      optionOffset: 0,
+      options: [{ label: 'staging', description: undefined, current: false, selected: false }],
+      custom: { label: 'other', description: 'type your own answer', current: true, selected: true },
+      answerInput: answerBar('the eu-central cluster'),
+      hint: 'type or paste an answer · enter confirm · ↑↓ or esc back to options',
+    }
+    const lines = viewOf(new TranscriptModel(), COLLAPSED, gate).render(60)
+    const row = lines.findIndex(line => line.includes('0. other'))
+    const answer = lines.findIndex(line => line.includes('the eu-central cluster'))
+    // The bar belongs to the row it fills: above the options it reads as
+    // something the question says rather than something the reader is typing.
+    expect(answer).toBeGreaterThan(row)
+    expect(lines.findIndex(line => line.includes('1. staging'))).toBeLessThan(answer)
+    expect(lines.findIndex(line => line.includes('type or paste'))).toBeGreaterThan(answer)
+  })
+
+  it('draws the answer line of a question that has only text to collect', () => {
+    const gate: GateCard = {
+      kind: 'question',
+      title: 'why?',
+      detail: [],
+      optionOffset: 0,
+      options: [],
+      custom: undefined,
+      answerInput: answerBar(''),
+      hint: 'type or paste an answer · enter confirm · esc skip',
+    }
+    const lines = viewOf(new TranscriptModel(), COLLAPSED, gate).render(60)
+    expect(lines).toContain('? why?')
+    // A question with nothing but text to collect still opens the bar, because
+    // an empty bar is where the first character of an answer lands.
+    expect(lines.some(line => line.startsWith('   │'))).toBe(true)
+    expect(lines.findIndex(line => line.startsWith('   │'))).toBeGreaterThan(lines.indexOf('? why?'))
+  })
+
+  it('wraps the question and the keys it names rather than cutting them', () => {
+    const gate: GateCard = {
+      kind: 'question',
+      title: 'which deployment target should the release candidate use?',
+      detail: [],
+      optionOffset: 0,
+      options: [],
+      custom: undefined,
+      answerInput: undefined,
+      hint: 'space select · digits pick · 0 answer freely · type to filter · enter confirm · esc skip',
+    }
+    const lines = viewOf(new TranscriptModel(), COLLAPSED, gate).render(40)
+    expect(lines.every(line => visibleWidth(line) <= 40)).toBe(true)
+    // The question's own words and the last key it names both survive the edge.
+    expect(lines.join(' ')).toContain('release candidate use?')
+    expect(lines.join(' ')).toContain('esc skip')
   })
 })
 
