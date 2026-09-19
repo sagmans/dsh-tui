@@ -97,6 +97,35 @@ exports[`golden frames > renders a busy dock at 80 columns 1`] = `
 ]
 `;
 
+exports[`golden frames > renders a question gate at 40 columns 1`] = `
+[
+  "",
+  "? which deployment target?  (1/2)",
+  "    showing 1–2 of 9",
+  "   ❯ [ ] 1. staging-eu-west-1 — canary",
+  "            the rollout behind an audit",
+  "            window",
+  "     [ ] 2. production",
+  "     [ ] 0. other — type your own answer",
+  "   space select · digits pick · 0 answer",
+  "   freely · type to filter · enter",
+  "   confirm · esc skip",
+]
+`;
+
+exports[`golden frames > renders a question gate at 80 columns 1`] = `
+[
+  "",
+  "? which deployment target?  (1/2)",
+  "    showing 1–2 of 9",
+  "   ❯ [ ] 1. staging-eu-west-1 — canary the rollout behind an audit window",
+  "     [ ] 2. production",
+  "     [ ] 0. other — type your own answer",
+  "   space select · digits pick · 0 answer freely · type to filter · enter confirm",
+  "   · esc skip",
+]
+`;
+
 exports[`golden frames > renders the dock at 40 columns 1`] = `
 [
   "⏸ plan mode · answer the plan before ed…",

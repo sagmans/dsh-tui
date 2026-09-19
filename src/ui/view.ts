@@ -1,6 +1,6 @@
 import { type Component, visibleWidth, wrapTextWithAnsi } from '@earendil-works/pi-tui'
 import { cardDetailRows, shellFoldHint, shellRetentionHint, type CardPreview, type CardStat, type CardStatKind, type ToolCard } from '../cards.ts'
-import type { GateCard } from '../gates.ts'
+import { CUSTOM_ROW_NUMBER, type GateCard } from '../gates.ts'
 import { displayText } from '../text.ts'
 import type { TranscriptEntry, TranscriptModel } from '../transcript.ts'
 import { CARD_ROW_TOKEN, type TuiToken } from '../theme-tokens.ts'
@@ -45,6 +45,15 @@ const STAT_TOKEN: Readonly<Record<CardStatKind, TuiToken>> = {
   changed: 'tool.stat.changed',
   removed: 'tool.stat.removed',
   size: 'tool.stat.size',
+}
+
+/** One row a gate draws: a numbered option, or the free-text row below them. */
+interface GateRow {
+  readonly number: number
+  readonly label: string
+  readonly description: string | undefined
+  readonly current: boolean
+  readonly selected: boolean
 }
 
 /** Which rows the reader has opened; one key decides for every row of a kind. */
@@ -327,7 +336,9 @@ export class TranscriptView implements Component {
     if (this.theme.visible('gate.title')) {
       const glyphToken = gate.kind === 'approval' ? 'gate.glyphApproval' : 'gate.glyphQuestion'
       const glyph = this.theme.glyph(glyphToken) || (gate.kind === 'approval' ? APPROVAL_MARK : QUESTION_MARK)
-      lines.push(this.theme.style('gate.title', this.theme.cut(`${glyph} ${displayText(gate.title)}`, width, '')))
+      // The question is the thing being decided, so it wraps rather than being
+      // cut: a reader cannot answer a sentence they were not shown.
+      this.pushWrapped(lines, gate.title, width, `${glyph} `, text => this.theme.style('gate.title', text))
     }
     if (this.theme.visible('gate.detail')) {
       for (const detail of gate.detail) {
@@ -335,20 +346,50 @@ export class TranscriptView implements Component {
       }
     }
     gate.options.forEach((option, position) => {
-      const token = option.current ? 'gate.optionCurrent' : 'gate.option'
-      if (!this.theme.visible(token)) return
-      const box = option.selected ? CHECKBOX_ON : CHECKBOX_OFF
-      const cursor = option.current ? this.theme.glyph('gate.cursor') || CURSOR_MARK : NO_CURSOR
-      const label = displayText(option.label)
-      const number = gate.optionOffset + position + 1
-      const text = option.description === undefined
-        ? `${cursor} ${box} ${number}. ${label}`
-        : `${cursor} ${box} ${number}. ${label} — ${displayText(option.description)}`
-      lines.push(this.theme.style(token, this.theme.cut(`${OPTION_INDENT}${text}`, width, '')))
+      this.pushGateRow(lines, width, {
+        number: gate.optionOffset + position + 1,
+        label: option.label,
+        description: option.description,
+        current: option.current,
+        selected: option.selected,
+      })
     })
-    if (this.theme.visible('gate.hint')) {
-      lines.push(this.theme.style('gate.hint', this.theme.cut(`${OPTION_INDENT}${displayText(gate.hint)}`, width, '')))
+    // The free-text row is drawn under the window rather than inside it: it is
+    // the one row that must never scroll out of reach, and the window's own
+    // numbering is left running 1..n above it.
+    if (gate.custom !== undefined) {
+      this.pushGateRow(lines, width, {
+        number: CUSTOM_ROW_NUMBER,
+        label: gate.custom.label,
+        description: gate.custom.description,
+        current: gate.custom.current,
+        selected: gate.custom.selected,
+      })
     }
+    // The keys are how the gate is answered at all, so they wrap rather than
+    // lose their tail at a narrow edge.
+    if (this.theme.visible('gate.hint')) {
+      this.pushWrapped(lines, gate.hint, width, OPTION_INDENT, text => this.theme.style('gate.hint', text))
+    }
+  }
+
+  /**
+   * One row a reader can choose: the cursor, the box, the number, the label.
+   *
+   * The row wraps under the label it belongs to rather than at the screen edge,
+   * because the label and its description together are what tells two rows
+   * apart, and a mark on a continuation line reads as another row.
+   */
+  private pushGateRow(lines: string[], width: number, row: GateRow): void {
+    const token = row.current ? 'gate.optionCurrent' : 'gate.option'
+    if (!this.theme.visible(token)) return
+    const cursor = row.current ? this.theme.glyph('gate.cursor') || CURSOR_MARK : NO_CURSOR
+    const box = row.selected ? CHECKBOX_ON : CHECKBOX_OFF
+    const lead = `${OPTION_INDENT}${cursor} ${box} ${row.number}. `
+    const text = row.description === undefined ? row.label : `${row.label} — ${row.description}`
+    // The text reaches pushWrapped unescaped: it escapes once, and escaping a
+    // second time would show the reader the escape instead of the character.
+    this.pushWrapped(lines, text, width, lead, body => this.theme.style(token, body))
   }
 
   /** The rows one transcript entry becomes; `live` marks the entry the turn is still writing. */

@@ -336,6 +336,7 @@ describe('TranscriptView gate', () => {
       detail: ['write outside the workspace'],
       optionOffset: 0,
       options: [],
+      custom: undefined,
       hint: 'y allow once · n reject · esc cancel',
     }
     const lines = viewOf(new TranscriptModel(), COLLAPSED, gate).render(60)
@@ -354,12 +355,72 @@ describe('TranscriptView gate', () => {
         { label: 'staging', description: 'safe', current: true, selected: true },
         { label: 'production', description: undefined, current: false, selected: false },
       ],
+      custom: undefined,
       hint: 'space select · digits pick · enter confirm · esc skip',
     }
     const lines = viewOf(new TranscriptModel(), COLLAPSED, gate).render(60)
     expect(lines).toContain('? which target?  (1/2)')
     expect(lines).toContain('   ❯ [x] 5. staging — safe')
     expect(lines).toContain('     [ ] 6. production')
+  })
+
+  it('wraps an option that runs past the screen instead of cutting it', () => {
+    const gate: GateCard = {
+      kind: 'question',
+      title: 'which target?',
+      detail: [],
+      optionOffset: 0,
+      options: [
+        { label: 'staging-eu-west-1', description: 'the full canary rollout behind an audit window', current: true, selected: false },
+      ],
+      custom: undefined,
+      hint: 'space select · digits pick · enter confirm · esc skip',
+    }
+    const lines = viewOf(new TranscriptModel(), COLLAPSED, gate).render(40)
+    const first = lines.findIndex(line => line.includes('1. staging-eu-west-1'))
+    expect(first).toBeGreaterThan(-1)
+    // The tail has to stay readable, because the description is what tells two
+    // targets apart when their labels look alike.
+    const wrapped = lines.slice(first, first + 3)
+    expect(wrapped.join(' ')).toContain('audit window')
+    // The continuation aligns under the label, not under the cursor mark: a
+    // wrap that lands in the marker column reads as another row.
+    expect(wrapped[1]).toMatch(/^ {12}\S/u)
+    expect(lines.every(line => visibleWidth(line) <= 40)).toBe(true)
+  })
+
+  it('draws row 0 under the windowed options, marked while the cursor is on it', () => {
+    const gate: GateCard = {
+      kind: 'question',
+      title: 'which target?  (1/2)',
+      detail: [],
+      optionOffset: 4,
+      options: [{ label: 'staging', description: undefined, current: false, selected: false }],
+      custom: { label: 'other', description: 'type your own answer', current: true, selected: true },
+      hint: 'space select · digits pick · 0 answer freely · type to filter · enter confirm · esc skip',
+    }
+    const lines = viewOf(new TranscriptModel(), COLLAPSED, gate).render(60)
+    const row = lines.findIndex(line => line.includes('0. other'))
+    expect(lines[row]).toBe('   ❯ [x] 0. other — type your own answer')
+    // Row 0 sits under the window, so the window's own numbering is never interrupted.
+    expect(lines.findIndex(line => line.includes('5. staging'))).toBeLessThan(row)
+  })
+
+  it('wraps the question and the keys it names rather than cutting them', () => {
+    const gate: GateCard = {
+      kind: 'question',
+      title: 'which deployment target should the release candidate use?',
+      detail: [],
+      optionOffset: 0,
+      options: [],
+      custom: undefined,
+      hint: 'space select · digits pick · 0 answer freely · type to filter · enter confirm · esc skip',
+    }
+    const lines = viewOf(new TranscriptModel(), COLLAPSED, gate).render(40)
+    expect(lines.every(line => visibleWidth(line) <= 40)).toBe(true)
+    // The question's own words and the last key it names both survive the edge.
+    expect(lines.join(' ')).toContain('release candidate use?')
+    expect(lines.join(' ')).toContain('esc skip')
   })
 })
 

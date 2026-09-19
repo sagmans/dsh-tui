@@ -277,3 +277,145 @@ describe('QuestionGate paste', () => {
     expect(gate.card().title).toBe('Sign in · why?')
   })
 })
+
+/**
+ * Row 0 is the free-text answer.
+ *
+ * A question that lists options otherwise offers no visible way to answer with
+ * anything the model did not think of, and the seam already carries that answer
+ * as `custom`: the row is how a reader reaches it without guessing.
+ */
+describe('QuestionGate free-text row', () => {
+  const paste = (text: string): string => `\x1b[200~${text}\x1b[201~`
+
+  const withOptions = (): QuestionGate => new QuestionGate(toGateQuestions({
+    questions: [{ id: 'q1', question: 'deploy?', options: [{ label: 'yes' }, { label: 'no' }] }],
+  }))
+
+  it('offers row 0 on every question that has options', () => {
+    expect(withOptions().card().custom).toEqual({
+      label: 'other',
+      description: 'type your own answer',
+      current: false,
+      selected: false,
+    })
+  })
+
+  it('takes the cursor onto row 0 with the zero key', () => {
+    const gate = withOptions()
+    expect(gate.handleKey('0')).toBeUndefined()
+    const card = gate.card()
+    expect(card.custom?.current).toBe(true)
+    expect(card.options.every(option => !option.current)).toBe(true)
+    expect(card.hint).toContain('↑↓ back to options')
+  })
+
+  it('answers with what was typed on row 0 instead of filtering by it', () => {
+    const gate = withOptions()
+    gate.handleKey('0')
+    for (const character of 'ship it') gate.handleKey(character)
+    expect(gate.card().options.map(option => option.label)).toEqual(['yes', 'no'])
+    expect(gate.card().detail.join('\n')).toContain('answer: ship it▌')
+    expect(gate.handleKey(ENTER)).toEqual([{ id: 'q1', selected: [], custom: 'ship it' }])
+  })
+
+  it('reaches row 0 past the last option and keeps the text when the cursor walks back', () => {
+    const gate = withOptions()
+    gate.handleKey(DOWN)
+    // Walking past the last option is the second way onto row 0.
+    gate.handleKey(DOWN)
+    expect(gate.card().custom?.current).toBe(true)
+    for (const character of 'later') gate.handleKey(character)
+    gate.handleKey(UP)
+    const card = gate.card()
+    expect(card.custom).toMatchObject({ current: false, selected: true })
+    expect(card.options.find(option => option.current)?.label).toBe('no')
+    expect(gate.handleKey(ENTER)).toEqual([{ id: 'q1', selected: [], custom: 'later' }])
+  })
+
+  it('lets row 0 override the label a single-select question already chose', () => {
+    const gate = withOptions()
+    gate.handleKey('1')
+    gate.handleKey('0')
+    gate.handleKey('m')
+    expect(gate.handleKey(ENTER)).toEqual([{ id: 'q1', selected: [], custom: 'm' }])
+  })
+
+  it('supplements the labels a multi-select question chose', () => {
+    const gate = new QuestionGate(toGateQuestions({
+      questions: [{ id: 'q1', question: 'pick', options: [{ label: 'a' }, { label: 'b' }], multiSelect: true }],
+    }))
+    gate.handleKey('1')
+    gate.handleKey('0')
+    gate.handleKey('x')
+    expect(gate.handleKey(ENTER)).toEqual([{ id: 'q1', selected: ['a'], custom: 'x' }])
+  })
+
+  it('confirms what is already chosen when row 0 holds nothing, rather than a hidden row', () => {
+    const gate = withOptions()
+    gate.handleKey('2')
+    gate.handleKey('0')
+    expect(gate.handleKey(ENTER)).toEqual([{ id: 'q1', selected: ['no'] }])
+  })
+
+  it('types a space and a digit on row 0 instead of acting on the list', () => {
+    const gate = withOptions()
+    gate.handleKey('0')
+    for (const character of 'v2 two') gate.handleKey(character)
+    expect(gate.handleKey(ENTER)).toEqual([{ id: 'q1', selected: [], custom: 'v2 two' }])
+  })
+
+  it('keeps a pasted answer on row 0 and hides it when the question asks for a secret', () => {
+    const gate = new QuestionGate(toGateQuestions({
+      questions: [{ id: 'q1', question: 'API key?', options: [{ label: 'from the vault' }] }],
+    }))
+    gate.handleKey('0')
+    gate.handleKey(paste('sk-ant-api03-FAKE998877665544332211'))
+    const row = gate.card().detail.join('\n')
+    expect(row).toMatch(/API KEY: sk-a\*+2211▌/u)
+    expect(row).not.toContain('FAKE9988')
+    expect(gate.handleKey(ENTER)).toEqual([{ id: 'q1', selected: [], custom: 'sk-ant-api03-FAKE998877665544332211' }])
+  })
+
+  it('draws row 0 even when the filter leaves no option to show', () => {
+    const gate = withOptions()
+    for (const character of 'zzz') gate.handleKey(character)
+    const card = gate.card()
+    expect(card.options).toEqual([])
+    expect(card.custom).toMatchObject({ current: false, selected: false })
+  })
+
+  it('skips on escape without sending the text it drops', () => {
+    const typed = withOptions()
+    typed.handleKey('0')
+    typed.handleKey('x')
+    expect(typed.handleKey(ESC)).toEqual([{ id: 'q1', selected: [] }])
+
+    // An escape means the same thing on a question that is nothing but text.
+    const freeform = new QuestionGate(toGateQuestions({ questions: [{ id: 'q1', question: 'why?' }] }))
+    for (const character of 'because') freeform.handleKey(character)
+    expect(freeform.handleKey(ESC)).toEqual([{ id: 'q1', selected: [] }])
+  })
+
+  it('starts the next question of a batch with an empty row 0', () => {
+    const gate = new QuestionGate(toGateQuestions({
+      questions: [
+        { id: 'a', question: 'first', options: [{ label: 'x' }] },
+        { id: 'b', question: 'second', options: [{ label: 'y' }] },
+      ],
+    }))
+    gate.handleKey('0')
+    gate.handleKey('m')
+    gate.handleKey(ENTER)
+    const card = gate.card()
+    expect(card.custom).toEqual({ label: 'other', description: 'type your own answer', current: false, selected: false })
+    expect(card.detail.join('\n')).not.toContain('answer:')
+  })
+
+  it('leaves a question without options to typing, with no row 0 to reach', () => {
+    const gate = new QuestionGate(toGateQuestions({ questions: [{ id: 'q1', question: 'why?' }] }))
+    expect(gate.card().custom).toBeUndefined()
+    for (const character of 'because') gate.handleKey(character)
+    expect(gate.handleKey(ENTER)).toEqual([{ id: 'q1', selected: [], custom: 'because' }])
+  })
+})

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
 import { createToolPresenter } from '@/agent/present.ts'
+import type { GateCard } from '@/gates.ts'
 import { createTheme } from '@/theme.ts'
 import { TranscriptModel } from '@/transcript.ts'
 import { MarkdownRenderer } from '@/ui/markdown.ts'
@@ -220,6 +221,33 @@ function modelPickerCard(): ModelPicker {
   )
 }
 
+/**
+ * A pending question whose option is longer than a cramped terminal holds.
+ *
+ * A decision is only answerable when its rows are readable, so this frame pins
+ * wrapping in place of truncation, and the free-text row every question with
+ * options carries.
+ */
+function gateCard(): TranscriptView {
+  const gate: GateCard = {
+    kind: 'question',
+    title: 'which deployment target?  (1/2)',
+    detail: ['showing 1–2 of 9'],
+    optionOffset: 0,
+    options: [
+      { label: 'staging-eu-west-1', description: 'canary the rollout behind an audit window', current: true, selected: false },
+      { label: 'production', description: undefined, current: false, selected: false },
+    ],
+    custom: { label: 'other', description: 'type your own answer', current: false, selected: false },
+    hint: 'space select · digits pick · 0 answer freely · type to filter · enter confirm · esc skip',
+  }
+  return new TranscriptView(new TranscriptModel(), theme, new MarkdownRenderer(theme.markdown), {
+    state: () => DEFAULT_VIEW_STATE,
+    gate: () => gate,
+    picker: () => undefined,
+  })
+}
+
 describe('golden frames', () => {
   for (const width of WIDTHS) {
     it(`renders the transcript at ${width} columns`, () => {
@@ -236,6 +264,10 @@ describe('golden frames', () => {
 
     it(`renders the queued prompts at ${width} columns`, () => {
       expect(queued().render(width)).toMatchSnapshot()
+    })
+
+    it(`renders a question gate at ${width} columns`, () => {
+      expect(gateCard().render(width)).toMatchSnapshot()
     })
   }
 
