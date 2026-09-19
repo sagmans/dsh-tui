@@ -119,7 +119,8 @@ dsh --profile tui --no-bell            # do not ring when a long turn finishes
 
 | Key | Action |
 |---|---|
-| Enter | submit the prompt |
+| Enter / Shift+Enter | break the line: a prompt is written before it is sent |
+| Ctrl+Enter / Alt+Enter / Ctrl+S | submit the prompt |
 | Ctrl+C | interrupt the running turn, or leave when idle |
 | Ctrl+O | open every tool card: its header plus every retained row. Folded, a card is one line, and a shell card keeps its command plus the last 20 rows of output with a hint naming what it dropped |
 | Ctrl+Y | show or hide the calls a PTC program dispatched: one two-space-indented entry per call under its `run_code` card, named and argued from the tool's own header and wrapped at the screen edge; shown by default |
