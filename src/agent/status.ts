@@ -78,6 +78,11 @@ export interface StatusSources {
     readonly reasoningEffort?: string
   } | undefined) | undefined
   readonly home?: string | undefined
+  /**
+   * The chord waiting for its next key, read per paint so its window lapses on
+   * screen rather than only in the reader's head.
+   */
+  readonly chord?: (() => string | undefined) | undefined
 }
 
 export function createStatusFacts(ctx: Context, sources: StatusSources): () => StatusFacts {
@@ -111,6 +116,7 @@ export function createStatusFacts(ctx: Context, sources: StatusSources): () => S
       outputTokens: numberOr(totals?.outputTokens),
       cwd: process.cwd(),
       home: sources.home,
+      chord: sources.chord?.(),
     }
   }
 }

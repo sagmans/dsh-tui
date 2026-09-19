@@ -191,6 +191,7 @@ export const TUI_TOKENS = [
   'dock.jobs.running',
   'dock.jobs.overflow',
   // Status bar
+  'status.prefix',
   'status.activity.working',
   'status.activity.ready',
   'status.elapsed',
@@ -363,6 +364,7 @@ export const DEFAULT_TOKENS: Readonly<Record<TuiToken, StyleSpec>> = {
   'dock.jobs.running': muted,
   'dock.jobs.overflow': muted,
 
+  'status.prefix': { fg: 'accent' },
   'status.activity.working': muted,
   'status.activity.ready': muted,
   'status.elapsed': muted,
