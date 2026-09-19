@@ -430,7 +430,7 @@ describe('TranscriptView gate', () => {
       options: [{ label: 'staging', description: undefined, current: false, selected: false }],
       custom: { label: 'other', description: 'type your own answer', current: true, selected: true },
       answerInput: answerBar('the eu-central cluster'),
-      hint: 'type or paste an answer · enter confirm · ↑↓ back to options · esc skip',
+      hint: 'type or paste an answer · enter confirm · ↑↓ or esc back to options',
     }
     const lines = viewOf(new TranscriptModel(), COLLAPSED, gate).render(60)
     const row = lines.findIndex(line => line.includes('0. other'))

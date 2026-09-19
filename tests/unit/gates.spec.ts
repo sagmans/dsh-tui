@@ -334,7 +334,7 @@ describe('QuestionGate free-text row', () => {
     const card = gate.card()
     expect(card.custom?.current).toBe(true)
     expect(card.options.every(option => !option.current)).toBe(true)
-    expect(card.hint).toContain('↑↓ back to options')
+    expect(card.hint).toContain('back to options')
   })
 
   it('answers with what was typed on row 0 instead of filtering by it', () => {
@@ -411,13 +411,47 @@ describe('QuestionGate free-text row', () => {
     expect(card.custom).toMatchObject({ current: false, selected: false })
   })
 
-  it('skips on escape without sending the text it drops', () => {
+  it('leaves the free-text row on escape, and skips only from the list', () => {
+    // A question skipped by accident is a question the reader answers again, so
+    // an escape out of the text they are writing is not an escape from the
+    // question: the list it returns to is where a question is skipped.
     const typed = withOptions()
     typed.handleKey('0')
     typed.handleKey('x')
+    expect(typed.handleKey(ESC)).toBeUndefined()
+    expect(typed.card().custom).toMatchObject({ current: false, selected: true })
+    expect(answerText(typed)).toBe('x')
     expect(typed.handleKey(ESC)).toEqual([{ id: 'q1', selected: [] }])
+  })
 
-    // An escape means the same thing on a question that is nothing but text.
+  it('returns the cursor to the row the free-text row was entered from', () => {
+    const gate = providerGate()
+    gate.handleKey('down')
+    gate.handleKey('down')
+    const left = gate.card().options.find(option => option.current)?.label
+    expect(left).toBeDefined()
+    gate.handleKey('0')
+    expect(gate.card().custom).toMatchObject({ current: true })
+    // The text stays where it was written, so answering freely again resumes it.
+    gate.handleKey('later')
+    gate.handleKey(ESC)
+    expect(gate.card().options.find(option => option.current)?.label).toBe(left)
+    gate.handleKey('0')
+    expect(answerText(gate)).toBe('later')
+  })
+
+  it('returns to the row a digit picked, which the cursor never walked to', () => {
+    const gate = providerGate()
+    gate.handleKey('2')
+    expect(gate.card().options.find(option => option.current)?.label).toBe('ChatGPT (Codex)')
+    expect(gate.card().options.find(option => option.selected)?.label).toBe('Anthropic (Claude Pro/Max)')
+    gate.handleKey('0')
+    gate.handleKey(ESC)
+    expect(gate.card().options.find(option => option.current)?.label).toBe('Anthropic (Claude Pro/Max)')
+  })
+
+  it('skips a question that is nothing but text on the first escape', () => {
+    // Such a question has no list to return to, so an escape has nowhere else to go.
     const freeform = gateOver(toGateQuestions({ questions: [{ id: 'q1', question: 'why?' }] }))
     for (const character of 'because') freeform.handleKey(character)
     expect(freeform.handleKey(ESC)).toEqual([{ id: 'q1', selected: [] }])

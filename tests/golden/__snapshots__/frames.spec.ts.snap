@@ -140,8 +140,7 @@ exports[`golden frames > renders a question gate collecting a typed answer at 40
   "   │ the eu-central cluster[7m [0m           │",
   "   ╰───────────────────────────────────╯",
   "   type or paste an answer · enter",
-  "   confirm · ↑↓ back to options · esc",
-  "   skip",
+  "   confirm · ↑↓ or esc back to options",
 ]
 `;
 
@@ -156,7 +155,7 @@ exports[`golden frames > renders a question gate collecting a typed answer at 80
   "   ╭───────────────────────────────────────────────────────────────────────────╮",
   "   │ the eu-central cluster[7m [0m                                                   │",
   "   ╰───────────────────────────────────────────────────────────────────────────╯",
-  "   type or paste an answer · enter confirm · ↑↓ back to options · esc skip",
+  "   type or paste an answer · enter confirm · ↑↓ or esc back to options",
 ]
 `;
 

@@ -192,7 +192,7 @@ const CUSTOM_ROW_DESCRIPTION = 'type your own answer'
 const CUSTOM_ROW_SHORTHAND = `${CUSTOM_ROW_NUMBER} answer freely`
 
 /** The keys that answer the free-text row, where typing is the answer rather than a filter. */
-const CUSTOM_HINT = 'type or paste an answer · enter confirm · ↑↓ back to options · esc skip'
+const CUSTOM_HINT = 'type or paste an answer · enter confirm · ↑↓ or esc back to options'
 
 /** One option with the position it answers for, so filtering can drop rows and keep the meaning. */
 interface PositionedOption {
@@ -214,6 +214,15 @@ export class QuestionGate {
   private typed = ''
   /** Whether the cursor is on the free-text row. */
   private atCustom = false
+  /**
+   * The row an escape from the free-text row returns to.
+   *
+   * It is the row the reader last acted on — walked to, picked by its number, or
+   * toggled — because that is the option they were looking at when they decided
+   * to answer freely, and it is not always the row the cursor still stands on: a
+   * digit picks by number without walking anywhere.
+   */
+  private customFrom = 0
   private readonly chosen: string[][] = []
   private readonly custom: (string | undefined)[] = []
   private finished = false
@@ -313,6 +322,7 @@ export class QuestionGate {
     }
     this.typed += text
     this.cursor = 0
+    this.customFrom = 0
   }
 
   /** Apply one key press; returns the batch answer the first time it completes. */
@@ -333,18 +343,24 @@ export class QuestionGate {
     const matched = this.matched(question)
     if (matchesKey(data, 'up')) {
       this.cursor = Math.max(0, this.cursor - 1)
+      this.customFrom = this.cursor
       return undefined
     }
     if (matchesKey(data, 'down')) {
       // Below the last option sits the free-text row, which is the second way
       // to reach it; a list with nothing left to show steps straight onto it.
-      if (this.cursor >= matched.length - 1) this.atCustom = true
-      else this.cursor += 1
+      if (this.cursor >= matched.length - 1) {
+        this.atCustom = true
+      } else {
+        this.cursor += 1
+        this.customFrom = this.cursor
+      }
       return undefined
     }
     if (question.options.length > 0 && matchesKey(data, 'space')) {
       const row = this.currentRow(question)
       if (row !== undefined) this.pick(row.position)
+      this.customFrom = this.cursor
       return undefined
     }
     if (matchesKey(data, 'escape')) {
@@ -386,7 +402,10 @@ export class QuestionGate {
         return undefined
       }
       const row = matched[digit - 1]
-      if (row !== undefined) this.pick(row.position)
+      if (row !== undefined) {
+        this.pick(row.position)
+        this.customFrom = digit - 1
+      }
       return undefined
     }
     if (data.length === 1 && data >= ' ') this.absorb(data)
@@ -397,8 +416,10 @@ export class QuestionGate {
    * One key press while the free-text row holds the cursor.
    *
    * Walking back to the list keeps whatever was typed, so a reader who changes
-   * their mind about answering freely has not lost the text yet; only an escape
-   * drops it, because an escape is how every question is skipped.
+   * their mind about answering freely has not lost the text yet. An escape
+   * leaves the row the same way, because a question skipped by accident is a
+   * question the reader has to answer again: from the list, where every other
+   * question is skipped, an escape skips this one too.
    */
   private handleCustomKey(data: string): GateAnswer[] | undefined {
     if (matchesKey(data, 'up') || matchesKey(data, 'down')) {
@@ -406,8 +427,11 @@ export class QuestionGate {
       return undefined
     }
     if (matchesKey(data, 'escape')) {
-      this.advance()
-      return this.result()
+      const question = this.current
+      const rows = question === undefined ? 0 : this.matched(question).length
+      this.atCustom = false
+      this.cursor = Math.min(this.customFrom, Math.max(0, rows - 1))
+      return undefined
     }
     if (matchesKey(data, 'enter')) {
       this.confirm()
@@ -442,6 +466,7 @@ export class QuestionGate {
   private advance(): void {
     this.typed = ''
     this.atCustom = false
+    this.customFrom = 0
     this.cursor = 0
     this.index += 1
     if (this.index >= this.questions.length) this.finished = true
