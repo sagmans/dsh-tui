@@ -209,6 +209,16 @@ export interface ThemeOverrides {
 }
 
 /**
+ * One sentence for a section the surface refused.
+ *
+ * Shared by the stderr fallback and the reader-facing notice so a refusal the
+ * schema makes at registration and one the parser makes on a read read alike.
+ */
+export function settingsProblemMessage(error: unknown): string {
+  return `ignoring ${TUI_SETTINGS_NAMESPACE} settings: ${error instanceof Error ? error.message : String(error)}`
+}
+
+/**
  * Read a registered scope's section, or nothing when it cannot be read.
  *
  * A malformed section must not cost the reader their session: an unreadable
@@ -221,7 +231,7 @@ export function readScope(scope: { get(): unknown }, onProblem?: (message: strin
   try {
     return parseSettings(scope.get() ?? {})
   } catch (error) {
-    const message = `ignoring ${TUI_SETTINGS_NAMESPACE} settings: ${error instanceof Error ? error.message : String(error)}`
+    const message = settingsProblemMessage(error)
     if (onProblem === undefined) process.stderr.write(`dsh-tui: ${message}\n`)
     else onProblem(message)
     return defaultSettings()
