@@ -50,6 +50,14 @@ export class BoxedEditor extends Editor {
     return this.borderColor(`${open}${stripTerminalSequences(row)}${close}`)
   }
 
+  /**
+   * Rewrite one row of the text before it is framed, so a subclass can hide
+   * what it collects without hiding the box the reader types inside.
+   */
+  protected decorateText(row: string): string {
+    return row
+  }
+
   override render(width: number): string[] {
     const side = this.borderColor(FRAME_GLYPHS.side)
     // A frame narrower than its own furniture would eat the text it exists to
@@ -57,7 +65,7 @@ export class BoxedEditor extends Editor {
     // the plain rules rather than reserve columns for what nobody can see.
     if (width < MIN_BOX_WIDTH || side === '') {
       this.boxed = false
-      return super.render(width)
+      return super.render(width).map(row => this.decorateText(row))
     }
     const rows = super.render(width - FRAME_COLUMNS)
     const closing = rows.findIndex(row => row.includes(CLOSING_TAG))
@@ -72,7 +80,7 @@ export class BoxedEditor extends Editor {
     // The menu keeps the page's own width; only its rows moved above the box.
     const lines = menu.map(row => row + ' '.repeat(FRAME_COLUMNS))
     lines.push(this.edge(FRAME_GLYPHS.topLeft, FRAME_GLYPHS.topRight, rows[0] ?? ''))
-    for (const row of text) lines.push(`${side}${row}${side}`)
+    for (const row of text) lines.push(`${side}${this.decorateText(row)}${side}`)
     lines.push(this.edge(FRAME_GLYPHS.bottomLeft, FRAME_GLYPHS.bottomRight, rows[closing]!.replace(CLOSING_TAG, '')))
     return lines
   }

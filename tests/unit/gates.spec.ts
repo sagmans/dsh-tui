@@ -2,7 +2,7 @@ import { type TUI } from '@earendil-works/pi-tui'
 import { describe, expect, it } from 'vitest'
 import { ApprovalGate, type GateQuestion, QuestionGate, toGateQuestions } from '@/gates.ts'
 import { createTheme } from '@/theme.ts'
-import { BoxedEditor } from '@/ui/editor.ts'
+import { GateInputBar } from '@/ui/gate-input.ts'
 
 /**
  * The terminal the bar renders against. Nothing in these tests reads the screen
@@ -11,7 +11,7 @@ import { BoxedEditor } from '@/ui/editor.ts'
 const STUB_TUI = { requestRender: () => {}, terminal: { rows: 24, cols: 80 } } as unknown as TUI
 
 /** The bar a gate collects its answers with, which the surface lends it. */
-const answerBar = (): BoxedEditor => new BoxedEditor(STUB_TUI, createTheme('none').editor)
+const answerBar = (): GateInputBar => new GateInputBar(STUB_TUI, createTheme('none').editor)
 
 /** A question gate over a fresh bar, which is how the surface builds one. */
 const gateOver = (questions: readonly GateQuestion[]): QuestionGate => new QuestionGate(questions, answerBar())
@@ -270,13 +270,41 @@ describe('QuestionGate paste', () => {
     expect(gate.handleKey(ENTER)).toEqual([{ id: 'q1', selected: [], custom: 'sk-ant-api03-abcDEF123' }])
   })
 
-  it('shows a key in the editor that collects it, because the reader has to check it', () => {
-    // A question cannot know that an answer is a secret, and hiding one it only
-    // guessed at costs the reader the sight of what they are about to send.
+  it('shows an answer no question declared a credential, even when its wording says key', () => {
+    // Wording is not a declaration: a question that merely mentions a key would
+    // otherwise hide an answer its author meant the reader to check.
     const gate = gateOver(toGateQuestions({ questions: [{ id: 'q1', question: 'Enter the Anthropic API key' }] }))
     gate.handleKey(paste('sk-ant-api03-FAKE998877665544332211'))
     expect(answerText(gate)).toBe('sk-ant-api03-FAKE998877665544332211')
     expect(answerRows(gate)).toContain('FAKE9988')
+  })
+
+  it('hides the middle of an answer the question declares a credential', () => {
+    const gate = gateOver(toGateQuestions({ questions: [{ id: 'prompt:secret', question: 'Enter the value' }] }))
+    gate.handleKey(paste('sk-ant-api03-FAKE998877665544332211'))
+    expect(answerText(gate)).toBe('sk-ant-api03-FAKE998877665544332211')
+    expect(answerRows(gate)).toContain('sk-a')
+    expect(answerRows(gate)).toContain('2211')
+    expect(answerRows(gate)).not.toContain('FAKE9988')
+  })
+
+  it('names the free-text row after what a declared answer is', () => {
+    const gate = gateOver(toGateQuestions({
+      questions: [{ id: 'prompt:secret', question: 'Enter the value', options: [{ label: 'one' }, { label: 'two' }] }],
+    }))
+    expect(gate.card().custom?.label).toBe('API KEY')
+  })
+
+  it('gives the bar back its plain mode for the question after a credential', () => {
+    const gate = gateOver(toGateQuestions({ questions: [
+      { id: 'prompt:secret', question: 'Enter the value' },
+      { id: 'q2', question: 'Which branch should I use?' },
+    ] }))
+    gate.handleKey(paste('sk-ant-api03-FAKE998877665544332211'))
+    expect(answerRows(gate)).not.toContain('FAKE9988')
+    gate.handleKey(ENTER)
+    gate.handleKey(paste('release/0.2'))
+    expect(answerRows(gate)).toContain('release/0.2')
   })
 
   it('shows a plain answer as typed, because an answer is not filtered through the gate', () => {
