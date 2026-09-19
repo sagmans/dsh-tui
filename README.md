@@ -156,7 +156,7 @@ dsh --profile tui --no-bell            # do not ring when a long turn finishes
 | `/theme` | list every styled element and the value in force |
 | `/quit` | leave and print the resume command |
 
-An approval or a question draws inline above the editor and takes the keyboard. A question that lists options always adds row `0. other — type your own answer`: type or paste an answer the model did not offer, and the seam receives it as that question's free text — replacing a single-select choice, or supplementing a multi-select one. `0`, or `↓` past the last option, reaches the row; `↑` walks back to the list with the text kept; `esc` skips the question. Free text is written in a bar under that row — the prompt bar's own component, so cursor movement, word and line deletion, undo, and multi-line paste all work there; a question that asks for a credential (a key, a token, a password) switches the same bar to hide what it holds while still sending it whole. Every gate row wraps at the screen edge under its own label, so a long option or question is readable rather than cut.
+An approval or a question draws inline above the editor and takes the keyboard. A question that lists options always adds row `0. other — type your own answer`: type or paste an answer the model did not offer, and the seam receives it as that question's free text — replacing a single-select choice, or supplementing a multi-select one. `0`, or `↓` past the last option, reaches the row; `↑` walks back to the list with the text kept; `esc` skips the question. Free text is written in the prompt bar's own editor, drawn under that row: movement, word and line deletion, undo, completion, and multi-line paste are all the editor the reader already uses, and the prompt bar steps aside while a question is open, so a prompt written but not sent comes back untouched once the question is answered. No question hides its answer — the reader is the one who has to check what they are about to send. Every gate row wraps at the screen edge under its own label, so a long option or question is readable rather than cut.
 
 While a turn runs, a prompt submitted into the editor waits in the agent's own inbox instead of disappearing: it is drawn above the editor in the input bar's own frame, faint and italic, and moves into the transcript when the agent takes it — where it keeps that frame in the prompt's own rose shade, so what the reader typed is never mistaken for what the agent said. `editor.queued` and `editor.queued.more` restyle or hide the waiting rows; `transcript.user` restyles the submitted prompt.
 
@@ -331,8 +331,8 @@ The automated checks drive a real PTY, but they run on this machine's terminal. 
 | resize the window mid-turn | the transcript rewraps; the dock, editor, and status row stay put |
 | a 40-column terminal | transcript and card rows end in `…` instead of wrapping into the next line |
 | a question with a long option at 40 columns | the option wraps onto rows indented under its label, and `0. other — type your own answer` sits under the list |
-| press `0` on a question, type an answer, press Enter | the bar under row `0` shows the text as it is edited, and the model receives it as that question's answer |
-| press `0` on a question that asks for a key, then paste one | the bar fills with `*` and the model still receives the key itself |
+| press `0` on a question, type an answer, press Enter | the editor under row `0` shows the text as it is edited, and the model receives it as that question's answer |
+| type a prompt without sending it, then answer a question | the prompt bar steps aside while the question is open and holds the same prompt again afterwards |
 | `echo hi \| dsh --profile tui` | refuses with a non-zero exit and a message naming the TTY requirement |
 | `/quit`, Ctrl+C while idle, `kill -TERM <pid>` | the shell returns with cursor, echo, mouse, and title restored |
 

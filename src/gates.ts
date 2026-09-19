@@ -52,13 +52,6 @@ export interface GateInput {
   render(width: number): string[]
   /** Take a key the gate itself did not claim. */
   handleInput(data: string): void
-  /**
-   * Show what the bar holds, or hide it, without changing what it holds.
-   *
-   * A question that asks for a credential is answered in the same bar as every
-   * other, so hiding is a mode of that bar rather than a different component.
-   */
-  setMode(mode: 'answer' | 'secret'): void
 }
 
 /** One selectable row of a question gate. */
@@ -201,40 +194,6 @@ const CUSTOM_ROW_SHORTHAND = `${CUSTOM_ROW_NUMBER} answer freely`
 /** The keys that answer the free-text row, where typing is the answer rather than a filter. */
 const CUSTOM_HINT = 'type or paste an answer · enter confirm · ↑↓ back to options · esc skip'
 
-/**
- * Words that mark a question as one whose answer is a secret. A plugin cannot
- * say so through the seam yet, and the question is where it already says it:
- * a person who loses a key to a shoulder loses an account, so the bar keeps the
- * value out of sight rather than trusting every question to be harmless.
- */
-const SECRET_WORDS = ['token', 'secret', 'password', 'passphrase', 'credential'] as const
-
-/** The words that make a key a credential rather than a button. */
-const SECRET_KEY_QUALIFIERS = ['api', 'access', 'private', 'ssh', 'signing', 'deploy', 'auth', 'encryption'] as const
-
-/**
- * The credential forms a question can name.
- *
- * A bare key counts only as the thing the question asks for — "key?", "enter
- * the key" — because questions also mention the keyboard ("which keys", "the
- * keys line", "keybinding"), and hiding an answer that is not a secret costs
- * the reader the sight of the very text they are checking.
- */
-const SECRET_PATTERN = new RegExp(
-  [
-    `\\b(?:${SECRET_WORDS.join('|')})s?\\b`,
-    `\\b(?:${SECRET_KEY_QUALIFIERS.join('|')})[-\\s]?keys?\\b`,
-    '\\bkeys?\\b(?![ ][a-z])',
-  ].join('|'),
-  'iu',
-)
-
-/** Whether a question asks for something its owner should not show a bystander. */
-function asksForSecret(question: GateQuestion | undefined): boolean {
-  if (question === undefined) return false
-  return SECRET_PATTERN.test(question.question) || (question.header !== undefined && SECRET_PATTERN.test(question.header))
-}
-
 /** One option with the position it answers for, so filtering can drop rows and keep the meaning. */
 interface PositionedOption {
   readonly option: GateQuestion['options'][number]
@@ -272,15 +231,14 @@ export class QuestionGate {
   }
 
   /**
-   * Hand the bar the question now under the cursor, with nothing written in it.
+   * Empty the editor for the question now under the cursor.
    *
-   * The bar belongs to the surface and outlives one question, so an answer must
-   * never cross from the last question into the next — or from a gate that was
-   * abandoned into the one that follows it.
+   * The editor belongs to the surface and outlives one question, so an answer
+   * must never cross from the last question into the next — or from a gate that
+   * was abandoned into the one that follows it.
    */
   private resetInput(): void {
     this.input.setText('')
-    this.input.setMode(asksForSecret(this.current) ? 'secret' : 'answer')
   }
 
   get resolved(): boolean {

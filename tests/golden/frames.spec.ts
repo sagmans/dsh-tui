@@ -7,7 +7,7 @@ import { createTheme } from '@/theme.ts'
 import { TranscriptModel } from '@/transcript.ts'
 import { MarkdownRenderer } from '@/ui/markdown.ts'
 import { createMermaidTransform } from '@/ui/mermaid.ts'
-import { GateInputBar } from '@/ui/gate-input.ts'
+import { BoxedEditor } from '@/ui/editor.ts'
 import { StatusBar } from '@/ui/status.ts'
 import { DEFAULT_VIEW_STATE, TranscriptView } from '@/ui/view.ts'
 import { WorkDock } from '@/ui/dock.ts'
@@ -235,7 +235,7 @@ function modelPickerCard(): ModelPicker {
  */
 function gateCard(typed = ''): TranscriptView {
   const typing = typed !== ''
-  const bar = new GateInputBar(STUB_TUI, theme.editor)
+  const bar = new BoxedEditor(STUB_TUI, theme.editor)
   bar.setText(typed)
   const gate: GateCard = {
     kind: 'question',

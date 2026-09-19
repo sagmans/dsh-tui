@@ -2,7 +2,7 @@ import { type TUI } from '@earendil-works/pi-tui'
 import { describe, expect, it } from 'vitest'
 import { ApprovalGate, type GateQuestion, QuestionGate, toGateQuestions } from '@/gates.ts'
 import { createTheme } from '@/theme.ts'
-import { GateInputBar } from '@/ui/gate-input.ts'
+import { BoxedEditor } from '@/ui/editor.ts'
 
 /**
  * The terminal the bar renders against. Nothing in these tests reads the screen
@@ -10,8 +10,8 @@ import { GateInputBar } from '@/ui/gate-input.ts'
  */
 const STUB_TUI = { requestRender: () => {}, terminal: { rows: 24, cols: 80 } } as unknown as TUI
 
-/** The bar a gate collects its answers with, which is the component under test. */
-const answerBar = (): GateInputBar => new GateInputBar(STUB_TUI, createTheme('none').editor)
+/** The bar a gate collects its answers with, which the surface lends it. */
+const answerBar = (): BoxedEditor => new BoxedEditor(STUB_TUI, createTheme('none').editor)
 
 /** A question gate over a fresh bar, which is how the surface builds one. */
 const gateOver = (questions: readonly GateQuestion[]): QuestionGate => new QuestionGate(questions, answerBar())
@@ -270,18 +270,16 @@ describe('QuestionGate paste', () => {
     expect(gate.handleKey(ENTER)).toEqual([{ id: 'q1', selected: [], custom: 'sk-ant-api03-abcDEF123' }])
   })
 
-  it('hides a key in the bar that collects it, whatever the question calls it', () => {
+  it('shows a key in the editor that collects it, because the reader has to check it', () => {
+    // A question cannot know that an answer is a secret, and hiding one it only
+    // guessed at costs the reader the sight of what they are about to send.
     const gate = gateOver(toGateQuestions({ questions: [{ id: 'q1', question: 'Enter the Anthropic API key' }] }))
     gate.handleKey(paste('sk-ant-api03-FAKE998877665544332211'))
-    // The bar holds every character and shows none of them: the value is what an
-    // enter sends, and the screen is what a bystander can read.
     expect(answerText(gate)).toBe('sk-ant-api03-FAKE998877665544332211')
-    const rows = answerRows(gate)
-    expect(rows).not.toContain('FAKE9988')
-    expect(rows).toContain('*')
+    expect(answerRows(gate)).toContain('FAKE9988')
   })
 
-  it('shows a plain answer as typed, because hiding an answer hides the answer', () => {
+  it('shows a plain answer as typed, because an answer is not filtered through the gate', () => {
     const gate = gateOver(toGateQuestions({ questions: [{ id: 'q1', question: 'Which branch should I use?' }] }))
     gate.handleKey(paste('release/0.2'))
     expect(answerText(gate)).toBe('release/0.2')
@@ -394,14 +392,14 @@ describe('QuestionGate free-text row', () => {
     expect(gate.handleKey(ENTER)).toEqual([{ id: 'q1', selected: [], custom: 'v2 two' }])
   })
 
-  it('keeps a pasted answer on row 0 and hides it when the question asks for a secret', () => {
+  it('keeps a pasted answer on row 0 and sends it whole', () => {
     const gate = gateOver(toGateQuestions({
-      questions: [{ id: 'q1', question: 'API key?', options: [{ label: 'from the vault' }] }],
+      questions: [{ id: 'q1', question: 'Which key should the deploy use?', options: [{ label: 'from the vault' }] }],
     }))
     gate.handleKey('0')
     gate.handleKey(paste('sk-ant-api03-FAKE998877665544332211'))
     expect(answerText(gate)).toBe('sk-ant-api03-FAKE998877665544332211')
-    expect(answerRows(gate)).not.toContain('FAKE9988')
+    expect(answerRows(gate)).toContain('FAKE9988')
     expect(gate.handleKey(ENTER)).toEqual([{ id: 'q1', selected: [], custom: 'sk-ant-api03-FAKE998877665544332211' }])
   })
 
@@ -462,24 +460,14 @@ describe('QuestionGate free-text row', () => {
     expect(answerRows(gate)).toContain('ctrl+t')
   })
 
-  it('hides an answer the question asks to be kept', () => {
+  it('draws what a question about credentials collects', () => {
     const gate = gateOver(toGateQuestions({
       questions: [{ id: 'q1', question: 'Paste the deploy credentials, then pick the vault', options: [{ label: 'from the vault' }] }],
     }))
     gate.handleKey('0')
     gate.handleKey(paste('abcdefghijkl'))
     expect(answerText(gate)).toBe('abcdefghijkl')
-    expect(answerRows(gate)).not.toContain('abcdefghijkl')
-  })
-
-  it('hides the answer to a question that is nothing but a bare key', () => {
-    const gate = gateOver(toGateQuestions({
-      questions: [{ id: 'q1', question: 'key?', options: [{ label: 'from the vault' }] }],
-    }))
-    gate.handleKey('0')
-    gate.handleKey(paste('abcdefghijkl'))
-    expect(answerText(gate)).toBe('abcdefghijkl')
-    expect(answerRows(gate)).not.toContain('abcdefghijkl')
+    expect(answerRows(gate)).toContain('abcdefghijkl')
   })
 
   it('hands the typed answer to the bar, not to the question detail', () => {

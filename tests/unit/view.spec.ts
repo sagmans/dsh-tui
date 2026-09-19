@@ -8,7 +8,7 @@ import { TranscriptModel, type TranscriptEntry } from '@/transcript.ts'
 import { MarkdownRenderer } from '@/ui/markdown.ts'
 import type { PickerCard } from '@/ui/picker.ts'
 import { RowCache } from '@/ui/rows.ts'
-import { GateInputBar } from '@/ui/gate-input.ts'
+import { BoxedEditor } from '@/ui/editor.ts'
 import { TranscriptView, type ViewState } from '@/ui/view.ts'
 
 const theme = createTheme('none')
@@ -16,9 +16,9 @@ const theme = createTheme('none')
 /** The terminal the bar under test renders against; these tests read its rows only. */
 const STUB_TUI = { requestRender: () => {}, terminal: { rows: 24, cols: 80 } } as unknown as TUI
 
-/** The bar a gate answers in, which is the component the surface hands in. */
-const answerBar = (text: string): GateInputBar => {
-  const bar = new GateInputBar(STUB_TUI, theme.editor)
+/** The editor a gate answers in, which is the surface's own prompt bar. */
+const answerBar = (text: string): BoxedEditor => {
+  const bar = new BoxedEditor(STUB_TUI, theme.editor)
   bar.setText(text)
   return bar
 }
