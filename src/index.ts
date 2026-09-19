@@ -36,6 +36,7 @@ import type { AskUserQuestionAnswer } from '@deepseek-ai/dsh-user-questions'
 import { ApprovalGate, QuestionGate, toGateQuestions, type GateAnswer } from './gates.ts'
 import { createCompletionProvider } from './input/completion.ts'
 import { LOCAL_COMMANDS, classifySubmission, type Submission } from './input/submission.ts'
+import { createDeferredNotice } from './settings-notice.ts'
 import {
   ChordReader,
   DEFAULT_PREFIX_KEY,
@@ -55,7 +56,7 @@ import { CLEAR_TITLE, windowTitle } from './terminal/title.ts'
 import { defaultExportFile, transcriptToText } from './export.ts'
 import { createTheme, forwardEditorTheme, forwardMarkdownTheme, type TuiTheme } from './theme.ts'
 import { detectColourMode, type ColourMode } from './theme-capability.ts'
-import { defaultSettings, readScope, toOverrides, TUI_SETTINGS_NAMESPACE, TuiSettingsSchema, type MermaidMode, type TuiSettings } from './theme-settings.ts'
+import { defaultSettings, readScope, settingsProblemMessage, toOverrides, TUI_SETTINGS_NAMESPACE, TuiSettingsSchema, type MermaidMode, type TuiSettings } from './theme-settings.ts'
 import { pendingPrompts } from './queue.ts'
 import { renderThemeTable } from './theme-command.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
@@ -177,11 +178,14 @@ export function apply(ctx: Context, config: unknown): void {
    * late-bound read that the injection point and the change event both use.
    */
   let readSection = (): TuiSettings => defaultSettings()
-  /** A refused settings edit, kept until the surface can show it: stderr is behind the alt screen. */
-  let pendingSettingsProblem: string | undefined
+  /**
+   * A refused settings edit, kept until the surface can show it: stderr is
+   * behind the alt screen, and the section is read on a schedule of its own.
+   */
+  const settingsNotice = createDeferredNotice()
   let current = createTheme(themeMode())
-  const applyTheme = (): void => {
-    current = createTheme(themeMode(), toOverrides(readSection()))
+  const applyTheme = (section: TuiSettings): void => {
+    current = createTheme(themeMode(), toOverrides(section))
   }
   const theme: TuiTheme = {
     get revision() { return current.revision },
@@ -232,14 +236,24 @@ export function apply(ctx: Context, config: unknown): void {
    * deliberate act, so it re-seeds and becomes the new starting point; the
    * mermaid mode has no key of its own and only ever comes from the document.
    */
-  const applyDisplay = (): void => {
-    const section = readSection()
+  const applyDisplay = (section: TuiSettings): void => {
     viewState.expandSubCalls = section.subcalls === 'inline'
     mermaidMode = section.mermaid
     prefixKey = section.prefix
     prefixWindowMs = section.prefixWindow * MS_PER_SECOND
     // A chord armed under the keymap the reader just replaced is not their chord.
     keyChord.disarm()
+  }
+  /**
+   * Read the reader's section once and apply everything it configures.
+   *
+   * One read per change, because a refused section is reported on the way past:
+   * reading it once per field would show the reader the same refusal twice.
+   */
+  const applySettings = (): void => {
+    const section = readSection()
+    applyTheme(section)
+    applyDisplay(section)
   }
   /**
    * Own the section, so the harness validates and persists it for the reader.
@@ -250,10 +264,19 @@ export function apply(ctx: Context, config: unknown): void {
    * may be touched in.
    */
   ctx.inject(['settings'], settingsCtx => {
-    const scope = settingsCtx.settings.register(TUI_SETTINGS_NAMESPACE, TuiSettingsSchema)
-    readSection = () => readScope(scope, message => { pendingSettingsProblem = message })
-    applyTheme()
-    applyDisplay()
+    // Registration parses the document against the schema, so a section the
+    // schema itself refuses throws here — inside a fiber whose failure the
+    // screen never shows. Reporting it through the same holder keeps a typo
+    // from costing the reader every setting they wrote, silently.
+    let scope: { get(): unknown }
+    try {
+      scope = settingsCtx.settings.register(TUI_SETTINGS_NAMESPACE, TuiSettingsSchema)
+    } catch (error) {
+      settingsNotice.post(settingsProblemMessage(error))
+      return
+    }
+    readSection = () => readScope(scope, message => settingsNotice.post(message))
+    applySettings()
   })
   /**
    * The agent scope the tool presenter resolves against.
@@ -1693,17 +1716,11 @@ export function apply(ctx: Context, config: unknown): void {
    */
   disposers.push(ctx.on('settings/updated', ns => {
     if (String(ns) !== TUI_SETTINGS_NAMESPACE) return
-    pendingSettingsProblem = undefined
-    applyTheme()
-    applyDisplay()
+    applySettings()
     // Both caches hold rows under the old table, so they have to be told the
     // table moved; a repaint alone would reuse what they already stored.
     markdown.invalidate()
     view.invalidate()
-    if (pendingSettingsProblem !== undefined) {
-      model.notice(`dsh-tui settings: ${pendingSettingsProblem}`)
-      pendingSettingsProblem = undefined
-    }
     tui.requestRender()
   }))
 
@@ -1750,11 +1767,8 @@ export function apply(ctx: Context, config: unknown): void {
     tui.start()
     terminal.write(windowTitle(process.cwd(), 'ready'))
     // A refused settings edit is only visible now that the surface owns the
-    // screen; a bare stderr line would have been hidden behind it.
-    if (pendingSettingsProblem !== undefined) {
-      model.notice(`dsh-tui settings: ${pendingSettingsProblem}`)
-      pendingSettingsProblem = undefined
-    }
+    // screen; whatever the scope found before this point prints here instead.
+    settingsNotice.open(message => model.notice(message))
     await boot()
   }
 
