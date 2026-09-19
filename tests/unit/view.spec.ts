@@ -337,6 +337,7 @@ describe('TranscriptView gate', () => {
       optionOffset: 0,
       options: [],
       custom: undefined,
+      answer: undefined,
       hint: 'y allow once · n reject · esc cancel',
     }
     const lines = viewOf(new TranscriptModel(), COLLAPSED, gate).render(60)
@@ -356,6 +357,7 @@ describe('TranscriptView gate', () => {
         { label: 'production', description: undefined, current: false, selected: false },
       ],
       custom: undefined,
+      answer: undefined,
       hint: 'space select · digits pick · enter confirm · esc skip',
     }
     const lines = viewOf(new TranscriptModel(), COLLAPSED, gate).render(60)
@@ -374,6 +376,7 @@ describe('TranscriptView gate', () => {
         { label: 'staging-eu-west-1', description: 'the full canary rollout behind an audit window', current: true, selected: false },
       ],
       custom: undefined,
+      answer: undefined,
       hint: 'space select · digits pick · enter confirm · esc skip',
     }
     const lines = viewOf(new TranscriptModel(), COLLAPSED, gate).render(40)
@@ -397,6 +400,7 @@ describe('TranscriptView gate', () => {
       optionOffset: 4,
       options: [{ label: 'staging', description: undefined, current: false, selected: false }],
       custom: { label: 'other', description: 'type your own answer', current: true, selected: true },
+      answer: undefined,
       hint: 'space select · digits pick · 0 answer freely · type to filter · enter confirm · esc skip',
     }
     const lines = viewOf(new TranscriptModel(), COLLAPSED, gate).render(60)
@@ -404,6 +408,43 @@ describe('TranscriptView gate', () => {
     expect(lines[row]).toBe('   ❯ [x] 0. other — type your own answer')
     // Row 0 sits under the window, so the window's own numbering is never interrupted.
     expect(lines.findIndex(line => line.includes('5. staging'))).toBeLessThan(row)
+  })
+
+  it('draws the typed answer under row 0, above the keys that name it', () => {
+    const gate: GateCard = {
+      kind: 'question',
+      title: 'which target?',
+      detail: ['showing 1–2 of 9'],
+      optionOffset: 0,
+      options: [{ label: 'staging', description: undefined, current: false, selected: false }],
+      custom: { label: 'other', description: 'type your own answer', current: true, selected: true },
+      answer: 'answer: the eu-central cluster▌',
+      hint: 'type or paste an answer · enter confirm · ↑↓ back to options · esc skip',
+    }
+    const lines = viewOf(new TranscriptModel(), COLLAPSED, gate).render(60)
+    const row = lines.findIndex(line => line.includes('0. other'))
+    const answer = lines.findIndex(line => line.includes('answer:'))
+    expect(answer).toBe(row + 1)
+    // The line belongs to the row it fills: above the options it reads as
+    // something the question says rather than something the reader is typing.
+    expect(lines.findIndex(line => line.includes('1. staging'))).toBeLessThan(answer)
+    expect(lines.findIndex(line => line.includes('type or paste'))).toBeGreaterThan(answer)
+  })
+
+  it('draws the answer line of a question that has only text to collect', () => {
+    const gate: GateCard = {
+      kind: 'question',
+      title: 'why?',
+      detail: [],
+      optionOffset: 0,
+      options: [],
+      custom: undefined,
+      answer: 'answer: ▌',
+      hint: 'type or paste an answer · enter confirm · esc skip',
+    }
+    const lines = viewOf(new TranscriptModel(), COLLAPSED, gate).render(60)
+    expect(lines).toContain('? why?')
+    expect(lines).toContain('    answer: ▌')
   })
 
   it('wraps the question and the keys it names rather than cutting them', () => {
@@ -414,6 +455,7 @@ describe('TranscriptView gate', () => {
       optionOffset: 0,
       options: [],
       custom: undefined,
+      answer: undefined,
       hint: 'space select · digits pick · 0 answer freely · type to filter · enter confirm · esc skip',
     }
     const lines = viewOf(new TranscriptModel(), COLLAPSED, gate).render(40)

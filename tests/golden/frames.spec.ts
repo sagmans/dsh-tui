@@ -225,21 +225,25 @@ function modelPickerCard(): ModelPicker {
  * A pending question whose option is longer than a cramped terminal holds.
  *
  * A decision is only answerable when its rows are readable, so this frame pins
- * wrapping in place of truncation, and the free-text row every question with
- * options carries.
+ * wrapping in place of truncation, the free-text row every question with
+ * options carries, and the answer line that row collects.
  */
-function gateCard(): TranscriptView {
+function gateCard(typed = ''): TranscriptView {
+  const typing = typed !== ''
   const gate: GateCard = {
     kind: 'question',
     title: 'which deployment target?  (1/2)',
     detail: ['showing 1–2 of 9'],
     optionOffset: 0,
     options: [
-      { label: 'staging-eu-west-1', description: 'canary the rollout behind an audit window', current: true, selected: false },
+      { label: 'staging-eu-west-1', description: 'canary the rollout behind an audit window', current: !typing, selected: false },
       { label: 'production', description: undefined, current: false, selected: false },
     ],
-    custom: { label: 'other', description: 'type your own answer', current: false, selected: false },
-    hint: 'space select · digits pick · 0 answer freely · type to filter · enter confirm · esc skip',
+    custom: { label: 'other', description: 'type your own answer', current: typing, selected: typing },
+    answer: typing ? `answer: ${typed}▌` : undefined,
+    hint: typing
+      ? 'type or paste an answer · enter confirm · ↑↓ back to options · esc skip'
+      : 'space select · digits pick · 0 answer freely · type to filter · enter confirm · esc skip',
   }
   return new TranscriptView(new TranscriptModel(), theme, new MarkdownRenderer(theme.markdown), {
     state: () => DEFAULT_VIEW_STATE,
@@ -268,6 +272,10 @@ describe('golden frames', () => {
 
     it(`renders a question gate at ${width} columns`, () => {
       expect(gateCard().render(width)).toMatchSnapshot()
+    })
+
+    it(`renders a question gate collecting a typed answer at ${width} columns`, () => {
+      expect(gateCard('the eu-central cluster').render(width)).toMatchSnapshot()
     })
   }
 

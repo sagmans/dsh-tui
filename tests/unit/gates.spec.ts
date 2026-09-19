@@ -242,14 +242,14 @@ describe('QuestionGate paste', () => {
   it('takes a pasted key as the whole answer instead of dropping it', () => {
     const gate = new QuestionGate(toGateQuestions({ questions: [{ id: 'q1', question: 'key?' }] }))
     expect(gate.handleKey(paste('sk-ant-api03-abcDEF123\r\n'))).toBeUndefined()
-    expect(gate.card().detail.join('\n')).toMatch(/API KEY: sk-a\*+F123▌/u)
+    expect(gate.card().answer).toMatch(/API KEY: sk-a\*+F123▌/u)
     expect(gate.handleKey(ENTER)).toEqual([{ id: 'q1', selected: [], custom: 'sk-ant-api03-abcDEF123' }])
   })
 
   it('keeps a secret recognizable at both ends and hidden in between', () => {
     const gate = new QuestionGate(toGateQuestions({ questions: [{ id: 'q1', question: 'Enter the Anthropic API key' }] }))
     gate.handleKey(paste('sk-ant-api03-FAKE998877665544332211'))
-    const row = gate.card().detail.join('\n')
+    const row = gate.card().answer ?? ''
     expect(row).toMatch(/API KEY: sk-a\*+2211▌/u)
     expect(row).not.toContain('FAKE9988')
   })
@@ -257,7 +257,7 @@ describe('QuestionGate paste', () => {
   it('shows a plain answer as typed, because hiding everything hides the answer', () => {
     const gate = new QuestionGate(toGateQuestions({ questions: [{ id: 'q1', question: 'Which branch should I use?' }] }))
     gate.handleKey(paste('release/0.2'))
-    expect(gate.card().detail.join('\n')).toContain('answer: release/0.2▌')
+    expect(gate.card().answer).toContain('answer: release/0.2▌')
   })
 
   it('filters the options from a pasted provider name', () => {
@@ -268,7 +268,7 @@ describe('QuestionGate paste', () => {
 
   it('draws the answer row before anything is typed, so a key has somewhere to land', () => {
     const gate = new QuestionGate(toGateQuestions({ questions: [{ id: 'q1', question: 'key?' }] }))
-    expect(gate.card().detail.join('\n')).toContain('API KEY: ▌')
+    expect(gate.card().answer).toContain('API KEY: ▌')
     expect(gate.card().hint).toContain('paste')
   })
 
@@ -315,7 +315,7 @@ describe('QuestionGate free-text row', () => {
     gate.handleKey('0')
     for (const character of 'ship it') gate.handleKey(character)
     expect(gate.card().options.map(option => option.label)).toEqual(['yes', 'no'])
-    expect(gate.card().detail.join('\n')).toContain('answer: ship it▌')
+    expect(gate.card().answer).toContain('answer: ship it▌')
     expect(gate.handleKey(ENTER)).toEqual([{ id: 'q1', selected: [], custom: 'ship it' }])
   })
 
@@ -371,7 +371,7 @@ describe('QuestionGate free-text row', () => {
     }))
     gate.handleKey('0')
     gate.handleKey(paste('sk-ant-api03-FAKE998877665544332211'))
-    const row = gate.card().detail.join('\n')
+    const row = gate.card().answer ?? ''
     expect(row).toMatch(/API KEY: sk-a\*+2211▌/u)
     expect(row).not.toContain('FAKE9988')
     expect(gate.handleKey(ENTER)).toEqual([{ id: 'q1', selected: [], custom: 'sk-ant-api03-FAKE998877665544332211' }])
@@ -409,7 +409,24 @@ describe('QuestionGate free-text row', () => {
     gate.handleKey(ENTER)
     const card = gate.card()
     expect(card.custom).toEqual({ label: 'other', description: 'type your own answer', current: false, selected: false })
-    expect(card.detail.join('\n')).not.toContain('answer:')
+    expect(card.answer).toBeUndefined()
+  })
+
+  it('hands the typed answer to the view as its own row, not as question detail', () => {
+    const gate = withOptions()
+    gate.handleKey('0')
+    for (const character of 'later') gate.handleKey(character)
+    const card = gate.card()
+    expect(card.answer).toBe('answer: later▌')
+    // The detail block is drawn above the options, where the line would read as
+    // something the question says rather than something the reader is typing.
+    expect(card.detail.some(line => line.includes('answer:'))).toBe(false)
+  })
+
+  it('carries the answer row of a question that has only text to collect', () => {
+    const gate = new QuestionGate(toGateQuestions({ questions: [{ id: 'q1', question: 'why?' }] }))
+    expect(gate.card().answer).toBe('answer: ▌')
+    expect(gate.card().detail).toEqual([])
   })
 
   it('leaves a question without options to typing, with no row 0 to reach', () => {

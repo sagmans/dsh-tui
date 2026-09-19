@@ -23,6 +23,12 @@ export interface GateCard {
    * by typing anyway, so it has no such row to draw.
    */
   readonly custom: GateCustomRow | undefined
+  /**
+   * The line the typed answer is forming on, drawn under the row that owns it.
+   * A row the reader is typing into belongs under the row it fills; in the
+   * detail block above the options it reads as something the question says.
+   */
+  readonly answer: string | undefined
   readonly hint: string
 }
 
@@ -85,6 +91,7 @@ export class ApprovalGate {
       kind: 'approval',
       title: `approval needed · ${this.toolName}`,
       detail: this.reason === undefined ? [] : lines(this.reason),
+      answer: undefined,
       optionOffset: 0,
       options: [],
       custom: undefined,
@@ -453,7 +460,7 @@ export class QuestionGate {
   card(): GateCard {
     const question = this.current
     if (question === undefined) {
-      return { kind: 'question', title: 'question', detail: [], optionOffset: 0, options: [], custom: undefined, hint: 'finishing' }
+      return { kind: 'question', title: 'question', detail: [], optionOffset: 0, options: [], custom: undefined, answer: undefined, hint: 'finishing' }
     }
     const chosen = this.chosen[this.index] ?? []
     const detail = question.detail === undefined ? [] : lines(question.detail)
@@ -462,9 +469,6 @@ export class QuestionGate {
     const secret = asksForSecret(question)
     const answerRow = `${secret ? SECRET_LABEL : ANSWER_LABEL}: ${secret ? masked(this.answer) : this.answer}${ANSWER_CURSOR}`
     if (question.options.length === 0) {
-      // The row is the only place the text lands, so it is drawn even while
-      // empty: a question answered by typing needs somewhere to paste a key.
-      detail.push(answerRow)
       return {
         kind: 'question',
         title,
@@ -472,13 +476,13 @@ export class QuestionGate {
         optionOffset: 0,
         options: [],
         custom: undefined,
+        // The row is the only place the text lands, so it is drawn even while
+        // empty: a question answered by typing needs somewhere to paste a key.
+        answer: answerRow,
         hint: 'type or paste an answer · enter confirm · esc skip',
       }
     }
     if (this.typed !== '') detail.push(`filter: ${this.typed}`)
-    // A pending answer stays in view whether or not the cursor is on the row,
-    // because it is what an enter is about to send.
-    if (this.atCustom || this.answer !== '') detail.push(answerRow)
     const matched = this.matched(question)
     const { rows, start, cursor } = this.windowed(question)
     if (rows.length < matched.length) detail.push(`showing ${start + 1}–${start + rows.length} of ${matched.length}`)
@@ -501,6 +505,9 @@ export class QuestionGate {
         current: this.atCustom,
         selected: this.atCustom || this.answer.trim() !== '',
       },
+      // A pending answer stays in view whether or not the cursor is on the row,
+      // because it is what an enter is about to send.
+      answer: this.atCustom || this.answer !== '' ? answerRow : undefined,
       hint: this.atCustom
         ? CUSTOM_HINT
         : `${question.multiSelect ? 'space toggle' : 'space select'} · digits pick · ${CUSTOM_ROW_SHORTHAND} · type to filter · enter confirm · esc skip`,
