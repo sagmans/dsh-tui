@@ -177,6 +177,12 @@ describe('QuestionGate filtering', () => {
     expect(gate.card().hint).toContain('type to filter')
   })
 
+  it('narrows by a scattered fragment, so a name need not be typed whole', () => {
+    const gate = providerGate()
+    for (const character of 'gptcdx') gate.handleKey(character)
+    expect(gate.card().options.map(option => option.label)).toEqual(['ChatGPT (Codex)'])
+  })
+
   it('takes the row the filter left under the cursor on enter', () => {
     const gate = providerGate()
     for (const character of 'codex') gate.handleKey(character)

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { StoredSession } from '@/agent/history.ts'
-import { PICKER_WINDOW, EffortPicker, SessionPicker, describeAge, effortChoices, type EffortChoice } from '@/ui/picker.ts'
+import { modelRouteKey, type ModelChoice, type ModelRoute } from '@/agent/model.ts'
+import type { PresetSummary } from '@/agent/presets.ts'
+import { PICKER_WINDOW, EffortPicker, ModelPicker, PresetPicker, SessionPicker, describeAge, effortChoices, type EffortChoice } from '@/ui/picker.ts'
 
 const session = (id: string, overrides: Partial<StoredSession> = {}): StoredSession => ({
   id,
@@ -33,6 +35,10 @@ describe('SessionPicker', () => {
     expect(pickerOf([session('a')]).handleKey('\u001b')).toEqual({ kind: 'cancel' })
   })
 
+  it('cancels on the interrupt key too, rather than swallowing it', () => {
+    expect(pickerOf([session('a')]).handleKey('\u0003')).toEqual({ kind: 'cancel' })
+  })
+
   it('filters by title, id, and directory', () => {
     const picker = pickerOf([session('a', { cwd: '/one' }), session('b', { cwd: '/two' })], { a: 'fix the parser' })
     picker.handleKey('p')
@@ -44,6 +50,12 @@ describe('SessionPicker', () => {
     picker.handleKey('w')
     picker.handleKey('o')
     expect(picker.visible().map(entry => entry.id)).toEqual(['b'])
+  })
+
+  it('matches a fragment of a title whose letters are not contiguous', () => {
+    const picker = pickerOf([session('a', { cwd: '/one' }), session('b', { cwd: '/two' })], { a: 'fix the parser' })
+    for (const key of 'ftp') picker.handleKey(key)
+    expect(picker.visible().map(entry => entry.id)).toEqual(['a'])
   })
 
   it('filters from a pasted run instead of dropping it', () => {
@@ -101,6 +113,20 @@ describe('SessionPicker', () => {
   })
 })
 
+const PRESETS: readonly PresetSummary[] = [
+  { id: 'standard', trust: 'system', name: 'Standard', description: 'every tool', broken: undefined },
+  { id: 'minimal', trust: 'system', name: 'Minimal', description: 'read and search', broken: undefined },
+]
+
+describe('PresetPicker', () => {
+  it('matches a fragment of a mode name and picks the row it left', () => {
+    const picker = new PresetPicker(() => PRESETS, () => 'standard')
+    for (const key of 'mnml') picker.handleKey(key)
+    expect(picker.visible().map(preset => preset.id)).toEqual(['minimal'])
+    expect(picker.handleKey('\r')).toEqual({ kind: 'pick', id: 'minimal' })
+  })
+})
+
 const EFFORTS: readonly EffortChoice[] = [
   { id: '', name: 'provider default', description: 'clear the explicit effort', current: false },
   { id: 'low', name: 'Low', current: false },
@@ -144,7 +170,73 @@ describe('effortChoices', () => {
     ])
   })
 
+  it('matches a fragment of an effort whose letters are not contiguous', () => {
+    const picker = effortPicker()
+    for (const key of 'hgh') picker.handleKey(key)
+    expect(picker.visible().map(choice => choice.id)).toEqual(['high'])
+  })
+
   it('marks the provider default when no effort is in force', () => {
     expect(effortChoices([{ id: 'low', name: 'Low' }], undefined)[0]?.current).toBe(true)
+  })
+})
+
+const ROUTES: readonly ModelRoute[] = [
+  { provider: 'kimi-coding', model: 'k2', name: 'K2' },
+  { provider: 'zai-coding-cn', model: 'glm-5.3', name: 'GLM 5.3' },
+]
+
+const modelPicker = (
+  routes: readonly ModelRoute[] = ROUTES,
+  current: ModelChoice | undefined = { provider: 'kimi-coding', model: 'k2' },
+): ModelPicker => new ModelPicker(() => routes, () => current)
+
+describe('ModelPicker', () => {
+  it('picks the highlighted route on enter', () => {
+    const picker = modelPicker()
+    expect(picker.handleKey('\u001b[B')).toBeUndefined()
+    expect(picker.handleKey('\r')).toEqual({
+      kind: 'pick',
+      id: modelRouteKey({ provider: 'zai-coding-cn', model: 'glm-5.3' }),
+    })
+  })
+
+  it('filters by provider, model id, and advertised name', () => {
+    const byProvider = modelPicker()
+    byProvider.handleKey('z')
+    expect(byProvider.visible().map(route => route.model)).toEqual(['glm-5.3'])
+    const byId = modelPicker()
+    for (const key of 'glm-5') byId.handleKey(key)
+    expect(byId.visible().map(route => route.provider)).toEqual(['zai-coding-cn'])
+    const byName = modelPicker()
+    byName.handleKey('K')
+    byName.handleKey('2')
+    expect(byName.visible().map(route => route.model)).toEqual(['k2'])
+  })
+
+  it('matches a fragment whose punctuation the reader left out, best match first', () => {
+    const routes: readonly ModelRoute[] = [
+      { provider: 'kimi-coding', model: 'g-l-m-5-3', name: 'Scattered' },
+      { provider: 'zai-coding-cn', model: 'glm-5.3', name: 'GLM 5.3' },
+    ]
+    const picker = new ModelPicker(() => routes, () => undefined)
+    for (const key of 'glm53') picker.handleKey(key)
+    expect(picker.visible().map(route => route.model)).toEqual(['glm-5.3', 'g-l-m-5-3'])
+  })
+
+  it('shows rows that arrive after it opened, without reopening it', () => {
+    const routes: ModelRoute[] = []
+    const picker = new ModelPicker(() => routes, () => undefined)
+    picker.handleKey('l')
+    picker.handleKey('a')
+    routes.push({ provider: 'kimi-coding', model: 'k2-latest', name: 'K2 Latest' })
+    expect(picker.visible().map(route => route.model)).toEqual(['k2-latest'])
+  })
+
+  it('says the route in force and where an unadvertised id goes', () => {
+    const card = modelPicker().card()
+    expect(card.title).toContain('kimi-coding/k2')
+    expect(card.rows.find(row => row.label === 'K2')?.description).toContain('current')
+    expect(modelPicker([]).card().hint).toContain('/model')
   })
 })

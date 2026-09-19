@@ -127,6 +127,7 @@ dsh --profile tui --no-bell            # do not ring when a long turn finishes
 | Ctrl+T | pick the reasoning effort for the next step |
 | `y` / `n` / Esc | allow once, reject, or cancel a pending approval |
 | digits / space / ↑↓ / Enter / Esc | answer a question: pick or toggle, confirm, or skip one |
+| typing in any picker or question | narrow the rows by fragment (`glm53` finds `GLM-5.3`); backspace widens, `esc` or Ctrl+C leaves |
 | `/` then Tab | complete commands, including every command this session registered |
 | `@` or a path then Tab | complete workspace file references |
 | `ctrl+shift+f` | search the transcript (`enter` next, `shift+enter` previous, `esc` close) |
@@ -136,7 +137,7 @@ dsh --profile tui --no-bell            # do not ring when a long turn finishes
 | mouse wheel, drag | scroll, and copy a selection through OSC 52 |
 | `/help` | list registered and local commands |
 | `/status` | show the session id, model, permissions, context, and directory |
-| `/model` | show the route the next step will use, and the providers available |
+| `/model` | open the picker for the configured providers and their models; it heads itself with the route the next step will use, and typing filters it by fragment (`glm53` finds `GLM-5.3`) |
 | `/model <provider>` | list that provider's advertised models |
 | `/model <provider>/<model>` | use that route from the next step on (session only, nothing is written to settings) |
 | `/model <provider>/<model>/<effort>` | use that route and reasoning effort (the effort must be one the route advertises) |
@@ -319,6 +320,7 @@ The automated checks drive a real PTY, but they run on this machine's terminal. 
 | a reply carrying a mermaid fence | it draws as box art at the transcript width, with the prose around it untouched |
 | that reply in a terminal narrower than the drawing | the fence stays source, and widening the window draws it without a new turn |
 | `dsh-tui: { mermaid: off }` in `$DSH_HOME/settings.yaml`, then a mermaid reply | the fence stays source; editing the value to `streaming` draws a settled reply without a restart |
+| `/model` on a configured profile | the picker lists only the configured providers' advertised models, heads itself with the route in force, and typing filters it while later rows stream in; `esc` or Ctrl+C leaves without changing the route, and `enter` chains into the route's reasoning efforts |
 | `/preset` on a fresh session | the picker lists four modes, marks the current one, and the switch survives a resume |
 | `/preset minimal` after a turn | refused, naming the reason; the session keeps the mode it composed with |
 | `--resume --preset <mode>` and then picking a session that runs another mode | the list stays open and says why that row cannot be taken; `esc` leaves the picker |
@@ -342,7 +344,7 @@ The workflow stores no npm token: the registry trusts `release.yml` on the `npm-
 ## Limitations
 
 - Two different things are called a preset. The agent mode (`--preset`, `/preset`) is fixed once a session has produced a turn; the permission preset (`/permission <preset>`, named in the status line) can change at any time.
-- `/model` changes the route and reasoning effort for the running session only. Catalog membership is advisory — an adapter may accept an id it does not advertise, while an explicit effort is checked against the route's own levels before it is applied.
+- `/model` changes the route and reasoning effort for the running session only. Catalog membership is advisory — an adapter may accept an id it does not advertise, while an explicit effort is checked against the route's own levels before it is applied. The picker offers the routes this deployment configured, not the ones it can prove credentialed: a provider whose key or sign-in is still missing appears like any other, and its first request names the missing credential.
 - Scrolling is the mouse wheel, or the terminal's own scrollback keys where it offers them.
 - A turn that ran longer than ten seconds rings the terminal bell when it ends, because the reader may have walked away; `--no-bell` turns that off.
 - The dock shows the goal, plan mode, the todo items still to do, and any background job or delegation still running; a settled item leaves rather than turns into a completed row. The transcript marks where older history was compacted away. `/plan` toggles plan mode; `/plan <message>` also steers that message, which is the base command's own behaviour.

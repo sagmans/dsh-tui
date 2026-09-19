@@ -29,7 +29,7 @@ export const LOCAL_COMMANDS = [
 export const LOCAL_COMMAND_DESCRIPTIONS: Readonly<Record<string, string>> = {
   '/help': 'list registered and local commands',
   '/status': 'show the session, model, permissions, and context',
-  '/model': 'show or switch the model and its reasoning effort for the next step',
+  '/model': 'open the model picker (type to filter); /model <provider>/<model> switches directly',
   '/preset': 'choose the agent preset (mode) this session runs',
   '/jobs': 'list background jobs, read one, or kill one',
   '/subagents': 'list delegations; /subagents open <id|last> reads one, /subagents kill <id> stops one',

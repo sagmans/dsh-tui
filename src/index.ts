@@ -21,7 +21,7 @@ import { createToolPresenter } from './agent/present.ts'
 import { forkPoint, type ForkEvent } from './agent/fork.ts'
 import { PROFILE_NAME, resumeHint } from './identity.ts'
 import { createStatusFacts } from './agent/status.ts'
-import { ModelSwitch, createModelCatalog, parseModelArgument } from './agent/model.ts'
+import { ModelSwitch, createModelCatalog, parseModelArgument, readModelRouteKey, type ModelChoice, type ModelRoute } from './agent/model.ts'
 import { JOB_READ_LINES, createJobDirectory, describeJobs, parseJobsArgument, type JobSummary } from './jobs.ts'
 import {
   SubagentRoster,
@@ -59,6 +59,7 @@ import { MarkdownRenderer } from './ui/markdown.ts'
 import { createMermaidTransform } from './ui/mermaid.ts'
 import {
   EffortPicker,
+  ModelPicker,
   PROVIDER_DEFAULT_EFFORT_ID,
   PresetPicker,
   SessionPicker,
@@ -292,7 +293,7 @@ export function apply(ctx: Context, config: unknown): void {
   }
   let pending: PendingGate | undefined
   let pendingPicker: PendingPicker | undefined
-  /** A pick being vetted owns the keyboard: a key would answer what is unanswered. */
+  /** A pick being vetted owns the list, not the keyboard: filtering stays live while its verdict is read. */
   let vetting = false
   const view = new TranscriptView(model, theme, markdown, {
     state: () => viewState,
@@ -423,10 +424,16 @@ export function apply(ctx: Context, config: unknown): void {
       return { consume: true }
     }
     if (pendingPicker !== undefined) {
-      if (vetting) return { consume: true }
       const action = pendingPicker.picker.handleKey(data)
       if (action === undefined) {
         tui.requestRender()
+        return { consume: true }
+      }
+      if (vetting) {
+        // A refusal check must not take the keyboard with it: the reader keeps
+        // filtering and can still leave, while a second pick waits for the
+        // first verdict rather than racing it.
+        if (action.kind === 'cancel') settlePicker(undefined)
         return { consume: true }
       }
       if (action.kind === 'cancel') {
@@ -1065,19 +1072,11 @@ export function apply(ctx: Context, config: unknown): void {
     }
     const command = parseModelArgument(argument, catalog.providers(), modelSwitch.current())
     switch (command.kind) {
-      case 'current': {
-        const facts = statusFacts()
-        const current = modelSwitch.current()
-        const route = current === undefined
-          // Without a choice of its own the surface reports what the next step
-          // would actually use, not that it has no opinion.
-          ? `${facts.model ?? 'unset'}${facts.effort === undefined ? '' : ` (${facts.effort})`} · composition default`
-          : `${current.provider}/${current.model}${current.reasoningEffort === undefined ? '' : ` (${current.reasoningEffort})`}`
-        const providers = catalog.providers().map(provider => provider.id)
-        model.notice(`model ${route} · providers: ${providers.length === 0 ? 'none' : providers.join(', ')} · /model <provider>/<model>[/<effort>] switches, /model <provider> lists its models`)
-        tui.requestRender()
+      case 'current':
+        // Choosing by eye is the point of a terminal selector; the picker
+        // heads itself with the route the next step will actually use.
+        void openModelPicker()
         return
-      }
       case 'list-models':
         void catalog.models(command.provider).then(entries => {
           model.notice(entries.length === 0
@@ -1137,6 +1136,124 @@ export function apply(ctx: Context, config: unknown): void {
       : { provider, model: modelId, reasoningEffort: effortId })
     model.notice(`reasoning effort for ${provider}/${modelId} set to ${effortId === PROVIDER_DEFAULT_EFFORT_ID ? 'provider default' : effortId} for the next step`)
     tui.requestRender()
+  }
+
+  /** Whether a model picker's catalog is being read, so a second key cannot race it. */
+  let openingModels = false
+
+  /** One route, as the picker names it; the effort is not part of the choice here. */
+  type PickedRoute = { readonly provider: string; readonly model: string }
+
+  /**
+   * The route the next step would actually use.
+   *
+   * Without a choice of its own the surface reports the composition default,
+   * not that it has no opinion: the picker's heading and its marked row have to
+   * agree with the status line about the route in force.
+   */
+  const effectiveRoute = (): ModelChoice | undefined => {
+    const chosen = modelSwitch.current()
+    if (chosen !== undefined) return chosen
+    const facts = statusFacts()
+    if (facts.provider === undefined || facts.model === undefined) return undefined
+    return {
+      provider: facts.provider,
+      model: facts.model,
+      ...facts.effort === undefined ? {} : { reasoningEffort: facts.effort },
+    }
+  }
+
+  /** Put the reader's route choice in force for the next step. */
+  const applyRoute = (route: PickedRoute): void => {
+    const current = effectiveRoute()
+    // The levels belong to the route, so a switch clears an explicit effort
+    // while re-picking the route already in force is not a switch.
+    const keep = current !== undefined && current.provider === route.provider && current.model === route.model
+      ? current.reasoningEffort
+      : undefined
+    modelSwitch.choose({
+      provider: route.provider,
+      model: route.model,
+      ...keep === undefined ? {} : { reasoningEffort: keep },
+    })
+    model.notice(`model set to ${route.provider}/${route.model} for the next step`)
+    tui.requestRender()
+  }
+
+  /**
+   * Offer the levels a route advertises, after the route is already in force.
+   *
+   * Cancelling the list is a real choice — the reader keeps the model with the
+   * provider's own default — which is why the route is applied first. The list
+   * is read before the picker opens because the rows are the route's own
+   * metadata; a menu painted before that arrived could offer a level the
+   * request would then be refused for.
+   */
+  const offerRouteEfforts = async (route: PickedRoute): Promise<void> => {
+    if (catalog === undefined) return
+    try {
+      const info = await catalog.efforts(route.provider, route.model)
+      const efforts = info?.efforts ?? []
+      if (efforts.length === 0) return
+      const current = effectiveRoute()
+      const effective = current !== undefined && current.provider === route.provider && current.model === route.model
+        ? current.reasoningEffort
+        : undefined
+      const picked = await openPicker(new EffortPicker(
+        () => effortChoices(efforts, effective),
+        `reasoning effort · ${route.provider}/${route.model}`,
+      ))
+      if (picked !== undefined) applyEffort(route.provider, route.model, picked)
+    } catch (error) {
+      model.notice(`could not read reasoning efforts: ${error instanceof Error ? error.message : String(error)}`)
+    }
+    tui.requestRender()
+  }
+
+  /**
+   * Offer every model the configured routes advertise.
+   *
+   * Rows come from the routes the llm service registered — the providers this
+   * deployment configured — and each provider's models join the open list as
+   * its catalog resolves, so the picker is filterable before the slowest
+   * adapter answers. A route whose catalog cannot be read stays reachable by
+   * name through the text form rather than by an explanation in the list.
+   */
+  const openModelPicker = async (): Promise<void> => {
+    if (catalog === undefined) {
+      model.notice('this profile has no llm service, so models cannot be listed or switched')
+      tui.requestRender()
+      return
+    }
+    const providers = catalog.providers()
+    if (providers.length === 0) {
+      model.notice('no provider is configured; add one before choosing a model')
+      tui.requestRender()
+      return
+    }
+    if (openingModels) return
+    openingModels = true
+    try {
+      const routes: ModelRoute[] = []
+      for (const provider of providers) {
+        void catalog.models(provider.id).then(entries => {
+          if (entries.length === 0) return
+          routes.push(...entries.map(entry => ({ provider: provider.id, model: entry.id, name: entry.name })))
+          tui.requestRender()
+        }).catch(() => {
+          // One adapter's discovery failure is not the list's to explain.
+        })
+      }
+      const picked = await openPicker(new ModelPicker(() => routes, effectiveRoute))
+      if (picked === undefined) return
+      const route = readModelRouteKey(picked)
+      if (route === undefined) return
+      applyRoute(route)
+      await offerRouteEfforts(route)
+    } finally {
+      openingModels = false
+      tui.requestRender()
+    }
   }
 
   /**

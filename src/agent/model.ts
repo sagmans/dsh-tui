@@ -1,6 +1,7 @@
 import { installModelSelection, type ModelSelectionRef } from '@deepseek-ai/dsh-agent'
 import { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { Context } from '@deepseek-ai/cordis'
+import type { PickerRow } from '../ui/picker.ts'
 
 /** The route a reader chose for the next step. */
 export interface ModelChoice {
@@ -12,6 +13,14 @@ export interface ModelChoice {
 /** One provider a session may route through. */
 export interface ProviderEntry {
   readonly id: string
+  readonly name: string
+}
+
+/** One route a configured provider advertises, as the picker lists it. */
+export interface ModelRoute {
+  readonly provider: string
+  readonly model: string
+  /** The adapter's display name; the id stays the value a request names. */
   readonly name: string
 }
 
@@ -63,6 +72,50 @@ export function parseModelArgument(
     }
   }
   return { kind: 'switch', choice: { provider: current.provider, model: trimmed } }
+}
+
+/**
+ * The separator inside a picker's route key.
+ *
+ * A picker settles on a string, so the pair has to survive one round trip
+ * without a reading that guesses which half is which: a model id may contain
+ * the slash a `provider/model` reading would split on, and no route id can
+ * contain this character.
+ */
+const ROUTE_KEY_SEPARATOR = '\u0000'
+
+/** The picker's stable id for one route. */
+export function modelRouteKey(route: { readonly provider: string; readonly model: string }): string {
+  return route.provider + ROUTE_KEY_SEPARATOR + route.model
+}
+
+/** Read a route key back; undefined for a string this surface never minted. */
+export function readModelRouteKey(key: string): { provider: string; model: string } | undefined {
+  const at = key.indexOf(ROUTE_KEY_SEPARATOR)
+  if (at <= 0 || at === key.length - 1) return undefined
+  return { provider: key.slice(0, at), model: key.slice(at + 1) }
+}
+
+/**
+ * How one advertised route appears in the picker.
+ *
+ * The name leads because it is what a reader recognizes, and the id follows
+ * only when it says something the name does not; the route in force carries
+ * its effort, since that is the other half of the choice on screen.
+ */
+export function describeModelRoute(route: ModelRoute, current: ModelChoice | undefined): PickerRow {
+  const chosen = current !== undefined && current.provider === route.provider && current.model === route.model
+  const description = [
+    route.provider,
+    route.model === route.name ? undefined : route.model,
+    chosen ? 'current' : undefined,
+    chosen && current.reasoningEffort !== undefined ? `effort ${current.reasoningEffort}` : undefined,
+  ].filter(part => part !== undefined && part !== '').join(' · ')
+  return {
+    label: route.name,
+    description: description === '' ? undefined : description,
+    current: chosen,
+  }
 }
 
 /**

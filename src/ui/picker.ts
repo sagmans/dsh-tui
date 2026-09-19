@@ -1,6 +1,8 @@
 import { matchesKey } from '@earendil-works/pi-tui'
 import { pastedText } from '../input.ts'
+import { matchScore } from '../input/match.ts'
 import type { StoredSession } from '../agent/history.ts'
+import { describeModelRoute, modelRouteKey, type ModelChoice, type ModelRoute } from '../agent/model.ts'
 import { describePreset, type PresetSummary } from '../agent/presets.ts'
 
 /** One selectable row of the picker. */
@@ -82,11 +84,17 @@ export class ListPicker<Row> {
     private readonly hints: PickerHints,
   ) {}
 
-  /** Rows matching the typed filter, in the order they were listed. */
+  /** Rows matching the typed filter, best match first. */
   visible(): readonly Row[] {
-    const needle = this.filter.trim().toLowerCase()
+    const needle = this.filter.trim()
     if (needle === '') return this.source()
-    return this.source().filter(row => this.haystackOf(row).toLowerCase().includes(needle))
+    // Ties keep the order the caller listed them in, so rows do not shuffle
+    // under the cursor while the reader is still typing.
+    return this.source()
+      .map(row => ({ row, score: matchScore(needle, this.haystackOf(row)) }))
+      .filter((entry): entry is { readonly row: Row; readonly score: number } => entry.score !== undefined)
+      .sort((left, right) => right.score - left.score)
+      .map(entry => entry.row)
   }
 
   /**
@@ -104,7 +112,9 @@ export class ListPicker<Row> {
   handleKey(data: string): PickerAction | undefined {
     this.note = undefined
     const rows = this.visible()
-    if (matchesKey(data, 'escape')) return { kind: 'cancel' }
+    // A picker owns the keyboard while it is open, so the interrupt key has to
+    // mean "leave this list" here: swallowing it would strand the reader.
+    if (matchesKey(data, 'escape') || matchesKey(data, 'ctrl+c')) return { kind: 'cancel' }
     if (matchesKey(data, 'enter')) {
       const chosen = rows[Math.min(this.cursor, Math.max(0, rows.length - 1))]
       return chosen === undefined ? undefined : { kind: 'pick', id: this.idOf(chosen) }
@@ -211,6 +221,35 @@ export class PresetPicker extends ListPicker<PresetSummary> {
       preset => [preset.id, preset.name ?? '', preset.description ?? ''].join(' '),
       {
         empty: 'nothing matches · backspace to widen · esc cancel',
+        listed: '↑↓ move · enter switch · esc cancel · type to filter',
+      },
+    )
+  }
+}
+
+/**
+ * One configured model route chosen by key press.
+ *
+ * Rows are the caller's and are re-read on every key and paint, so a provider
+ * whose model list arrives after the picker opened appears in it without
+ * reopening, and the filter the reader already typed applies to those late
+ * rows too.
+ */
+export class ModelPicker extends ListPicker<ModelRoute> {
+  constructor(routes: () => readonly ModelRoute[], current: () => ModelChoice | undefined) {
+    super(
+      routes,
+      () => {
+        const chosen = current()
+        if (chosen === undefined) return 'model · no route in use'
+        const effort = chosen.reasoningEffort === undefined ? '' : ` (${chosen.reasoningEffort})`
+        return `model · current ${chosen.provider}/${chosen.model}${effort}`
+      },
+      route => modelRouteKey(route),
+      route => describeModelRoute(route, current()),
+      route => [route.provider, route.model, route.name].join(' '),
+      {
+        empty: 'nothing matched · /model <provider>/<model> takes any id · backspace to widen · esc cancel',
         listed: '↑↓ move · enter switch · esc cancel · type to filter',
       },
     )

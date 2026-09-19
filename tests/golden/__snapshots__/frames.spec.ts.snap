@@ -115,6 +115,62 @@ exports[`golden frames > renders the dock at 80 columns 1`] = `
 ]
 `;
 
+exports[`golden frames > renders the model picker at 40 columns 1`] = `
+{
+  "above": 0,
+  "below": 0,
+  "filter": "",
+  "hint": "↑↓ move · enter switch · esc cancel · type to filter",
+  "note": undefined,
+  "rows": [
+    {
+      "current": true,
+      "description": "kimi-coding · k2 · current · effort high",
+      "label": "K2",
+    },
+    {
+      "current": false,
+      "description": "opencode-go · qwen3-coder",
+      "label": "Qwen3 Coder",
+    },
+    {
+      "current": false,
+      "description": "zai-coding-cn · glm-5.3",
+      "label": "GLM 5.3",
+    },
+  ],
+  "title": "model · current kimi-coding/k2 (high)",
+}
+`;
+
+exports[`golden frames > renders the model picker at 80 columns 1`] = `
+{
+  "above": 0,
+  "below": 0,
+  "filter": "",
+  "hint": "↑↓ move · enter switch · esc cancel · type to filter",
+  "note": undefined,
+  "rows": [
+    {
+      "current": true,
+      "description": "kimi-coding · k2 · current · effort high",
+      "label": "K2",
+    },
+    {
+      "current": false,
+      "description": "opencode-go · qwen3-coder",
+      "label": "Qwen3 Coder",
+    },
+    {
+      "current": false,
+      "description": "zai-coding-cn · glm-5.3",
+      "label": "GLM 5.3",
+    },
+  ],
+  "title": "model · current kimi-coding/k2 (high)",
+}
+`;
+
 exports[`golden frames > renders the queued prompts at 40 columns 1`] = `
 [
   "╭──────────────────────────────────────╮",
