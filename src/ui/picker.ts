@@ -1,6 +1,7 @@
 import { matchesKey } from '@earendil-works/pi-tui'
 import { pastedText } from '../input.ts'
 import type { StoredSession } from '../agent/history.ts'
+import { describeModelRoute, modelRouteKey, type ModelChoice, type ModelRoute } from '../agent/model.ts'
 import { describePreset, type PresetSummary } from '../agent/presets.ts'
 
 /** One selectable row of the picker. */
@@ -104,7 +105,9 @@ export class ListPicker<Row> {
   handleKey(data: string): PickerAction | undefined {
     this.note = undefined
     const rows = this.visible()
-    if (matchesKey(data, 'escape')) return { kind: 'cancel' }
+    // A picker owns the keyboard while it is open, so the interrupt key has to
+    // mean "leave this list" here: swallowing it would strand the reader.
+    if (matchesKey(data, 'escape') || matchesKey(data, 'ctrl+c')) return { kind: 'cancel' }
     if (matchesKey(data, 'enter')) {
       const chosen = rows[Math.min(this.cursor, Math.max(0, rows.length - 1))]
       return chosen === undefined ? undefined : { kind: 'pick', id: this.idOf(chosen) }
@@ -211,6 +214,35 @@ export class PresetPicker extends ListPicker<PresetSummary> {
       preset => [preset.id, preset.name ?? '', preset.description ?? ''].join(' '),
       {
         empty: 'nothing matches · backspace to widen · esc cancel',
+        listed: '↑↓ move · enter switch · esc cancel · type to filter',
+      },
+    )
+  }
+}
+
+/**
+ * One configured model route chosen by key press.
+ *
+ * Rows are the caller's and are re-read on every key and paint, so a provider
+ * whose model list arrives after the picker opened appears in it without
+ * reopening, and the filter the reader already typed applies to those late
+ * rows too.
+ */
+export class ModelPicker extends ListPicker<ModelRoute> {
+  constructor(routes: () => readonly ModelRoute[], current: () => ModelChoice | undefined) {
+    super(
+      routes,
+      () => {
+        const chosen = current()
+        if (chosen === undefined) return 'model · no route in use'
+        const effort = chosen.reasoningEffort === undefined ? '' : ` (${chosen.reasoningEffort})`
+        return `model · current ${chosen.provider}/${chosen.model}${effort}`
+      },
+      route => modelRouteKey(route),
+      route => describeModelRoute(route, current()),
+      route => [route.provider, route.model, route.name].join(' '),
+      {
+        empty: 'nothing matched · /model <provider>/<model> takes any id · backspace to widen · esc cancel',
         listed: '↑↓ move · enter switch · esc cancel · type to filter',
       },
     )

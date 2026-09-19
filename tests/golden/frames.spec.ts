@@ -8,7 +8,7 @@ import { createMermaidTransform } from '@/ui/mermaid.ts'
 import { StatusBar } from '@/ui/status.ts'
 import { DEFAULT_VIEW_STATE, TranscriptView } from '@/ui/view.ts'
 import { WorkDock } from '@/ui/dock.ts'
-import { SessionPicker } from '@/ui/picker.ts'
+import { ModelPicker, SessionPicker } from '@/ui/picker.ts'
 import { QueueBar } from '@/ui/queue.ts'
 import { WorkFold } from '@/work.ts'
 
@@ -208,6 +208,18 @@ function pickerCard(): SessionPicker {
   )
 }
 
+/** The configured-route list, headed by the route the next step will use. */
+function modelPickerCard(): ModelPicker {
+  return new ModelPicker(
+    () => [
+      { provider: 'kimi-coding', model: 'k2', name: 'K2' },
+      { provider: 'opencode-go', model: 'qwen3-coder', name: 'Qwen3 Coder' },
+      { provider: 'zai-coding-cn', model: 'glm-5.3', name: 'GLM 5.3' },
+    ],
+    () => ({ provider: 'kimi-coding', model: 'k2', reasoningEffort: 'high' }),
+  )
+}
+
 describe('golden frames', () => {
   for (const width of WIDTHS) {
     it(`renders the transcript at ${width} columns`, () => {
@@ -234,6 +246,10 @@ describe('golden frames', () => {
 
     it(`renders the session picker at ${width} columns`, () => {
       expect(pickerCard().card()).toMatchSnapshot()
+    })
+
+    it(`renders the model picker at ${width} columns`, () => {
+      expect(modelPickerCard().card()).toMatchSnapshot()
     })
   }
 

@@ -1,6 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it } from 'vitest'
-import { ModelSwitch, createModelCatalog, parseModelArgument } from '@/agent/model.ts'
+import { ModelSwitch, createModelCatalog, describeModelRoute, modelRouteKey, parseModelArgument, readModelRouteKey, type ModelChoice } from '@/agent/model.ts'
 
 const PROVIDERS = [
   { id: 'zai-coding-cn', name: 'ZAI' },
@@ -115,5 +115,48 @@ describe('createModelCatalog reasoning efforts', () => {
   it('reports nothing when the deployment has no model resolver', async () => {
     const catalog = catalogOf({ listProviders: () => [] })
     expect(await catalog?.efforts('kimi-coding', 'k2')).toBeUndefined()
+  })
+})
+
+describe('modelRouteKey', () => {
+  it('round-trips a route whose model id contains the slash a reading would split on', () => {
+    expect(readModelRouteKey(modelRouteKey({ provider: 'openrouter', model: 'anthropic/claude' })))
+      .toEqual({ provider: 'openrouter', model: 'anthropic/claude' })
+  })
+
+  it('keeps apart two routes a slash-joined key would merge', () => {
+    expect(modelRouteKey({ provider: 'a', model: 'b/c' }))
+      .not.toBe(modelRouteKey({ provider: 'a/b', model: 'c' }))
+  })
+
+  it('refuses a string this surface never minted', () => {
+    expect(readModelRouteKey('openrouter/anthropic/claude')).toBeUndefined()
+    expect(readModelRouteKey('')).toBeUndefined()
+  })
+})
+
+describe('describeModelRoute', () => {
+  const route = { provider: 'kimi-coding', model: 'k2', name: 'K2 Turbo' }
+
+  it('leads with the advertised name and keeps the id readable', () => {
+    const row = describeModelRoute(route, undefined)
+    expect(row.label).toBe('K2 Turbo')
+    expect(row.description).toContain('kimi-coding')
+    expect(row.description).toContain('k2')
+    expect(row.current).toBe(false)
+  })
+
+  it('names the route in force with the effort in force', () => {
+    const current: ModelChoice = { provider: 'kimi-coding', model: 'k2', reasoningEffort: 'high' }
+    const row = describeModelRoute(route, current)
+    expect(row.description).toContain('current')
+    expect(row.description).toContain('high')
+    expect(row.current).toBe(true)
+  })
+
+  it('leaves another route unmarked', () => {
+    const row = describeModelRoute(route, { provider: 'zai-coding-cn', model: 'glm-5.3' })
+    expect(row.current).toBe(false)
+    expect(row.description).not.toContain('current')
   })
 })

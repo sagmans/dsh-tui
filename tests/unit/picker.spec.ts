@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { StoredSession } from '@/agent/history.ts'
-import { PICKER_WINDOW, EffortPicker, SessionPicker, describeAge, effortChoices, type EffortChoice } from '@/ui/picker.ts'
+import { modelRouteKey, type ModelChoice, type ModelRoute } from '@/agent/model.ts'
+import { PICKER_WINDOW, EffortPicker, ModelPicker, SessionPicker, describeAge, effortChoices, type EffortChoice } from '@/ui/picker.ts'
 
 const session = (id: string, overrides: Partial<StoredSession> = {}): StoredSession => ({
   id,
@@ -31,6 +32,10 @@ describe('SessionPicker', () => {
 
   it('cancels on escape', () => {
     expect(pickerOf([session('a')]).handleKey('\u001b')).toEqual({ kind: 'cancel' })
+  })
+
+  it('cancels on the interrupt key too, rather than swallowing it', () => {
+    expect(pickerOf([session('a')]).handleKey('\u0003')).toEqual({ kind: 'cancel' })
   })
 
   it('filters by title, id, and directory', () => {
@@ -146,5 +151,55 @@ describe('effortChoices', () => {
 
   it('marks the provider default when no effort is in force', () => {
     expect(effortChoices([{ id: 'low', name: 'Low' }], undefined)[0]?.current).toBe(true)
+  })
+})
+
+const ROUTES: readonly ModelRoute[] = [
+  { provider: 'kimi-coding', model: 'k2', name: 'K2' },
+  { provider: 'zai-coding-cn', model: 'glm-5.3', name: 'GLM 5.3' },
+]
+
+const modelPicker = (
+  routes: readonly ModelRoute[] = ROUTES,
+  current: ModelChoice | undefined = { provider: 'kimi-coding', model: 'k2' },
+): ModelPicker => new ModelPicker(() => routes, () => current)
+
+describe('ModelPicker', () => {
+  it('picks the highlighted route on enter', () => {
+    const picker = modelPicker()
+    expect(picker.handleKey('\u001b[B')).toBeUndefined()
+    expect(picker.handleKey('\r')).toEqual({
+      kind: 'pick',
+      id: modelRouteKey({ provider: 'zai-coding-cn', model: 'glm-5.3' }),
+    })
+  })
+
+  it('filters by provider, model id, and advertised name', () => {
+    const byProvider = modelPicker()
+    byProvider.handleKey('z')
+    expect(byProvider.visible().map(route => route.model)).toEqual(['glm-5.3'])
+    const byId = modelPicker()
+    for (const key of 'glm-5') byId.handleKey(key)
+    expect(byId.visible().map(route => route.provider)).toEqual(['zai-coding-cn'])
+    const byName = modelPicker()
+    byName.handleKey('K')
+    byName.handleKey('2')
+    expect(byName.visible().map(route => route.model)).toEqual(['k2'])
+  })
+
+  it('shows rows that arrive after it opened, without reopening it', () => {
+    const routes: ModelRoute[] = []
+    const picker = new ModelPicker(() => routes, () => undefined)
+    picker.handleKey('l')
+    picker.handleKey('a')
+    routes.push({ provider: 'kimi-coding', model: 'k2-latest', name: 'K2 Latest' })
+    expect(picker.visible().map(route => route.model)).toEqual(['k2-latest'])
+  })
+
+  it('says the route in force and where an unadvertised id goes', () => {
+    const card = modelPicker().card()
+    expect(card.title).toContain('kimi-coding/k2')
+    expect(card.rows.find(row => row.label === 'K2')?.description).toContain('current')
+    expect(modelPicker([]).card().hint).toContain('/model')
   })
 })
