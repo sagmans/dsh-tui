@@ -1,5 +1,7 @@
 import {
   Editor,
+  isKittyProtocolActive,
+  matchesKey,
   stripTerminalSequences,
   type EditorTheme,
   type TUI,
@@ -21,6 +23,28 @@ import { FRAME_COLUMNS, FRAME_GLYPHS, MIN_BOX_WIDTH, PADDING_X } from './frame.t
 const CLOSING_TAG = '\u0000'
 
 /**
+ * The line feed a plain Enter is handed to the base class as.
+ *
+ * The base owns what a newline does to paste markers, history, and undo, and it
+ * reads this byte as one in every terminal mode, including the modes where it
+ * no longer calls Enter itself a newline.
+ */
+const NEWLINE_BYTE = '\n'
+
+/** The one sequence a terminal that reports no modifiers sends for alt+enter. */
+const LEGACY_ALT_ENTER = '\u001b\r'
+
+/**
+ * Ctrl+Enter as the keyboard protocol spells it.
+ *
+ * A legacy alt+enter arrives as the very sequence the base class reads as a
+ * newline before it ever looks for a submit key, so the press is translated
+ * into the chord the base does look for. The submit path then runs whole, with
+ * the same guards a real chord meets, instead of a second sender beside it.
+ */
+const KITTY_SUBMIT = '\u001b[13;5u'
+
+/**
  * The input bar drawn as a box, with its completion menu above it.
  *
  * The editor already draws the two rules and pads every row to the width it is
@@ -38,6 +62,33 @@ export class BoxedEditor extends Editor {
 
   constructor(tui: TUI, theme: EditorTheme) {
     super(tui, theme, { paddingX: PADDING_X })
+  }
+
+  /**
+   * Read the two presses the base class cannot place on its own.
+   *
+   * Enter breaks the line here, so the press the base would submit with becomes
+   * a newline — except while it is picking a completion, the one press that
+   * chooses something instead of sending it, and except on a bar a question or
+   * a picker has borrowed, whose keys belong to whoever borrowed it.
+   */
+  override handleInput(data: string): void {
+    if (this.disableSubmit) {
+      super.handleInput(data)
+      return
+    }
+    if (matchesKey(data, 'enter') && !this.isShowingAutocomplete()) {
+      super.handleInput(NEWLINE_BYTE)
+      return
+    }
+    // Only while the terminal cannot tell alt+enter apart from a mapping: with
+    // the protocol active the same sequence is the reader's shift+enter, which
+    // is a newline and has to stay one.
+    if (data === LEGACY_ALT_ENTER && !isKittyProtocolActive()) {
+      super.handleInput(KITTY_SUBMIT)
+      return
+    }
+    super.handleInput(data)
   }
 
   /** Tag the closing rule so {@link render} can find where the box ends. */
