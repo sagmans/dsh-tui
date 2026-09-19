@@ -487,10 +487,10 @@ describe('TranscriptView theming', () => {
     return model
   }
 
-  it('dresses a prompt in its rose shade without the weight', () => {
+  it('dresses a prompt in its mint shade without the weight', () => {
     const colour = createTheme('truecolor')
     const lines = new TranscriptView(userModel(), colour, new MarkdownRenderer(colour.markdown), { state: () => COLLAPSED }).render(40)
-    expect(lines.join('\n')).toContain('\u001b[38;2;252;202;240mhello there\u001b[0m')
+    expect(lines.join('\n')).toContain('\u001b[38;2;39;245;200mhello there\u001b[0m')
     expect(lines.join('\n')).not.toContain('\u001b[1;')
   })
 
@@ -500,7 +500,7 @@ describe('TranscriptView theming', () => {
     expect(lines).toHaveLength(1)
     // No frame, but the text keeps the column the frame's own air gave it, so a
     // theme that hides the border does not move the prompt.
-    expect(lines[0]?.trimEnd()).toBe(' \u001b[38;2;252;202;240mhello there\u001b[0m')
+    expect(lines[0]?.trimEnd()).toBe(' \u001b[38;2;39;245;200mhello there\u001b[0m')
   })
 
   it('draws nothing for a hidden element', () => {

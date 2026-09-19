@@ -402,7 +402,7 @@ exports[`styled golden frames > renders the status row with its escapes 1`] = `
 exports[`styled golden frames > renders the transcript with its escapes 1`] = `
 [
   "[38;2;138;138;138m╭──────────────────────────────────────────────────────────────────────────────╮[0m",
-  "[38;2;138;138;138m│[0m [38;2;252;202;240madd a dock above the editor[0m                                                  [38;2;138;138;138m│[0m",
+  "[38;2;138;138;138m│[0m [38;2;39;245;200madd a dock above the editor[0m                                                  [38;2;138;138;138m│[0m",
   "[38;2;138;138;138m╰──────────────────────────────────────────────────────────────────────────────╯[0m",
   "[38;2;138;138;138minjected dsh-agent-instructions · 3 lines — <system-reminder>[0m",
   "[38;2;138;138;138mreasoning · 14 tokens[0m[38;2;138;138;138m (shift+tab)[0m",

@@ -158,7 +158,7 @@ dsh --profile tui --no-bell            # do not ring when a long turn finishes
 
 An approval or a question draws inline above the editor and takes the keyboard. A question that lists options always adds row `0. other — type your own answer`: type or paste an answer the model did not offer, and the seam receives it as that question's free text — replacing a single-select choice, or supplementing a multi-select one. `0`, or `↓` past the last option, reaches the row; `↑` walks back to the list with the text kept, and `esc` does the same from that row, because a question skipped by accident is a question answered twice — an escape from the list skips it. Free text is written in the prompt bar's own editor, drawn under that row: movement, word and line deletion, undo, completion, and multi-line paste are all the editor the reader already uses, and the prompt bar steps aside while a question is open, so a prompt written but not sent comes back untouched once the question is answered. No question hides its answer — the reader is the one who has to check what they are about to send. Every gate row wraps at the screen edge under its own label, so a long option or question is readable rather than cut.
 
-While a turn runs, a prompt submitted into the editor waits in the agent's own inbox instead of disappearing: it is drawn above the editor in the input bar's own frame, faint and italic, and moves into the transcript when the agent takes it — where it keeps that frame in the prompt's own rose shade, so what the reader typed is never mistaken for what the agent said. `editor.queued` and `editor.queued.more` restyle or hide the waiting rows; `transcript.user` restyles the submitted prompt.
+While a turn runs, a prompt submitted into the editor waits in the agent's own inbox instead of disappearing: it is drawn above the editor in the input bar's own frame, faint and italic, and moves into the transcript when the agent takes it — where it keeps that frame in the prompt's own mint shade, so what the reader typed is never mistaken for what the agent said. `editor.queued` and `editor.queued.more` restyle or hide the waiting rows; `transcript.user` restyles the submitted prompt.
 
 Any other `/command` goes to the command registry, so `/plan`, `/compact`, `/goal`, and `/feedback` behave as they do on the other surfaces.
 
@@ -219,7 +219,7 @@ name the palette rather than a terminal slot, so on anything but a 16-colour
 terminal their contrast does not depend on what the reader's colour scheme maps
 slot 8 to. `arg` is the pale blue a card gives the argument it was called with,
 so `tool.args` is restyled on its own and stays distinct from the tool's own
-label and from its output. `user` is the rose a submitted prompt takes, so a
+label and from its output. `user` is the mint a submitted prompt takes, so a
 reader's own turns stand apart from the reply without reading either.
 
 `NO_COLOR` and `--no-color` disable styling entirely, attributes included, and
