@@ -187,9 +187,27 @@ const ANSWER_LABEL = 'answer'
  * a person who loses a key to a shoulder loses an account, so the row keeps the
  * value out of sight rather than trusting every question to be harmless.
  */
-const SECRET_WORDS = ['key', 'token', 'secret', 'password', 'passphrase', 'credential'] as const
+const SECRET_WORDS = ['token', 'secret', 'password', 'passphrase', 'credential'] as const
 
-const SECRET_PATTERN = new RegExp('\\b(?:' + SECRET_WORDS.join('|') + ')', 'iu')
+/** The words that make a key a credential rather than a button. */
+const SECRET_KEY_QUALIFIERS = ['api', 'access', 'private', 'ssh', 'signing', 'deploy', 'auth', 'encryption'] as const
+
+/**
+ * The credential forms a question can name.
+ *
+ * A bare key counts only as the thing the question asks for — "key?", "enter
+ * the key" — because questions also mention the keyboard ("which keys", "the
+ * keys line", "keybinding"), and hiding an answer that is not a secret costs
+ * the reader the sight of the very text they are checking.
+ */
+const SECRET_PATTERN = new RegExp(
+  [
+    `\\b(?:${SECRET_WORDS.join('|')})s?\\b`,
+    `\\b(?:${SECRET_KEY_QUALIFIERS.join('|')})[-\\s]?keys?\\b`,
+    '\\bkeys?\\b(?![ ][a-z])',
+  ].join('|'),
+  'iu',
+)
 
 /** How much of a secret stays readable, at each end, so its owner can recognize it. */
 const MASK_HEAD = 4

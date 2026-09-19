@@ -412,6 +412,43 @@ describe('QuestionGate free-text row', () => {
     expect(card.answer).toBeUndefined()
   })
 
+  it('keeps a question that only mentions keys from hiding its answer', () => {
+    const gate = new QuestionGate(toGateQuestions({
+      questions: [{
+        id: 'q1',
+        question: 'Which keys should the shortcut row use? Paste your verdict.',
+        options: [{ label: 'ctrl+t' }],
+      }],
+    }))
+    gate.handleKey('0')
+    for (const character of 'the keys line') gate.handleKey(character)
+    expect(gate.card().answer).toBe('answer: the keys line▌')
+  })
+
+  it('keeps a keyboard noun from hiding its answer', () => {
+    const gate = new QuestionGate(toGateQuestions({ questions: [{ id: 'q1', question: 'Which keybinding should I use?' }] }))
+    for (const character of 'ctrl+t') gate.handleKey(character)
+    expect(gate.card().answer).toBe('answer: ctrl+t▌')
+  })
+
+  it('still hides an answer the question asks to be kept', () => {
+    const gate = new QuestionGate(toGateQuestions({
+      questions: [{ id: 'q1', question: 'Paste the deploy credentials, then pick the vault', options: [{ label: 'from the vault' }] }],
+    }))
+    gate.handleKey('0')
+    gate.handleKey(paste('abcdefghijkl'))
+    expect(gate.card().answer).toMatch(/API KEY: abcd\*+ijkl▌/u)
+  })
+
+  it('still treats a bare key question as a secret', () => {
+    const gate = new QuestionGate(toGateQuestions({
+      questions: [{ id: 'q1', question: 'key?', options: [{ label: 'from the vault' }] }],
+    }))
+    gate.handleKey('0')
+    gate.handleKey(paste('abcdefghijkl'))
+    expect(gate.card().answer).toMatch(/API KEY: abcd\*+ijkl▌/u)
+  })
+
   it('hands the typed answer to the view as its own row, not as question detail', () => {
     const gate = withOptions()
     gate.handleKey('0')
