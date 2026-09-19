@@ -125,6 +125,8 @@ dsh --profile tui --no-bell            # do not ring when a long turn finishes
 | Ctrl+Y | show or hide the calls a PTC program dispatched: one two-space-indented entry per call under its `run_code` card, named and argued from the tool's own header and wrapped at the screen edge; shown by default |
 | Shift+Tab | expand or fold the reasoning behind an answer: folded, the row names itself, its token count, and the key; opened, it adds the thought |
 | Ctrl+T | pick the reasoning effort for the next step |
+| Ctrl+X then M | open the model picker |
+| Ctrl+X then Y | copy the last answer to the clipboard |
 | `y` / `n` / Esc | allow once, reject, or cancel a pending approval |
 | digits / space / ↑↓ / Enter / Esc | answer a question: pick or toggle, confirm, or skip one; `0` answers with your own text in the input bar |
 | typing in any picker or question | narrow the rows by fragment (`glm53` finds `GLM-5.3`); backspace widens, `esc` or Ctrl+C leaves |
@@ -156,6 +158,16 @@ dsh --profile tui --no-bell            # do not ring when a long turn finishes
 | `/theme` | list every styled element and the value in force |
 | `/quit` | leave and print the resume command |
 
+`Ctrl+X` starts a chord. For the next two seconds the footer leads with the keys
+that finish it — `m` opens the model picker, `y` copies the last answer — and a
+key that finishes nothing is typed as usual rather than swallowed, so a prefix
+pressed by accident costs nothing. `prefix: alt+x` starts the chord with another
+key and `prefixWindow: 0` waits for the next key instead of lapsing; a prefix
+that is not a modifier chord, that the surface already answers (`ctrl+c`), or
+that the terminal keeps (`ctrl+s`) is refused with the reason, and the shipped
+keymap stays in force. The chords themselves are the commands they stand for:
+`m` and `y` ask the same dispatcher `/model` and `/copy` do.
+
 An approval or a question draws inline above the editor and takes the keyboard. A question that lists options always adds row `0. other — type your own answer`: type or paste an answer the model did not offer, and the seam receives it as that question's free text — replacing a single-select choice, or supplementing a multi-select one. `0`, or `↓` past the last option, reaches the row; `↑` walks back to the list with the text kept, and `esc` does the same from that row, because a question skipped by accident is a question answered twice — an escape from the list skips it. Free text is written in the prompt bar's own editor, drawn under that row: movement, word and line deletion, undo, completion, and multi-line paste are all the editor the reader already uses, and the prompt bar steps aside while a question is open, so a prompt written but not sent comes back untouched once the question is answered. No question hides its answer — the reader is the one who has to check what they are about to send. Every gate row wraps at the screen edge under its own label, so a long option or question is readable rather than cut.
 
 While a turn runs, a prompt submitted into the editor waits in the agent's own inbox instead of disappearing: it is drawn above the editor in the input bar's own frame, faint and italic, and moves into the transcript when the agent takes it — where it keeps that frame in the prompt's own mint shade, so what the reader typed is never mistaken for what the agent said. `editor.queued` and `editor.queued.more` restyle or hide the waiting rows; `transcript.user` restyles the submitted prompt.
@@ -173,6 +185,8 @@ document as every other preference (`$DSH_HOME/settings.yaml`), under a
 dsh-tui:
   subcalls: collapsed         # fold the calls a PTC program dispatched (default inline)
   mermaid: streaming          # draw a reply's mermaid fences: off, final, or streaming (default streaming)
+  prefix: ctrl+x              # the key that starts a chord; must be a modifier chord, and not one the surface answers
+  prefixWindow: 2             # seconds the chord waits for its second key; 0 waits for the next key instead
   palette:
     muted: '#5c5c5c'          # one shade quiets every receding element
   tokens:
