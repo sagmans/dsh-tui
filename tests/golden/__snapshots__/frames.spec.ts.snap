@@ -136,7 +136,9 @@ exports[`golden frames > renders a question gate collecting a typed answer at 40
   "            window",
   "     [ ] 2. production",
   "   ❯ [x] 0. other — type your own answer",
-  "    answer: the eu-central cluster▌",
+  "   ╭───────────────────────────────────╮",
+  "   │ the eu-central cluster[7m [0m           │",
+  "   ╰───────────────────────────────────╯",
   "   type or paste an answer · enter",
   "   confirm · ↑↓ back to options · esc",
   "   skip",
@@ -151,7 +153,9 @@ exports[`golden frames > renders a question gate collecting a typed answer at 80
   "     [ ] 1. staging-eu-west-1 — canary the rollout behind an audit window",
   "     [ ] 2. production",
   "   ❯ [x] 0. other — type your own answer",
-  "    answer: the eu-central cluster▌",
+  "   ╭───────────────────────────────────────────────────────────────────────────╮",
+  "   │ the eu-central cluster[7m [0m                                                   │",
+  "   ╰───────────────────────────────────────────────────────────────────────────╯",
   "   type or paste an answer · enter confirm · ↑↓ back to options · esc skip",
 ]
 `;

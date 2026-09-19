@@ -55,6 +55,7 @@ import { TranscriptModel } from './transcript.ts'
 import { WorkFold, describeTodos } from './work.ts'
 import { WorkDock } from './ui/dock.ts'
 import { BoxedEditor } from './ui/editor.ts'
+import { GateInputBar } from './ui/gate-input.ts'
 import { MarkdownRenderer } from './ui/markdown.ts'
 import { createMermaidTransform } from './ui/mermaid.ts'
 import {
@@ -301,6 +302,11 @@ export function apply(ctx: Context, config: unknown): void {
     picker: () => pendingPicker?.picker.card(),
   })
   const editor = new BoxedEditor(tui, theme.editor)
+  // A second bar for what a question collects: it is asked for text the same way
+  // the prompt bar is, so it is the same component with its own modes, and the
+  // bar below keeps the prompt it is holding while the question is answered.
+  const gateEditor = new GateInputBar(tui, theme.editor)
+  gateEditor.disableSubmit = true
   const disposers: Array<() => void> = []
   // The presenter closure outlives the composition's own teardown, so it must
   // not keep an agent alive after its world unwinds.
@@ -386,12 +392,16 @@ export function apply(ctx: Context, config: unknown): void {
     pending = next
     // A gate owns the keyboard: the editor must not collect the decision keys.
     editor.disableSubmit = true
+    // The gate's own editor is the one being typed into, so it wears the cursor
+    // while the gate holds the keyboard.
+    gateEditor.focused = true
     tui.setFocus(null)
     tui.requestRender()
   }
 
   const closeGate = (): void => {
     pending = undefined
+    gateEditor.focused = false
     editor.disableSubmit = false
     tui.setFocus(editor)
     tui.requestRender()
@@ -1575,7 +1585,7 @@ export function apply(ctx: Context, config: unknown): void {
     const questions = toGateQuestions(request)
     if (questions.length === 0) return next()
     return new Promise<AskUserQuestionAnswer>(resolve => {
-      const gate = new QuestionGate(questions)
+      const gate = new QuestionGate(questions, gateEditor)
       // The seam takes mutable selection arrays and an optional custom field, so
       // the read-only gate answer is copied into that exact shape here.
       openGate({

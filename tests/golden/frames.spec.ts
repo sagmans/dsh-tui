@@ -1,3 +1,4 @@
+import { type TUI } from '@earendil-works/pi-tui'
 import { describe, expect, it } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
 import { createToolPresenter } from '@/agent/present.ts'
@@ -6,6 +7,7 @@ import { createTheme } from '@/theme.ts'
 import { TranscriptModel } from '@/transcript.ts'
 import { MarkdownRenderer } from '@/ui/markdown.ts'
 import { createMermaidTransform } from '@/ui/mermaid.ts'
+import { GateInputBar } from '@/ui/gate-input.ts'
 import { StatusBar } from '@/ui/status.ts'
 import { DEFAULT_VIEW_STATE, TranscriptView } from '@/ui/view.ts'
 import { WorkDock } from '@/ui/dock.ts'
@@ -23,6 +25,9 @@ import { WorkFold } from '@/work.ts'
  */
 const WIDTHS = [80, 40]
 const theme = createTheme('none')
+
+/** The terminal the gate's bar renders against; a golden frame reads its rows only. */
+const STUB_TUI = { requestRender: () => {}, terminal: { rows: 24, cols: 80 } } as unknown as TUI
 
 /** The rows this frame pins: a shell command whose output is kept, and a file read. */
 const FIXTURE_COMMAND = 'pnpm test'
@@ -226,10 +231,12 @@ function modelPickerCard(): ModelPicker {
  *
  * A decision is only answerable when its rows are readable, so this frame pins
  * wrapping in place of truncation, the free-text row every question with
- * options carries, and the answer line that row collects.
+ * options carries, and the input bar that row opens.
  */
 function gateCard(typed = ''): TranscriptView {
   const typing = typed !== ''
+  const bar = new GateInputBar(STUB_TUI, theme.editor)
+  bar.setText(typed)
   const gate: GateCard = {
     kind: 'question',
     title: 'which deployment target?  (1/2)',
@@ -240,7 +247,7 @@ function gateCard(typed = ''): TranscriptView {
       { label: 'production', description: undefined, current: false, selected: false },
     ],
     custom: { label: 'other', description: 'type your own answer', current: typing, selected: typing },
-    answer: typing ? `answer: ${typed}▌` : undefined,
+    answerInput: typing ? bar : undefined,
     hint: typing
       ? 'type or paste an answer · enter confirm · ↑↓ back to options · esc skip'
       : 'space select · digits pick · 0 answer freely · type to filter · enter confirm · esc skip',

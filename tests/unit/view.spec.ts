@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { stripTerminalSequences, visibleWidth } from '@earendil-works/pi-tui'
+import { stripTerminalSequences, type TUI, visibleWidth } from '@earendil-works/pi-tui'
 import { cardOfCall, cardOfResult, contentLines, CARD_DETAIL_MAX, CARD_SHELL_PREVIEW, SUBCALL_MAX, type ToolPresenter } from '@/cards.ts'
 import type { GateCard } from '@/gates.ts'
 import { createTheme, forwardEditorTheme, forwardMarkdownTheme, type TuiTheme } from '@/theme.ts'
@@ -8,9 +8,20 @@ import { TranscriptModel, type TranscriptEntry } from '@/transcript.ts'
 import { MarkdownRenderer } from '@/ui/markdown.ts'
 import type { PickerCard } from '@/ui/picker.ts'
 import { RowCache } from '@/ui/rows.ts'
+import { GateInputBar } from '@/ui/gate-input.ts'
 import { TranscriptView, type ViewState } from '@/ui/view.ts'
 
 const theme = createTheme('none')
+
+/** The terminal the bar under test renders against; these tests read its rows only. */
+const STUB_TUI = { requestRender: () => {}, terminal: { rows: 24, cols: 80 } } as unknown as TUI
+
+/** The bar a gate answers in, which is the component the surface hands in. */
+const answerBar = (text: string): GateInputBar => {
+  const bar = new GateInputBar(STUB_TUI, theme.editor)
+  bar.setText(text)
+  return bar
+}
 const COLLAPSED: ViewState = { expandCards: false, expandReasoning: false, expandSubCalls: false }
 
 function viewOf(model: TranscriptModel, state: ViewState = COLLAPSED, gate?: GateCard): TranscriptView {
@@ -337,7 +348,7 @@ describe('TranscriptView gate', () => {
       optionOffset: 0,
       options: [],
       custom: undefined,
-      answer: undefined,
+      answerInput: undefined,
       hint: 'y allow once · n reject · esc cancel',
     }
     const lines = viewOf(new TranscriptModel(), COLLAPSED, gate).render(60)
@@ -357,7 +368,7 @@ describe('TranscriptView gate', () => {
         { label: 'production', description: undefined, current: false, selected: false },
       ],
       custom: undefined,
-      answer: undefined,
+      answerInput: undefined,
       hint: 'space select · digits pick · enter confirm · esc skip',
     }
     const lines = viewOf(new TranscriptModel(), COLLAPSED, gate).render(60)
@@ -376,7 +387,7 @@ describe('TranscriptView gate', () => {
         { label: 'staging-eu-west-1', description: 'the full canary rollout behind an audit window', current: true, selected: false },
       ],
       custom: undefined,
-      answer: undefined,
+      answerInput: undefined,
       hint: 'space select · digits pick · enter confirm · esc skip',
     }
     const lines = viewOf(new TranscriptModel(), COLLAPSED, gate).render(40)
@@ -400,7 +411,7 @@ describe('TranscriptView gate', () => {
       optionOffset: 4,
       options: [{ label: 'staging', description: undefined, current: false, selected: false }],
       custom: { label: 'other', description: 'type your own answer', current: true, selected: true },
-      answer: undefined,
+      answerInput: undefined,
       hint: 'space select · digits pick · 0 answer freely · type to filter · enter confirm · esc skip',
     }
     const lines = viewOf(new TranscriptModel(), COLLAPSED, gate).render(60)
@@ -418,15 +429,15 @@ describe('TranscriptView gate', () => {
       optionOffset: 0,
       options: [{ label: 'staging', description: undefined, current: false, selected: false }],
       custom: { label: 'other', description: 'type your own answer', current: true, selected: true },
-      answer: 'answer: the eu-central cluster▌',
+      answerInput: answerBar('the eu-central cluster'),
       hint: 'type or paste an answer · enter confirm · ↑↓ back to options · esc skip',
     }
     const lines = viewOf(new TranscriptModel(), COLLAPSED, gate).render(60)
     const row = lines.findIndex(line => line.includes('0. other'))
-    const answer = lines.findIndex(line => line.includes('answer:'))
-    expect(answer).toBe(row + 1)
-    // The line belongs to the row it fills: above the options it reads as
+    const answer = lines.findIndex(line => line.includes('the eu-central cluster'))
+    // The bar belongs to the row it fills: above the options it reads as
     // something the question says rather than something the reader is typing.
+    expect(answer).toBeGreaterThan(row)
     expect(lines.findIndex(line => line.includes('1. staging'))).toBeLessThan(answer)
     expect(lines.findIndex(line => line.includes('type or paste'))).toBeGreaterThan(answer)
   })
@@ -439,12 +450,15 @@ describe('TranscriptView gate', () => {
       optionOffset: 0,
       options: [],
       custom: undefined,
-      answer: 'answer: ▌',
+      answerInput: answerBar(''),
       hint: 'type or paste an answer · enter confirm · esc skip',
     }
     const lines = viewOf(new TranscriptModel(), COLLAPSED, gate).render(60)
     expect(lines).toContain('? why?')
-    expect(lines).toContain('    answer: ▌')
+    // A question with nothing but text to collect still opens the bar, because
+    // an empty bar is where the first character of an answer lands.
+    expect(lines.some(line => line.startsWith('   │'))).toBe(true)
+    expect(lines.findIndex(line => line.startsWith('   │'))).toBeGreaterThan(lines.indexOf('? why?'))
   })
 
   it('wraps the question and the keys it names rather than cutting them', () => {
@@ -455,7 +469,7 @@ describe('TranscriptView gate', () => {
       optionOffset: 0,
       options: [],
       custom: undefined,
-      answer: undefined,
+      answerInput: undefined,
       hint: 'space select · digits pick · 0 answer freely · type to filter · enter confirm · esc skip',
     }
     const lines = viewOf(new TranscriptModel(), COLLAPSED, gate).render(40)

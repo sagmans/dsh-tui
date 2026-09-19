@@ -24,12 +24,41 @@ export interface GateCard {
    */
   readonly custom: GateCustomRow | undefined
   /**
-   * The line the typed answer is forming on, drawn under the row that owns it.
-   * A row the reader is typing into belongs under the row it fills; in the
-   * detail block above the options it reads as something the question says.
+   * The editor the answer is written in, drawn under the row that fills it.
+   *
+   * A question says nothing about its answer until someone writes one, so the
+   * rows come from the surface's own editor rather than from text composed
+   * here: the reader gets the cursor movement, deletion, undo, and paste the
+   * prompt bar already has.
    */
-  readonly answer: string | undefined
+  readonly answerInput: GateInput | undefined
   readonly hint: string
+}
+
+/**
+ * The editor a question collects typed text with.
+ *
+ * These are the editor's own members rather than a vocabulary invented here, so
+ * the surface hands in the component the prompt bar already uses and nothing
+ * has to adapt it. Every key the gate does not claim — movement, deletion,
+ * undo, a pasted block — reaches the answer through this.
+ */
+export interface GateInput {
+  /** The answer as written, with a pasted block expanded back to its text. */
+  getExpandedText(): string
+  /** Replace the answer, so the next question of a batch does not inherit one. */
+  setText(text: string): void
+  /** Lay the answer out for this width; its rows are drawn under the free-text row. */
+  render(width: number): string[]
+  /** Take a key the gate itself did not claim. */
+  handleInput(data: string): void
+  /**
+   * Show what the bar holds, or hide it, without changing what it holds.
+   *
+   * A question that asks for a credential is answered in the same bar as every
+   * other, so hiding is a mode of that bar rather than a different component.
+   */
+  setMode(mode: 'answer' | 'secret'): void
 }
 
 /** One selectable row of a question gate. */
@@ -91,7 +120,7 @@ export class ApprovalGate {
       kind: 'approval',
       title: `approval needed · ${this.toolName}`,
       detail: this.reason === undefined ? [] : lines(this.reason),
-      answer: undefined,
+      answerInput: undefined,
       optionOffset: 0,
       options: [],
       custom: undefined,
@@ -172,19 +201,10 @@ const CUSTOM_ROW_SHORTHAND = `${CUSTOM_ROW_NUMBER} answer freely`
 /** The keys that answer the free-text row, where typing is the answer rather than a filter. */
 const CUSTOM_HINT = 'type or paste an answer · enter confirm · ↑↓ back to options · esc skip'
 
-/** Drawn after a typed answer, so an empty question still shows where its text goes. */
-const ANSWER_CURSOR = '▌'
-
-/** The row label a question earns when it asks for something that identifies its owner. */
-const SECRET_LABEL = 'API KEY'
-
-/** The row label for every other typed answer, where the text is the answer itself. */
-const ANSWER_LABEL = 'answer'
-
 /**
  * Words that mark a question as one whose answer is a secret. A plugin cannot
  * say so through the seam yet, and the question is where it already says it:
- * a person who loses a key to a shoulder loses an account, so the row keeps the
+ * a person who loses a key to a shoulder loses an account, so the bar keeps the
  * value out of sight rather than trusting every question to be harmless.
  */
 const SECRET_WORDS = ['token', 'secret', 'password', 'passphrase', 'credential'] as const
@@ -209,20 +229,10 @@ const SECRET_PATTERN = new RegExp(
   'iu',
 )
 
-/** How much of a secret stays readable, at each end, so its owner can recognize it. */
-const MASK_HEAD = 4
-const MASK_TAIL = 4
-const MASK_CHAR = '*'
-
-/** The words a question uses when it wants a secret rather than an answer. */
-function asksForSecret(question: GateQuestion): boolean {
+/** Whether a question asks for something its owner should not show a bystander. */
+function asksForSecret(question: GateQuestion | undefined): boolean {
+  if (question === undefined) return false
   return SECRET_PATTERN.test(question.question) || (question.header !== undefined && SECRET_PATTERN.test(question.header))
-}
-
-/** A secret with both ends readable: a field for its owner, and nothing for a bystander. */
-function masked(value: string): string {
-  if (value.length <= MASK_HEAD + MASK_TAIL) return value
-  return value.slice(0, MASK_HEAD) + MASK_CHAR.repeat(value.length - MASK_HEAD - MASK_TAIL) + value.slice(-MASK_TAIL)
 }
 
 /** One option with the position it answers for, so filtering can drop rows and keep the meaning. */
@@ -243,19 +253,34 @@ export class QuestionGate {
   private index = 0
   private cursor = 0
   private typed = ''
-  /** The text the free-text row collects, which is an answer rather than a filter. */
-  private answer = ''
   /** Whether the cursor is on the free-text row. */
   private atCustom = false
   private readonly chosen: string[][] = []
   private readonly custom: (string | undefined)[] = []
   private finished = false
 
-  constructor(private readonly questions: readonly GateQuestion[]) {
+  constructor(
+    private readonly questions: readonly GateQuestion[],
+    /** The editor every typed answer is written in, whichever row asks for it. */
+    private readonly input: GateInput,
+  ) {
     for (const _ of questions) {
       this.chosen.push([])
       this.custom.push(undefined)
     }
+    this.resetInput()
+  }
+
+  /**
+   * Hand the bar the question now under the cursor, with nothing written in it.
+   *
+   * The bar belongs to the surface and outlives one question, so an answer must
+   * never cross from the last question into the next — or from a gate that was
+   * abandoned into the one that follows it.
+   */
+  private resetInput(): void {
+    this.input.setText('')
+    this.input.setMode(asksForSecret(this.current) ? 'secret' : 'answer')
   }
 
   get resolved(): boolean {
@@ -323,7 +348,9 @@ export class QuestionGate {
     const question = this.current
     if (question === undefined || text === '') return
     if (this.typingAnswer(question)) {
-      this.answer += text
+      // The editor decides what an insertion is: a paste arrives as one edit,
+      // and a multi-character chunk is one undo step rather than many.
+      this.input.handleInput(text)
       return
     }
     this.typed += text
@@ -336,7 +363,9 @@ export class QuestionGate {
     if (this.finished || question === undefined) return undefined
     const paste = pastedText(data)
     if (paste !== undefined) {
-      this.absorb(paste)
+      // An answer takes the paste sequence itself, because the editor reads it;
+      // a filter takes the text inside it, because nothing else would.
+      this.absorb(this.typingAnswer(question) ? data : paste)
       return undefined
     }
     // The free-text row is a text field, so the keys that walk or pick a list
@@ -381,7 +410,7 @@ export class QuestionGate {
       // The same routing typing follows: a question without options has no
       // filter to erase, and the delete belongs to the answer it collected.
       if (this.typingAnswer(question)) {
-        this.answer = this.answer.slice(0, -1)
+        this.input.handleInput(data)
         return undefined
       }
       this.typed = this.typed.slice(0, -1)
@@ -426,11 +455,9 @@ export class QuestionGate {
       this.confirm()
       return this.result()
     }
-    if (matchesKey(data, 'backspace')) {
-      this.answer = this.answer.slice(0, -1)
-      return undefined
-    }
-    if (data.length === 1 && data >= ' ') this.absorb(data)
+    // Anything else is the editor's: movement, deletion, undo, and the keys
+    // that insert a character this gate has no business knowing about.
+    this.input.handleInput(data)
     return undefined
   }
 
@@ -438,7 +465,7 @@ export class QuestionGate {
   private confirm(): void {
     const question = this.current
     if (question === undefined) return
-    const text = this.answer.trim()
+    const text = this.input.getExpandedText().trim()
     if (text !== '') {
       this.custom[this.index] = text
       // The seam reads a single-select custom as the answer itself, so a label
@@ -456,11 +483,11 @@ export class QuestionGate {
    */
   private advance(): void {
     this.typed = ''
-    this.answer = ''
     this.atCustom = false
     this.cursor = 0
     this.index += 1
     if (this.index >= this.questions.length) this.finished = true
+    this.resetInput()
   }
 
   private result(): GateAnswer[] | undefined {
@@ -478,14 +505,12 @@ export class QuestionGate {
   card(): GateCard {
     const question = this.current
     if (question === undefined) {
-      return { kind: 'question', title: 'question', detail: [], optionOffset: 0, options: [], custom: undefined, answer: undefined, hint: 'finishing' }
+      return { kind: 'question', title: 'question', detail: [], optionOffset: 0, options: [], custom: undefined, answerInput: undefined, hint: 'finishing' }
     }
     const chosen = this.chosen[this.index] ?? []
     const detail = question.detail === undefined ? [] : lines(question.detail)
     const heading = question.header === undefined ? '' : question.header + ' · '
     const title = `${heading}${question.question}${this.questions.length > 1 ? `  (${this.index + 1}/${this.questions.length})` : ''}`
-    const secret = asksForSecret(question)
-    const answerRow = `${secret ? SECRET_LABEL : ANSWER_LABEL}: ${secret ? masked(this.answer) : this.answer}${ANSWER_CURSOR}`
     if (question.options.length === 0) {
       return {
         kind: 'question',
@@ -494,13 +519,16 @@ export class QuestionGate {
         optionOffset: 0,
         options: [],
         custom: undefined,
-        // The row is the only place the text lands, so it is drawn even while
+        // The editor is the only place the text lands, so it is drawn even while
         // empty: a question answered by typing needs somewhere to paste a key.
-        answer: answerRow,
+        answerInput: this.input,
         hint: 'type or paste an answer · enter confirm · esc skip',
       }
     }
     if (this.typed !== '') detail.push(`filter: ${this.typed}`)
+    // The editor holds the answer, so whether one has been written is its own
+    // answer to give; the card only decides where to draw it.
+    const written = this.input.getExpandedText() !== ''
     const matched = this.matched(question)
     const { rows, start, cursor } = this.windowed(question)
     if (rows.length < matched.length) detail.push(`showing ${start + 1}–${start + rows.length} of ${matched.length}`)
@@ -521,11 +549,11 @@ export class QuestionGate {
         label: CUSTOM_ROW_LABEL,
         description: CUSTOM_ROW_DESCRIPTION,
         current: this.atCustom,
-        selected: this.atCustom || this.answer.trim() !== '',
+        selected: this.atCustom || written,
       },
-      // A pending answer stays in view whether or not the cursor is on the row,
+      // A written answer stays in view whether or not the cursor is on the row,
       // because it is what an enter is about to send.
-      answer: this.atCustom || this.answer !== '' ? answerRow : undefined,
+      answerInput: this.atCustom || written ? this.input : undefined,
       hint: this.atCustom
         ? CUSTOM_HINT
         : `${question.multiSelect ? 'space toggle' : 'space select'} · digits pick · ${CUSTOM_ROW_SHORTHAND} · type to filter · enter confirm · esc skip`,

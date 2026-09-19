@@ -1,9 +1,31 @@
+import { type TUI } from '@earendil-works/pi-tui'
 import { describe, expect, it } from 'vitest'
-import { ApprovalGate, QuestionGate, toGateQuestions } from '@/gates.ts'
+import { ApprovalGate, type GateQuestion, QuestionGate, toGateQuestions } from '@/gates.ts'
+import { createTheme } from '@/theme.ts'
+import { GateInputBar } from '@/ui/gate-input.ts'
+
+/**
+ * The terminal the bar renders against. Nothing in these tests reads the screen
+ * size or repaints, so the bar under test is the real component over a stub.
+ */
+const STUB_TUI = { requestRender: () => {}, terminal: { rows: 24, cols: 80 } } as unknown as TUI
+
+/** The bar a gate collects its answers with, which is the component under test. */
+const answerBar = (): GateInputBar => new GateInputBar(STUB_TUI, createTheme('none').editor)
+
+/** A question gate over a fresh bar, which is how the surface builds one. */
+const gateOver = (questions: readonly GateQuestion[]): QuestionGate => new QuestionGate(questions, answerBar())
+
+/** What the bar holds, which is what an enter sends. */
+const answerText = (gate: QuestionGate): string | undefined => gate.card().answerInput?.getExpandedText()
+
+/** What the bar draws, which is how the answer reaches the reader. */
+const answerRows = (gate: QuestionGate): string => gate.card().answerInput?.render(60).join('\n') ?? ''
 
 const ESC = '\x1b'
 const ENTER = '\r'
 const UP = '\x1b[A'
+const LEFT = '\x1b[D'
 const DOWN = '\x1b[B'
 const BACKSPACE = '\x7f'
 
@@ -83,37 +105,37 @@ describe('QuestionGate', () => {
   })
 
   it('selects with a digit and confirms with enter', () => {
-    const gate = new QuestionGate(single)
+    const gate = gateOver(single)
     expect(gate.handleKey('2')).toBeUndefined()
     expect(gate.handleKey(ENTER)).toEqual([{ id: 'q1', selected: ['no'] }])
   })
 
   it('moves the cursor and selects with space', () => {
-    const gate = new QuestionGate(single)
+    const gate = gateOver(single)
     gate.handleKey(DOWN)
     gate.handleKey(' ')
     expect(gate.handleKey(ENTER)).toEqual([{ id: 'q1', selected: ['no'] }])
   })
 
   it('replaces the selection for a single-select question and accumulates for multi-select', () => {
-    const replacement = new QuestionGate(single)
+    const replacement = gateOver(single)
     replacement.handleKey('1')
     replacement.handleKey('2')
     expect(replacement.handleKey(ENTER)).toEqual([{ id: 'q1', selected: ['no'] }])
 
-    const accumulation = new QuestionGate(multi)
+    const accumulation = gateOver(multi)
     accumulation.handleKey('1')
     accumulation.handleKey('2')
     expect(accumulation.handleKey(ENTER)).toEqual([{ id: 'q1', selected: ['a', 'b'] }])
   })
 
   it('skips the current question on escape with an empty selection', () => {
-    const gate = new QuestionGate(single)
+    const gate = gateOver(single)
     expect(gate.handleKey(ESC)).toEqual([{ id: 'q1', selected: [] }])
   })
 
   it('answers an option-less question with typed text', () => {
-    const gate = new QuestionGate(toGateQuestions({ questions: [{ id: 'q1', question: 'why?' }] }))
+    const gate = gateOver(toGateQuestions({ questions: [{ id: 'q1', question: 'why?' }] }))
     for (const character of 'because') gate.handleKey(character)
     gate.handleKey(' ')
     gate.handleKey('x')
@@ -123,7 +145,7 @@ describe('QuestionGate', () => {
   })
 
   it('walks a batch and reports progress', () => {
-    const gate = new QuestionGate(toGateQuestions({
+    const gate = gateOver(toGateQuestions({
       questions: [{ id: 'a', question: 'first' }, { id: 'b', question: 'second', options: [{ label: 'x' }] }],
     }))
     expect(gate.card().title).toBe('first  (1/2)')
@@ -138,7 +160,7 @@ describe('QuestionGate', () => {
   })
 
   it('marks the cursor and the chosen rows in the card', () => {
-    const gate = new QuestionGate(single)
+    const gate = gateOver(single)
     gate.handleKey('1')
     const card = gate.card()
     expect(card.options.map(option => [option.label, option.current, option.selected])).toEqual([
@@ -151,7 +173,7 @@ describe('QuestionGate', () => {
 
 /** A picker's question: several providers, two of them sharing a name. */
 function providerGate(): QuestionGate {
-  return new QuestionGate(toGateQuestions({
+  return gateOver(toGateQuestions({
     questions: [{
       id: 'q1',
       question: 'which provider?',
@@ -197,7 +219,7 @@ describe('QuestionGate filtering', () => {
   })
 
   it('keeps a number inside the answer of a question without options', () => {
-    const gate = new QuestionGate(toGateQuestions({ questions: [{ id: 'q1', question: 'key?' }] }))
+    const gate = gateOver(toGateQuestions({ questions: [{ id: 'q1', question: 'key?' }] }))
     for (const character of 'sk-2') gate.handleKey(character)
     expect(gate.handleKey(ENTER)).toEqual([{ id: 'q1', selected: [], custom: 'sk-2' }])
   })
@@ -210,7 +232,7 @@ describe('QuestionGate filtering', () => {
         options: Array.from({ length: 30 }, (_, index) => ({ label: `option ${index + 1}` })),
       }],
     })
-    const gate = new QuestionGate(many)
+    const gate = gateOver(many)
     expect(gate.card().options.length).toBe(12)
     expect(gate.card().detail.join('\n')).toContain('showing 1–12 of 30')
     gate.handleKey('1')
@@ -225,7 +247,7 @@ describe('QuestionGate filtering', () => {
         options: Array.from({ length: 30 }, (_, index) => ({ label: `option ${index + 1}` })),
       }],
     })
-    const gate = new QuestionGate(many)
+    const gate = gateOver(many)
     expect(gate.card().optionOffset).toBe(0)
     for (let step = 0; step < 20; step += 1) gate.handleKey(DOWN)
     const scrolled = gate.card()
@@ -240,24 +262,30 @@ describe('QuestionGate paste', () => {
   const paste = (text: string): string => `\x1b[200~${text}\x1b[201~`
 
   it('takes a pasted key as the whole answer instead of dropping it', () => {
-    const gate = new QuestionGate(toGateQuestions({ questions: [{ id: 'q1', question: 'key?' }] }))
+    const gate = gateOver(toGateQuestions({ questions: [{ id: 'q1', question: 'key?' }] }))
     expect(gate.handleKey(paste('sk-ant-api03-abcDEF123\r\n'))).toBeUndefined()
-    expect(gate.card().answer).toMatch(/API KEY: sk-a\*+F123▌/u)
+    // The paste brings its own trailing newline; it is the answer's edge, not
+    // its content, so the bar holds it and confirm trims it.
+    expect(answerText(gate)?.trim()).toBe('sk-ant-api03-abcDEF123')
     expect(gate.handleKey(ENTER)).toEqual([{ id: 'q1', selected: [], custom: 'sk-ant-api03-abcDEF123' }])
   })
 
-  it('keeps a secret recognizable at both ends and hidden in between', () => {
-    const gate = new QuestionGate(toGateQuestions({ questions: [{ id: 'q1', question: 'Enter the Anthropic API key' }] }))
+  it('hides a key in the bar that collects it, whatever the question calls it', () => {
+    const gate = gateOver(toGateQuestions({ questions: [{ id: 'q1', question: 'Enter the Anthropic API key' }] }))
     gate.handleKey(paste('sk-ant-api03-FAKE998877665544332211'))
-    const row = gate.card().answer ?? ''
-    expect(row).toMatch(/API KEY: sk-a\*+2211▌/u)
-    expect(row).not.toContain('FAKE9988')
+    // The bar holds every character and shows none of them: the value is what an
+    // enter sends, and the screen is what a bystander can read.
+    expect(answerText(gate)).toBe('sk-ant-api03-FAKE998877665544332211')
+    const rows = answerRows(gate)
+    expect(rows).not.toContain('FAKE9988')
+    expect(rows).toContain('*')
   })
 
-  it('shows a plain answer as typed, because hiding everything hides the answer', () => {
-    const gate = new QuestionGate(toGateQuestions({ questions: [{ id: 'q1', question: 'Which branch should I use?' }] }))
+  it('shows a plain answer as typed, because hiding an answer hides the answer', () => {
+    const gate = gateOver(toGateQuestions({ questions: [{ id: 'q1', question: 'Which branch should I use?' }] }))
     gate.handleKey(paste('release/0.2'))
-    expect(gate.card().answer).toContain('answer: release/0.2▌')
+    expect(answerText(gate)).toBe('release/0.2')
+    expect(answerRows(gate)).toContain('release/0.2')
   })
 
   it('filters the options from a pasted provider name', () => {
@@ -266,14 +294,15 @@ describe('QuestionGate paste', () => {
     expect(gate.card().options.map(option => option.label)).toEqual(['Anthropic (Claude Pro/Max)'])
   })
 
-  it('draws the answer row before anything is typed, so a key has somewhere to land', () => {
-    const gate = new QuestionGate(toGateQuestions({ questions: [{ id: 'q1', question: 'key?' }] }))
-    expect(gate.card().answer).toContain('API KEY: ▌')
+  it('draws the bar before anything is typed, so a key has somewhere to land', () => {
+    const gate = gateOver(toGateQuestions({ questions: [{ id: 'q1', question: 'key?' }] }))
+    expect(answerText(gate)).toBe('')
+    expect(answerRows(gate).length).toBeGreaterThan(0)
     expect(gate.card().hint).toContain('paste')
   })
 
   it('leads with the heading the caller sent, which the seam promises and a plugin relies on', () => {
-    const gate = new QuestionGate(toGateQuestions({ questions: [{ id: 'q1', question: 'why?', header: 'Sign in' }] }))
+    const gate = gateOver(toGateQuestions({ questions: [{ id: 'q1', question: 'why?', header: 'Sign in' }] }))
     expect(gate.card().title).toBe('Sign in · why?')
   })
 })
@@ -288,7 +317,7 @@ describe('QuestionGate paste', () => {
 describe('QuestionGate free-text row', () => {
   const paste = (text: string): string => `\x1b[200~${text}\x1b[201~`
 
-  const withOptions = (): QuestionGate => new QuestionGate(toGateQuestions({
+  const withOptions = (): QuestionGate => gateOver(toGateQuestions({
     questions: [{ id: 'q1', question: 'deploy?', options: [{ label: 'yes' }, { label: 'no' }] }],
   }))
 
@@ -315,7 +344,7 @@ describe('QuestionGate free-text row', () => {
     gate.handleKey('0')
     for (const character of 'ship it') gate.handleKey(character)
     expect(gate.card().options.map(option => option.label)).toEqual(['yes', 'no'])
-    expect(gate.card().answer).toContain('answer: ship it▌')
+    expect(answerText(gate)).toBe('ship it')
     expect(gate.handleKey(ENTER)).toEqual([{ id: 'q1', selected: [], custom: 'ship it' }])
   })
 
@@ -342,7 +371,7 @@ describe('QuestionGate free-text row', () => {
   })
 
   it('supplements the labels a multi-select question chose', () => {
-    const gate = new QuestionGate(toGateQuestions({
+    const gate = gateOver(toGateQuestions({
       questions: [{ id: 'q1', question: 'pick', options: [{ label: 'a' }, { label: 'b' }], multiSelect: true }],
     }))
     gate.handleKey('1')
@@ -366,14 +395,13 @@ describe('QuestionGate free-text row', () => {
   })
 
   it('keeps a pasted answer on row 0 and hides it when the question asks for a secret', () => {
-    const gate = new QuestionGate(toGateQuestions({
+    const gate = gateOver(toGateQuestions({
       questions: [{ id: 'q1', question: 'API key?', options: [{ label: 'from the vault' }] }],
     }))
     gate.handleKey('0')
     gate.handleKey(paste('sk-ant-api03-FAKE998877665544332211'))
-    const row = gate.card().answer ?? ''
-    expect(row).toMatch(/API KEY: sk-a\*+2211▌/u)
-    expect(row).not.toContain('FAKE9988')
+    expect(answerText(gate)).toBe('sk-ant-api03-FAKE998877665544332211')
+    expect(answerRows(gate)).not.toContain('FAKE9988')
     expect(gate.handleKey(ENTER)).toEqual([{ id: 'q1', selected: [], custom: 'sk-ant-api03-FAKE998877665544332211' }])
   })
 
@@ -392,13 +420,13 @@ describe('QuestionGate free-text row', () => {
     expect(typed.handleKey(ESC)).toEqual([{ id: 'q1', selected: [] }])
 
     // An escape means the same thing on a question that is nothing but text.
-    const freeform = new QuestionGate(toGateQuestions({ questions: [{ id: 'q1', question: 'why?' }] }))
+    const freeform = gateOver(toGateQuestions({ questions: [{ id: 'q1', question: 'why?' }] }))
     for (const character of 'because') freeform.handleKey(character)
     expect(freeform.handleKey(ESC)).toEqual([{ id: 'q1', selected: [] }])
   })
 
   it('starts the next question of a batch with an empty row 0', () => {
-    const gate = new QuestionGate(toGateQuestions({
+    const gate = gateOver(toGateQuestions({
       questions: [
         { id: 'a', question: 'first', options: [{ label: 'x' }] },
         { id: 'b', question: 'second', options: [{ label: 'y' }] },
@@ -409,11 +437,12 @@ describe('QuestionGate free-text row', () => {
     gate.handleKey(ENTER)
     const card = gate.card()
     expect(card.custom).toEqual({ label: 'other', description: 'type your own answer', current: false, selected: false })
-    expect(card.answer).toBeUndefined()
+    // Nothing is written into the next question, so its bar is not drawn yet.
+    expect(card.answerInput).toBeUndefined()
   })
 
-  it('keeps a question that only mentions keys from hiding its answer', () => {
-    const gate = new QuestionGate(toGateQuestions({
+  it('shows the answer to a question that only mentions keys', () => {
+    const gate = gateOver(toGateQuestions({
       questions: [{
         id: 'q1',
         question: 'Which keys should the shortcut row use? Paste your verdict.',
@@ -422,52 +451,89 @@ describe('QuestionGate free-text row', () => {
     }))
     gate.handleKey('0')
     for (const character of 'the keys line') gate.handleKey(character)
-    expect(gate.card().answer).toBe('answer: the keys line▌')
+    expect(answerText(gate)).toBe('the keys line')
+    expect(answerRows(gate)).toContain('the keys line')
   })
 
-  it('keeps a keyboard noun from hiding its answer', () => {
-    const gate = new QuestionGate(toGateQuestions({ questions: [{ id: 'q1', question: 'Which keybinding should I use?' }] }))
+  it('shows the answer to a question that names a keybinding', () => {
+    const gate = gateOver(toGateQuestions({ questions: [{ id: 'q1', question: 'Which keybinding should I use?' }] }))
     for (const character of 'ctrl+t') gate.handleKey(character)
-    expect(gate.card().answer).toBe('answer: ctrl+t▌')
+    expect(answerText(gate)).toBe('ctrl+t')
+    expect(answerRows(gate)).toContain('ctrl+t')
   })
 
-  it('still hides an answer the question asks to be kept', () => {
-    const gate = new QuestionGate(toGateQuestions({
+  it('hides an answer the question asks to be kept', () => {
+    const gate = gateOver(toGateQuestions({
       questions: [{ id: 'q1', question: 'Paste the deploy credentials, then pick the vault', options: [{ label: 'from the vault' }] }],
     }))
     gate.handleKey('0')
     gate.handleKey(paste('abcdefghijkl'))
-    expect(gate.card().answer).toMatch(/API KEY: abcd\*+ijkl▌/u)
+    expect(answerText(gate)).toBe('abcdefghijkl')
+    expect(answerRows(gate)).not.toContain('abcdefghijkl')
   })
 
-  it('still treats a bare key question as a secret', () => {
-    const gate = new QuestionGate(toGateQuestions({
+  it('hides the answer to a question that is nothing but a bare key', () => {
+    const gate = gateOver(toGateQuestions({
       questions: [{ id: 'q1', question: 'key?', options: [{ label: 'from the vault' }] }],
     }))
     gate.handleKey('0')
     gate.handleKey(paste('abcdefghijkl'))
-    expect(gate.card().answer).toMatch(/API KEY: abcd\*+ijkl▌/u)
+    expect(answerText(gate)).toBe('abcdefghijkl')
+    expect(answerRows(gate)).not.toContain('abcdefghijkl')
   })
 
-  it('hands the typed answer to the view as its own row, not as question detail', () => {
+  it('hands the typed answer to the bar, not to the question detail', () => {
     const gate = withOptions()
     gate.handleKey('0')
     for (const character of 'later') gate.handleKey(character)
     const card = gate.card()
-    expect(card.answer).toBe('answer: later▌')
+    expect(card.answerInput).toBeDefined()
+    expect(answerText(gate)).toBe('later')
     // The detail block is drawn above the options, where the line would read as
     // something the question says rather than something the reader is typing.
-    expect(card.detail.some(line => line.includes('answer:'))).toBe(false)
+    expect(card.detail.some(line => line.includes('later'))).toBe(false)
   })
 
-  it('carries the answer row of a question that has only text to collect', () => {
-    const gate = new QuestionGate(toGateQuestions({ questions: [{ id: 'q1', question: 'why?' }] }))
-    expect(gate.card().answer).toBe('answer: ▌')
+  it('carries the bar of a question that has only text to collect', () => {
+    const gate = gateOver(toGateQuestions({ questions: [{ id: 'q1', question: 'why?' }] }))
+    expect(gate.card().answerInput).toBeDefined()
+    expect(answerText(gate)).toBe('')
     expect(gate.card().detail).toEqual([])
   })
 
+  it('edits the answer with the whole editor rather than at its end', () => {
+    const gate = withOptions()
+    gate.handleKey('0')
+    for (const character of 'later') gate.handleKey(character)
+    gate.handleKey(LEFT)
+    gate.handleKey(LEFT)
+    gate.handleKey('X')
+    expect(answerText(gate)).toBe('latXer')
+    expect(gate.handleKey(ENTER)).toEqual([{ id: 'q1', selected: [], custom: 'latXer' }])
+  })
+
+  it('opens a question over a bar that still holds the last answer as empty', () => {
+    // The bar outlives one gate, so a question opened after an abandoned answer
+    // must not inherit it: the reader sees an empty bar and sends what they type.
+    const bar = answerBar()
+    bar.setText('an answer nobody sent')
+    const gate = new QuestionGate(toGateQuestions({
+      questions: [{ id: 'q1', question: 'why?', options: [{ label: 'because' }] }],
+    }), bar)
+    expect(gate.card().answerInput).toBeUndefined()
+    gate.handleKey('0')
+    expect(answerText(gate)).toBe('')
+  })
+
+  it('takes a multi-line paste as one answer', () => {
+    const gate = gateOver(toGateQuestions({ questions: [{ id: 'q1', question: 'why?' }] }))
+    gate.handleKey(paste('first line\nsecond line'))
+    expect(answerText(gate)).toBe('first line\nsecond line')
+    expect(gate.handleKey(ENTER)).toEqual([{ id: 'q1', selected: [], custom: 'first line\nsecond line' }])
+  })
+
   it('leaves a question without options to typing, with no row 0 to reach', () => {
-    const gate = new QuestionGate(toGateQuestions({ questions: [{ id: 'q1', question: 'why?' }] }))
+    const gate = gateOver(toGateQuestions({ questions: [{ id: 'q1', question: 'why?' }] }))
     expect(gate.card().custom).toBeUndefined()
     for (const character of 'because') gate.handleKey(character)
     expect(gate.handleKey(ENTER)).toEqual([{ id: 'q1', selected: [], custom: 'because' }])

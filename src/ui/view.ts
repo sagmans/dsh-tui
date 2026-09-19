@@ -366,10 +366,13 @@ export class TranscriptView implements Component {
         selected: gate.custom.selected,
       })
     }
-    // The typed answer belongs to the row it fills: the free-text row, or the
-    // question itself when typing is the only way to answer it.
-    if (gate.answer !== undefined && this.theme.visible('gate.detail')) {
-      this.pushWrapped(lines, gate.answer, width, DETAIL_INDENT, text => this.theme.style('gate.detail', text))
+    // The answer belongs to the row it fills: the free-text row, or the question
+    // itself when typing is the only way to answer it. The rows come from the
+    // surface's own editor, so they are placed rather than restyled — it draws
+    // its frame, its padding, and its cursor for the width it is given.
+    if (gate.answerInput !== undefined) {
+      const room = Math.max(1, width - visibleWidth(OPTION_INDENT))
+      for (const row of gate.answerInput.render(room)) lines.push(`${OPTION_INDENT}${row}`)
     }
     // The keys are how the gate is answered at all, so they wrap rather than
     // lose their tail at a narrow edge.

@@ -50,6 +50,15 @@ export class BoxedEditor extends Editor {
     return this.borderColor(`${open}${stripTerminalSequences(row)}${close}`)
   }
 
+  /**
+   * Let a mode change what a text row says without changing what the editor
+   * holds. The frame, the padding, and the cursor stay where the layout put
+   * them, so a hidden answer keeps the shape of the answer it hides.
+   */
+  protected decorateText(row: string): string {
+    return row
+  }
+
   override render(width: number): string[] {
     const side = this.borderColor(FRAME_GLYPHS.side)
     // A frame narrower than its own furniture would eat the text it exists to
@@ -72,7 +81,7 @@ export class BoxedEditor extends Editor {
     // The menu keeps the page's own width; only its rows moved above the box.
     const lines = menu.map(row => row + ' '.repeat(FRAME_COLUMNS))
     lines.push(this.edge(FRAME_GLYPHS.topLeft, FRAME_GLYPHS.topRight, rows[0] ?? ''))
-    for (const row of text) lines.push(`${side}${row}${side}`)
+    for (const row of text) lines.push(`${side}${this.decorateText(row)}${side}`)
     lines.push(this.edge(FRAME_GLYPHS.bottomLeft, FRAME_GLYPHS.bottomRight, rows[closing]!.replace(CLOSING_TAG, '')))
     return lines
   }
