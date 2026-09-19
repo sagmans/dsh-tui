@@ -29,9 +29,9 @@ const facts = (overrides: Partial<StatusFacts> = {}): StatusFacts => ({
 
 describe('an armed chord', () => {
   it('leads the row, so a narrow terminal cuts the tail and not the chord', () => {
-    expect(formatStatus(facts({ chord: 'ctrl+x then m model · y copy' }), 200, theme))
-      .toMatch(/^ctrl\+x then m model · y copy/)
-    expect(formatStatus(facts({ chord: 'ctrl+x then m model · y copy' }), 20, theme)).toContain('ctrl+x then')
+    expect(formatStatus(facts({ chord: 'ctrl+x' }), 200, theme))
+      .toMatch(/^ctrl\+x/)
+    expect(formatStatus(facts({ chord: 'ctrl+x' }), 20, theme)).toContain('ctrl+x')
   })
 
   it('is absent until a prefix is pressed', () => {

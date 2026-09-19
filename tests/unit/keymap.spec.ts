@@ -99,7 +99,7 @@ describe('ChordReader', () => {
     expect(chord.pending).toBe(false)
     expect(chord.handle('\u0018')).toEqual({ kind: 'armed' })
     expect(chord.pending).toBe(true)
-    expect(chord.hint()).toBe('ctrl+x then m model · y copy')
+    expect(chord.hint()).toBe('ctrl+x')
     expect(chord.handle('m')).toEqual({ kind: 'action', binding: CHORD_BINDINGS[0] })
     expect(chord.pending).toBe(false)
     expect(chord.hint()).toBeUndefined()

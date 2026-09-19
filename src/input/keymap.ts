@@ -158,9 +158,15 @@ export class ChordReader {
     return this.armed
   }
 
-  /** The armed chord as the footer prints it, or undefined when nothing is armed. */
+  /**
+   * The armed chord as the footer prints it, or undefined when nothing is armed.
+   *
+   * Only the prefix: the footer has to say that a key is waiting, not recite the
+   * map — a reader who wants the chords asks /help, and a narrow terminal would
+   * cut the list anyway.
+   */
   hint(): string | undefined {
-    return this.armed ? chordKeysLine(this.prefix()) : undefined
+    return this.armed ? this.prefix() : undefined
   }
 
   /** End the chord, whatever ends it: its key, its window, or a keymap change. */

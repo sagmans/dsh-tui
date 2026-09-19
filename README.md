@@ -158,15 +158,16 @@ dsh --profile tui --no-bell            # do not ring when a long turn finishes
 | `/theme` | list every styled element and the value in force |
 | `/quit` | leave and print the resume command |
 
-`Ctrl+X` starts a chord. For the next two seconds the footer leads with the keys
-that finish it — `m` opens the model picker, `y` copies the last answer — and a
-key that finishes nothing is typed as usual rather than swallowed, so a prefix
-pressed by accident costs nothing. `prefix: alt+x` starts the chord with another
-key and `prefixWindow: 0` waits for the next key instead of lapsing; a prefix
-that is not a modifier chord, that the surface already answers (`ctrl+c`), or
-that the terminal keeps (`ctrl+s`) is refused with the reason, and the shipped
-keymap stays in force. The chords themselves are the commands they stand for:
-`m` and `y` ask the same dispatcher `/model` and `/copy` do.
+`Ctrl+X` starts a chord. For the next two seconds the footer leads with the
+prefix alone — enough to say that a key is waiting, without reciting the map —
+and a key that finishes nothing is typed as usual rather than swallowed, so a
+prefix pressed by accident costs nothing; `/help` lists the chords, `m` for the
+model picker and `y` for the last answer. `prefix: alt+x` starts the chord with
+another key and `prefixWindow: 0` waits for the next key instead of lapsing; a
+prefix that is not a modifier chord, that the surface already answers
+(`ctrl+c`), or that the terminal keeps (`ctrl+s`) is refused with the reason,
+and the shipped keymap stays in force. The chords themselves are the commands
+they stand for: `m` and `y` ask the same dispatcher `/model` and `/copy` do.
 
 An approval or a question draws inline above the editor and takes the keyboard. A question that lists options always adds row `0. other — type your own answer`: type or paste an answer the model did not offer, and the seam receives it as that question's free text — replacing a single-select choice, or supplementing a multi-select one. `0`, or `↓` past the last option, reaches the row; `↑` walks back to the list with the text kept, and `esc` does the same from that row, because a question skipped by accident is a question answered twice — an escape from the list skips it. Free text is written in the prompt bar's own editor, drawn under that row: movement, word and line deletion, undo, completion, and multi-line paste are all the editor the reader already uses, and the prompt bar steps aside while a question is open, so a prompt written but not sent comes back untouched once the question is answered. No question hides its answer — the reader is the one who has to check what they are about to send. Every gate row wraps at the screen edge under its own label, so a long option or question is readable rather than cut.
 
