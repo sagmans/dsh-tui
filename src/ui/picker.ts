@@ -1,5 +1,6 @@
 import { matchesKey } from '@earendil-works/pi-tui'
 import { pastedText } from '../input.ts'
+import { matchScore } from '../input/match.ts'
 import type { StoredSession } from '../agent/history.ts'
 import { describeModelRoute, modelRouteKey, type ModelChoice, type ModelRoute } from '../agent/model.ts'
 import { describePreset, type PresetSummary } from '../agent/presets.ts'
@@ -83,11 +84,17 @@ export class ListPicker<Row> {
     private readonly hints: PickerHints,
   ) {}
 
-  /** Rows matching the typed filter, in the order they were listed. */
+  /** Rows matching the typed filter, best match first. */
   visible(): readonly Row[] {
-    const needle = this.filter.trim().toLowerCase()
+    const needle = this.filter.trim()
     if (needle === '') return this.source()
-    return this.source().filter(row => this.haystackOf(row).toLowerCase().includes(needle))
+    // Ties keep the order the caller listed them in, so rows do not shuffle
+    // under the cursor while the reader is still typing.
+    return this.source()
+      .map(row => ({ row, score: matchScore(needle, this.haystackOf(row)) }))
+      .filter((entry): entry is { readonly row: Row; readonly score: number } => entry.score !== undefined)
+      .sort((left, right) => right.score - left.score)
+      .map(entry => entry.row)
   }
 
   /**

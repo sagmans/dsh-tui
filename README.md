@@ -136,7 +136,7 @@ dsh --profile tui --no-bell            # do not ring when a long turn finishes
 | mouse wheel, drag | scroll, and copy a selection through OSC 52 |
 | `/help` | list registered and local commands |
 | `/status` | show the session id, model, permissions, context, and directory |
-| `/model` | open the picker for the configured providers and their models; it heads itself with the route the next step will use, and typing filters it |
+| `/model` | open the picker for the configured providers and their models; it heads itself with the route the next step will use, and typing filters it by fragment (`glm53` finds `GLM-5.3`) |
 | `/model <provider>` | list that provider's advertised models |
 | `/model <provider>/<model>` | use that route from the next step on (session only, nothing is written to settings) |
 | `/model <provider>/<model>/<effort>` | use that route and reasoning effort (the effort must be one the route advertises) |

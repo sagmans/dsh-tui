@@ -1,5 +1,6 @@
 import { matchesKey } from '@earendil-works/pi-tui'
 import { pastedText } from './input.ts'
+import { matchScore } from './input/match.ts'
 
 /** The outcome vocabulary the approval seam accepts from an answerer. */
 export type ApprovalOutcome = 'allowed-once' | 'rejected' | 'cancelled'
@@ -205,14 +206,17 @@ export class QuestionGate {
     return this.questions[this.index]
   }
 
-  /** Options the typed filter leaves, in the order they were listed. */
+  /**
+   * Options the typed filter leaves, in the order they were listed.
+   *
+   * The order is not the score order a picker uses: a digit answers by
+   * position, and re-ranking rows would move the number the reader just read.
+   */
   private matched(question: GateQuestion): PositionedOption[] {
-    const needle = this.typed.trim().toLowerCase()
+    const needle = this.typed.trim()
     return question.options
       .map((option, position) => ({ option, position }))
-      .filter(({ option }) => needle === ''
-        || option.label.toLowerCase().includes(needle)
-        || (option.description ?? '').toLowerCase().includes(needle))
+      .filter(({ option }) => matchScore(needle, `${option.label} ${option.description ?? ''}`) !== undefined)
   }
 
   /**

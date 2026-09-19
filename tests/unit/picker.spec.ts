@@ -187,6 +187,16 @@ describe('ModelPicker', () => {
     expect(byName.visible().map(route => route.model)).toEqual(['k2'])
   })
 
+  it('matches a fragment whose punctuation the reader left out, best match first', () => {
+    const routes: readonly ModelRoute[] = [
+      { provider: 'kimi-coding', model: 'g-l-m-5-3', name: 'Scattered' },
+      { provider: 'zai-coding-cn', model: 'glm-5.3', name: 'GLM 5.3' },
+    ]
+    const picker = new ModelPicker(() => routes, () => undefined)
+    for (const key of 'glm53') picker.handleKey(key)
+    expect(picker.visible().map(route => route.model)).toEqual(['glm-5.3', 'g-l-m-5-3'])
+  })
+
   it('shows rows that arrive after it opened, without reopening it', () => {
     const routes: ModelRoute[] = []
     const picker = new ModelPicker(() => routes, () => undefined)
