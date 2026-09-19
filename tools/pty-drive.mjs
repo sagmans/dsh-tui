@@ -113,7 +113,9 @@ const NAMED_KEYS = {
   left: '\u001b[D',
   right: '\u001b[C',
   esc: '\u001b',
-  back: '\u0002',
+  // The delete byte a terminal sends for Backspace, which is not Ctrl+B: that is
+  // cursor-left, and a run that meant to erase would silently walk instead.
+  back: '\u007f',
   'ctrl+t': '\u0014',
   'ctrl+y': '\u0019',
   // Shift+Tab is CBT (CSI Z), distinct from the plain Tab an editor completes on.
