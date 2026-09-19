@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { StoredSession } from '@/agent/history.ts'
 import { modelRouteKey, type ModelChoice, type ModelRoute } from '@/agent/model.ts'
-import { PICKER_WINDOW, EffortPicker, ModelPicker, SessionPicker, describeAge, effortChoices, type EffortChoice } from '@/ui/picker.ts'
+import type { PresetSummary } from '@/agent/presets.ts'
+import { PICKER_WINDOW, EffortPicker, ModelPicker, PresetPicker, SessionPicker, describeAge, effortChoices, type EffortChoice } from '@/ui/picker.ts'
 
 const session = (id: string, overrides: Partial<StoredSession> = {}): StoredSession => ({
   id,
@@ -49,6 +50,12 @@ describe('SessionPicker', () => {
     picker.handleKey('w')
     picker.handleKey('o')
     expect(picker.visible().map(entry => entry.id)).toEqual(['b'])
+  })
+
+  it('matches a fragment of a title whose letters are not contiguous', () => {
+    const picker = pickerOf([session('a', { cwd: '/one' }), session('b', { cwd: '/two' })], { a: 'fix the parser' })
+    for (const key of 'ftp') picker.handleKey(key)
+    expect(picker.visible().map(entry => entry.id)).toEqual(['a'])
   })
 
   it('filters from a pasted run instead of dropping it', () => {
@@ -106,6 +113,20 @@ describe('SessionPicker', () => {
   })
 })
 
+const PRESETS: readonly PresetSummary[] = [
+  { id: 'standard', trust: 'system', name: 'Standard', description: 'every tool', broken: undefined },
+  { id: 'minimal', trust: 'system', name: 'Minimal', description: 'read and search', broken: undefined },
+]
+
+describe('PresetPicker', () => {
+  it('matches a fragment of a mode name and picks the row it left', () => {
+    const picker = new PresetPicker(() => PRESETS, () => 'standard')
+    for (const key of 'mnml') picker.handleKey(key)
+    expect(picker.visible().map(preset => preset.id)).toEqual(['minimal'])
+    expect(picker.handleKey('\r')).toEqual({ kind: 'pick', id: 'minimal' })
+  })
+})
+
 const EFFORTS: readonly EffortChoice[] = [
   { id: '', name: 'provider default', description: 'clear the explicit effort', current: false },
   { id: 'low', name: 'Low', current: false },
@@ -147,6 +168,12 @@ describe('effortChoices', () => {
       { id: 'low', name: 'Low', current: false },
       { id: 'high', name: 'High', description: 'thorough', current: true },
     ])
+  })
+
+  it('matches a fragment of an effort whose letters are not contiguous', () => {
+    const picker = effortPicker()
+    for (const key of 'hgh') picker.handleKey(key)
+    expect(picker.visible().map(choice => choice.id)).toEqual(['high'])
   })
 
   it('marks the provider default when no effort is in force', () => {

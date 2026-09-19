@@ -127,6 +127,7 @@ dsh --profile tui --no-bell            # do not ring when a long turn finishes
 | Ctrl+T | pick the reasoning effort for the next step |
 | `y` / `n` / Esc | allow once, reject, or cancel a pending approval |
 | digits / space / ↑↓ / Enter / Esc | answer a question: pick or toggle, confirm, or skip one |
+| typing in any picker or question | narrow the rows by fragment (`glm53` finds `GLM-5.3`); backspace widens, `esc` or Ctrl+C leaves |
 | `/` then Tab | complete commands, including every command this session registered |
 | `@` or a path then Tab | complete workspace file references |
 | `ctrl+shift+f` | search the transcript (`enter` next, `shift+enter` previous, `esc` close) |
