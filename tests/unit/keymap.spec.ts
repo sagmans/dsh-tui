@@ -121,6 +121,17 @@ describe('installKeybindings', () => {
     expect(keys.matches('\n', 'tui.input.newLine')).toBe(false)
   })
 
+  it('installs a reloaded map where the library is what answers a press', () => {
+    // A settings edit re-installs the tables, and the library is what the editor
+    // asks: the key the reader moved to has to land there and the shipped one
+    // has to stop answering.
+    installKeybindings(resolveKeymap({}))
+    expect(getKeybindings().matches('\u0007', 'tui.input.submit')).toBe(false)
+    installKeybindings(resolveKeymap({ 'prompt.submit': 'ctrl+g' }))
+    expect(getKeybindings().matches('\u0007', 'tui.input.submit')).toBe(true)
+    expect(getKeybindings().matches('\u0013', 'tui.input.submit')).toBe(false)
+  })
+
   it('keeps Enter out of the library newline binding, which the bar answers itself', () => {
     installKeybindings(defaultKeymap())
     const keys = getKeybindings()

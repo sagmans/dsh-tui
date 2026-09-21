@@ -238,8 +238,51 @@ describe('resolveKeymap', () => {
     expect(() => resolveKeymap({ 'tui.editor.cursorLineEnd': 'ctrl+u' })).toThrow(/deleteToLineStart/)
   })
 
-  it('refuses a surface key the viewport reads before it, and names the winner', () => {
+  it('refuses two actions one byte cannot tell apart, however each is spelled', () => {
+    // A bare terminal reports a line feed for both Return and Ctrl+J, and one
+    // control byte carries both spellings of Ctrl+-: the surface answers these
+    // layers first row first, so the second row would never be reached.
+    expect(() => resolveKeymap({ 'gate.allow': 'ctrl+j', 'gate.reject': 'enter' })).toThrow(/gate\.allow and gate\.reject/)
+    expect(() => resolveKeymap({ 'gate.allow': 'ctrl+-', 'gate.reject': 'ctrl+_' })).toThrow(/gate\.allow and gate\.reject/)
+    expect(() => resolveKeymap({ 'question.confirm': 'ctrl+j', 'question.skip': 'enter' })).toThrow(/bound to both question\./)
+  })
+
+  it('lets one action carry two spellings of the same press', () => {
+    // Writing the same key twice is the reader's way of saying one thing, not a
+    // clash: only two rows fighting over the byte would be one that never runs.
+    const map = resolveKeymap({ 'gate.allow': ['enter', 'ctrl+m'] })
+    expect(keysFor(map, 'gate.allow')).toEqual(['enter', 'ctrl+m'])
+  })
+
+  it('keeps send on Ctrl+J available while Return still writes the line', () => {
+    // The bar answers Return and a line feed itself before the library matcher
+    // runs, so moving send onto Ctrl+J is a choice and not an overlap.
+    const map = resolveKeymap({ 'prompt.submit': ['ctrl+j'], 'prompt.newLine': ['enter', 'shift+enter'] })
+    expect(keysFor(map, 'prompt.submit')).toEqual(['ctrl+j'])
+  })
+
+  it('refuses a key the viewport reads first, whichever side of the pair was written', () => {
     expect(() => resolveKeymap({ 'surface.toolDetail': 'pageUp' })).toThrow(/tui\.altScreen\.pageUp/)
+    // A second key or a gate key is read after the viewport too, so it would be
+    // a binding that never answers.
+    expect(() => resolveKeymap({ 'chord.model': 'pageUp' })).toThrow(/tui\.altScreen\.pageUp/)
+    expect(() => resolveKeymap({ 'gate.allow': 'pageUp' })).toThrow(/tui\.altScreen\.pageUp/)
+    // The other direction: moving the viewport row onto a key the surface
+    // answers would take that key away from the surface.
+    expect(() => resolveKeymap({ 'tui.altScreen.search': 'ctrl+t' })).toThrow(/surface\.effort/)
+    // The overlaps the library ships are its own business and stay allowed.
+    expect(() => resolveKeymap({})).not.toThrow()
+  })
+
+  it('refuses Return on a library row while the prompt bar answers it', () => {
+    // The library reads Return as a line break before it looks for a row, and
+    // the bar answers it before the library: a library row that took it would
+    // be the row that never runs.
+    expect(() => resolveKeymap({ 'tui.editor.cursorLineEnd': 'enter' })).toThrow(/tui\.editor\.cursorLineEnd/)
+    expect(() => resolveKeymap({ 'tui.editor.cursorLineEnd': 'ctrl+m' })).toThrow(/tui\.editor\.cursorLineEnd/)
+    // A reader who sends with Return keeps it: the bar still answers the press.
+    expect(keysFor(resolveKeymap({ 'prompt.submit': ['enter'], 'prompt.newLine': ['shift+enter'] }), 'prompt.submit')).toEqual(['enter'])
+    expect(() => resolveKeymap({ 'prompt.submit': ['enter'], 'prompt.newLine': ['shift+enter'], 'tui.editor.cursorLineEnd': 'enter' })).toThrow(/tui\.editor\.cursorLineEnd/)
   })
 
   it('lets two layers share a key, which is how the shipped map already works', () => {

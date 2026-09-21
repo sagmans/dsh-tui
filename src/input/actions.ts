@@ -359,25 +359,105 @@ function readKeys(action: Action, value: string | readonly string[]): readonly K
   return keys
 }
 
+/** How many control characters a probe walks: every byte a bare terminal can send for a press. */
+const PROBE_BYTES = 0x20
+
 /**
- * Refuse two actions of one layer claiming one press.
+ * The bytes a press can arrive as, so an overlap is read from the matcher.
+ *
+ * The library is the only authority on which spellings are one press, and it
+ * folds more than a spelling table could say: a bare terminal reports Return for
+ * both Enter and Ctrl+M, a line feed for Ctrl+J and — without the keyboard
+ * protocol — Return as well, and Ctrl+- for Ctrl+_ too. Probing the matcher
+ * answers what is true rather than what the ids look like.
+ */
+const PRESS_PROBES: readonly string[] = [
+  ...Array.from({ length: PROBE_BYTES }, (_, code) => String.fromCharCode(code)),
+  '\u007f',
+]
+
+/** The probe names that reach a key, or its own id when no single byte does. */
+function matchPresses(key: KeyId): readonly string[] {
+  const probes = PRESS_PROBES
+    .filter(probe => matchesKey(probe, key))
+    .map(probe => `byte:${probe.charCodeAt(0)}`)
+  return probes.length === 0 ? [`key:${key}`] : probes
+}
+
+/**
+ * Refuse two actions of one layer a terminal cannot tell apart.
  *
  * Layers are checked apart because sharing across them is the design: the chord
  * layer takes a key before the surface answers it, and the surface takes one
- * before the library's editor sees it. Within one layer a shared key is an
- * action the reader could never reach.
+ * before the library's editor sees it. Within one layer a shared press is an
+ * action the reader could never reach — and the surface answers these layers
+ * itself, first row first, so two rows sharing one byte is one row that loses.
  */
-function refuseLayerClashes(effective: Readonly<Record<string, readonly KeyId[]>>): void {
-  for (const layer of ['prompt', 'surface', 'chord', 'gate', 'question', 'picker'] as const) {
-    const owner = new Map<string, string>()
+function refuseMatcherClashes(effective: Readonly<Record<string, readonly KeyId[]>>): void {
+  for (const layer of ['surface', 'chord', 'gate', 'question', 'picker'] as const) {
+    const rows: Array<{ readonly id: string; readonly key: KeyId }> = []
     for (const action of ACTION_CATALOG) {
       if (action.layer !== layer) continue
-      for (const key of effective[action.id] ?? []) {
-        const press = pressOf(key)
-        const taken = owner.get(press)
-        if (taken !== undefined) throw new Error(`key "${key}" is bound to both ${taken} and ${action.id}`)
-        owner.set(press, action.id)
+      for (const key of effective[action.id] ?? []) rows.push({ id: action.id, key })
+    }
+    // Union by shared probe: the relation is "some byte reaches both", which no
+    // single signature per key can express.
+    const parent = rows.map((_, index) => index)
+    const find = (index: number): number => {
+      const kept = parent[index] ?? index
+      if (kept === index) return index
+      const root = find(kept)
+      parent[index] = root
+      return root
+    }
+    const seen = new Map<string, number>()
+    rows.forEach((row, index) => {
+      for (const press of matchPresses(row.key)) {
+        const owner = seen.get(press)
+        if (owner === undefined) {
+          seen.set(press, index)
+          continue
+        }
+        const left = find(owner)
+        const right = find(index)
+        if (left !== right) parent[right] = left
       }
+    })
+    const groups = new Map<number, Set<string>>()
+    rows.forEach((row, index) => {
+      const root = find(index)
+      const ids = groups.get(root) ?? new Set<string>()
+      ids.add(row.id)
+      groups.set(root, ids)
+    })
+    for (const ids of groups.values()) {
+      if (ids.size < 2) continue
+      const key = rows.find(row => ids.has(row.id))?.key ?? ''
+      throw new Error(`key "${key}" is bound to both ${[...ids].join(' and ')}`)
+    }
+  }
+}
+
+/**
+ * Refuse two prompt rows claiming one press.
+ *
+ * The bar is the one layer the library's matcher does not decide: Return is
+ * answered in the bar itself, which reads a line feed as send when the reader
+ * bound it and as a line otherwise. Its rows are therefore compared by the
+ * press they arrive as rather than by every byte the matcher folds, so moving
+ * send onto Ctrl+J stays possible.
+ */
+function refusePromptClashes(effective: Readonly<Record<string, readonly KeyId[]>>): void {
+  const owner = new Map<string, string>()
+  for (const action of ACTION_CATALOG) {
+    if (action.layer !== 'prompt') continue
+    for (const key of effective[action.id] ?? []) {
+      const press = pressOf(key)
+      const taken = owner.get(press)
+      if (taken !== undefined && taken !== action.id) {
+        throw new Error(`key "${key}" is bound to both ${taken} and ${action.id}`)
+      }
+      owner.set(press, action.id)
     }
   }
 }
@@ -416,9 +496,12 @@ function libraryRows(effective: Readonly<Record<string, readonly KeyId[]>>): Rec
     if (action.layer === 'library') rows[action.id] = [...(effective[action.id] ?? [])]
   }
   rows['tui.input.submit'] = [...(effective['prompt.submit'] ?? [])]
-  // Enter is left out for the same reason the installation leaves it out: the
-  // library reads that press as a line break before it looks for this row.
-  rows['tui.input.newLine'] = (effective['prompt.newLine'] ?? []).filter(key => key !== ENTER_KEY)
+  // Enter is left out of the installation for one reason and kept here for the
+  // opposite one: the library reads that press as a line break before it looks
+  // for this row, so a library row that took Return would be the row that never
+  // runs while the bar still answers it — as a line, or as send.
+  const line = effective['prompt.newLine'] ?? []
+  rows['tui.input.newLine'] = line.includes(ENTER_KEY) ? [...line] : line.filter(key => key !== ENTER_KEY)
   return rows
 }
 
@@ -430,7 +513,7 @@ function shippedLibraryRows(): Record<string, KeyId[]> {
     if (action.layer === 'library') rows[action.id] = [...action.defaultKeys]
   }
   rows['tui.input.submit'] = [...(defaults.get('prompt.submit') ?? [])]
-  rows['tui.input.newLine'] = [...(defaults.get('prompt.newLine') ?? [])].filter(key => key !== ENTER_KEY)
+  rows['tui.input.newLine'] = [...(defaults.get('prompt.newLine') ?? [])]
   return rows
 }
 
@@ -511,25 +594,78 @@ const VIEWPORT_FIRST_ROWS: readonly string[] = [
   'tui.altScreen.bottom',
 ]
 
+/** Every row a press reaches, with the keys in force: the catalog and the bar's own library rows. */
+function dispatchRows(effective: Readonly<Record<string, readonly KeyId[]>>): Record<string, KeyId[]> {
+  const rows: Record<string, KeyId[]> = {}
+  for (const action of ACTION_CATALOG) rows[action.id] = [...(effective[action.id] ?? [])]
+  rows['tui.input.submit'] = [...(effective['prompt.submit'] ?? [])]
+  rows['tui.input.newLine'] = (effective['prompt.newLine'] ?? []).filter(key => key !== ENTER_KEY)
+  return rows
+}
+
+/** The same rows as they read before the reader wrote anything. */
+function shippedRows(): Record<string, KeyId[]> {
+  const rows: Record<string, KeyId[]> = {}
+  for (const action of ACTION_CATALOG) rows[action.id] = [...action.defaultKeys]
+  rows['tui.input.submit'] = [...(actionOf('prompt.submit')?.defaultKeys ?? [])]
+  rows['tui.input.newLine'] = [...(actionOf('prompt.newLine')?.defaultKeys ?? [])].filter(key => key !== ENTER_KEY)
+  return rows
+}
+
+/** One press, the viewport row that reads it first, and a row that would never see it. */
+interface ViewportPair {
+  readonly press: string
+  readonly viewport: string
+  readonly other: string
+}
+
+function viewportPairs(rows: Readonly<Record<string, readonly KeyId[]>>): ViewportPair[] {
+  const byPress = new Map<string, string[]>()
+  for (const [id, keys] of Object.entries(rows)) {
+    for (const key of keys) {
+      const press = pressOf(key)
+      const list = byPress.get(press) ?? []
+      if (!list.includes(id)) list.push(id)
+      byPress.set(press, list)
+    }
+  }
+  const pairs: ViewportPair[] = []
+  for (const [press, ids] of byPress) {
+    const viewport = ids.filter(id => VIEWPORT_FIRST_ROWS.includes(id))
+    for (const row of viewport) {
+      for (const other of ids.filter(id => id !== row && !VIEWPORT_FIRST_ROWS.includes(id))) {
+        pairs.push({ press, viewport: row, other })
+      }
+    }
+  }
+  return pairs
+}
+
 /**
- * Refuse a prompt or surface key the viewport reads first.
+ * Refuse a pair the viewport answers before the row it was written on.
  *
- * A row written there would never answer: the press scrolls instead, and the
- * binding only looks alive while an overlay defers the viewport.
+ * A key the alternate screen's listener reads never reaches the surface: the
+ * press scrolls or searches instead, and the binding only looks alive while an
+ * overlay defers the viewport. Either side of the pair can be the one the
+ * reader wrote, and both are a binding that does nothing, so both are refused
+ * apart from the overlap the library already ships.
  */
 function refuseViewportTakingKeys(effective: Readonly<Record<string, readonly KeyId[]>>, written: ReadonlySet<string>): void {
-  const taken = new Map<string, string>()
-  for (const id of VIEWPORT_FIRST_ROWS) {
-    for (const key of effective[id] ?? []) taken.set(pressOf(key), id)
-  }
-  for (const action of ACTION_CATALOG) {
-    if (!written.has(action.id)) continue
-    if (action.layer !== 'prompt' && action.layer !== 'surface') continue
-    for (const key of effective[action.id] ?? []) {
-      const row = taken.get(pressOf(key))
-      if (row !== undefined) {
-        throw new Error(`key "${key}" on ${action.id} is read by ${row} first; move that row or pick another key`)
-      }
+  const pairKey = (pair: ViewportPair): string => `${pair.viewport}\u0000${pair.other}`
+  const shipped = new Set(viewportPairs(shippedRows()).map(pairKey))
+  // A prompt row is read through a library row of the bar's own, so the reader's
+  // name for the row is the action they wrote rather than the mirror.
+  const isWritten = (id: string): boolean =>
+    written.has(id) ||
+    (id === 'tui.input.submit' && written.has('prompt.submit')) ||
+    (id === 'tui.input.newLine' && written.has('prompt.newLine'))
+  for (const pair of viewportPairs(dispatchRows(effective))) {
+    if (shipped.has(pairKey(pair))) continue
+    if (isWritten(pair.other)) {
+      throw new Error(`key "${pair.press}" on ${pair.other} is read by ${pair.viewport} first; move that row or pick another key`)
+    }
+    if (isWritten(pair.viewport)) {
+      throw new Error(`key "${pair.press}" on ${pair.viewport} would take it from ${pair.other}, which never sees the press; pick another key`)
     }
   }
 }
@@ -554,7 +690,8 @@ export function resolveKeymap(overrides: KeymapOverrides): Keymap {
     effective[id] = readKeys(action, value)
     written.add(id)
   }
-  refuseLayerClashes(effective)
+  refusePromptClashes(effective)
+  refuseMatcherClashes(effective)
   refusePrefixTakingKeys(effective)
   refuseLibraryClashes(effective)
   refuseViewportTakingKeys(effective, written)

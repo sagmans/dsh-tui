@@ -64,7 +64,7 @@ import { KEYMAP_LAYERS, keymapLayer, renderKeymap } from './keys-command.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { formatTokens } from './tokens.ts'
 import { TranscriptModel } from './transcript.ts'
-import { WorkFold, describeTodos, planSelectedActive, planToggleLine, type PlanModeController } from './work.ts'
+import { WorkFold, describeTodos, planSelectedActive, planToggleLine, readPlanState, type PlanModeState } from './work.ts'
 import { WorkDock } from './ui/dock.ts'
 import { GateInputBar } from './ui/gate-input.ts'
 import { PromptBar } from './ui/prompt.ts'
@@ -98,11 +98,11 @@ export const inject = ['agents', 'tools']
 /** One second in the unit a chord window is scheduled in. */
 const MS_PER_SECOND = 1000
 
-/** The one thing to say about a view a reader did not open. */
-const keysBackHint = (map: Keymap): string => `${hintKeys(map, 'surface.back') || CARD_BACK_FALLBACK} returns`
+/** What the back hint names when the reader has unbound the key it would advertise. */
+const BACK_HINT_FALLBACK = 'ctrl+b'
 
-/** What the hint names when the reader has unbound the key it would advertise. */
-const CARD_BACK_FALLBACK = 'ctrl+b'
+/** What the reader presses to leave a view they did not open. */
+const backHint = (map: Keymap): string => `${hintKeys(map, 'surface.back') || BACK_HINT_FALLBACK} returns to this session`
 
 /** Stored sessions titled at once when the picker opens. */
 const TITLE_CONCURRENCY = 4
@@ -113,6 +113,11 @@ const STATUS_TICK_MS = 1000
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined
+}
+
+/** The preset registry, asked for a service the agent's own composition holds. */
+interface ServiceFor {
+  serviceFor(agent: unknown, name: string): unknown
 }
 
 /**
@@ -394,6 +399,10 @@ export function apply(ctx: Context, config: unknown): void {
     override: () => modelSwitch.current(),
     home: process.env.HOME,
     chord: () => keyChord.hint(),
+    // Read per paint rather than written into the marker the view left behind:
+    // a hint stored with the transcript would keep naming the key of the day it
+    // was written, and the reader may remap it with the row already on screen.
+    back: () => (viewedSession === activeSession ? undefined : backHint(keymap)),
   })
   const statusBar = new StatusBar(statusFacts, theme)
   const dock = new WorkDock(() => work.state(), theme, () => jobs, () => roster.list())
@@ -809,9 +818,7 @@ export function apply(ctx: Context, config: unknown): void {
       model.notice(`could not read that session: ${error instanceof Error ? error.message : String(error)}`)
     }
     const returned = id === activeSession && previous !== activeSession
-    model.marker(returned
-      ? 'back to the session this terminal drives'
-      : `viewing ${id}${id === activeSession ? '' : ` — ${keysBackHint(keymap)}`}`)
+    model.marker(returned ? 'back to the session this terminal drives' : `viewing ${id}`)
     tui.requestRender()
   }
 
@@ -1467,12 +1474,17 @@ export function apply(ctx: Context, config: unknown): void {
    * package: with the controller present its answer is the agent's own state
    * rather than a replay of the events this surface happened to see.
    */
-  const planActive = (): boolean => {
-    const controller = ctx.get('planMode') as PlanModeController | undefined
+  const planState = (): PlanModeState | undefined => {
     const current = agent?.agent
-    const state = controller === undefined || current === undefined ? undefined : controller.get(current)
-    return planSelectedActive(state, work.state().planMode)
+    if (current === undefined) return undefined
+    const presets = ctx.get('agentPresets') as ServiceFor | undefined
+    return readPlanState({
+      direct: name => ctx.get(name),
+      forAgent: (target, name) => presets?.serviceFor(target, name),
+    }, current)
   }
+
+  const planActive = (): boolean => planSelectedActive(planState(), work.state().planMode)
 
   const runCommand = (name: string, line: string): void => {
     const current = agent

@@ -271,6 +271,33 @@ describe('the prompt keys', () => {
     expect(instance.getText()).toBe('')
   })
 
+  it('keeps the legacy alt+enter a line while the reader keeps it for the line', () => {
+    // A terminal without modifiers spells shift+enter as escape+return: the map
+    // says that sequence is a line, so it stays one even though the reader also
+    // sends with a chord a fallback would translate the same bytes into.
+    const map = resolveKeymap({ 'prompt.submit': ['ctrl+enter'], 'prompt.newLine': ['enter', 'alt+enter'] })
+    installKeybindings(map)
+    const { instance, sent } = sender(map)
+    instance.setText('hello')
+    instance.handleInput('\u001b\r')
+    expect(instance.getText()).toBe('hello\n')
+    expect(sent).toEqual([])
+  })
+
+  it('keeps the line feed a line while the protocol spells shift+enter through it', () => {
+    // A terminal that speaks the protocol may report shift+enter as a bare line
+    // feed, which the library reads as that key and as nothing else until the
+    // reader binds Ctrl+J. Handing it over as the chord would decide for them.
+    setKittyProtocolActive(true)
+    const map = resolveKeymap({ 'prompt.submit': ['ctrl+j'], 'prompt.newLine': ['enter', 'shift+enter'] })
+    installKeybindings(map)
+    const { instance, sent } = sender(map)
+    instance.setText('hello')
+    instance.handleInput('\n')
+    expect(instance.getText()).toBe('hello\n')
+    expect(sent).toEqual([])
+  })
+
   it('sends on the legacy alt+enter when that is the only chord the reader sends with', () => {
     const map = resolveKeymap({ 'prompt.submit': ['alt+enter'] })
     installKeybindings(map)

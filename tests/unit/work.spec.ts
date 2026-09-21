@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { WorkFold, planSelectedActive, planToggleLine } from '@/work.ts'
+import { WorkFold, planSelectedActive, planToggleLine, readPlanState, type ServiceLookup } from '@/work.ts'
 
 const foldWith = (...events: Array<{ type: string; data?: unknown }>): WorkFold => {
   const fold = new WorkFold()
@@ -78,5 +78,25 @@ describe('the plan toggle', () => {
   it('falls back to the fold when the composition has no plan controller', () => {
     expect(planSelectedActive(undefined, true)).toBe(true)
     expect(planSelectedActive(undefined, false)).toBe(false)
+  })
+
+  it('asks the composition that owns the agent before the container', () => {
+    // A preset mounts the package behind isolate, which the container cannot
+    // see: the agent's registry is asked first, and the container is the
+    // fallback for a composition that mounts the package flat.
+    const presetController = { get: () => ({ active: true, pending: false }) }
+    const containerController = { get: () => ({ active: false }) }
+    const lookup = (preset: unknown, container: unknown): ServiceLookup => ({
+      direct: name => (name === 'planMode' ? container : undefined),
+      forAgent: (agent, name) => (name === 'planMode' && agent === 'the-agent' ? preset : undefined),
+    })
+    expect(readPlanState(lookup(presetController, containerController), 'the-agent')).toEqual({ active: true, pending: false })
+    expect(readPlanState(lookup(presetController, undefined), 'the-agent')).toEqual({ active: true, pending: false })
+    expect(readPlanState(lookup(undefined, containerController), 'the-agent')).toEqual({ active: false })
+    expect(readPlanState(lookup(undefined, undefined), 'the-agent')).toBeUndefined()
+    // Another service registered under the name is not a plan controller, and a
+    // controller that cannot answer is no answer at all.
+    expect(readPlanState(lookup({ set: () => 'committed' }, undefined), 'the-agent')).toBeUndefined()
+    expect(readPlanState(lookup({ get: () => undefined }, undefined), 'the-agent')).toBeUndefined()
   })
 })

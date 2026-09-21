@@ -8,6 +8,8 @@ import type { TuiTheme } from '../theme.ts'
 export interface StatusFacts {
   /** The chord waiting for its second key, when one is armed. */
   readonly chord: string | undefined
+  /** How the reader returns to the session this terminal drives, when another is on screen. */
+  readonly back: string | undefined
   readonly activity: 'idle' | 'working'
   /** How long the running turn has been running, when one is. */
   readonly elapsedMs: number | undefined
@@ -96,6 +98,9 @@ export function formatStatus(facts: StatusFacts, width: number, theme: TuiTheme)
   // An armed chord is transient and needs the reader's eye now, so it leads the
   // row: a row cut to width loses its tail, never what is about to happen.
   if (facts.chord !== undefined && facts.chord !== '') push('status.prefix', facts.chord)
+  // The way back is the other thing the reader may need at once: a transcript of
+  // a session they are not driving is exactly when they need it.
+  if (facts.back !== undefined && facts.back !== '') push('status.back', facts.back)
   if (facts.activity === 'working') {
     push('status.activity.working', `${WORKING_MARK} working`)
     // Elapsed carries its own token so it can be toned apart from the activity,

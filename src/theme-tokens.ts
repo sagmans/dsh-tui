@@ -192,6 +192,7 @@ export const TUI_TOKENS = [
   'dock.jobs.overflow',
   // Status bar
   'status.prefix',
+  'status.back',
   'status.activity.working',
   'status.activity.ready',
   'status.elapsed',
@@ -365,6 +366,9 @@ export const DEFAULT_TOKENS: Readonly<Record<TuiToken, StyleSpec>> = {
   'dock.jobs.overflow': muted,
 
   'status.prefix': { fg: 'accent' },
+  // The way back is a key the reader presses, so it carries the weight of an
+  // armed chord rather than toning down with the facts.
+  'status.back': { fg: 'accent' },
   'status.activity.working': muted,
   'status.activity.ready': muted,
   'status.elapsed': muted,

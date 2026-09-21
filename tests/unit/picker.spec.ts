@@ -40,6 +40,16 @@ describe('SessionPicker', () => {
     expect(pickerOf([session('a')]).handleKey('\u0003')).toEqual({ kind: 'cancel' })
   })
 
+  it('reads the hint of an open list from the map in force', () => {
+    // A settings edit while the list is open lands on the card the reader is
+    // looking at: the surface repaints it rather than building a new one.
+    let map: Keymap = defaultKeymap()
+    const picker = pickerOf([session('a')], {}, () => map)
+    expect(picker.card().hint).toContain('enter open')
+    map = resolveKeymap({ 'picker.confirm': 'alt+y' })
+    expect(picker.card().hint).toContain('alt+y open')
+  })
+
   it('picks, cancels, and moves on the keys the reader chose', () => {
     const map = resolveKeymap({ 'picker.confirm': 'alt+y', 'picker.cancel': 'alt+g', 'picker.down': 'alt+d', 'picker.up': 'alt+u' })
     const picker = pickerOf([session('a'), session('b')], {}, () => map)

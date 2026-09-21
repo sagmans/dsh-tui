@@ -77,7 +77,44 @@ export interface PlanModeState {
 
 /** The plan controller, described structurally so the surface needs no import of it. */
 export interface PlanModeController {
-  get(agent: unknown): PlanModeState | undefined
+  get(agent: unknown): unknown
+}
+
+/** The name the plan package registers under, in the container and in a preset scope. */
+export const PLAN_SERVICE = 'planMode'
+
+/**
+ * Where the surface asks for a service.
+ *
+ * A plugin a preset mounts behind `isolate` is invisible outside the group that
+ * declares it, the host included, so the agent's own composition has to be
+ * asked through its preset. The container is the fallback for a composition that
+ * mounts the package flat.
+ */
+export interface ServiceLookup {
+  readonly direct: (name: string) => unknown
+  readonly forAgent: (agent: unknown, name: string) => unknown
+}
+
+function asController(value: unknown): PlanModeController | undefined {
+  const record = asRecord(value)
+  if (typeof record?.get !== 'function') return undefined
+  return record as unknown as PlanModeController
+}
+
+function asPlanState(value: unknown): PlanModeState | undefined {
+  const record = asRecord(value)
+  if (typeof record?.active !== 'boolean') return undefined
+  return typeof record.pending === 'boolean'
+    ? { active: record.active, pending: record.pending }
+    : { active: record.active }
+}
+
+/** The plan state of one agent, read from whichever scope of the composition holds it. */
+export function readPlanState(lookup: ServiceLookup, agent: unknown): PlanModeState | undefined {
+  const controller = asController(lookup.forAgent(agent, PLAN_SERVICE) ?? lookup.direct(PLAN_SERVICE))
+  if (controller === undefined) return undefined
+  return asPlanState(controller.get(agent))
 }
 
 /**

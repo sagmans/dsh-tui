@@ -83,6 +83,11 @@ export interface StatusSources {
    * screen rather than only in the reader's head.
    */
   readonly chord?: (() => string | undefined) | undefined
+  /**
+   * The way back to the driven session, read per paint: the reader may remap it
+   * or open another session while the row is already on screen.
+   */
+  readonly back?: (() => string | undefined) | undefined
 }
 
 export function createStatusFacts(ctx: Context, sources: StatusSources): () => StatusFacts {
@@ -117,6 +122,7 @@ export function createStatusFacts(ctx: Context, sources: StatusSources): () => S
       cwd: process.cwd(),
       home: sources.home,
       chord: sources.chord?.(),
+      back: sources.back?.(),
     }
   }
 }

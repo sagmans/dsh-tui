@@ -140,7 +140,7 @@ moves any of them — see [Keys](#keys).
 | `ctrl+shift+f` | search the transcript (`enter` next, `shift+enter` previous, `esc` close) |
 | `home` / `end` | jump to the start or the end of the transcript |
 | `ctrl+down` | jump to the next prompt |
-| `ctrl+b` | leave a child's conversation and return to this session |
+| `ctrl+b` | leave a child's conversation and return to this session (the status line names the key you have now) |
 | mouse wheel, drag | scroll, and copy a selection through OSC 52 |
 | `/help` | list registered and local commands |
 | `/status` | show the session id, model, permissions, context, and directory |
@@ -280,12 +280,15 @@ transcript move where you tell them to.
 Refused, with the reason in a notice and the shipped map left in force: an
 action the surface does not have, a key no terminal reports, `ctrl+q` (the
 terminal keeps it), a bare character outside the chord and gate layers, two
-actions of one layer on one press however each is spelled (`enter` beside
-`ctrl+m`), a key the library already answers on a row you never wrote, a key the
-viewport reads before the surface sees it (`pageUp`), a `chord.prefix` that is
-not a modifier chord or that takes a key the surface or the prompt bar answers,
-and `prefix:` beside `keys.chord.prefix:`, which are the same row under two
-names.
+actions of one layer on one press whatever the spelling — a bare terminal reports
+Return for `enter` and `ctrl+m`, a line feed for `ctrl+j` and, without the
+keyboard protocol, Return as well, and one control byte carries both `ctrl+-` and
+`ctrl+_` — a key the library already answers on a row you never wrote, a key the
+viewport reads before the surface sees it, whichever of the two the map moved onto
+it (`pageUp`, or `tui.altScreen.search` moved onto a surface key), a `chord.prefix`
+that is not a modifier chord or that takes a key the surface or the prompt bar
+answers, and `prefix:` beside `keys.chord.prefix:`, which are the same row under
+two names.
 
 A key the surface or a chord answers is a key the library never sees: that is
 how `ctrl+y` shows nested calls instead of yanking a line in the editor.
@@ -426,7 +429,7 @@ The workflow stores no npm token: the registry trusts `release.yml` on the `npm-
 - The dock shows the goal, plan mode, the todo items still to do, and any background job or delegation still running; a settled item leaves rather than turns into a completed row. The transcript marks where older history was compacted away. `/plan` toggles plan mode; `/plan <message>` also steers that message, which is the base command's own behaviour.
 - Background jobs and subagent runs are live process state, not durable events: they disappear when the run ends, and a resumed session starts with an empty board and roster.
 - A card reads its tool's own render intent through the agent whose session is on screen, so a stored session with no live agent — one this process is not running, or a child that has already finished — folds to the generic card instead of the tool's own.
-- Reading a child's conversation does not move the terminal: commands, approvals, and the status line stay with the session you launched, and the transcript is the only thing that switches.
+- Reading a child's conversation does not move the terminal: commands, approvals, and the status line stay with the session you launched, and the transcript is the only thing that switches. The status line carries the way back, read from the map in force, so a remap shows up without reopening the view.
 - Delete is unimplemented: the session store exposes no delete, and the surface does not reach around that seam into its files. `/fork` covers the case that needs it — it branches into a new session and leaves the original alone.
 - Approvals and questions render inline and take the keyboard; a question batch is answered in order, and a question that lists options can always be answered with free text on row `0`.
 - Styling is per element and overridable; see [Settings](#settings). Shipped defaults are emitted as 24-bit colour where the terminal advertises it and degraded to 256 or 16 colours otherwise, so a light or dark terminal still follows its own palette where it has one.

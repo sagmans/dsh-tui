@@ -86,8 +86,10 @@ export class BoxedEditor extends Editor {
     // A bare line feed is a line break in the base class whatever the map says,
     // so a reader who moved the line break off ctrl+j and sends with it would
     // keep getting lines. It is read before the Return guard because a terminal
-    // without the protocol reports that byte as Return as well.
-    if (data === NEWLINE_BYTE && keys.submit.includes('ctrl+j')) {
+    // without the protocol reports that byte as Return as well — and only
+    // without it, because a terminal that speaks the protocol sends the chord
+    // itself and reports a line feed for a key the reader meant as a line.
+    if (data === NEWLINE_BYTE && !isKittyProtocolActive() && keys.submit.includes('ctrl+j')) {
       super.handleInput(KITTY_CTRL_J)
       return
     }
@@ -97,9 +99,10 @@ export class BoxedEditor extends Editor {
     }
     // Only while the terminal cannot tell alt+enter apart from a mapping: with
     // the protocol active the same sequence is the reader's shift+enter, which
-    // is a newline and has to stay one. The spelling follows the binding, so a
-    // reader who sends with alt+enter alone is answered too.
-    if (data === LEGACY_ALT_ENTER && !isKittyProtocolActive()) {
+    // is a newline and has to stay one. A reader who keeps that sequence for a
+    // line is answered by the library's own rule, so the spelling follows the
+    // binding only once the line break is off it.
+    if (data === LEGACY_ALT_ENTER && !isKittyProtocolActive() && !keys.newLine.includes('alt+enter')) {
       if (keys.submit.includes('alt+enter')) {
         super.handleInput(KITTY_ALT_ENTER)
         return
