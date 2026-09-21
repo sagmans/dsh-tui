@@ -305,6 +305,52 @@ exports[`golden frames > renders the session picker at 80 columns 1`] = `
 }
 `;
 
+exports[`golden frames > renders the stash picker at 40 columns 1`] = `
+{
+  "above": 0,
+  "below": 0,
+  "filter": "",
+  "hint": "↑↓ move · enter pop · esc cancel · type to filter",
+  "note": undefined,
+  "rows": [
+    {
+      "current": true,
+      "description": "1m ago",
+      "label": "refactor the fold cursor so a resume replays it",
+    },
+    {
+      "current": false,
+      "description": "10m ago",
+      "label": "why does the dock render twice on the first frame?",
+    },
+  ],
+  "title": "stash · ~/source/opensource/deepseek-harness/master · 2 drafts",
+}
+`;
+
+exports[`golden frames > renders the stash picker at 80 columns 1`] = `
+{
+  "above": 0,
+  "below": 0,
+  "filter": "",
+  "hint": "↑↓ move · enter pop · esc cancel · type to filter",
+  "note": undefined,
+  "rows": [
+    {
+      "current": true,
+      "description": "1m ago",
+      "label": "refactor the fold cursor so a resume replays it",
+    },
+    {
+      "current": false,
+      "description": "10m ago",
+      "label": "why does the dock render twice on the first frame?",
+    },
+  ],
+  "title": "stash · ~/source/opensource/deepseek-harness/master · 2 drafts",
+}
+`;
+
 exports[`golden frames > renders the status row at 40 columns 1`] = `
 [
   "● ready · standard · zai-coding-cn/glm-…",
@@ -314,6 +360,12 @@ exports[`golden frames > renders the status row at 40 columns 1`] = `
 exports[`golden frames > renders the status row at 80 columns 1`] = `
 [
   "● ready · standard · zai-coding-cn/glm-5.3 (max) · workspace-write · ctx 17.5k/…",
+]
+`;
+
+exports[`golden frames > renders the status row with parked drafts at 80 columns 1`] = `
+[
+  "● ready · standard · zai-coding-cn/glm-5.3 (max) · stash 3 · ~/src/app",
 ]
 `;
 
@@ -378,6 +430,12 @@ exports[`styled golden frames > renders the busy dock with its escapes 1`] = `
   "[38;2;138;138;138m  ▸ bash-1 · running 12s — sleep 45 && echo bg-done[0m",
   "[1m☰ todos · 1 left[0m",
   "[38;2;138;138;138m  ▸ verify the dock[0m",
+]
+`;
+
+exports[`styled golden frames > renders the parked-draft count with its escapes 1`] = `
+[
+  "[38;2;138;138;138m● ready[0m[38;2;138;138;138m · [0m[38;2;138;138;138mstandard[0m[38;2;138;138;138m · [0m[38;2;138;138;138mzai-coding-cn/glm-5.3[0m[38;2;138;138;138m (max)[0m[38;2;138;138;138m · [0m[38;2;95;175;215mstash 3[0m[38;2;138;138;138m · [0m[38;2;138;138;138m~/src/app[0m",
 ]
 `;
 

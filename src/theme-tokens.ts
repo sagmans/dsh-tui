@@ -202,6 +202,7 @@ export const TUI_TOKENS = [
   'status.permission',
   'status.context',
   'status.cache',
+  'status.stash',
   'status.cwd',
   'status.separator',
   // Editor
@@ -379,6 +380,9 @@ export const DEFAULT_TOKENS: Readonly<Record<TuiToken, StyleSpec>> = {
   'status.permission': muted,
   'status.context': muted,
   'status.cache': muted,
+  // Accented, unlike the facts around it: a parked draft is something the
+  // reader left behind and may want back, not another measurement.
+  'status.stash': { fg: 'accent' },
   'status.cwd': muted,
   'status.separator': muted,
 

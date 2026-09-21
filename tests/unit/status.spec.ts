@@ -40,6 +40,19 @@ describe('an armed chord', () => {
   })
 })
 
+describe('the parked-draft count', () => {
+  it('is absent while nothing is parked, so the ordinary state stays quiet', () => {
+    expect(formatStatus(facts(), 200, theme)).not.toContain('stash ')
+    expect(formatStatus(facts({ stashed: 0 }), 200, theme)).not.toContain('stash ')
+  })
+
+  it('says how many drafts are waiting, before the directory they belong to', () => {
+    const line = formatStatus(facts({ stashed: 3 }), 200, theme)
+    expect(line).toContain('stash 3')
+    expect(line.indexOf('stash 3')).toBeLessThan(line.indexOf('~/source/opensource'))
+  })
+})
+
 describe('formatTokens', () => {
   it('keeps small counts exact and compacts large ones', () => {
     expect(formatTokens(999)).toBe('999')

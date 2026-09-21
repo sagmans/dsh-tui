@@ -28,6 +28,8 @@ export interface StatusFacts {
   readonly uncachedInputTokens: number | undefined
   /** Tokens this session has generated, when the provider reported any. */
   readonly outputTokens: number | undefined
+  /** Drafts parked for this working directory; omitted when none are known. */
+  readonly stashed?: number | undefined
   readonly cwd: string
   readonly home: string | undefined
 }
@@ -43,6 +45,8 @@ const ELLIPSIS = '…'
 /** The mark that says which of the two activities the session is in. */
 const WORKING_MARK = '▶'
 const READY_MARK = '●'
+/** What the parked-draft count is labelled, so the number is not mistaken for tokens. */
+const STASH_LABEL = 'stash'
 
 /** One row segment: what it is, what it says, and how it joins the previous one. */
 interface Segment {
@@ -125,6 +129,9 @@ export function formatStatus(facts: StatusFacts, width: number, theme: TuiTheme)
       : `ctx ${formatTokens(facts.contextTokens)}/${formatTokens(facts.contextWindow)}`)
   }
   if (facts.cacheRate !== undefined) push('status.cache', `cache ${Math.round(facts.cacheRate * 100)}%`)
+  // A count of zero is the ordinary state, so it is said by not being said: the
+  // row only carries the fact that something is waiting to be taken back.
+  if (facts.stashed !== undefined && facts.stashed > 0) push('status.stash', `${STASH_LABEL} ${facts.stashed}`)
   push('status.cwd', shortPath(facts.cwd, facts.home))
   return renderSegments(segments, width, theme)
 }
