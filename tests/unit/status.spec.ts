@@ -40,6 +40,40 @@ describe('an armed chord', () => {
   })
 })
 
+describe('the parked-draft count', () => {
+  it('is absent while nothing is parked, so the ordinary state stays quiet', () => {
+    expect(formatStatus(facts(), 200, theme)).not.toContain('stash ')
+    expect(formatStatus(facts({ stashed: 0 }), 200, theme)).not.toContain('stash ')
+  })
+
+  it('says how many drafts are waiting, before the directory they belong to', () => {
+    const line = formatStatus(facts({ stashed: 3 }), 200, theme)
+    expect(line).toContain('stash 3')
+    expect(line.indexOf('stash 3')).toBeLessThan(line.indexOf('~/source/opensource'))
+  })
+
+  /**
+   * A row cut to width keeps its head, and the count is what tells a reader work
+   * is waiting; the context and cache numbers are recoverable by looking again.
+   * So the count has to survive every cut the numbers beside it survive, at any
+   * width — it is not promised to survive a cut that already dropped them, which
+   * is what a long model route on a narrow terminal does.
+   */
+  it('is never cut while the running numbers it outranks are still shown', () => {
+    const parked = facts({ stashed: 3 })
+    let firstWithCount: number | undefined
+    for (let width = 20; width < 200; width += 1) {
+      const line = formatStatus(parked, width, theme)
+      const hasCount = line.includes('stash 3')
+      firstWithCount ??= hasCount ? width : undefined
+      if (line.includes('cache 87%') || line.includes('ctx 12.4k')) expect(hasCount).toBe(true)
+      // A count that is inside the row has to be inside the width it was cut to.
+      if (hasCount) expect(visibleWidth(line)).toBeLessThanOrEqual(width)
+    }
+    expect(firstWithCount).toBeDefined()
+  })
+})
+
 describe('formatTokens', () => {
   it('keeps small counts exact and compacts large ones', () => {
     expect(formatTokens(999)).toBe('999')

@@ -88,8 +88,10 @@ import {
   type PickerCard,
 } from './ui/picker.ts'
 import { QueueBar } from './ui/queue.ts'
-import { StatusBar } from './ui/status.ts'
+import { shortPath, StatusBar } from './ui/status.ts'
 import { DEFAULT_VIEW_STATE, TranscriptView } from './ui/view.ts'
+import { PromptStash } from './stash.ts'
+import { confirmedClear, StashConfirmPicker, StashPicker } from './ui/stash-picker.ts'
 
 export const name = 'tui'
 
@@ -440,6 +442,10 @@ export function apply(ctx: Context, config: unknown): void {
     tui.requestRender()
   }
 
+  // The bank is built once the picker exists to answer for it, so the status
+  // source is late-bound: the footer must not read a half-constructed stash.
+  let stash: PromptStash | undefined
+
   const statusFacts = createStatusFacts(ctx, {
     sessionId: () => activeSession,
     activity: () => ({ running: turnOpen, startedAt: turnStartedAt }),
@@ -450,6 +456,7 @@ export function apply(ctx: Context, config: unknown): void {
     // a hint stored with the transcript would keep naming the key of the day it
     // was written, and the reader may remap it with the row already on screen.
     back: () => (viewedSession === activeSession ? undefined : backHint(keymap)),
+    stash: () => stash?.entryCount,
   })
   const statusBar = new StatusBar(statusFacts, theme)
   const dock = new WorkDock(() => work.state(), theme, () => jobs, () => roster.list())
@@ -801,6 +808,32 @@ export function apply(ctx: Context, config: unknown): void {
     presetRows = await agentPresets.list()
     return await openPicker(new PresetPicker(() => presetRows, () => currentId, () => keymap))
   }
+
+  /**
+   * The prompt bank for this working directory.
+   *
+   * The surface owns the editor, the picker, and the notices, so the bank is
+   * handed the few things it needs to reach them and nothing else: the commands
+   * stay free of terminal state and are exercised without one in the tests.
+   */
+  const stashCwdLabel = shortPath(process.cwd(), process.env.HOME)
+  stash = new PromptStash(
+    {
+      getEditorText: () => editor.getExpandedText(),
+      setEditorText: text => {
+        editor.setText(text)
+        tui.requestRender()
+      },
+      // A question answers in this editor, so a draft written into a borrowed bar
+      // would become somebody's answer instead of a parked prompt.
+      editorIsAvailable: () => !promptBar.isBorrowed(),
+      notice: message => model.notice(message),
+      pick: (entries, label) => openPicker(new StashPicker(entries, label, () => keymap)),
+      confirm: async count => confirmedClear(await openPicker(new StashConfirmPicker(count, () => keymap))),
+      render: () => tui.requestRender(),
+    },
+    { cwd: process.cwd() },
+  )
 
   /** Title the listed sessions without making the reader wait for the slowest log. */
   const loadTitles = async (
@@ -1750,6 +1783,31 @@ export function apply(ctx: Context, config: unknown): void {
       case 'history':
         runHistoryCommand(submission.argument)
         return
+      case 'stash':
+        // Submitting a command consumes the line it was typed on, so this path
+        // can only carry a draft it was given; parking the bar's own draft is
+        // what the chord is for.
+        if (submission.argument.trim() === '') model.notice('usage: /stash <draft>, or ctrl+x then s to park the editor')
+        else void stash?.stashEditor(submission.argument)
+        return
+      case 'stash-draft':
+        void stash?.stashEditor()
+        return
+      case 'stash-pop':
+        void stash?.pop(submission.selector)
+        return
+      case 'stash-apply':
+        void stash?.apply(submission.selector)
+        return
+      case 'stash-list':
+        void stash?.list(stashCwdLabel)
+        return
+      case 'stash-drop':
+        void stash?.drop(submission.selector)
+        return
+      case 'stash-clear':
+        void stash?.clear()
+        return
       case 'status': {
         const facts = statusFacts()
         const context = facts.contextTokens === undefined
@@ -2008,6 +2066,9 @@ export function apply(ctx: Context, config: unknown): void {
     // reason. With a picker the session is not known yet, so it waits for one.
     if (!resolved.resumePicker) await presetFor(resolved.sessionId, resolved.resume, undefined)
     tui.start()
+    // Loaded now so the footer's count is real from the first paint, and because
+    // a bank that cannot be read should say so before a reader trusts it.
+    void stash?.open()
     terminal.write(windowTitle(process.cwd(), 'ready'))
     // Claiming the pane's agent row does not wait for a session: the pane is
     // already on screen and already idle, and a session may still be chosen.

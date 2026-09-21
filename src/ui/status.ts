@@ -28,6 +28,8 @@ export interface StatusFacts {
   readonly uncachedInputTokens: number | undefined
   /** Tokens this session has generated, when the provider reported any. */
   readonly outputTokens: number | undefined
+  /** Drafts parked for this working directory; omitted when none are known. */
+  readonly stashed?: number | undefined
   readonly cwd: string
   readonly home: string | undefined
 }
@@ -43,6 +45,8 @@ const ELLIPSIS = '…'
 /** The mark that says which of the two activities the session is in. */
 const WORKING_MARK = '▶'
 const READY_MARK = '●'
+/** What the parked-draft count is labelled, so the number is not mistaken for tokens. */
+const STASH_LABEL = 'stash'
 
 /** One row segment: what it is, what it says, and how it joins the previous one. */
 interface Segment {
@@ -119,6 +123,10 @@ export function formatStatus(facts: StatusFacts, width: number, theme: TuiTheme)
     if (facts.effort !== undefined && facts.effort !== '') push('status.effort', ` (${facts.effort})`, true)
   }
   if (facts.preset !== undefined && facts.preset !== '') push('status.permission', facts.preset)
+  // Parked drafts come before the running numbers: a row cut to width loses its
+  // tail, and a reader who cannot see the count cannot know the directory is
+  // holding work they meant to come back to.
+  if (facts.stashed !== undefined && facts.stashed > 0) push('status.stash', `${STASH_LABEL} ${facts.stashed}`)
   if (facts.contextTokens !== undefined) {
     push('status.context', facts.contextWindow === undefined
       ? `ctx ${formatTokens(facts.contextTokens)}`

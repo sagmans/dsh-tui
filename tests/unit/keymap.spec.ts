@@ -72,16 +72,21 @@ describe('the key tables', () => {
     expect(line).not.toContain('ctrl+t')
   })
 
-  it('asks for the model picker and the copy through the command line submissions', () => {
+  it('asks for the stash, the model picker, the plan, and the copy through the command line submissions', () => {
     const bindings = chordBindings(defaultKeymap())
+    // The chord has its own kind because it parks the editor's own draft, which
+    // a submitted command cannot: the line it was typed on is gone by then.
+    expect(bindings.find(entry => entry.key === 's')?.submission).toEqual({ kind: 'stash-draft' })
+    expect(bindings.find(entry => entry.key === 'l')?.submission).toEqual({ kind: 'stash-list' })
     expect(bindings.find(entry => entry.key === 'm')?.submission).toEqual({ kind: 'model', argument: '' })
+    expect(bindings.find(entry => entry.key === 'p')?.submission).toEqual({ kind: 'plan' })
     expect(bindings.find(entry => entry.key === 'y')?.submission).toEqual({ kind: 'copy' })
-    expect(chordKeysLine(defaultKeymap())).toBe('ctrl+x then m model · p plan mode · y copy')
+    expect(chordKeysLine(defaultKeymap())).toBe('ctrl+x then m model · p plan mode · y copy · s stash the draft · l stashed drafts')
   })
 
   it('reads a chord the reader moved, and a prefix they changed', () => {
     const map = resolveKeymap({ 'chord.prefix': 'alt+z', 'chord.model': 'n' })
-    expect(chordKeysLine(map)).toBe('alt+z then n model · p plan mode · y copy')
+    expect(chordKeysLine(map)).toBe('alt+z then n model · p plan mode · y copy · s stash the draft · l stashed drafts')
     expect(chordBindings(map).find(entry => entry.label === 'model')?.key).toBe('n')
   })
 })
@@ -201,6 +206,15 @@ describe('ChordReader', () => {
     const { chord } = reader([DEFAULT_PREFIX_KEY], DEFAULT_PREFIX_WINDOW_S * 1000, map)
     chord.handle('\u0018')
     expect(chord.handle('\u0019')).toEqual({ kind: 'action', binding: chordBindings(map).find(entry => entry.label === 'copy') })
+  })
+
+  it('dispatches the stash chords', () => {
+    const bindings = chordBindings(defaultKeymap())
+    const { chord } = reader()
+    chord.handle('\u0018')
+    expect(chord.handle('s')).toEqual({ kind: 'action', binding: bindings.find(entry => entry.key === 's') })
+    chord.handle('\u0018')
+    expect(chord.handle('l')).toEqual({ kind: 'action', binding: bindings.find(entry => entry.key === 'l') })
   })
 
   it('hands an unbound second key back rather than swallowing it', () => {

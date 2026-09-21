@@ -84,10 +84,16 @@ export interface StatusSources {
    */
   readonly chord?: (() => string | undefined) | undefined
   /**
+  /**
    * The way back to the driven session, read per paint: the reader may remap it
    * or open another session while the row is already on screen.
    */
   readonly back?: (() => string | undefined) | undefined
+  /**
+   * How many drafts this directory has parked, read per paint so the count
+   * follows a stash or a pop without the surface having to push an update.
+   */
+  readonly stash?: (() => number | undefined) | undefined
 }
 
 export function createStatusFacts(ctx: Context, sources: StatusSources): () => StatusFacts {
@@ -119,6 +125,7 @@ export function createStatusFacts(ctx: Context, sources: StatusSources): () => S
       cacheRate: cacheRate(totals),
       uncachedInputTokens: numberOr(totals?.uncachedInputTokens),
       outputTokens: numberOr(totals?.outputTokens),
+      stashed: sources.stash?.(),
       cwd: process.cwd(),
       home: sources.home,
       chord: sources.chord?.(),

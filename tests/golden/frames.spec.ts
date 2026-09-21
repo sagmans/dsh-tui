@@ -9,10 +9,11 @@ import { TranscriptModel } from '@/transcript.ts'
 import { MarkdownRenderer } from '@/ui/markdown.ts'
 import { createMermaidTransform } from '@/ui/mermaid.ts'
 import { BoxedEditor } from '@/ui/editor.ts'
-import { StatusBar } from '@/ui/status.ts'
+import { StatusBar, type StatusFacts } from '@/ui/status.ts'
 import { DEFAULT_VIEW_STATE, TranscriptView } from '@/ui/view.ts'
 import { WorkDock } from '@/ui/dock.ts'
 import { ModelPicker, SessionPicker } from '@/ui/picker.ts'
+import { StashPicker } from '@/ui/stash-picker.ts'
 import { QueueBar } from '@/ui/queue.ts'
 import { WorkFold } from '@/work.ts'
 
@@ -26,6 +27,26 @@ import { WorkFold } from '@/work.ts'
  */
 const WIDTHS = [80, 40]
 const theme = createTheme('none')
+
+/** The footer facts this file pins; a case that varies one spreads over them. */
+const STATUS_FACTS: StatusFacts = {
+  chord: undefined,
+  back: undefined,
+  activity: 'idle',
+  elapsedMs: undefined,
+  provider: 'zai-coding-cn',
+  model: 'glm-5.3',
+  effort: 'max',
+  agentPreset: 'standard',
+  preset: 'workspace-write',
+  contextTokens: 17_500,
+  contextWindow: 1_000_000,
+  cacheRate: 0.87,
+  uncachedInputTokens: 2_300,
+  outputTokens: 3_100,
+  cwd: '/Users/dev/source/opensource/deepseek-harness/master',
+  home: '/Users/dev',
+}
 
 /** The terminal the gate's bar renders against; a golden frame reads its rows only. */
 const STUB_TUI = { requestRender: () => {}, terminal: { rows: 24, cols: 80 } } as unknown as TUI
@@ -120,25 +141,22 @@ function fixture(frameTheme = theme): { view: TranscriptView; dock: WorkDock; st
   return {
     view,
     dock: new WorkDock(() => work.state(), frameTheme),
-    status: new StatusBar(() => ({
-      chord: undefined,
-      back: undefined,
-      activity: 'idle',
-      elapsedMs: undefined,
-      provider: 'zai-coding-cn',
-      model: 'glm-5.3',
-      effort: 'max',
-      agentPreset: 'standard',
-      preset: 'workspace-write',
-      contextTokens: 17_500,
-      contextWindow: 1_000_000,
-      cacheRate: 0.87,
-      uncachedInputTokens: 2_300,
-      outputTokens: 3_100,
-      cwd: '/Users/dev/source/opensource/deepseek-harness/master',
-      home: '/Users/dev',
-    }), frameTheme),
+    status: new StatusBar(() => STATUS_FACTS, frameTheme),
   }
+}
+
+/**
+ * The footer with drafts parked.
+ *
+ * Nothing is trimmed: the row carries the running numbers a real session shows,
+ * so the frame proves the count survives beside facts it is ranked above.
+ */
+function parkedStatus(count: number, frameTheme = theme): StatusBar {
+  return new StatusBar(() => ({
+    ...STATUS_FACTS,
+    cwd: '/Users/dev/src/app',
+    stashed: count,
+  }), frameTheme)
 }
 
 /**
@@ -231,6 +249,19 @@ function modelPickerCard(): ModelPicker {
   )
 }
 
+/** The drafts parked for one directory, whose rows are the draft itself. */
+function stashPickerCard(): StashPicker {
+  return new StashPicker(
+    [
+      { entry: { id: 'a1', text: 'refactor the fold cursor so a resume replays it', createdAt: NOW - 90_000 }, index: 0 },
+      { entry: { id: 'b2', text: 'why does the dock render twice on the first frame?', createdAt: NOW - 600_000 }, index: 1 },
+    ],
+    '~/source/opensource/deepseek-harness/master',
+    defaultKeymap,
+    () => NOW,
+  )
+}
+
 /**
  * A pending question whose option is longer than a cramped terminal holds.
  *
@@ -303,7 +334,15 @@ describe('golden frames', () => {
     it(`renders the model picker at ${width} columns`, () => {
       expect(modelPickerCard().card()).toMatchSnapshot()
     })
+
+    it(`renders the stash picker at ${width} columns`, () => {
+      expect(stashPickerCard().card()).toMatchSnapshot()
+    })
   }
+
+  it('renders the status row with parked drafts at 80 columns', () => {
+    expect(parkedStatus(3).render(80)).toMatchSnapshot()
+  })
 
   it('folds the same event log into identical rows, as a resume must', () => {
     // A resume replays the durable events into a fresh fold, so the same log has
@@ -346,6 +385,10 @@ describe('styled golden frames', () => {
 
   it('renders the status row with its escapes', () => {
     expect(fixture(styled).status.render(80)).toMatchSnapshot()
+  })
+
+  it('renders the parked-draft count with its escapes', () => {
+    expect(parkedStatus(3, styled).render(80)).toMatchSnapshot()
   })
 
   it('renders the busy dock with its escapes', () => {

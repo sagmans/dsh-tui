@@ -2,7 +2,7 @@
 
 Interactive terminal (TUI) surface for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): use `dsh` in a terminal instead of a browser.
 
-Status: **v1 feature-complete; published on npm as `@sagmans/dsh-tui`.** The surface owns the alternate screen, streams assistant text as markdown, renders every tool's own card, answers approvals and questions, restores and names stored conversations, switches model mid-session, runs any of the four shipped agent modes and switches between them before a session's first turn, reads a child agent's conversation in place, keeps the goal, plan mode, todo list, delegations, and background jobs above the editor with a status line below it, nudges an agent whose plan has aged without an update, and hands the terminal back on every graceful exit. Publication is tag-driven with GitHub OIDC provenance and no stored npm token; see [RELEASE.md](RELEASE.md).
+Status: **v1 feature-complete; published on npm as `@sagmans/dsh-tui`.** The surface owns the alternate screen, streams assistant text as markdown, renders every tool's own card, answers approvals and questions, restores and names stored conversations, switches model mid-session, runs any of the four shipped agent modes and switches between them before a session's first turn, reads a child agent's conversation in place, keeps the goal, plan mode, todo list, delegations, and background jobs above the editor with a status line below it, nudges an agent whose plan has aged without an update, parks and restores prompt drafts per working directory, and hands the terminal back on every graceful exit. Publication is tag-driven with GitHub OIDC provenance and no stored npm token; see [RELEASE.md](RELEASE.md).
 
 ## Install
 
@@ -131,6 +131,8 @@ moves any of them — see [Keys](#keys).
 | Shift+Tab | expand or fold the reasoning behind an answer: folded, the row names itself, its token count, and the key; opened, it adds the thought |
 | Ctrl+T | pick the reasoning effort for the next step |
 | Ctrl+R | reverse-search recorded prompts: the list opens filtered by whatever is in the bar, `enter` puts one back, `esc` keeps the draft |
+| Ctrl+X then S | stash the current draft |
+| Ctrl+X then L | open this directory's stashed drafts |
 | Ctrl+X then M | open the model picker |
 | Ctrl+X then Y | copy the last answer to the clipboard |
 | `y` / `n` / Esc | allow once, reject, or cancel a pending approval |
@@ -165,21 +167,29 @@ moves any of them — see [Keys](#keys).
 | `/history clear` | forget every recorded prompt, reporting how many went |
 | `/theme` | list every styled element and the value in force |
 | `/keys` | list every action and the keys in force; `/keys <layer>` narrows it (see [Keys](#keys)) |
+| `/stash <draft>` | park the text given after the command (`ctrl+x` then `s` parks the editor) |
+| `/stash-pop [index\|id]` | put a stashed draft into the editor and remove it (newest by default) |
+| `/stash-apply [index\|id]` | put a stashed draft into the editor and keep it |
+| `/stash-list` | pick from this directory's stashed drafts; `enter` pops the marked one |
+| `/stash-drop [index\|id]` | delete a stashed draft without using it |
+| `/stash-clear` | delete every stashed draft for this directory, after a confirmation |
 | `/quit` | leave and print the resume command |
 
 `Ctrl+X` starts a chord. For the next two seconds the footer leads with the
 prefix alone — enough to say that a key is waiting, without reciting the map —
 and a key that finishes nothing is typed as usual rather than swallowed, so a
 prefix pressed by accident costs nothing; `/help` lists the chords, `m` for the
-model picker, `p` for plan mode, and `y` for the last answer.
+model picker, `p` for plan mode, `y` for the last answer, `s` to stash the
+draft, and `l` for the stashes.
 `keys.chord.prefix: alt+x` starts the chord with another key — or with a list of
 them, as so many ways in — and `prefixWindow: 0` waits for the next key instead
 of lapsing; every second key is a row of its own (`chord.model`, `chord.plan`,
-`chord.copy`), so a chord can be respelled whole. A prefix that is not a modifier chord, that
+`chord.copy`, `chord.stash`, `chord.stashes`), so a chord can be respelled whole. A prefix that is not a modifier chord, that
 the surface or the prompt bar already answers (`ctrl+c`, `ctrl+s`), or that the
 terminal keeps (`ctrl+q`) is refused with the reason, and the shipped keymap
 stays in force. The chords themselves are the commands they stand for: `m`, `p`,
-and `y` ask the same dispatcher `/model`, `/plan`, and `/copy` do. Plan mode is
+`y`, `s`, and `l` ask the same dispatcher `/model`, `/plan`, `/copy`, `/stash`,
+and `/stash-list` do. Plan mode is
 the one pair that cannot share a name: `/plan` only enters, so the chord names
 `/plan off` instead when the agent is in plan mode — or is waiting for the turn
 boundary to become so — and reads that state from the plan package rather than
@@ -204,6 +214,65 @@ is never overwritten; `/history` names it and the count, and `/history clear`
 forgets everything.
 
 Any other `/command` goes to the command registry, so `/plan`, `/compact`, `/goal`, and `/feedback` behave as they do on the other surfaces.
+
+## Prompt stash
+
+`ctrl+x` then `s` parks the draft the editor is holding and clears it;
+`/stash <draft>` parks a draft typed on the command line. A bare `/stash` only
+says so, because submitting a command consumes the line it was typed on and there
+is nothing left of the draft to park. `/stash-pop` puts a parked draft back and
+removes it, so a prompt written for the wrong moment survives a restart instead
+of being retyped or sent; `l` opens the list of them. A stash belongs to the exact
+working directory, so the drafts parked in one checkout never appear in another;
+the footer shows `stash N` while any are waiting, ranked above the context and
+cache numbers it shares a row with.
+
+A selector is the number the list shows in brackets — `0` is the newest — or the
+entry's own id; leaving it out takes the newest. `apply` and `pop` refuse to
+overwrite a draft already in the editor, because losing an unsent prompt to a
+restore is the one outcome the feature exists to prevent. They refuse while a
+question is borrowing the bar for the same reason: a draft written into an answer
+would be sent as one. `pop` writes the editor first and removes the entry second,
+so a crash between the two leaves the draft in the bank rather than only in a
+terminal that is gone.
+
+Nothing is cleared until the write has landed. A refusal — no room left, a bank
+past its cap, another writer holding the lock — leaves the draft in the bar,
+including a draft typed after `/stash`, which is written back into the bar before
+the write is attempted. The bar is only cleared while it still holds that same
+draft and no question has borrowed it, so an answer typed during the write is
+never wiped by a stash finishing.
+
+The bank is one JSON file per directory under `$DSH_HOME/tui-stash`, written with
+owner-only permissions (`0700` directory, `0600` file) through a no-follow open,
+and every directory the path passes through must be owned by the reader (or by
+root) and not writable by anyone else — the sticky bit is the only exception,
+since it keeps renaming to an entry's owner. Links are walked one hop at a time,
+with `..` left for the filesystem to resolve against what the link points at, and
+a link this user does not own ends the walk: a chain that jumps through a shared
+directory is refused at the directory it jumped through. A directory
+that another user or a group member could redirect the storage through is refused
+rather than trusted, which is also why a group-writable home directory fails the
+stash with the offending path named. Every update is a locked read-modify-write
+and an atomic temp-and-rename, so two surfaces in the same directory cannot lose
+each other's entries; reclaiming a lock whose owner is gone is serialized on a
+per-bank claim file, and the removal only applies to the lock it judged, so a
+holder that released in between cannot have its successor's live lock deleted. A
+contender never deletes a lock it did not publish, so losing the name to a
+successor costs a retry rather than the successor's turn.
+
+A bank whose working directory is not this one, or whose bytes do not parse, is
+moved aside as `<name>.corrupt-<time>` and reported with its path — including when
+the directory holding the copy could not be synced. A bank written by a newer
+format, or one past the size cap, is refused in place rather than moved, because
+neither is corruption. A storage directory a save had to create is flushed
+through the directory that names it before the save reports anything. If that
+flush fails, the empty directories are taken back so the retry starts clean; a
+directory another surface has already saved into is left exactly as it is, because
+an entry left unflushed costs durability while a removed bank costs the draft. Drafts are never written to a session log, and control and
+Unicode bidi controls are stripped when a draft is stored and again when it is
+read, so a hand-edited bank cannot park a terminal escape or a reordering trick in
+the bar.
 
 ## Settings
 
@@ -488,6 +557,10 @@ The automated checks drive a real PTY, but they run on this machine's terminal. 
 | press `0` on a question, type an answer, press Enter | the editor under row `0` shows the text as it is edited, and the model receives it as that question's answer |
 | type a prompt without sending it, then answer a question | the prompt bar steps aside while the question is open and holds the same prompt again afterwards |
 | `echo hi \| dsh --profile tui` | refuses with a non-zero exit and a message naming the TTY requirement |
+| `/stash`, `/stash-pop` in one terminal | the footer shows `stash 1` after the stash and the draft returns to the editor after the pop |
+| a second `dsh --profile tui` in the same directory | `/stash-list` shows the draft the first terminal parked |
+| `dsh --profile tui` in another directory | `/stash-list` says `no stashed drafts`, even though the first directory still has one |
+| hand-edit `$DSH_HOME/tui-stash/<key>.json` into invalid JSON, then `/stash-list` | the surface reports the quarantine path, starts empty, and leaves the moved file readable |
 | `/quit`, Ctrl+C while idle, `kill -TERM <pid>` | the shell returns with cursor, echo, mouse, and title restored |
 
 ## Releasing
@@ -511,10 +584,11 @@ The workflow stores no npm token: the registry trusts `release.yml` on the `npm-
 - A card reads its tool's own render intent through the agent whose session is on screen, so a stored session with no live agent — one this process is not running, or a child that has already finished — folds to the generic card instead of the tool's own.
 - Reading a child's conversation does not move the terminal: commands, approvals, and the status line stay with the session you launched, and the transcript is the only thing that switches. The status line carries the way back, read from the map in force, so a remap shows up without reopening the view.
 - Delete is unimplemented: the session store exposes no delete, and the surface does not reach around that seam into its files. `/fork` covers the case that needs it — it branches into a new session and leaves the original alone.
+- The prompt stash holds text only. It does not read Pi's `pi-stash` data, does not migrate an older key format, and keeps no pasted images: a draft larger than 1 MiB, or a bank larger than 16 MiB, is refused rather than stored — the cap is measured on the bytes the file will hold, escapes included, before anything is written, so a refusal cannot leave a bank that saves and then refuses to load. A corrupt bank is quarantined and reported, never repaired in place; a bank from a newer format is refused where it lies, so an older build cannot swallow a newer build's drafts.
 - Approvals and questions render inline and take the keyboard; a question batch is answered in order, and a question that lists options can always be answered with free text on row `0`.
 - Inside Herdr the pane reports its own state, and that report is the only thing that makes it an agent there: Herdr cannot start, resume, or prompt this surface, so launching and resuming stay with `dsh` itself (or a Herdr plugin that runs it).
 - Styling is per element and overridable; see [Settings](#settings). Shipped defaults are emitted as 24-bit colour where the terminal advertises it and degraded to 256 or 16 colours otherwise, so a light or dark terminal still follows its own palette where it has one.
-- Tool text, model text, and file content are escaped before rendering, so a hostile result cannot inject terminal control sequences; the cost is that a literal tab shows as \x09.
+- Tool text, model text, and file content are escaped before rendering, so a hostile result cannot inject terminal control sequences; the cost is that a literal tab shows as \x09. A stashed draft is stripped of control and bidi characters instead, because it is restored into a live editor rather than drawn as text.
 - Mermaid fences draw in assistant replies only, and only at the top level of one: a fence nested in a list, quoted inside another fence, or carried by a prompt, a thought, or a tool card stays source. Author `:::class` styling and diagram links are ignored — the renderer reports what each run is, and the theme decides how it looks.
 - Prompt history is global to this machine, not per project: `$DSH_HOME/prompt-history.json` holds every submitted line, deduplicated exactly, and a file this build cannot parse is left untouched with writes refused so a newer format is never overwritten. Every write re-reads the file under a lock shared by sessions, so a second session's prompts are folded in rather than overwritten, and a lock whose holder stopped is reclaimed or reported instead of guessed at; control characters are spelled out before a prompt is stored. A multiline suggestion draws its first line with `↵` marking the fold. `history.ghost: false` keeps reverse search without the suggestion, `history.enabled: false` stops recording and offering it, and `NO_COLOR`/`--no-color` suppresses the ghost because text the reader cannot see but could still accept is worse than none.
 

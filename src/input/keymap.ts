@@ -22,6 +22,8 @@ const CHORD_SUBMISSIONS: Readonly<Record<string, Submission>> = {
   'chord.model': { kind: 'model', argument: '' },
   'chord.plan': { kind: 'plan' },
   'chord.copy': { kind: 'copy' },
+  'chord.stash': { kind: 'stash-draft' },
+  'chord.stashes': { kind: 'stash-list' },
 }
 
 /** One chord: the key that follows the prefix, and the line that key asks for. */

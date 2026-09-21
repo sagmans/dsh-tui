@@ -34,6 +34,9 @@ proven by that gate — run `tools/pty-drive.mjs` and read the screen it prints.
   `src/input/` holds keymap, submission, and completion; `src/terminal/` owns the
   alternate screen, restore, bell, and clipboard; `src/compat/` probes the harness
   it mounts on.
+- `src/stash.ts` answers the parked-draft commands and their chord rows;
+  `src/stash/` holds the bank's schema, the private path it is written through,
+  and the lock one read-modify-write takes.
 - `tests/unit/*.spec.ts` are the focused specs, `tests/golden/frames.spec.ts`
   snapshots rendered frames, `tests/release/test_release.py` guards
   `scripts/npm/release.py`.
