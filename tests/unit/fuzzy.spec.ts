@@ -83,6 +83,13 @@ describe('fuzzyScore outside ASCII', () => {
   it('folds a dotted capital into the letter a reader would type', () => {
     expect(fuzzyScore('i', 'İ')).toBeGreaterThan(0)
   })
+
+  it('reads a letter outside ASCII as a letter rather than a word break', () => {
+    // fzf scores ab in éab as a plain run and ab in zAb across a hump, so the
+    // hump wins; a word break at é would hand it a boundary bonus instead.
+    expect(fuzzyScore('ab', 'éab')).toBe(36)
+    expect(fuzzyScore('ab', 'zAb')).toBe(53)
+  })
 })
 
 describe('fuzzyScore single characters', () => {

@@ -67,12 +67,28 @@ const LOWER_PATTERN = /[a-z]/
 const UPPER_PATTERN = /[A-Z]/
 const NUMBER_PATTERN = /[0-9]/
 
+/**
+ * The categories fzf reads a code point outside ASCII by.
+ *
+ * Without them a letter such as é would be read as a word break, so a fragment
+ * landing beside it would take a boundary bonus fzf never pays and outrank a
+ * text fzf ranks higher.
+ */
+const UNICODE_LOWER_PATTERN = /\p{Ll}/u
+const UNICODE_UPPER_PATTERN = /\p{Lu}/u
+const UNICODE_NUMBER_PATTERN = /\p{N}/u
+const UNICODE_LETTER_PATTERN = /\p{L}/u
+
 function classOf(character: string): number {
   if (character >= 'a' && character <= 'z') return LOWER
   if (character >= 'A' && character <= 'Z') return UPPER
   if (NUMBER_PATTERN.test(character)) return NUMBER
   if (WHITE_CHARACTERS.includes(character)) return WHITE
   if (DELIMITER_CHARACTERS.includes(character)) return DELIMITER
+  if (UNICODE_LOWER_PATTERN.test(character)) return LOWER
+  if (UNICODE_UPPER_PATTERN.test(character)) return UPPER
+  if (UNICODE_NUMBER_PATTERN.test(character)) return NUMBER
+  if (UNICODE_LETTER_PATTERN.test(character)) return LETTER
   return NON_WORD
 }
 
