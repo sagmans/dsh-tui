@@ -113,6 +113,13 @@ describe('installKeybindings', () => {
     expect(getKeybindings().matches('\u001b[1;3D', 'tui.editor.cursorWordLeft')).toBe(true)
   })
 
+  it('unbinds the library newline keys when the reader leaves the line to Enter alone', () => {
+    installKeybindings(resolveKeymap({ 'prompt.newLine': ['enter'], 'prompt.submit': 'ctrl+g' }))
+    const keys = getKeybindings()
+    expect(keys.matches('\u001b[13;2u', 'tui.input.newLine')).toBe(false)
+    expect(keys.matches('\n', 'tui.input.newLine')).toBe(false)
+  })
+
   it('keeps Enter out of the library newline binding, which the bar answers itself', () => {
     installKeybindings(defaultKeymap())
     const keys = getKeybindings()

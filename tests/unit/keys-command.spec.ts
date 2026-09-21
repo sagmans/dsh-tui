@@ -10,13 +10,13 @@ describe('renderKeymap', () => {
     for (const action of ACTION_CATALOG) expect(rendered).toContain(`${action.id} = `)
     expect(rendered).toContain('prompt.submit = ctrl+enter · alt+enter · ctrl+s · submit the prompt')
     expect(rendered).toContain('tui.editor.yank = ctrl+y · ')
-    expect(rendered).toContain('keys · 68 actions · 0 of them yours')
+    expect(rendered).toContain(`keys · ${ACTION_CATALOG.length} actions · 0 of them yours`)
   })
 
   it('marks the rows the reader wrote, and the shadows they cast', () => {
     const rendered = text(renderKeymap(resolveKeymap({ 'surface.effort': 'alt+d' })))
     expect(rendered).toContain('surface.effort = alt+d · reasoning effort  (yours)')
-    expect(rendered).toContain('keys · 68 actions · 1 of them yours')
+    expect(rendered).toContain(`keys · ${ACTION_CATALOG.length} actions · 1 of them yours`)
     expect(rendered).toContain('keys you took from the library:')
     expect(rendered).toContain('alt+d: surface.effort over tui.editor.deleteWordForward')
   })
