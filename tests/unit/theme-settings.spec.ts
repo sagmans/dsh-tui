@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { defaultKeymap, keysFor } from '@/input/actions.ts'
 import { createTheme } from '@/theme.ts'
 import { TUI_SETTINGS_NAMESPACE, parseSettings,
   TuiSettingsSchema, defaultSettings, readScope, toOverrides } from '@/theme-settings.ts'
@@ -17,6 +18,7 @@ describe('the dsh-tui settings section', () => {
       mermaid: 'streaming',
       prefix: 'ctrl+x',
       prefixWindow: 2,
+      keymap: defaultKeymap(),
     })
   })
 
@@ -87,6 +89,7 @@ describe('the dsh-tui settings section', () => {
       mermaid: 'streaming',
       prefix: 'ctrl+x',
       prefixWindow: 2,
+      keymap: defaultKeymap(),
     })
     expect(problems[0]).toContain('transcript.reasoning.bdy')
   })
@@ -107,6 +110,53 @@ describe('the dsh-tui settings section', () => {
   it('lets a palette override win over the shipped palette', () => {
     const overrides = toOverrides(parseSettings({ palette: { muted: '#777777' } }))
     expect(overrides.palette.muted).toBe('#777777')
+  })
+})
+
+describe('the keys section', () => {
+  it('keeps every shipped key when the reader writes nothing', () => {
+    const settings = parseSettings({})
+    expect(keysFor(settings.keymap, 'prompt.submit')).toEqual(['ctrl+enter', 'alt+enter', 'ctrl+s'])
+    expect(keysFor(settings.keymap, 'tui.editor.yank')).toEqual(['ctrl+y'])
+    expect(settings.keymap.written.size).toBe(0)
+  })
+
+  it('takes one action, one key or a list, and leaves the rest shipped', () => {
+    const settings = parseSettings({ keys: { 'surface.effort': 'ctrl+e', 'prompt.submit': ['ctrl+g'] } })
+    expect(keysFor(settings.keymap, 'surface.effort')).toEqual(['ctrl+e'])
+    expect(keysFor(settings.keymap, 'prompt.submit')).toEqual(['ctrl+g'])
+    expect(keysFor(settings.keymap, 'surface.toolDetail')).toEqual(['ctrl+o'])
+    expect([...settings.keymap.written].sort()).toEqual(['prompt.submit', 'surface.effort'])
+  })
+
+  it('takes the chord starter through the map, and keeps the old spelling working', () => {
+    expect(parseSettings({ keys: { 'chord.prefix': 'alt+z' } }).prefix).toBe('alt+z')
+    expect(parseSettings({ prefix: 'alt+z' }).prefix).toBe('alt+z')
+    expect(keysFor(parseSettings({ prefix: 'alt+z' }).keymap, 'chord.prefix')).toEqual(['alt+z'])
+  })
+
+  it('refuses both spellings of the chord starter at once', () => {
+    expect(() => parseSettings({ prefix: 'alt+z', keys: { 'chord.prefix': 'ctrl+a' } })).toThrow(/chord\.prefix/)
+  })
+
+  it('rejects an action the surface does not have, naming it', () => {
+    expect(() => parseSettings({ keys: { 'surface.nope': 'ctrl+g' } })).toThrow(/surface\.nope/)
+  })
+
+  it('rejects a key the reader could never press', () => {
+    expect(() => parseSettings({ keys: { 'surface.effort': 'ctrl+q' } })).toThrow(/terminal/)
+    expect(() => parseSettings({ keys: { 'surface.effort': 'e' } })).toThrow(/surface\.effort/)
+    expect(() => parseSettings({ keys: { 'surface.effort': 'meta+e' } })).toThrow(/surface\.effort/)
+  })
+
+  it('rejects two actions of one layer claiming one key', () => {
+    expect(() => parseSettings({ keys: { 'surface.effort': 'ctrl+o' } })).toThrow(/surface\.toolDetail/)
+  })
+
+  it('falls back to the shipped map when the reader wrote one the surface refuses', () => {
+    const settings = readScope({ get: () => ({ keys: { 'surface.nope': 'ctrl+g' } }) }, () => {})
+    expect(settings.prefix).toBe('ctrl+x')
+    expect(keysFor(settings.keymap, 'prompt.submit')).toEqual(['ctrl+enter', 'alt+enter', 'ctrl+s'])
   })
 })
 
