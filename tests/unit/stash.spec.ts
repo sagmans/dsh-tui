@@ -219,14 +219,17 @@ describe('stashing the editor draft', () => {
   it('does not clear a bar a question borrowed during the write', async () => {
     const host = new FakeHost()
     const baseDir = scratchBase()
+    // The answer is the same text as the draft, so a clear that only compares the
+    // bar's contents cannot tell them apart.
     const borrowing: StashWriter = async (file, contents) => {
       host.editorAvailable = false
-      host.editorText = 'an answer typed into the question'
+      host.editorText = 'parked'
       return await writeStashFile(file, contents)
     }
     const stash = bank(host, { baseDir, write: borrowing })
     await stash.stashEditor('parked')
-    expect(host.editorText).toBe('an answer typed into the question')
+    expect(host.editorText).toBe('parked')
+    expect(host.editorAvailable).toBe(false)
     expect(host.last()).toBe('Stashed [0]')
   })
 })
