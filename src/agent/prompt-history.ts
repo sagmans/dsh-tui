@@ -1,4 +1,4 @@
-import { chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, open, readFile, rename, rm, stat, writeFile, type FileHandle } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join, resolve as resolvePath } from 'node:path'
 import { displayText } from '../text.ts'
@@ -30,9 +30,24 @@ export const MAX_ENTRIES_LIMIT = 20_000
 const PRIVATE_FILE_MODE = 0o600
 /** A created home directory stays private; an existing one is never re-moded. */
 const PRIVATE_DIR_MODE = 0o700
+/** Suffix of the file that serializes mutations across sessions. */
+const LOCK_SUFFIX = '.lock'
+/** How long a mutation waits for another session's lock before giving up. */
+const LOCK_WAIT_MS = 2_000
+/** How long a lock may stand before it is treated as a crash leftover. */
+const LOCK_STALE_MS = 10_000
+/** Delay between lock attempts, so a short hold is not a spin. */
+const LOCK_RETRY_MS = 20
 
 /** Why the store refuses to write, which is a reason the reader can act on. */
 export type HistoryBlockReason = 'corrupt_history' | 'unsupported_schema' | 'unreadable_history'
+
+/** One phrase per refusal, so a notice reads the same wherever it is raised. */
+const BLOCK_DESCRIPTIONS: Record<HistoryBlockReason, string> = {
+  corrupt_history: 'corrupt',
+  unsupported_schema: 'a newer format',
+  unreadable_history: 'unreadable',
+}
 
 /** One recorded prompt, newest first in the file. */
 export interface PromptEntry {
@@ -81,6 +96,54 @@ export interface PromptHistoryOptions {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
+}
+
+function isAlreadyExists(error: unknown): boolean {
+  return isRecord(error) && error.code === 'EEXIST'
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+/**
+ * Take the lock that serializes mutations across sessions.
+ *
+ * A second session that read the same entries before this one wrote would
+ * otherwise replace the file with its own view and lose the first session's
+ * prompts. A lock left behind by a crash is taken over once it is stale, and a
+ * holder that never lets go costs one mutation rather than the whole file.
+ */
+async function acquireLock(lockPath: string): Promise<FileHandle> {
+  const deadline = Date.now() + LOCK_WAIT_MS
+  for (;;) {
+    try {
+      return await open(lockPath, 'wx', PRIVATE_FILE_MODE)
+    } catch (error) {
+      if (!isAlreadyExists(error)) throw error
+    }
+    const held = await stat(lockPath).catch(() => undefined)
+    if (held !== undefined && Date.now() - held.mtimeMs > LOCK_STALE_MS) {
+      await rm(lockPath, { force: true })
+      continue
+    }
+    if (Date.now() >= deadline) throw new Error('another session is writing the prompt history')
+    await delay(LOCK_RETRY_MS)
+  }
+}
+
+/** Run one read-modify-replace under the lock, so nothing lands between them. */
+async function withLock<Result>(lockPath: string, operation: () => Promise<Result>): Promise<Result> {
+  await mkdir(dirname(lockPath), { recursive: true, mode: PRIVATE_DIR_MODE })
+  const handle = await acquireLock(lockPath)
+  try {
+    return await operation()
+  } finally {
+    // A lock that cannot be removed is left for the stale window rather than
+    // turning a write that already landed into a reported failure.
+    await handle.close().catch(() => {})
+    await rm(lockPath, { force: true }).catch(() => {})
+  }
 }
 
 function isPositiveInteger(value: unknown): value is number {
@@ -178,6 +241,7 @@ export function createPromptHistory(options: PromptHistoryOptions): PromptHistor
   const now = options.now ?? (() => new Date())
   const warn = options.warn ?? (() => {})
   const filePath = join(options.home ?? resolveDshHome(), HISTORY_FILE_NAME)
+  const lockPath = filePath + LOCK_SUFFIX
   let entries: readonly PromptEntry[] = []
   let blocked: HistoryBlockReason | undefined
   const warned = new Set<string>()
@@ -208,8 +272,7 @@ export function createPromptHistory(options: PromptHistoryOptions): PromptHistor
     const parsed = parseHistoryFile(text)
     if (parsed.kind === 'blocked') {
       blocked = parsed.reason
-      const shape = parsed.reason === 'unsupported_schema' ? 'a newer format' : 'corrupt'
-      warnOnce('load:' + parsed.reason, 'prompt history is ' + shape + '; writes are disabled and the file is left untouched')
+      warnOnce('load:' + parsed.reason, 'prompt history is ' + BLOCK_DESCRIPTIONS[parsed.reason] + '; writes are disabled and the file is left untouched')
       return
     }
     entries = parsed.file.entries
@@ -242,19 +305,21 @@ export function createPromptHistory(options: PromptHistoryOptions): PromptHistor
     record(text: string): void {
       if (text.trim() === '') return
       const prompt = displayText(text)
-      void enqueue(async () => {
+      void enqueue(() => withLock(lockPath, async () => {
         await load()
         if (blocked !== undefined) return
         entries = upsertEntry(entries, prompt, now().toISOString(), options.cap())
         await write()
-      }).catch(() => {
+      })).catch(() => {
         warnOnce('write', 'prompt history could not be written; this session keeps it in memory only')
       })
     },
     clear(): Promise<number> {
-      return enqueue(async () => {
+      return enqueue(() => withLock(lockPath, async () => {
         await load()
-        if (blocked !== undefined) return 0
+        // A file that changed under the reader cannot be cleared safely, and
+        // reporting a successful clear of nothing would be worse than refusing.
+        if (blocked !== undefined) throw new Error('the file is ' + BLOCK_DESCRIPTIONS[blocked])
         const removed = entries.length
         const previous = entries
         entries = []
@@ -267,7 +332,7 @@ export function createPromptHistory(options: PromptHistoryOptions): PromptHistor
           throw error
         }
         return removed
-      })
+      }))
     },
     flush: () => chain,
   }

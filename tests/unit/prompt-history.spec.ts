@@ -1,4 +1,4 @@
-import { chmod, mkdtemp, readFile, stat, writeFile } from 'node:fs/promises'
+import { chmod, mkdtemp, readFile, stat, utimes, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -162,6 +162,45 @@ describe('createPromptHistory', () => {
     first.record('from the first session')
     await first.flush()
     expect(await read()).toEqual(['from the first session', 'from the second session'])
+  })
+
+  it('serializes overlapping records from two stores', async () => {
+    const home = await scratchHome()
+    const first = createPromptHistory({ home, cap: () => DEFAULT_MAX_ENTRIES, now: () => new Date(AT(1)) })
+    const second = createPromptHistory({ home, cap: () => DEFAULT_MAX_ENTRIES, now: () => new Date(AT(2)) })
+    await Promise.all([first.flush(), second.flush()])
+    first.record('from the first session')
+    second.record('from the second session')
+    await Promise.all([first.flush(), second.flush()])
+    const texts = (JSON.parse(await readFile(historyPath(home), 'utf8')) as { entries: PromptEntry[] })
+      .entries.map(item => item.text)
+    expect([...texts].sort()).toEqual(['from the first session', 'from the second session'])
+    expect(await stat(historyPath(home) + '.lock').catch(() => undefined)).toBeUndefined()
+  })
+
+  it('refuses a clear when the file becomes a newer schema', async () => {
+    const home = await scratchHome()
+    const history = createPromptHistory({ home, cap: () => DEFAULT_MAX_ENTRIES })
+    history.record('one')
+    await history.flush()
+    const newer = JSON.stringify({ version: HISTORY_SCHEMA_VERSION + 1, updatedAt: AT(1), entries: [] })
+    await writeFile(historyPath(home), newer)
+    await expect(history.clear()).rejects.toThrow(/newer format/)
+    expect(history.blockedReason()).toBe('unsupported_schema')
+    expect(await readFile(historyPath(home), 'utf8')).toBe(newer)
+  })
+
+  it('takes over a lock left behind by a crash', async () => {
+    const home = await scratchHome()
+    const lock = historyPath(home) + '.lock'
+    await writeFile(lock, '')
+    const old = new Date(Date.now() - 60_000)
+    await utimes(lock, old, old)
+    const history = createPromptHistory({ home, cap: () => DEFAULT_MAX_ENTRIES, now: () => new Date(AT(1)) })
+    history.record('after the crash')
+    await history.flush()
+    expect(history.entries().map(item => item.text)).toEqual(['after the crash'])
+    expect(await stat(lock).catch(() => undefined)).toBeUndefined()
   })
 
   it('refuses a newer schema that appeared after startup', async () => {
