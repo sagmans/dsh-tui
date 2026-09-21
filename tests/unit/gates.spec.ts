@@ -159,6 +159,13 @@ describe('QuestionGate', () => {
     expect(gate.resolved).toBe(true)
   })
 
+  it('lets an abort cancel a question nobody answered', () => {
+    const gate = gateOver(single)
+    gate.cancel()
+    expect(gate.resolved).toBe(true)
+    expect(gate.handleKey(ENTER)).toBeUndefined()
+  })
+
   it('marks the cursor and the chosen rows in the card', () => {
     const gate = gateOver(single)
     gate.handleKey('1')

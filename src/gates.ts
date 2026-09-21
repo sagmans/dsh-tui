@@ -280,6 +280,17 @@ export class QuestionGate {
     return this.finished
   }
 
+  /**
+   * Stop a question whose caller is gone.
+   *
+   * WHY: an aborted call has no reader for the answer, and a live gate would
+   * otherwise keep the keyboard — and the borrowed editor — until someone
+   * typed into a call that had already ended.
+   */
+  cancel(): void {
+    this.finished = true
+  }
+
   private get current(): GateQuestion | undefined {
     return this.questions[this.index]
   }
