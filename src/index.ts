@@ -16,6 +16,7 @@ import {
   type SessionHistory,
   type StoredSession,
 } from './agent/history.ts'
+import { createPromptHistory } from './agent/prompt-history.ts'
 import { createPresetRoster, parsePresetArgument, type PresetRoster, type PresetSummary } from './agent/presets.ts'
 import { createToolPresenter } from './agent/present.ts'
 import { forkPoint, type ForkEvent } from './agent/fork.ts'
@@ -35,6 +36,7 @@ import type { ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
 import type { AskUserQuestionAnswer } from '@deepseek-ai/dsh-user-questions'
 import { ApprovalGate, QuestionGate, toGateQuestions, type GateAnswer } from './gates.ts'
 import { createCompletionProvider } from './input/completion.ts'
+import { ghostSuffix } from './input/ghost.ts'
 import { LOCAL_COMMANDS, classifySubmission, type Submission } from './input/submission.ts'
 import { createDeferredNotice } from './settings-notice.ts'
 import {
@@ -61,12 +63,15 @@ import { defaultSettings, readScope, settingsProblemMessage, toOverrides, TUI_SE
 import { pendingPrompts } from './queue.ts'
 import { renderThemeTable } from './theme-command.ts'
 import { KEYMAP_LAYERS, keymapLayer, renderKeymap } from './keys-command.ts'
+import { resetSequence } from './theme-tokens.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { formatTokens } from './tokens.ts'
 import { TranscriptModel } from './transcript.ts'
 import { WorkFold, describeTodos, planSelectedActive, planToggleLine, readPlanState, type PlanModeState } from './work.ts'
 import { WorkDock } from './ui/dock.ts'
 import { GateInputBar } from './ui/gate-input.ts'
+import type { GhostBrush } from './ui/editor.ts'
+import { HistoryPicker } from './ui/history-picker.ts'
 import { PromptBar } from './ui/prompt.ts'
 import { MarkdownRenderer } from './ui/markdown.ts'
 import { createMermaidTransform } from './ui/mermaid.ts'
@@ -109,6 +114,9 @@ const TITLE_CONCURRENCY = 4
 
 /** How often the running-state clock repaints while a turn is open. */
 const STATUS_TICK_MS = 1000
+
+/** Reverse video for the cell the cursor occupies, so a ghost keeps the cursor visible. */
+const GHOST_CURSOR_PREFIX = '\u001b[7m'
 
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -232,6 +240,10 @@ export function apply(ctx: Context, config: unknown): void {
   let prefixWindowMs = DEFAULT_PREFIX_WINDOW_S * MS_PER_SECOND
   /** Every action's keys in force; the settings document owns it and a press reads it live. */
   let keymap: Keymap = defaultKeymap()
+  /** Whether prompts are recorded and offered, and the cap on how many; the settings document owns all three. */
+  let historyEnabled = defaultSettings().history.enabled
+  let historyGhost = defaultSettings().history.ghost
+  let historyMaxEntries = defaultSettings().history.maxEntries
   /**
    * The chord between a prefix and the action that follows it.
    *
@@ -257,6 +269,9 @@ export function apply(ctx: Context, config: unknown): void {
     // Installed where the library reads it, so a remap lands on the next press
     // rather than at the next restart.
     installKeybindings(keymap)
+    historyEnabled = section.history.enabled
+    historyGhost = section.history.ghost
+    historyMaxEntries = section.history.maxEntries
     // A chord armed under the keymap the reader just replaced is not their chord.
     keyChord.disarm()
   }
@@ -288,7 +303,10 @@ export function apply(ctx: Context, config: unknown): void {
     try {
       scope = settingsCtx.settings.register(TUI_SETTINGS_NAMESPACE, TuiSettingsSchema)
     } catch (error) {
-      settingsNotice.post(settingsProblemMessage(error))
+      // Nothing registered means nothing to read, so the reader's switch cannot
+      // be confirmed: recording stays off rather than falling back to on.
+      historyEnabled = false
+      settingsNotice.post(settingsProblemMessage(error) + ' · prompt history stays off until the section parses')
       return
     }
     readSection = () => readScope(scope, message => settingsNotice.post(message))
@@ -304,6 +322,33 @@ export function apply(ctx: Context, config: unknown): void {
    */
   let presentScope: Agent | undefined
   const model = new TranscriptModel(createToolPresenter(ctx, () => presentScope))
+  /**
+   * The reader's prompt history: global across projects, recorded from every
+   * submitted line, and offered back as they type. Built before the bar so its
+   * first load cannot race the first suggestion.
+   */
+  const promptHistory = createPromptHistory({
+    cap: () => historyMaxEntries,
+    warn: message => {
+      model.notice(message)
+      tui.requestRender()
+    },
+  })
+  /**
+   * The dimmed completion drawn from recorded prompts.
+   *
+   * Colour is the affordance: with styling off the suggestion would be
+   * unreadable text the reader could still accept, which is worse than none.
+   * The cursor cell is also reversed so the cursor stays visible on the ghost.
+   */
+  const ghostBrush: GhostBrush = {
+    enabled: () => historyEnabled && historyGhost && theme.color && theme.visible('editor.ghost'),
+    suggestion: input => ghostSuffix({ entries: promptHistory.entries(), ...input }),
+    paint: (text, cell) => {
+      const styled = theme.style('editor.ghost', text)
+      return cell === 'cursor' ? GHOST_CURSOR_PREFIX + styled + resetSequence() : styled
+    },
+  }
   const work = new WorkFold()
   const modelSwitch = new ModelSwitch()
   const agentPresets = createPresetRoster(ctx)
@@ -371,7 +416,7 @@ export function apply(ctx: Context, config: unknown): void {
   // send the library submits on by default. A settings document read after this
   // point installs over it, which is why the bar reads the map per press.
   installKeybindings(keymap)
-  const editor = new GateInputBar(tui, theme.editor, () => keymap)
+  const editor = new GateInputBar(tui, theme.editor, () => keymap, ghostBrush)
   // Answers are written in the reader's own editor, which is why a question
   // borrows the bar instead of drawing a second one beside it.
   const promptBar = new PromptBar(editor)
@@ -488,7 +533,7 @@ export function apply(ctx: Context, config: unknown): void {
   /**
    * What each key the surface answers itself does; false hands the press back.
    *
-   * Keyed by the table's own ids, so a key added to {@link SURFACE_KEYS}
+   * Keyed by the table's own ids, so a key added to {@link SURFACE_ACTIONS}
    * without a handler here fails to compile rather than doing nothing.
    */
   const surfaceActions: Readonly<Record<SurfaceActionId, () => boolean>> = {
@@ -509,6 +554,10 @@ export function apply(ctx: Context, config: unknown): void {
     },
     effort: () => {
       void openEffortPicker()
+      return true
+    },
+    history: () => {
+      void openHistoryPicker()
       return true
     },
     back: () => {
@@ -680,6 +729,32 @@ export function apply(ctx: Context, config: unknown): void {
       tui.setFocus(null)
       tui.requestRender()
     })
+
+  /**
+   * Reverse search over recorded prompts, seeded with whatever is in the bar.
+   *
+   * A pick replaces the draft; a cancel leaves it exactly as it was, because the
+   * list was opened to look rather than to lose what is already typed.
+   */
+  const openHistoryPicker = async (): Promise<void> => {
+    if (!historyEnabled) {
+      model.notice('prompt history is disabled in ' + TUI_SETTINGS_NAMESPACE + ' settings')
+      tui.requestRender()
+      return
+    }
+    if (promptHistory.entries().length === 0) {
+      const blocked = promptHistory.blockedReason()
+      model.notice(blocked === undefined ? 'no prompt history yet' : 'prompt history is unavailable: ' + blocked)
+      tui.requestRender()
+      return
+    }
+    // The expanded text is what the reader wrote; a large paste sits in the bar
+    // as a marker, and seeding with it would filter out the prompt it came from.
+    const picked = await openPicker(new HistoryPicker(() => promptHistory.entries(), editor.getExpandedText(), () => keymap))
+    if (picked === undefined) return
+    editor.setText(picked)
+    tui.requestRender()
+  }
 
   /** The roster as the picker paints it, refreshed when the picker opens. */
   let presetRows: readonly PresetSummary[] = []
@@ -1530,6 +1605,48 @@ export function apply(ctx: Context, config: unknown): void {
     })
   }
 
+  /** Show where history is kept, or forget it; the file is global to this machine. */
+  const runHistoryCommand = (argument: string): void => {
+    // The line that asked for this is recorded before the command runs, but that
+    // write rides the store's queue; waiting for it lets the count describe the
+    // file the reader has, not the state before their own line landed.
+    void promptHistory.flush().then(() => {
+      if (argument === '') {
+        const count = promptHistory.entries().length
+        const blocked = promptHistory.blockedReason()
+        model.notice([
+          count + (count === 1 ? ' prompt recorded' : ' prompts recorded'),
+          promptHistory.path(),
+          blocked === undefined ? undefined : 'writes disabled: ' + blocked,
+        ].filter(part => part !== undefined).join(' · '))
+        tui.requestRender()
+        return
+      }
+      if (argument !== 'clear') {
+        model.notice('usage: /history shows where history is kept · /history clear forgets every prompt')
+        tui.requestRender()
+        return
+      }
+      // A refused write cannot remove anything, so saying "forgot 0 prompts"
+      // would describe a successful clear the file never had.
+      const blocked = promptHistory.blockedReason()
+      if (blocked !== undefined) {
+        model.notice('prompt history is unavailable: ' + blocked)
+        tui.requestRender()
+        return
+      }
+      return promptHistory.clear().then(removed => {
+        model.notice('forgot ' + removed + (removed === 1 ? ' prompt' : ' prompts'))
+        tui.requestRender()
+      })
+    }).catch(error => {
+      // The store keeps what the file still holds, so the reader is told the
+      // clear failed rather than being shown a count that never landed.
+      model.notice('could not clear prompt history: ' + (error instanceof Error ? error.message : String(error)))
+      tui.requestRender()
+    })
+  }
+
   /**
    * Carry out one classified line, wherever it was asked for.
    *
@@ -1586,6 +1703,9 @@ export function apply(ctx: Context, config: unknown): void {
       }
       case 'copy':
         runCopyCommand()
+        return
+      case 'history':
+        runHistoryCommand(submission.argument)
         return
       case 'status': {
         const facts = statusFacts()
@@ -1647,7 +1767,15 @@ export function apply(ctx: Context, config: unknown): void {
     }
   }
 
-  editor.onSubmit = text => runSubmission(classifySubmission(text))
+  editor.onSubmit = text => {
+    const submission = classifySubmission(text)
+    if (submission.kind === 'empty') return
+    // The library's own history feeds the up/down keys; the store below feeds
+    // ghost completion and reverse search, and is global rather than per-session.
+    editor.addToHistory(text)
+    if (historyEnabled) promptHistory.record(text)
+    runSubmission(submission)
+  }
 
   disposers.push(ctx.on('session/event', (session, event) => {
     // The surface state — activity, timer, title, bell, job board — belongs to

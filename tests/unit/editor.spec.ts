@@ -11,7 +11,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { defaultKeymap, resolveKeymap, type Keymap } from '@/input/actions.ts'
 import { installKeybindings } from '@/input/keymap.ts'
 import { createTheme } from '@/theme.ts'
-import { BoxedEditor } from '@/ui/editor.ts'
+import { BoxedEditor, type GhostBrush } from '@/ui/editor.ts'
 
 /** The width every frame assertion is drawn at, so one row is one readable string. */
 const WIDTH = 30
@@ -349,5 +349,113 @@ describe('the prompt keys', () => {
     instance.handleInput('\u001b\r')
     expect(instance.getText()).toBe('hello\n')
     expect(sent).toEqual([])
+  })
+})
+
+describe('prompt-history ghost completion', () => {
+  /** A brush a test can point at any suggestion; paint is identity so text is readable. */
+  const brush = (overrides: Partial<GhostBrush> = {}): GhostBrush => ({
+    enabled: () => true,
+    suggestion: input => (input.text === 'fix ' ? 'the parser bug' : undefined),
+    paint: text => text,
+    ...overrides,
+  })
+
+  const ghosted = (input: GhostBrush = brush()): BoxedEditor => {
+    const instance = new BoxedEditor(surface(), createTheme('none').editor, defaultKeymap, input)
+    instance.focused = true
+    instance.setText('fix ')
+    return instance
+  }
+
+  it('draws the offered suffix inside the frame at the full width', () => {
+    const instance = ghosted()
+    const lines = instance.render(WIDTH)
+    expect(lines.some(line => line.includes('the parser bug'))).toBe(true)
+    for (const line of lines) expect(visibleWidth(line)).toBe(WIDTH)
+  })
+
+  it('keeps the hardware cursor at the end of what was typed', () => {
+    const instance = ghosted()
+    const row = instance.render(WIDTH).find(line => line.includes('the parser bug'))!
+    expect(row.indexOf(CURSOR_MARKER)).toBeLessThan(row.indexOf('the parser bug'))
+  })
+
+  it('draws nothing while a gate owns the bar', () => {
+    const instance = ghosted()
+    instance.disableSubmit = true
+    expect(instance.render(WIDTH).some(line => line.includes('the parser bug'))).toBe(false)
+  })
+
+  it('draws nothing when the brush is disabled', () => {
+    const instance = ghosted(brush({ enabled: () => false }))
+    expect(instance.render(WIDTH).some(line => line.includes('the parser bug'))).toBe(false)
+  })
+
+  it('draws nothing while the cursor sits mid-text', () => {
+    const instance = ghosted()
+    instance.handleInput('\u001b[D')
+    expect(instance.render(WIDTH).some(line => line.includes('the parser bug'))).toBe(false)
+  })
+
+  it('accepts the whole suffix on Ctrl+E', () => {
+    const instance = ghosted()
+    instance.handleInput('\u0005')
+    expect(instance.getText()).toBe('fix the parser bug')
+  })
+
+  it('accepts one word on the word-right key', () => {
+    const instance = ghosted()
+    instance.handleInput('\u001bf')
+    expect(instance.getText()).toBe('fix the')
+  })
+
+  it('leaves Ctrl+E its line-end meaning when there is no ghost', () => {
+    const instance = editor()
+    instance.setText('hello')
+    instance.handleInput('\u001b[D')
+    instance.handleInput('\u0005')
+    expect(instance.getCursor().col).toBe(5)
+  })
+
+  it('spells out a suggestion carrying control sequences instead of drawing them', () => {
+    const instance = ghosted(brush({ suggestion: () => 'x\u001b[2Jy' }))
+    const rows = instance.render(WIDTH)
+    expect(rows.some(row => row.includes('\u001b[2J'))).toBe(false)
+    expect(rows.some(row => row.includes('\\x1B[2Jy'))).toBe(true)
+  })
+
+  it('accepts the spelled-out suggestion rather than the sequence', () => {
+    const instance = ghosted(brush({ suggestion: () => 'x\u001b[2Jy' }))
+    instance.handleInput('\u0005')
+    expect(instance.getText()).toBe('fix x\\x1B[2Jy')
+  })
+
+  it('matches a suggestion against the expanded text of a large paste', () => {
+    const pasted = 'p'.repeat(1001)
+    let seen = ''
+    const instance = new BoxedEditor(surface(), createTheme('none').editor, defaultKeymap, brush({
+      suggestion: input => {
+        seen = input.text
+        return undefined
+      },
+    }))
+    instance.focused = true
+    instance.handleInput('\u001b[200~' + pasted + '\u001b[201~')
+    instance.render(WIDTH)
+    expect(seen).toBe(pasted)
+  })
+
+  it('leaves the row alone when a wide grapheme cannot fit the freed cell', () => {
+    const theme = createTheme('truecolor')
+    const painted = new BoxedEditor(surface(), theme.editor, defaultKeymap, {
+      enabled: () => true,
+      suggestion: () => '界 ',
+      paint: (text, cell) => (cell === 'cursor' ? '\u001b[7m' : '') + theme.style('editor.ghost', text) + '\u001b[0m',
+    })
+    painted.setText('a'.repeat(26))
+    const plain = new BoxedEditor(surface(), theme.editor)
+    plain.setText('a'.repeat(26))
+    expect(painted.render(WIDTH)).toEqual(plain.render(WIDTH))
   })
 })

@@ -19,6 +19,7 @@ describe('the dsh-tui settings section', () => {
       prefixes: ['ctrl+x'],
       prefixWindow: 2,
       keymap: defaultKeymap(),
+      history: { enabled: true, ghost: true, maxEntries: 2000 },
     })
   })
 
@@ -61,6 +62,22 @@ describe('the dsh-tui settings section', () => {
     expect(() => parseSettings({ prefixWindow: 600 })).toThrow()
   })
 
+  it('records prompts by default and lets the reader narrow or stop it', () => {
+    expect(parseSettings({}).history).toEqual({ enabled: true, ghost: true, maxEntries: 2000 })
+    expect(parseSettings({ history: { ghost: false } }).history).toEqual({ enabled: true, ghost: false, maxEntries: 2000 })
+    expect(parseSettings({ history: { enabled: false } }).history.enabled).toBe(false)
+    expect(parseSettings({ history: { maxEntries: 50 } }).history.maxEntries).toBe(50)
+  })
+
+  it('rejects a history cap outside what the store can hold', () => {
+    expect(() => parseSettings({ history: { maxEntries: 0 } })).toThrow()
+    expect(() => parseSettings({ history: { maxEntries: 20001 } })).toThrow()
+  })
+
+  it('rejects an unknown history key so a typo fails loudly', () => {
+    expect(() => parseSettings({ history: { ghosting: true } })).toThrow(/history/)
+  })
+
   it('rejects an unknown section key so a typo fails loudly', () => {
     expect(() => parseSettings({ subcall: 'inline' })).toThrow(/subcall/)
   })
@@ -90,8 +107,29 @@ describe('the dsh-tui settings section', () => {
       prefixes: ['ctrl+x'],
       prefixWindow: 2,
       keymap: defaultKeymap(),
+      history: { enabled: true, ghost: true, maxEntries: 2000 },
     })
     expect(problems[0]).toContain('transcript.reasoning.bdy')
+  })
+
+  it('keeps an explicit history opt-out when another key is refused', () => {
+    const problems: string[] = []
+    const settings = readScope({
+      get: () => ({ history: { enabled: false }, tokens: { 'transcript.reasoning.bdy': { fg: '#fff' } } }),
+    }, message => problems.push(message))
+    expect(settings.history.enabled).toBe(false)
+    expect(settings.history.ghost).toBe(true)
+    expect(problems).toHaveLength(1)
+  })
+
+  it('refuses to record when the history switch itself cannot be read', () => {
+    const settings = readScope({ get: () => ({ history: { enabled: 'no' } }) }, () => {})
+    expect(settings.history.enabled).toBe(false)
+  })
+
+  it('refuses to record when the section cannot be read at all', () => {
+    const settings = readScope({ get: () => { throw new Error('unreadable') } }, () => {})
+    expect(settings.history.enabled).toBe(false)
   })
 
   it('accepts hex, a palette name, and an index', () => {

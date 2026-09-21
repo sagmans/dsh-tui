@@ -208,6 +208,7 @@ export const TUI_TOKENS = [
   'editor.border',
   'editor.queued',
   'editor.queued.more',
+  'editor.ghost',
   'editor.selectList.selectedPrefix',
   'editor.selectList.selectedText',
   'editor.selectList.description',
@@ -386,6 +387,9 @@ export const DEFAULT_TOKENS: Readonly<Record<TuiToken, StyleSpec>> = {
   // what makes queued text read as not-yet-sent rather than as being typed.
   'editor.queued': { dim: true, italic: true },
   'editor.queued.more': muted,
+  // Faint only: the ghost is a suggestion, and a named colour would drop the
+  // faint that makes it read as not-yet-typed.
+  'editor.ghost': { dim: true },
   'editor.selectList.selectedPrefix': { fg: 'accent' },
   'editor.selectList.selectedText': { bold: true },
   'editor.selectList.description': muted,

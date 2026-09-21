@@ -1,15 +1,19 @@
 import {
   Editor,
+  getKeybindings,
   isKittyProtocolActive,
   matchesKey,
   stripTerminalSequences,
+  visibleWidth,
   type EditorTheme,
   type TUI,
   type TuiMouseEvent,
   type TuiMouseEventResult,
 } from '@earendil-works/pi-tui'
 import { ENTER_KEY, defaultKeymap, type Keymap } from '../input/actions.ts'
+import { ghostDisplayLine, ghostGraphemes, isCursorAtTextEnd, nextGhostWord, type EditorCursor } from '../input/ghost.ts'
 import { promptKeys } from '../input/keymap.ts'
+import { displayText } from '../text.ts'
 import { FRAME_COLUMNS, FRAME_GLYPHS, MIN_BOX_WIDTH, PADDING_X } from './frame.ts'
 
 /**
@@ -48,6 +52,43 @@ const KITTY_ALT_ENTER = '\u001b[13;3u'
 const KITTY_CTRL_J = '\u001b[106;5u'
 
 /**
+ * The cell the base editor draws for a cursor parked past the last character.
+ *
+ * Ghost text takes that cell over: the base offers no seam for "style the text
+ * after the cursor", so one paint pass finds the cell it drew and replaces the
+ * padding after it. The cell looks the same when the cursor sits over a typed
+ * space, which is why a caller also confirms the cursor is past the last
+ * character before treating the sequence as padding.
+ */
+const CURSOR_AT_END = '\u001b[7m \u001b[0m'
+
+/** Which run of a ghost is being drawn: the cursor cell, or the text after it. */
+export type GhostCell = 'cursor' | 'rest'
+
+/** What the bar knows when it asks for a suggestion. */
+export interface GhostRequest {
+  readonly text: string
+  readonly lines: readonly string[]
+  readonly cursor: EditorCursor
+}
+
+/**
+ * The recorded-prompt suggestion the bar offers, and how to draw it.
+ *
+ * Kept as a collaborator rather than built in: the editor owns where the text
+ * goes, while the surface owns where the entries come from and which shade they
+ * are drawn in, so neither has to know the other's world.
+ */
+export interface GhostBrush {
+  /** Whether the affordance may draw at all; colour and settings decide this. */
+  enabled(): boolean
+  /** The suffix to offer after the typed text, or undefined for none. */
+  suggestion(input: GhostRequest): string | undefined
+  /** Paint one run of the suffix; '' leaves the run undrawn. */
+  paint(text: string, cell: GhostCell): string
+}
+
+/**
  * The input bar drawn as a box, with its completion menu above it.
  *
  * The editor already draws the two rules and pads every row to the width it is
@@ -63,7 +104,12 @@ export class BoxedEditor extends Editor {
   /** Whether the last render drew a frame, which is what a click is mapped through. */
   private boxed = false
 
-  constructor(tui: TUI, theme: EditorTheme, private readonly keymap: () => Keymap = defaultKeymap) {
+  constructor(
+    tui: TUI,
+    theme: EditorTheme,
+    private readonly keymap: () => Keymap = defaultKeymap,
+    private readonly ghost?: GhostBrush,
+  ) {
     super(tui, theme, { paddingX: PADDING_X })
   }
 
@@ -81,6 +127,7 @@ export class BoxedEditor extends Editor {
       super.handleInput(data)
       return
     }
+    if (this.acceptGhost(data)) return
     const keys = promptKeys(this.keymap())
     // A bare line feed is a line break in the base class whatever the map says,
     // so a reader who moved the line break off ctrl+j and sends with it would
@@ -127,14 +174,86 @@ export class BoxedEditor extends Editor {
     return row
   }
 
+  /** The suggestion to draw this paint, or undefined when the brush offers none. */
+  private currentGhostSuffix(): string | undefined {
+    const brush = this.ghost
+    if (brush === undefined || !brush.enabled()) return undefined
+    const lines = this.getLines()
+    const cursor = this.getCursor()
+    // A cursor parked over a typed space draws the same cell as one at the very
+    // end, so the position has to be confirmed before a brush is asked at all.
+    if (!isCursorAtTextEnd({ lines, cursor })) return undefined
+    // The brush is a collaborator this class does not own, and its answer is
+    // both drawn and inserted: a control sequence would reach the terminal or
+    // the bar itself. The store refuses them too, so this only has to hold for
+    // any other brush. The expanded text is what was actually written; a large
+    // paste is stored as a marker and would otherwise match nothing.
+    const suffix = brush.suggestion({ text: this.getExpandedText(), lines, cursor })
+    return suffix === undefined ? undefined : displayText(suffix)
+  }
+
+  /**
+   * Replace the end-of-text cursor cell with the offered suffix.
+   *
+   * The base draws the cursor as one reverse-video cell and pads the rest of the
+   * row; the suffix takes that cell plus the padding after it, so the row keeps
+   * exactly its width and the cursor stays where the reader is typing.
+   */
+  private ghostRow(row: string, suffix: string | undefined): string {
+    const brush = this.ghost
+    if (brush === undefined || suffix === undefined) return row
+    const cursorAt = row.indexOf(CURSOR_AT_END)
+    if (cursorAt < 0) return row
+    const before = row.slice(0, cursorAt)
+    const pad = visibleWidth(row.slice(cursorAt + CURSOR_AT_END.length))
+    // The freed cursor cell is one more column the suffix may fill.
+    const room = pad + 1
+    // A width-aware cut can split a wide grapheme or return the escape that
+    // closed a style, so the fit is measured one grapheme at a time; when even
+    // the first one is too wide, the row keeps the cursor the base drew.
+    let drawn = ''
+    let used = 0
+    for (const grapheme of ghostGraphemes(ghostDisplayLine(suffix))) {
+      const width = visibleWidth(grapheme)
+      if (used + width > room) break
+      drawn += grapheme
+      used += width
+    }
+    if (drawn === '') return row
+    const [first = '', ...rest] = ghostGraphemes(drawn)
+    const spaces = ' '.repeat(Math.max(0, room - used))
+    return before + brush.paint(first, 'cursor') + brush.paint(rest.join(''), 'rest') + spaces
+  }
+
+  /**
+   * Take a ghost-accepting key before the base sees it, so the key returns to
+   * its own meaning the moment nothing is offered.
+   */
+  private acceptGhost(data: string): boolean {
+    const suffix = this.currentGhostSuffix()
+    if (suffix === undefined) return false
+    if (getKeybindings().matches(data, 'tui.editor.cursorWordRight')) {
+      const word = nextGhostWord(suffix)
+      if (word === undefined) return false
+      this.insertTextAtCursor(word)
+      this.tui.requestRender()
+      return true
+    }
+    if (!matchesKey(data, 'ctrl+e')) return false
+    this.insertTextAtCursor(suffix)
+    this.tui.requestRender()
+    return true
+  }
+
   override render(width: number): string[] {
     const side = this.borderColor(FRAME_GLYPHS.side)
     // A frame narrower than its own furniture would eat the text it exists to
     // hold, and a hidden border token asks for no frame at all: both cases keep
     // the plain rules rather than reserve columns for what nobody can see.
+    const ghost = this.disableSubmit ? undefined : this.currentGhostSuffix()
     if (width < MIN_BOX_WIDTH || side === '') {
       this.boxed = false
-      return super.render(width).map(row => this.decorateText(row))
+      return super.render(width).map(row => this.decorateText(this.ghostRow(row, ghost)))
     }
     const rows = super.render(width - FRAME_COLUMNS)
     const closing = rows.findIndex(row => row.includes(CLOSING_TAG))
@@ -149,7 +268,7 @@ export class BoxedEditor extends Editor {
     // The menu keeps the page's own width; only its rows moved above the box.
     const lines = menu.map(row => row + ' '.repeat(FRAME_COLUMNS))
     lines.push(this.edge(FRAME_GLYPHS.topLeft, FRAME_GLYPHS.topRight, rows[0] ?? ''))
-    for (const row of text) lines.push(`${side}${this.decorateText(row)}${side}`)
+    for (const row of text) lines.push(`${side}${this.decorateText(this.ghostRow(row, ghost))}${side}`)
     lines.push(this.edge(FRAME_GLYPHS.bottomLeft, FRAME_GLYPHS.bottomRight, rows[closing]!.replace(CLOSING_TAG, '')))
     return lines
   }

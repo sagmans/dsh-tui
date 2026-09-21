@@ -62,7 +62,8 @@ describe('the key tables', () => {
   it('names every key the surface answers, for help and for the refusal message', () => {
     const line = surfaceKeysLine(defaultKeymap())
     expect(line).toContain('ctrl+o tool detail')
-    expect(line.split(' · ')).toHaveLength(6)
+    expect(line).toContain('ctrl+r search prompt history')
+    expect(line.split(' · ')).toHaveLength(7)
   })
 
   it('reads the keys the reader wrote wherever help is asked for', () => {
