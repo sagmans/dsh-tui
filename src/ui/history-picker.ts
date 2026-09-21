@@ -1,17 +1,9 @@
 import type { PromptEntry } from '../agent/prompt-history.ts'
 import { hintKeys, moveHint, type Keymap } from '../input/actions.ts'
-import { ListPicker } from './picker.ts'
+import { ListPicker, singleLine } from './picker.ts'
 
 /** A prompt used exactly once reads as ordinary, so the count only starts at a repeat. */
 const REUSED = 2
-
-/** Runs of whitespace, including the newlines a multiline prompt folds on. */
-const WHITESPACE = /\s+/gu
-
-/** Fold a multiline prompt onto one row, so a label cannot push the card apart. */
-function singleLine(text: string): string {
-  return text.replace(WHITESPACE, ' ').trim()
-}
 
 /**
  * The reverse search over recorded prompts.

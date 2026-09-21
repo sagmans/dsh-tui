@@ -52,6 +52,20 @@ export interface PickerHints {
   readonly listed: () => string
 }
 
+/** Runs of whitespace, including the newlines a seeded draft or a paste can carry. */
+const WHITESPACE = /\s+/gu
+
+/**
+ * Fold a value onto one drawn row.
+ *
+ * A filter can be seeded from a multiline draft or typed through a paste, and a
+ * raw newline inside a row would push the frame's own accounting apart; the
+ * needle the list matches with stays untouched.
+ */
+export function singleLine(text: string): string {
+  return text.replace(WHITESPACE, ' ').trim()
+}
+
 const MINUTE_MS = 60_000
 const HOUR_MS = 60 * MINUTE_MS
 const DAY_MS = 24 * HOUR_MS
@@ -172,7 +186,7 @@ export class ListPicker<Row> {
       })),
       above: start,
       below: Math.max(0, rows.length - start - window.length),
-      filter: this.filter,
+      filter: singleLine(this.filter),
       hint: rows.length === 0 ? this.hints.empty() : this.hints.listed(),
     }
   }

@@ -24,6 +24,12 @@ describe('HistoryPicker', () => {
     expect(card.rows[0]?.label).toBe('first line second line')
   })
 
+  it('folds a multiline draft on the card without losing the match', () => {
+    const instance = picker([entry('one\ntwo')], 'one\ntwo')
+    expect(instance.visible().map(item => item.text)).toEqual(['one\ntwo'])
+    expect(instance.card().filter).toBe('one two')
+  })
+
   it('counts how often a prompt was reused', () => {
     expect(picker([entry('repeat', 3)]).card().rows[0]?.description).toBe('3 uses')
   })
