@@ -383,10 +383,15 @@ export function resolveKeymap(overrides: KeymapOverrides): Keymap {
   return { effective, written }
 }
 
-/** The map as it reads when the reader has written nothing. */
+/** The map as it reads when the reader has written nothing, built once. */
 export function defaultKeymap(): Keymap {
-  return resolveKeymap({})
+  // Read on every press by components that outlive a settings edit, so the
+  // shipped map is resolved once rather than a row at a time on each key.
+  shippedMap ??= resolveKeymap({})
+  return shippedMap
 }
+
+let shippedMap: Keymap | undefined
 
 const WINNING_LAYERS: readonly ActionLayer[] = ['chord', 'surface']
 

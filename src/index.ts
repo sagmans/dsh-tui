@@ -60,6 +60,7 @@ import { detectColourMode, type ColourMode } from './theme-capability.ts'
 import { defaultSettings, readScope, settingsProblemMessage, toOverrides, TUI_SETTINGS_NAMESPACE, TuiSettingsSchema, type MermaidMode, type TuiSettings } from './theme-settings.ts'
 import { pendingPrompts } from './queue.ts'
 import { renderThemeTable } from './theme-command.ts'
+import { KEYMAP_LAYERS, keymapLayer, renderKeymap } from './keys-command.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { formatTokens } from './tokens.ts'
 import { TranscriptModel } from './transcript.ts'
@@ -1541,6 +1542,16 @@ export function apply(ctx: Context, config: unknown): void {
         for (const line of renderThemeTable(toOverrides(readSection()))) model.notice(line)
         tui.requestRender()
         return
+      case 'keys': {
+        const layer = submission.argument === '' ? undefined : keymapLayer(submission.argument)
+        if (submission.argument !== '' && layer === undefined) {
+          model.notice(`unknown layer "${submission.argument}" · ${KEYMAP_LAYERS.join(' ')}`)
+        } else {
+          for (const line of renderKeymap(keymap, layer)) model.notice(line)
+        }
+        tui.requestRender()
+        return
+      }
       case 'copy':
         runCopyCommand()
         return
