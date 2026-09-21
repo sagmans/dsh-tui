@@ -26,6 +26,7 @@ const SHIPPED: Readonly<Record<string, readonly string[]>> = {
   'chord.model': ['m'],
   'chord.plan': ['p'],
   'chord.copy': ['y'],
+  'chord.editor': ['e'],
   'gate.allow': ['y'],
   'gate.reject': ['n'],
   'gate.cancel': ['escape'],

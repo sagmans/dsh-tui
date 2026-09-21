@@ -135,6 +135,7 @@ moves any of them — see [Keys](#keys).
 | Ctrl+X then L | open this session's stashed drafts |
 | Ctrl+X then M | open the model picker |
 | Ctrl+X then Y | copy the last answer to the clipboard |
+| Ctrl+X then E | edit the draft in `$VISUAL` (or `$EDITOR`) and take back what it saves |
 | `y` / `n` / Esc | allow once, reject, or cancel a pending approval |
 | digits / space / ↑↓ / Enter / Esc | answer a question: pick or toggle, confirm, or skip one; `0` answers with your own text in the input bar |
 | typing in any picker or question | narrow the rows by fragment (`glm53` finds `GLM-5.3`); backspace widens, `esc` or Ctrl+C leaves |
@@ -180,16 +181,18 @@ prefix alone — enough to say that a key is waiting, without reciting the map �
 and a key that finishes nothing is typed as usual rather than swallowed, so a
 prefix pressed by accident costs nothing; `/help` lists the chords, `m` for the
 model picker, `p` for plan mode, `y` for the last answer, `s` to stash the
-draft, and `l` for the stashes.
+draft, `l` for the stashes, and `e` for the draft in the reader's own editor.
 `keys.chord.prefix: alt+x` starts the chord with another key — or with a list of
 them, as so many ways in — and `prefixWindow: 0` waits for the next key instead
 of lapsing; every second key is a row of its own (`chord.model`, `chord.plan`,
-`chord.copy`, `chord.stash`, `chord.stashes`), so a chord can be respelled whole. A prefix that is not a modifier chord, that
+`chord.copy`, `chord.stash`, `chord.stashes`, `chord.editor`), so a chord can be
+respelled whole. A prefix that is not a modifier chord, that
 the surface or the prompt bar already answers (`ctrl+c`, `ctrl+s`), or that the
 terminal keeps (`ctrl+q`) is refused with the reason, and the shipped keymap
 stays in force. The chords themselves are the commands they stand for: `m`, `p`,
 `y`, `s`, and `l` ask the same dispatcher `/model`, `/plan`, `/copy`, `/stash`,
-and `/stash-list` do. Plan mode is
+and `/stash-list` do; `e` is the one chord with no command behind it, because it
+opens a program rather than running a line. Plan mode is
 the one pair that cannot share a name: `/plan` only enters, so the chord names
 `/plan off` instead when the agent is in plan mode — or is waiting for the turn
 boundary to become so — and reads that state from the plan package rather than
@@ -273,6 +276,32 @@ an entry left unflushed costs durability while a removed bank costs the draft. D
 Unicode bidi controls are stripped when a draft is stored and again when it is
 read, so a hand-edited bank cannot park a terminal escape or a reordering trick in
 the bar.
+
+## External editor
+
+`ctrl+x` then `e` hands the draft to the editor the environment already names:
+`$VISUAL` first, then `$EDITOR`, split on whitespace with quotes grouping and
+nothing else special — no shell, no backslash escapes — so `code --wait` works
+and a quoted path stays one argument. This surface cannot
+draw an editor inside its own screen, so it gives the terminal up — the
+alternate screen leaves, the child runs on the same tty — and takes it back
+when the child exits; the frame is repainted whole, and the bar holds whatever
+was saved. Nothing is submitted: a draft written for later survives a detour
+through a full editor.
+
+No shell is involved: the configured line is split here and the program is
+spawned directly, because an environment value is data and a typo in it must not
+become a command. The scratch file is a fresh directory per handoff, mode `0700`
+with a `0600` file, removed when the editor leaves; the text read back is read
+through one handle that follows no link and accepts only a plain file, so a draft
+swapped for a link, a fifo, or a device is refused rather than followed, and it
+is stripped of control and bidi characters, because it is going into a live
+editor rather than being drawn as text. A child that exits non-zero is not a failure —
+an editor that refused to save has already said so, and what it did save is what
+the reader meant to keep. Nothing configured, a program that could not start, a
+save that cannot be read, and a draft past 1 MiB are notices that leave the bar
+as it was; the oversized draft is left on disk with its path, because a refusal
+must not also be a way to lose the work.
 
 ## Settings
 
@@ -561,6 +590,8 @@ The automated checks drive a real PTY, but they run on this machine's terminal. 
 | a second `dsh --profile tui` in the same directory | `/stash-list` says `no stashed drafts`, and the first terminal's bank is untouched |
 | `/quit`, then `dsh --profile tui --resume=<id>` | `/stash-list` still shows the draft that session parked |
 | hand-edit `$DSH_HOME/tui-stash/<key>.json` into invalid JSON, then `/stash-list` | the surface reports the quarantine path, starts empty, and leaves the moved file readable |
+| `ctrl+x` then `e` with `$VISUAL` set to your editor | the alternate screen gives way to that editor with the draft in it; saving returns to the same frame with what was saved in the bar, and nothing is submitted |
+| the same with `$VISUAL` and `$EDITOR` unset | the draft stays in the bar, and a notice names the variables to set |
 | `/quit`, Ctrl+C while idle, `kill -TERM <pid>` | the shell returns with cursor, echo, mouse, and title restored |
 
 ## Releasing
@@ -591,6 +622,7 @@ The workflow stores no npm token: the registry trusts `release.yml` on the `npm-
 - Tool text, model text, and file content are escaped before rendering, so a hostile result cannot inject terminal control sequences; the cost is that a literal tab shows as \x09. A stashed draft is stripped of control and bidi characters instead, because it is restored into a live editor rather than drawn as text.
 - Mermaid fences draw in assistant replies only, and only at the top level of one: a fence nested in a list, quoted inside another fence, or carried by a prompt, a thought, or a tool card stays source. Author `:::class` styling and diagram links are ignored — the renderer reports what each run is, and the theme decides how it looks.
 - Prompt history is global to this machine, not per project: `$DSH_HOME/prompt-history.json` holds every submitted line, deduplicated exactly, and a file this build cannot parse is left untouched with writes refused so a newer format is never overwritten. Every write re-reads the file under a lock shared by sessions, so a second session's prompts are folded in rather than overwritten, and a lock whose holder stopped is reclaimed or reported instead of guessed at; control characters are spelled out before a prompt is stored. A multiline suggestion draws its first line with `↵` marking the fold. `history.ghost: false` keeps reverse search without the suggestion, `history.enabled: false` stops recording and offering it, and `NO_COLOR`/`--no-color` suppresses the ghost because text the reader cannot see but could still accept is worse than none.
+- The editor handoff gives the whole terminal to `$VISUAL` (or `$EDITOR`) and waits for it: while the child owns the screen this surface draws nothing: a title from a turn in flight is written again when the screen comes back, a bell that falls in the gap is dropped rather than rung late, and a second `ctrl+x` then `e` is ignored until the first editor leaves. A host that unloads the surface during the handoff gives the terminal back while the child is still running, because only the child's own exit can end the wait. What the editor saved is read back only up to 1 MiB; a larger draft is left on disk with its path in the notice rather than loaded into the bar.
 
 ## License
 

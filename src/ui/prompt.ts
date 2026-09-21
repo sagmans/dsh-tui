@@ -34,6 +34,17 @@ export class PromptBar implements Component {
     return this.borrowed
   }
 
+  /**
+   * Replace the prompt waiting behind a borrowed bar.
+   *
+   * The bar holds someone else's prompt for as long as a gate answers in it, so
+   * a draft edited during that time belongs to the held prompt rather than to
+   * the answer it would otherwise be written into.
+   */
+  replaceHeld(text: string): void {
+    if (this.borrowed) this.held = text
+  }
+
   /** Give the editor back, with the prompt that was in it. */
   giveBack(): void {
     if (!this.borrowed) return

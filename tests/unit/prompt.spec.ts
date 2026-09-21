@@ -66,4 +66,21 @@ describe('the prompt bar a question borrows', () => {
     bar.giveBack()
     expect(editor.getText()).toBe('ask me later')
   })
+
+  it('holds an edit that lands while the gate has the bar', () => {
+    // The reader can be editing the draft in another program while an approval
+    // arrives, and that edit is theirs, not the answer being collected.
+    const { bar, editor } = barOf('the draft so far')
+    bar.borrow(() => editor.setText('an answer'))
+    bar.replaceHeld('edited outside')
+    expect(editor.getText()).toBe('an answer')
+    bar.giveBack()
+    expect(editor.getText()).toBe('edited outside')
+  })
+
+  it('leaves the bar alone when nothing has borrowed it', () => {
+    const { bar, editor } = barOf('the draft so far')
+    bar.replaceHeld('edited outside')
+    expect(editor.getText()).toBe('the draft so far')
+  })
 })

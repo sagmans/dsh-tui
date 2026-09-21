@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { displayText } from '@/text.ts'
+import { displayText, stripControlCharacters } from '@/text.ts'
 
 const ESCAPE = '\u001b'
 const CSI = '\u009b'
@@ -37,5 +37,24 @@ describe('displayText', () => {
 
   it('keeps a full escape sequence inert for the terminal', () => {
     expect(displayText(`${ESCAPE}]0;pwned\u0007`)).toBe('\\x1B]0;pwned\\x07')
+  })
+})
+
+describe('stripControlCharacters', () => {
+  it('leaves the characters a draft legitimately needs', () => {
+    expect(stripControlCharacters('plain \u00e9 \u4e2d\nsecond\tcolumn')).toBe('plain \u00e9 \u4e2d\nsecond\tcolumn')
+  })
+
+  it('removes the bytes that command a terminal from a restored draft', () => {
+    expect(stripControlCharacters(`a${ESCAPE}]0;pwned\u0007b`)).toBe('a]0;pwnedb')
+    expect(stripControlCharacters(`a${CSI}2Jb`)).toBe('a2Jb')
+  })
+
+  it('folds a CRLF draft into lines', () => {
+    expect(stripControlCharacters('one\r\ntwo')).toBe('one\ntwo')
+  })
+
+  it('removes the bidi overrides nobody can see', () => {
+    expect(stripControlCharacters('a\u202eb\u2066c')).toBe('abc')
   })
 })
