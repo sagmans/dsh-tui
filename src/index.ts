@@ -1608,25 +1608,30 @@ export function apply(ctx: Context, config: unknown): void {
    */
   /** Show where history is kept, or forget it; the file is global to this machine. */
   const runHistoryCommand = (argument: string): void => {
-    if (argument === '') {
-      const count = promptHistory.entries().length
-      const blocked = promptHistory.blockedReason()
-      model.notice([
-        count + (count === 1 ? ' prompt recorded' : ' prompts recorded'),
-        promptHistory.path(),
-        blocked === undefined ? undefined : 'writes disabled: ' + blocked,
-      ].filter(part => part !== undefined).join(' · '))
-      tui.requestRender()
-      return
-    }
-    if (argument !== 'clear') {
-      model.notice('usage: /history shows where history is kept · /history clear forgets every prompt')
-      tui.requestRender()
-      return
-    }
-    void promptHistory.clear().then(removed => {
-      model.notice('forgot ' + removed + (removed === 1 ? ' prompt' : ' prompts'))
-      tui.requestRender()
+    // The line that asked for this is recorded before the command runs, but that
+    // write rides the store's queue; waiting for it lets the count describe the
+    // file the reader has, not the state before their own line landed.
+    void promptHistory.flush().then(() => {
+      if (argument === '') {
+        const count = promptHistory.entries().length
+        const blocked = promptHistory.blockedReason()
+        model.notice([
+          count + (count === 1 ? ' prompt recorded' : ' prompts recorded'),
+          promptHistory.path(),
+          blocked === undefined ? undefined : 'writes disabled: ' + blocked,
+        ].filter(part => part !== undefined).join(' · '))
+        tui.requestRender()
+        return
+      }
+      if (argument !== 'clear') {
+        model.notice('usage: /history shows where history is kept · /history clear forgets every prompt')
+        tui.requestRender()
+        return
+      }
+      return promptHistory.clear().then(removed => {
+        model.notice('forgot ' + removed + (removed === 1 ? ' prompt' : ' prompts'))
+        tui.requestRender()
+      })
     })
   }
 
