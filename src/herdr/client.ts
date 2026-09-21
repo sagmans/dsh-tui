@@ -11,7 +11,6 @@ import { createConnection } from 'node:net'
 import {
   DEFAULT_ATTEMPTS,
   DEFAULT_TIMEOUT_MS,
-  EXIT_RELEASE_TIMEOUT_MS,
   HERDR_AGENT,
   HERDR_ENV_FLAG,
   HERDR_ENV_VAR,
@@ -53,8 +52,8 @@ export interface HerdrClient {
   reportMetadata(tokens: Readonly<Record<string, string | undefined>>): Promise<boolean>
   /** Stop accepting reports and drop the ones still waiting. */
   stop(): void
-  /** Wait until the transport owes nothing more, or the budget runs out. */
-  settle(timeoutMs?: number): Promise<void>
+  /** Wait until the transport has finished everything it took on. */
+  settle(): Promise<void>
 }
 
 interface WireRequest {
@@ -106,7 +105,9 @@ export function createHerdrClient(env: HerdrEnvironment = process.env, options: 
   }
 
   const deliver = async (request: WireRequest): Promise<boolean> =>
-    socketPath === undefined ? true : sendWithRetry(socketPath, request, attempts, timeoutMs)
+    socketPath === undefined
+      ? true
+      : sendWithRetry(socketPath, request, attempts, timeoutMs, () => closed)
 
   const pump = async (): Promise<void> => {
     if (pumping) return
@@ -172,25 +173,23 @@ export function createHerdrClient(env: HerdrEnvironment = process.env, options: 
       // Nothing still waiting is sent once the pane stops being an agent: Herdr
       // ignores the release of a pane nothing has claimed, so a report that
       // landed after the release would claim the row back for a process on its
-      // way out.
+      // way out. What is already on the wire is left to finish — the waiters
+      // hear about it when it does, not before.
       closed = true
       const discarded = queued
       queued = []
       for (const entry of discarded) entry.settle(false)
-      wake()
     },
-    async settle(timeoutMs = EXIT_RELEASE_TIMEOUT_MS) {
-      // Only what is already on the wire is waited for; the wait is bounded so
-      // a wedged socket cannot hold the process open instead of releasing.
+    async settle() {
+      // The wait ends when the transport itself is done, not when a timer says
+      // so: a report whose first attempt failed still has its retries to spend,
+      // and a release that ran between them would be answered as a pane with
+      // nothing to clear, leaving the row for that report to claim back. A
+      // report's own budget is what bounds this.
       if (!pumping) return
-      await Promise.race([
-        new Promise<void>(resolve => {
-          waiters.push(resolve)
-        }),
-        new Promise<void>(resolve => {
-          setTimeout(resolve, timeoutMs)
-        }),
-      ])
+      await new Promise<void>(resolve => {
+        waiters.push(resolve)
+      })
     },
   }
 }
@@ -223,9 +222,18 @@ export function socketEndpoint(path: string): string {
  * answers slowly, but always within the idle timeout, would otherwise hold the
  * queue open packet by packet for as long as it liked.
  */
-async function sendWithRetry(path: string, request: WireRequest, attempts: number, timeoutMs: number): Promise<boolean> {
+async function sendWithRetry(
+  path: string,
+  request: WireRequest,
+  attempts: number,
+  timeoutMs: number,
+  stopped: () => boolean,
+): Promise<boolean> {
   const deadline = Date.now() + timeoutMs
   for (let attempt = 0; attempt < attempts; attempt += 1) {
+    // A stopped transport does not try again: the pane is no longer an agent,
+    // and an attempt that landed after the release would claim the row back.
+    if (stopped()) return false
     const remaining = deadline - Date.now()
     if (remaining <= 0) return false
     if (await sendAttempt(path, request, remaining)) return true

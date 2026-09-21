@@ -84,6 +84,7 @@ export function createHerdrReporter(options: HerdrReporterOptions = {}): HerdrRe
   let released = false
   let retryTimer: ReturnType<typeof setTimeout> | undefined
   let retryAttempt = 0
+  let releasing: Promise<void> | undefined
 
   const owed = (): boolean =>
     (wantedState !== undefined && !stateSent) ||
@@ -214,15 +215,19 @@ export function createHerdrReporter(options: HerdrReporterOptions = {}): HerdrRe
       client.stop()
       release()
     },
-    async release() {
-      if (released) return
+    release() {
+      if (released) return Promise.resolve()
       // Reports already on the wire are waited for before the row goes back:
       // Herdr ignores the release of a pane nothing has claimed, so a report
       // that arrived after it would claim the row back with an older number.
-      // The synchronous release stays as the path an exit cannot skip.
-      client.stop()
-      await client.settle()
-      reporter.releaseSync()
+      // The synchronous release stays as the path an exit cannot skip. One
+      // promise is shared so two callers cannot release against each other.
+      releasing ??= (async () => {
+        client.stop()
+        await client.settle()
+        reporter.releaseSync()
+      })()
+      return releasing
     },
     registerExitRelease() {
       const listener = (): void => reporter.releaseSync()

@@ -239,16 +239,31 @@ describe('createHerdrClient', () => {
 
   it('settles after the report already on the wire', async () => {
     const herdr = await listen(() => undefined)
-    const client = createHerdrClient(env(herdr.path), { attempts: 1, timeoutMs: 60 })
+    const client = createHerdrClient(env(herdr.path), { attempts: 2, timeoutMs: 120 })
     const order: string[] = []
 
     const report = client.reportState({ state: 'working', message: undefined, seq: 1, sessionId: undefined })
       .then(() => order.push('report'))
-    const settled = client.settle(5_000).then(() => order.push('settle'))
+    const settled = client.settle().then(() => order.push('settle'))
     await Promise.all([report, settled])
 
     // The row cannot go back before the report it may yet claim it has landed.
     expect(order).toEqual(['report', 'settle'])
+  })
+
+  it('does not retry a report once the pane stops being an agent', async () => {
+    const herdr = await listen(() => undefined)
+    const client = createHerdrClient(env(herdr.path), { attempts: 4, timeoutMs: 80 })
+
+    const report = client.reportState({ state: 'idle', message: undefined, seq: 1, sessionId: undefined })
+    await new Promise(resolve => setTimeout(resolve, 5))
+    client.stop()
+
+    // The attempts the report had left belong to a pane that is still an agent;
+    // spending them after the release would claim the row back.
+    expect(await report).toBe(false)
+    await new Promise(resolve => setTimeout(resolve, 100))
+    expect(herdr.requests.length).toBe(1)
   })
 
   it('settles at once when the transport owes nothing', async () => {
@@ -256,7 +271,7 @@ describe('createHerdrClient', () => {
     const client = createHerdrClient(env(herdr.path), { attempts: 1, timeoutMs: 60 })
     const started = Date.now()
 
-    await client.settle(5_000)
+    await client.settle()
 
     expect(Date.now() - started).toBeLessThan(1_000)
   })

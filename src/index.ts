@@ -467,7 +467,10 @@ export function apply(ctx: Context, config: unknown): void {
   // A containing Herdr is told what this pane is doing; away from one the
   // reporter is inert, so the surface never depends on being multiplexed.
   const herdr = createHerdrReporter()
-  disposers.push(herdr.registerExitRelease())
+  // Kept out of the disposal list on purpose: the row is handed back before
+  // this stops guarding it, so a host that leaves during the release still
+  // releases synchronously.
+  const unregisterExit = herdr.registerExitRelease()
 
   restore.add(() => tui.stop())
   ctx.effect(() => () => {
@@ -476,12 +479,13 @@ export function apply(ctx: Context, config: unknown): void {
     // and one that never ran would leave a row that reads as a live agent. The
     // reports already on the wire are settled first, because Herdr ignores a
     // release for a pane nothing has claimed yet — the report that followed it
-    // would otherwise claim the row back. The wait cannot hold the process open
-    // past the release itself; the exit listener is disposed last, so a process
-    // that leaves during the wait still hands the row back synchronously.
-    void herdr.release()
+    // would otherwise claim the row back. The promise is returned so a host that
+    // waits for teardown waits for the row too, and the exit listener outlives
+    // the wait, so one that does not still hands the row back synchronously.
+    const released = herdr.release().catch(() => undefined)
     restore.restore()
     for (const dispose of disposers.reverse()) dispose()
+    return released.finally(unregisterExit)
   })
 
   tui.setLayoutRoot(new VStack([
