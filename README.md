@@ -457,7 +457,7 @@ The automated checks drive a real PTY, but they run on this machine's terminal. 
 | type the start of a prompt already recorded | the rest of the newest match follows the cursor in a faint shade; `ctrl+e` takes it whole, the word-right key takes one word, and both keys do their old job when nothing is offered |
 | `ctrl+r`, then a fragment | reverse search opens seeded with the bar's draft; `enter` puts a prompt back, `esc` keeps the draft |
 | `dsh-tui: { history: { ghost: false } }`, then type a known prefix | no suggestion is drawn, and `ctrl+r` still searches |
-| `/history clear`, then `/history` | the notice reports the count forgotten, and the second reports `1 prompt recorded` — the clear line is itself recorded |
+| `/history clear`, then `/history` | the notice reports the count forgotten, and the second reports `1 prompt recorded` — the check line is itself recorded |
 | `/model` on a configured profile | the picker lists only the configured providers' advertised models, heads itself with the route in force, and typing filters it while later rows stream in; `esc` or Ctrl+C leaves without changing the route, and `enter` chains into the route's reasoning efforts |
 | `/preset` on a fresh session | the picker lists four modes, marks the current one, and the switch survives a resume |
 | `/preset minimal` after a turn | refused, naming the reason; the session keeps the mode it composed with |
