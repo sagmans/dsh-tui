@@ -140,7 +140,7 @@ moves any of them — see [Keys](#keys).
 | digits / space / ↑↓ / Enter / Esc | answer a question: pick or toggle, confirm, or skip one; `0` answers with your own text in the input bar |
 | typing in any picker or question | narrow the rows by fragment (`glm53` finds `GLM-5.3`); backspace widens, `esc` or Ctrl+C leaves |
 | `/` then Tab | complete commands, including every command this session registered |
-| `@` or a path then Tab | complete workspace file references |
+| `@` | open the workspace file menu, narrowed as you type; a path then Tab still completes a file reference |
 | `ctrl+shift+f` | search the transcript (`enter` next, `shift+enter` previous, `esc` close) |
 | `home` / `end` | jump to the start or the end of the transcript |
 | `ctrl+down` | jump to the next prompt |
@@ -175,6 +175,8 @@ moves any of them — see [Keys](#keys).
 | `/stash-drop [index\|id]` | delete a stashed draft without using it |
 | `/stash-clear` | delete every draft stashed in this session, after a confirmation |
 | `/quit` | leave and print the resume command |
+
+Typing `@` opens this workspace's files above the editor, ranked as the fragment is typed the way a fuzzy finder ranks a path list: `@edtr` reaches `src/ui/editor.ts` without spelling the separators, a directory offers itself with a trailing slash so typing continues into it, and a path holding a space is quoted. The rows are what git tracks or would add, with ignored paths left out, so a suggestion never names build output or a secret the repository deliberately ignores; a tree git does not own is walked instead, skipping `node_modules`, `.git`, and the rest of the build litter. A path typed from the working directory still completes on Tab as before.
 
 `Ctrl+X` starts a chord. For the next two seconds the footer leads with the
 prefix alone — enough to say that a key is waiting, without reciting the map —
