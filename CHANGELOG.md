@@ -8,6 +8,14 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+### Changed
+
+- A prompt stash belongs to the session that parked it rather than to the
+  working directory: a second terminal in the same checkout no longer sees or
+  clears the first one's drafts, and resuming a session finds its own. The bank
+  key moved to `v2`, so directory-scoped banks written by 0.4.0 are left where
+  they are and are not read.
+
 ## [0.4.0] - 2026-09-21
 
 ### Added
