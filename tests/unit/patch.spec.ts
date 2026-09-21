@@ -52,6 +52,7 @@ const PRESET_SUPPLIED_ROWS = [
 const INSERTED_ROWS = [
   ['tui-startup', '@sagmans/dsh-tui/startup'],
   ['tui', '@sagmans/dsh-tui'],
+  ['tui-todo-guard', '@sagmans/dsh-tui/todo-guard'],
   ['agent-presets', '@deepseek-ai/dsh-agent-presets'],
   ['subagent-model-selection-settings', '@deepseek-ai/dsh-tool-subagent/model-selection-settings'],
   ['cordis-host-runner', '@deepseek-ai/dsh-cordis-host-runner'],

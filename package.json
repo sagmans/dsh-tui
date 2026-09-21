@@ -24,6 +24,10 @@
       "types": "./lib/startup.d.ts",
       "default": "./lib/startup.js"
     },
+    "./todo-guard": {
+      "types": "./lib/todo-guard.d.ts",
+      "default": "./lib/todo-guard.js"
+    },
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },
