@@ -2,7 +2,7 @@
 
 Interactive terminal (TUI) surface for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): use `dsh` in a terminal instead of a browser.
 
-Status: **v1 feature-complete; published on npm as `@sagmans/dsh-tui`.** The surface owns the alternate screen, streams assistant text as markdown, renders every tool's own card, answers approvals and questions, restores and names stored conversations, switches model mid-session, runs any of the four shipped agent modes and switches between them before a session's first turn, reads a child agent's conversation in place, keeps the goal, plan mode, todo list, delegations, and background jobs above the editor with a status line below it, nudges an agent whose plan has aged without an update, and hands the terminal back on every graceful exit. Publication is tag-driven with GitHub OIDC provenance and no stored npm token; see [RELEASE.md](RELEASE.md).
+Status: **v1 feature-complete; published on npm as `@sagmans/dsh-tui`.** The surface owns the alternate screen, streams assistant text as markdown, renders every tool's own card, answers approvals and questions, restores and names stored conversations, switches model mid-session, runs any of the four shipped agent modes and switches between them before a session's first turn, reads a child agent's conversation in place, keeps the goal, plan mode, todo list, delegations, and background jobs above the editor with a status line below it, nudges an agent whose plan has aged without an update, parks and restores prompt drafts per working directory, and hands the terminal back on every graceful exit. Publication is tag-driven with GitHub OIDC provenance and no stored npm token; see [RELEASE.md](RELEASE.md).
 
 ## Install
 
@@ -131,6 +131,8 @@ moves any of them — see [Keys](#keys).
 | Shift+Tab | expand or fold the reasoning behind an answer: folded, the row names itself, its token count, and the key; opened, it adds the thought |
 | Ctrl+T | pick the reasoning effort for the next step |
 | Ctrl+R | reverse-search recorded prompts: the list opens filtered by whatever is in the bar, `enter` puts one back, `esc` keeps the draft |
+| Ctrl+X then S | stash the current draft |
+| Ctrl+X then L | open this directory's stashed drafts |
 | Ctrl+X then M | open the model picker |
 | Ctrl+X then Y | copy the last answer to the clipboard |
 | `y` / `n` / Esc | allow once, reject, or cancel a pending approval |
@@ -165,21 +167,29 @@ moves any of them — see [Keys](#keys).
 | `/history clear` | forget every recorded prompt, reporting how many went |
 | `/theme` | list every styled element and the value in force |
 | `/keys` | list every action and the keys in force; `/keys <layer>` narrows it (see [Keys](#keys)) |
+| `/stash [draft]` | park the current draft, or the text given after the command |
+| `/stash-pop [index\|id]` | put a stashed draft into the editor and remove it (newest by default) |
+| `/stash-apply [index\|id]` | put a stashed draft into the editor and keep it |
+| `/stash-list` | pick from this directory's stashed drafts; `enter` pops the marked one |
+| `/stash-drop [index\|id]` | delete a stashed draft without using it |
+| `/stash-clear` | delete every stashed draft for this directory, after a confirmation |
 | `/quit` | leave and print the resume command |
 
 `Ctrl+X` starts a chord. For the next two seconds the footer leads with the
 prefix alone — enough to say that a key is waiting, without reciting the map —
 and a key that finishes nothing is typed as usual rather than swallowed, so a
 prefix pressed by accident costs nothing; `/help` lists the chords, `m` for the
-model picker, `p` for plan mode, and `y` for the last answer.
+model picker, `p` for plan mode, `y` for the last answer, `s` to stash the
+draft, and `l` for the stashes.
 `keys.chord.prefix: alt+x` starts the chord with another key — or with a list of
 them, as so many ways in — and `prefixWindow: 0` waits for the next key instead
 of lapsing; every second key is a row of its own (`chord.model`, `chord.plan`,
-`chord.copy`), so a chord can be respelled whole. A prefix that is not a modifier chord, that
+`chord.copy`, `chord.stash`, `chord.stashes`), so a chord can be respelled whole. A prefix that is not a modifier chord, that
 the surface or the prompt bar already answers (`ctrl+c`, `ctrl+s`), or that the
 terminal keeps (`ctrl+q`) is refused with the reason, and the shipped keymap
 stays in force. The chords themselves are the commands they stand for: `m`, `p`,
-and `y` ask the same dispatcher `/model`, `/plan`, and `/copy` do. Plan mode is
+`y`, `s`, and `l` ask the same dispatcher `/model`, `/plan`, `/copy`, `/stash`,
+and `/stash-list` do. Plan mode is
 the one pair that cannot share a name: `/plan` only enters, so the chord names
 `/plan off` instead when the agent is in plan mode — or is waiting for the turn
 boundary to become so — and reads that state from the plan package rather than
@@ -204,6 +214,31 @@ is never overwritten; `/history` names it and the count, and `/history clear`
 forgets everything.
 
 Any other `/command` goes to the command registry, so `/plan`, `/compact`, `/goal`, and `/feedback` behave as they do on the other surfaces.
+
+## Prompt stash
+
+`/stash` parks the draft in the editor and clears it; `/stash-pop` puts a parked
+draft back and removes it, so a prompt written for the wrong moment survives a
+restart instead of being retyped or sent. `s` starts a chord for the same
+stashing, and `l` opens the list. A stash belongs to the exact working
+directory, so the drafts parked in one checkout never appear in another; the
+footer shows `stash N` while any are waiting.
+
+A selector is the number the list shows — `0` is the newest — or the entry's own
+id; leaving it out takes the newest. `apply` and `pop` refuse to overwrite a
+draft already in the editor, because losing an unsent prompt to a restore is the
+one outcome the feature exists to prevent. `pop` writes the editor first and
+removes the entry second, so a crash between the two leaves the draft in the
+bank rather than only in a terminal that is gone.
+
+The bank is one JSON file per directory under `$DSH_HOME/tui-stash`, written with
+owner-only permissions (`0700` directory, `0600` file) through a private,
+no-follow path; every update is a locked read-modify-write and an atomic
+temp-and-rename, so two surfaces in the same directory cannot lose each other's
+entries. A file this build cannot read is moved aside as
+`<name>.corrupt-<time>` and reported rather than overwritten. Drafts are never
+written to a session log, and the file is capped so one runaway paste cannot
+grow it without bound.
 
 ## Settings
 
@@ -488,6 +523,10 @@ The automated checks drive a real PTY, but they run on this machine's terminal. 
 | press `0` on a question, type an answer, press Enter | the editor under row `0` shows the text as it is edited, and the model receives it as that question's answer |
 | type a prompt without sending it, then answer a question | the prompt bar steps aside while the question is open and holds the same prompt again afterwards |
 | `echo hi \| dsh --profile tui` | refuses with a non-zero exit and a message naming the TTY requirement |
+| `/stash`, `/stash-pop` in one terminal | the footer shows `stash 1` after the stash and the draft returns to the editor after the pop |
+| a second `dsh --profile tui` in the same directory | `/stash-list` shows the draft the first terminal parked |
+| `dsh --profile tui` in another directory | `/stash-list` says `no stashed drafts`, even though the first directory still has one |
+| hand-edit `$DSH_HOME/tui-stash/<key>.json` into invalid JSON, then `/stash-list` | the surface reports the quarantine path, starts empty, and leaves the moved file readable |
 | `/quit`, Ctrl+C while idle, `kill -TERM <pid>` | the shell returns with cursor, echo, mouse, and title restored |
 
 ## Releasing
@@ -511,6 +550,7 @@ The workflow stores no npm token: the registry trusts `release.yml` on the `npm-
 - A card reads its tool's own render intent through the agent whose session is on screen, so a stored session with no live agent — one this process is not running, or a child that has already finished — folds to the generic card instead of the tool's own.
 - Reading a child's conversation does not move the terminal: commands, approvals, and the status line stay with the session you launched, and the transcript is the only thing that switches. The status line carries the way back, read from the map in force, so a remap shows up without reopening the view.
 - Delete is unimplemented: the session store exposes no delete, and the surface does not reach around that seam into its files. `/fork` covers the case that needs it — it branches into a new session and leaves the original alone.
+- The prompt stash holds text only. It does not read Pi's `pi-stash` data, does not migrate an older key format, and keeps no pasted images: a draft larger than 1 MiB, or a bank larger than 16 MiB, is refused rather than stored. A corrupt bank is quarantined and reported, never repaired in place.
 - Approvals and questions render inline and take the keyboard; a question batch is answered in order, and a question that lists options can always be answered with free text on row `0`.
 - Inside Herdr the pane reports its own state, and that report is the only thing that makes it an agent there: Herdr cannot start, resume, or prompt this surface, so launching and resuming stay with `dsh` itself (or a Herdr plugin that runs it).
 - Styling is per element and overridable; see [Settings](#settings). Shipped defaults are emitted as 24-bit colour where the terminal advertises it and degraded to 256 or 16 colours otherwise, so a light or dark terminal still follows its own palette where it has one.
