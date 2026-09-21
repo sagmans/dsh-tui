@@ -460,8 +460,13 @@ function pressOverlaps(rows: readonly PressRow[]): PressOverlap[] {
   for (const found of groups.values()) {
     const ids = [...new Set(found.map(index => rowAt(index).id))].sort()
     if (ids.length < 2) continue
+    // A spelling counts as shared only when two different rows read it: one row
+    // may hold two spellings of the same press (Return beside Ctrl+M), which is
+    // the reader saying one thing rather than a press two rows fight over.
     const spellings = [...new Set(found.flatMap(index => matchPresses(rowAt(index).key)))]
-      .filter(spelling => (reached.get(spelling) ?? []).filter(index => found.includes(index)).length > 1)
+      .filter(spelling => new Set(
+        (reached.get(spelling) ?? []).filter(index => found.includes(index)).map(index => rowAt(index).id),
+      ).size > 1)
       .sort()
     overlaps.push({ ids, key: rowAt(found[0]!).key, spellings })
   }

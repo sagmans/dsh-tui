@@ -255,6 +255,14 @@ describe('resolveKeymap', () => {
     expect(() => resolveKeymap({ 'gate.allow': 'alt+enter', 'gate.reject': 'ctrl+alt+m' })).toThrow(/gate\.allow and gate\.reject/)
   })
 
+  it('lets one row repeat a press without inventing a clash', () => {
+    // Return and Ctrl+M are one byte, and a reader who writes both on one row
+    // changes no other row's reach: the shipped search pair keeps the single
+    // overlap the library already gives it, on the line feed.
+    const map = resolveKeymap({ 'tui.altScreen.searchNext': ['enter', 'ctrl+g', 'ctrl+m'] })
+    expect(keysFor(map, 'tui.altScreen.searchNext')).toEqual(['enter', 'ctrl+g', 'ctrl+m'])
+  })
+
   it('refuses a library key whose byte the library already answers', () => {
     // One control byte carries two spellings, and the library reads the row it
     // shipped first: a reader moving another row onto the same byte would be
