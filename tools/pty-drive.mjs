@@ -126,6 +126,12 @@ const NAMED_KEYS = {
   back: '\u007f',
   'ctrl+t': '\u0014',
   'ctrl+y': '\u0019',
+  // The two control keys the surface answers itself: Ctrl+C cancels one state
+  // and never leaves, so a run can reach a state without ending the session;
+  // Ctrl+D is the only key that leaves, which is what a run proves when it
+  // expects exit 0 without the harness's own quit sequence.
+  'ctrl+c': '\u0003',
+  'ctrl+d': '\u0004',
   // A key a reader may move submit to, which is the point of driving the
   // surface with a settings document: the chord has to arrive as the byte the
   // terminal sends for it, not as the name the map spells.
@@ -144,6 +150,9 @@ const NAMED_KEYS = {
   'ctrl+x': '\u0018',
   // Shift+Tab is CBT (CSI Z), distinct from the plain Tab an editor completes on.
   'shift+tab': '\u001b[Z',
+  // The transcript search opens on shift+ctrl+f, a chord no single byte carries,
+  // so only the keyboard protocol's codepoint spelling reaches it in a run.
+  'ctrl+shift+f': '\u001b[102;6u',
   // The surface asks the terminal to report key events, so a real arrow press
   // arrives as a press followed by a release. A run that only sends the legacy
   // sequence above cannot see a handler that acts on both.
