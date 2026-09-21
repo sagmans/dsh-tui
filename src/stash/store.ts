@@ -25,7 +25,7 @@ import {
   type PrivateTextFile,
   quarantinePrivateFile,
   readPrivateTextFile,
-  syncPrivateDirectory,
+  syncDirectoryEntry,
   writePrivateFileExclusive,
 } from './private-fs.ts'
 import {
@@ -314,9 +314,10 @@ async function quarantineCorrupt(
 export async function writeStashFile(
   filePath: string,
   file: StashFile,
-  syncDirectory: typeof syncPrivateDirectory = syncPrivateDirectory,
+  syncDirectory: typeof syncDirectoryEntry = syncDirectoryEntry,
 ): Promise<void | StashWriteOutcome> {
-  await ensurePrivateDirectory(path.dirname(filePath))
+  const directory = path.dirname(filePath)
+  const created = await ensurePrivateDirectory(directory)
   const tempPath = `${filePath}.${process.pid}.${Date.now()}.tmp`
   const data = `${JSON.stringify(file, null, 2)}\n`
   // Every later read refuses a file past this cap, so a write that would cross
@@ -334,8 +335,15 @@ export async function writeStashFile(
     if (tempCreated) await rm(tempPath, { force: true })
     throw error
   }
+  // The rename is durable only once the directory naming the file is flushed,
+  // and a directory this save created is named by its parent, which has to be
+  // flushed too. Both happen here, after the commit, so a failure is a warning
+  // about durability instead of a failure that leaves a directory behind and
+  // never comes back to flush it.
+  const pending = created.length > 0 ? created : [path.dirname(directory)]
   try {
-    await syncDirectory(path.dirname(filePath))
+    await syncDirectory(directory)
+    for (const parent of pending) await syncDirectory(parent)
   } catch (error) {
     return { committed: true, phase: 'directory-sync', error }
   }

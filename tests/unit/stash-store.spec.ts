@@ -1,12 +1,14 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { resolveStashPaths } from '@/stash/paths.ts'
+import { syncDirectoryEntry } from '@/stash/private-fs.ts'
 import { createEmptyStashFile, MAX_STASH_ENTRY_BYTES, STASH_SCHEMA_VERSION } from '@/stash/schema.ts'
 import { StashCommittedError } from '@/stash/lock.ts'
 import {
   loadStashStore,
+  MAX_STASH_FILE_BYTES,
   StashFileTooLargeError,
   UnsupportedStashSchemaError,
   writeStashFile,
@@ -184,6 +186,34 @@ describe('StashStore mutations', () => {
     const loaded = await loadStashStore(paths, clock())
     expect(loaded.entries[0]?.text).toBe('wipe[2Jthe screen')
   })
+
+  /**
+   * The marks that carry no glyph are the ones a hand-list misses: an Arabic
+   * letter mark satisfies Unicode's bidi-control property while drawing nothing,
+   * so a draft carrying one has to lose it exactly like an override.
+   */
+  it('strips every bidi control, not only the overrides', async () => {
+    const { baseDir, file } = scratch()
+    const paths = resolveStashPaths(CWD, baseDir)
+    const store = await loadStashStore(paths, clock())
+    await store.add({ id: 'a', text: 'one\u061Ctwo\u200Ethree\u2069four' })
+    expect(store.entries[0]?.text).toBe('onetwothreefour')
+
+    seed(
+      file,
+      JSON.stringify({
+        version: STASH_SCHEMA_VERSION,
+        cwd: CWD,
+        createdAt: 1,
+        updatedAt: 1,
+        entries: [{ id: 'hand', text: 'kept\u200Bzero\u200Dwidth', createdAt: 1 }],
+      }),
+    )
+    const loaded = await loadStashStore(paths, clock())
+    // A zero-width space and the joiners are not bidi controls, and a draft that
+    // uses them deliberately keeps them.
+    expect(loaded.entries[0]?.text).toBe('kept\u200Bzero\u200Dwidth')
+  })
 })
 
 describe('StashStore persistence', () => {
@@ -233,6 +263,11 @@ describe('StashStore persistence', () => {
     expect(reloaded.entries.map(entry => entry.text)).toEqual(['one'])
   })
 
+  /**
+   * The failure below is injected, because no portable mechanism fails only the
+   * rename: a bank that cannot be replaced is first a bank that cannot be read
+   * (the load repairs its mode) or a directory that cannot be opened.
+   */
   it('keeps the previous bytes when the write never reaches the rename', async () => {
     const { baseDir } = scratch()
     const paths = resolveStashPaths(CWD, baseDir)
@@ -257,5 +292,64 @@ describe('StashStore persistence', () => {
     writeFileSync(`${paths.file}.999.1.tmp`, '{"half":', { mode: 0o600 })
     const reloaded = await loadStashStore(paths, clock())
     expect(reloaded.entries.map(entry => entry.id)).toEqual(['kept'])
+  })
+
+  /**
+   * A JSON escape doubles the bytes of the character that produced it, so the
+   * cap has to be measured on the file that will exist rather than on the draft
+   * the reader typed.
+   */
+  it('counts the bytes the file will hold, not the characters the draft was typed as', async () => {
+    const { baseDir } = scratch()
+    const paths = resolveStashPaths(CWD, baseDir)
+    const quotes = '"'.repeat(MAX_STASH_FILE_BYTES / 2 + 1)
+    const escaped = { ...createEmptyStashFile(CWD, 1), entries: [{ id: 'a', text: quotes, createdAt: 1 }] }
+    await expect(writeStashFile(paths.file, escaped)).rejects.toBeInstanceOf(StashFileTooLargeError)
+    expect(existsSync(paths.file)).toBe(false)
+  })
+
+  it('writes and reopens a bank that is large but still inside the cap', async () => {
+    const { baseDir } = scratch()
+    const paths = resolveStashPaths(CWD, baseDir)
+    const size = 8 * 1024 * 1024
+    await writeStashFile(paths.file, {
+      ...createEmptyStashFile(CWD, 1),
+      entries: [{ id: 'big', text: 'x'.repeat(size), createdAt: 1 }],
+    })
+    const reloaded = await loadStashStore(paths, clock())
+    expect(reloaded.entries[0]?.text.length).toBe(size)
+  })
+
+  /**
+   * A rename that fails has to leave the bank it was replacing exactly as it was,
+   * and no half-written temp file behind for a later read to trip over.
+   */
+  /**
+   * A first save creates the storage and has to flush the directory that names it.
+   * The flush happens after the commit, so a failure is a warning about durability
+   * rather than a failure that leaves the directory behind and never flushes it —
+   * which is why the retry has to flush the same directories again.
+   */
+  it('flushes the directories naming the storage on the first save and on the retry', async () => {
+    const { baseDir } = scratch()
+    const paths = resolveStashPaths(CWD, baseDir)
+    const synced: string[] = []
+    let failing = true
+    const writer: StashWriter = (filePath, file) =>
+      writeStashFile(filePath, file, async directory => {
+        synced.push(directory)
+        if (failing && synced.length === 2) throw new Error('fsync failed')
+        await syncDirectoryEntry(directory)
+      })
+
+    const store = await loadStashStore(paths, clock(), writer)
+    await expect(store.add({ id: 'a', text: 'one' })).rejects.toBeInstanceOf(StashCommittedError)
+    expect(synced).toEqual([baseDir, dirname(baseDir)])
+
+    synced.length = 0
+    failing = false
+    const retry = await loadStashStore(paths, clock(), writer)
+    await expect(retry.add({ id: 'b', text: 'two' })).resolves.toBeDefined()
+    expect(synced).toEqual([baseDir, dirname(baseDir)])
   })
 })
