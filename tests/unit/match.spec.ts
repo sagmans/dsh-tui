@@ -70,4 +70,12 @@ it('reads a fragment the way a fuzzy finder does inside its band', () => {
   it('ignores case', () => {
     expect(matchScore('GLM53', 'zai-coding-cn glm-5.3')).toBeDefined()
   })
+
+  it('keeps a camel hump above the same letters without one', () => {
+    expect(matchScore('fbb', 'fooBarBaz')).toBeGreaterThan(matchScore('fbb', 'foobarbaz') ?? 0)
+  })
+
+  it('matches letters that fold to one code point apiece', () => {
+    expect(matchScore('Σ', 'ΟΣ')).toBeGreaterThan(0)
+  })
 })

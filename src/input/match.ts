@@ -1,4 +1,4 @@
-import { fuzzyScore } from './fuzzy.ts'
+import { foldSimple, fuzzyScore } from './fuzzy.ts'
 
 /**
  * Where each kind of hit starts.
@@ -47,21 +47,24 @@ const SCATTERED_MIN_LENGTH = 3
  * above the same letters spread through the middle of a word.
  *
  * Higher is a better match; `undefined` is the only answer that means no
- * match at all.
+ * match at all. The bands are decided on the folded text and the reading
+ * itself on the row as it was written, because only the original spelling
+ * still carries the humps and separators the reading pays for.
  */
 export function matchScore(needle: string, haystack: string): number | undefined {
-  const query = needle.trim().toLowerCase()
+  const trimmed = needle.trim()
+  const query = foldSimple(trimmed)
   if (query === '') return EXACT_HIT
-  const text = haystack.toLowerCase()
+  const text = foldSimple(haystack)
   if (text === query) return EXACT_HIT
-  if (text.startsWith(query)) return PREFIX_HIT + fuzzyWithin(query, text)
+  if (text.startsWith(query)) return PREFIX_HIT + fuzzyWithin(trimmed, haystack)
   const at = text.indexOf(query)
   if (at >= 0) {
-    return CONTIGUOUS_HIT - Math.min(at, POSITION_PENALTY_CAP) * POSITION_PENALTY_PER_CHAR + fuzzyWithin(query, text)
+    return CONTIGUOUS_HIT - Math.min(at, POSITION_PENALTY_CAP) * POSITION_PENALTY_PER_CHAR + fuzzyWithin(trimmed, haystack)
   }
   if (query.length < SCATTERED_MIN_LENGTH) return undefined
-  if (fuzzyScore(query, text) === undefined) return undefined
-  return SCATTERED_HIT + fuzzyWithin(query, text)
+  const raw = fuzzyScore(trimmed, haystack)
+  return raw === undefined ? undefined : SCATTERED_HIT + clampToBand(raw)
 }
 
 /**
@@ -70,8 +73,11 @@ export function matchScore(needle: string, haystack: string): number | undefined
  * A row that reaches one band must never overtake a row in the band above it,
  * however good its letters look.
  */
-function fuzzyWithin(query: string, text: string): number {
-  const raw = fuzzyScore(query, text)
+function fuzzyWithin(query: string, haystack: string): number {
+  return clampToBand(fuzzyScore(query, haystack))
+}
+
+function clampToBand(raw: number | undefined): number {
   if (raw === undefined) return 0
   return Math.max(-FUZZY_BAND_CAP, Math.min(FUZZY_BAND_CAP, raw))
 }
