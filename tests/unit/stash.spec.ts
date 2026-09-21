@@ -210,6 +210,25 @@ describe('stashing the editor draft', () => {
     expect(host.last()).toContain('answering a question')
     expect(stash.entryCount).toBe(0)
   })
+
+  /**
+   * The write awaits the disk, and a question can take the bar while it does. The
+   * answer standing in the bar at that moment is not the draft that was parked,
+   * so it must not be cleared by the stash finishing.
+   */
+  it('does not clear a bar a question borrowed during the write', async () => {
+    const host = new FakeHost()
+    const baseDir = scratchBase()
+    const borrowing: StashWriter = async (file, contents) => {
+      host.editorAvailable = false
+      host.editorText = 'an answer typed into the question'
+      return await writeStashFile(file, contents)
+    }
+    const stash = bank(host, { baseDir, write: borrowing })
+    await stash.stashEditor('parked')
+    expect(host.editorText).toBe('an answer typed into the question')
+    expect(host.last()).toBe('Stashed [0]')
+  })
 })
 
 describe('applying a draft', () => {

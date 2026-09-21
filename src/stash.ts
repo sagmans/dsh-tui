@@ -142,9 +142,10 @@ export class PromptStash {
         resolved = error.result as ResolvedEntry
         warning = committedMessage(error, stashedMessage(resolved.index))
       }
-      // Only clear what was actually persisted: a draft edited while the write
-      // ran belongs to the reader, not to the bank.
-      if (this.host.getEditorText() === text) this.host.setEditorText('')
+      // Only clear what was actually persisted, and only while the bar is still
+      // the reader's: a question can borrow it during the write, and clearing
+      // there would erase the answer instead of the draft that was parked.
+      if (this.host.editorIsAvailable() && this.host.getEditorText() === text) this.host.setEditorText('')
       this.host.notice(warning ?? stashedMessage(resolved.index))
     })
   }
