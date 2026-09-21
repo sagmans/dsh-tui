@@ -8,6 +8,43 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-21
+
+### Added
+
+- A todo guard nudges an agent whose plan has aged: the advisory host row reads
+  the harness's own `todos` and `plan` projections and rides the next tool
+  result with a reminder, capped per turn, plan-mode aware, and silent when it
+  cannot know the plan ([#36](https://github.com/sagmans/dsh-tui/pull/36)).
+- Every submitted line is kept in a machine-wide prompt history: a recorded
+  prompt is offered as dimmed ghost text, `ctrl+r` opens reverse search seeded
+  with the bar's draft, the `history` settings block tunes or disables both, and
+  a lock shared by sessions folds concurrent writes together
+  ([#37](https://github.com/sagmans/dsh-tui/pull/37)).
+- A pane inside Herdr reports its lifecycle over the socket Herdr exports:
+  `wait` while a gate or picker holds the keyboard, work during a turn, idle
+  otherwise, with the session identity and resume tokens an exact resume needs;
+  the row is handed back on the way out, and away from Herdr nothing changes
+  ([#38](https://github.com/sagmans/dsh-tui/pull/38)).
+- Prompt drafts park per working directory: `ctrl+x` then `s`, or
+  `/stash <draft>`, saves the bar into an owner-only bank, `/stash-pop`,
+  `/stash-apply`, `/stash-list`, `/stash-drop`, and `/stash-clear` answer
+  it, the footer counts the drafts waiting, and a pop fills the editor before it
+  removes the entry ([#39](https://github.com/sagmans/dsh-tui/pull/39)).
+
+### Changed
+
+- The plan strip clears when the next turn opens, following the host
+  projection's lifetime, so a fresh task never inherits the previous turn's
+  checklist ([#36](https://github.com/sagmans/dsh-tui/pull/36)).
+
+### Documentation
+
+- The prompt stash, prompt history, Herdr reporting, and the todo guard are
+  documented with their commands, chords, settings, on-disk contract, and the
+  checks a real terminal still has to answer
+  ([#36](https://github.com/sagmans/dsh-tui/pull/36), [#37](https://github.com/sagmans/dsh-tui/pull/37), [#38](https://github.com/sagmans/dsh-tui/pull/38), [#39](https://github.com/sagmans/dsh-tui/pull/39)).
+
 ## [0.3.0] - 2026-09-21
 
 ### Added
@@ -132,7 +169,8 @@ breaking change, and a patch carries only fixes.
 - Publication through npm OIDC trusted publishing, with the first version
   bootstrapped by hand ([#5](https://github.com/sagmans/dsh-tui/pull/5)).
 
-[Unreleased]: https://github.com/sagmans/dsh-tui/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/sagmans/dsh-tui/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/sagmans/dsh-tui/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/sagmans/dsh-tui/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/sagmans/dsh-tui/compare/v0.1.2...v0.2.0
 [0.1.2]: https://github.com/sagmans/dsh-tui/compare/v0.1.1...v0.1.2
