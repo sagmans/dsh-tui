@@ -406,6 +406,24 @@ Override them from the home-level patch, which outranks the profile's own layers
 
 The list the dock and `/todo` draw follows the same lifetime every other surface shows: it is cleared when the next turn opens, because a fresh task must not inherit the previous turn's checklist.
 
+## Herdr
+
+[Herdr](https://github.com/herdrdev/herdr) is a terminal multiplexer for coding agents. When it starts this surface in one of its panes it exports `HERDR_ENV=1`, `HERDR_PANE_ID`, and `HERDR_SOCKET_PATH`, and the pane reports what it is doing over that socket — as the agent `dsh`, under the source `custom:dsh-tui`. Away from Herdr (an ordinary terminal, SSH, tmux) the reporter is inert: no socket is opened, and nothing reaches the screen the reader owns.
+
+| This surface | Herdr |
+|---|---|
+| the screen is taken, before any session opens | `idle`, claiming the pane's agent row |
+| `turn/start` | `working` |
+| an approval, a question, or a picker takes the keyboard | `blocked`, named by that card's title |
+| the decision settles | `working` if a turn is open, otherwise `idle` |
+| `turn/end` | `idle` |
+| a session opens, resumes, forks, or is switched to | its id and reason, plus the `dsh_session` / `dsh_cwd` pane tokens |
+| exit, signal, or boot failure | `herdr pane release-agent`, so no row is left waiting on a process that is gone |
+
+A wait outranks a running turn: a turn waiting on a human is not making progress, and the wait is the only thing worth acting on from a wall of panes. Reports are sequenced per source, so a delivery that arrives late cannot undo the state the surface already moved past, and a state Herdr is already showing is not sent again.
+
+Herdr persists a session reference only for its own built-in integrations, so this pane's session identity travels as metadata tokens instead: a script or a companion plugin reads them back with `herdr pane get <id>` and resumes that exact conversation with `dsh --profile tui --resume=<id>`. What Herdr cannot do is identify the process itself — its detection table and its screen rules both name built-in agents only — so a pane that has not reported yet reads as an ordinary pane.
+
 ## Development
 
 ```sh
@@ -494,6 +512,7 @@ The workflow stores no npm token: the registry trusts `release.yml` on the `npm-
 - Reading a child's conversation does not move the terminal: commands, approvals, and the status line stay with the session you launched, and the transcript is the only thing that switches. The status line carries the way back, read from the map in force, so a remap shows up without reopening the view.
 - Delete is unimplemented: the session store exposes no delete, and the surface does not reach around that seam into its files. `/fork` covers the case that needs it — it branches into a new session and leaves the original alone.
 - Approvals and questions render inline and take the keyboard; a question batch is answered in order, and a question that lists options can always be answered with free text on row `0`.
+- Inside Herdr the pane reports its own state, and that report is the only thing that makes it an agent there: Herdr cannot start, resume, or prompt this surface, so launching and resuming stay with `dsh` itself (or a Herdr plugin that runs it).
 - Styling is per element and overridable; see [Settings](#settings). Shipped defaults are emitted as 24-bit colour where the terminal advertises it and degraded to 256 or 16 colours otherwise, so a light or dark terminal still follows its own palette where it has one.
 - Tool text, model text, and file content are escaped before rendering, so a hostile result cannot inject terminal control sequences; the cost is that a literal tab shows as \x09.
 - Mermaid fences draw in assistant replies only, and only at the top level of one: a fence nested in a list, quoted inside another fence, or carried by a prompt, a thought, or a tool card stays source. Author `:::class` styling and diagram links are ignored — the renderer reports what each run is, and the theme decides how it looks.
