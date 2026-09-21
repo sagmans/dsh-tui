@@ -12,8 +12,9 @@ breaking change, and a patch carries only fixes.
 
 - The bar's draft opens in the reader's own editor: `ctrl+x` then `e` hands the
   terminal to `$VISUAL` (or `$EDITOR`) with the draft in an owner-only scratch
-  file, waits for the child, repaints, and takes back what was saved with control
-  and bidi characters stripped. A non-zero exit still keeps the saved text, no
+  file, waits for the child, repaints, and takes back what was saved through one
+  no-follow handle that refuses anything past 1 MiB, with control and bidi
+  characters stripped. A non-zero exit still keeps the saved text, no
   editor configured is a notice rather than a failure, and a draft past 1 MiB is
   left on disk with its path instead of loaded into the bar.
 

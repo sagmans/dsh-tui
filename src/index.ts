@@ -388,6 +388,8 @@ export function apply(ctx: Context, config: unknown): void {
   const tui = new WarningSafeTui(terminal)
   /** Whether a child process owns the terminal, which is when nothing here may write to it. */
   let handedOver = false
+  /** Whether the host has unloaded this surface, after which nothing may start it again. */
+  let disposed = false
   /** An exit asked for while a child owned the terminal, run once the screen is ours again. */
   let deferredExit: { readonly code: number; readonly reason: string | undefined } | undefined
   /**
@@ -395,7 +397,8 @@ export function apply(ctx: Context, config: unknown): void {
    *
    * An editor the reader opened draws its own screen on the same terminal, so a
    * title or a bell from here would land on top of it and, for a bell, sound as
-   * if the editor had failed. Both are written when the screen comes back.
+   * if the editor had failed. The title is written again when the screen comes
+   * back; a bell that fell in the gap is dropped rather than rung late.
    */
   const writeTerminal = (text: string): void => {
     if (!handedOver) terminal.write(text)
@@ -496,6 +499,9 @@ export function apply(ctx: Context, config: unknown): void {
 
   restore.add(() => tui.stop())
   ctx.effect(() => () => {
+    // A surface the host unloads owns no screen and keeps no listeners, so a
+    // child still running in another process must not be handed a start().
+    disposed = true
     // The pane stops being an agent before the process that claimed it unwinds:
     // a release that ran after the reports were unregistered would race them,
     // and one that never ran would leave a row that reads as a live agent. The
@@ -846,8 +852,10 @@ export function apply(ctx: Context, config: unknown): void {
         tui.requestRender()
       },
       // A question answers in this editor, so a draft written into a borrowed bar
-      // would become somebody's answer instead of a parked prompt.
-      editorIsAvailable: () => !promptBar.isBorrowed(),
+      // would become somebody's answer instead of a parked prompt. An editor
+      // holding the draft in another program owns it just as firmly: a pop that
+      // landed then would be deleted from the bank and then overwritten.
+      editorIsAvailable: () => !promptBar.isBorrowed() && !handedOver,
       notice: message => model.notice(message),
       pick: (entries, label) => openPicker(new StashPicker(entries, label, () => keymap)),
       confirm: async count => confirmedClear(await openPicker(new StashConfirmPicker(count, () => keymap))),
@@ -870,16 +878,35 @@ export function apply(ctx: Context, config: unknown): void {
   const externalEditor = new ExternalEditor({
     suspend: () => {
       handedOver = true
-      // The frame is left in place rather than repainted into the normal
-      // buffer: the editor is about to paint over that same screen.
-      tui.stop({ preserveScreen: true })
+      try {
+        // The frame is left in place rather than repainted into the normal
+        // buffer: the editor is about to paint over that same screen.
+        tui.stop({ preserveScreen: true })
+      } catch (error) {
+        // A stop that failed leaves the screen ours; leaving the flag up would
+        // suppress every later title and defer every exit for good.
+        handedOver = false
+        throw error
+      }
     },
     resume: () => {
+      // Whatever the host unloaded is not coming back: starting it again would
+      // paint on a terminal this process is done with, into listeners that are gone.
+      if (disposed) return
       try {
         tui.start()
       } finally {
         handedOver = false
       }
+      // Entering the alternate screen clears it, and any render asked for while
+      // the child owned the terminal was dropped after setting the very flag that
+      // makes the next ordinary request a no-op: without a forced one the reader
+      // would get a blank screen with a working keyboard under it.
+      tui.requestRender(true)
+      // The title is state this surface owns and the handoff swallowed any change
+      // to it, so a turn that ended while the editor was open would leave
+      // "working" up until the next turn.
+      writeTerminal(windowTitle(process.cwd(), turnOpen ? 'working' : 'ready'))
     },
     notice: message => model.notice(message),
   })

@@ -11,7 +11,8 @@
 // and nothing in this surface writes to the tty while the child owns it.
 
 import { spawn } from 'node:child_process'
-import { chmod, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { constants } from 'node:fs'
+import { chmod, mkdtemp, open, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { stripControlCharacters } from '../text.ts'
@@ -44,6 +45,11 @@ const useFailureMessage = (error: unknown): string =>
   `could not use the edited draft: ${error instanceof Error ? error.message : 'unknown error'}`
 const tooLargeMessage = (file: string): string =>
   `the edited draft is larger than ${MAX_DRAFT_LABEL}; it was left at ${file}`
+const NOT_A_FILE_MESSAGE = 'the edited draft is no longer a plain file; nothing was taken back'
+const retainedMessage = (directory: string): string =>
+  `could not remove the scratch directory; the draft is still at ${directory}`
+const resumeFailureMessage = (error: unknown): string =>
+  `the screen did not come back cleanly: ${error instanceof Error ? error.message : 'unknown error'}`
 
 /** The quote a command line is currently inside, if any. */
 const QUOTES: ReadonlySet<string> = new Set(["'", '"'])
@@ -139,6 +145,12 @@ export type EditorSpawn = (file: string, args: readonly string[], options: Edito
  */
 const SPAWN: EditorSpawn = (file, args, options) => spawn(file, [...args], options)
 
+/** What one bounded read of the editor's file produced. */
+type DraftRead =
+  | { readonly kind: 'text'; readonly text: string }
+  | { readonly kind: 'too-large' }
+  | { readonly kind: 'not-a-file' }
+
 /** How the handoff runs; every part a spec would otherwise have to fake is overridable. */
 export interface ExternalEditorOptions {
   readonly env?: NodeJS.ProcessEnv | undefined
@@ -185,8 +197,16 @@ export class ExternalEditor {
     // scratch directory: a refusal must not also be a way to lose the work.
     let keepDirectory = false
     // The screen goes before the first await, so no key can be read between the
-    // chord that asked for this and the child that owns the terminal.
-    this.host.suspend()
+    // chord that asked for this and the child that owns the terminal. A stop that
+    // failed leaves the screen ours, so the flag behind it has to come back down:
+    // left up, this surface would suppress every later title and defer every exit.
+    try {
+      this.host.suspend()
+    } catch (error) {
+      this.running = false
+      this.host.notice(useFailureMessage(error))
+      return undefined
+    }
     try {
       directory = await mkdtemp(join(this.tempRoot, DRAFT_DIR_PREFIX))
       // mkdtemp makes the directory owner-only on POSIX; setting it here makes
@@ -199,26 +219,66 @@ export class ExternalEditor {
         this.host.notice(launchFailureMessage(command, failure))
         return undefined
       }
-      const { size } = await stat(file)
-      if (size > MAX_DRAFT_BYTES) {
+      const draft = await this.readDraft(file)
+      if (draft.kind === 'too-large') {
         keepDirectory = true
         this.host.notice(tooLargeMessage(file))
         return undefined
       }
-      return stripControlCharacters(await readFile(file, 'utf8'))
+      if (draft.kind === 'not-a-file') {
+        this.host.notice(NOT_A_FILE_MESSAGE)
+        return undefined
+      }
+      return draft.text
     } catch (error) {
       this.host.notice(useFailureMessage(error))
       return undefined
     } finally {
-      if (directory !== undefined && !keepDirectory) {
-        // Best effort: a scratch directory that outlived its draft is litter,
-        // not a failure worth interrupting the reader's return for.
-        await rm(directory, { recursive: true, force: true }).catch(() => undefined)
+      const scratch = directory
+      if (scratch !== undefined && !keepDirectory) {
+        // Best effort, but not silent: a directory the reader believes was swept
+        // still holds what they typed, and only they can decide what to do with it.
+        await rm(scratch, { recursive: true, force: true }).catch(() => {
+          this.host.notice(retainedMessage(scratch))
+        })
       }
       // Cleared before the screen comes back, so a `resume` that throws cannot
       // leave a surface that refuses every later handoff.
       this.running = false
-      this.host.resume()
+      // A resume that failed must not reject this promise: the caller is a key
+      // press with nobody to catch it, and the exit it deferred still has to run.
+      try {
+        this.host.resume()
+      } catch (error) {
+        this.host.notice(resumeFailureMessage(error))
+      }
+    }
+  }
+
+  /**
+   * What the editor saved, read through one handle.
+   *
+   * The file is opened without following a link and read through that same
+   * handle, so a replacement between a check and a read cannot slip past it, a
+   * fifo left in the draft's place cannot block the surface, and the read stops
+   * one byte past the cap so a file that grows while it is read cannot exhaust
+   * memory.
+   */
+  private async readDraft(file: string): Promise<DraftRead> {
+    const handle = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
+    try {
+      if (!(await handle.stat()).isFile()) return { kind: 'not-a-file' }
+      const buffer = Buffer.allocUnsafe(MAX_DRAFT_BYTES + 1)
+      let filled = 0
+      while (filled < buffer.length) {
+        const { bytesRead } = await handle.read(buffer, filled, buffer.length - filled, filled)
+        if (bytesRead === 0) break
+        filled += bytesRead
+      }
+      if (filled > MAX_DRAFT_BYTES) return { kind: 'too-large' }
+      return { kind: 'text', text: stripControlCharacters(buffer.subarray(0, filled).toString('utf8')) }
+    } finally {
+      await handle.close().catch(() => undefined)
     }
   }
 

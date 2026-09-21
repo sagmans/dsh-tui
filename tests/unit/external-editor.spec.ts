@@ -1,4 +1,4 @@
-import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -101,7 +101,17 @@ function scratch(): string {
 }
 
 afterEach(() => {
-  for (const directory of scratchDirs.splice(0)) rmSync(directory, { recursive: true, force: true })
+  for (const directory of scratchDirs.splice(0)) {
+    // A case that proved a removal failure left the tree unreadable on purpose.
+    try {
+      chmodSync(directory, 0o700)
+    } catch {
+      // Already gone, which is the common case.
+    }
+    // The removal a case watched fail can still be settling: the retry budget is
+    // what makes this cleanup independent of the filesystem's own timing.
+    rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
+  }
 })
 
 function editorOf(host: FakeHost, spawn: FakeSpawn, env: NodeJS.ProcessEnv = { EDITOR: 'nvim' }): ExternalEditor {
@@ -269,6 +279,50 @@ describe('the external editor handoff', () => {
     }
 
     await expect(editor.edit('draft')).resolves.toBe('a]0;pwnedb\ncd')
+  })
+
+  it('keeps the bar when the surface could not hand the screen over', async () => {
+    const host = new FakeHost()
+    const spawn = fakeSpawn()
+    const editor = editorOf(host, spawn)
+    host.suspend = () => {
+      throw new Error('stop failed')
+    }
+
+    await expect(editor.edit('draft')).resolves.toBeUndefined()
+    expect(spawn.calls).toEqual([])
+    expect(host.last()).toContain('could not use the edited draft')
+
+    // A stop that threw must not leave the surface refusing every later handoff.
+    host.suspend = () => host.events.push('suspend')
+    await expect(editor.edit('draft')).resolves.toBe('edited in the child')
+  })
+
+  it('answers with what was saved even when the screen did not come back cleanly', async () => {
+    const host = new FakeHost()
+    const spawn = fakeSpawn()
+    const editor = editorOf(host, spawn)
+    host.resume = () => {
+      throw new Error('start failed')
+    }
+
+    await expect(editor.edit('draft')).resolves.toBe('edited in the child')
+    expect(host.last()).toContain('the screen did not come back cleanly')
+  })
+
+  it('refuses a draft that is no longer a plain file', async () => {
+    const host = new FakeHost()
+    const spawn = fakeSpawn()
+    const editor = editorOf(host, spawn)
+    spawn.respond = (draft, signals) => {
+      rmSync(draft)
+      mkdirSync(draft)
+      signals.exit(0)
+    }
+
+    await expect(editor.edit('draft')).resolves.toBeUndefined()
+    expect(host.last()).toBe('the edited draft is no longer a plain file; nothing was taken back')
+    expect(host.events).toEqual(['suspend', 'resume'])
   })
 
   it('refuses a second handoff while a child owns the terminal', async () => {
