@@ -626,6 +626,28 @@ The workflow stores no npm token: the registry trusts `release.yml` on the `npm-
 - Prompt history is global to this machine, not per project: `$DSH_HOME/prompt-history.json` holds every submitted line, deduplicated exactly, and a file this build cannot parse is left untouched with writes refused so a newer format is never overwritten. Every write re-reads the file under a lock shared by sessions, so a second session's prompts are folded in rather than overwritten, and a lock whose holder stopped is reclaimed or reported instead of guessed at; control characters are spelled out before a prompt is stored. A multiline suggestion draws its first line with `↵` marking the fold. `history.ghost: false` keeps reverse search without the suggestion, `history.enabled: false` stops recording and offering it, and `NO_COLOR`/`--no-color` suppresses the ghost because text the reader cannot see but could still accept is worse than none.
 - The editor handoff gives the whole terminal to `$VISUAL` (or `$EDITOR`) and waits for it: while the child owns the screen this surface draws nothing: a title from a turn in flight is written again when the screen comes back, a bell that falls in the gap is dropped rather than rung late, and a second `ctrl+x` then `e` is ignored until the first editor leaves. A host that unloads the surface during the handoff gives the terminal back while the child is still running, because only the child's own exit can end the wait. What the editor saved is read back only up to 1 MiB; a larger draft is left on disk with its path in the notice rather than loaded into the bar.
 
+## Related plugins
+
+Two companion bundles stack onto the same profile and complement this surface.
+Neither is a dependency of this package: a profile works without them, and each
+publishes to npm under the same tag-driven, provenance-carrying release
+discipline as this one.
+
+| Plugin | What it adds |
+|---|---|
+| [`@sagmans/dsh-auto-compact`](https://github.com/sagmans/dsh-auto-compact) | An absolute token trigger for automatic compaction: the conversation condenses at `min(thresholdTokens, contextWindow × thresholdRatio)` instead of the window ratio alone, so a large-window model pays a fixed price, with per-route overrides. Its patch swaps the shipped `compaction-basic` backend — the same row this bundle already takes out of the global composition — so the profile still keeps exactly one compaction service, and this surface needs no setting for it. |
+| [`@sagmans/dsh-provider-extra`](https://github.com/sagmans/dsh-provider-extra) | Extra provider routes: OpenCode Go, which sends the live conversation id in `x-opencode-session` for routing and prompt caching, and OpenAI Codex over a ChatGPT subscription's OAuth flow with the harness credential store. Its routes join the `/model` picker like every configured provider. |
+
+```sh
+dsh plugin --profile tui add @sagmans/dsh-auto-compact
+dsh plugin --profile tui add @sagmans/dsh-provider-extra
+```
+
+The base stack this bundle itself mounts — `@deepseek-ai/dsh-base`, the agent
+presets, and the host machinery PTC and creator modes need — is named in
+[How it works](#how-it-works); the multiplexer this surface reports to is
+[Herdr](#herdr).
+
 ## License
 
 MIT
