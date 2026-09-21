@@ -5,7 +5,7 @@ import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { MessageSource } from '@deepseek-ai/dsh-llm'
 import type { UserMessage } from '@deepseek-ai/dsh-session'
 import type { PostToolDecision, ToolExecution, ToolExecutionResult } from '@deepseek-ai/dsh-tools'
-import { projectionState } from './agent/projections.ts'
+import { projectionRead } from './agent/projections.ts'
 import type { TodoEntry } from './work.ts'
 
 /**
@@ -152,7 +152,8 @@ export type TodoListRead =
 export interface TodoObservation {
   readonly toolName: string
   readonly hasTodoTool: boolean
-  readonly planActive: boolean
+  /** Plan mode suppresses the guard; `undefined` is a plan read that cannot answer. */
+  readonly planActive: boolean | undefined
   readonly todos: TodoListRead
 }
 
@@ -193,7 +194,10 @@ export class TodoGuard {
     // Never speak on the write's own result; the committed event restarts the
     // count, so a rejected attempt does not silence the guard either.
     if (observation.toolName === TODO_WRITE_TOOL) return undefined
-    if (!observation.hasTodoTool || observation.planActive) return undefined
+    if (!observation.hasTodoTool) return undefined
+    // Plan mode suppresses the guard, and an unreadable plan projection is not
+    // a `false` answer, so only a definite "not in plan mode" lets it speak.
+    if (observation.planActive !== false) return undefined
     if (observation.todos.kind === 'unavailable') return undefined
     if (counters.remindedThisStep || counters.reminders >= this.config.maxRemindersPerTurn) return undefined
     const open = observation.todos.kind === 'listed' ? observation.todos.todos.filter(isOpenTodo) : []
@@ -241,9 +245,11 @@ const TODO_STATUSES: ReadonlySet<string> = new Set(['pending', 'in_progress', 'c
 
 /** The current whole list from the harness projection. */
 function readTodos(ctx: Context, session: object): TodoListRead {
-  const state = projectionState(ctx, session, TODOS_KEY)
+  const read = projectionRead(ctx, session, TODOS_KEY)
   // The projection is an array once the tool has written and `null` before
-  // that; anything else is a registry that cannot answer, which silences us.
+  // that; an unregistered or unreadable unit silences us instead.
+  if (read.kind !== 'state') return { kind: 'unavailable' }
+  const state = read.state
   if (state === null) return { kind: 'absent' }
   if (!Array.isArray(state)) return { kind: 'unavailable' }
   const todos: TodoEntry[] = []
@@ -258,10 +264,15 @@ function readTodos(ctx: Context, session: object): TodoListRead {
   return { kind: 'listed', todos }
 }
 
-/** Whether this session is in plan mode, where the todo tool is deliberately discouraged. */
-function readPlanActive(ctx: Context, session: object): boolean {
-  const state = projectionState(ctx, session, PLAN_KEY)
-  return asRecord(state)?.active === true
+/** Whether this session is in plan mode; `undefined` when that cannot be read. */
+function readPlanActive(ctx: Context, session: object): boolean | undefined {
+  const read = projectionRead(ctx, session, PLAN_KEY)
+  // An unregistered key means plan mode is not composed for this agent, which is
+  // a definite "not in plan mode". A registered unit that cannot answer is not a
+  // definite anything, so it keeps the guard silent.
+  if (read.kind === 'unregistered') return false
+  if (read.kind !== 'state') return undefined
+  return asRecord(read.state)?.active === true
 }
 
 /** Whether `todo_write` is reachable from this agent, so a tool-less preset stays silent. */

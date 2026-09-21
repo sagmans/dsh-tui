@@ -125,6 +125,8 @@ describe('TodoGuard', () => {
     expect(guard.observe(plan, { ...observation(listed([open('one')])), planActive: true })).toBeUndefined()
     const bare = advanced(guard, 3)
     expect(guard.observe(bare, { ...observation(listed([open('one')])), hasTodoTool: false })).toBeUndefined()
+    const unknown = advanced(guard, 3)
+    expect(guard.observe(unknown, { ...observation(listed([open('one')])), planActive: undefined })).toBeUndefined()
   })
 
   it('suggests a first list only after a turn runs long, and never over an empty write', () => {
@@ -184,7 +186,11 @@ describe('foldReminder', () => {
 
 describe('apply', () => {
   /** The two host surfaces the guard reads, wired the way Cordis wires them. */
-  function fakeContext(state: { todos?: unknown; plan?: unknown }, withProjections = true) {
+  function fakeContext(
+    state: { todos?: unknown; plan?: unknown },
+    options: { projections?: boolean; planThrows?: boolean } = {},
+  ) {
+    const { projections = true, planThrows = false } = options
     const handlers = new Map<string, ((...args: unknown[]) => unknown)[]>()
     const ctx = {
       on(name: string, handler: (...args: unknown[]) => unknown) {
@@ -195,9 +201,16 @@ describe('apply', () => {
       },
       tools: { get: (name: string) => name === 'todo_write' ? {} : undefined },
       get(name: string) {
-        if (!withProjections) return undefined
+        if (!projections) return undefined
         if (name !== 'sessionProjections') return undefined
-        return { stateOf: (_session: unknown, key: string) => key === 'todos' ? state.todos : state.plan }
+        return {
+          stateOf: (_session: unknown, key: string) => {
+            // A throwing fold is the "cannot answer" case; `undefined` below is
+            // the "key is not registered" case.
+            if (key === 'plan' && planThrows) throw new Error('plan fold failed')
+            return key === 'todos' ? state.todos : state.plan
+          },
+        }
       },
     }
     return { ctx, handlers }
@@ -206,11 +219,11 @@ describe('apply', () => {
   /** One tool result through the installed handler, as the loop would deliver it. */
   async function run(
     handlers: Map<string, ((...args: unknown[]) => unknown)[]>,
-    session: object,
+    agent: { session: object },
     result: unknown,
   ): Promise<PostToolDecision> {
     const decision = await handlers.get('tools/post-execute')?.[0]?.(
-      { name: 'edit', agent: { session } },
+      { name: 'edit', agent },
       result,
       async () => ({ kind: 'accept' }),
     )
@@ -225,7 +238,7 @@ describe('apply', () => {
     apply(ctx as unknown as Context, { staleSteps: 1, missingListSteps: 9, maxRemindersPerTurn: 2, previewItems: 5 })
     const session = {}
     handlers.get('session/event')?.[0]?.(session, { type: 'step/start' })
-    const decision = await run(handlers, session, { isError: false })
+    const decision = await run(handlers, { session }, { isError: false })
     expect(decision.additionalContexts).toHaveLength(1)
   })
 
@@ -234,7 +247,7 @@ describe('apply', () => {
     apply(ctx as unknown as Context, { staleSteps: 1 })
     const session = {}
     handlers.get('session/event')?.[0]?.(session, { type: 'step/start' })
-    expect((await run(handlers, session, { isError: false })).additionalContexts).toBeUndefined()
+    expect((await run(handlers, { session }, { isError: false })).additionalContexts).toBeUndefined()
   })
 
   it('stays silent on a result that already concludes the turn', async () => {
@@ -242,25 +255,44 @@ describe('apply', () => {
     apply(ctx as unknown as Context, { staleSteps: 1 })
     const session = {}
     handlers.get('session/event')?.[0]?.(session, { type: 'step/start' })
-    expect((await run(handlers, session, { isError: false, concludesTurn: true })).additionalContexts).toBeUndefined()
+    expect((await run(handlers, { session }, { isError: false, concludesTurn: true })).additionalContexts).toBeUndefined()
   })
 
   it('stays silent when the projection registry is unavailable', async () => {
-    const { ctx, handlers } = fakeContext({}, false)
+    const { ctx, handlers } = fakeContext({}, { projections: false })
     apply(ctx as unknown as Context, { staleSteps: 1, missingListSteps: 1 })
     const session = {}
     handlers.get('session/event')?.[0]?.(session, { type: 'step/start' })
-    expect((await run(handlers, session, { isError: false })).additionalContexts).toBeUndefined()
+    expect((await run(handlers, { session }, { isError: false })).additionalContexts).toBeUndefined()
+  })
+
+  it('reminds when plan mode is simply not composed', async () => {
+    const { ctx, handlers } = fakeContext({ todos: [open('stale')] })
+    apply(ctx as unknown as Context, { staleSteps: 1 })
+    const session = {}
+    handlers.get('session/event')?.[0]?.(session, { type: 'step/start' })
+    expect((await run(handlers, { session }, { isError: false })).additionalContexts).toHaveLength(1)
+  })
+
+  it('stays silent when the plan projection cannot be read', async () => {
+    const { ctx, handlers } = fakeContext({ todos: [open('stale')], plan: { active: false } }, { planThrows: true })
+    apply(ctx as unknown as Context, { staleSteps: 1 })
+    const session = {}
+    handlers.get('session/event')?.[0]?.(session, { type: 'step/start' })
+    expect((await run(handlers, { session }, { isError: false })).additionalContexts).toBeUndefined()
   })
 
   it('follows the live tool registry instead of a cached answer', async () => {
     const { ctx, handlers } = fakeContext({ todos: [open('stale')], plan: { active: false } })
     apply(ctx as unknown as Context, { staleSteps: 1 })
     const session = {}
+    // One stable agent identity: a fresh object per call would miss a cache.
+    const agent = { session }
     const remind = async () => {
       handlers.get('session/event')?.[0]?.(session, { type: 'step/start' })
-      return (await run(handlers, session, { isError: false })).additionalContexts?.length ?? 0
+      return (await run(handlers, agent, { isError: false })).additionalContexts?.length ?? 0
     }
+    expect(await remind()).toBe(1)
     ctx.tools.get = () => undefined
     expect(await remind()).toBe(0)
     ctx.tools.get = (name: string) => name === 'todo_write' ? {} : undefined
