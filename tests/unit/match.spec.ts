@@ -38,8 +38,11 @@ describe('matchScore', () => {
   })
 
   it('prefers the fragment whose characters sit closest together', () => {
-    const tight = matchScore('glm53', 'xglm-5.3')
-    const spread = matchScore('glm53', 'g-x-l-m-5-3')
+    // fzf weighs a word start above raw tightness — g-x-l-m-5-3 outranks
+    // xglm-5.3 — so the pair here keeps the boundaries equal and tests the
+    // tightness itself.
+    const tight = matchScore('abc', 'a-b-c')
+    const spread = matchScore('abc', 'a--b--c')
     expect(tight).toBeGreaterThan(spread ?? 0)
   })
 
@@ -49,7 +52,30 @@ describe('matchScore', () => {
     expect(better).toBeGreaterThan(worse ?? 0)
   })
 
+it('reads a fragment the way a fuzzy finder does inside its band', () => {
+    // fzf ranks out-of-bound above foobar for this fragment: the run starts on
+    // a word boundary even though the whole match is spread further.
+    const boundary = matchScore('oob', 'out-of-bound')
+    const inline = matchScore('oob', 'xoutofboundx')
+    expect(boundary).toBeGreaterThan(inline ?? 0)
+  })
+
+  it('still keeps a contiguous band above a scattered one', () => {
+    const contiguous = matchScore('foob', 'foobar')
+    const scattered = matchScore('foob', 'foo-bar')
+    expect(contiguous).toBeGreaterThan(scattered ?? 0)
+  })
+
+
   it('ignores case', () => {
     expect(matchScore('GLM53', 'zai-coding-cn glm-5.3')).toBeDefined()
+  })
+
+  it('keeps a camel hump above the same letters without one', () => {
+    expect(matchScore('fbb', 'fooBarBaz')).toBeGreaterThan(matchScore('fbb', 'foobarbaz') ?? 0)
+  })
+
+  it('matches letters that fold to one code point apiece', () => {
+    expect(matchScore('Σ', 'ΟΣ')).toBeGreaterThan(0)
   })
 })
