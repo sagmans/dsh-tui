@@ -112,6 +112,21 @@ describe('the dsh-tui settings section', () => {
     expect(problems[0]).toContain('transcript.reasoning.bdy')
   })
 
+  it('keeps an explicit history opt-out when another key is refused', () => {
+    const problems: string[] = []
+    const settings = readScope({
+      get: () => ({ history: { enabled: false }, tokens: { 'transcript.reasoning.bdy': { fg: '#fff' } } }),
+    }, message => problems.push(message))
+    expect(settings.history.enabled).toBe(false)
+    expect(settings.history.ghost).toBe(true)
+    expect(problems).toHaveLength(1)
+  })
+
+  it('refuses to record when the history switch itself cannot be read', () => {
+    const settings = readScope({ get: () => ({ history: { enabled: 'no' } }) }, () => {})
+    expect(settings.history.enabled).toBe(false)
+  })
+
   it('accepts hex, a palette name, and an index', () => {
     expect(() => parseSettings({ tokens: { 'transcript.user': { fg: '#ff0000' } } })).not.toThrow()
     expect(() => parseSettings({ tokens: { 'transcript.user': { fg: 'muted' } } })).not.toThrow()

@@ -299,14 +299,44 @@ export function settingsProblemMessage(error: unknown): string {
  * stderr alone is invisible under the alternate screen.
  */
 export function readScope(scope: { get(): unknown }, onProblem?: (message: string) => void): TuiSettings {
+  let raw: unknown = undefined
   try {
-    return parseSettings(scope.get() ?? {})
+    raw = scope.get() ?? {}
+    return parseSettings(raw)
   } catch (error) {
     const message = settingsProblemMessage(error)
     if (onProblem === undefined) process.stderr.write(`dsh-tui: ${message}\n`)
     else onProblem(message)
-    return defaultSettings()
+    // The rest of the refused section falls back to the shipped table, but
+    // recording is a privacy choice: an explicit switch survives a typo
+    // somewhere else, and a switch that could not be read stays off rather than
+    // quietly turning the store back on.
+    return { ...defaultSettings(), history: salvageHistory(raw) }
   }
+}
+
+/**
+ * The history block as far as it can be read from a refused section.
+ *
+ * Only the primitive shapes the schema would have accepted are taken; missing
+ * and malformed fields fall back to the shipped value, except an unreadable
+ * `enabled`, which refuses.
+ */
+function salvageHistory(raw: unknown): HistorySettings {
+  const fallback = defaultSettings().history
+  const history = asRecord(asRecord(raw)?.history)
+  if (history === undefined) return fallback
+  const enabled = history.enabled === undefined
+    ? fallback.enabled
+    : typeof history.enabled === 'boolean' ? history.enabled : false
+  const ghost = typeof history.ghost === 'boolean' ? history.ghost : fallback.ghost
+  const maxEntries = typeof history.maxEntries === 'number'
+    && Number.isSafeInteger(history.maxEntries)
+    && history.maxEntries >= 1
+    && history.maxEntries <= MAX_ENTRIES_LIMIT
+    ? history.maxEntries
+    : fallback.maxEntries
+  return { enabled, ghost, maxEntries }
 }
 
 /**
