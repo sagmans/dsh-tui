@@ -76,17 +76,59 @@ describe('ensurePrivateDirectory', () => {
   })
 
   /**
-   * A directory that names a new child is the only record of it, so a first save
-   * that creates storage has to sync every directory it created through its
-   * parent; otherwise the drafts survive a crash and the storage does not.
+   * A group member can rename an entry exactly as a stranger can, so a shared
+   * directory is only safe when its sticky bit keeps renaming to the owner.
    */
-  it('syncs every directory it had to create, through that directory parent', async () => {
+  it('rejects a group-writable ancestor without the sticky bit', async () => {
+    const shared = join(scratch(), 'shared')
+    mkdirSync(shared, { recursive: true })
+    chmodSync(shared, 0o775)
+    await expect(ensurePrivateDirectory(join(shared, 'stash'), 'stash directory')).rejects.toThrow(
+      /writable by other users/,
+    )
+  })
+
+  it('accepts a group-writable ancestor that is sticky', async () => {
+    const shared = join(scratch(), 'shared')
+    mkdirSync(shared, { recursive: true })
+    chmodSync(shared, 0o1775)
+    await expect(ensurePrivateDirectory(join(shared, 'stash'), 'stash directory')).resolves.toBeDefined()
+  })
+
+  /**
+   * A link resolves to a chain of its own, and a writable directory anywhere in
+   * that chain can redirect the link just as well as one on the path as typed.
+   */
+  it('rejects an ancestor of what a link resolves to', async () => {
     const root = scratch()
-    const synced: string[] = []
-    await ensurePrivateDirectory(join(root, 'nested', 'stash'), 'stash directory', async parent => {
-      synced.push(parent)
-    })
-    expect(synced).toEqual([join(root, 'nested'), root])
+    const open = join(root, 'open')
+    const target = join(open, 'target')
+    mkdirSync(target, { recursive: true })
+    chmodSync(open, 0o777)
+    chmodSync(target, 0o700)
+    const link = join(scratch(), 'link')
+    symlinkSync(target, link)
+    await expect(ensurePrivateDirectory(join(link, 'stash'), 'stash directory')).rejects.toThrow(
+      /writable by other users/,
+    )
+  })
+
+  /**
+   * A directory that names a new child is the only record of it, so the caller
+   * has to be told which directories it created and flush them through their
+   * parents; otherwise the drafts survive a crash and the storage does not.
+   */
+  it('reports the directories it created, deepest first, for the caller to flush', async () => {
+    const root = scratch()
+    const created = await ensurePrivateDirectory(join(root, 'nested', 'stash'), 'stash directory')
+    expect(created).toEqual([join(root, 'nested'), root])
+  })
+
+  it('reports nothing to flush when the directories were already there', async () => {
+    const root = scratch()
+    const directory = join(root, 'stash')
+    await ensurePrivateDirectory(directory, 'stash directory')
+    await expect(ensurePrivateDirectory(directory, 'stash directory')).resolves.toEqual([])
   })
 })
 

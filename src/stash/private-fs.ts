@@ -7,7 +7,7 @@
 // shared machine or a network home.
 
 import { constants, type Stats } from 'node:fs'
-import { type FileHandle, link, lstat, mkdir, open, rm, stat, unlink } from 'node:fs/promises'
+import { type FileHandle, link, lstat, mkdir, open, realpath, rm, stat, unlink } from 'node:fs/promises'
 import path from 'node:path'
 
 export const PRIVATE_DIR_MODE = 0o700
@@ -18,6 +18,7 @@ const NO_FOLLOW_FLAG = constants.O_NOFOLLOW ?? 0
 const DIRECTORY_FLAG = constants.O_DIRECTORY ?? 0
 const ROOT_UID = 0
 const WORLD_WRITABLE_MODE = 0o002
+const GROUP_WRITABLE_MODE = 0o020
 const STICKY_MODE = 0o1000
 const UNTRUSTED_ANCESTOR_MESSAGE =
   'is writable by other users, so a stash kept there could be redirected to another directory by anyone on this machine'
@@ -44,11 +45,17 @@ export class FileTooLargeError extends Error {
   }
 }
 
-export async function ensurePrivateDirectory(
-  directory: string,
-  label = 'storage directory',
-  syncDirectory: typeof syncDirectoryHandle = syncDirectoryHandle,
-): Promise<void> {
+/**
+ * Prepare the storage directory, returning what a durable save still has to sync.
+ *
+ * The returned paths are the directories that name a newly created child. They
+ * are not synced here, because a sync that fails before the rename would report a
+ * failure for a directory that now exists, and the retry would find nothing left
+ * to sync and could report success for an entry that never reached the disk. The
+ * caller syncs them after the write commits, where a failure is a warning about
+ * durability rather than a lost draft.
+ */
+export async function ensurePrivateDirectory(directory: string, label = 'storage directory'): Promise<string[]> {
   await assertTrustedAncestors(directory, label)
   const created = await createPrivateDirectory(directory)
   const handle = await openValidatedDirectory(directory, label)
@@ -59,10 +66,8 @@ export async function ensurePrivateDirectory(
     await handle.close()
   }
   // A directory that names a new child holds the only record of that child, so
-  // each directory this call created is synced through its parent. Without this
-  // the drafts are durable but the storage that holds them is not, and a power
-  // loss can drop the whole subtree a successful save reported.
-  for (const parent of created) await syncDirectory(parent)
+  // the caller has to sync every directory this call created through its parent.
+  return created
 }
 
 /** Create the directory chain, returning the directories that name something new. */
@@ -87,16 +92,23 @@ async function createPrivateDirectory(directory: string): Promise<string[]> {
  *
  * Opening the storage directory without following a link protects that one
  * component, but an ancestor that another user can write is enough to rename the
- * directory underneath it and hand every later open somewhere else. Ancestors
- * are followed on purpose: a link like macOS's `/tmp` is not a threat, the
- * permissions of the directory it resolves to are what count. A sticky
- * world-writable directory such as `/tmp` is accepted, because its entries can
- * only be replaced by their owner.
+ * directory underneath it and hand every later open somewhere else. The writable
+ * bit that matters is any bit but the owner's: a group member can rename an entry
+ * just as a stranger can, so only the sticky bit — which reserves renaming to the
+ * entry's owner — makes a shared directory acceptable.
+ *
+ * Links are followed on purpose, because a link like macOS's `/tmp` is not a
+ * threat and the permissions of what it resolves to are what count. That also
+ * means the resolved chain has to be checked: a private directory reached through
+ * a link can still sit under a directory other users can write, and resolving the
+ * deepest part that exists is what names that chain.
  */
 async function assertTrustedAncestors(directory: string, label: string): Promise<void> {
   const currentUid = process.getuid?.()
-  let current = path.resolve(directory)
-  for (;;) {
+  const resolved = path.resolve(directory)
+  const checked = new Set<string>()
+  let deepestExisting: string | undefined
+  for (let current = resolved; ; ) {
     let stats: Stats
     try {
       stats = await stat(current)
@@ -105,22 +117,49 @@ async function assertTrustedAncestors(directory: string, label: string): Promise
       // ancestors still have to be checked, so a miss is not a failure here.
       if (hasErrorCode(error, 'ENOENT')) {
         const parent = path.dirname(current)
-        if (parent === current) return
+        if (parent === current) break
         current = parent
         continue
       }
       throw error
     }
-    if (currentUid !== undefined && stats.uid !== currentUid && stats.uid !== ROOT_UID) {
-      throw new Error(`${label} at ${current} is owned by another user`)
+    assertTrustedStats(stats, current, label, currentUid)
+    checked.add(current)
+    deepestExisting ??= current
+    const parent = path.dirname(current)
+    if (parent === current) break
+    current = parent
+  }
+  if (deepestExisting === undefined) return
+  let target: string
+  try {
+    target = await realpath(deepestExisting)
+  } catch (error) {
+    if (hasErrorCode(error, 'ENOENT')) return
+    throw error
+  }
+  for (let current = target; !checked.has(current); ) {
+    let stats: Stats
+    try {
+      stats = await stat(current)
+    } catch (error) {
+      if (hasErrorCode(error, 'ENOENT')) return
+      throw error
     }
-    const mode = stats.mode
-    if ((mode & WORLD_WRITABLE_MODE) !== 0 && (mode & STICKY_MODE) === 0) {
-      throw new Error(`${label} at ${current} ${UNTRUSTED_ANCESTOR_MESSAGE}`)
-    }
+    assertTrustedStats(stats, current, label, currentUid)
     const parent = path.dirname(current)
     if (parent === current) return
     current = parent
+  }
+}
+
+function assertTrustedStats(stats: Stats, directory: string, label: string, currentUid: number | undefined): void {
+  if (currentUid !== undefined && stats.uid !== currentUid && stats.uid !== ROOT_UID) {
+    throw new Error(`${label} at ${directory} is owned by another user`)
+  }
+  const shared = stats.mode & (WORLD_WRITABLE_MODE | GROUP_WRITABLE_MODE)
+  if (shared !== 0 && (stats.mode & STICKY_MODE) === 0) {
+    throw new Error(`${label} at ${directory} ${UNTRUSTED_ANCESTOR_MESSAGE}`)
   }
 }
 
@@ -130,8 +169,9 @@ async function assertTrustedAncestors(directory: string, label: string): Promise
  * An ancestor may legitimately be root-owned (`/tmp`, a mount point) and still
  * have to be synced for the entry below it to survive a power loss, so the
  * ownership rule that guards the storage directory itself is not applied here.
+ * A directory that is already gone needs no flushing.
  */
-async function syncDirectoryHandle(directory: string): Promise<void> {
+export async function syncDirectoryEntry(directory: string): Promise<void> {
   let handle: FileHandle
   try {
     handle = await open(directory, constants.O_RDONLY | DIRECTORY_FLAG)
