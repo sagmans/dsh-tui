@@ -39,7 +39,7 @@ export interface Action {
 }
 
 /** The names the surface's own handler map is keyed by. */
-export type SurfaceActionId = 'toolDetail' | 'subCalls' | 'reasoning' | 'effort' | 'history' | 'back' | 'interrupt'
+export type SurfaceActionId = 'toolDetail' | 'subCalls' | 'reasoning' | 'effort' | 'history' | 'back' | 'interrupt' | 'quit'
 
 /** A key the tty answers before the application sees it. */
 export const TERMINAL_OWNED_KEYS: readonly KeyId[] = ['ctrl+q']
@@ -148,7 +148,8 @@ export const SURFACE_ACTIONS: readonly (Action & { readonly name: SurfaceActionI
   { id: 'surface.effort', name: 'effort', layer: 'surface', defaultKeys: ['ctrl+t'], label: 'reasoning effort', mayUseBare: false, mayUnbind: false },
   { id: 'surface.history', name: 'history', layer: 'surface', defaultKeys: ['ctrl+r'], label: 'search prompt history', mayUseBare: false, mayUnbind: false },
   { id: 'surface.back', name: 'back', layer: 'surface', defaultKeys: ['ctrl+b'], label: 'back to this session', mayUseBare: false, mayUnbind: false },
-  { id: 'surface.interrupt', name: 'interrupt', layer: 'surface', defaultKeys: ['ctrl+c'], label: 'interrupt or exit', mayUseBare: false, mayUnbind: false },
+  { id: 'surface.interrupt', name: 'interrupt', layer: 'surface', defaultKeys: ['ctrl+c'], label: 'cancel', mayUseBare: false, mayUnbind: false },
+  { id: 'surface.quit', name: 'quit', layer: 'surface', defaultKeys: ['ctrl+d'], label: 'quit', mayUseBare: false, mayUnbind: false },
 ]
 
 const CHORD_ACTIONS: readonly Action[] = [
@@ -164,7 +165,7 @@ const CHORD_ACTIONS: readonly Action[] = [
 const GATE_ACTIONS: readonly Action[] = [
   { id: 'gate.allow', layer: 'gate', defaultKeys: ['y'], label: 'allow once', mayUseBare: true, mayUnbind: false },
   { id: 'gate.reject', layer: 'gate', defaultKeys: ['n'], label: 'reject', mayUseBare: true, mayUnbind: false },
-  { id: 'gate.cancel', layer: 'gate', defaultKeys: ['escape'], label: 'cancel', mayUseBare: false, mayUnbind: false },
+  { id: 'gate.cancel', layer: 'gate', defaultKeys: ['escape', 'ctrl+c'], label: 'cancel', mayUseBare: false, mayUnbind: false },
 ]
 
 const QUESTION_ACTIONS: readonly Action[] = [
@@ -173,6 +174,7 @@ const QUESTION_ACTIONS: readonly Action[] = [
   { id: 'question.toggle', layer: 'question', defaultKeys: ['space'], label: 'toggle an option', mayUseBare: false, mayUnbind: false },
   { id: 'question.confirm', layer: 'question', defaultKeys: [ENTER_KEY], label: 'answer the question', mayUseBare: false, mayUnbind: false },
   { id: 'question.skip', layer: 'question', defaultKeys: ['escape'], label: 'skip this question', mayUseBare: false, mayUnbind: false },
+  { id: 'question.cancel', layer: 'question', defaultKeys: ['ctrl+c'], label: 'abandon the questions', mayUseBare: false, mayUnbind: false },
 ]
 
 const PICKER_ACTIONS: readonly Action[] = [
@@ -181,6 +183,19 @@ const PICKER_ACTIONS: readonly Action[] = [
   { id: 'picker.confirm', layer: 'picker', defaultKeys: [ENTER_KEY], label: 'take the row', mayUseBare: false, mayUnbind: false },
   { id: 'picker.cancel', layer: 'picker', defaultKeys: ['escape', 'ctrl+c'], label: 'leave the list', mayUseBare: false, mayUnbind: false },
 ]
+
+/**
+ * Library rows this surface adds a key to.
+ *
+ * A key that only works when the reader writes it into settings is a key the
+ * surface can never reach: the transcript search owns the keyboard while it is
+ * open, so its close row is the one seam through which the cancel key gets
+ * there. The added row travels with the map, so /keys and the clash guards read
+ * the key that is really installed rather than the one the library shipped.
+ */
+export const LIBRARY_KEY_ADDITIONS: Readonly<Record<string, readonly KeyId[]>> = {
+  'tui.altScreen.searchClose': ['escape', 'ctrl+c'],
+}
 
 /**
  * Library ids whose meaning this surface owns.
@@ -282,6 +297,11 @@ export interface Shadow {
 
 function actionOf(id: string): Action | undefined {
   return ACTION_CATALOG.find(entry => entry.id === id)
+}
+
+/** The keys one action ships with, this surface's own additions to a library row included. */
+function shippedKeys(action: Action): readonly KeyId[] {
+  return LIBRARY_KEY_ADDITIONS[action.id] ?? action.defaultKeys
 }
 
 /** The keys in force for one action, or nothing when no action has that id. */
@@ -572,7 +592,7 @@ function shippedLibraryRows(): Record<string, KeyId[]> {
   const defaults = new Map(ACTION_CATALOG.map(action => [action.id, action.defaultKeys]))
   const rows: Record<string, KeyId[]> = {}
   for (const action of ACTION_CATALOG) {
-    if (action.layer === 'library') rows[action.id] = [...action.defaultKeys]
+    if (action.layer === 'library') rows[action.id] = [...shippedKeys(action)]
   }
   rows['tui.input.submit'] = [...(defaults.get('prompt.submit') ?? [])]
   rows['tui.input.newLine'] = [...(defaults.get('prompt.newLine') ?? [])]
@@ -703,7 +723,7 @@ function dispatchRows(effective: Readonly<Record<string, readonly KeyId[]>>): Re
 /** The same rows as they read before the reader wrote anything. */
 function shippedRows(): Record<string, KeyId[]> {
   const rows: Record<string, KeyId[]> = {}
-  for (const action of ACTION_CATALOG) rows[action.id] = [...action.defaultKeys]
+  for (const action of ACTION_CATALOG) rows[action.id] = [...shippedKeys(action)]
   rows['tui.input.submit'] = [...(actionOf('prompt.submit')?.defaultKeys ?? [])]
   rows['tui.input.newLine'] = [...(actionOf('prompt.newLine')?.defaultKeys ?? [])].filter(key => key !== ENTER_KEY)
   return rows
@@ -771,8 +791,13 @@ function refuseViewportTakingKeys(effective: Readonly<Record<string, readonly Ke
  * that costs them the whole section.
  */
 export function resolveKeymap(overrides: KeymapOverrides): Keymap {
+  // An addition naming a row the library no longer draws would silently drop
+  // the key, so it is refused while the startup still has somewhere to say so.
+  for (const id of Object.keys(LIBRARY_KEY_ADDITIONS)) {
+    if (actionOf(id)?.layer !== 'library') throw new Error(`key additions name ${id}, which is not a library action this surface can bind`)
+  }
   const effective: Record<string, readonly KeyId[]> = {}
-  for (const action of ACTION_CATALOG) effective[action.id] = [...action.defaultKeys]
+  for (const action of ACTION_CATALOG) effective[action.id] = [...shippedKeys(action)]
   const written = new Set<string>()
   for (const [id, value] of Object.entries(overrides)) {
     if (value === undefined) continue

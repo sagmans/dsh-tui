@@ -1,5 +1,5 @@
 import { KeybindingsManager, TUI_KEYBINDINGS, matchesKey, setKeybindings, type KeyId } from '@earendil-works/pi-tui'
-import { ACTION_CATALOG, ENTER_KEY, defaultKeymap, keysFor, type Keymap } from './actions.ts'
+import { ACTION_CATALOG, ENTER_KEY, LIBRARY_KEY_ADDITIONS, defaultKeymap, keysFor, type Keymap } from './actions.ts'
 import type { Submission } from './submission.ts'
 
 /** How long an armed chord waits for the key that follows it, in seconds. */
@@ -69,12 +69,15 @@ export function surfaceKeysLine(map: Keymap): string {
  * Only the rows the reader wrote are sent, so every key they did not touch
  * keeps whatever the library ships. The prompt bar's two actions are always
  * sent, because both need the bar's own guard and therefore differ from the
- * library's defaults even when the reader never wrote them.
+ * library's defaults even when the reader never wrote them. A row this surface
+ * adds a key to is sent for the same reason: the library reads that key itself,
+ * so a default the surface only holds on paper would never open the search.
  */
 export function libraryOverrides(map: Keymap): Record<string, KeyId[]> {
   const overrides: Record<string, KeyId[]> = {}
   for (const action of ACTION_CATALOG) {
-    if (action.layer !== 'library' || !map.written.has(action.id)) continue
+    if (action.layer !== 'library') continue
+    if (!map.written.has(action.id) && LIBRARY_KEY_ADDITIONS[action.id] === undefined) continue
     overrides[action.id] = [...keysFor(map, action.id)]
   }
   overrides['tui.input.submit'] = [...keysFor(map, 'prompt.submit')]
