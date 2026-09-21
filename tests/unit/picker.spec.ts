@@ -3,7 +3,7 @@ import { defaultKeymap, resolveKeymap, type Keymap } from '@/input/actions.ts'
 import type { StoredSession } from '@/agent/history.ts'
 import { modelRouteKey, type ModelChoice, type ModelRoute } from '@/agent/model.ts'
 import type { PresetSummary } from '@/agent/presets.ts'
-import { PICKER_WINDOW, EffortPicker, ModelPicker, PresetPicker, SessionPicker, describeAge, effortChoices, type EffortChoice } from '@/ui/picker.ts'
+import { ListPicker, PICKER_WINDOW, EffortPicker, ModelPicker, PresetPicker, SessionPicker, describeAge, effortChoices, type EffortChoice } from '@/ui/picker.ts'
 
 const session = (id: string, overrides: Partial<StoredSession> = {}): StoredSession => ({
   id,
@@ -22,6 +22,32 @@ describe('describeAge', () => {
     expect(describeAge(0, 5 * 60_000)).toBe('5m ago')
     expect(describeAge(0, 3 * 3_600_000)).toBe('3h ago')
     expect(describeAge(0, 2 * 86_400_000)).toBe('2d ago')
+  })
+})
+
+describe('ListPicker seeded filter', () => {
+  const picker = (initialFilter = ''): ListPicker<{ label: string }> =>
+    new ListPicker(
+      () => [{ label: 'alpha' }, { label: 'beta' }],
+      () => 'letters',
+      row => row.label,
+      row => ({ label: row.label, description: undefined, current: false }),
+      row => row.label,
+      { empty: () => 'nothing matches', listed: () => 'listed' },
+      defaultKeymap,
+      initialFilter,
+    )
+
+  it('opens already filtered by the draft it was seeded with', () => {
+    const seeded = picker('bet')
+    expect(seeded.visible().map(row => row.label)).toEqual(['beta'])
+    expect(seeded.card().filter).toBe('bet')
+  })
+
+  it('widens from the seeded filter when the reader backspaces', () => {
+    const seeded = picker('bet')
+    for (let index = 0; index < 3; index += 1) seeded.handleKey('\u007f')
+    expect(seeded.visible().map(row => row.label)).toEqual(['alpha', 'beta'])
   })
 })
 

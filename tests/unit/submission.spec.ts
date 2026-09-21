@@ -26,6 +26,8 @@ describe('classifySubmission', () => {
     expect(classifySubmission('/fork  parser branch ')).toEqual({ kind: 'fork', title: 'parser branch' })
     expect(classifySubmission('/todo')).toEqual({ kind: 'todo' })
     expect(classifySubmission('/copy')).toEqual({ kind: 'copy' })
+    expect(classifySubmission('/history')).toEqual({ kind: 'history', argument: '' })
+    expect(classifySubmission('/history  clear ')).toEqual({ kind: 'history', argument: 'clear' })
     expect(classifySubmission('/new  fresh start')).toEqual({ kind: 'new', title: 'fresh start' })
   })
 

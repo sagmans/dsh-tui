@@ -1,6 +1,7 @@
 import type { KeyId } from '@earendil-works/pi-tui'
 import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-settings'
+import { DEFAULT_MAX_ENTRIES, MAX_ENTRIES_LIMIT } from './agent/prompt-history.ts'
 import { defaultKeymap, keysFor, resolveKeymap, type KeyListValue, type Keymap } from './input/actions.ts'
 import { KeymapSectionSchema, isActionId } from './input/keymap-settings.ts'
 import { DEFAULT_PREFIX_KEYS, DEFAULT_PREFIX_WINDOW_S } from './input/keymap.ts'
@@ -74,6 +75,25 @@ const DEFAULT_MERMAID_MODE: MermaidMode = 'streaming'
 /** Longest chord window a reader may ask for, so a typo cannot arm one for an hour. */
 const MAX_PREFIX_WINDOW_S = 60
 
+/** Prompt history is on, and offers the dimmed completion, until the reader says otherwise. */
+const DEFAULT_HISTORY_ENABLED = true
+const DEFAULT_HISTORY_GHOST = true
+
+/** The history keys, declared once so a typo is refused by name. */
+const HISTORY_KEYS = new Set(['enabled', 'ghost', 'maxEntries'])
+
+/**
+ * The prompt-history affordances.
+ *
+ * Grouped under one key because they are tuned together: a reader who wants no
+ * ghost still keeps reverse search, and one who wants neither stops the store.
+ */
+const HistorySchema = z.object({
+  enabled: z.boolean().default(DEFAULT_HISTORY_ENABLED),
+  ghost: z.boolean().default(DEFAULT_HISTORY_GHOST),
+  maxEntries: z.number().min(1).max(MAX_ENTRIES_LIMIT).default(DEFAULT_MAX_ENTRIES),
+})
+
 const SECTION = z.object({
   palette: PaletteSchema.default({}),
   tokens: TokensSchema.default({}),
@@ -88,6 +108,7 @@ const SECTION = z.object({
   prefix: z.string(),
   prefixWindow: z.number().min(0).max(MAX_PREFIX_WINDOW_S).default(DEFAULT_PREFIX_WINDOW_S),
   keys: KeymapSectionSchema.default({}),
+  history: HistorySchema.default({ enabled: DEFAULT_HISTORY_ENABLED, ghost: DEFAULT_HISTORY_GHOST, maxEntries: DEFAULT_MAX_ENTRIES }),
 })
 
 /**
@@ -103,7 +124,7 @@ const TOKEN_NAMES = new Set<string>(TUI_TOKENS)
 const PALETTE_NAME_SET = new Set<string>(PALETTE_NAMES)
 
 /** The section's own keys: schemastery keeps what it does not declare, so a misspelling has to be refused here. */
-const SECTION_KEYS = new Set(['palette', 'tokens', 'subcalls', 'mermaid', 'prefix', 'prefixWindow', 'keys'])
+const SECTION_KEYS = new Set(['palette', 'tokens', 'subcalls', 'mermaid', 'prefix', 'prefixWindow', 'keys', 'history'])
 
 /**
  * Validate the raw section, refusing a name the surface does not have.
@@ -132,6 +153,10 @@ function rejectUnknownKeys(raw: unknown): void {
   if (unknownActions.length > 0) {
     throw new Error(`unknown ${TUI_SETTINGS_NAMESPACE} key action${unknownActions.length === 1 ? '' : 's'}: ${unknownActions.join(', ')}`)
   }
+  const unknownHistory = Object.keys(asRecord(section.history) ?? {}).filter(name => !HISTORY_KEYS.has(name))
+  if (unknownHistory.length > 0) {
+    throw new Error('unknown ' + TUI_SETTINGS_NAMESPACE + ' history key' + (unknownHistory.length === 1 ? '' : 's') + ': ' + unknownHistory.join(', '))
+  }
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -150,6 +175,7 @@ export function parseSettings(raw: unknown): TuiSettings {
     prefix: string
     prefixWindow: number
     keys: Record<string, KeyListValue>
+    history: HistorySettings
   }
   // Only what the reader actually wrote is an override: the schema fills every
   // field so validation can see a whole section, but returning those fills
@@ -197,6 +223,7 @@ export function parseSettings(raw: unknown): TuiSettings {
     prefixes: keysFor(keymap, 'chord.prefix'),
     prefixWindow: parsed.prefixWindow,
     keymap,
+    history: parsed.history,
   }
 }
 
@@ -204,6 +231,16 @@ export function parseSettings(raw: unknown): TuiSettings {
 function hasAnyField(spec: StyleSpec | undefined): boolean {
   if (spec === undefined) return false
   return Object.values(spec).some(value => value !== undefined)
+}
+
+/** The prompt-history affordances and the size the reader allows. */
+export interface HistorySettings {
+  /** Whether prompts are recorded and offered at all. */
+  readonly enabled: boolean
+  /** Whether the dimmed completion is drawn; reverse search is unaffected. */
+  readonly ghost: boolean
+  /** Entries kept, newest first. */
+  readonly maxEntries: number
 }
 
 /** What the section holds once parsed: only what the reader wrote. */
@@ -218,6 +255,8 @@ export interface TuiSettings {
   readonly prefixWindow: number
   /** Every action's keys, with the reader's overrides already merged over the shipped ones. */
   readonly keymap: Keymap
+  /** The prompt-history affordances, grouped so one key tunes them together. */
+  readonly history: HistorySettings
 }
 
 /** The section as it reads when the reader has written nothing. */
@@ -230,6 +269,7 @@ export function defaultSettings(): TuiSettings {
     prefixes: [...DEFAULT_PREFIX_KEYS],
     prefixWindow: DEFAULT_PREFIX_WINDOW_S,
     keymap: defaultKeymap(),
+    history: { enabled: DEFAULT_HISTORY_ENABLED, ghost: DEFAULT_HISTORY_GHOST, maxEntries: DEFAULT_MAX_ENTRIES },
   }
 }
 

@@ -362,7 +362,7 @@ describe('prompt-history ghost completion', () => {
   })
 
   const ghosted = (input: GhostBrush = brush()): BoxedEditor => {
-    const instance = new BoxedEditor(surface(), createTheme('none').editor, input)
+    const instance = new BoxedEditor(surface(), createTheme('none').editor, defaultKeymap, input)
     instance.focused = true
     instance.setText('fix ')
     return instance

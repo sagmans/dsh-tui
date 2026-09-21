@@ -19,12 +19,13 @@ export type Submission =
   | { readonly kind: 'keys'; readonly argument: string }
   | { readonly kind: 'copy' }
   | { readonly kind: 'plan' }
+  | { readonly kind: 'history'; readonly argument: string }
   | { readonly kind: 'command'; readonly name: string; readonly line: string }
   | { readonly kind: 'prompt'; readonly text: string }
 
 /** Commands the surface answers itself, without a model turn. */
 export const LOCAL_COMMANDS = [
-  '/help', '/status', '/model', '/preset', '/todo', '/theme', '/keys', '/jobs', '/subagents', '/fork', '/new', '/rename', '/export', '/copy', '/clear', '/resume', '/quit', '/exit',
+  '/help', '/status', '/model', '/preset', '/todo', '/theme', '/keys', '/jobs', '/subagents', '/fork', '/new', '/rename', '/export', '/copy', '/history', '/clear', '/resume', '/quit', '/exit',
 ] as const
 
 /** What each local command does, shown in the editor's completion menu. */
@@ -41,6 +42,7 @@ export const LOCAL_COMMAND_DESCRIPTIONS: Readonly<Record<string, string>> = {
   '/fork': 'branch this conversation and continue in the branch',
   '/new': 'start a fresh session without leaving the terminal',
   '/copy': 'copy the last answer to the clipboard through the terminal',
+  '/history': 'show where prompt history is kept; /history clear forgets every prompt',
   '/rename': 'give this session a title the picker will show',
   '/export': 'write the visible transcript to a markdown file',
   '/clear': 'clear the visible transcript',
@@ -91,6 +93,9 @@ export function classifySubmission(text: string): Submission {
     return { kind: 'keys', argument: trimmed.slice('/keys'.length).trim() }
   }
   if (trimmed === '/copy') return { kind: 'copy' }
+  if (trimmed === '/history' || trimmed.startsWith('/history ')) {
+    return { kind: 'history', argument: trimmed.slice('/history'.length).trim() }
+  }
   if (trimmed === '/new' || trimmed.startsWith('/new ')) {
     return { kind: 'new', title: trimmed.slice('/new'.length).trim() }
   }

@@ -39,7 +39,7 @@ export interface Action {
 }
 
 /** The names the surface's own handler map is keyed by. */
-export type SurfaceActionId = 'toolDetail' | 'subCalls' | 'reasoning' | 'effort' | 'back' | 'interrupt'
+export type SurfaceActionId = 'toolDetail' | 'subCalls' | 'reasoning' | 'effort' | 'history' | 'back' | 'interrupt'
 
 /** A key the tty answers before the application sees it. */
 export const TERMINAL_OWNED_KEYS: readonly KeyId[] = ['ctrl+q']
@@ -146,6 +146,7 @@ export const SURFACE_ACTIONS: readonly (Action & { readonly name: SurfaceActionI
   { id: 'surface.subCalls', name: 'subCalls', layer: 'surface', defaultKeys: ['ctrl+y'], label: 'nested calls', mayUseBare: false, mayUnbind: false },
   { id: 'surface.reasoning', name: 'reasoning', layer: 'surface', defaultKeys: ['shift+tab'], label: 'reasoning', mayUseBare: false, mayUnbind: false },
   { id: 'surface.effort', name: 'effort', layer: 'surface', defaultKeys: ['ctrl+t'], label: 'reasoning effort', mayUseBare: false, mayUnbind: false },
+  { id: 'surface.history', name: 'history', layer: 'surface', defaultKeys: ['ctrl+r'], label: 'search prompt history', mayUseBare: false, mayUnbind: false },
   { id: 'surface.back', name: 'back', layer: 'surface', defaultKeys: ['ctrl+b'], label: 'back to this session', mayUseBare: false, mayUnbind: false },
   { id: 'surface.interrupt', name: 'interrupt', layer: 'surface', defaultKeys: ['ctrl+c'], label: 'interrupt or exit', mayUseBare: false, mayUnbind: false },
 ]

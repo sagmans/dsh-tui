@@ -90,7 +90,11 @@ export class ListPicker<Row> {
     private readonly hints: PickerHints,
     /** The keys in force, read per press so a settings edit lands on the next key. */
     private readonly keys: () => Keymap,
-  ) {}
+    /** A draft to open already filtered by, so a search can start where the reader is. */
+    initialFilter = '',
+  ) {
+    this.filter = initialFilter
+  }
 
   /** Rows matching the typed filter, best match first. */
   visible(): readonly Row[] {
