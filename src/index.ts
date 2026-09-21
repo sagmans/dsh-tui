@@ -56,6 +56,8 @@ import { WarningSafeTui } from './terminal/warning-screen.ts'
 import { BELL, shouldRingBell } from './terminal/bell.ts'
 import { clipboardSequence } from './terminal/clipboard.ts'
 import { CLEAR_TITLE, windowTitle } from './terminal/title.ts'
+import { sessionStartReason } from './herdr/state.ts'
+import { createHerdrReporter } from './herdr/reporter.ts'
 import { defaultExportFile, transcriptToText } from './export.ts'
 import { createTheme, forwardEditorTheme, forwardMarkdownTheme, type TuiTheme } from './theme.ts'
 import { detectColourMode, type ColourMode } from './theme-capability.ts'
@@ -462,10 +464,28 @@ export function apply(ctx: Context, config: unknown): void {
   // A window that outlived the surface would repaint a screen that is gone.
   disposers.push(() => keyChord.disarm())
 
+  // A containing Herdr is told what this pane is doing; away from one the
+  // reporter is inert, so the surface never depends on being multiplexed.
+  const herdr = createHerdrReporter()
+  // Kept out of the disposal list on purpose: the row is handed back before
+  // this stops guarding it, so a host that leaves during the release still
+  // releases synchronously.
+  const unregisterExit = herdr.registerExitRelease()
+
   restore.add(() => tui.stop())
   ctx.effect(() => () => {
+    // The pane stops being an agent before the process that claimed it unwinds:
+    // a release that ran after the reports were unregistered would race them,
+    // and one that never ran would leave a row that reads as a live agent. The
+    // reports already on the wire are settled first, because Herdr ignores a
+    // release for a pane nothing has claimed yet — the report that followed it
+    // would otherwise claim the row back. The promise is returned so a host that
+    // waits for teardown waits for the row too, and the exit listener outlives
+    // the wait, so one that does not still hands the row back synchronously.
+    const released = herdr.release().catch(() => undefined)
     restore.restore()
     for (const dispose of disposers.reverse()) dispose()
+    return released.finally(unregisterExit)
   })
 
   tui.setLayoutRoot(new VStack([
@@ -491,25 +511,36 @@ export function apply(ctx: Context, config: unknown): void {
     if (exited) return
     exited = true
     clearInterval(statusTicker)
-    // Hand the window label back before the screen does, so a shell that sets
-    // its own title can take over cleanly.
+    // The screen goes back at once, so leaving feels like leaving; the row goes
+    // back behind it. Reports already on the wire are settled first, because
+    // Herdr ignores the release of a pane nothing has claimed yet — the report
+    // that followed it would otherwise claim the row back during shutdown.
     terminal.write(CLEAR_TITLE)
     restore.restore()
-    // Everything below is written after the release: the alternate screen closes
-    // over whatever was painted on it, and a failure nobody can read is not a
-    // failure that was reported.
-    if (reason !== undefined) terminal.write(`\ndsh-tui: ${reason}\n`)
-    // The hint is computed here rather than read from the context because only
-    // the surface knows which session it is leaving: a fork or a switch moves it.
-    // A run that opened nothing has nothing to offer back: the identity it was
-    // launched with names no log, so pointing at it would send the reader to a
-    // conversation that does not exist.
-    if (sessionOpened) terminal.write(`\n${resumeHint(String(activeSession), PROFILE_NAME)}\n`)
-    appExit(code)
+    void herdr
+      .release()
+      // Nobody is left to report a release that failed on the way out, and a
+      // row that could not be cleared is not a reason to keep the process.
+      .catch(() => undefined)
+      .finally(() => {
+        // Everything below is written after the release: a failure nobody can
+        // read is not a failure that was reported.
+        if (reason !== undefined) terminal.write(`\ndsh-tui: ${reason}\n`)
+        // The hint is computed here rather than read from the context because
+        // only the surface knows which session it is leaving: a fork or a
+        // switch moves it. A run that opened nothing has nothing to offer back:
+        // the identity it was launched with names no log, so pointing at it
+        // would send the reader to a conversation that does not exist.
+        if (sessionOpened) terminal.write(`\n${resumeHint(String(activeSession), PROFILE_NAME)}\n`)
+        appExit(code)
+      })
   }
 
   const openGate = (next: PendingGate): void => {
     pending = next
+    // The card's own title names the decision, which is what a reader glancing
+    // at a wall of panes needs in order to know which one to open.
+    herdr.block(next.gate.card().title)
     // A gate owns the keyboard: the editor must not collect the decision keys.
     editor.disableSubmit = true
     tui.setFocus(null)
@@ -522,6 +553,7 @@ export function apply(ctx: Context, config: unknown): void {
 
   const closeGate = (): void => {
     pending = undefined
+    herdr.unblock()
     editor.disableSubmit = false
     // The question is answered or skipped, so the reader gets their prompt back
     // in the bar they left it in.
@@ -695,6 +727,7 @@ export function apply(ctx: Context, config: unknown): void {
   const settlePicker = (id: string | undefined): void => {
     const settle = pendingPicker?.settle
     pendingPicker = undefined
+    herdr.unblock()
     editor.disableSubmit = false
     tui.setFocus(editor)
     settle?.(id)
@@ -725,6 +758,9 @@ export function apply(ctx: Context, config: unknown): void {
   ): Promise<string | undefined> =>
     new Promise<string | undefined>(resolve => {
       pendingPicker = { picker, settle: resolve, vet }
+      // A picker owns the keyboard exactly as a gate does: nothing moves until
+      // the reader chooses, so it is the same kind of wait.
+      herdr.block(picker.card().title)
       editor.disableSubmit = true
       tui.setFocus(null)
       tui.requestRender()
@@ -979,6 +1015,13 @@ export function apply(ctx: Context, config: unknown): void {
     activeSession = id
     viewedSession = id
     agent = handle
+    // The agent's own id is reported rather than the requested one: a resume can
+    // be answered by the session the log actually holds.
+    herdr.session({
+      id: String(handle.sessionId),
+      cwd: process.cwd(),
+      reason: sessionStartReason({ forked: fork !== undefined, resumed: resume }),
+    })
     // A session with no history to fold still has to present its first live
     // card through the right scope, so the scope is set before any event can.
     presentScope = handle.agent
@@ -1785,12 +1828,14 @@ export function apply(ctx: Context, config: unknown): void {
         turnOpen = true
         turnStartedAt = Date.now()
         terminal.write(windowTitle(process.cwd(), 'working'))
+        herdr.working()
       }
       if (event.type === 'turn/end') {
         const ranFor = turnStartedAt === undefined ? 0 : Date.now() - turnStartedAt
         turnOpen = false
         turnStartedAt = undefined
         terminal.write(windowTitle(process.cwd(), 'ready'))
+        herdr.idle()
         if (shouldRingBell({ bell: resolved.bell, ranForMs: ranFor, exiting: exited })) terminal.write(BELL)
         // A job the turn started may have settled while the reader was watching
         // something else, and nothing else refreshes a live board.
@@ -1964,6 +2009,9 @@ export function apply(ctx: Context, config: unknown): void {
     if (!resolved.resumePicker) await presetFor(resolved.sessionId, resolved.resume, undefined)
     tui.start()
     terminal.write(windowTitle(process.cwd(), 'ready'))
+    // Claiming the pane's agent row does not wait for a session: the pane is
+    // already on screen and already idle, and a session may still be chosen.
+    herdr.publish()
     // A refused settings edit is only visible now that the surface owns the
     // screen; whatever the scope found before this point prints here instead.
     settingsNotice.open(message => model.notice(message))
