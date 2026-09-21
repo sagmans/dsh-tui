@@ -11,6 +11,7 @@ import { createConnection } from 'node:net'
 import {
   DEFAULT_ATTEMPTS,
   DEFAULT_TIMEOUT_MS,
+  EXIT_RELEASE_TIMEOUT_MS,
   HERDR_AGENT,
   HERDR_ENV_FLAG,
   HERDR_ENV_VAR,
@@ -50,6 +51,10 @@ export interface HerdrClient {
   reportState(report: StateReport): Promise<boolean>
   reportSession(report: SessionReport): Promise<boolean>
   reportMetadata(tokens: Readonly<Record<string, string | undefined>>): Promise<boolean>
+  /** Stop accepting reports and drop the ones still waiting. */
+  stop(): void
+  /** Wait until the transport owes nothing more, or the budget runs out. */
+  settle(timeoutMs?: number): Promise<void>
 }
 
 interface WireRequest {
@@ -91,6 +96,14 @@ export function createHerdrClient(env: HerdrEnvironment = process.env, options: 
   let requestNumber = 0
   let queued: QueuedReport[] = []
   let pumping = false
+  let closed = false
+  let waiters: Array<() => void> = []
+
+  const wake = (): void => {
+    const waiting = waiters
+    waiters = []
+    for (const resolve of waiting) resolve()
+  }
 
   const deliver = async (request: WireRequest): Promise<boolean> =>
     socketPath === undefined ? true : sendWithRetry(socketPath, request, attempts, timeoutMs)
@@ -99,19 +112,20 @@ export function createHerdrClient(env: HerdrEnvironment = process.env, options: 
     if (pumping) return
     pumping = true
     try {
-      while (queued.length > 0) {
+      while (!closed && queued.length > 0) {
         const next = queued.shift()
         if (next === undefined) break
         next.settle(await deliver(next.request))
       }
     } finally {
       pumping = false
+      wake()
     }
   }
 
   const enqueue = (method: string, params: Record<string, unknown>, coalescing: boolean): Promise<boolean> =>
     new Promise<boolean>(resolve => {
-      if (!enabled || paneId === undefined || socketPath === undefined) {
+      if (closed || !enabled || paneId === undefined || socketPath === undefined) {
         resolve(true)
         return
       }
@@ -153,6 +167,30 @@ export function createHerdrClient(env: HerdrEnvironment = process.env, options: 
         applies_to_source: HERDR_SOURCE,
         tokens: acceptedTokens(tokens),
       }, false)
+    },
+    stop() {
+      // Nothing still waiting is sent once the pane stops being an agent: Herdr
+      // ignores the release of a pane nothing has claimed, so a report that
+      // landed after the release would claim the row back for a process on its
+      // way out.
+      closed = true
+      const discarded = queued
+      queued = []
+      for (const entry of discarded) entry.settle(false)
+      wake()
+    },
+    async settle(timeoutMs = EXIT_RELEASE_TIMEOUT_MS) {
+      // Only what is already on the wire is waited for; the wait is bounded so
+      // a wedged socket cannot hold the process open instead of releasing.
+      if (!pumping) return
+      await Promise.race([
+        new Promise<void>(resolve => {
+          waiters.push(resolve)
+        }),
+        new Promise<void>(resolve => {
+          setTimeout(resolve, timeoutMs)
+        }),
+      ])
     },
   }
 }

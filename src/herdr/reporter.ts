@@ -20,6 +20,8 @@ import {
   HERDR_SOCKET_PATH_VAR,
   HERDR_SOURCE,
   METADATA_TOKENS,
+  RETRY_BASE_MS,
+  RETRY_MAX_MS,
   type SessionStartReason,
 } from './constants.ts'
 import { boundedMessage, createReportSequence, isReportChange, lifecycleReport, type LifecycleReport } from './state.ts'
@@ -35,6 +37,8 @@ export interface HerdrReporterOptions {
   readonly env?: HerdrEnvironment
   readonly now?: () => number
   readonly releaseSync?: () => void
+  /** The first retry wait; a test cannot wait a socket out. */
+  readonly retryBaseMs?: number | undefined
 }
 
 export interface HerdrReporter {
@@ -53,6 +57,8 @@ export interface HerdrReporter {
   publish(force?: boolean): void
   /** Hand the pane's agent row back before the process leaves. */
   releaseSync(): void
+  /** Hand the row back with the reports already on the wire settled. */
+  release(): Promise<void>
   /** Release on process exit; returns the unregister function. */
   registerExitRelease(): () => void
 }
@@ -64,6 +70,7 @@ export function createHerdrReporter(options: HerdrReporterOptions = {}): HerdrRe
   // A fresh sequence rides along: Herdr keeps the newest number per source and
   // drops a release that cannot beat the reports this pane already sent.
   const release = options.releaseSync ?? ((): void => releaseAgentSync(env, nextSeq()))
+  const retryBaseMs = Math.max(1, options.retryBaseMs ?? RETRY_BASE_MS)
   let blockedCount = 0
   let blockedMessage: string | undefined
   let turnOpen = false
@@ -75,6 +82,39 @@ export function createHerdrReporter(options: HerdrReporterOptions = {}): HerdrRe
   let sessionSent = false
   let metadataSent = false
   let released = false
+  let retryTimer: ReturnType<typeof setTimeout> | undefined
+  let retryAttempt = 0
+
+  const owed = (): boolean =>
+    (wantedState !== undefined && !stateSent) ||
+    (wantedSession !== undefined && !sessionSent) ||
+    (wantedMetadata !== undefined && !metadataSent)
+
+  const cancelRetry = (): void => {
+    if (retryTimer !== undefined) clearTimeout(retryTimer)
+    retryTimer = undefined
+    retryAttempt = 0
+  }
+
+  /**
+   * Try an unacknowledged report again, later.
+   *
+   * A report that failed leaves the pane reading as something it is not, and
+   * the surface may have nothing else to say: a turn that ended while the
+   * socket was down produces no further event, so the retry cannot wait for
+   * one. The wait backs off so a socket that stays down is not hammered, and it
+   * never holds the process open.
+   */
+  const scheduleRetry = (): void => {
+    if (released || retryTimer !== undefined) return
+    retryAttempt += 1
+    const wait = Math.min(retryBaseMs * 2 ** (retryAttempt - 1), RETRY_MAX_MS)
+    retryTimer = setTimeout(() => {
+      retryTimer = undefined
+      flush()
+    }, wait)
+    retryTimer.unref()
+  }
 
   /**
    * Send what Herdr has not acknowledged.
@@ -87,22 +127,38 @@ export function createHerdrReporter(options: HerdrReporterOptions = {}): HerdrRe
    */
   const flush = (): void => {
     if (released) return
+    const afterDelivery = (delivered: boolean): void => {
+      if (!delivered) {
+        scheduleRetry()
+        return
+      }
+      if (!owed()) cancelRetry()
+    }
     if (wantedSession !== undefined && !sessionSent) {
       const report = wantedSession
       sessionSent = true
       void client.reportSession({ sessionId: report.sessionId, seq: nextSeq(), reason: report.reason })
-        .then(delivered => { if (!delivered) sessionSent = false })
+        .then(delivered => {
+          if (!delivered) sessionSent = false
+          afterDelivery(delivered)
+        })
     }
     if (wantedMetadata !== undefined && !metadataSent) {
       const tokens = wantedMetadata
       metadataSent = true
-      void client.reportMetadata(tokens).then(delivered => { if (!delivered) metadataSent = false })
+      void client.reportMetadata(tokens).then(delivered => {
+        if (!delivered) metadataSent = false
+        afterDelivery(delivered)
+      })
     }
     if (wantedState !== undefined && !stateSent) {
       const next = wantedState
       stateSent = true
       void client.reportState({ state: next.state, message: next.message, seq: nextSeq(), sessionId })
-        .then(delivered => { if (!delivered) stateSent = false })
+        .then(delivered => {
+          if (!delivered) stateSent = false
+          afterDelivery(delivered)
+        })
     }
   }
 
@@ -151,10 +207,22 @@ export function createHerdrReporter(options: HerdrReporterOptions = {}): HerdrRe
       // and a second spawn would only delay the process leaving.
       if (released) return
       released = true
+      cancelRetry()
       // Nothing may be reported after this: the pane is no longer an agent, and
       // a report that landed later would claim the row back for a process that
       // is on its way out.
+      client.stop()
       release()
+    },
+    async release() {
+      if (released) return
+      // Reports already on the wire are waited for before the row goes back:
+      // Herdr ignores the release of a pane nothing has claimed, so a report
+      // that arrived after it would claim the row back with an older number.
+      // The synchronous release stays as the path an exit cannot skip.
+      client.stop()
+      await client.settle()
+      reporter.releaseSync()
     },
     registerExitRelease() {
       const listener = (): void => reporter.releaseSync()

@@ -13,15 +13,27 @@ interface Recorded {
 }
 
 /** A client that records instead of dialling: these tests are about decisions. */
-function recordingClient(): { readonly calls: Recorded[]; readonly client: HerdrClient } {
+function recordingClient(): {
+  readonly calls: Recorded[]
+  readonly client: HerdrClient
+  readonly transport: string[]
+} {
   const calls: Recorded[] = []
+  const transport: string[] = []
   return {
     calls,
+    transport,
     client: {
       enabled: true,
       reportState: async (report: StateReport) => (calls.push({ kind: 'state', value: report }), true),
       reportSession: async report => (calls.push({ kind: 'session', value: report }), true),
       reportMetadata: async tokens => (calls.push({ kind: 'metadata', value: tokens }), true),
+      stop: () => {
+        transport.push('stop')
+      },
+      settle: async () => {
+        transport.push('settle')
+      },
     },
   }
 }
@@ -161,7 +173,7 @@ describe('createHerdrReporter', () => {
     expect(released).toBe(1)
   })
 
-  it('retries a report Herdr did not acknowledge', async () => {
+  it('retries a report Herdr did not acknowledge without another lifecycle call', async () => {
     let reachable = false
     const calls: Recorded[] = []
     const client: HerdrClient = {
@@ -169,20 +181,85 @@ describe('createHerdrReporter', () => {
       reportState: async report => (calls.push({ kind: 'state', value: report }), reachable),
       reportSession: async () => true,
       reportMetadata: async () => true,
+      stop: () => {},
+      settle: async () => {},
     }
-    const reporter = createHerdrReporter({ client, now: () => 1 })
+    const reporter = createHerdrReporter({ client, now: () => 1, retryBaseMs: 1 })
 
     reporter.idle()
     await Promise.resolve()
     expect(states(calls).length).toBe(1)
 
-    // The state did not change, but Herdr never heard it: a pane left reading
-    // as something it is not is worse than one more report.
+    // Nothing else happens in this pane, so a retry that waited for another
+    // event would never come: the reporter has to make it happen.
     reachable = true
-    reporter.idle()
-    await Promise.resolve()
+    await new Promise(resolve => setTimeout(resolve, 40))
 
     expect(states(calls).length).toBe(2)
+  })
+
+  it('stops retrying once the row has been handed back', async () => {
+    const calls: Recorded[] = []
+    const client: HerdrClient = {
+      enabled: true,
+      reportState: async report => (calls.push({ kind: 'state', value: report }), false),
+      reportSession: async () => true,
+      reportMetadata: async () => true,
+      stop: () => {},
+      settle: async () => {},
+    }
+    const reporter = createHerdrReporter({ client, now: () => 1, retryBaseMs: 1, releaseSync: () => {} })
+
+    reporter.working()
+    await Promise.resolve()
+    await reporter.release()
+    const seen = states(calls).length
+
+    await new Promise(resolve => setTimeout(resolve, 40))
+
+    // A retry after the release would claim the row back for a pane that is no
+    // longer an agent.
+    expect(states(calls).length).toBe(seen)
+  })
+
+  it('waits for the report on the wire before handing the row back', async () => {
+    const order: string[] = []
+    let complete: ((value: boolean) => void) | undefined
+    let finishSettling: (() => void) | undefined
+    const client: HerdrClient = {
+      enabled: true,
+      reportState: () => new Promise<boolean>(resolve => {
+        complete = resolve
+      }),
+      reportSession: async () => true,
+      reportMetadata: async () => true,
+      stop: () => {
+        if (!order.includes('stop')) order.push('stop')
+      },
+      settle: async () => new Promise<void>(resolve => {
+        order.push('settle')
+        finishSettling = resolve
+      }),
+    }
+    let released = 0
+    const reporter = createHerdrReporter({ client, now: () => 1, releaseSync: () => {
+      order.push('release')
+      released += 1
+    } })
+
+    reporter.working()
+    const handingBack = reporter.release()
+    await Promise.resolve()
+
+    // The report is still unanswered, and a release that outran it would be
+    // ignored for a pane nothing has claimed: the late report would then claim
+    // the row after teardown.
+    expect(released).toBe(0)
+    complete?.(true)
+    finishSettling?.()
+    await handingBack
+
+    expect(order).toEqual(['stop', 'settle', 'release'])
   })
 
   it('retries a session identity a socket was down for', async () => {
@@ -193,6 +270,8 @@ describe('createHerdrReporter', () => {
       reportState: async report => (calls.push({ kind: 'state', value: report }), true),
       reportSession: async report => (calls.push({ kind: 'session', value: report }), reachable),
       reportMetadata: async tokens => (calls.push({ kind: 'metadata', value: tokens }), reachable),
+      stop: () => {},
+      settle: async () => {},
     }
     const reporter = createHerdrReporter({ client, now: () => 1 })
 

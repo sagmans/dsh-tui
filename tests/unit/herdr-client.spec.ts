@@ -216,6 +216,50 @@ describe('createHerdrClient', () => {
     expect(await client.reportState({ state: 'working', message: undefined, seq: 1, sessionId: undefined })).toBe(false)
     expect(await client.reportState({ state: 'idle', message: undefined, seq: 2, sessionId: undefined })).toBe(true)
   })
+
+  it('drops what was still waiting when the pane stops being an agent', async () => {
+    const herdr = await listen(() => undefined)
+    const client = createHerdrClient(env(herdr.path), { attempts: 1, timeoutMs: 40 })
+
+    const inFlight = client.reportState({ state: 'working', message: undefined, seq: 1, sessionId: undefined })
+    const waiting = client.reportSession({ sessionId: 'tui-session-1', seq: 2, reason: 'startup' })
+    await new Promise(resolve => setTimeout(resolve, 5))
+    client.stop()
+
+    // Herdr ignores the release of a pane nothing has claimed, so a report that
+    // landed after it would claim the row back for a process on its way out.
+    expect(await waiting).toBe(false)
+    expect(herdr.requests.length).toBe(1)
+    expect(await inFlight).toBe(false)
+
+    // A stopped transport is not a broken one: the surface may still ask.
+    expect(await client.reportState({ state: 'idle', message: undefined, seq: 3, sessionId: undefined })).toBe(true)
+    expect(herdr.requests.length).toBe(1)
+  })
+
+  it('settles after the report already on the wire', async () => {
+    const herdr = await listen(() => undefined)
+    const client = createHerdrClient(env(herdr.path), { attempts: 1, timeoutMs: 60 })
+    const order: string[] = []
+
+    const report = client.reportState({ state: 'working', message: undefined, seq: 1, sessionId: undefined })
+      .then(() => order.push('report'))
+    const settled = client.settle(5_000).then(() => order.push('settle'))
+    await Promise.all([report, settled])
+
+    // The row cannot go back before the report it may yet claim it has landed.
+    expect(order).toEqual(['report', 'settle'])
+  })
+
+  it('settles at once when the transport owes nothing', async () => {
+    const herdr = await listen(ok)
+    const client = createHerdrClient(env(herdr.path), { attempts: 1, timeoutMs: 60 })
+    const started = Date.now()
+
+    await client.settle(5_000)
+
+    expect(Date.now() - started).toBeLessThan(1_000)
+  })
 })
 
 describe('acceptedTokens', () => {

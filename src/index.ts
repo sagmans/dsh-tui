@@ -473,8 +473,13 @@ export function apply(ctx: Context, config: unknown): void {
   ctx.effect(() => () => {
     // The pane stops being an agent before the process that claimed it unwinds:
     // a release that ran after the reports were unregistered would race them,
-    // and one that never ran would leave a row that reads as a live agent.
-    herdr.releaseSync()
+    // and one that never ran would leave a row that reads as a live agent. The
+    // reports already on the wire are settled first, because Herdr ignores a
+    // release for a pane nothing has claimed yet — the report that followed it
+    // would otherwise claim the row back. The wait cannot hold the process open
+    // past the release itself; the exit listener is disposed last, so a process
+    // that leaves during the wait still hands the row back synchronously.
+    void herdr.release()
     restore.restore()
     for (const dispose of disposers.reverse()) dispose()
   })

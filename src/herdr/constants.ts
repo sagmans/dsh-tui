@@ -58,6 +58,12 @@ export const DEFAULT_TIMEOUT_MS = 500
 /** A release on the way out cannot outlive the process that owes it. */
 export const EXIT_RELEASE_TIMEOUT_MS = 250
 
+/** The first wait before a report Herdr did not acknowledge is sent again. */
+export const RETRY_BASE_MS = 250
+
+/** The longest that wait can grow to, so a down socket is still noticed. */
+export const RETRY_MAX_MS = 8_000
+
 /** Beyond this a response is a surprise, not an answer. */
 export const MAX_RESPONSE_BYTES = 64 * 1024
 export const RESPONSE_DELIMITER = '\n'
