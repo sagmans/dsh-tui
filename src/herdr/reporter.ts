@@ -68,8 +68,43 @@ export function createHerdrReporter(options: HerdrReporterOptions = {}): HerdrRe
   let blockedMessage: string | undefined
   let turnOpen = false
   let sessionId: string | undefined
-  let last: LifecycleReport | undefined
+  let wantedState: LifecycleReport | undefined
+  let wantedSession: { readonly sessionId: string; readonly reason: SessionStartReason } | undefined
+  let wantedMetadata: Readonly<Record<string, string | undefined>> | undefined
+  let stateSent = false
+  let sessionSent = false
+  let metadataSent = false
   let released = false
+
+  /**
+   * Send what Herdr has not acknowledged.
+   *
+   * A report that failed is still owed: a socket that was down while a turn ran
+   * would otherwise leave the pane reading as working forever, and a session
+   * whose identity never arrived is one a reader cannot return to. Each flag is
+   * set before the send and cleared only by a failure, so the next publish
+   * retries exactly what is missing and a delivered report is never repeated.
+   */
+  const flush = (): void => {
+    if (released) return
+    if (wantedSession !== undefined && !sessionSent) {
+      const report = wantedSession
+      sessionSent = true
+      void client.reportSession({ sessionId: report.sessionId, seq: nextSeq(), reason: report.reason })
+        .then(delivered => { if (!delivered) sessionSent = false })
+    }
+    if (wantedMetadata !== undefined && !metadataSent) {
+      const tokens = wantedMetadata
+      metadataSent = true
+      void client.reportMetadata(tokens).then(delivered => { if (!delivered) metadataSent = false })
+    }
+    if (wantedState !== undefined && !stateSent) {
+      const next = wantedState
+      stateSent = true
+      void client.reportState({ state: next.state, message: next.message, seq: nextSeq(), sessionId })
+        .then(delivered => { if (!delivered) stateSent = false })
+    }
+  }
 
   const reporter: HerdrReporter = {
     enabled: client.enabled,
@@ -95,23 +130,30 @@ export function createHerdrReporter(options: HerdrReporterOptions = {}): HerdrRe
     },
     session(input) {
       sessionId = input.id
-      void client.reportSession({ sessionId: input.id, seq: nextSeq(), reason: input.reason })
-      void client.reportMetadata({ [METADATA_TOKENS.session]: input.id, [METADATA_TOKENS.cwd]: input.cwd })
+      wantedSession = { sessionId: input.id, reason: input.reason }
+      sessionSent = false
+      wantedMetadata = { [METADATA_TOKENS.session]: input.id, [METADATA_TOKENS.cwd]: input.cwd }
+      metadataSent = false
       // Forced: a switch can land on the state Herdr already shows, and the
       // session identity is part of what the pane means.
       reporter.publish(true)
     },
     publish(force = false) {
       const next = lifecycleReport({ blockedCount, blockedMessage, turnOpen })
-      if (!force && !isReportChange(last, next)) return
-      last = next
-      void client.reportState({ state: next.state, message: next.message, seq: nextSeq(), sessionId })
+      if (force || isReportChange(wantedState, next)) {
+        wantedState = next
+        stateSent = false
+      }
+      flush()
     },
     releaseSync() {
       // One release is enough: both the exit path and the teardown path can ask,
       // and a second spawn would only delay the process leaving.
       if (released) return
       released = true
+      // Nothing may be reported after this: the pane is no longer an agent, and
+      // a report that landed later would claim the row back for a process that
+      // is on its way out.
       release()
     },
     registerExitRelease() {

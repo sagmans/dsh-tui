@@ -132,14 +132,29 @@ describe('createHerdrClient', () => {
     expect(Date.now() - started).toBeLessThan(200)
   })
 
-  it('gives up once the attempt budget is spent', async () => {
+  it('retries a report the server answered with an error', async () => {
+    let calls = 0
+    const herdr = await listen(request => {
+      calls += 1
+      return calls === 1 ? { id: request.id, error: { code: 'busy' } } : ok(request)
+    })
+    const client = createHerdrClient(env(herdr.path), { attempts: 2, timeoutMs: 200 })
+
+    expect(await client.reportState({ state: 'idle', message: undefined, seq: 1, sessionId: undefined })).toBe(true)
+    expect(herdr.requests.length).toBe(2)
+  })
+
+  it('gives up when the whole report budget is spent, however many attempts remain', async () => {
     // A listener that never answers is what a wedged or half-started server
-    // looks like from inside the pane.
+    // looks like from inside the pane. The budget covers the whole report, so a
+    // server that never answers cannot be asked five times for the price of one.
     const herdr = await listen(() => undefined)
-    const client = createHerdrClient(env(herdr.path), { attempts: 2, timeoutMs: 20 })
+    const client = createHerdrClient(env(herdr.path), { attempts: 5, timeoutMs: 25 })
+    const started = Date.now()
 
     expect(await client.reportState({ state: 'idle', message: undefined, seq: 1, sessionId: undefined })).toBe(false)
-    expect(herdr.requests.length).toBe(2)
+    expect(herdr.requests.length).toBe(1)
+    expect(Date.now() - started).toBeLessThan(500)
   })
 
   it('treats an error answer as undelivered', async () => {
@@ -156,17 +171,38 @@ describe('createHerdrClient', () => {
     expect(await client.reportState({ state: 'idle', message: undefined, seq: 1, sessionId: undefined })).toBe(false)
   })
 
-  it('delivers reports in the order the surface decided them', async () => {
+  it('sends the newest state instead of every state it passed through', async () => {
     const herdr = await listen(ok)
     const client = createHerdrClient(env(herdr.path))
 
-    await Promise.all([
+    const pending = Promise.all([
       client.reportState({ state: 'working', message: undefined, seq: 1, sessionId: undefined }),
       client.reportState({ state: 'blocked', message: 'approval needed · Bash', seq: 2, sessionId: undefined }),
       client.reportState({ state: 'idle', message: undefined, seq: 3, sessionId: undefined }),
     ])
 
-    expect(herdr.requests.map(request => request.params?.seq)).toEqual([1, 2, 3])
+    // A state describes the pane now, so the one still waiting to be sent is
+    // replaced rather than replayed; the pane's own history is not Herdr's.
+    expect(await pending).toEqual([true, true, true])
+    expect(herdr.requests.map(request => request.params?.seq)).toEqual([1, 3])
+    expect(herdr.requests.at(-1)?.params?.state).toBe('idle')
+  })
+
+  it('keeps a session and its tokens in the order they were decided', async () => {
+    const herdr = await listen(ok)
+    const client = createHerdrClient(env(herdr.path))
+
+    await Promise.all([
+      client.reportSession({ sessionId: 'tui-session-1', seq: 1, reason: 'startup' }),
+      client.reportMetadata({ dsh_session: 'tui-session-1', dsh_cwd: '/tmp/project' }),
+      client.reportState({ state: 'idle', message: undefined, seq: 2, sessionId: 'tui-session-1' }),
+    ])
+
+    expect(herdr.requests.map(request => request.method)).toEqual([
+      'pane.report_agent_session',
+      'pane.report_metadata',
+      'pane.report_agent',
+    ])
   })
 
   it('keeps reporting after one report is lost', async () => {
@@ -183,13 +219,15 @@ describe('createHerdrClient', () => {
 })
 
 describe('acceptedTokens', () => {
-  it('drops an absent value rather than sending undefined', () => {
-    expect(acceptedTokens({ dsh_session: 'x', dsh_cwd: undefined })).toEqual({ dsh_session: 'x' })
+  it('clears a token whose value is absent', () => {
+    expect(acceptedTokens({ dsh_session: 'x', dsh_cwd: undefined })).toEqual({ dsh_session: 'x', dsh_cwd: null })
   })
 
-  it('drops a value Herdr would refuse the whole report over', () => {
+  it('clears a value too long to be held whole', () => {
+    // Herdr shortens what it cannot hold, and a shortened path reads as a
+    // different directory; clearing the token is the only honest answer.
     const long = 'y'.repeat(MAX_METADATA_VALUE_CHARS + 1)
-    expect(acceptedTokens({ dsh_cwd: long, dsh_session: 'x' })).toEqual({ dsh_session: 'x' })
+    expect(acceptedTokens({ dsh_cwd: long, dsh_session: 'x' })).toEqual({ dsh_cwd: null, dsh_session: 'x' })
   })
 
   it('keeps a value at the limit', () => {

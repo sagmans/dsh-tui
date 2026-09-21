@@ -52,13 +52,33 @@ export interface HerdrClient {
   reportMetadata(tokens: Readonly<Record<string, string | undefined>>): Promise<boolean>
 }
 
+interface WireRequest {
+  readonly id: string
+  readonly method: string
+  readonly params: Record<string, unknown>
+}
+
+interface QueuedReport {
+  readonly request: WireRequest
+  /**
+   * Whether a newer report of the same kind makes this one pointless.
+   *
+   * A state describes the pane now, so a socket that was down while a turn ran
+   * must be told the state it is in rather than the states it passed through;
+   * a session and its tokens are facts about an event, and every one of them
+   * happened.
+   */
+  readonly coalescing: boolean
+  readonly settle: (delivered: boolean) => void
+}
+
 /**
  * Create the client for one pane.
  *
- * Requests are serialized on a single chain instead of racing: state reports
- * are sequenced server-side, and a chain keeps them arriving in the order the
- * surface decided them. The chain is bounded in practice because states change
- * a handful of times a turn, and a stuck socket costs one attempt budget.
+ * Requests are serialized instead of racing: state reports are sequenced
+ * server-side, and a queue keeps a session's identity arriving before the state
+ * that names it. The queue is bounded in practice because states change a
+ * handful of times a turn and each attempt is spent against one deadline.
  */
 export function createHerdrClient(env: HerdrEnvironment = process.env, options: HerdrClientOptions = {}): HerdrClient {
   const paneId = env[HERDR_PANE_ID_VAR]
@@ -69,20 +89,47 @@ export function createHerdrClient(env: HerdrEnvironment = process.env, options: 
   const attempts = Math.max(1, options.attempts ?? DEFAULT_ATTEMPTS)
   const timeoutMs = Math.max(1, options.timeoutMs ?? DEFAULT_TIMEOUT_MS)
   let requestNumber = 0
-  let tail: Promise<boolean> = Promise.resolve(true)
+  let queued: QueuedReport[] = []
+  let pumping = false
 
-  const enqueue = (method: string, params: Record<string, unknown>): Promise<boolean> => {
-    if (!enabled || paneId === undefined || socketPath === undefined) return Promise.resolve(true)
-    const request = {
-      id: `${HERDR_SOURCE}:${process.pid}:${String(++requestNumber)}`,
-      method,
-      params: { pane_id: paneId, source: HERDR_SOURCE, agent: HERDR_AGENT, ...params },
+  const deliver = async (request: WireRequest): Promise<boolean> =>
+    socketPath === undefined ? true : sendWithRetry(socketPath, request, attempts, timeoutMs)
+
+  const pump = async (): Promise<void> => {
+    if (pumping) return
+    pumping = true
+    try {
+      while (queued.length > 0) {
+        const next = queued.shift()
+        if (next === undefined) break
+        next.settle(await deliver(next.request))
+      }
+    } finally {
+      pumping = false
     }
-    const delivery = tail.then(() => sendWithRetry(socketPath, request, attempts, timeoutMs))
-    // The chain survives a failure so one lost report cannot stall the rest.
-    tail = delivery.catch(() => false)
-    return delivery
   }
+
+  const enqueue = (method: string, params: Record<string, unknown>, coalescing: boolean): Promise<boolean> =>
+    new Promise<boolean>(resolve => {
+      if (!enabled || paneId === undefined || socketPath === undefined) {
+        resolve(true)
+        return
+      }
+      const request: WireRequest = {
+        id: `${HERDR_SOURCE}:${String(process.pid)}:${String(++requestNumber)}`,
+        method,
+        params: { pane_id: paneId, source: HERDR_SOURCE, agent: HERDR_AGENT, ...params },
+      }
+      if (coalescing && queued.some(entry => entry.coalescing)) {
+        const superseded = queued.filter(entry => entry.coalescing)
+        queued = queued.filter(entry => !entry.coalescing)
+        // Superseded, not lost: the report that replaced it says what this one
+        // said and more, so nothing is left owed to Herdr.
+        for (const entry of superseded) entry.settle(true)
+      }
+      queued.push({ request, coalescing, settle: resolve })
+      void pump()
+    })
 
   return {
     enabled,
@@ -92,37 +139,36 @@ export function createHerdrClient(env: HerdrEnvironment = process.env, options: 
         seq: report.seq,
         ...(report.message === undefined ? {} : { message: report.message }),
         ...(report.sessionId === undefined ? {} : { agent_session_id: report.sessionId }),
-      })
+      }, true)
     },
     reportSession(report) {
       return enqueue('pane.report_agent_session', {
         agent_session_id: report.sessionId,
         seq: report.seq,
         session_start_source: report.reason,
-      })
+      }, false)
     },
     reportMetadata(tokens) {
       return enqueue('pane.report_metadata', {
         applies_to_source: HERDR_SOURCE,
         tokens: acceptedTokens(tokens),
-      })
+      }, false)
     },
   }
 }
 
 /**
- * The tokens Herdr will accept.
+ * The tokens Herdr will accept, with the ones it cannot hold cleared.
  *
- * An over-long value fails the entire report, so a value that cannot fit is
- * dropped rather than sent: losing one token is cheaper than losing the pane's
- * session identity with it. A cwd is also the one value a reader controls by
- * naming a directory, so it is the one worth bounding.
+ * An over-long value is not refused: Herdr cuts it at the limit, so a path that
+ * was too long would come back shortened and read as another directory. A null
+ * is the one value that tells Herdr to forget the token, which is the honest
+ * answer for a fact that cannot be represented.
  */
-export function acceptedTokens(tokens: Readonly<Record<string, string | undefined>>): Record<string, string> {
-  const accepted: Record<string, string> = {}
+export function acceptedTokens(tokens: Readonly<Record<string, string | undefined>>): Record<string, string | null> {
+  const accepted: Record<string, string | null> = {}
   for (const [key, value] of Object.entries(tokens)) {
-    if (value === undefined || value.length > MAX_METADATA_VALUE_CHARS) continue
-    accepted[key] = value
+    accepted[key] = value === undefined || value.length > MAX_METADATA_VALUE_CHARS ? null : value
   }
   return accepted
 }
@@ -132,23 +178,24 @@ export function socketEndpoint(path: string): string {
   return process.platform === 'win32' ? `\\\\.\\pipe\\${path}` : path
 }
 
-async function sendWithRetry(
-  path: string,
-  request: { readonly id: string; readonly method: string; readonly params: Record<string, unknown> },
-  attempts: number,
-  timeoutMs: number,
-): Promise<boolean> {
+/**
+ * Spend one report's budget, not one per attempt.
+ *
+ * The deadline covers the whole report: a server that accepts a connection and
+ * answers slowly, but always within the idle timeout, would otherwise hold the
+ * queue open packet by packet for as long as it liked.
+ */
+async function sendWithRetry(path: string, request: WireRequest, attempts: number, timeoutMs: number): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs
   for (let attempt = 0; attempt < attempts; attempt += 1) {
-    if (await sendAttempt(path, request, timeoutMs)) return true
+    const remaining = deadline - Date.now()
+    if (remaining <= 0) return false
+    if (await sendAttempt(path, request, remaining)) return true
   }
   return false
 }
 
-function sendAttempt(
-  path: string,
-  request: { readonly id: string; readonly method: string; readonly params: Record<string, unknown> },
-  timeoutMs: number,
-): Promise<boolean> {
+function sendAttempt(path: string, request: WireRequest, timeoutMs: number): Promise<boolean> {
   return new Promise<boolean>(resolve => {
     const socket = createConnection(socketEndpoint(path))
     const chunks: Buffer[] = []
@@ -158,10 +205,14 @@ function sendAttempt(
     const finish = (delivered: boolean): void => {
       if (settled) return
       settled = true
+      clearTimeout(expiry)
       socket.destroy()
       resolve(delivered)
     }
 
+    // Idle time is the fast signal; the hard deadline is what a peer that keeps
+    // the socket busy cannot postpone.
+    const expiry = setTimeout(() => finish(false), timeoutMs)
     socket.setTimeout(timeoutMs, () => finish(false))
     socket.once('error', () => finish(false))
     socket.once('end', () => finish(false))

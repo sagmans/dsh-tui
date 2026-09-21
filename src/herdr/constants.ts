@@ -62,7 +62,13 @@ export const EXIT_RELEASE_TIMEOUT_MS = 250
 export const MAX_RESPONSE_BYTES = 64 * 1024
 export const RESPONSE_DELIMITER = '\n'
 
-/** Herdr refuses the whole metadata report when one value is longer. */
+/**
+ * The longest metadata value Herdr can hold whole.
+ *
+ * A longer value is shortened rather than refused, so a path past the limit
+ * would come back reading as a different directory: a value this long is the
+ * most the pane can say about itself, and anything longer has to be cleared.
+ */
 export const MAX_METADATA_VALUE_CHARS = 80
 
 /**

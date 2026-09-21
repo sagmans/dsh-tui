@@ -161,6 +161,76 @@ describe('createHerdrReporter', () => {
     expect(released).toBe(1)
   })
 
+  it('retries a report Herdr did not acknowledge', async () => {
+    let reachable = false
+    const calls: Recorded[] = []
+    const client: HerdrClient = {
+      enabled: true,
+      reportState: async report => (calls.push({ kind: 'state', value: report }), reachable),
+      reportSession: async () => true,
+      reportMetadata: async () => true,
+    }
+    const reporter = createHerdrReporter({ client, now: () => 1 })
+
+    reporter.idle()
+    await Promise.resolve()
+    expect(states(calls).length).toBe(1)
+
+    // The state did not change, but Herdr never heard it: a pane left reading
+    // as something it is not is worse than one more report.
+    reachable = true
+    reporter.idle()
+    await Promise.resolve()
+
+    expect(states(calls).length).toBe(2)
+  })
+
+  it('retries a session identity a socket was down for', async () => {
+    let reachable = false
+    const calls: Recorded[] = []
+    const client: HerdrClient = {
+      enabled: true,
+      reportState: async report => (calls.push({ kind: 'state', value: report }), true),
+      reportSession: async report => (calls.push({ kind: 'session', value: report }), reachable),
+      reportMetadata: async tokens => (calls.push({ kind: 'metadata', value: tokens }), reachable),
+    }
+    const reporter = createHerdrReporter({ client, now: () => 1 })
+
+    reporter.session({ id: 'tui-session-9', cwd: '/tmp/project', reason: SESSION_START_REASONS.resume })
+    await Promise.resolve()
+    expect(calls.filter(call => call.kind === 'session').length).toBe(1)
+
+    reachable = true
+    reporter.publish()
+    await Promise.resolve()
+
+    // The identity is how a reader returns to this conversation and its tokens
+    // outlive the pane, so both stay owed until Herdr confirms them.
+    expect(calls.filter(call => call.kind === 'session').length).toBe(2)
+    expect(calls.filter(call => call.kind === 'metadata').length).toBe(2)
+  })
+
+  it('reports nothing once the pane has been handed back', () => {
+    let released = 0
+    const { calls, client } = recordingClient()
+    const reporter = createHerdrReporter({ client, releaseSync: () => {
+      released += 1
+    } })
+
+    reporter.working()
+    reporter.releaseSync()
+    reporter.idle()
+    reporter.block('approval needed · Bash')
+    reporter.session({ id: 'tui-session-9', cwd: '/tmp/project', reason: SESSION_START_REASONS.resume })
+    reporter.publish(true)
+
+    // A report landing after the release would claim the row back for a process
+    // that is on its way out.
+    expect(released).toBe(1)
+    expect(states(calls).length).toBe(1)
+    expect(calls.filter(call => call.kind !== 'state')).toEqual([])
+  })
+
   it('registers its exit release and gives the registration back', () => {
     const { client } = recordingClient()
     const reporter = createHerdrReporter({ client })

@@ -471,6 +471,10 @@ export function apply(ctx: Context, config: unknown): void {
 
   restore.add(() => tui.stop())
   ctx.effect(() => () => {
+    // The pane stops being an agent before the process that claimed it unwinds:
+    // a release that ran after the reports were unregistered would race them,
+    // and one that never ran would leave a row that reads as a live agent.
+    herdr.releaseSync()
     restore.restore()
     for (const dispose of disposers.reverse()) dispose()
   })
