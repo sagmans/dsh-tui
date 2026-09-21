@@ -6,6 +6,7 @@
 // the schema fully unit-testable.
 
 import { randomUUID } from 'node:crypto'
+import { stripControlCharacters } from '../text.ts'
 
 export const STASH_SCHEMA_VERSION = 2
 
@@ -17,29 +18,6 @@ const ENTRY_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/u
 const NUMERIC_SELECTOR_PATTERN = /^\d+$/u
 const INVALID_ENTRY_ID_MESSAGE = 'invalid stash entry id'
 const ENTRY_TOO_LARGE_MESSAGE = 'stashed draft is too large'
-
-/**
- * Control characters a draft can never legitimately need: everything below the
- * printable range except the tab and line feed that lay text out, plus DEL and
- * the C1 block.
- *
- * A draft is written straight into a terminal, so a sequence that reached the
- * bank through a hand-edited or hostile file would be executed as a command —
- * clearing the screen, or replacing the reader's clipboard over OSC 52 — instead
- * of appearing as the text they asked for. Stripping at the storage boundary
- * covers every path a draft can take back to the screen.
- *
- * The bidi overrides are stripped with them: they draw nothing, so they cannot
- * be seen and cannot be removed by hand, and what they reorder is what the reader
- * is about to run. A terminal that shapes right-to-left text still has the
- * letters themselves.
- */
-const DISALLOWED_CONTROL_CHARACTERS =
-  /[\u0000-\u0008\u000B-\u001F\u007F-\u009F\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/gu
-
-export function stripControlCharacters(text: string): string {
-  return text.replace(DISALLOWED_CONTROL_CHARACTERS, '')
-}
 
 export function isSafeEntryId(value: string): boolean {
   return value.length <= ENTRY_ID_MAX_LENGTH && ENTRY_ID_PATTERN.test(value)

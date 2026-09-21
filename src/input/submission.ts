@@ -23,6 +23,13 @@ export type Submission =
   | { readonly kind: 'stash'; readonly argument: string }
   /** The chord: park whatever the editor is holding, which a typed command cannot do. */
   | { readonly kind: 'stash-draft' }
+  /**
+   * The chord: edit the draft in the reader's own editor.
+   *
+   * Typed, this would be a command whose own line is already consumed by the
+   * time it runs, so the chord is the only way to hand over the draft in hand.
+   */
+  | { readonly kind: 'editor' }
   | { readonly kind: 'stash-pop'; readonly selector: string }
   | { readonly kind: 'stash-apply'; readonly selector: string }
   | { readonly kind: 'stash-list' }

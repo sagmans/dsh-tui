@@ -52,6 +52,7 @@ import { defaultKeymap, hintKeys, surfaceBindings, type Keymap, type SurfaceActi
 import { resolveConfig } from './config.ts'
 import { FoldCursor } from './fold-cursor.ts'
 import { createRestoreRegistry } from './terminal/restore.ts'
+import { ExternalEditor } from './terminal/external-editor.ts'
 import { WarningSafeTui } from './terminal/warning-screen.ts'
 import { BELL, shouldRingBell } from './terminal/bell.ts'
 import { clipboardSequence } from './terminal/clipboard.ts'
@@ -385,6 +386,20 @@ export function apply(ctx: Context, config: unknown): void {
   const restore = createRestoreRegistry()
   const terminal = new ProcessTerminal()
   const tui = new WarningSafeTui(terminal)
+  /** Whether a child process owns the terminal, which is when nothing here may write to it. */
+  let handedOver = false
+  /** An exit asked for while a child owned the terminal, run once the screen is ours again. */
+  let deferredExit: { readonly code: number; readonly reason: string | undefined } | undefined
+  /**
+   * Write to the tty, but only while this surface owns it.
+   *
+   * An editor the reader opened draws its own screen on the same terminal, so a
+   * title or a bell from here would land on top of it and, for a bell, sound as
+   * if the editor had failed. Both are written when the screen comes back.
+   */
+  const writeTerminal = (text: string): void => {
+    if (!handedOver) terminal.write(text)
+  }
   /** The one gate a terminal can present at a time, and how it settles its caller. */
   type PendingGate =
     | { readonly kind: 'approval'; readonly gate: ApprovalGate; readonly settle: (outcome: ApprovalOutcome) => void }
@@ -516,6 +531,13 @@ export function apply(ctx: Context, config: unknown): void {
 
   const requestExit = (code: number, reason?: string): void => {
     if (exited) return
+    // A child owns the terminal: restoring it here would leave the reader a
+    // shell behind an editor that is still running, and would put its tty back
+    // into cooked mode under it. The exit waits for the screen to come back.
+    if (handedOver) {
+      deferredExit = { code, reason }
+      return
+    }
     exited = true
     clearInterval(statusTicker)
     // The screen goes back at once, so leaving feels like leaving; the row goes
@@ -836,6 +858,31 @@ export function apply(ctx: Context, config: unknown): void {
     // finds the ones it parked. Read per command so a switch retargets it.
     { sessionId: () => String(activeSession) },
   )
+
+  /**
+   * The reader's own editor, opened over the draft the bar holds.
+   *
+   * The screen is handed over rather than drawn beside: an editor needs the
+   * terminal, so this is the one moment the surface is not the process painting
+   * on it. Every failure is reported as a notice and leaves the bar as it was,
+   * because the caller is a key press with nowhere to put an error.
+   */
+  const externalEditor = new ExternalEditor({
+    suspend: () => {
+      handedOver = true
+      // The frame is left in place rather than repainted into the normal
+      // buffer: the editor is about to paint over that same screen.
+      tui.stop({ preserveScreen: true })
+    },
+    resume: () => {
+      try {
+        tui.start()
+      } finally {
+        handedOver = false
+      }
+    },
+    notice: message => model.notice(message),
+  })
 
   /** Title the listed sessions without making the reader wait for the slowest log. */
   const loadTitles = async (
@@ -1813,6 +1860,21 @@ export function apply(ctx: Context, config: unknown): void {
       case 'stash-clear':
         void stash?.clear()
         return
+      case 'editor':
+        void externalEditor.edit(editor.getExpandedText()).then(text => {
+          if (text !== undefined) {
+            // A gate can open while the child owns the screen, and the bar then
+            // holds somebody's answer: the edited draft waits behind it instead
+            // of being written into a question the reader never answered.
+            if (promptBar.isBorrowed()) promptBar.replaceHeld(text)
+            else editor.setText(text)
+            tui.requestRender()
+          }
+          const pendingExit = deferredExit
+          deferredExit = undefined
+          if (pendingExit !== undefined) requestExit(pendingExit.code, pendingExit.reason)
+        })
+        return
       case 'status': {
         const facts = statusFacts()
         const context = facts.contextTokens === undefined
@@ -1890,16 +1952,16 @@ export function apply(ctx: Context, config: unknown): void {
       if (event.type === 'turn/start') {
         turnOpen = true
         turnStartedAt = Date.now()
-        terminal.write(windowTitle(process.cwd(), 'working'))
+        writeTerminal(windowTitle(process.cwd(), 'working'))
         herdr.working()
       }
       if (event.type === 'turn/end') {
         const ranFor = turnStartedAt === undefined ? 0 : Date.now() - turnStartedAt
         turnOpen = false
         turnStartedAt = undefined
-        terminal.write(windowTitle(process.cwd(), 'ready'))
+        writeTerminal(windowTitle(process.cwd(), 'ready'))
         herdr.idle()
-        if (shouldRingBell({ bell: resolved.bell, ranForMs: ranFor, exiting: exited })) terminal.write(BELL)
+        if (shouldRingBell({ bell: resolved.bell, ranForMs: ranFor, exiting: exited })) writeTerminal(BELL)
         // A job the turn started may have settled while the reader was watching
         // something else, and nothing else refreshes a live board.
         refreshJobs()
@@ -2071,7 +2133,7 @@ export function apply(ctx: Context, config: unknown): void {
     // reason. With a picker the session is not known yet, so it waits for one.
     if (!resolved.resumePicker) await presetFor(resolved.sessionId, resolved.resume, undefined)
     tui.start()
-    terminal.write(windowTitle(process.cwd(), 'ready'))
+    writeTerminal(windowTitle(process.cwd(), 'ready'))
     // Claiming the pane's agent row does not wait for a session: the pane is
     // already on screen and already idle, and a session may still be chosen.
     herdr.publish()

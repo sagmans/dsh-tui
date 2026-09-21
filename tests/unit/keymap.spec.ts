@@ -81,12 +81,13 @@ describe('the key tables', () => {
     expect(bindings.find(entry => entry.key === 'm')?.submission).toEqual({ kind: 'model', argument: '' })
     expect(bindings.find(entry => entry.key === 'p')?.submission).toEqual({ kind: 'plan' })
     expect(bindings.find(entry => entry.key === 'y')?.submission).toEqual({ kind: 'copy' })
-    expect(chordKeysLine(defaultKeymap())).toBe('ctrl+x then m model · p plan mode · y copy · s stash the draft · l stashed drafts')
+    expect(bindings.find(entry => entry.key === 'e')?.submission).toEqual({ kind: 'editor' })
+    expect(chordKeysLine(defaultKeymap())).toBe('ctrl+x then m model · p plan mode · y copy · s stash the draft · l stashed drafts · e external editor')
   })
 
   it('reads a chord the reader moved, and a prefix they changed', () => {
     const map = resolveKeymap({ 'chord.prefix': 'alt+z', 'chord.model': 'n' })
-    expect(chordKeysLine(map)).toBe('alt+z then n model · p plan mode · y copy · s stash the draft · l stashed drafts')
+    expect(chordKeysLine(map)).toBe('alt+z then n model · p plan mode · y copy · s stash the draft · l stashed drafts · e external editor')
     expect(chordBindings(map).find(entry => entry.label === 'model')?.key).toBe('n')
   })
 })

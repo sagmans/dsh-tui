@@ -158,6 +158,7 @@ const CHORD_ACTIONS: readonly Action[] = [
   { id: 'chord.copy', layer: 'chord', defaultKeys: ['y'], label: 'copy', mayUseBare: true, mayUnbind: false },
   { id: 'chord.stash', layer: 'chord', defaultKeys: ['s'], label: 'stash the draft', mayUseBare: true, mayUnbind: false },
   { id: 'chord.stashes', layer: 'chord', defaultKeys: ['l'], label: 'stashed drafts', mayUseBare: true, mayUnbind: false },
+  { id: 'chord.editor', layer: 'chord', defaultKeys: ['e'], label: 'external editor', mayUseBare: true, mayUnbind: false },
 ]
 
 const GATE_ACTIONS: readonly Action[] = [
