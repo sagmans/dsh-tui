@@ -418,11 +418,11 @@ The automated checks drive a real PTY, but they run on this machine's terminal. 
 
 Published artefacts carry a provenance attestation, which only a CI provider can issue, so releases ship from the tag workflow rather than a laptop.
 
-1. Bump `version` in `package.json`, land it on `main` through a reviewed PR, and wait for CI to pass on the merged SHA.
+1. Bump `version` in `package.json` and move `CHANGELOG.md`'s `Unreleased` section to that version, land both on `main` through a reviewed PR, and wait for CI to pass on the merged SHA.
 2. Tag that SHA with a signed tag and push it. The tag ruleset admits repository admins only.
 3. `.github/workflows/release.yml` re-runs typecheck, tests, and the package smoke; the publish job then waits for a maintainer's approval on the `npm-release` environment before it publishes with OIDC trusted publishing and automatic provenance.
 
-The workflow stores no npm token: the registry trusts `release.yml` on the `npm-release` environment, and [`scripts/npm/release.py`](scripts/npm/release.py) creates both the environment and that trust. The full runbook is [RELEASE.md](RELEASE.md).
+The workflow stores no npm token: the registry trusts `release.yml` on the `npm-release` environment, and [`scripts/npm/release.py`](scripts/npm/release.py) creates both the environment and that trust. The full runbook is [RELEASE.md](RELEASE.md); the user-visible history is [CHANGELOG.md](CHANGELOG.md).
 
 ## Limitations
 

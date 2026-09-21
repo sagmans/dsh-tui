@@ -6,6 +6,8 @@ Applies to maintainers. Current release owner: repository owner ([`LICENSE`](LIC
 
 [SemVer](https://semver.org). While at 0.x, minor bumps may contain breaking changes; patch bumps are fixes only. The git tag (`vX.Y.Z`) and `package.json` `version` must always match. The tag workflow fails before publish when they do not.
 
+[`CHANGELOG.md`](CHANGELOG.md) records what shipped, in [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) form. A change lands under `Unreleased` in the PR that makes it; the release PR moves that section to `## [X.Y.Z] - <date>` and repoints the compare links.
+
 ## Gates — all required before tagging
 
 1. Candidate lands on `main` through a reviewed PR (squash merge).
@@ -13,7 +15,8 @@ Applies to maintainers. Current release owner: repository owner ([`LICENSE`](LIC
 3. Locally on that SHA: `pnpm typecheck`, `pnpm test`, `pnpm test:release`, `npm audit signatures`, `node tools/pack-smoke.mjs`.
 4. Dogfooding: install the candidate into a plugin profile and drive a real session in a terminal per [README](README.md#install). Unit tests do not prove the terminal surface.
 5. README accuracy pass: every documented command and profile path still behaves as written.
-6. A published npm version is immutable. A broken release is forward-fixed, never unpublished (see [Rollback](#rollback)).
+6. `CHANGELOG.md` carries the version being tagged: `Unreleased` holds only what landed after it, the `## [X.Y.Z] - <date>` section names the tag, and the compare links point at that tag.
+7. A published npm version is immutable. A broken release is forward-fixed, never unpublished (see [Rollback](#rollback)).
 
 ## Release identity and authority
 
@@ -88,7 +91,7 @@ python3 scripts/npm/release.py verify
 
 ## Tagging a release
 
-Draft the GitHub release notes against the candidate SHA before tagging. Tag creation for `v*` is restricted to repository admins by the ruleset above.
+Draft the GitHub release notes from the `CHANGELOG.md` entry against the candidate SHA before tagging. Tag creation for `v*` is restricted to repository admins by the ruleset above.
 
 ```sh
 git tag -s -a "v${PKG_VERSION}" -m "v${PKG_VERSION}" <merged-sha>

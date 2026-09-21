@@ -4,7 +4,7 @@
 interactive terminal surface: `dsh --profile tui` runs one agent in the
 alternate screen instead of a browser. ESM TypeScript (strict), Node >= 22.19,
 pnpm. Behaviour and install: [README.md](README.md). Publication:
-[RELEASE.md](RELEASE.md).
+[RELEASE.md](RELEASE.md). History: [CHANGELOG.md](CHANGELOG.md).
 
 ## Commands
 
