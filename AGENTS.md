@@ -1,0 +1,79 @@
+# AGENTS.md
+
+`@sagmans/dsh-tui` is a Cordis plugin bundle that gives DeepSeek Harness an
+interactive terminal surface: `dsh --profile tui` runs one agent in the
+alternate screen instead of a browser. ESM TypeScript (strict), Node >= 22.19,
+pnpm. Behaviour and install: [README.md](README.md). Publication:
+[RELEASE.md](RELEASE.md).
+
+## Commands
+
+| Task | Command |
+| --- | --- |
+| Install | `pnpm install --frozen-lockfile` |
+| Typecheck `src` and `tests` | `pnpm run typecheck` |
+| Unit and golden tests | `pnpm test` |
+| Release-helper guards (python3 >= 3.11) | `pnpm test:release` |
+| Build `src` into `lib` | `pnpm run build` |
+| Tarball inventory check | `node tools/pack-smoke.mjs` |
+| Drive the real surface in a PTY | `node tools/pty-drive.mjs --prompt 'Reply with exactly: pong'` |
+
+`.github/workflows/ci.yml` is the completion gate, in this order: `pnpm install
+--frozen-lockfile`, `npm audit signatures`, `pnpm typecheck`, `pnpm test`,
+`pnpm test:release`, `node tools/pack-smoke.mjs`. Terminal behaviour is not
+proven by that gate — run `tools/pty-drive.mjs` and read the screen it prints.
+
+## Map
+
+- `src/index.ts` mounts the surface; `src/startup.ts` parses this app's flags.
+- `src/agent/` composes, projects, and resumes the agent. `src/cards.ts`,
+  `src/transcript.ts`, and `src/work.ts` fold `session/event` into what is drawn;
+  `src/ui/` draws the dock, editor, gates, pickers, markdown, and mermaid;
+  `src/input/` holds keymap, submission, and completion; `src/terminal/` owns the
+  alternate screen, restore, bell, and clipboard; `src/compat/` probes the harness
+  it mounts on.
+- `tests/unit/*.spec.ts` are the focused specs, `tests/golden/frames.spec.ts`
+  snapshots rendered frames, `tests/release/test_release.py` guards
+  `scripts/npm/release.py`.
+- `lib/` is build output and `.plans/` is local planning scratch; both are
+  gitignored and neither is edited by hand.
+
+## Sharp edges
+
+**A linked profile loads `lib/`, not `src/`.** Source edits are invisible to
+`dsh --profile tui` until `pnpm run build` runs.
+
+**Specs reach sources only through the `@/` alias** (declared in
+`vitest.config.ts`, mirrored by `tsconfig.test.json`): parent-relative imports
+do not resolve under this runner.
+
+**Point `DSH_HOME` at a scratch directory for every surface run**, and copy in
+only the credentials that run needs. The real home holds
+`~/.dsh/.credentials.yaml`; no credential or session log belongs in the tree.
+
+**A rendered-frame change usually changes the golden snapshot.** Read
+`tests/golden/__snapshots__/frames.spec.ts.snap` in the diff before accepting it
+with `pnpm vitest run -u`.
+
+**`cordis.patch.yml` disables the base's global agent rows on purpose**: a
+session's own preset supplies its tools, prompt sections, skills, and planning
+rows. A row added there registers the same tool in two layers and fails
+composition.
+
+**Comments state why a choice was made**, not what the code does; the reason a
+non-obvious constraint exists is the part that prevents future drift.
+
+## Boundaries
+
+- **Publication is tag-driven CI, never local.** `release.yml` publishes through
+  npm OIDC trusted publishing and the repository stores no token; the
+  `scripts/npm/` helpers act only on an explicit `CONFIRM=<action>` (preview with
+  `DRY_RUN=1`). Ask the maintainer instead of starting a release.
+- **Release shape:** the `vX.Y.Z` tag and `package.json` `version` must match,
+  and a candidate reaches `main` through a reviewed PR (squash merge).
+- **Dependency install scripts and release age are gated in
+  `pnpm-workspace.yaml`** (`allowBuilds`, `minimumReleaseAgeExclude`). Ask before
+  adding a dependency or allowlisting a build.
+- **Commits are Conventional Commits with a scope** (`feat(tui): …`,
+  `fix(gates): …`, `docs(readme): …`), signed and DCO-signed. Work on a branch and
+  land through a PR.
