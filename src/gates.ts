@@ -1,4 +1,5 @@
 import { matchesKey } from '@earendil-works/pi-tui'
+import { actionLabel, defaultKeymap, keyName, keysFor, matchesAction, moveHint, type Keymap } from './input/actions.ts'
 import { pastedText } from './input.ts'
 import { matchScore } from './input/match.ts'
 
@@ -96,6 +97,8 @@ export class ApprovalGate {
   constructor(
     private readonly toolName: string,
     private readonly reason: string | undefined,
+    /** The keys in force, read per press so a settings edit lands on the next key. */
+    private readonly keys: () => Keymap = defaultKeymap,
   ) {}
 
   get resolved(): boolean {
@@ -105,9 +108,9 @@ export class ApprovalGate {
   /** Apply one key press; returns the outcome the first time it settles. */
   handleKey(data: string): ApprovalOutcome | undefined {
     if (this.outcome !== undefined) return undefined
-    if (matchesKey(data, 'y')) this.outcome = 'allowed-once'
-    else if (matchesKey(data, 'n')) this.outcome = 'rejected'
-    else if (matchesKey(data, 'escape')) this.outcome = 'cancelled'
+    if (matchesAction(this.keys(), 'gate.allow', data)) this.outcome = 'allowed-once'
+    else if (matchesAction(this.keys(), 'gate.reject', data)) this.outcome = 'rejected'
+    else if (matchesAction(this.keys(), 'gate.cancel', data)) this.outcome = 'cancelled'
     return this.outcome
   }
 
@@ -124,7 +127,11 @@ export class ApprovalGate {
       optionOffset: 0,
       options: [],
       custom: undefined,
-      hint: this.outcome === undefined ? 'y allow once · n reject · esc cancel' : 'decided',
+      hint: this.outcome === undefined
+        ? ['gate.allow', 'gate.reject', 'gate.cancel']
+          .map(id => keysFor(this.keys(), id).map(key => `${keyName(key)} ${actionLabel(id)}`).join(' · '))
+          .join(' · ')
+        : 'decided',
     }
   }
 }
@@ -198,8 +205,22 @@ const CUSTOM_ROW_DESCRIPTION = 'type your own answer'
 /** How the list hint names that row, which the row itself already labels. */
 const CUSTOM_ROW_SHORTHAND = `${CUSTOM_ROW_NUMBER} answer freely`
 
+/**
+ * How a hint names the keys of one action.
+ *
+ * A hint is prose about what a key does here, so the word comes from the card
+ * rather than from the catalog row, which has to read well out of context too.
+ */
+function namedKeys(map: Keymap, id: string, verb: string): string {
+  // One verb for the action, however many keys reach it: a hint that repeated
+  // the word would read as two actions rather than two ways to do one.
+  return `${keysFor(map, id).map(keyName).join('/')} ${verb}`
+}
+
 /** The keys that answer the free-text row, where typing is the answer rather than a filter. */
-const CUSTOM_HINT = 'type or paste an answer · enter confirm · ↑↓ or esc back to options'
+function customHint(map: Keymap): string {
+  return `type or paste an answer · ${namedKeys(map, 'question.confirm', 'confirm')} · ${moveHint(map, 'question.up', 'question.down')} or ${namedKeys(map, 'question.skip', 'back')} to options`
+}
 
 /**
  * The question-id suffix that declares a typed answer a credential. The seam
@@ -254,6 +275,8 @@ export class QuestionGate {
     private readonly questions: readonly GateQuestion[],
     /** The editor every typed answer is written in, whichever row asks for it. */
     private readonly input: GateInput,
+    /** The keys in force, read per press so a settings edit lands on the next key. */
+    private readonly keys: () => Keymap = defaultKeymap,
   ) {
     for (const _ of questions) {
       this.chosen.push([])
@@ -378,12 +401,13 @@ export class QuestionGate {
     if (this.atCustom) return this.handleCustomKey(data)
 
     const matched = this.matched(question)
-    if (matchesKey(data, 'up')) {
+    const keys = this.keys()
+    if (matchesAction(keys, 'question.up', data)) {
       this.cursor = Math.max(0, this.cursor - 1)
       this.customFrom = this.cursor
       return undefined
     }
-    if (matchesKey(data, 'down')) {
+    if (matchesAction(keys, 'question.down', data)) {
       // Below the last option sits the free-text row, which is the second way
       // to reach it; a list with nothing left to show steps straight onto it.
       if (this.cursor >= matched.length - 1) {
@@ -394,17 +418,17 @@ export class QuestionGate {
       }
       return undefined
     }
-    if (question.options.length > 0 && matchesKey(data, 'space')) {
+    if (question.options.length > 0 && matchesAction(keys, 'question.toggle', data)) {
       const row = this.currentRow(question)
       if (row !== undefined) this.pick(row.position)
       this.customFrom = this.cursor
       return undefined
     }
-    if (matchesKey(data, 'escape')) {
+    if (matchesAction(keys, 'question.skip', data)) {
       this.advance()
       return this.result()
     }
-    if (matchesKey(data, 'enter')) {
+    if (matchesAction(keys, 'question.confirm', data)) {
       const chosen = this.chosen[this.index] ?? []
       if (question.options.length > 0 && chosen.length === 0) {
         // A reader who typed enough to narrow the list is naming the row it
@@ -459,6 +483,12 @@ export class QuestionGate {
    * question is skipped, an escape skips this one too.
    */
   private handleCustomKey(data: string): GateAnswer[] | undefined {
+    if (matchesAction(this.keys(), 'question.confirm', data)) {
+      this.confirm()
+      return this.result()
+    }
+    // The keys that leave a text field are the field's own, not the question's:
+    // a skip the reader moved elsewhere must not quietly mean "walk back".
     if (matchesKey(data, 'up') || matchesKey(data, 'down')) {
       this.atCustom = false
       return undefined
@@ -469,10 +499,6 @@ export class QuestionGate {
       this.atCustom = false
       this.cursor = Math.min(this.customFrom, Math.max(0, rows - 1))
       return undefined
-    }
-    if (matchesKey(data, 'enter')) {
-      this.confirm()
-      return this.result()
     }
     // Anything else is the editor's: movement, deletion, undo, and the keys
     // that insert a character this gate has no business knowing about.
@@ -542,7 +568,7 @@ export class QuestionGate {
         // The editor is the only place the text lands, so it is drawn even while
         // empty: a question answered by typing needs somewhere to paste a key.
         answerInput: this.input,
-        hint: 'type or paste an answer · enter confirm · esc skip',
+        hint: `type or paste an answer · ${namedKeys(this.keys(), 'question.confirm', 'confirm')} · ${namedKeys(this.keys(), 'question.skip', 'skip')}`,
       }
     }
     if (this.typed !== '') detail.push(`filter: ${this.typed}`)
@@ -576,8 +602,8 @@ export class QuestionGate {
       // because it is what an enter is about to send.
       answerInput: this.atCustom || written ? this.input : undefined,
       hint: this.atCustom
-        ? CUSTOM_HINT
-        : `${question.multiSelect ? 'space toggle' : 'space select'} · digits pick · ${CUSTOM_ROW_SHORTHAND} · type to filter · enter confirm · esc skip`,
+        ? customHint(this.keys())
+        : `${namedKeys(this.keys(), 'question.toggle', question.multiSelect ? 'toggle' : 'select')} · digits pick · ${CUSTOM_ROW_SHORTHAND} · type to filter · ${namedKeys(this.keys(), 'question.confirm', 'confirm')} · ${namedKeys(this.keys(), 'question.skip', 'skip')}`,
     }
   }
 }

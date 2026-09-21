@@ -1,4 +1,5 @@
 import { matchesKey } from '@earendil-works/pi-tui'
+import { defaultKeymap, keyName, keysFor, matchesAction, moveHint, type Keymap } from '../input/actions.ts'
 import { pastedText } from '../input.ts'
 import { matchScore } from '../input/match.ts'
 import type { StoredSession } from '../agent/history.ts'
@@ -46,6 +47,13 @@ export interface PickerHints {
   readonly listed: string
 }
 
+/** The keys in force for one action, as a hint prints them. */
+function hintKeys(map: Keymap, id: string): string {
+  // One word for the action, however many keys reach it, so a hint does not read
+  // as two actions.
+  return keysFor(map, id).map(keyName).join('/')
+}
+
 const MINUTE_MS = 60_000
 const HOUR_MS = 60 * MINUTE_MS
 const DAY_MS = 24 * HOUR_MS
@@ -82,6 +90,8 @@ export class ListPicker<Row> {
     /** Extra text the filter matches besides the row's own label. */
     private readonly haystackOf: (row: Row) => string,
     private readonly hints: PickerHints,
+    /** The keys in force, read per press so a settings edit lands on the next key. */
+    private readonly keys: () => Keymap = defaultKeymap,
   ) {}
 
   /** Rows matching the typed filter, best match first. */
@@ -114,16 +124,17 @@ export class ListPicker<Row> {
     const rows = this.visible()
     // A picker owns the keyboard while it is open, so the interrupt key has to
     // mean "leave this list" here: swallowing it would strand the reader.
-    if (matchesKey(data, 'escape') || matchesKey(data, 'ctrl+c')) return { kind: 'cancel' }
-    if (matchesKey(data, 'enter')) {
+    const keys = this.keys()
+    if (matchesAction(keys, 'picker.cancel', data)) return { kind: 'cancel' }
+    if (matchesAction(keys, 'picker.confirm', data)) {
       const chosen = rows[Math.min(this.cursor, Math.max(0, rows.length - 1))]
       return chosen === undefined ? undefined : { kind: 'pick', id: this.idOf(chosen) }
     }
-    if (matchesKey(data, 'up')) {
+    if (matchesAction(keys, 'picker.up', data)) {
       this.cursor = Math.max(0, this.cursor - 1)
       return undefined
     }
-    if (matchesKey(data, 'down')) {
+    if (matchesAction(keys, 'picker.down', data)) {
       this.cursor = Math.min(Math.max(0, rows.length - 1), this.cursor + 1)
       return undefined
     }
@@ -177,6 +188,7 @@ export class SessionPicker extends ListPicker<StoredSession> {
     sessions: readonly StoredSession[],
     titles: () => ReadonlyMap<string, string>,
     now: () => number = () => Date.now(),
+    keys: () => Keymap = defaultKeymap,
   ) {
     const labelOf = (session: StoredSession): string => titles().get(session.id) ?? session.id
     super(
@@ -195,9 +207,10 @@ export class SessionPicker extends ListPicker<StoredSession> {
       }),
       session => [labelOf(session), session.id, session.cwd ?? ''].join(' '),
       {
-        empty: 'nothing matches · backspace to widen · esc cancel',
-        listed: '↑↓ move · enter open · esc cancel · type to filter',
+        empty: `nothing matches · backspace to widen · ${hintKeys(keys(), 'picker.cancel')} cancel`,
+        listed: `${moveHint(keys(), 'picker.up', 'picker.down')} move · ${hintKeys(keys(), 'picker.confirm')} open · ${hintKeys(keys(), 'picker.cancel')} cancel · type to filter`,
       },
+      keys,
     )
   }
 }
@@ -212,6 +225,7 @@ export class PresetPicker extends ListPicker<PresetSummary> {
   constructor(
     presets: () => readonly PresetSummary[],
     currentId: () => string | undefined,
+    keys: () => Keymap = defaultKeymap,
   ) {
     super(
       presets,
@@ -220,9 +234,10 @@ export class PresetPicker extends ListPicker<PresetSummary> {
       preset => describePreset(preset, currentId()),
       preset => [preset.id, preset.name ?? '', preset.description ?? ''].join(' '),
       {
-        empty: 'nothing matches · backspace to widen · esc cancel',
-        listed: '↑↓ move · enter switch · esc cancel · type to filter',
+        empty: `nothing matches · backspace to widen · ${hintKeys(keys(), 'picker.cancel')} cancel`,
+        listed: `${moveHint(keys(), 'picker.up', 'picker.down')} move · ${hintKeys(keys(), 'picker.confirm')} switch · ${hintKeys(keys(), 'picker.cancel')} cancel · type to filter`,
       },
+      keys,
     )
   }
 }
@@ -236,7 +251,7 @@ export class PresetPicker extends ListPicker<PresetSummary> {
  * rows too.
  */
 export class ModelPicker extends ListPicker<ModelRoute> {
-  constructor(routes: () => readonly ModelRoute[], current: () => ModelChoice | undefined) {
+  constructor(routes: () => readonly ModelRoute[], current: () => ModelChoice | undefined, keys: () => Keymap = defaultKeymap) {
     super(
       routes,
       () => {
@@ -249,9 +264,10 @@ export class ModelPicker extends ListPicker<ModelRoute> {
       route => describeModelRoute(route, current()),
       route => [route.provider, route.model, route.name].join(' '),
       {
-        empty: 'nothing matched · /model <provider>/<model> takes any id · backspace to widen · esc cancel',
-        listed: '↑↓ move · enter switch · esc cancel · type to filter',
+        empty: `nothing matched · /model <provider>/<model> takes any id · backspace to widen · ${hintKeys(keys(), 'picker.cancel')} cancel`,
+        listed: `${moveHint(keys(), 'picker.up', 'picker.down')} move · ${hintKeys(keys(), 'picker.confirm')} switch · ${hintKeys(keys(), 'picker.cancel')} cancel · type to filter`,
       },
+      keys,
     )
   }
 }
@@ -308,7 +324,7 @@ export function effortChoices(
  * cannot change while the list owns the keyboard.
  */
 export class EffortPicker extends ListPicker<EffortChoice> {
-  constructor(choices: () => readonly EffortChoice[], heading: string) {
+  constructor(choices: () => readonly EffortChoice[], heading: string, keys: () => Keymap = defaultKeymap) {
     super(
       choices,
       () => heading,
@@ -324,9 +340,10 @@ export class EffortPicker extends ListPicker<EffortChoice> {
       }),
       choice => [choice.name, choice.id, choice.description ?? ''].join(' '),
       {
-        empty: 'nothing matches · backspace to widen · esc cancel',
-        listed: '↑↓ move · enter apply · esc cancel · type to filter',
+        empty: `nothing matches · backspace to widen · ${hintKeys(keys(), 'picker.cancel')} cancel`,
+        listed: `${moveHint(keys(), 'picker.up', 'picker.down')} move · ${hintKeys(keys(), 'picker.confirm')} apply · ${hintKeys(keys(), 'picker.cancel')} cancel · type to filter`,
       },
+      keys,
     )
   }
 }

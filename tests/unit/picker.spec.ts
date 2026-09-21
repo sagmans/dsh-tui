@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { defaultKeymap, resolveKeymap, type Keymap } from '@/input/actions.ts'
 import type { StoredSession } from '@/agent/history.ts'
 import { modelRouteKey, type ModelChoice, type ModelRoute } from '@/agent/model.ts'
 import type { PresetSummary } from '@/agent/presets.ts'
@@ -12,8 +13,8 @@ const session = (id: string, overrides: Partial<StoredSession> = {}): StoredSess
   ...overrides,
 })
 
-const pickerOf = (sessions: StoredSession[], titles: Record<string, string> = {}): SessionPicker =>
-  new SessionPicker(sessions, () => new Map(Object.entries(titles)), () => 1_000_000)
+const pickerOf = (sessions: StoredSession[], titles: Record<string, string> = {}, keys: () => Keymap = defaultKeymap): SessionPicker =>
+  new SessionPicker(sessions, () => new Map(Object.entries(titles)), () => 1_000_000, keys)
 
 describe('describeAge', () => {
   it('reads as a moment rather than a timestamp', () => {
@@ -37,6 +38,19 @@ describe('SessionPicker', () => {
 
   it('cancels on the interrupt key too, rather than swallowing it', () => {
     expect(pickerOf([session('a')]).handleKey('\u0003')).toEqual({ kind: 'cancel' })
+  })
+
+  it('picks, cancels, and moves on the keys the reader chose', () => {
+    const map = resolveKeymap({ 'picker.confirm': 'alt+y', 'picker.cancel': 'alt+g', 'picker.down': 'alt+d', 'picker.up': 'alt+u' })
+    const picker = pickerOf([session('a'), session('b')], {}, () => map)
+    expect(picker.card().hint).toBe('alt+u or alt+d move · alt+y open · alt+g cancel · type to filter')
+    expect(picker.handleKey('\r')).toBeUndefined()
+    expect(picker.handleKey('\u001b[B')).toBeUndefined()
+    expect(picker.card().rows[0]?.current).toBe(true)
+    expect(picker.handleKey('\u001bd')).toBeUndefined()
+    expect(picker.card().rows[1]?.current).toBe(true)
+    expect(picker.handleKey('\u001bg')).toEqual({ kind: 'cancel' })
+    expect(picker.handleKey('\u001by')).toEqual({ kind: 'pick', id: 'b' })
   })
 
   it('filters by title, id, and directory', () => {

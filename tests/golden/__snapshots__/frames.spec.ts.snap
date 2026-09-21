@@ -182,7 +182,7 @@ exports[`golden frames > renders the model picker at 40 columns 1`] = `
   "above": 0,
   "below": 0,
   "filter": "",
-  "hint": "↑↓ move · enter switch · esc cancel · type to filter",
+  "hint": "↑↓ move · enter switch · esc/ctrl+c cancel · type to filter",
   "note": undefined,
   "rows": [
     {
@@ -210,7 +210,7 @@ exports[`golden frames > renders the model picker at 80 columns 1`] = `
   "above": 0,
   "below": 0,
   "filter": "",
-  "hint": "↑↓ move · enter switch · esc cancel · type to filter",
+  "hint": "↑↓ move · enter switch · esc/ctrl+c cancel · type to filter",
   "note": undefined,
   "rows": [
     {
@@ -264,7 +264,7 @@ exports[`golden frames > renders the session picker at 40 columns 1`] = `
   "above": 0,
   "below": 0,
   "filter": "",
-  "hint": "↑↓ move · enter open · esc cancel · type to filter",
+  "hint": "↑↓ move · enter open · esc/ctrl+c cancel · type to filter",
   "note": undefined,
   "rows": [
     {
@@ -287,7 +287,7 @@ exports[`golden frames > renders the session picker at 80 columns 1`] = `
   "above": 0,
   "below": 0,
   "filter": "",
-  "hint": "↑↓ move · enter open · esc cancel · type to filter",
+  "hint": "↑↓ move · enter open · esc/ctrl+c cancel · type to filter",
   "note": undefined,
   "rows": [
     {

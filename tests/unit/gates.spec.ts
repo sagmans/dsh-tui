@@ -1,6 +1,7 @@
 import { type TUI } from '@earendil-works/pi-tui'
 import { describe, expect, it } from 'vitest'
 import { ApprovalGate, type GateQuestion, QuestionGate, toGateQuestions } from '@/gates.ts'
+import { defaultKeymap, resolveKeymap, type Keymap } from '@/input/actions.ts'
 import { createTheme } from '@/theme.ts'
 import { GateInputBar } from '@/ui/gate-input.ts'
 
@@ -14,7 +15,7 @@ const STUB_TUI = { requestRender: () => {}, terminal: { rows: 24, cols: 80 } } a
 const answerBar = (): GateInputBar => new GateInputBar(STUB_TUI, createTheme('none').editor)
 
 /** A question gate over a fresh bar, which is how the surface builds one. */
-const gateOver = (questions: readonly GateQuestion[]): QuestionGate => new QuestionGate(questions, answerBar())
+const gateOver = (questions: readonly GateQuestion[], keys: () => Keymap = defaultKeymap): QuestionGate => new QuestionGate(questions, answerBar(), keys)
 
 /** What the bar holds, which is what an enter sends. */
 const answerText = (gate: QuestionGate): string | undefined => gate.card().answerInput?.getExpandedText()
@@ -57,6 +58,14 @@ describe('ApprovalGate', () => {
     gate.cancel()
     expect(gate.resolved).toBe(true)
     expect(gate.handleKey('y')).toBeUndefined()
+  })
+
+  it('decides on the keys the reader chose, and names those in its card', () => {
+    const map = resolveKeymap({ 'gate.allow': 'a', 'gate.reject': 'r', 'gate.cancel': 'alt+g' })
+    const gate = new ApprovalGate('bash', undefined, () => map)
+    expect(gate.card().hint).toBe('a allow once · r reject · alt+g cancel')
+    expect(gate.handleKey('y')).toBeUndefined()
+    expect(gate.handleKey('a')).toBe('allowed-once')
   })
 
   it('shows the tool, the reason, and the keys that decide', () => {
@@ -127,6 +136,29 @@ describe('QuestionGate', () => {
     accumulation.handleKey('1')
     accumulation.handleKey('2')
     expect(accumulation.handleKey(ENTER)).toEqual([{ id: 'q1', selected: ['a', 'b'] }])
+  })
+
+  it('moves, picks, and answers on the keys the reader chose', () => {
+    const map = resolveKeymap({
+      'question.up': 'alt+u',
+      'question.down': 'alt+d',
+      'question.toggle': 'alt+t',
+      'question.confirm': 'alt+y',
+      'question.skip': 'alt+g',
+    })
+    const gate = gateOver(single, () => map)
+    expect(gate.card().hint).toContain('alt+t select')
+    gate.handleKey('\u001bd')
+    gate.handleKey('\u001bt')
+    expect(gate.handleKey(ESC)).toBeUndefined()
+    expect(gate.handleKey('\u001by')).toEqual([{ id: 'q1', selected: ['no'] }])
+  })
+
+  it('skips only on the key the reader kept for skipping', () => {
+    const map = resolveKeymap({ 'question.skip': 'alt+g' })
+    const gate = gateOver(single, () => map)
+    expect(gate.handleKey(ESC)).toBeUndefined()
+    expect(gate.handleKey('\u001bg')).toEqual([{ id: 'q1', selected: [] }])
   })
 
   it('skips the current question on escape with an empty selection', () => {

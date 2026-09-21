@@ -1,4 +1,4 @@
-import { Key, KeybindingsManager, TUI_KEYBINDINGS, type KeyId } from '@earendil-works/pi-tui'
+import { Key, KeybindingsManager, TUI_KEYBINDINGS, matchesKey, type KeyId } from '@earendil-works/pi-tui'
 
 /**
  * Every action a reader may bind, in one table.
@@ -238,6 +238,42 @@ function actionOf(id: string): Action | undefined {
 /** The keys in force for one action, or nothing when no action has that id. */
 export function keysFor(map: Keymap, id: string): readonly KeyId[] {
   return map.effective[id] ?? []
+}
+
+/** Whether a press is one of the keys in force for an action. */
+export function matchesAction(map: Keymap, id: string, data: string): boolean {
+  return keysFor(map, id).some(key => matchesKey(data, key))
+}
+
+/**
+ * The name a hint prints for a key.
+ *
+ * A hint is a line of prose in a card, so the names a terminal already writes on
+ * its own keycaps win over the library's spelling of them.
+ */
+const SHORT_KEY_NAMES: Readonly<Record<string, string>> = { escape: 'esc' }
+
+export function keyName(key: KeyId): string {
+  return SHORT_KEY_NAMES[key] ?? key
+}
+
+/**
+ * The keys that move a cursor, as a hint prints them.
+ *
+ * A terminal draws arrows on its keycaps, which is shorter than the names the
+ * library uses; a map that moved them falls back to naming whatever it moved
+ * them to, because a glyph for a key nobody has would be a lie.
+ */
+export function moveHint(map: Keymap, upId: string, downId: string): string {
+  const up = keysFor(map, upId).map(keyName)
+  const down = keysFor(map, downId).map(keyName)
+  if (up.length === 1 && up[0] === 'up' && down.length === 1 && down[0] === 'down') return '↑↓'
+  return `${up.join('/')} or ${down.join('/')}`
+}
+
+/** How an action names itself in a hint. */
+export function actionLabel(id: string): string {
+  return actionOf(id)?.label ?? id
 }
 
 function readKeys(action: Action, value: string | readonly string[]): readonly KeyId[] {
