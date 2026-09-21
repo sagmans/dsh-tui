@@ -25,7 +25,9 @@ proven by that gate — run `tools/pty-drive.mjs` and read the screen it prints.
 
 ## Map
 
-- `src/index.ts` mounts the surface; `src/startup.ts` parses this app's flags.
+- `src/index.ts` mounts the surface; `src/startup.ts` parses this app's flags;
+  `src/todo-guard.ts` is the one advisory agent-plane row, nudging a stale plan
+  from the harness's own projections.
 - `src/agent/` composes, projects, and resumes the agent. `src/cards.ts`,
   `src/transcript.ts`, and `src/work.ts` fold `session/event` into what is drawn;
   `src/ui/` draws the dock, editor, gates, pickers, markdown, and mermaid;
@@ -58,7 +60,8 @@ with `pnpm vitest run -u`.
 **`cordis.patch.yml` disables the base's global agent rows on purpose**: a
 session's own preset supplies its tools, prompt sections, skills, and planning
 rows. A row added there registers the same tool in two layers and fails
-composition.
+composition. Host-plane insert rows are the exception: the todo guard registers
+no tool, so it cannot double a preset's.
 
 **Comments state why a choice was made**, not what the code does; the reason a
 non-obvious constraint exists is the part that prevents future drift.

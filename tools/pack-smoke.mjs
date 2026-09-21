@@ -38,6 +38,7 @@ const FORBIDDEN = [
 /** Rows the bundle patch promises the composed profile. */
 const PATCH_ROWS = [
   '@sagmans/dsh-tui/startup',
+  '@sagmans/dsh-tui/todo-guard',
   "name: '@sagmans/dsh-tui'",
   "name: '@deepseek-ai/dsh-agent-presets'",
   "name: '@deepseek-ai/dsh-code-runtime-worker-thread'",

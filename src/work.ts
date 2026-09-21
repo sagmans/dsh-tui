@@ -145,7 +145,9 @@ export function planToggleLine(active: boolean): string {
  * The state is folded rather than read from a service so a resumed session
  * shows exactly what the live one did, and so a composition without the
  * projection registry still tells the reader what the agent is doing. Each of
- * these events is a whole-value snapshot: the latest one wins.
+ * these events is a whole-value snapshot: the latest one wins. `turn/start`
+ * also clears the todo list, matching the host projection's turn-boundary
+ * lifetime so the dock and `/todo` never show a previous task's checklist.
  */
 export class WorkFold {
   private planMode = false
@@ -169,6 +171,12 @@ export class WorkFold {
     switch (event.type) {
       case 'plan/mode':
         this.planMode = data.active === true
+        return
+      case 'turn/start':
+        // The host projection drops the standing plan when the next turn opens,
+        // because a new task must not inherit the previous turn's checklist; the
+        // fold follows the same rule or every surface disagrees.
+        this.todos = undefined
         return
       case 'todo/write': {
         const entries = todoEntries(data.todos)

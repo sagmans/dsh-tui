@@ -28,6 +28,18 @@ describe('WorkFold', () => {
     expect(fold.state().todos).toBeUndefined()
   })
 
+  it('clears the plan strip when the next turn opens, as the host projection does', () => {
+    const fold = foldWith({ type: 'todo/write', data: { todos: [{ content: 'stale plan', status: 'in_progress' }] } })
+    expect(fold.state().todos).toHaveLength(1)
+    fold.apply({ type: 'turn/start', data: { turn: 2 } })
+    expect(fold.state().todos).toBeUndefined()
+    // A new turn clears; the turn boundary itself is not a second clear, so a
+    // plan written after it has to survive to the end of that turn.
+    fold.apply({ type: 'todo/write', data: { todos: [{ content: 'fresh plan', status: 'pending' }] } })
+    fold.apply({ type: 'turn/end', data: { turn: 2, reason: { kind: 'completed' } } })
+    expect(fold.state().todos).toEqual([{ content: 'fresh plan', status: 'pending' }])
+  })
+
   it('refuses a todo entry it cannot render', () => {
     const fold = foldWith({
       type: 'todo/write',
