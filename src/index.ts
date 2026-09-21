@@ -1605,12 +1605,6 @@ export function apply(ctx: Context, config: unknown): void {
     })
   }
 
-  /**
-   * Carry out one classified line, wherever it was asked for.
-   *
-   * A chord asks for the same things the command line does, so both arrive
-   * here: a chord cannot behave differently from the command it stands for.
-   */
   /** Show where history is kept, or forget it; the file is global to this machine. */
   const runHistoryCommand = (argument: string): void => {
     // The line that asked for this is recorded before the command runs, but that
@@ -1653,6 +1647,12 @@ export function apply(ctx: Context, config: unknown): void {
     })
   }
 
+  /**
+   * Carry out one classified line, wherever it was asked for.
+   *
+   * A chord asks for the same things the command line does, so both arrive
+   * here: a chord cannot behave differently from the command it stands for.
+   */
   const runSubmission = (submission: Submission): void => {
     switch (submission.kind) {
       case 'empty':
