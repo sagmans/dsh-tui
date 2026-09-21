@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
 import { createToolPresenter } from '@/agent/present.ts'
 import type { GateCard } from '@/gates.ts'
+import { defaultKeymap } from '@/input/actions.ts'
 import { createTheme } from '@/theme.ts'
 import { TranscriptModel } from '@/transcript.ts'
 import { MarkdownRenderer } from '@/ui/markdown.ts'
@@ -212,6 +213,7 @@ function pickerCard(): SessionPicker {
     ],
     () => new Map([['tui-session-33e6ddc3-c871-4534-aae1-8c38f7cf69a2', 'dock polish']]),
     () => NOW,
+    defaultKeymap,
   )
 }
 
@@ -224,6 +226,7 @@ function modelPickerCard(): ModelPicker {
       { provider: 'zai-coding-cn', model: 'glm-5.3', name: 'GLM 5.3' },
     ],
     () => ({ provider: 'kimi-coding', model: 'k2', reasoningEffort: 'high' }),
+    defaultKeymap,
   )
 }
 

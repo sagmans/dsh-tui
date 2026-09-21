@@ -625,7 +625,7 @@ export function apply(ctx: Context, config: unknown): void {
   const askForSession = async (history: SessionHistory, sessions: readonly StoredSession[]): Promise<SessionId | undefined> => {
     const titles = new Map<string, string>()
     void loadTitles(history, sessions, titles)
-    const picked = await openPicker(new SessionPicker(sessions, () => titles), refuseReason)
+    const picked = await openPicker(new SessionPicker(sessions, () => titles, undefined, () => keymap), refuseReason)
     return picked === undefined ? undefined : SessionId(picked)
   }
 
@@ -675,7 +675,7 @@ export function apply(ctx: Context, config: unknown): void {
   const askForPreset = async (currentId: string | undefined): Promise<string | undefined> => {
     if (agentPresets === undefined) return undefined
     presetRows = await agentPresets.list()
-    return await openPicker(new PresetPicker(() => presetRows, () => currentId))
+    return await openPicker(new PresetPicker(() => presetRows, () => currentId, () => keymap))
   }
 
   /** Title the listed sessions without making the reader wait for the slowest log. */
@@ -1300,6 +1300,7 @@ export function apply(ctx: Context, config: unknown): void {
       const picked = await openPicker(new EffortPicker(
         () => effortChoices(efforts, effective),
         `reasoning effort · ${route.provider}/${route.model}`,
+        () => keymap,
       ))
       if (picked !== undefined) applyEffort(route.provider, route.model, picked)
     } catch (error) {
@@ -1342,7 +1343,7 @@ export function apply(ctx: Context, config: unknown): void {
           // One adapter's discovery failure is not the list's to explain.
         })
       }
-      const picked = await openPicker(new ModelPicker(() => routes, effectiveRoute))
+      const picked = await openPicker(new ModelPicker(() => routes, effectiveRoute, () => keymap))
       if (picked === undefined) return
       const route = readModelRouteKey(picked)
       if (route === undefined) return
@@ -1385,6 +1386,7 @@ export function apply(ctx: Context, config: unknown): void {
       const picked = await openPicker(new EffortPicker(
         () => effortChoices(efforts, facts.effort),
         `reasoning effort · ${facts.provider}/${facts.model}`,
+        () => keymap,
       ))
       if (picked !== undefined) applyEffort(facts.provider, facts.model, picked)
     } catch (error) {
@@ -1674,7 +1676,7 @@ export function apply(ctx: Context, config: unknown): void {
   disposers.push(ctx.on('approval/request', (request, next) => {
     if (request.agent.id !== activeSession) return next()
     return new Promise<ApprovalOutcome>(resolve => {
-      const gate = new ApprovalGate(request.toolName, request.reason)
+      const gate = new ApprovalGate(request.toolName, request.reason, () => keymap)
       request.signal?.addEventListener('abort', () => {
         gate.cancel()
         if (pending?.gate === gate) closeGate()
@@ -1690,7 +1692,7 @@ export function apply(ctx: Context, config: unknown): void {
     const questions = toGateQuestions(request)
     if (questions.length === 0) return next()
     return new Promise<AskUserQuestionAnswer>(resolve => {
-      const gate = promptBar.borrow(() => new QuestionGate(questions, editor))
+      const gate = promptBar.borrow(() => new QuestionGate(questions, editor, () => keymap))
       // The seam takes mutable selection arrays and an optional custom field, so
       // the read-only gate answer is copied into that exact shape here.
       const settle = (answers: GateAnswer[]): void => {

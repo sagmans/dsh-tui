@@ -1,5 +1,5 @@
 import { matchesKey } from '@earendil-works/pi-tui'
-import { actionLabel, defaultKeymap, keyName, keysFor, matchesAction, moveHint, type Keymap } from './input/actions.ts'
+import { actionLabel, keyName, keysFor, matchesAction, moveHint, type Keymap } from './input/actions.ts'
 import { pastedText } from './input.ts'
 import { matchScore } from './input/match.ts'
 
@@ -98,7 +98,7 @@ export class ApprovalGate {
     private readonly toolName: string,
     private readonly reason: string | undefined,
     /** The keys in force, read per press so a settings edit lands on the next key. */
-    private readonly keys: () => Keymap = defaultKeymap,
+    private readonly keys: () => Keymap,
   ) {}
 
   get resolved(): boolean {
@@ -276,7 +276,7 @@ export class QuestionGate {
     /** The editor every typed answer is written in, whichever row asks for it. */
     private readonly input: GateInput,
     /** The keys in force, read per press so a settings edit lands on the next key. */
-    private readonly keys: () => Keymap = defaultKeymap,
+    private readonly keys: () => Keymap,
   ) {
     for (const _ of questions) {
       this.chosen.push([])

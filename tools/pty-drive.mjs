@@ -126,6 +126,11 @@ const NAMED_KEYS = {
   back: '\u007f',
   'ctrl+t': '\u0014',
   'ctrl+y': '\u0019',
+  // A key a reader may move submit to, which is the point of driving the
+  // surface with a settings document: the chord has to arrive as the byte the
+  // terminal sends for it, not as the name the map spells.
+  'ctrl+g': '\u0007',
+  'alt+d': '\u001bd',
   // The chord prefix has no printable byte: it arrives as the control the
   // terminal sends for the letter, which is what makes a two-key run drivable.
   'ctrl+x': '\u0018',

@@ -1,5 +1,5 @@
 import { matchesKey } from '@earendil-works/pi-tui'
-import { defaultKeymap, keyName, keysFor, matchesAction, moveHint, type Keymap } from '../input/actions.ts'
+import { keyName, keysFor, matchesAction, moveHint, type Keymap } from '../input/actions.ts'
 import { pastedText } from '../input.ts'
 import { matchScore } from '../input/match.ts'
 import type { StoredSession } from '../agent/history.ts'
@@ -91,7 +91,7 @@ export class ListPicker<Row> {
     private readonly haystackOf: (row: Row) => string,
     private readonly hints: PickerHints,
     /** The keys in force, read per press so a settings edit lands on the next key. */
-    private readonly keys: () => Keymap = defaultKeymap,
+    private readonly keys: () => Keymap,
   ) {}
 
   /** Rows matching the typed filter, best match first. */
@@ -188,7 +188,7 @@ export class SessionPicker extends ListPicker<StoredSession> {
     sessions: readonly StoredSession[],
     titles: () => ReadonlyMap<string, string>,
     now: () => number = () => Date.now(),
-    keys: () => Keymap = defaultKeymap,
+    keys: () => Keymap,
   ) {
     const labelOf = (session: StoredSession): string => titles().get(session.id) ?? session.id
     super(
@@ -225,7 +225,7 @@ export class PresetPicker extends ListPicker<PresetSummary> {
   constructor(
     presets: () => readonly PresetSummary[],
     currentId: () => string | undefined,
-    keys: () => Keymap = defaultKeymap,
+    keys: () => Keymap,
   ) {
     super(
       presets,
@@ -251,7 +251,7 @@ export class PresetPicker extends ListPicker<PresetSummary> {
  * rows too.
  */
 export class ModelPicker extends ListPicker<ModelRoute> {
-  constructor(routes: () => readonly ModelRoute[], current: () => ModelChoice | undefined, keys: () => Keymap = defaultKeymap) {
+  constructor(routes: () => readonly ModelRoute[], current: () => ModelChoice | undefined, keys: () => Keymap) {
     super(
       routes,
       () => {
@@ -324,7 +324,7 @@ export function effortChoices(
  * cannot change while the list owns the keyboard.
  */
 export class EffortPicker extends ListPicker<EffortChoice> {
-  constructor(choices: () => readonly EffortChoice[], heading: string, keys: () => Keymap = defaultKeymap) {
+  constructor(choices: () => readonly EffortChoice[], heading: string, keys: () => Keymap) {
     super(
       choices,
       () => heading,

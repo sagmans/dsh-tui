@@ -134,7 +134,7 @@ const PRESETS: readonly PresetSummary[] = [
 
 describe('PresetPicker', () => {
   it('matches a fragment of a mode name and picks the row it left', () => {
-    const picker = new PresetPicker(() => PRESETS, () => 'standard')
+    const picker = new PresetPicker(() => PRESETS, () => 'standard', defaultKeymap)
     for (const key of 'mnml') picker.handleKey(key)
     expect(picker.visible().map(preset => preset.id)).toEqual(['minimal'])
     expect(picker.handleKey('\r')).toEqual({ kind: 'pick', id: 'minimal' })
@@ -148,7 +148,7 @@ const EFFORTS: readonly EffortChoice[] = [
 ]
 
 const effortPicker = (): EffortPicker =>
-  new EffortPicker(() => EFFORTS, 'reasoning effort · kimi-coding/k2')
+  new EffortPicker(() => EFFORTS, 'reasoning effort · kimi-coding/k2', defaultKeymap)
 
 describe('EffortPicker', () => {
   it('picks the row under the cursor, including the provider default', () => {
@@ -203,7 +203,7 @@ const ROUTES: readonly ModelRoute[] = [
 const modelPicker = (
   routes: readonly ModelRoute[] = ROUTES,
   current: ModelChoice | undefined = { provider: 'kimi-coding', model: 'k2' },
-): ModelPicker => new ModelPicker(() => routes, () => current)
+): ModelPicker => new ModelPicker(() => routes, () => current, defaultKeymap)
 
 describe('ModelPicker', () => {
   it('picks the highlighted route on enter', () => {
@@ -233,14 +233,14 @@ describe('ModelPicker', () => {
       { provider: 'kimi-coding', model: 'g-l-m-5-3', name: 'Scattered' },
       { provider: 'zai-coding-cn', model: 'glm-5.3', name: 'GLM 5.3' },
     ]
-    const picker = new ModelPicker(() => routes, () => undefined)
+    const picker = new ModelPicker(() => routes, () => undefined, defaultKeymap)
     for (const key of 'glm53') picker.handleKey(key)
     expect(picker.visible().map(route => route.model)).toEqual(['glm-5.3', 'g-l-m-5-3'])
   })
 
   it('shows rows that arrive after it opened, without reopening it', () => {
     const routes: ModelRoute[] = []
-    const picker = new ModelPicker(() => routes, () => undefined)
+    const picker = new ModelPicker(() => routes, () => undefined, defaultKeymap)
     picker.handleKey('l')
     picker.handleKey('a')
     routes.push({ provider: 'kimi-coding', model: 'k2-latest', name: 'K2 Latest' })
