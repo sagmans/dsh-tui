@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, utimesSync } from 'node:fs'
 import { hostname } from 'node:os'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -32,11 +32,15 @@ afterEach(() => {
 })
 
 /** Publish a lock as if another process held it, so the contender is exercised. */
-async function holdLock(lockDir: string, owner: { pid: number; host: string }): Promise<void> {
+async function holdLock(
+  lockDir: string,
+  owner: { pid: number; host: string },
+  token = 'foreign-token',
+): Promise<void> {
   mkdirSync(lockDir, { mode: PRIVATE_DIR_MODE })
   await writePrivateFileExclusive(
     join(lockDir, 'owner.json'),
-    `${JSON.stringify({ ...owner, token: 'foreign-token', createdAt: new Date().toISOString() })}\n`,
+    `${JSON.stringify({ ...owner, token, createdAt: new Date().toISOString() })}\n`,
   )
 }
 
@@ -134,8 +138,11 @@ describe('withStashFileLock', () => {
    * removal, and the name is taken by a live lock before the removal lands. The
    * observation is the barrier — the replacement is published between the two
    * calls — so a removal that trusts its earlier look deletes a running holder.
+   *
+   * The successor's token is what a release can never keep, so it is the token
+   * that answers here; a filesystem is free to hand the same inode straight back.
    */
-  it('refuses to remove a lock that replaced the one it judged', async () => {
+  it('refuses to remove a lock whose owner was replaced', async () => {
     const file = scratchFile()
     const lockDir = `${file}.lock`
     await holdLock(lockDir, { pid: DEAD_PID, host: hostname() })
@@ -143,6 +150,45 @@ describe('withStashFileLock', () => {
     expect(observed).toBeDefined()
 
     rmSync(lockDir, { recursive: true })
+    await holdLock(lockDir, { pid: process.pid, host: hostname() }, 'successor-token')
+    const replacement = readFileSync(join(lockDir, 'owner.json'), 'utf8')
+
+    await expect(removeObservedLock(lockDir, observed!)).resolves.toBe(false)
+    expect(readFileSync(join(lockDir, 'owner.json'), 'utf8')).toBe(replacement)
+  })
+
+  /**
+   * The token on its own: an observation whose identity still matches the
+   * directory in place, so nothing but the owner it names can refuse. A
+   * filesystem may hand a released lock's inode straight back to its successor,
+   * which is exactly the case a comparison that stopped at identity would miss.
+   */
+  it('refuses a lock whose identity matches but whose owner token does not', async () => {
+    const file = scratchFile()
+    const lockDir = `${file}.lock`
+    await holdLock(lockDir, { pid: DEAD_PID, host: hostname() })
+    const observed = await observeLock(lockDir)
+    expect(observed).toBeDefined()
+
+    const judged = { ...observed!, owner: { ...observed!.owner!, token: 'judged-token' } }
+    await expect(removeObservedLock(lockDir, judged)).resolves.toBe(false)
+    expect(existsSync(lockDir)).toBe(true)
+  })
+
+  /**
+   * A lock that replaced the judged one without sharing its token: the directory
+   * is renamed aside rather than deleted, so its inode stays allocated and the
+   * replacement cannot be mistaken for it. Identity is the only thing left that
+   * can refuse, which is what makes this the check's own test.
+   */
+  it('refuses to remove a different directory at the same name', async () => {
+    const file = scratchFile()
+    const lockDir = `${file}.lock`
+    await holdLock(lockDir, { pid: DEAD_PID, host: hostname() })
+    const observed = await observeLock(lockDir)
+    expect(observed).toBeDefined()
+
+    renameSync(lockDir, `${lockDir}.judged`)
     await holdLock(lockDir, { pid: process.pid, host: hostname() })
     const replacement = readFileSync(join(lockDir, 'owner.json'), 'utf8')
 
