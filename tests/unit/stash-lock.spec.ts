@@ -184,7 +184,9 @@ describe('withStashFileLock', () => {
       }),
     )
     expect(peak).toBe(1)
-    expect(existsSync(`${file}.lock.reclaiming`)).toBe(false)
+    // Every winner clears its claim, so nothing is left to fail the next reclaim.
+    expect(existsSync(reclaimMutexPath(`${file}.lock`))).toBe(false)
+    expect(readdirSync(join(file, '..')).filter(name => name.startsWith('.claim-'))).toEqual([])
   })
 
   it('leaves a live lock exactly where it is while looking at it', async () => {
