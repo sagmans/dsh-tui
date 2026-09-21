@@ -130,6 +130,7 @@ moves any of them — see [Keys](#keys).
 | Ctrl+Y | show or hide the calls a PTC program dispatched: one two-space-indented entry per call under its `run_code` card, named and argued from the tool's own header and wrapped at the screen edge; shown by default |
 | Shift+Tab | expand or fold the reasoning behind an answer: folded, the row names itself, its token count, and the key; opened, it adds the thought |
 | Ctrl+T | pick the reasoning effort for the next step |
+| Ctrl+R | reverse-search recorded prompts: the list opens filtered by whatever is in the bar, `enter` puts one back, `esc` keeps the draft |
 | Ctrl+X then M | open the model picker |
 | Ctrl+X then Y | copy the last answer to the clipboard |
 | `y` / `n` / Esc | allow once, reject, or cancel a pending approval |
@@ -160,6 +161,8 @@ moves any of them — see [Keys](#keys).
 | `/export [path]` | write the visible transcript as markdown (default `dsh-session-<id>.md`) |
 | `/resume` | open another stored session without leaving the terminal |
 | `/clear` | clear the visible transcript |
+| `/history` | show how many prompts are recorded and where the file is |
+| `/history clear` | forget every recorded prompt, reporting how many went |
 | `/theme` | list every styled element and the value in force |
 | `/keys` | list every action and the keys in force; `/keys <layer>` narrows it (see [Keys](#keys)) |
 | `/quit` | leave and print the resume command |
@@ -186,6 +189,20 @@ An approval or a question draws inline above the editor and takes the keyboard. 
 
 While a turn runs, a prompt submitted into the editor waits in the agent's own inbox instead of disappearing: it is drawn above the editor in the input bar's own frame, faint and italic, and moves into the transcript when the agent takes it — where it keeps that frame in the prompt's own mint shade, so what the reader typed is never mistaken for what the agent said. `editor.queued` and `editor.queued.more` restyle or hide the waiting rows; `transcript.user` restyles the submitted prompt.
 
+Every submitted line is also kept in a global prompt history at
+`$DSH_HOME/prompt-history.json`. Typing the start of a prompt that was sent
+before draws the rest of the newest match after the cursor in a faint shade.
+`Ctrl+E` takes the whole suggestion and the word-movement key takes the next
+word, and both keys fall back to their old meaning the moment nothing is
+offered. The history is deliberately global — the same prompt is useful in
+every checkout — so nothing records a directory. An exact repeat moves to the
+front instead of being stored twice. `history.ghost: false` keeps reverse
+search but stops drawing the suggestion, `history.enabled: false` stops
+recording and offering, and `history.maxEntries` bounds the file. A file this
+build cannot parse is left untouched and writes are refused, so a newer format
+is never overwritten; `/history` names it and the count, and `/history clear`
+forgets everything.
+
 Any other `/command` goes to the command registry, so `/plan`, `/compact`, `/goal`, and `/feedback` behave as they do on the other surfaces.
 
 ## Settings
@@ -205,6 +222,10 @@ dsh-tui:
     prompt.submit: [ctrl+enter, alt+enter, ctrl+s]
     surface.effort: ctrl+t    # one key, or a list of them
     tui.editor.yank: ctrl+y   # any action the library draws, by the id /keys prints
+  history:
+    enabled: true             # record prompts and offer them back (default true)
+    ghost: true               # draw the dimmed completion; reverse search stays either way (default true)
+    maxEntries: 2000          # prompts kept, newest first (1-20000, default 2000)
   palette:
     muted: '#5c5c5c'          # one shade quiets every receding element
   tokens:
@@ -229,6 +250,13 @@ program dispatched under their card, and `subcalls: collapsed` starts with the
 card alone instead. `Ctrl+Y` toggles the same choice for the current session,
 and an edit to the document re-seeds it. An unknown key or value is
 refused with a notice naming it, so a typo cannot quietly do nothing.
+
+The `history` block tunes the prompt history. `enabled: false` stops recording
+and offering it; `ghost: false` keeps reverse search but stops the dimmed
+completion; `maxEntries` bounds the file, and an exact repeat moves to the
+front rather than being stored twice. `editor.ghost` styles the suggestion, and
+`NO_COLOR` or `--no-color` suppresses it entirely, because a suggestion the
+reader cannot see but could still accept is worse than none.
 
 A reply whose fenced block names `mermaid` is drawn as terminal box art instead
 of source, laid out at the width the transcript has. `mermaid: streaming` (the
@@ -426,6 +454,10 @@ The automated checks drive a real PTY, but they run on this machine's terminal. 
 | a reply carrying a mermaid fence | it draws as box art at the transcript width, with the prose around it untouched |
 | that reply in a terminal narrower than the drawing | the fence stays source, and widening the window draws it without a new turn |
 | `dsh-tui: { mermaid: off }` in `$DSH_HOME/settings.yaml`, then a mermaid reply | the fence stays source; editing the value to `streaming` draws a settled reply without a restart |
+| type the start of a prompt already recorded | the rest of the newest match follows the cursor in a faint shade; `ctrl+e` takes it whole, the word-right key takes one word, and both keys do their old job when nothing is offered |
+| `ctrl+r`, then a fragment | reverse search opens seeded with the bar's draft; `enter` puts a prompt back, `esc` keeps the draft |
+| `dsh-tui: { history: { ghost: false } }`, then type a known prefix | no suggestion is drawn, and `ctrl+r` still searches |
+| `/history clear`, then `/history` | the notice reports the count forgotten, and the second reports none recorded |
 | `/model` on a configured profile | the picker lists only the configured providers' advertised models, heads itself with the route in force, and typing filters it while later rows stream in; `esc` or Ctrl+C leaves without changing the route, and `enter` chains into the route's reasoning efforts |
 | `/preset` on a fresh session | the picker lists four modes, marks the current one, and the switch survives a resume |
 | `/preset minimal` after a turn | refused, naming the reason; the session keeps the mode it composed with |
@@ -465,6 +497,7 @@ The workflow stores no npm token: the registry trusts `release.yml` on the `npm-
 - Styling is per element and overridable; see [Settings](#settings). Shipped defaults are emitted as 24-bit colour where the terminal advertises it and degraded to 256 or 16 colours otherwise, so a light or dark terminal still follows its own palette where it has one.
 - Tool text, model text, and file content are escaped before rendering, so a hostile result cannot inject terminal control sequences; the cost is that a literal tab shows as \x09.
 - Mermaid fences draw in assistant replies only, and only at the top level of one: a fence nested in a list, quoted inside another fence, or carried by a prompt, a thought, or a tool card stays source. Author `:::class` styling and diagram links are ignored — the renderer reports what each run is, and the theme decides how it looks.
+- Prompt history is global to this machine, not per project: `$DSH_HOME/prompt-history.json` holds every submitted line, deduplicated exactly, and a file this build cannot parse is left untouched with writes refused so a newer format is never overwritten. A multiline suggestion draws its first line with `↵` marking the fold. `history.ghost: false` keeps reverse search without the suggestion, `history.enabled: false` stops recording and offering it, and `NO_COLOR`/`--no-color` suppresses the ghost because text the reader cannot see but could still accept is worse than none.
 
 ## License
 
