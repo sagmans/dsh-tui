@@ -4,7 +4,6 @@ import {
   isKittyProtocolActive,
   matchesKey,
   stripTerminalSequences,
-  truncateToWidth,
   visibleWidth,
   type EditorTheme,
   type TUI,
@@ -14,6 +13,7 @@ import {
 import { ENTER_KEY, defaultKeymap, type Keymap } from '../input/actions.ts'
 import { ghostDisplayLine, ghostGraphemes, isCursorAtTextEnd, nextGhostWord, type EditorCursor } from '../input/ghost.ts'
 import { promptKeys } from '../input/keymap.ts'
+import { displayText } from '../text.ts'
 import { FRAME_COLUMNS, FRAME_GLYPHS, MIN_BOX_WIDTH, PADDING_X } from './frame.ts'
 
 /**
@@ -183,7 +183,13 @@ export class BoxedEditor extends Editor {
     // A cursor parked over a typed space draws the same cell as one at the very
     // end, so the position has to be confirmed before a brush is asked at all.
     if (!isCursorAtTextEnd({ lines, cursor })) return undefined
-    return brush.suggestion({ text: this.getText(), lines, cursor })
+    // The brush is a collaborator this class does not own, and its answer is
+    // both drawn and inserted: a control sequence would reach the terminal or
+    // the bar itself. The store refuses them too, so this only has to hold for
+    // any other brush. The expanded text is what was actually written; a large
+    // paste is stored as a marker and would otherwise match nothing.
+    const suffix = brush.suggestion({ text: this.getExpandedText(), lines, cursor })
+    return suffix === undefined ? undefined : displayText(suffix)
   }
 
   /**
@@ -202,10 +208,20 @@ export class BoxedEditor extends Editor {
     const pad = visibleWidth(row.slice(cursorAt + CURSOR_AT_END.length))
     // The freed cursor cell is one more column the suffix may fill.
     const room = pad + 1
-    const drawn = truncateToWidth(ghostDisplayLine(suffix), room, '')
+    // A width-aware cut can split a wide grapheme or return the escape that
+    // closed a style, so the fit is measured one grapheme at a time; when even
+    // the first one is too wide, the row keeps the cursor the base drew.
+    let drawn = ''
+    let used = 0
+    for (const grapheme of ghostGraphemes(ghostDisplayLine(suffix))) {
+      const width = visibleWidth(grapheme)
+      if (used + width > room) break
+      drawn += grapheme
+      used += width
+    }
     if (drawn === '') return row
     const [first = '', ...rest] = ghostGraphemes(drawn)
-    const spaces = ' '.repeat(Math.max(0, room - visibleWidth(drawn)))
+    const spaces = ' '.repeat(Math.max(0, room - used))
     return before + brush.paint(first, 'cursor') + brush.paint(rest.join(''), 'rest') + spaces
   }
 

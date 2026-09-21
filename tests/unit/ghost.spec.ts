@@ -60,6 +60,17 @@ describe('nextGhostWord', () => {
   it('returns undefined for an empty suffix', () => {
     expect(nextGhostWord('')).toBeUndefined()
   })
+
+  it('takes a word that begins on the next line, so acceptance can cross lines', () => {
+    expect(nextGhostWord('\nthe parser')).toBe('\nthe')
+  })
+
+  it('keeps crossing lines on repeated acceptance', () => {
+    const suffix = '\nthe\nparser'
+    const first = nextGhostWord(suffix)
+    expect(first).toBe('\nthe')
+    expect(nextGhostWord(suffix.slice(first!.length))).toBe('\nparser')
+  })
 })
 
 describe('ghostDisplayLine', () => {

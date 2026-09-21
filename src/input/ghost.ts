@@ -29,8 +29,13 @@ export interface GhostInput {
 /** Marks a folded ghost so the reader knows the suggestion continues. */
 export const NEWLINE_MARKER = '\u21b5'
 
-/** Leading whitespace travels with the word so a partial accept keeps spacing. */
-const NEXT_WORD = /^[^\S\n]*\S+/u
+/**
+ * Leading whitespace travels with the word so a partial accept keeps spacing.
+ *
+ * A newline is whitespace too: a multiline suggestion starts its second word
+ * with one, and refusing to take it would stall acceptance at the fold.
+ */
+const NEXT_WORD = /^\s*\S+/u
 
 // Locale-independent grapheme clusters: a ghost is drawn inside a styled line,
 // and slicing by code unit would orphan the high surrogate of an emoji or split

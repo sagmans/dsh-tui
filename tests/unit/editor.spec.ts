@@ -417,4 +417,45 @@ describe('prompt-history ghost completion', () => {
     instance.handleInput('\u0005')
     expect(instance.getCursor().col).toBe(5)
   })
+
+  it('spells out a suggestion carrying control sequences instead of drawing them', () => {
+    const instance = ghosted(brush({ suggestion: () => 'x\u001b[2Jy' }))
+    const rows = instance.render(WIDTH)
+    expect(rows.some(row => row.includes('\u001b[2J'))).toBe(false)
+    expect(rows.some(row => row.includes('\\x1B[2Jy'))).toBe(true)
+  })
+
+  it('accepts the spelled-out suggestion rather than the sequence', () => {
+    const instance = ghosted(brush({ suggestion: () => 'x\u001b[2Jy' }))
+    instance.handleInput('\u0005')
+    expect(instance.getText()).toBe('fix x\\x1B[2Jy')
+  })
+
+  it('matches a suggestion against the expanded text of a large paste', () => {
+    const pasted = 'p'.repeat(1001)
+    let seen = ''
+    const instance = new BoxedEditor(surface(), createTheme('none').editor, brush({
+      suggestion: input => {
+        seen = input.text
+        return undefined
+      },
+    }))
+    instance.focused = true
+    instance.handleInput('\u001b[200~' + pasted + '\u001b[201~')
+    instance.render(WIDTH)
+    expect(seen).toBe(pasted)
+  })
+
+  it('leaves the row alone when a wide grapheme cannot fit the freed cell', () => {
+    const theme = createTheme('truecolor')
+    const painted = new BoxedEditor(surface(), theme.editor, {
+      enabled: () => true,
+      suggestion: () => '界 ',
+      paint: (text, cell) => (cell === 'cursor' ? '\u001b[7m' : '') + theme.style('editor.ghost', text) + '\u001b[0m',
+    })
+    painted.setText('a'.repeat(26))
+    const plain = new BoxedEditor(surface(), theme.editor)
+    plain.setText('a'.repeat(26))
+    expect(painted.render(WIDTH)).toEqual(plain.render(WIDTH))
+  })
 })
