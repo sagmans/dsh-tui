@@ -34,7 +34,7 @@ export function stashLabel(text: string): string {
 }
 
 /**
- * The drafts of one working directory, chosen by key press.
+ * The drafts of one session, chosen by key press.
  *
  * The id a pick settles on is the entry id, so a pop survives the list being
  * re-read while it is open and can never take the wrong draft after a concurrent
@@ -45,13 +45,13 @@ export function stashLabel(text: string): string {
 export class StashPicker extends ListPicker<ResolvedEntry> {
   constructor(
     entries: readonly ResolvedEntry[],
-    cwdLabel: string,
+    sessionLabel: string,
     keys: () => Keymap,
     now: () => number = () => Date.now(),
   ) {
     super(
       () => entries,
-      () => `stash · ${cwdLabel} · ${entries.length} draft${entries.length === 1 ? '' : 's'}`,
+      () => `stash · ${sessionLabel} · ${entries.length} draft${entries.length === 1 ? '' : 's'}`,
       row => row.entry.id,
       (row): PickerRow => ({
         label: `[${row.index}] ${stashLabel(row.entry.text)}`,
@@ -100,7 +100,7 @@ export class StashConfirmPicker extends ListPicker<ConfirmChoice> {
     ]
     super(
       () => choices,
-      () => `clear stash · ${count} draft${count === 1 ? '' : 's'} in this directory`,
+      () => `clear stash · ${count} draft${count === 1 ? '' : 's'} in this session`,
       choice => choice.id,
       (choice): PickerRow => ({ label: choice.label, description: choice.description, current: false }),
       choice => choice.label,

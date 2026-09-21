@@ -324,7 +324,7 @@ exports[`golden frames > renders the stash picker at 40 columns 1`] = `
       "label": "[1] why does the dock render twice on the first frame?",
     },
   ],
-  "title": "stash · ~/source/opensource/deepseek-harness/master · 2 drafts",
+  "title": "stash · tui-session-87c1e0d2 · 2 drafts",
 }
 `;
 
@@ -347,7 +347,7 @@ exports[`golden frames > renders the stash picker at 80 columns 1`] = `
       "label": "[1] why does the dock render twice on the first frame?",
     },
   ],
-  "title": "stash · ~/source/opensource/deepseek-harness/master · 2 drafts",
+  "title": "stash · tui-session-87c1e0d2 · 2 drafts",
 }
 `;
 

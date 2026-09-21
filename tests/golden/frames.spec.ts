@@ -249,14 +249,14 @@ function modelPickerCard(): ModelPicker {
   )
 }
 
-/** The drafts parked for one directory, whose rows are the draft itself. */
+/** The drafts parked for one session, whose rows are the draft itself. */
 function stashPickerCard(): StashPicker {
   return new StashPicker(
     [
       { entry: { id: 'a1', text: 'refactor the fold cursor so a resume replays it', createdAt: NOW - 90_000 }, index: 0 },
       { entry: { id: 'b2', text: 'why does the dock render twice on the first frame?', createdAt: NOW - 600_000 }, index: 1 },
     ],
-    '~/source/opensource/deepseek-harness/master',
+    'tui-session-87c1e0d2',
     defaultKeymap,
     () => NOW,
   )

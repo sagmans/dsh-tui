@@ -1,4 +1,4 @@
-// StashStore: on-disk CRUD for stash entries, scoped to one working directory.
+// StashStore: on-disk CRUD for stash entries, scoped to one session.
 //
 // Entries are stored newest-first (`entries[0]` is `stash@{0}`), mirroring git's
 // index-0-is-tip convention. Every mutation re-reads the file inside an
@@ -53,7 +53,7 @@ export const MAX_STASH_FILE_BYTES = 16_777_216
 const DUPLICATE_STASH_ID_MESSAGE = 'duplicate stash id'
 const UNSUPPORTED_SCHEMA_GUIDANCE =
   'Upgrade dsh-tui before using this stash, or move the stash file aside for safe recovery.'
-const FILE_TOO_LARGE_MESSAGE = 'this directory has no room left for another draft; drop one first'
+const FILE_TOO_LARGE_MESSAGE = 'this session has no room left for another draft; drop one first'
 
 /**
  * A bank that cannot be written because it would no longer be readable.
@@ -131,7 +131,7 @@ export class StashStore {
     this.paths = paths
     this.now = now
     this.write = write
-    this.file = loaded.kind === 'ready' ? loaded.file : createEmptyStashFile(paths.cwd, now())
+    this.file = loaded.kind === 'ready' ? loaded.file : createEmptyStashFile(paths.sessionId, now())
     this.corruptRecovery =
       loaded.kind === 'corrupt' && loaded.quarantinedTo !== undefined
         ? { path: loaded.quarantinedTo, syncFailed: loaded.quarantineSyncFailed }
@@ -222,7 +222,7 @@ export class StashStore {
       const removed = this.file.entries.length - kept.length
       if (removed === 0) return { didPersist: false, result: 0 }
       const next: StashFile = {
-        ...createEmptyStashFile(this.paths.cwd, this.now()),
+        ...createEmptyStashFile(this.paths.sessionId, this.now()),
         updatedAt: this.now(),
         entries: kept,
       }
@@ -252,7 +252,7 @@ export class StashStore {
   }
 
   private async reloadFresh(): Promise<void> {
-    const loaded = await readCurrentStashFile(this.filePath, this.paths.cwd, this.now())
+    const loaded = await readCurrentStashFile(this.filePath, this.paths.sessionId, this.now())
     if (loaded.kind === 'ready') {
       this.file = loaded.file
       return
@@ -260,7 +260,7 @@ export class StashStore {
     if (loaded.kind === 'unsupported') throw new UnsupportedStashSchemaError(loaded.version)
     // Corrupt input is quarantined and replaced in memory, so later writes
     // cannot resurrect entries from the invalidated snapshot.
-    this.file = createEmptyStashFile(this.paths.cwd, this.now())
+    this.file = createEmptyStashFile(this.paths.sessionId, this.now())
     this.corruptRecovery =
       loaded.quarantinedTo === undefined
         ? undefined
@@ -273,19 +273,19 @@ export async function loadStashStore(
   now: Clock = Date.now,
   write: StashWriter = writeStashFile,
 ): Promise<StashStore> {
-  const loaded = await withStashFileLock(paths.file, () => readCurrentStashFile(paths.file, paths.cwd, now()))
+  const loaded = await withStashFileLock(paths.file, () => readCurrentStashFile(paths.file, paths.sessionId, now()))
   if (loaded.kind === 'unsupported') throw new UnsupportedStashSchemaError(loaded.version)
   return new StashStore(paths, loaded, now, write)
 }
 
-async function readCurrentStashFile(filePath: string, cwd: string, now: number): Promise<LoadResult> {
+async function readCurrentStashFile(filePath: string, sessionId: string, now: number): Promise<LoadResult> {
   let source: PrivateTextFile
   try {
     source = await readPrivateTextFile(filePath, 'stash file', MAX_STASH_FILE_BYTES)
   } catch (error) {
     // A missing bank is an empty one; an oversized or unreadable bank is a real
     // failure the caller must report rather than silently start over from.
-    if (hasErrorCode(error, 'ENOENT')) return { kind: 'ready', file: createEmptyStashFile(cwd, now) }
+    if (hasErrorCode(error, 'ENOENT')) return { kind: 'ready', file: createEmptyStashFile(sessionId, now) }
     throw error
   }
 
@@ -296,7 +296,7 @@ async function readCurrentStashFile(filePath: string, cwd: string, now: number):
     return await quarantineCorrupt(filePath, source.identity)
   }
   const parsed = parseStashFile(raw)
-  if (parsed !== undefined && parsed.cwd === cwd) return { kind: 'ready', file: parsed }
+  if (parsed !== undefined && parsed.sessionId === sessionId) return { kind: 'ready', file: parsed }
   if (
     isRecord(raw) &&
     typeof raw.version === 'number' &&

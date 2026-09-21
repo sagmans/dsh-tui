@@ -7,7 +7,7 @@
 
 import { randomUUID } from 'node:crypto'
 
-export const STASH_SCHEMA_VERSION = 1
+export const STASH_SCHEMA_VERSION = 2
 
 /** A stash longer than this is refused rather than stored. */
 export const MAX_STASH_ENTRY_BYTES = 1_048_576
@@ -68,14 +68,14 @@ export interface StashEntry {
 export interface StashFile {
   readonly version: typeof STASH_SCHEMA_VERSION
   /**
-   * The exact working directory this bank belongs to.
+   * The exact session this bank belongs to.
    *
    * The key alone cannot prove ownership: it is a flattened label that two
-   * directories could once have shared. The exact path is compared on every
-   * read, so a file that belongs to another directory is quarantined rather than
-   * read or deleted as this one's.
+   * sessions could once have shared. The exact id is compared on every read, so
+   * a file that belongs to another session is quarantined rather than read or
+   * deleted as this one's.
    */
-  readonly cwd: string
+  readonly sessionId: string
   readonly createdAt: number
   readonly updatedAt: number
   /** Newest first: `entries[0]` is `stash@{0}`. */
@@ -86,8 +86,8 @@ export type Clock = () => number
 
 export const createNewId = (): string => randomUUID()
 
-export function createEmptyStashFile(cwd: string, now: number): StashFile {
-  return { version: STASH_SCHEMA_VERSION, cwd, createdAt: now, updatedAt: now, entries: [] }
+export function createEmptyStashFile(sessionId: string, now: number): StashFile {
+  return { version: STASH_SCHEMA_VERSION, sessionId, createdAt: now, updatedAt: now, entries: [] }
 }
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
@@ -110,14 +110,14 @@ export function normalizeEntry(raw: unknown): StashEntry | undefined {
 /**
  * Read one stash file, or nothing when it is not this surface's current format.
  *
- * Strict on purpose: a duplicate id, a missing timestamp, or a foreign working
- * directory is corruption the store quarantines rather than a shape to repair,
- * because a silently repaired file can resurrect entries the reader thought they
- * dropped — or hand another directory's drafts to this one.
+ * Strict on purpose: a duplicate id, a missing timestamp, or a foreign session
+ * is corruption the store quarantines rather than a shape to repair, because a
+ * silently repaired file can resurrect entries the reader thought they dropped —
+ * or hand another session's drafts to this one.
  */
 export function parseStashFile(raw: unknown): StashFile | undefined {
   if (!isRecord(raw) || raw.version !== STASH_SCHEMA_VERSION) return undefined
-  if (typeof raw.cwd !== 'string') return undefined
+  if (typeof raw.sessionId !== 'string') return undefined
   if (!isValidTimestamp(raw.createdAt) || !isValidTimestamp(raw.updatedAt)) return undefined
   if (!Array.isArray(raw.entries)) return undefined
   const entries: StashEntry[] = []
@@ -128,7 +128,7 @@ export function parseStashFile(raw: unknown): StashFile | undefined {
     ids.add(entry.id)
     entries.push(entry)
   }
-  return { version: STASH_SCHEMA_VERSION, cwd: raw.cwd, createdAt: raw.createdAt, updatedAt: raw.updatedAt, entries }
+  return { version: STASH_SCHEMA_VERSION, sessionId: raw.sessionId, createdAt: raw.createdAt, updatedAt: raw.updatedAt, entries }
 }
 
 export interface ResolvedEntry {

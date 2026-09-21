@@ -14,13 +14,13 @@ import {
   type StashWriter,
 } from '@/stash/store.ts'
 
-const CWD = '/work/me/app'
+const SESSION = 'tui-session-store-spec'
 const scratchDirs: string[] = []
 
 function scratch(): { baseDir: string; file: string } {
   const baseDir = mkdtempSync(join(tmpdir(), 'dsh-stash-store-'))
   scratchDirs.push(baseDir)
-  return { baseDir, file: resolveStashPaths(CWD, baseDir).file }
+  return { baseDir, file: resolveStashPaths(SESSION, baseDir).file }
 }
 
 afterEach(() => {
@@ -39,9 +39,9 @@ function seed(file: string, contents: string): void {
 }
 
 describe('StashStore load', () => {
-  it('starts empty when the directory has no bank yet', async () => {
+  it('starts empty when the session has no bank yet', async () => {
     const { baseDir } = scratch()
-    const store = await loadStashStore(resolveStashPaths(CWD, baseDir), clock())
+    const store = await loadStashStore(resolveStashPaths(SESSION, baseDir), clock())
     expect(store.entryCount).toBe(0)
     expect(store.entries).toEqual([])
   })
@@ -49,7 +49,7 @@ describe('StashStore load', () => {
   it('quarantines a file that is not JSON, and says where it went', async () => {
     const { baseDir, file } = scratch()
     seed(file, 'not json at all')
-    const store = await loadStashStore(resolveStashPaths(CWD, baseDir), clock())
+    const store = await loadStashStore(resolveStashPaths(SESSION, baseDir), clock())
     const quarantined = store.takeQuarantine()?.path
     expect(quarantined).toBeDefined()
     expect(existsSync(quarantined as string)).toBe(true)
@@ -58,20 +58,20 @@ describe('StashStore load', () => {
     expect(store.entryCount).toBe(0)
   })
 
-  it('quarantines a valid file written for another directory', async () => {
+  it('quarantines a valid file written for another session', async () => {
     const { baseDir, file } = scratch()
     seed(
       file,
-      JSON.stringify({ version: STASH_SCHEMA_VERSION, cwd: '/somewhere/else', createdAt: 1, updatedAt: 1, entries: [] }),
+      JSON.stringify({ version: STASH_SCHEMA_VERSION, sessionId: 'tui-session-elsewhere', createdAt: 1, updatedAt: 1, entries: [] }),
     )
-    const store = await loadStashStore(resolveStashPaths(CWD, baseDir), clock())
+    const store = await loadStashStore(resolveStashPaths(SESSION, baseDir), clock())
     expect(store.takeQuarantine()).toBeDefined()
   })
 
   it('refuses a newer format without touching it', async () => {
     const { baseDir, file } = scratch()
-    seed(file, JSON.stringify({ version: STASH_SCHEMA_VERSION + 1, cwd: '/work/me/app', entries: [] }))
-    await expect(loadStashStore(resolveStashPaths(CWD, baseDir), clock())).rejects.toBeInstanceOf(
+    seed(file, JSON.stringify({ version: STASH_SCHEMA_VERSION + 1, sessionId: SESSION, entries: [] }))
+    await expect(loadStashStore(resolveStashPaths(SESSION, baseDir), clock())).rejects.toBeInstanceOf(
       UnsupportedStashSchemaError,
     )
     expect(existsSync(file)).toBe(true)
@@ -81,7 +81,7 @@ describe('StashStore load', () => {
 describe('StashStore mutations', () => {
   it('keeps the newest entry first and writes it where a reload finds it', async () => {
     const { baseDir } = scratch()
-    const paths = resolveStashPaths(CWD, baseDir)
+    const paths = resolveStashPaths(SESSION, baseDir)
     const store = await loadStashStore(paths, clock())
     await store.add({ id: 'first', text: 'one' })
     await store.add({ id: 'second', text: 'two' })
@@ -94,7 +94,7 @@ describe('StashStore mutations', () => {
 
   it('refuses a second entry under an id already stored', async () => {
     const { baseDir } = scratch()
-    const store = await loadStashStore(resolveStashPaths(CWD, baseDir), clock())
+    const store = await loadStashStore(resolveStashPaths(SESSION, baseDir), clock())
     await store.add({ id: 'fixed', text: 'one' })
     await expect(store.add({ id: 'fixed', text: 'two' })).rejects.toThrow(/duplicate stash id/)
     expect(store.entryCount).toBe(1)
@@ -102,7 +102,7 @@ describe('StashStore mutations', () => {
 
   it('removes by id, by selector, and in one sweep', async () => {
     const { baseDir } = scratch()
-    const store = await loadStashStore(resolveStashPaths(CWD, baseDir), clock())
+    const store = await loadStashStore(resolveStashPaths(SESSION, baseDir), clock())
     await store.add({ id: 'a', text: 'one' })
     await store.add({ id: 'b', text: 'two' })
     await store.add({ id: 'c', text: 'three' })
@@ -120,7 +120,7 @@ describe('StashStore mutations', () => {
 
   it('reloads before a mutation, so a concurrent surface is never overwritten', async () => {
     const { baseDir } = scratch()
-    const paths = resolveStashPaths(CWD, baseDir)
+    const paths = resolveStashPaths(SESSION, baseDir)
     const [one, two] = await Promise.all([loadStashStore(paths, clock()), loadStashStore(paths, clock())])
     await one.add({ id: 'one', text: 'from one' })
     await two.add({ id: 'two', text: 'from two' })
@@ -130,7 +130,7 @@ describe('StashStore mutations', () => {
 
   it('reports a committed write separately from a failed one', async () => {
     const { baseDir } = scratch()
-    const paths = resolveStashPaths(CWD, baseDir)
+    const paths = resolveStashPaths(SESSION, baseDir)
     const committed: StashWriter = async () => ({ committed: true, phase: 'directory-sync', error: new Error('fsync') })
     const store = await loadStashStore(paths, clock(), committed)
     const failure = store.add({ id: 'a', text: 'one' })
@@ -144,7 +144,7 @@ describe('StashStore mutations', () => {
 
   it('clears only the entries the reader confirmed', async () => {
     const { baseDir } = scratch()
-    const paths = resolveStashPaths(CWD, baseDir)
+    const paths = resolveStashPaths(SESSION, baseDir)
     const store = await loadStashStore(paths, clock())
     await store.add({ id: 'a', text: 'one' })
     await store.add({ id: 'b', text: 'two' })
@@ -162,7 +162,7 @@ describe('StashStore mutations', () => {
 
   it('strips terminal control characters on the way in and on the way out', async () => {
     const { baseDir, file } = scratch()
-    const paths = resolveStashPaths(CWD, baseDir)
+    const paths = resolveStashPaths(SESSION, baseDir)
     const store = await loadStashStore(paths, clock())
     // OSC 52 replaces the clipboard, BEL ends it, and a bidi override reorders
     // what follows without drawing anything a reader could notice.
@@ -176,7 +176,7 @@ describe('StashStore mutations', () => {
       file,
       JSON.stringify({
         version: STASH_SCHEMA_VERSION,
-        cwd: CWD,
+        sessionId: SESSION,
         createdAt: 1,
         updatedAt: 1,
         entries: [{ id: 'hand', text: 'wipe\u001b[2Jthe\u202E screen', createdAt: 1 }],
@@ -193,7 +193,7 @@ describe('StashStore mutations', () => {
    */
   it('strips every bidi control, not only the overrides', async () => {
     const { baseDir, file } = scratch()
-    const paths = resolveStashPaths(CWD, baseDir)
+    const paths = resolveStashPaths(SESSION, baseDir)
     const store = await loadStashStore(paths, clock())
     await store.add({ id: 'a', text: 'one\u061Ctwo\u200Ethree\u2069four' })
     expect(store.entries[0]?.text).toBe('onetwothreefour')
@@ -202,7 +202,7 @@ describe('StashStore mutations', () => {
       file,
       JSON.stringify({
         version: STASH_SCHEMA_VERSION,
-        cwd: CWD,
+        sessionId: SESSION,
         createdAt: 1,
         updatedAt: 1,
         entries: [{ id: 'hand', text: 'kept\u200Bzero\u200Dwidth', createdAt: 1 }],
@@ -223,13 +223,13 @@ describe('StashStore persistence', () => {
    */
   it('refuses a write that would land past the read cap, leaving the bank alone', async () => {
     const { baseDir } = scratch()
-    const paths = resolveStashPaths(CWD, baseDir)
-    const seeded = { ...createEmptyStashFile(CWD, 1), entries: [{ id: 'kept', text: 'one', createdAt: 1 }] }
+    const paths = resolveStashPaths(SESSION, baseDir)
+    const seeded = { ...createEmptyStashFile(SESSION, 1), entries: [{ id: 'kept', text: 'one', createdAt: 1 }] }
     await writeStashFile(paths.file, seeded)
     const before = readFileSync(paths.file, 'utf8')
 
     const oversized = {
-      ...createEmptyStashFile(CWD, 1),
+      ...createEmptyStashFile(SESSION, 1),
       entries: Array.from({ length: 17 }, (_, index) => ({
         id: `big-${index}`,
         text: 'x'.repeat(MAX_STASH_ENTRY_BYTES),
@@ -244,7 +244,7 @@ describe('StashStore persistence', () => {
 
   it('reopens the bytes a committed write left on disk after a sync failure', async () => {
     const { baseDir } = scratch()
-    const paths = resolveStashPaths(CWD, baseDir)
+    const paths = resolveStashPaths(SESSION, baseDir)
     // The real writer with only its last step failing: the rename has happened,
     // so the entry must be readable again rather than merely remembered.
     const failingSync: StashWriter = (filePath, file) =>
@@ -269,7 +269,7 @@ describe('StashStore persistence', () => {
    */
   it('keeps the previous bytes when the write never reaches the rename', async () => {
     const { baseDir } = scratch()
-    const paths = resolveStashPaths(CWD, baseDir)
+    const paths = resolveStashPaths(SESSION, baseDir)
     const store = await loadStashStore(paths, clock())
     await store.add({ id: 'kept', text: 'one' })
     const before = readFileSync(paths.file, 'utf8')
@@ -285,7 +285,7 @@ describe('StashStore persistence', () => {
 
   it('reads past a temp file a writer left before it could rename', async () => {
     const { baseDir } = scratch()
-    const paths = resolveStashPaths(CWD, baseDir)
+    const paths = resolveStashPaths(SESSION, baseDir)
     const store = await loadStashStore(paths, clock())
     await store.add({ id: 'kept', text: 'one' })
     // A writer that stops after the temp write leaves exactly this behind: the
@@ -307,19 +307,19 @@ describe('StashStore persistence', () => {
    */
   it('counts the bytes the file will hold, not the characters the draft was typed as', async () => {
     const { baseDir } = scratch()
-    const paths = resolveStashPaths(CWD, baseDir)
+    const paths = resolveStashPaths(SESSION, baseDir)
     const quotes = '"'.repeat(MAX_STASH_FILE_BYTES / 2 + 1)
-    const escaped = { ...createEmptyStashFile(CWD, 1), entries: [{ id: 'a', text: quotes, createdAt: 1 }] }
+    const escaped = { ...createEmptyStashFile(SESSION, 1), entries: [{ id: 'a', text: quotes, createdAt: 1 }] }
     await expect(writeStashFile(paths.file, escaped)).rejects.toBeInstanceOf(StashFileTooLargeError)
     expect(existsSync(paths.file)).toBe(false)
   })
 
   it('writes and reopens a bank that is large but still inside the cap', async () => {
     const { baseDir } = scratch()
-    const paths = resolveStashPaths(CWD, baseDir)
+    const paths = resolveStashPaths(SESSION, baseDir)
     const size = 8 * 1024 * 1024
     await writeStashFile(paths.file, {
-      ...createEmptyStashFile(CWD, 1),
+      ...createEmptyStashFile(SESSION, 1),
       entries: [{ id: 'big', text: 'x'.repeat(size), createdAt: 1 }],
     })
     const reloaded = await loadStashStore(paths, clock())
@@ -333,7 +333,7 @@ describe('StashStore persistence', () => {
    */
   it('saves into a storage directory it had to create, and reloads it', async () => {
     const { baseDir } = scratch()
-    const paths = resolveStashPaths(CWD, join(baseDir, 'tui-stash'))
+    const paths = resolveStashPaths(SESSION, join(baseDir, 'tui-stash'))
     const store = await loadStashStore(paths, clock())
     await expect(store.add({ id: 'first', text: 'one' })).resolves.toBeDefined()
     const reloaded = await loadStashStore(paths, clock())
@@ -347,7 +347,7 @@ describe('StashStore persistence', () => {
    */
   it('reports a flush that fails after the rename as a committed save', async () => {
     const { baseDir } = scratch()
-    const paths = resolveStashPaths(CWD, baseDir)
+    const paths = resolveStashPaths(SESSION, baseDir)
     const synced: string[] = []
     const writer: StashWriter = (filePath, file) =>
       writeStashFile(filePath, file, async directory => {
@@ -368,7 +368,7 @@ describe('StashStore persistence', () => {
    */
   it('keeps the previous bank and cleans up when the rename is refused', async () => {
     const { baseDir } = scratch()
-    const paths = resolveStashPaths(CWD, baseDir)
+    const paths = resolveStashPaths(SESSION, baseDir)
     const store = await loadStashStore(paths, clock())
     await store.add({ id: 'kept', text: 'one' })
     const before = readFileSync(paths.file, 'utf8')

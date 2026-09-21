@@ -88,7 +88,7 @@ import {
   type PickerCard,
 } from './ui/picker.ts'
 import { QueueBar } from './ui/queue.ts'
-import { shortPath, StatusBar } from './ui/status.ts'
+import { StatusBar } from './ui/status.ts'
 import { DEFAULT_VIEW_STATE, TranscriptView } from './ui/view.ts'
 import { PromptStash } from './stash.ts'
 import { confirmedClear, StashConfirmPicker, StashPicker } from './ui/stash-picker.ts'
@@ -810,13 +810,12 @@ export function apply(ctx: Context, config: unknown): void {
   }
 
   /**
-   * The prompt bank for this working directory.
+   * The prompt bank for the session this surface drives.
    *
    * The surface owns the editor, the picker, and the notices, so the bank is
    * handed the few things it needs to reach them and nothing else: the commands
    * stay free of terminal state and are exercised without one in the tests.
    */
-  const stashCwdLabel = shortPath(process.cwd(), process.env.HOME)
   stash = new PromptStash(
     {
       getEditorText: () => editor.getExpandedText(),
@@ -832,7 +831,10 @@ export function apply(ctx: Context, config: unknown): void {
       confirm: async count => confirmedClear(await openPicker(new StashConfirmPicker(count, () => keymap))),
       render: () => tui.requestRender(),
     },
-    { cwd: process.cwd() },
+    // The bank follows the session this surface drives, not the directory it
+    // runs in: two terminals in one checkout keep separate drafts, and a resume
+    // finds the ones it parked. Read per command so a switch retargets it.
+    { sessionId: () => String(activeSession) },
   )
 
   /** Title the listed sessions without making the reader wait for the slowest log. */
@@ -1048,6 +1050,9 @@ export function apply(ctx: Context, config: unknown): void {
     activeSession = id
     viewedSession = id
     agent = handle
+    // The bank follows the session, so the footer stops counting the drafts of
+    // the session just left and the next command reads this session's file.
+    void stash?.open()
     // The agent's own id is reported rather than the requested one: a resume can
     // be answered by the session the log actually holds.
     herdr.session({
@@ -1800,7 +1805,7 @@ export function apply(ctx: Context, config: unknown): void {
         void stash?.apply(submission.selector)
         return
       case 'stash-list':
-        void stash?.list(stashCwdLabel)
+        void stash?.list(String(activeSession))
         return
       case 'stash-drop':
         void stash?.drop(submission.selector)
@@ -2066,9 +2071,6 @@ export function apply(ctx: Context, config: unknown): void {
     // reason. With a picker the session is not known yet, so it waits for one.
     if (!resolved.resumePicker) await presetFor(resolved.sessionId, resolved.resume, undefined)
     tui.start()
-    // Loaded now so the footer's count is real from the first paint, and because
-    // a bank that cannot be read should say so before a reader trusts it.
-    void stash?.open()
     terminal.write(windowTitle(process.cwd(), 'ready'))
     // Claiming the pane's agent row does not wait for a session: the pane is
     // already on screen and already idle, and a session may still be chosen.

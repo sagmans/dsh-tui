@@ -13,7 +13,7 @@ const row = (id: string, text: string, createdAt = 1_000, index = 0): ResolvedEn
 })
 
 const picker = (entries: readonly ResolvedEntry[], keys: () => Keymap = defaultKeymap): StashPicker =>
-  new StashPicker(entries, '~/work/app', keys, () => 1_000 + 5 * 60_000)
+  new StashPicker(entries, 'tui-session-abc', keys, () => 1_000 + 5 * 60_000)
 
 describe('stashLabel', () => {
   it('names a draft by its first line, with whitespace collapsed', () => {
@@ -33,10 +33,10 @@ describe('stashLabel', () => {
 })
 
 describe('StashPicker', () => {
-  it('heads the list with the directory and the count', () => {
+  it('heads the list with the session and the count', () => {
     const card = picker([row('a', 'one')]).card()
-    expect(card.title).toBe('stash · ~/work/app · 1 draft')
-    expect(picker([row('a', 'one'), row('b', 'two')]).card().title).toBe('stash · ~/work/app · 2 drafts')
+    expect(card.title).toBe('stash · tui-session-abc · 1 draft')
+    expect(picker([row('a', 'one'), row('b', 'two')]).card().title).toBe('stash · tui-session-abc · 2 drafts')
   })
 
   it('describes each draft by its label and its age', () => {
@@ -76,7 +76,7 @@ describe('StashPicker', () => {
 describe('StashConfirmPicker', () => {
   it('offers the safe choice first, under the cursor', () => {
     const card = new StashConfirmPicker(3, defaultKeymap).card()
-    expect(card.title).toBe('clear stash · 3 drafts in this directory')
+    expect(card.title).toBe('clear stash · 3 drafts in this session')
     expect(card.rows[0]).toMatchObject({ label: 'cancel', current: true })
     expect(card.rows[1]).toMatchObject({ label: 'delete 3 drafts' })
   })

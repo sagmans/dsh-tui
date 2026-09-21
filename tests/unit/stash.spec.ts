@@ -8,7 +8,9 @@ import type { ResolvedEntry } from '@/stash/schema.ts'
 import { StashCommittedError } from '@/stash/lock.ts'
 import { loadStashStore, writeStashFile, type StashWriter } from '@/stash/store.ts'
 
-const CWD = '/work/me/app'
+const SESSION = 'tui-session-spec'
+const OTHER_SESSION = 'tui-session-other'
+const SESSION_CHANGED = 'the session changed; the stash stayed with the session it belonged to'
 const scratchDirs: string[] = []
 
 function scratchBase(): string {
@@ -69,12 +71,28 @@ class FakeHost implements StashHost {
   }
 }
 
-function bank(host: FakeHost, overrides: { baseDir?: string; write?: StashWriter } = {}): PromptStash {
+function bank(
+  host: FakeHost,
+  overrides: { baseDir?: string; write?: StashWriter; sessionId?: () => string } = {},
+): PromptStash {
   return new PromptStash(host, {
-    cwd: CWD,
+    sessionId: overrides.sessionId ?? (() => SESSION),
     baseDir: overrides.baseDir ?? scratchBase(),
     ...(overrides.write === undefined ? {} : { write: overrides.write }),
   })
+}
+
+/**
+/**
+ * A writer that moves the surface before it lands, so a test can switch
+ * sessions after one command has resolved its bank but before the commands
+ * queued behind it are reached.
+ */
+function movingWriter(onWrite: () => void): StashWriter {
+  return async (file, contents) => {
+    onWrite()
+    return await writeStashFile(file, contents)
+  }
 }
 
 describe('stashing the editor draft', () => {
@@ -106,7 +124,7 @@ describe('stashing the editor draft', () => {
     await stash.stashEditor('park this instead')
     expect(host.editorText).toBe('')
 
-    const reloaded = await loadStashStore(resolveStashPaths(CWD, baseDir))
+    const reloaded = await loadStashStore(resolveStashPaths(SESSION, baseDir))
     expect(reloaded.entries.map(entry => entry.text)).toEqual(['park this instead'])
   })
 
@@ -182,7 +200,7 @@ describe('stashing the editor draft', () => {
     expect(host.last()).toBe('Stashed [0], but the directory-sync step failed')
     expect(host.editorText).toBe('')
 
-    const reloaded = await loadStashStore(resolveStashPaths(CWD, baseDir))
+    const reloaded = await loadStashStore(resolveStashPaths(SESSION, baseDir))
     expect(reloaded.entries.map(entry => entry.text)).toEqual(['parked'])
   })
 
@@ -295,7 +313,7 @@ describe('popping a draft', () => {
     expect(host.last()).toBe('Popped [1]')
     expect(stash.entryCount).toBe(1)
 
-    const reloaded = await loadStashStore(resolveStashPaths(CWD, baseDir))
+    const reloaded = await loadStashStore(resolveStashPaths(SESSION, baseDir))
     expect(reloaded.entries.map(entry => entry.text)).toEqual(['two'])
   })
 
@@ -353,14 +371,14 @@ describe('popping a draft', () => {
     // side of a crash between the two.
     expect(host.editorText).toBe('one')
     expect(host.last()).toMatch(/removing the entry failed: disk full/)
-    const reloaded = await loadStashStore(resolveStashPaths(CWD, baseDir))
+    const reloaded = await loadStashStore(resolveStashPaths(SESSION, baseDir))
     expect(reloaded.entryCount).toBe(1)
   })
 
   it('reports a committed removal as popped with a warning rather than a loss', async () => {
     const host = new FakeHost()
     const baseDir = scratchBase()
-    await (await loadStashStore(resolveStashPaths(CWD, baseDir))).add({ id: 'a', text: 'one' })
+    await (await loadStashStore(resolveStashPaths(SESSION, baseDir))).add({ id: 'a', text: 'one' })
     const committed: StashWriter = async () => ({ committed: true, phase: 'lock-release', error: new Error('busy') })
     const stash = bank(host, { baseDir, write: committed })
     await stash.pop(undefined)
@@ -439,7 +457,7 @@ describe('clearing the bank', () => {
     await stash.clear()
     expect(host.last()).toBe('Cleared 2 drafts')
 
-    const reloaded = await loadStashStore(resolveStashPaths(CWD, baseDir))
+    const reloaded = await loadStashStore(resolveStashPaths(SESSION, baseDir))
     expect(reloaded.entries.map(entry => entry.text)).toEqual(['added while confirming'])
   })
 })
@@ -455,7 +473,7 @@ describe('listing drafts', () => {
     await stash.list('~/app')
     expect(host.editorText).toBe('one')
     expect(stash.entryCount).toBe(1)
-    const reloaded = await loadStashStore(resolveStashPaths(CWD, baseDir))
+    const reloaded = await loadStashStore(resolveStashPaths(SESSION, baseDir))
     expect(reloaded.entries.map(entry => entry.text)).toEqual(['two'])
   })
 
@@ -486,11 +504,161 @@ describe('listing drafts', () => {
   })
 })
 
+describe('session scope', () => {
+  it('never shows another session the drafts this one parked', async () => {
+    const baseDir = scratchBase()
+    await bank(new FakeHost(), { baseDir }).stashEditor('mine')
+    await bank(new FakeHost(), { baseDir, sessionId: () => OTHER_SESSION }).stashEditor('theirs')
+
+    const mineHost = new FakeHost()
+    const mine = bank(mineHost, { baseDir })
+    await mine.apply(undefined)
+    expect(mine.entryCount).toBe(1)
+    expect(mineHost.editorText).toBe('mine')
+
+    const theirsHost = new FakeHost()
+    const theirs = bank(theirsHost, { baseDir, sessionId: () => OTHER_SESSION })
+    await theirs.apply(undefined)
+    expect(theirs.entryCount).toBe(1)
+    expect(theirsHost.editorText).toBe('theirs')
+  })
+
+  it('clears only the drafts of this session', async () => {
+    const baseDir = scratchBase()
+    await bank(new FakeHost(), { baseDir }).stashEditor('mine')
+    await bank(new FakeHost(), { baseDir, sessionId: () => OTHER_SESSION }).stashEditor('theirs')
+
+    const mineHost = new FakeHost()
+    const mine = bank(mineHost, { baseDir })
+    mineHost.confirmResult = true
+    await mine.clear()
+    expect(mineHost.last()).toBe('Cleared 1 draft')
+
+    const theirsHost = new FakeHost()
+    const theirs = bank(theirsHost, { baseDir, sessionId: () => OTHER_SESSION })
+    await theirs.open()
+    expect(theirs.entryCount).toBe(1)
+  })
+
+  /**
+   * A resume keeps the session id, which is the only reason a draft parked
+   * before a restart is still findable afterwards.
+   */
+  it('finds the drafts the same session parked before a restart', async () => {
+    const baseDir = scratchBase()
+    await bank(new FakeHost(), { baseDir }).stashEditor('parked before the restart')
+    const host = new FakeHost()
+    const resumed = bank(host, { baseDir })
+    await resumed.open()
+    expect(resumed.entryCount).toBe(1)
+    await resumed.apply(undefined)
+    expect(host.editorText).toBe('parked before the restart')
+  })
+
+  it('follows the surface to another session and back', async () => {
+    const baseDir = scratchBase()
+    let session = SESSION
+    const host = new FakeHost()
+    const stash = bank(host, { baseDir, sessionId: () => session })
+    await stash.stashEditor('first')
+    session = OTHER_SESSION
+    await stash.open()
+    expect(stash.entryCount).toBe(0)
+    await stash.stashEditor('second')
+    session = SESSION
+    await stash.open()
+    expect(stash.entryCount).toBe(1)
+    await stash.apply(undefined)
+    expect(host.editorText).toBe('first')
+  })
+
+  /**
+   * The queue can hold a command past a session switch. A command names the
+   * bank the reader was looking at when they asked for it, so it must not
+   * resolve the session again when its turn comes.
+   */
+  it('drops from the session that issued the command, not the one on screen later', async () => {
+    const baseDir = scratchBase()
+    await bank(new FakeHost(), { baseDir, sessionId: () => OTHER_SESSION }).stashEditor('theirs')
+
+    let session = SESSION
+    const host = new FakeHost()
+    const stash = bank(host, {
+      baseDir,
+      write: movingWriter(() => { session = OTHER_SESSION }),
+      sessionId: () => session,
+    })
+
+    // The first write has already resolved this session when the surface moves,
+    // and the drop behind it was asked for on this session too.
+    const parked = stash.stashEditor('parked')
+    const dropped = stash.drop(undefined)
+    const opened = stash.open()
+    await Promise.all([parked, dropped, opened])
+
+    const mine = await loadStashStore(resolveStashPaths(SESSION, baseDir))
+    expect(mine.entries).toEqual([])
+    const theirs = await loadStashStore(resolveStashPaths(OTHER_SESSION, baseDir))
+    expect(theirs.entries.map(entry => entry.text)).toEqual(['theirs'])
+    expect(stash.entryCount).toBe(1)
+  })
+
+  it('keeps a queued pop out of the bar of the session the surface moved to', async () => {
+    const baseDir = scratchBase()
+    await bank(new FakeHost(), { baseDir }).stashEditor('mine')
+    await bank(new FakeHost(), { baseDir, sessionId: () => OTHER_SESSION }).stashEditor('theirs')
+
+    let session = SESSION
+    const host = new FakeHost()
+    const stash = bank(host, {
+      baseDir,
+      write: movingWriter(() => { session = OTHER_SESSION }),
+      sessionId: () => session,
+    })
+
+    const held = stash.stashEditor('holding the queue')
+    const popped = stash.pop(undefined)
+    const opened = stash.open()
+    await Promise.all([held, popped, opened])
+
+    // Nothing was taken from the bank the pop named, and nothing was typed into
+    // the bar that now belongs to the session the surface moved to.
+    expect(host.editorText).toBe('holding the queue')
+    expect(host.notices).toContain(SESSION_CHANGED)
+    const mine = await loadStashStore(resolveStashPaths(SESSION, baseDir))
+    expect(mine.entries.map(entry => entry.text)).toEqual(['holding the queue', 'mine'])
+    const theirs = await loadStashStore(resolveStashPaths(OTHER_SESSION, baseDir))
+    expect(theirs.entries.map(entry => entry.text)).toEqual(['theirs'])
+  })
+
+  it('parks the bar the reader had when the command was issued', async () => {
+    const baseDir = scratchBase()
+    let session = SESSION
+    const host = new FakeHost()
+    const stash = bank(host, {
+      baseDir,
+      write: movingWriter(() => { session = OTHER_SESSION }),
+      sessionId: () => session,
+    })
+
+    const first = stash.stashEditor('first')
+    host.editorText = 'the draft the reader sees'
+    const second = stash.stashEditor()
+    host.editorText = 'typed in the other session'
+    const opened = stash.open()
+    await Promise.all([first, second, opened])
+
+    const mine = await loadStashStore(resolveStashPaths(SESSION, baseDir))
+    expect(mine.entries.map(entry => entry.text)).toEqual(['the draft the reader sees', 'first'])
+    expect(host.editorText).toBe('typed in the other session')
+  })
+})
+
 describe('open', () => {
   it('reports where a corrupt bank was quarantined', async () => {
     const host = new FakeHost()
     const baseDir = scratchBase()
-    writeFileSync(resolveStashPaths(CWD, baseDir).file, 'not json')
+    writeFileSync(resolveStashPaths(SESSION, baseDir).file, 'not json')
     const stash = bank(host, { baseDir })
     await stash.open()
     expect(host.notices.some(message => message.includes('corrupt stash data was quarantined to'))).toBe(true)
@@ -500,7 +668,7 @@ describe('open', () => {
   it('says a newer bank is unavailable instead of quarantining it', async () => {
     const host = new FakeHost()
     const baseDir = scratchBase()
-    writeFileSync(resolveStashPaths(CWD, baseDir).file, JSON.stringify({ version: 99 }))
+    writeFileSync(resolveStashPaths(SESSION, baseDir).file, JSON.stringify({ version: 99 }))
     const stash = bank(host, { baseDir })
     await stash.open()
     expect(host.last()).toContain('stash unavailable')
