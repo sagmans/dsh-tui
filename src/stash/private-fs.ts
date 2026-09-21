@@ -7,7 +7,7 @@
 // shared machine or a network home.
 
 import { constants, type Stats } from 'node:fs'
-import { type FileHandle, link, lstat, mkdir, open, realpath, rm, stat, unlink } from 'node:fs/promises'
+import { type FileHandle, link, lstat, mkdir, open, readlink, rm, unlink } from 'node:fs/promises'
 import path from 'node:path'
 
 export const PRIVATE_DIR_MODE = 0o700
@@ -20,6 +20,10 @@ const ROOT_UID = 0
 const WORLD_WRITABLE_MODE = 0o002
 const GROUP_WRITABLE_MODE = 0o020
 const STICKY_MODE = 0o1000
+/** The kernel's own limit on a link chain, past which the path cannot be opened anyway. */
+const MAX_LINK_HOPS = 32
+const TOO_MANY_LINKS_MESSAGE = 'passes through too many links to be checked'
+
 const UNTRUSTED_ANCESTOR_MESSAGE =
   'is writable by other users, so a stash kept there could be redirected to another directory by anyone on this machine'
 
@@ -46,18 +50,22 @@ export class FileTooLargeError extends Error {
 }
 
 /**
- * Prepare the storage directory, returning what a durable save still has to sync.
+ * Prepare the storage directory, and make the directories that name it durable.
  *
- * The returned paths are the directories that name a newly created child. They
- * are not synced here, because a sync that fails before the rename would report a
- * failure for a directory that now exists, and the retry would find nothing left
- * to sync and could report success for an entry that never reached the disk. The
- * caller syncs them after the write commits, where a failure is a warning about
- * durability rather than a lost draft.
+ * A directory that names a new child holds the only record of that child, so
+ * every directory this call creates is flushed through its parent before the
+ * call returns. A flush that fails takes the created directories away again:
+ * leaving them behind would turn the next attempt into one that finds nothing
+ * left to flush, and a save could then report success for a tree that a power
+ * loss is free to drop. Rolling back keeps the retry honest instead.
  */
-export async function ensurePrivateDirectory(directory: string, label = 'storage directory'): Promise<string[]> {
+export async function ensurePrivateDirectory(
+  directory: string,
+  label = 'storage directory',
+  syncDirectory: typeof syncDirectoryEntry = syncDirectoryEntry,
+): Promise<void> {
   await assertTrustedAncestors(directory, label)
-  const created = await createPrivateDirectory(directory)
+  const { created, namingParents } = await createPrivateDirectory(directory)
   const handle = await openValidatedDirectory(directory, label)
   try {
     await handle.chmod(PRIVATE_DIR_MODE)
@@ -65,92 +73,95 @@ export async function ensurePrivateDirectory(directory: string, label = 'storage
   } finally {
     await handle.close()
   }
-  // A directory that names a new child holds the only record of that child, so
-  // the caller has to sync every directory this call created through its parent.
-  return created
+  try {
+    for (const parent of namingParents) await syncDirectory(parent)
+  } catch (error) {
+    // Deepest first, so a directory is only removed once nothing is named by it.
+    for (const entry of created) await rm(entry, { recursive: true, force: true }).catch(() => undefined)
+    throw error
+  }
 }
 
-/** Create the directory chain, returning the directories that name something new. */
-async function createPrivateDirectory(directory: string): Promise<string[]> {
-  const missing: string[] = []
+interface CreatedDirectories {
+  /** What this call created, deepest first. */
+  readonly created: readonly string[]
+  /** The directories that name something new, deepest first, to flush. */
+  readonly namingParents: readonly string[]
+}
+
+/** Create the directory chain, reporting what it created and what names it. */
+async function createPrivateDirectory(directory: string): Promise<CreatedDirectories> {
+  const created: string[] = []
   let current = path.resolve(directory)
   for (;;) {
     if (await pathExists(current)) break
-    missing.push(current)
+    created.push(current)
     const parent = path.dirname(current)
     if (parent === current) break
     current = parent
   }
   await mkdir(directory, { recursive: true, mode: PRIVATE_DIR_MODE })
-  // Deepest first, and only the directories that already existed: syncing a
-  // directory that was itself just created happens on the next step of the walk.
-  return missing.map(entry => path.dirname(entry))
+  // The parent of a created directory is where its entry lives; a directory that
+  // was itself just created is named by the next step of the walk.
+  return { created, namingParents: created.map(entry => path.dirname(entry)) }
 }
 
 /**
  * Refuse a storage path that anyone but this user (or root) can rewrite.
  *
  * Opening the storage directory without following a link protects that one
- * component, but an ancestor that another user can write is enough to rename the
- * directory underneath it and hand every later open somewhere else. The writable
- * bit that matters is any bit but the owner's: a group member can rename an entry
- * just as a stranger can, so only the sticky bit — which reserves renaming to the
- * entry's owner — makes a shared directory acceptable.
+ * component, but a directory another user can write is enough to redirect the
+ * storage by replacing an entry below it, so every directory that the path
+ * passes through has to be checked. The writable bit that matters is any bit but
+ * the owner's: a group member can rename an entry just as a stranger can, so only
+ * the sticky bit — which reserves renaming to an entry's owner — makes a shared
+ * directory acceptable.
  *
  * Links are followed on purpose, because a link like macOS's `/tmp` is not a
- * threat and the permissions of what it resolves to are what count. That also
- * means the resolved chain has to be checked: a private directory reached through
- * a link can still sit under a directory other users can write, and resolving the
- * deepest part that exists is what names that chain.
+ * threat and the permissions of what it resolves to are what count. Each link is
+ * therefore read as a link and its target walked in turn, rather than resolved in
+ * one step: a chain that jumps through a shared directory would otherwise be
+ * checked only where it lands, and the directory it jumped through is the one
+ * another user can rewrite.
  */
 async function assertTrustedAncestors(directory: string, label: string): Promise<void> {
   const currentUid = process.getuid?.()
-  const resolved = path.resolve(directory)
+  const pending = [path.resolve(directory)]
   const checked = new Set<string>()
-  let deepestExisting: string | undefined
-  for (let current = resolved; ; ) {
+  let hops = 0
+  while (pending.length > 0) {
+    const current = pending.pop() as string
+    if (checked.has(current)) continue
+    checked.add(current)
     let stats: Stats
     try {
-      stats = await stat(current)
+      stats = await lstat(current)
     } catch (error) {
       // A directory that is not there yet is created by the caller; its
       // ancestors still have to be checked, so a miss is not a failure here.
-      if (hasErrorCode(error, 'ENOENT')) {
-        const parent = path.dirname(current)
-        if (parent === current) break
-        current = parent
-        continue
-      }
-      throw error
+      if (!hasErrorCode(error, 'ENOENT')) throw error
+      pending.push(...parentsOf(current))
+      continue
+    }
+    // The link itself is checked through the directories that name it and the
+    // directories its target passes through, not through its own mode: a link's
+    // permissions are not what decides who can replace it.
+    if (stats.isSymbolicLink()) {
+      hops += 1
+      if (hops > MAX_LINK_HOPS) throw new Error(`${label} at ${current} ${TOO_MANY_LINKS_MESSAGE}`)
+      const target = path.resolve(path.dirname(current), await readlink(current))
+      pending.push(target, ...parentsOf(current))
+      continue
     }
     assertTrustedStats(stats, current, label, currentUid)
-    checked.add(current)
-    deepestExisting ??= current
-    const parent = path.dirname(current)
-    if (parent === current) break
-    current = parent
+    pending.push(...parentsOf(current))
   }
-  if (deepestExisting === undefined) return
-  let target: string
-  try {
-    target = await realpath(deepestExisting)
-  } catch (error) {
-    if (hasErrorCode(error, 'ENOENT')) return
-    throw error
-  }
-  for (let current = target; !checked.has(current); ) {
-    let stats: Stats
-    try {
-      stats = await stat(current)
-    } catch (error) {
-      if (hasErrorCode(error, 'ENOENT')) return
-      throw error
-    }
-    assertTrustedStats(stats, current, label, currentUid)
-    const parent = path.dirname(current)
-    if (parent === current) return
-    current = parent
-  }
+}
+
+/** The one directory that names `current`, if it has one. */
+function parentsOf(current: string): string[] {
+  const parent = path.dirname(current)
+  return parent === current ? [] : [parent]
 }
 
 function assertTrustedStats(stats: Stats, directory: string, label: string, currentUid: number | undefined): void {

@@ -92,7 +92,7 @@ describe('ensurePrivateDirectory', () => {
     const shared = join(scratch(), 'shared')
     mkdirSync(shared, { recursive: true })
     chmodSync(shared, 0o1775)
-    await expect(ensurePrivateDirectory(join(shared, 'stash'), 'stash directory')).resolves.toBeDefined()
+    await expect(ensurePrivateDirectory(join(shared, 'stash'), 'stash directory')).resolves.toBeUndefined()
   })
 
   /**
@@ -114,21 +114,82 @@ describe('ensurePrivateDirectory', () => {
   })
 
   /**
-   * A directory that names a new child is the only record of it, so the caller
-   * has to be told which directories it created and flush them through their
-   * parents; otherwise the drafts survive a crash and the storage does not.
+   * A chain is not one link: a trusted alias can point at a link that lives in a
+   * shared directory, and that shared directory decides who can repoint the
+   * second hop. Resolving the chain in one step would land on the private
+   * directory at its end and never look at the directory it jumped through.
    */
-  it('reports the directories it created, deepest first, for the caller to flush', async () => {
+  it('rejects a link whose own link passes through a directory others can rewrite', async () => {
     const root = scratch()
-    const created = await ensurePrivateDirectory(join(root, 'nested', 'stash'), 'stash directory')
-    expect(created).toEqual([join(root, 'nested'), root])
+    const shared = join(root, 'shared')
+    const privateTarget = join(root, 'private')
+    mkdirSync(shared, { recursive: true })
+    mkdirSync(privateTarget, { recursive: true })
+    chmodSync(shared, 0o777)
+    chmodSync(privateTarget, 0o700)
+    const jump = join(shared, 'jump')
+    symlinkSync(privateTarget, jump)
+    const alias = join(scratch(), 'alias')
+    symlinkSync(jump, alias)
+    await expect(ensurePrivateDirectory(join(alias, 'stash'), 'stash directory')).rejects.toThrow(
+      /writable by other users/,
+    )
   })
 
-  it('reports nothing to flush when the directories were already there', async () => {
+  it('refuses a link chain that never ends', async () => {
+    const root = scratch()
+    const first = join(root, 'first')
+    const second = join(root, 'second')
+    symlinkSync(second, first)
+    symlinkSync(first, second)
+    // Either the walk bounds the chain or the filesystem does; both refuse.
+    await expect(ensurePrivateDirectory(join(first, 'stash'), 'stash directory')).rejects.toThrow(
+      /too many (symbolic )?links/,
+    )
+  })
+
+  /**
+   * A directory that names a new child is the only record of it, so every
+   * directory this call created has to be flushed through its parent; otherwise
+   * the drafts survive a crash and the storage that holds them does not.
+   */
+  it('flushes each directory it created through the directory that names it', async () => {
+    const root = scratch()
+    const synced: string[] = []
+    await ensurePrivateDirectory(join(root, 'nested', 'stash'), 'stash directory', async parent => {
+      synced.push(parent)
+    })
+    expect(synced).toEqual([join(root, 'nested'), root])
+  })
+
+  it('flushes nothing when the directories were already there', async () => {
     const root = scratch()
     const directory = join(root, 'stash')
     await ensurePrivateDirectory(directory, 'stash directory')
-    await expect(ensurePrivateDirectory(directory, 'stash directory')).resolves.toEqual([])
+    const synced: string[] = []
+    await ensurePrivateDirectory(directory, 'stash directory', async parent => {
+      synced.push(parent)
+    })
+    expect(synced).toEqual([])
+  })
+
+  /**
+   * A flush that fails must not leave the directories behind: the next attempt
+   * would find nothing left to flush and could report a save whose storage a
+   * power loss is free to drop.
+   */
+  it('takes the created directories away again when the flush fails', async () => {
+    const root = scratch()
+    let calls = 0
+    const failing = async (): Promise<void> => {
+      calls += 1
+      if (calls === 2) throw new Error('fsync failed')
+    }
+    await expect(
+      ensurePrivateDirectory(join(root, 'nested', 'stash'), 'stash directory', failing),
+    ).rejects.toThrow('fsync failed')
+    expect(existsSync(join(root, 'nested'))).toBe(false)
+    expect(existsSync(root)).toBe(true)
   })
 })
 

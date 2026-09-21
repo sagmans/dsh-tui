@@ -97,7 +97,12 @@ export interface StashWriteOutcome {
   readonly error: unknown
 }
 
-export type StashWriter = (filePath: string, file: StashFile) => Promise<void | StashWriteOutcome>
+export type StashWriter = (
+  filePath: string,
+  file: StashFile,
+  syncDirectory?: typeof syncDirectoryEntry,
+  replaceFile?: typeof rename,
+) => Promise<void | StashWriteOutcome>
 
 /** Stash data written by a newer build, which this one must not touch. */
 export class UnsupportedStashSchemaError extends Error {
@@ -315,9 +320,10 @@ export async function writeStashFile(
   filePath: string,
   file: StashFile,
   syncDirectory: typeof syncDirectoryEntry = syncDirectoryEntry,
+  replaceFile: typeof rename = rename,
 ): Promise<void | StashWriteOutcome> {
   const directory = path.dirname(filePath)
-  const created = await ensurePrivateDirectory(directory)
+  await ensurePrivateDirectory(directory)
   const tempPath = `${filePath}.${process.pid}.${Date.now()}.tmp`
   const data = `${JSON.stringify(file, null, 2)}\n`
   // Every later read refuses a file past this cap, so a write that would cross
@@ -329,21 +335,17 @@ export async function writeStashFile(
   try {
     await writePrivateFileExclusive(tempPath, data)
     tempCreated = true
-    await rename(tempPath, filePath)
+    await replaceFile(tempPath, filePath)
     tempCreated = false
   } catch (error) {
     if (tempCreated) await rm(tempPath, { force: true })
     throw error
   }
-  // The rename is durable only once the directory naming the file is flushed,
-  // and a directory this save created is named by its parent, which has to be
-  // flushed too. Both happen here, after the commit, so a failure is a warning
-  // about durability instead of a failure that leaves a directory behind and
-  // never comes back to flush it.
-  const pending = created.length > 0 ? created : [path.dirname(directory)]
+  // The rename is durable once the directory naming the file is flushed. The
+  // directories that name the storage itself were flushed when they were created,
+  // so this is the entry the save is actually responsible for.
   try {
     await syncDirectory(directory)
-    for (const parent of pending) await syncDirectory(parent)
   } catch (error) {
     return { committed: true, phase: 'directory-sync', error }
   }

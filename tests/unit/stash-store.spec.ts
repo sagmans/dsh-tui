@@ -3,7 +3,6 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { resolveStashPaths } from '@/stash/paths.ts'
-import { syncDirectoryEntry } from '@/stash/private-fs.ts'
 import { createEmptyStashFile, MAX_STASH_ENTRY_BYTES, STASH_SCHEMA_VERSION } from '@/stash/schema.ts'
 import { StashCommittedError } from '@/stash/lock.ts'
 import {
@@ -284,12 +283,19 @@ describe('StashStore persistence', () => {
     expect((await loadStashStore(paths, clock())).entries.map(entry => entry.id)).toEqual(['kept'])
   })
 
-  it('reads past a temp file a killed writer left behind', async () => {
+  it('reads past a temp file a writer left before it could rename', async () => {
     const { baseDir } = scratch()
     const paths = resolveStashPaths(CWD, baseDir)
     const store = await loadStashStore(paths, clock())
     await store.add({ id: 'kept', text: 'one' })
-    writeFileSync(`${paths.file}.999.1.tmp`, '{"half":', { mode: 0o600 })
+    // A writer that stops after the temp write leaves exactly this behind: the
+    // temp file is the real one, and only the rename never happens.
+    const stalled: StashWriter = (filePath, file, sync, replaceFile) =>
+      writeStashFile(filePath, file, sync, async () => undefined)
+    const stalledStore = await loadStashStore(paths, clock(), stalled)
+    await stalledStore.add({ id: 'unfinished', text: 'two' })
+    expect(readdirSync(baseDir).filter(name => name.endsWith('.tmp')).length).toBe(1)
+
     const reloaded = await loadStashStore(paths, clock())
     expect(reloaded.entries.map(entry => entry.id)).toEqual(['kept'])
   })
@@ -321,35 +327,61 @@ describe('StashStore persistence', () => {
   })
 
   /**
-   * A rename that fails has to leave the bank it was replacing exactly as it was,
-   * and no half-written temp file behind for a later read to trip over.
+   * A first save into a storage directory that does not exist yet is the case
+   * where a power loss could drop the whole subtree: the save has to create the
+   * chain and flush what names it before it reports anything.
    */
+  it('saves into a storage directory it had to create, and reloads it', async () => {
+    const { baseDir } = scratch()
+    const paths = resolveStashPaths(CWD, join(baseDir, 'tui-stash'))
+    const store = await loadStashStore(paths, clock())
+    await expect(store.add({ id: 'first', text: 'one' })).resolves.toBeDefined()
+    const reloaded = await loadStashStore(paths, clock())
+    expect(reloaded.entries.map(entry => entry.text)).toEqual(['one'])
+  })
+
   /**
-   * A first save creates the storage and has to flush the directory that names it.
-   * The flush happens after the commit, so a failure is a warning about durability
-   * rather than a failure that leaves the directory behind and never flushes it —
-   * which is why the retry has to flush the same directories again.
+   * The entry naming the bank file is the one this save is responsible for, so a
+   * flush that fails after the rename is reported as a warning beside the result
+   * rather than as a failure that would invite a retry of a write that landed.
    */
-  it('flushes the directories naming the storage on the first save and on the retry', async () => {
+  it('reports a flush that fails after the rename as a committed save', async () => {
     const { baseDir } = scratch()
     const paths = resolveStashPaths(CWD, baseDir)
     const synced: string[] = []
-    let failing = true
     const writer: StashWriter = (filePath, file) =>
       writeStashFile(filePath, file, async directory => {
         synced.push(directory)
-        if (failing && synced.length === 2) throw new Error('fsync failed')
-        await syncDirectoryEntry(directory)
+        throw new Error('fsync failed')
       })
 
     const store = await loadStashStore(paths, clock(), writer)
     await expect(store.add({ id: 'a', text: 'one' })).rejects.toBeInstanceOf(StashCommittedError)
-    expect(synced).toEqual([baseDir, dirname(baseDir)])
+    expect(synced).toEqual([baseDir])
+    expect(readFileSync(paths.file, 'utf8')).toContain('one')
+  })
 
-    synced.length = 0
-    failing = false
-    const retry = await loadStashStore(paths, clock(), writer)
-    await expect(retry.add({ id: 'b', text: 'two' })).resolves.toBeDefined()
-    expect(synced).toEqual([baseDir, dirname(baseDir)])
+  /**
+   * The writer that loses the race to replace the bank is the one the temp file
+   * and the rename exist for: the previous bytes have to survive it untouched, and
+   * the temp file it wrote must not be left for a later read to trip over.
+   */
+  it('keeps the previous bank and cleans up when the rename is refused', async () => {
+    const { baseDir } = scratch()
+    const paths = resolveStashPaths(CWD, baseDir)
+    const store = await loadStashStore(paths, clock())
+    await store.add({ id: 'kept', text: 'one' })
+    const before = readFileSync(paths.file, 'utf8')
+
+    // Only the rename is replaced, so the temp file is written for real and the
+    // cleanup under test is the writer's own.
+    const refused: StashWriter = (filePath, file, sync, replaceFile) =>
+      writeStashFile(filePath, file, sync, async () => {
+        throw new Error('rename refused')
+      })
+    const blocked = await loadStashStore(paths, clock(), refused)
+    await expect(blocked.add({ id: 'lost', text: 'two' })).rejects.toThrow('rename refused')
+    expect(readFileSync(paths.file, 'utf8')).toBe(before)
+    expect(readdirSync(baseDir).filter(name => name.endsWith('.tmp'))).toEqual([])
   })
 })
