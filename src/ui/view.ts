@@ -1,4 +1,4 @@
-import { type Component, visibleWidth, wrapTextWithAnsi } from '@earendil-works/pi-tui'
+import { type Component, type MarkdownTheme, visibleWidth, wrapTextWithAnsi } from '@earendil-works/pi-tui'
 import { cardDetailRows, shellFoldHint, shellRetentionHint, type CardPreview, type CardStat, type CardStatKind, type ToolCard } from '../cards.ts'
 import { defaultKeymap, hintKeys, type Keymap } from '../input/actions.ts'
 import { CUSTOM_ROW_NUMBER, type GateCard } from '../gates.ts'
@@ -6,8 +6,8 @@ import { displayText } from '../text.ts'
 import type { TranscriptEntry, TranscriptModel } from '../transcript.ts'
 import { CARD_ROW_TOKEN, type TuiToken } from '../theme-tokens.ts'
 import type { TuiTheme } from '../theme.ts'
-import { canFrame, frameText } from './frame.ts'
-import type { MarkdownRenderer } from './markdown.ts'
+import { canFrame, frameLines, FRAME_COLUMNS, textWidth } from './frame.ts'
+import { ANSWER_FACE, type MarkdownFace, type MarkdownRenderer } from './markdown.ts'
 import type { PickerCard } from './picker.ts'
 import { RowCache } from './rows.ts'
 
@@ -47,6 +47,33 @@ const STAT_TOKEN: Readonly<Record<CardStatKind, TuiToken>> = {
   changed: 'tool.stat.changed',
   removed: 'tool.stat.removed',
   size: 'tool.stat.size',
+}
+
+/**
+ * A markdown theme that keeps every element in one token.
+ *
+ * A thought is deliberately recessive, and the answer's theme would let a
+ * heading or a link inside it outshine the answer it produced. The structure
+ * still shows because markdown draws it around the text — bullets, fences,
+ * indents, table rules — rather than in the text's own colour.
+ */
+function recessiveMarkdownTheme(style: (text: string) => string): MarkdownTheme {
+  return {
+    heading: style,
+    link: style,
+    linkUrl: style,
+    code: style,
+    codeBlock: style,
+    codeBlockBorder: style,
+    quote: style,
+    quoteBorder: style,
+    hr: style,
+    listBullet: style,
+    bold: style,
+    italic: style,
+    strikethrough: style,
+    underline: style,
+  }
 }
 
 /** One row a gate draws: a numbered option, or the free-text row below them. */
@@ -162,19 +189,53 @@ export class TranscriptView implements Component {
     })
   }
 
-  /** Render assistant text as markdown: the model writes structure, the reader reads it. */
-  private pushMarkdown(lines: string[], text: string, width: number, live: boolean): void {
-    const rendered = this.markdown.render(displayText(text), Math.max(1, width), live)
-    rendered.forEach(line => {
-      // The renderer pads to its width for background styling we do not use.
-      const trimmed = line.replace(/[ \t]+$/u, '')
+  /** The rows one markdown message draws, with the padding pi-tui adds for background styling removed. */
+  private markdownLines(text: string, width: number, live: boolean, face: MarkdownFace): string[] {
+    return this.markdown
+      .render(displayText(text), Math.max(1, width), live, face)
+      .map(line => line.replace(/[ \t]+$/u, ''))
+  }
+
+  /**
+   * Render one message's text as markdown.
+   *
+   * A thought passes its own face and an indent, so the row stays visibly a
+   * detail of the step that produced it rather than a second answer.
+   */
+  private pushMarkdown(
+    lines: string[],
+    text: string,
+    width: number,
+    live: boolean,
+    face: MarkdownFace = ANSWER_FACE,
+    indent = '',
+  ): void {
+    const lead = visibleWidth(indent)
+    for (const line of this.markdownLines(text, Math.max(1, width - lead), live, face)) {
       // A blank markdown line stays blank: it shows nothing, so it holds nothing.
-      if (trimmed === '') {
+      if (line === '') {
         lines.push('')
-        return
+        continue
       }
-      lines.push(this.theme.cut(trimmed, width, '…'))
-    })
+      lines.push(this.theme.cut(`${indent}${line}`, width, '…'))
+    }
+  }
+
+  /**
+   * The face a thought is drawn in.
+   *
+   * Its shade stays the thought body's and it asks for no drawing: a diagram in
+   * the middle of a thought would carry the answer's weight, and the answer's
+   * colours would make the thinking compete with it.
+   */
+  private reasoningFace(): MarkdownFace {
+    const body = (text: string): string => this.theme.style('transcript.reasoning.body', text)
+    return { name: 'reasoning', base: { color: body }, theme: recessiveMarkdownTheme(body), transform: false }
+  }
+
+  /** The face a submitted prompt is drawn in: its structure is markdown's, its shade stays the prompt's. */
+  private userFace(): MarkdownFace {
+    return { name: 'user', base: { color: text => this.theme.style('transcript.user', text) } }
   }
 
   /** The live map, or the shipped one for a caller that did not lend one. */
@@ -203,9 +264,7 @@ export class TranscriptView implements Component {
     lines.push(suffix === '' ? summary : `${summary}${this.theme.style('transcript.reasoning.hint', suffix)}`)
     if (!this.viewState.expandReasoning) return
     if (!this.theme.visible('transcript.reasoning.body')) return
-    for (const line of entry.body.split('\n')) {
-      this.pushWrapped(lines, line, width, DETAIL_INDENT, text => this.theme.style('transcript.reasoning.body', text))
-    }
+    this.pushMarkdown(lines, entry.body, width, entry.live, this.reasoningFace(), DETAIL_INDENT)
   }
 
   private pushCard(lines: string[], card: ToolCard, width: number): void {
@@ -433,16 +492,22 @@ export class TranscriptView implements Component {
       case 'assistant':
         this.pushMarkdown(lines, entry.text, width, live)
         return
-      case 'user':
+      case 'user': {
         if (!this.theme.visible('transcript.user')) return
         // A prompt is boxed wherever it is read, so the row it left in the queue
         // and the row it becomes here are recognisably the same object.
-        lines.push(...frameText(entry.text, width, {
-          text: text => this.theme.style('transcript.user', text),
+        const framed = canFrame(width, this.theme.visible('editor.border'))
+        const inside = framed ? width - FRAME_COLUMNS : width
+        // Markdown lays itself out to the frame's text width, so the frame may
+        // only place the rows: wrapping them again would break what it drew.
+        const body = this.markdownLines(entry.text, textWidth(inside), false, this.userFace())
+        lines.push(...frameLines(body, width, {
+          text: line => line,
           border: rule => this.theme.editor.borderColor(rule),
-          framed: canFrame(width, this.theme.visible('editor.border')),
+          framed,
         }))
         return
+      }
       case 'notice':
         if (!this.theme.visible('transcript.notice')) return
         this.pushWrapped(lines, entry.text, width, this.elementLead('transcript.notice'), text => this.theme.style('transcript.notice', text))

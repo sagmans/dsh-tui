@@ -79,6 +79,22 @@ describe('TranscriptView text', () => {
     expect(lines.some(line => line.includes('strong'))).toBe(true)
   })
 
+  it("renders a submitted prompt's markdown inside its frame", () => {
+    const model = new TranscriptModel()
+    model.apply({
+      type: 'user/message',
+      data: { content: [{ type: 'text', text: '**bold** steps:\n\n- one\n- two' }], source: { kind: 'user' } },
+    })
+    const lines = viewOf(model).render(40)
+    expect(lines[0]?.startsWith('╭')).toBe(true)
+    expect(lines.at(-1)?.startsWith('╰')).toBe(true)
+    const body = stripTerminalSequences(lines.join('\n'))
+    expect(body).toContain('bold steps:')
+    expect(body).not.toContain('**')
+    expect(body).toContain('- one')
+    expect(body).toContain('- two')
+  })
+
   it("closes a human prompt into the editor's own frame", () => {
     const model = new TranscriptModel()
     model.apply({ type: 'user/message', data: { content: [{ type: 'text', text: 'hello there' }], source: { kind: 'user' } } })
@@ -137,6 +153,53 @@ describe('TranscriptView text', () => {
     expect(opened).toHaveLength(4)
     for (const line of opened.slice(0, 3)) expect(line).toContain('\u001b[38;2;138;138;138m')
     expect(opened[3]).toBe('the answer')
+  })
+
+  it('renders an opened thought as markdown in the thought shade', () => {
+    const colour = createTheme('truecolor')
+    const model = new TranscriptModel()
+    model.apply({
+      type: 'assistant/message',
+      data: { message: { content: [{ type: 'reasoning', text: '**bold** plan\n\n- one' }, { type: 'text', text: 'the answer' }] } },
+    })
+    const opened = new TranscriptView(model, colour, new MarkdownRenderer(colour.markdown), {
+      state: () => ({ expandCards: false, expandReasoning: true, expandSubCalls: false }),
+    }).render(60)
+    const body = stripTerminalSequences(opened.join('\n'))
+    expect(body).toContain('bold plan')
+    expect(body).not.toContain('**')
+    expect(body).toContain('- one')
+    // The structure is markdown's, the shade is still the thought's: the
+    // answer's accent must not leak into a row meant to stay recessive. A blank
+    // row holds no text and so has no shade to check.
+    for (const line of opened.slice(0, -1).filter(line => line !== '')) {
+      expect(line).toContain('\u001b[38;2;138;138;138m')
+    }
+    expect(opened.at(-1)).toBe('the answer')
+  })
+
+  it('keeps a thought fence as source while the answer still draws it', () => {
+    const fence = '**note**\n\n```mermaid\nflowchart TB\n  A --> B\n```'
+    let rendered = 0
+    const markdown = new MarkdownRenderer(theme.markdown, () => {
+      rendered += 1
+      return 'DIAGRAM'
+    })
+    const model = new TranscriptModel()
+    model.apply({
+      type: 'assistant/message',
+      data: { message: { content: [{ type: 'reasoning', text: fence }, { type: 'text', text: fence }] } },
+    })
+    const lines = new TranscriptView(model, theme, markdown, {
+      state: () => ({ expandCards: false, expandReasoning: true, expandSubCalls: false }),
+    }).render(60)
+    const drawn = lines.join('\n')
+    // One drawing for the answer, none for the thought: a thought parses its own
+    // markdown but a diagram would give the thinking the answer's weight.
+    expect(rendered).toBe(1)
+    expect(drawn).toContain('DIAGRAM')
+    expect(drawn).toContain('```mermaid')
+    expect(stripTerminalSequences(drawn)).not.toContain('**')
   })
 
   it('wraps a long line to the width it was given', () => {
@@ -543,13 +606,16 @@ describe('TranscriptView theming', () => {
       editor: forwardEditorTheme(() => active.editor),
       markdown: forwardMarkdownTheme(() => active.markdown),
     }
-    const view = new TranscriptView(userModel(), delegate, new MarkdownRenderer(delegate.markdown), { state: () => COLLAPSED })
+    const markdown = new MarkdownRenderer(delegate.markdown)
+    const view = new TranscriptView(userModel(), delegate, markdown, { state: () => COLLAPSED })
     // Derived rather than repeated: this test is about the cache rebuilding,
     // not about which shade the prompt wears.
     const shipped = [1, 3, 5].map(at => Number.parseInt(DEFAULT_PALETTE.user.slice(at, at + 2), 16))
     expect(view.render(60).join('\n')).toContain(`38;2;${shipped.join(';')}`)
     active = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['transcript.user', { fg: '#ff0000' }]]) })
-    // The row cache is keyed to the old revision, so a plain repaint re-draws it.
+    // A settings change drops both caches, as the surface does; the row cache is
+    // keyed to the old revision, so the repaint re-draws the row under the new table.
+    markdown.invalidate()
     expect(view.render(60).join('\n')).toContain('38;2;255;0;0')
   })
 })

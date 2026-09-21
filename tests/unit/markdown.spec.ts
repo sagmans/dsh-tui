@@ -92,3 +92,38 @@ describe('MarkdownRenderer', () => {
     expect(markdown.render('# hi', 40).join('\n')).toContain('38;2;0;255;0')
   })
 })
+
+describe('MarkdownFace', () => {
+  it('bases text the markdown does not rule on in the shade the row carries', () => {
+    const lines = renderer().render('plain words', 40, false, { name: 'prompt', base: { color: text => `[${text}]` } })
+    expect(lines.join('\n')).toContain('[plain words]')
+  })
+
+  it('parses one text once per face instead of sharing a cached parse', () => {
+    let renders = 0
+    const markdown = new MarkdownRenderer(theme.markdown, () => {
+      renders += 1
+      return 'drawing'
+    })
+    const thought = { name: 'thought', transform: false } as const
+    expect(markdown.render('a mermaid reply', 60, false).join('\n')).toContain('drawing')
+    expect(markdown.render('a mermaid reply', 60, false, thought).join('\n')).toContain('a mermaid reply')
+    // Asking for the answer again must still draw: if the thought had taken the
+    // answer's cache entry, this call would hand back the thought's own rows.
+    expect(markdown.render('a mermaid reply', 60, false).join('\n')).toContain('drawing')
+    // One transform for the one face that asks for it: the thought's parse is
+    // its own, and reinstalls nothing on the answer's.
+    expect(renders).toBe(1)
+  })
+
+  it('leaves a face without the transform alone even when the renderer has one', () => {
+    let renders = 0
+    const markdown = new MarkdownRenderer(theme.markdown, () => {
+      renders += 1
+      return 'drawing'
+    })
+    const lines = markdown.render('a mermaid reply', 60, false, { name: 'thought', transform: false })
+    expect(renders).toBe(0)
+    expect(lines.join('\n')).toContain('a mermaid reply')
+  })
+})

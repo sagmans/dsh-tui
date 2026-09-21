@@ -25,6 +25,10 @@ breaking change, and a patch carries only fixes.
   clears the first one's drafts, and resuming a session finds its own. The bank
   key moved to `v2`, so directory-scoped banks written by 0.4.0 are left where
   they are and are not read.
+- Markdown renders for every message rather than only a reply: a submitted
+  prompt lays its markdown out inside its own frame, and an opened thought
+  parses lists, fences, and emphasis in the thought's own shade. A thought's
+  mermaid fence stays source instead of carrying the answer's weight.
 
 ## [0.4.0] - 2026-09-21
 
