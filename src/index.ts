@@ -303,7 +303,10 @@ export function apply(ctx: Context, config: unknown): void {
     try {
       scope = settingsCtx.settings.register(TUI_SETTINGS_NAMESPACE, TuiSettingsSchema)
     } catch (error) {
-      settingsNotice.post(settingsProblemMessage(error))
+      // Nothing registered means nothing to read, so the reader's switch cannot
+      // be confirmed: recording stays off rather than falling back to on.
+      historyEnabled = false
+      settingsNotice.post(settingsProblemMessage(error) + ' · prompt history stays off until the section parses')
       return
     }
     readSection = () => readScope(scope, message => settingsNotice.post(message))

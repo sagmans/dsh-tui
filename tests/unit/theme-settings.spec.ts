@@ -127,6 +127,11 @@ describe('the dsh-tui settings section', () => {
     expect(settings.history.enabled).toBe(false)
   })
 
+  it('refuses to record when the section cannot be read at all', () => {
+    const settings = readScope({ get: () => { throw new Error('unreadable') } }, () => {})
+    expect(settings.history.enabled).toBe(false)
+  })
+
   it('accepts hex, a palette name, and an index', () => {
     expect(() => parseSettings({ tokens: { 'transcript.user': { fg: '#ff0000' } } })).not.toThrow()
     expect(() => parseSettings({ tokens: { 'transcript.user': { fg: 'muted' } } })).not.toThrow()

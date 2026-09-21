@@ -311,7 +311,9 @@ export function readScope(scope: { get(): unknown }, onProblem?: (message: strin
     // recording is a privacy choice: an explicit switch survives a typo
     // somewhere else, and a switch that could not be read stays off rather than
     // quietly turning the store back on.
-    return { ...defaultSettings(), history: salvageHistory(raw) }
+    const fallback = defaultSettings()
+    if (raw === undefined) return { ...fallback, history: { ...fallback.history, enabled: false } }
+    return { ...fallback, history: salvageHistory(raw) }
   }
 }
 
