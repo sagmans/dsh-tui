@@ -1,4 +1,4 @@
-import type { StashEntry } from '../stash/schema.ts'
+import type { ResolvedEntry } from '../stash/schema.ts'
 import { hintKeys, moveHint, type Keymap } from '../input/actions.ts'
 import { describeAge, ListPicker, type PickerHints, type PickerRow } from './picker.ts'
 
@@ -38,11 +38,13 @@ export function stashLabel(text: string): string {
  *
  * The id a pick settles on is the entry id, so a pop survives the list being
  * re-read while it is open and can never take the wrong draft after a concurrent
- * drop shifted the indexes.
+ * drop shifted the indexes. The index is still shown, because it is the selector
+ * the same draft answers to on the command line, and filtering must not renumber
+ * it into something a reader could type and miss.
  */
-export class StashPicker extends ListPicker<StashEntry> {
+export class StashPicker extends ListPicker<ResolvedEntry> {
   constructor(
-    entries: readonly StashEntry[],
+    entries: readonly ResolvedEntry[],
     cwdLabel: string,
     keys: () => Keymap,
     now: () => number = () => Date.now(),
@@ -50,14 +52,14 @@ export class StashPicker extends ListPicker<StashEntry> {
     super(
       () => entries,
       () => `stash · ${cwdLabel} · ${entries.length} draft${entries.length === 1 ? '' : 's'}`,
-      entry => entry.id,
-      (entry): PickerRow => ({
-        label: stashLabel(entry.text),
-        description: describeAge(entry.createdAt, now()),
+      row => row.entry.id,
+      (row): PickerRow => ({
+        label: `[${row.index}] ${stashLabel(row.entry.text)}`,
+        description: describeAge(row.entry.createdAt, now()),
         // The card marks the row under the cursor, which the list decides.
         current: false,
       }),
-      entry => entry.text,
+      row => row.entry.text,
       stashHints(keys, 'pop'),
       keys,
     )

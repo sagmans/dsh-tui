@@ -123,15 +123,16 @@ export function formatStatus(facts: StatusFacts, width: number, theme: TuiTheme)
     if (facts.effort !== undefined && facts.effort !== '') push('status.effort', ` (${facts.effort})`, true)
   }
   if (facts.preset !== undefined && facts.preset !== '') push('status.permission', facts.preset)
+  // Parked drafts come before the running numbers: a row cut to width loses its
+  // tail, and a reader who cannot see the count cannot know the directory is
+  // holding work they meant to come back to.
+  if (facts.stashed !== undefined && facts.stashed > 0) push('status.stash', `${STASH_LABEL} ${facts.stashed}`)
   if (facts.contextTokens !== undefined) {
     push('status.context', facts.contextWindow === undefined
       ? `ctx ${formatTokens(facts.contextTokens)}`
       : `ctx ${formatTokens(facts.contextTokens)}/${formatTokens(facts.contextWindow)}`)
   }
   if (facts.cacheRate !== undefined) push('status.cache', `cache ${Math.round(facts.cacheRate * 100)}%`)
-  // A count of zero is the ordinary state, so it is said by not being said: the
-  // row only carries the fact that something is waiting to be taken back.
-  if (facts.stashed !== undefined && facts.stashed > 0) push('status.stash', `${STASH_LABEL} ${facts.stashed}`)
   push('status.cwd', shortPath(facts.cwd, facts.home))
   return renderSegments(segments, width, theme)
 }

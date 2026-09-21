@@ -316,12 +316,12 @@ exports[`golden frames > renders the stash picker at 40 columns 1`] = `
     {
       "current": true,
       "description": "1m ago",
-      "label": "refactor the fold cursor so a resume replays it",
+      "label": "[0] refactor the fold cursor so a resume replays it",
     },
     {
       "current": false,
       "description": "10m ago",
-      "label": "why does the dock render twice on the first frame?",
+      "label": "[1] why does the dock render twice on the first frame?",
     },
   ],
   "title": "stash · ~/source/opensource/deepseek-harness/master · 2 drafts",
@@ -339,12 +339,12 @@ exports[`golden frames > renders the stash picker at 80 columns 1`] = `
     {
       "current": true,
       "description": "1m ago",
-      "label": "refactor the fold cursor so a resume replays it",
+      "label": "[0] refactor the fold cursor so a resume replays it",
     },
     {
       "current": false,
       "description": "10m ago",
-      "label": "why does the dock render twice on the first frame?",
+      "label": "[1] why does the dock render twice on the first frame?",
     },
   ],
   "title": "stash · ~/source/opensource/deepseek-harness/master · 2 drafts",
@@ -365,7 +365,7 @@ exports[`golden frames > renders the status row at 80 columns 1`] = `
 
 exports[`golden frames > renders the status row with parked drafts at 80 columns 1`] = `
 [
-  "● ready · standard · zai-coding-cn/glm-5.3 (max) · stash 3 · ~/src/app",
+  "● ready · standard · zai-coding-cn/glm-5.3 (max) · workspace-write · stash 3 · …",
 ]
 `;
 
@@ -435,7 +435,7 @@ exports[`styled golden frames > renders the busy dock with its escapes 1`] = `
 
 exports[`styled golden frames > renders the parked-draft count with its escapes 1`] = `
 [
-  "[38;2;138;138;138m● ready[0m[38;2;138;138;138m · [0m[38;2;138;138;138mstandard[0m[38;2;138;138;138m · [0m[38;2;138;138;138mzai-coding-cn/glm-5.3[0m[38;2;138;138;138m (max)[0m[38;2;138;138;138m · [0m[38;2;95;175;215mstash 3[0m[38;2;138;138;138m · [0m[38;2;138;138;138m~/src/app[0m",
+  "[38;2;138;138;138m● ready[0m[38;2;138;138;138m · [0m[38;2;138;138;138mstandard[0m[38;2;138;138;138m · [0m[38;2;138;138;138mzai-coding-cn/glm-5.3[0m[38;2;138;138;138m (max)[0m[38;2;138;138;138m · [0m[38;2;138;138;138mworkspace-write[0m[38;2;138;138;138m · [0m[38;2;95;175;215mstash 3[0m[38;2;138;138;138m · [0m[38;2;138;138;138m[0m…[0m[0m",
 ]
 `;
 

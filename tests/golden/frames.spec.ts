@@ -145,14 +145,15 @@ function fixture(frameTheme = theme): { view: TranscriptView; dock: WorkDock; st
   }
 }
 
-/** The footer with drafts parked; the other facts are trimmed so the count is on screen. */
+/**
+ * The footer with drafts parked.
+ *
+ * Nothing is trimmed: the row carries the running numbers a real session shows,
+ * so the frame proves the count survives beside facts it is ranked above.
+ */
 function parkedStatus(count: number, frameTheme = theme): StatusBar {
   return new StatusBar(() => ({
     ...STATUS_FACTS,
-    preset: undefined,
-    contextTokens: undefined,
-    contextWindow: undefined,
-    cacheRate: undefined,
     cwd: '/Users/dev/src/app',
     stashed: count,
   }), frameTheme)
@@ -252,8 +253,8 @@ function modelPickerCard(): ModelPicker {
 function stashPickerCard(): StashPicker {
   return new StashPicker(
     [
-      { id: 'a1', text: 'refactor the fold cursor so a resume replays it', createdAt: NOW - 90_000 },
-      { id: 'b2', text: 'why does the dock render twice on the first frame?', createdAt: NOW - 600_000 },
+      { entry: { id: 'a1', text: 'refactor the fold cursor so a resume replays it', createdAt: NOW - 90_000 }, index: 0 },
+      { entry: { id: 'b2', text: 'why does the dock render twice on the first frame?', createdAt: NOW - 600_000 }, index: 1 },
     ],
     '~/source/opensource/deepseek-harness/master',
     defaultKeymap,

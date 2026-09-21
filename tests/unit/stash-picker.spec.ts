@@ -1,12 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import { defaultKeymap, type Keymap } from '@/input/actions.ts'
-import type { StashEntry } from '@/stash/schema.ts'
+import type { ResolvedEntry, StashEntry } from '@/stash/schema.ts'
 import type { PickerAction } from '@/ui/picker.ts'
 import { confirmedClear, StashConfirmPicker, StashPicker, stashLabel } from '@/ui/stash-picker.ts'
 
 const entry = (id: string, text: string, createdAt = 1_000): StashEntry => ({ id, text, createdAt })
 
-const picker = (entries: readonly StashEntry[], keys: () => Keymap = defaultKeymap): StashPicker =>
+/** A draft with the index the bank gives it, which the row has to show. */
+const row = (id: string, text: string, createdAt = 1_000, index = 0): ResolvedEntry => ({
+  entry: entry(id, text, createdAt),
+  index,
+})
+
+const picker = (entries: readonly ResolvedEntry[], keys: () => Keymap = defaultKeymap): StashPicker =>
   new StashPicker(entries, '~/work/app', keys, () => 1_000 + 5 * 60_000)
 
 describe('stashLabel', () => {
@@ -28,30 +34,42 @@ describe('stashLabel', () => {
 
 describe('StashPicker', () => {
   it('heads the list with the directory and the count', () => {
-    const card = picker([entry('a', 'one')]).card()
+    const card = picker([row('a', 'one')]).card()
     expect(card.title).toBe('stash · ~/work/app · 1 draft')
-    expect(picker([entry('a', 'one'), entry('b', 'two')]).card().title).toBe('stash · ~/work/app · 2 drafts')
+    expect(picker([row('a', 'one'), row('b', 'two')]).card().title).toBe('stash · ~/work/app · 2 drafts')
   })
 
   it('describes each draft by its label and its age', () => {
-    const card = picker([entry('a', 'send the report', 1_000)]).card()
-    expect(card.rows[0]).toMatchObject({ label: 'send the report', description: '5m ago', current: true })
+    const card = picker([row('a', 'send the report', 1_000)]).card()
+    expect(card.rows[0]).toMatchObject({ label: '[0] send the report', description: '5m ago', current: true })
   })
 
   it('picks the draft under the cursor by its id, not its index', () => {
-    const list = picker([entry('a', 'one'), entry('b', 'two')])
+    const list = picker([row('a', 'one'), row('b', 'two')])
     expect(list.handleKey('\u001b[B')).toBeUndefined()
     expect(list.handleKey('\r')).toEqual({ kind: 'pick', id: 'b' })
   })
 
   it('cancels on escape', () => {
-    expect(picker([entry('a', 'one')]).handleKey('\u001b')).toEqual({ kind: 'cancel' })
+    expect(picker([row('a', 'one')]).handleKey('\u001b')).toEqual({ kind: 'cancel' })
   })
 
   it('filters on the draft text, not only the shown label', () => {
-    const list = picker([entry('a', 'fix the parser'), entry('b', 'write the docs')])
+    const list = picker([row('a', 'fix the parser'), row('b', 'write the docs')])
     for (const key of 'docs') list.handleKey(key)
-    expect(list.visible().map(row => row.id)).toEqual(['b'])
+    expect(list.visible().map(visible => visible.entry.id)).toEqual(['b'])
+  })
+
+  /**
+   * Filtering hides rows, so a position in the list stops matching the bank. The
+   * index is the selector the command line answers to, and it has to keep naming
+   * the same draft however the list is narrowed.
+   */
+  it('keeps the bank index on a row filtering left alone', () => {
+    const list = picker([row('a', 'fix the parser'), row('b', 'write the docs', 1_000, 1)])
+    for (const key of 'docs') list.handleKey(key)
+    expect(list.visible().map(visible => visible.index)).toEqual([1])
+    expect(list.card().rows[0]?.label).toBe('[1] write the docs')
   })
 })
 

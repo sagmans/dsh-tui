@@ -51,6 +51,22 @@ describe('the parked-draft count', () => {
     expect(line).toContain('stash 3')
     expect(line.indexOf('stash 3')).toBeLessThan(line.indexOf('~/source/opensource'))
   })
+
+  /**
+   * A row cut to width keeps its head, and the count is what tells a reader work
+   * is waiting; the context and cache numbers are recoverable by looking again.
+   * So the count has to survive every cut the numbers beside it survive.
+   */
+  it('never appears later than the running numbers it outranks', () => {
+    const parked = facts({ stashed: 3 })
+    const widths = Array.from({ length: 180 }, (_, index) => index + 20)
+    const firstWithCount = widths.find(width => formatStatus(parked, width, theme).includes('stash 3'))
+    expect(firstWithCount).toBeDefined()
+    const line = formatStatus(parked, firstWithCount as number, theme)
+    expect(visibleWidth(line)).toBeLessThanOrEqual(firstWithCount as number)
+    expect(line).not.toContain('cache 87%')
+    expect(line).not.toContain('ctx 12.4k')
+  })
 })
 
 describe('formatTokens', () => {
