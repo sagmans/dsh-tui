@@ -5,8 +5,11 @@ import type { Submission } from './submission.ts'
 /** How long an armed chord waits for the key that follows it, in seconds. */
 export const DEFAULT_PREFIX_WINDOW_S = 2
 
-/** The key that starts a chord when the reader configures nothing. */
-export const DEFAULT_PREFIX_KEY: KeyId = keysFor(defaultKeymap(), 'chord.prefix')[0]!
+/** The keys that start a chord when the reader configures nothing. */
+export const DEFAULT_PREFIX_KEYS: readonly KeyId[] = keysFor(defaultKeymap(), 'chord.prefix')
+
+/** The first shipped prefix, for the places that need one key rather than the list. */
+export const DEFAULT_PREFIX_KEY: KeyId = DEFAULT_PREFIX_KEYS[0]!
 
 /**
  * The command each chord stands for.
@@ -94,15 +97,6 @@ export interface PromptKeys {
   readonly newLine: readonly KeyId[]
   /** Whether a plain press of Return breaks the line, which is the bar's own guard. */
   readonly enterBreaksLine: boolean
-  /**
-   * Whether the one sequence a terminal without modifiers reports for alt+enter
-   * can send.
-   *
-   * The bar translates that sequence into the chord the library reads as
-   * submit, so it only helps while the reader still sends with that chord: with
-   * either end gone the translation would be a press nothing answers.
-   */
-  readonly legacyAltEnterSubmits: boolean
 }
 
 /** What the bar answers itself, read from the map on every press so an edit lands live. */
@@ -113,7 +107,6 @@ export function promptKeys(map: Keymap): PromptKeys {
     submit,
     newLine,
     enterBreaksLine: newLine.includes(ENTER_KEY),
-    legacyAltEnterSubmits: submit.includes('alt+enter') && submit.includes('ctrl+enter'),
   }
 }
 
@@ -143,11 +136,11 @@ const SYSTEM_TIMERS: ChordTimers = {
  * would cost more than one that did nothing.
  */
 export class ChordReader {
-  private armed = false
+  private armed: KeyId | undefined
   private expiry: unknown
 
   constructor(
-    private readonly prefix: () => KeyId,
+    private readonly prefixes: () => readonly KeyId[],
     private readonly bindings: () => readonly ChordBinding[],
     private readonly windowMs: () => number,
     private readonly onExpire: () => void,
@@ -156,7 +149,7 @@ export class ChordReader {
 
   /** Whether a chord is waiting for its next key, which is what the footer says. */
   get pending(): boolean {
-    return this.armed
+    return this.armed !== undefined
   }
 
   /**
@@ -167,12 +160,12 @@ export class ChordReader {
    * cut the list anyway.
    */
   hint(): string | undefined {
-    return this.armed ? this.prefix() : undefined
+    return this.armed
   }
 
   /** End the chord, whatever ends it: its key, its window, or a keymap change. */
   disarm(): void {
-    this.armed = false
+    this.armed = undefined
     if (this.expiry === undefined) return
     this.timers.cancel(this.expiry)
     this.expiry = undefined
@@ -180,15 +173,18 @@ export class ChordReader {
 
   /** Apply one key press; only a press that started or finished a chord is consumed. */
   handle(data: string): ChordResult | undefined {
-    if (!this.armed) {
-      if (!matchesKey(data, this.prefix())) return undefined
-      this.armed = true
+    if (this.armed === undefined) {
+      // Every configured prefix is a way in, and the footer names the one that
+      // was actually pressed: a list is a list of alternatives, not a sequence.
+      const armed = this.prefixes().find(key => matchesKey(data, key))
+      if (armed === undefined) return undefined
+      this.armed = armed
       const windowMs = this.windowMs()
       // A window of zero is the reader asking for a sticky chord: nothing but
       // the next key ends it.
       if (windowMs > 0) {
         this.expiry = this.timers.schedule(() => {
-          this.armed = false
+          this.armed = undefined
           this.expiry = undefined
           this.onExpire()
         }, windowMs)

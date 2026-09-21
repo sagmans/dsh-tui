@@ -401,7 +401,8 @@ describe('QuestionGate free-text row', () => {
     const card = gate.card()
     expect(card.custom?.current).toBe(true)
     expect(card.options.every(option => !option.current)).toBe(true)
-    expect(card.hint).toContain('back to options')
+    // The hint names the field's own exits, which are not the question's keys.
+    expect(card.hint).toContain('↑↓ or esc to options')
   })
 
   it('answers with what was typed on row 0 instead of filtering by it', () => {

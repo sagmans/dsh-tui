@@ -37,14 +37,16 @@ const NEWLINE_BYTE = '\n'
 const LEGACY_ALT_ENTER = '\u001b\r'
 
 /**
- * Ctrl+Enter as the keyboard protocol spells it.
+ * The chords as the keyboard protocol spells them.
  *
- * A legacy alt+enter arrives as the very sequence the base class reads as a
- * newline before it ever looks for a submit key, so the press is translated
- * into the chord the base does look for. The submit path then runs whole, with
- * the same guards a real chord meets, instead of a second sender beside it.
+ * The base class reads a legacy alt+enter and a bare line feed as line breaks
+ * before it looks at any binding, so each press is handed over as the chord the
+ * map actually holds for it. The submit path then runs whole, with the same
+ * guards a real chord meets, instead of a second sender beside it.
  */
-const KITTY_SUBMIT = '\u001b[13;5u'
+const KITTY_ALT_ENTER = '\u001b[13;3u'
+const KITTY_CTRL_ENTER = '\u001b[13;5u'
+const KITTY_CTRL_J = '\u001b[106;5u'
 
 /**
  * The input bar drawn as a box, with its completion menu above it.
@@ -81,17 +83,31 @@ export class BoxedEditor extends Editor {
       return
     }
     const keys = promptKeys(this.keymap())
+    // A bare line feed is a line break in the base class whatever the map says,
+    // so a reader who moved the line break off ctrl+j and sends with it would
+    // keep getting lines. It is read before the Return guard because a terminal
+    // without the protocol reports that byte as Return as well.
+    if (data === NEWLINE_BYTE && keys.submit.includes('ctrl+j')) {
+      super.handleInput(KITTY_CTRL_J)
+      return
+    }
     if (keys.enterBreaksLine && matchesKey(data, ENTER_KEY) && !this.isShowingAutocomplete()) {
       super.handleInput(NEWLINE_BYTE)
       return
     }
     // Only while the terminal cannot tell alt+enter apart from a mapping: with
     // the protocol active the same sequence is the reader's shift+enter, which
-    // is a newline and has to stay one. And only while a chord still sends,
-    // because otherwise the translation would be a press nothing answers.
-    if (data === LEGACY_ALT_ENTER && !isKittyProtocolActive() && keys.legacyAltEnterSubmits) {
-      super.handleInput(KITTY_SUBMIT)
-      return
+    // is a newline and has to stay one. The spelling follows the binding, so a
+    // reader who sends with alt+enter alone is answered too.
+    if (data === LEGACY_ALT_ENTER && !isKittyProtocolActive()) {
+      if (keys.submit.includes('alt+enter')) {
+        super.handleInput(KITTY_ALT_ENTER)
+        return
+      }
+      if (keys.submit.includes('ctrl+enter')) {
+        super.handleInput(KITTY_CTRL_ENTER)
+        return
+      }
     }
     super.handleInput(data)
   }

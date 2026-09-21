@@ -1,5 +1,5 @@
 import { matchesKey } from '@earendil-works/pi-tui'
-import { keyName, keysFor, matchesAction, moveHint, type Keymap } from '../input/actions.ts'
+import { hintKeys, matchesAction, moveHint, type Keymap } from '../input/actions.ts'
 import { pastedText } from '../input.ts'
 import { matchScore } from '../input/match.ts'
 import type { StoredSession } from '../agent/history.ts'
@@ -41,17 +41,15 @@ export type PickerAction =
  */
 export const PICKER_WINDOW = 12
 
-/** The hint lines a list uses when it is empty and when it holds rows. */
+/**
+ * The hint lines a list uses when it is empty and when it holds rows.
+ *
+ * Read at paint time rather than built once, because a settings edit while the
+ * list is open moves the keys the hint names.
+ */
 export interface PickerHints {
-  readonly empty: string
-  readonly listed: string
-}
-
-/** The keys in force for one action, as a hint prints them. */
-function hintKeys(map: Keymap, id: string): string {
-  // One word for the action, however many keys reach it, so a hint does not read
-  // as two actions.
-  return keysFor(map, id).map(keyName).join('/')
+  readonly empty: () => string
+  readonly listed: () => string
 }
 
 const MINUTE_MS = 60_000
@@ -171,7 +169,7 @@ export class ListPicker<Row> {
       above: start,
       below: Math.max(0, rows.length - start - window.length),
       filter: this.filter,
-      hint: rows.length === 0 ? this.hints.empty : this.hints.listed,
+      hint: rows.length === 0 ? this.hints.empty() : this.hints.listed(),
     }
   }
 }
@@ -207,8 +205,8 @@ export class SessionPicker extends ListPicker<StoredSession> {
       }),
       session => [labelOf(session), session.id, session.cwd ?? ''].join(' '),
       {
-        empty: `nothing matches · backspace to widen · ${hintKeys(keys(), 'picker.cancel')} cancel`,
-        listed: `${moveHint(keys(), 'picker.up', 'picker.down')} move · ${hintKeys(keys(), 'picker.confirm')} open · ${hintKeys(keys(), 'picker.cancel')} cancel · type to filter`,
+        empty: () => `nothing matches · backspace to widen · ${hintKeys(keys(), 'picker.cancel')} cancel`,
+        listed: () => `${moveHint(keys(), 'picker.up', 'picker.down')} move · ${hintKeys(keys(), 'picker.confirm')} open · ${hintKeys(keys(), 'picker.cancel')} cancel · type to filter`,
       },
       keys,
     )
@@ -234,8 +232,8 @@ export class PresetPicker extends ListPicker<PresetSummary> {
       preset => describePreset(preset, currentId()),
       preset => [preset.id, preset.name ?? '', preset.description ?? ''].join(' '),
       {
-        empty: `nothing matches · backspace to widen · ${hintKeys(keys(), 'picker.cancel')} cancel`,
-        listed: `${moveHint(keys(), 'picker.up', 'picker.down')} move · ${hintKeys(keys(), 'picker.confirm')} switch · ${hintKeys(keys(), 'picker.cancel')} cancel · type to filter`,
+        empty: () => `nothing matches · backspace to widen · ${hintKeys(keys(), 'picker.cancel')} cancel`,
+        listed: () => `${moveHint(keys(), 'picker.up', 'picker.down')} move · ${hintKeys(keys(), 'picker.confirm')} switch · ${hintKeys(keys(), 'picker.cancel')} cancel · type to filter`,
       },
       keys,
     )
@@ -264,8 +262,8 @@ export class ModelPicker extends ListPicker<ModelRoute> {
       route => describeModelRoute(route, current()),
       route => [route.provider, route.model, route.name].join(' '),
       {
-        empty: `nothing matched · /model <provider>/<model> takes any id · backspace to widen · ${hintKeys(keys(), 'picker.cancel')} cancel`,
-        listed: `${moveHint(keys(), 'picker.up', 'picker.down')} move · ${hintKeys(keys(), 'picker.confirm')} switch · ${hintKeys(keys(), 'picker.cancel')} cancel · type to filter`,
+        empty: () => `nothing matched · /model <provider>/<model> takes any id · backspace to widen · ${hintKeys(keys(), 'picker.cancel')} cancel`,
+        listed: () => `${moveHint(keys(), 'picker.up', 'picker.down')} move · ${hintKeys(keys(), 'picker.confirm')} switch · ${hintKeys(keys(), 'picker.cancel')} cancel · type to filter`,
       },
       keys,
     )
@@ -340,8 +338,8 @@ export class EffortPicker extends ListPicker<EffortChoice> {
       }),
       choice => [choice.name, choice.id, choice.description ?? ''].join(' '),
       {
-        empty: `nothing matches · backspace to widen · ${hintKeys(keys(), 'picker.cancel')} cancel`,
-        listed: `${moveHint(keys(), 'picker.up', 'picker.down')} move · ${hintKeys(keys(), 'picker.confirm')} apply · ${hintKeys(keys(), 'picker.cancel')} cancel · type to filter`,
+        empty: () => `nothing matches · backspace to widen · ${hintKeys(keys(), 'picker.cancel')} cancel`,
+        listed: () => `${moveHint(keys(), 'picker.up', 'picker.down')} move · ${hintKeys(keys(), 'picker.confirm')} apply · ${hintKeys(keys(), 'picker.cancel')} cancel · type to filter`,
       },
       keys,
     )

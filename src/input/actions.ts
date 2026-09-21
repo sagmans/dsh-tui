@@ -1,4 +1,4 @@
-import { Key, KeybindingsManager, TUI_KEYBINDINGS, matchesKey, type KeyId } from '@earendil-works/pi-tui'
+import { Key, TUI_KEYBINDINGS, matchesKey, type KeyId } from '@earendil-works/pi-tui'
 
 /**
  * Every action a reader may bind, in one table.
@@ -46,6 +46,27 @@ export const TERMINAL_OWNED_KEYS: readonly KeyId[] = ['ctrl+q']
 
 /** The key a plain press of Return arrives as. */
 export const ENTER_KEY: KeyId = 'enter'
+
+/**
+ * The named key a control character is the same press as.
+ *
+ * A terminal that reports no modifiers sends the control byte itself, so the
+ * library matches Ctrl+M where it matches Return and Ctrl+I where it matches
+ * Tab. Two rows that read one press have to be refused under the same name
+ * however they spell it, or the reader keeps a binding their terminal answers
+ * with a different action.
+ */
+const CONTROL_ALIASES: Readonly<Record<string, KeyId>> = {
+  'ctrl+m': ENTER_KEY,
+  'ctrl+i': 'tab',
+  'ctrl+h': 'backspace',
+  'ctrl+[': 'escape',
+}
+
+/** The press one key names, folded across the spellings a bare terminal cannot tell apart. */
+export function pressOf(key: KeyId): string {
+  return CONTROL_ALIASES[key] ?? key
+}
 
 /** The modifiers a key id may carry, in the order a canonical id writes them. */
 const MODIFIER_ORDER = ['ctrl', 'shift', 'alt', 'super'] as const
@@ -201,16 +222,39 @@ export const ACTION_CATALOG: readonly Action[] = [
   ...libraryActions(),
 ]
 
+/**
+ * Whether the library can match a key at all.
+ *
+ * The library answers no modifier on Escape or on a function key, because no
+ * terminal reports those, and no modifier beyond plain, shift, and control on
+ * Clear. A binding there would be a key the reader could never press.
+ */
+function isPressable(key: KeyId): boolean {
+  const parts = key.split('+')
+  const base = parts.pop() ?? ''
+  const count = parts.length
+  if (base === 'escape' && count > 0) return false
+  if (/^f([1-9]|1[0-2])$/u.test(base) && count > 0) return false
+  if (base === 'clear' && (count > 1 || parts.includes('alt') || parts.includes('super'))) return false
+  return true
+}
+
 /** Whether a key is one modifier chord on one letter or digit, the only shape a chord starter may take. */
 function isSimpleChord(key: KeyId): boolean {
   const base = key.split('+').pop() ?? ''
   return key.includes('+') && /^[a-z0-9]$/u.test(base)
 }
 
-/** Whether a key is a character the reader types, which only an armed layer may take. */
+/**
+ * Whether a key is a character the reader types, which only an armed layer may take.
+ *
+ * Shift is not a way out of this: a terminal reports a capital letter as the
+ * shifted letter, so shift+c types a C wherever c does.
+ */
 function isBareCharacter(key: KeyId): boolean {
-  if (key.includes('+')) return false
-  return key === 'space' || (key.length === 1 && key >= ' ')
+  const bare = key.startsWith('shift+') ? key.slice('shift+'.length) : key
+  if (bare.includes('+')) return false
+  return bare === 'space' || (bare.length === 1 && bare >= ' ')
 }
 
 /** What the settings document may say about one action: one key, or a list of them. */
@@ -277,6 +321,17 @@ export function actionLabel(id: string): string {
   return actionOf(id)?.label ?? id
 }
 
+/**
+ * The keys in force for one action, as a hint prints them.
+ *
+ * One word for the action however many keys reach it, so a hint does not read
+ * as two actions. Read from the live map, because a hint drawn after a settings
+ * edit must not keep advertising the key the reader just moved.
+ */
+export function hintKeys(map: Keymap, id: string): string {
+  return keysFor(map, id).map(keyName).join('/')
+}
+
 function readKeys(action: Action, value: string | readonly string[]): readonly KeyId[] {
   const written = Array.isArray(value) ? value : [value]
   const keys: KeyId[] = []
@@ -284,11 +339,16 @@ function readKeys(action: Action, value: string | readonly string[]): readonly K
     const key = normalizeKey(raw)
     if (key === undefined) throw new Error(`key "${raw}" on ${action.id} is not a key a terminal reports`)
     if (TERMINAL_OWNED_KEYS.includes(key)) throw new Error(`key "${key}" on ${action.id} is the terminal's own key`)
-    if (!action.mayUseBare && isBareCharacter(key)) {
+    // A row's own shipped key is always writable: a document that spells out the
+    // default changes nothing, and refusing it would cost the reader the section.
+    if (!action.mayUseBare && isBareCharacter(key) && !action.defaultKeys.includes(key)) {
       throw new Error(`key "${key}" on ${action.id} would be typed rather than commanded; write a modifier chord or a named key`)
     }
     if (action.keyShape === 'chord' && !isSimpleChord(key)) {
       throw new Error(`key "${key}" on ${action.id} must be a modifier chord like ctrl+x`)
+    }
+    if (!isPressable(key)) {
+      throw new Error(`key "${key}" on ${action.id} is one the library never matches; write a key the terminal reports`)
     }
     // A repeat inside one list is the same press written twice, not a second key.
     if (!keys.includes(key)) keys.push(key)
@@ -309,13 +369,14 @@ function readKeys(action: Action, value: string | readonly string[]): readonly K
  */
 function refuseLayerClashes(effective: Readonly<Record<string, readonly KeyId[]>>): void {
   for (const layer of ['prompt', 'surface', 'chord', 'gate', 'question', 'picker'] as const) {
-    const owner = new Map<KeyId, string>()
+    const owner = new Map<string, string>()
     for (const action of ACTION_CATALOG) {
       if (action.layer !== layer) continue
       for (const key of effective[action.id] ?? []) {
-        const taken = owner.get(key)
+        const press = pressOf(key)
+        const taken = owner.get(press)
         if (taken !== undefined) throw new Error(`key "${key}" is bound to both ${taken} and ${action.id}`)
-        owner.set(key, action.id)
+        owner.set(press, action.id)
       }
     }
   }
@@ -332,7 +393,9 @@ function refusePrefixTakingKeys(effective: Readonly<Record<string, readonly KeyI
   const owners = ACTION_CATALOG.filter(action => action.layer === 'surface' || action.layer === 'prompt')
   for (const key of effective['chord.prefix'] ?? []) {
     for (const owner of owners) {
-      if ((effective[owner.id] ?? []).includes(key)) {
+      // A prefix is consumed before anything else looks at the press, so it takes
+      // the key from a row that reads the same press under another spelling too.
+      if ((effective[owner.id] ?? []).some(owned => pressOf(owned) === pressOf(key))) {
         throw new Error(`key "${key}" as chord.prefix would take it from ${owner.id}`)
       }
     }
@@ -340,21 +403,134 @@ function refusePrefixTakingKeys(effective: Readonly<Record<string, readonly KeyI
 }
 
 /**
- * Refuse two library actions the reader bound to one key.
+ * The rows the library reads, as one map.
  *
- * Asked of the library's own manager rather than reimplemented, so the answer
- * matches what the reader will actually live with. A key the library ships on
- * two rows is not a clash: the rows belong to different components.
+ * Every library action appears, wherever the key came from, because a moved row
+ * and an untouched default are read by the same matcher. The bar's two actions
+ * are here as well: they are installed even when the reader never wrote them, so
+ * they share the keyboard with the library's own rows.
  */
-function refuseLibraryClashes(effective: Readonly<Record<string, readonly KeyId[]>>, written: ReadonlySet<string>): void {
-  const userBindings: Record<string, KeyId[]> = {}
-  for (const id of written) {
-    if (!id.startsWith('tui.')) continue
-    userBindings[id] = [...(effective[id] ?? [])]
+function libraryRows(effective: Readonly<Record<string, readonly KeyId[]>>): Record<string, KeyId[]> {
+  const rows: Record<string, KeyId[]> = {}
+  for (const action of ACTION_CATALOG) {
+    if (action.layer === 'library') rows[action.id] = [...(effective[action.id] ?? [])]
   }
-  const conflict = new KeybindingsManager(TUI_KEYBINDINGS, userBindings).getConflicts()[0]
-  if (conflict !== undefined) {
-    throw new Error(`key "${conflict.key}" is bound to both ${conflict.keybindings.join(' and ')}`)
+  rows['tui.input.submit'] = [...(effective['prompt.submit'] ?? [])]
+  // Enter is left out for the same reason the installation leaves it out: the
+  // library reads that press as a line break before it looks for this row.
+  rows['tui.input.newLine'] = (effective['prompt.newLine'] ?? []).filter(key => key !== ENTER_KEY)
+  return rows
+}
+
+/** The same rows as they read before the reader wrote anything. */
+function shippedLibraryRows(): Record<string, KeyId[]> {
+  const defaults = new Map(ACTION_CATALOG.map(action => [action.id, action.defaultKeys]))
+  const rows: Record<string, KeyId[]> = {}
+  for (const action of ACTION_CATALOG) {
+    if (action.layer === 'library') rows[action.id] = [...action.defaultKeys]
+  }
+  rows['tui.input.submit'] = [...(defaults.get('prompt.submit') ?? [])]
+  rows['tui.input.newLine'] = [...(defaults.get('prompt.newLine') ?? [])].filter(key => key !== ENTER_KEY)
+  return rows
+}
+
+/**
+ * The component that reads a library row.
+ *
+ * Two rows one component reads can fight over a press. Rows of different
+ * components meet only where the library already ships the overlap, such as the
+ * viewport's page keys shadowing the editor's, so those are its business rather
+ * than a clash to refuse.
+ */
+function libraryComponent(id: string): string {
+  if (id.startsWith('tui.editor.') || id.startsWith('tui.input.')) return 'editor'
+  if (id.startsWith('tui.select.')) return 'select'
+  if (id.startsWith('tui.altScreen.')) return 'viewport'
+  return 'other'
+}
+
+/** Every press one component reads on more than one row, with the rows that read it. */
+function sharedPresses(rows: Readonly<Record<string, readonly KeyId[]>>): Map<string, string[]> {
+  const owners = new Map<string, Map<string, string[]>>()
+  for (const [id, keys] of Object.entries(rows)) {
+    const component = libraryComponent(id)
+    for (const key of keys) {
+      const press = pressOf(key)
+      const byComponent = owners.get(press) ?? new Map<string, string[]>()
+      const found = byComponent.get(component) ?? []
+      if (!found.includes(id)) found.push(id)
+      byComponent.set(component, found)
+      owners.set(press, byComponent)
+    }
+  }
+  const shared = new Map<string, string[]>()
+  for (const [press, byComponent] of owners) {
+    for (const ids of byComponent.values()) {
+      if (ids.length > 1) shared.set(press, [...ids].sort())
+    }
+  }
+  return shared
+}
+
+/**
+ * Refuse two rows the library reads on one press.
+ *
+ * The library's own manager reports a clash between rows the reader wrote and
+ * nothing else, which would let a new binding quietly take a key from a row the
+ * reader never touched. The pairs the library itself ships shared are left
+ * alone: those are rows it already knows how to tell apart.
+ */
+function refuseLibraryClashes(effective: Readonly<Record<string, readonly KeyId[]>>): void {
+  const shipped = new Set([...sharedPresses(shippedLibraryRows())].map(([press, ids]) => `${press}\u0000${ids.join(',')}`))
+  for (const [press, ids] of sharedPresses(libraryRows(effective))) {
+    if (shipped.has(`${press}\u0000${ids.join(',')}`)) continue
+    throw new Error(`key "${press}" is bound to both ${ids.join(' and ')}; move one of them or pick another key`)
+  }
+}
+
+/**
+ * The library rows that read a press before the surface's own listener runs.
+ *
+ * The alternate screen registers its viewport listener while the terminal is
+ * built, so its keys arrive before a listener the surface adds later. These rows
+ * are read without asking whether an overlay holds the keyboard; the search
+ * overlay's own next, previous, and close keys are left out because they wait
+ * for it and would let an overlay-scoped surface key through.
+ */
+const VIEWPORT_FIRST_ROWS: readonly string[] = [
+  'tui.altScreen.search',
+  'tui.altScreen.pageUp',
+  'tui.altScreen.pageDown',
+  'tui.altScreen.halfPageUp',
+  'tui.altScreen.halfPageDown',
+  'tui.altScreen.lineUp',
+  'tui.altScreen.lineDown',
+  'tui.altScreen.previousPrompt',
+  'tui.altScreen.nextPrompt',
+  'tui.altScreen.top',
+  'tui.altScreen.bottom',
+]
+
+/**
+ * Refuse a prompt or surface key the viewport reads first.
+ *
+ * A row written there would never answer: the press scrolls instead, and the
+ * binding only looks alive while an overlay defers the viewport.
+ */
+function refuseViewportTakingKeys(effective: Readonly<Record<string, readonly KeyId[]>>, written: ReadonlySet<string>): void {
+  const taken = new Map<string, string>()
+  for (const id of VIEWPORT_FIRST_ROWS) {
+    for (const key of effective[id] ?? []) taken.set(pressOf(key), id)
+  }
+  for (const action of ACTION_CATALOG) {
+    if (!written.has(action.id)) continue
+    if (action.layer !== 'prompt' && action.layer !== 'surface') continue
+    for (const key of effective[action.id] ?? []) {
+      const row = taken.get(pressOf(key))
+      if (row !== undefined) {
+        throw new Error(`key "${key}" on ${action.id} is read by ${row} first; move that row or pick another key`)
+      }
+    }
   }
 }
 
@@ -380,7 +556,8 @@ export function resolveKeymap(overrides: KeymapOverrides): Keymap {
   }
   refuseLayerClashes(effective)
   refusePrefixTakingKeys(effective)
-  refuseLibraryClashes(effective, written)
+  refuseLibraryClashes(effective)
+  refuseViewportTakingKeys(effective, written)
   return { effective, written }
 }
 

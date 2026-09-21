@@ -6,7 +6,7 @@ export const KEYMAP_LAYERS: readonly ActionLayer[] = ['prompt', 'surface', 'chor
 /** What each layer is for, so a list of ids reads as a surface rather than a dump. */
 const LAYER_NOTES: Readonly<Record<ActionLayer, string>> = {
   prompt: 'the prompt bar',
-  surface: 'the surface, answered before anything else',
+  surface: 'the surface, answered before the editor',
   chord: 'the prefix first, then the key that follows it',
   gate: 'an approval',
   question: 'a question and its options',

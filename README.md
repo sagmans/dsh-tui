@@ -168,14 +168,19 @@ moves any of them — see [Keys](#keys).
 prefix alone — enough to say that a key is waiting, without reciting the map —
 and a key that finishes nothing is typed as usual rather than swallowed, so a
 prefix pressed by accident costs nothing; `/help` lists the chords, `m` for the
-model picker and `y` for the last answer. `keys.chord.prefix: alt+x` starts the
-chord with another key and `prefixWindow: 0` waits for the next key instead of
-lapsing; both second keys are rows of their own (`chord.model`, `chord.copy`),
-so a chord can be respelled whole. A prefix that is not a modifier chord, that
+model picker, `p` for plan mode, and `y` for the last answer.
+`keys.chord.prefix: alt+x` starts the chord with another key — or with a list of
+them, as so many ways in — and `prefixWindow: 0` waits for the next key instead
+of lapsing; every second key is a row of its own (`chord.model`, `chord.plan`,
+`chord.copy`), so a chord can be respelled whole. A prefix that is not a modifier chord, that
 the surface or the prompt bar already answers (`ctrl+c`, `ctrl+s`), or that the
 terminal keeps (`ctrl+q`) is refused with the reason, and the shipped keymap
-stays in force. The chords themselves are the commands they stand for: `m` and
-`y` ask the same dispatcher `/model` and `/copy` do.
+stays in force. The chords themselves are the commands they stand for: `m`, `p`,
+and `y` ask the same dispatcher `/model`, `/plan`, and `/copy` do. Plan mode is
+the one pair that cannot share a name: `/plan` only enters, so the chord names
+`/plan off` instead when the agent is in plan mode — or is waiting for the turn
+boundary to become so — and reads that state from the plan package rather than
+from the dock.
 
 An approval or a question draws inline above the editor and takes the keyboard. A question that lists options always adds row `0. other — type your own answer`: type or paste an answer the model did not offer, and the seam receives it as that question's free text — replacing a single-select choice, or supplementing a multi-select one. `0`, or `↓` past the last option, reaches the row; `↑` walks back to the list with the text kept, and `esc` does the same from that row, because a question skipped by accident is a question answered twice — an escape from the list skips it. Free text is written in the prompt bar's own editor, drawn under that row: movement, word and line deletion, undo, completion, and multi-line paste are all the editor the reader already uses, and the prompt bar steps aside while a question is open, so a prompt written but not sent comes back untouched once the question is answered. No question hides its answer — the reader is the one who has to check what they are about to send. Every gate row wraps at the screen edge under its own label, so a long option or question is readable rather than cut.
 
@@ -259,8 +264,9 @@ notice when the document loads, so a typo cannot quietly paint nothing.
 
 Every press the surface answers is an action with an id and a shipped key.
 `/keys` prints all of them with the keys in force, marks the rows you wrote,
-names the library keys you took, and shows the `keys:` section that would say
-the same thing; `/keys prompt`, `surface`, `chord`, `gate`, `question`,
+names the keys your map took from the library, and ends with a sample `keys:`
+section rather than a whole one; the table above it is the complete account.
+`/keys prompt`, `surface`, `chord`, `gate`, `question`,
 `picker`, and `library` narrow that list to one part of the surface.
 
 An entry is one key or a list of them. A key is a modifier chord
@@ -274,14 +280,17 @@ transcript move where you tell them to.
 Refused, with the reason in a notice and the shipped map left in force: an
 action the surface does not have, a key no terminal reports, `ctrl+q` (the
 terminal keeps it), a bare character outside the chord and gate layers, two
-actions of one layer on one key, a `chord.prefix` that is not a modifier chord
-or that takes a key the surface or the prompt bar answers, and `prefix:` beside
-`keys.chord.prefix:`, which are the same row under two names.
+actions of one layer on one press however each is spelled (`enter` beside
+`ctrl+m`), a key the library already answers on a row you never wrote, a key the
+viewport reads before the surface sees it (`pageUp`), a `chord.prefix` that is
+not a modifier chord or that takes a key the surface or the prompt bar answers,
+and `prefix:` beside `keys.chord.prefix:`, which are the same row under two
+names.
 
 A key the surface or a chord answers is a key the library never sees: that is
 how `ctrl+y` shows nested calls instead of yanking a line in the editor.
-`/keys` names every such shadow, and moving the surface key hands the library
-its own key back.
+`/keys` names every shadow your map introduces, and moving the surface key
+hands the library its own key back.
 
 Left alone, because they are typing rather than commands: the keys a question's
 filter narrows with and the ones that leave its free-text row, the digits and

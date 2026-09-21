@@ -217,9 +217,19 @@ function namedKeys(map: Keymap, id: string, verb: string): string {
   return `${keysFor(map, id).map(keyName).join('/')} ${verb}`
 }
 
+/**
+ * How the free-text row spells the keys that leave it.
+ *
+ * A text field keeps its own exits: the arrows and escape are the field's, not
+ * the question's, so a reader who moved question.up or question.skip somewhere
+ * else still leaves with these. The hint therefore names them as the terminal
+ * spells them instead of promising a key the row does not answer.
+ */
+const CUSTOM_ROW_EXITS = '↑↓ or esc'
+
 /** The keys that answer the free-text row, where typing is the answer rather than a filter. */
 function customHint(map: Keymap): string {
-  return `type or paste an answer · ${namedKeys(map, 'question.confirm', 'confirm')} · ${moveHint(map, 'question.up', 'question.down')} or ${namedKeys(map, 'question.skip', 'back')} to options`
+  return `type or paste an answer · ${namedKeys(map, 'question.confirm', 'confirm')} · ${CUSTOM_ROW_EXITS} to options`
 }
 
 /**
@@ -488,7 +498,8 @@ export class QuestionGate {
       return this.result()
     }
     // The keys that leave a text field are the field's own, not the question's:
-    // a skip the reader moved elsewhere must not quietly mean "walk back".
+    // a skip the reader moved elsewhere must not quietly mean "walk back". The
+    // hint spells these literally for the same reason (CUSTOM_ROW_EXITS).
     if (matchesKey(data, 'up') || matchesKey(data, 'down')) {
       this.atCustom = false
       return undefined

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { WorkFold } from '@/work.ts'
+import { WorkFold, planSelectedActive, planToggleLine } from '@/work.ts'
 
 const foldWith = (...events: Array<{ type: string; data?: unknown }>): WorkFold => {
   const fold = new WorkFold()
@@ -55,5 +55,28 @@ describe('WorkFold', () => {
   it('ignores events that are not work state', () => {
     const fold = foldWith({ type: 'turn/start', data: { turn: 1 } }, { type: 'todo/write', data: {} })
     expect(fold.state().todos).toBeUndefined()
+  })
+})
+
+describe('the plan toggle', () => {
+  it('asks for the other state, one command each way', () => {
+    // /plan only enters: the exit is a different command, so the surface names
+    // the state it wants rather than toggling a flag of its own.
+    expect(planToggleLine(false)).toBe('/plan')
+    expect(planToggleLine(true)).toBe('/plan off')
+  })
+
+  it('reads a waiting selection as the state the agent is about to be in', () => {
+    // Inside a turn the selection sits pending until the next pre-step; asking
+    // for the logged state again is a no-op the reader would read as a dead key.
+    expect(planSelectedActive({ active: false, pending: true }, false)).toBe(true)
+    expect(planSelectedActive({ active: true, pending: false }, true)).toBe(false)
+    expect(planSelectedActive({ active: true }, false)).toBe(true)
+    expect(planSelectedActive({ active: false }, true)).toBe(false)
+  })
+
+  it('falls back to the fold when the composition has no plan controller', () => {
+    expect(planSelectedActive(undefined, true)).toBe(true)
+    expect(planSelectedActive(undefined, false)).toBe(false)
   })
 })

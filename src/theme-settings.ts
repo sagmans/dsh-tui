@@ -3,7 +3,7 @@ import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-settings'
 import { defaultKeymap, keysFor, resolveKeymap, type KeyListValue, type Keymap } from './input/actions.ts'
 import { KeymapSectionSchema, isActionId } from './input/keymap-settings.ts'
-import { DEFAULT_PREFIX_KEY, DEFAULT_PREFIX_WINDOW_S } from './input/keymap.ts'
+import { DEFAULT_PREFIX_KEYS, DEFAULT_PREFIX_WINDOW_S } from './input/keymap.ts'
 import {
   DEFAULT_PALETTE,
   PALETTE_NAMES,
@@ -194,7 +194,7 @@ export function parseSettings(raw: unknown): TuiSettings {
     tokens: tokens as Readonly<Partial<Record<TuiToken, StyleSpec>>>,
     subcalls: parsed.subcalls,
     mermaid: parsed.mermaid,
-    prefix: keysFor(keymap, 'chord.prefix')[0]!,
+    prefixes: keysFor(keymap, 'chord.prefix'),
     prefixWindow: parsed.prefixWindow,
     keymap,
   }
@@ -212,8 +212,8 @@ export interface TuiSettings {
   readonly tokens: Readonly<Partial<Record<TuiToken, StyleSpec>>>
   readonly subcalls: SubCallDisplay
   readonly mermaid: MermaidMode
-  /** The key that starts a chord; a key the surface answers itself is refused at parse. */
-  readonly prefix: KeyId
+  /** The keys that start a chord; a key the surface answers itself is refused at parse. */
+  readonly prefixes: readonly KeyId[]
   /** How long an armed chord waits for its second key, in seconds; zero waits for the next key. */
   readonly prefixWindow: number
   /** Every action's keys, with the reader's overrides already merged over the shipped ones. */
@@ -227,7 +227,7 @@ export function defaultSettings(): TuiSettings {
     tokens: {},
     subcalls: 'inline',
     mermaid: DEFAULT_MERMAID_MODE,
-    prefix: DEFAULT_PREFIX_KEY,
+    prefixes: [...DEFAULT_PREFIX_KEYS],
     prefixWindow: DEFAULT_PREFIX_WINDOW_S,
     keymap: defaultKeymap(),
   }

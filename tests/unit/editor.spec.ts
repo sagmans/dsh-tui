@@ -259,6 +259,36 @@ describe('the prompt keys', () => {
     expect(instance.getText()).toBe('')
   })
 
+  it('sends on Ctrl+J once the reader moved the line break off it', () => {
+    // The library reads a bare line feed as a line break whatever the map says,
+    // so the bar has to hand it over as the chord the reader bound instead.
+    const map = resolveKeymap({ 'prompt.submit': ['ctrl+j'], 'prompt.newLine': ['enter', 'shift+enter'] })
+    installKeybindings(map)
+    const { instance, sent } = sender(map)
+    instance.setText('hello')
+    instance.handleInput('\n')
+    expect(sent).toEqual(['hello'])
+    expect(instance.getText()).toBe('')
+  })
+
+  it('sends on the legacy alt+enter when that is the only chord the reader sends with', () => {
+    const map = resolveKeymap({ 'prompt.submit': ['alt+enter'] })
+    installKeybindings(map)
+    const { instance, sent } = sender(map)
+    instance.setText('hello')
+    instance.handleInput('\u001b\r')
+    expect(sent).toEqual(['hello'])
+    expect(instance.getText()).toBe('')
+  })
+
+  it('keeps the bare line feed a line while the reader keeps it for the line', () => {
+    const { instance, sent } = sender()
+    instance.setText('first')
+    instance.handleInput('\n')
+    expect(instance.getText()).toBe('first\n')
+    expect(sent).toEqual([])
+  })
+
   it('breaks the line on the key the reader kept for it', () => {
     const map = resolveKeymap({ 'prompt.newLine': ['alt+n'], 'prompt.submit': ['ctrl+g'] })
     installKeybindings(map)

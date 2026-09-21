@@ -174,9 +174,23 @@ describe('resolveKeymap', () => {
     expect(() => resolveKeymap({ 'prompt.submit': ' ' })).toThrow(/prompt.submit/)
   })
 
+  it('reads a shifted character as typing rather than as a key of its own', () => {
+    // A terminal reports shift+C as a capital C, which is a character the reader
+    // types: a binding on it would swallow that character instead of answering.
+    expect(() => resolveKeymap({ 'surface.interrupt': 'shift+c' })).toThrow(/surface.interrupt/)
+    expect(() => resolveKeymap({ 'chord.prefix': 'shift+x' })).toThrow(/chord.prefix/)
+  })
+
   it('takes a bare character for the approval gate and the chord, which are theirs while armed', () => {
     expect(keysFor(resolveKeymap({ 'gate.allow': 'a' }), 'gate.allow')).toEqual(['a'])
     expect(keysFor(resolveKeymap({ 'chord.model': 'n' }), 'chord.model')).toEqual(['n'])
+  })
+
+  it('refuses a combination the library never matches, however it is named', () => {
+    // These parse cleanly but no terminal press can reach them, so accepting one
+    // would silently cost the reader the action.
+    expect(() => resolveKeymap({ 'surface.effort': 'ctrl+escape' })).toThrow(/never matches/)
+    expect(() => resolveKeymap({ 'surface.effort': 'ctrl+f1' })).toThrow(/never matches/)
   })
 
   it('refuses a key it cannot parse, naming the action', () => {
@@ -198,6 +212,34 @@ describe('resolveKeymap', () => {
     expect(() => resolveKeymap({ 'surface.effort': 'ctrl+o' })).toThrow(/surface.toolDetail/)
     expect(() => resolveKeymap({ 'gate.reject': 'y' })).toThrow(/gate.allow/)
     expect(() => resolveKeymap({ 'prompt.submit': ['ctrl+g'], 'prompt.newLine': ['ctrl+g'] })).toThrow(/prompt\.submit/)
+  })
+
+  it('refuses two actions one press reaches, however each of them spells it', () => {
+    // A terminal cannot tell ctrl+m from Return, nor ctrl+i from Tab, so a pair
+    // written with different spellings is still one press answering two actions.
+    expect(() => resolveKeymap({ 'gate.allow': 'enter', 'gate.reject': 'ctrl+m' })).toThrow(/gate\.(allow|reject)/)
+    expect(() => resolveKeymap({ 'prompt.submit': 'ctrl+m' })).toThrow(/prompt\.newLine/)
+    expect(() => resolveKeymap({ 'chord.prefix': 'ctrl+m' })).toThrow(/prompt\.newLine/)
+  })
+
+  it('takes every row at its own shipped key, whatever the rules say about that key', () => {
+    // A document that spells out the default changes nothing; refusing it would
+    // cost the reader the whole section over a line they did not need to write.
+    for (const entry of ACTION_CATALOG) {
+      if (entry.defaultKeys.length === 0) continue
+      expect(() => resolveKeymap({ [entry.id]: [...entry.defaultKeys] }), entry.id).not.toThrow()
+    }
+  })
+
+  it('refuses a key the library already reads, even a row the reader never wrote', () => {
+    // The matcher reads a shipped row and a moved one the same way, so accepting
+    // this would make ctrl+w delete the draft instead of sending it.
+    expect(() => resolveKeymap({ 'prompt.submit': 'ctrl+w' })).toThrow(/tui\.editor\.deleteWordBackward/)
+    expect(() => resolveKeymap({ 'tui.editor.cursorLineEnd': 'ctrl+u' })).toThrow(/deleteToLineStart/)
+  })
+
+  it('refuses a surface key the viewport reads before it, and names the winner', () => {
+    expect(() => resolveKeymap({ 'surface.toolDetail': 'pageUp' })).toThrow(/tui\.altScreen\.pageUp/)
   })
 
   it('lets two layers share a key, which is how the shipped map already works', () => {

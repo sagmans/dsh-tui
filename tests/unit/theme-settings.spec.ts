@@ -16,7 +16,7 @@ describe('the dsh-tui settings section', () => {
       tokens: {},
       subcalls: 'inline',
       mermaid: 'streaming',
-      prefix: 'ctrl+x',
+      prefixes: ['ctrl+x'],
       prefixWindow: 2,
       keymap: defaultKeymap(),
     })
@@ -42,13 +42,13 @@ describe('the dsh-tui settings section', () => {
   })
 
   it('starts a chord with ctrl+x and waits two seconds for its second key', () => {
-    expect(parseSettings({}).prefix).toBe('ctrl+x')
+    expect(parseSettings({}).prefixes).toEqual(['ctrl+x'])
     expect(parseSettings({}).prefixWindow).toBe(2)
   })
 
   it('takes another prefix key, and a window the reader chooses', () => {
-    expect(parseSettings({ prefix: 'alt+x' }).prefix).toBe('alt+x')
-    expect(parseSettings({ prefix: 'ctrl+shift+m' }).prefix).toBe('ctrl+shift+m')
+    expect(parseSettings({ prefix: 'alt+x' }).prefixes).toEqual(['alt+x'])
+    expect(parseSettings({ prefix: 'ctrl+shift+m' }).prefixes).toEqual(['ctrl+shift+m'])
     expect(parseSettings({ prefixWindow: 0 }).prefixWindow).toBe(0)
     expect(parseSettings({ prefixWindow: 5 }).prefixWindow).toBe(5)
   })
@@ -87,7 +87,7 @@ describe('the dsh-tui settings section', () => {
       tokens: {},
       subcalls: 'inline',
       mermaid: 'streaming',
-      prefix: 'ctrl+x',
+      prefixes: ['ctrl+x'],
       prefixWindow: 2,
       keymap: defaultKeymap(),
     })
@@ -130,8 +130,8 @@ describe('the keys section', () => {
   })
 
   it('takes the chord starter through the map, and keeps the old spelling working', () => {
-    expect(parseSettings({ keys: { 'chord.prefix': 'alt+z' } }).prefix).toBe('alt+z')
-    expect(parseSettings({ prefix: 'alt+z' }).prefix).toBe('alt+z')
+    expect(parseSettings({ keys: { 'chord.prefix': 'alt+z' } }).prefixes).toEqual(['alt+z'])
+    expect(parseSettings({ prefix: 'alt+z' }).prefixes).toEqual(['alt+z'])
     expect(keysFor(parseSettings({ prefix: 'alt+z' }).keymap, 'chord.prefix')).toEqual(['alt+z'])
   })
 
@@ -140,8 +140,12 @@ describe('the keys section', () => {
     // written even when the document never mentioned it. Only the field the
     // document wrote decides which spelling the section is using.
     const filled = TuiSettingsSchema({ keys: { 'chord.prefix': 'alt+z' } })
-    expect(parseSettings(filled).prefix).toBe('alt+z')
+    expect(parseSettings(filled).prefixes).toEqual(['alt+z'])
     expect(keysFor(parseSettings(filled).keymap, 'chord.prefix')).toEqual(['alt+z'])
+  })
+
+  it('takes a list of chord starters, one way in each', () => {
+    expect(parseSettings({ keys: { 'chord.prefix': ['ctrl+x', 'ctrl+g'] } }).prefixes).toEqual(['ctrl+x', 'ctrl+g'])
   })
 
   it('refuses both spellings of the chord starter at once', () => {
@@ -164,7 +168,7 @@ describe('the keys section', () => {
 
   it('falls back to the shipped map when the reader wrote one the surface refuses', () => {
     const settings = readScope({ get: () => ({ keys: { 'surface.nope': 'ctrl+g' } }) }, () => {})
-    expect(settings.prefix).toBe('ctrl+x')
+    expect(settings.prefixes).toEqual(['ctrl+x'])
     expect(keysFor(settings.keymap, 'prompt.submit')).toEqual(['ctrl+enter', 'alt+enter', 'ctrl+s'])
   })
 })

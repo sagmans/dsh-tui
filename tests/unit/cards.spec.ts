@@ -110,7 +110,9 @@ describe('cardDetailRows', () => {
     expect(texts(shown.lines).at(0)).toBe(`line ${25 - CARD_SHELL_PREVIEW}`)
     expect(texts(shown.lines).at(-1)).toBe('line 24')
     expect(shown.hidden).toBe(25 - CARD_SHELL_PREVIEW)
-    expect(shellFoldHint(shown.hidden)).toBe('… 5 earlier lines · ctrl+o shows more')
+    expect(shellFoldHint(shown.hidden, 'ctrl+o')).toBe('… 5 earlier lines · ctrl+o shows more')
+    // The key in the hint is the reader's, so a card opened by another key says so.
+    expect(shellFoldHint(shown.hidden, 'ctrl+t')).toBe('… 5 earlier lines · ctrl+t shows more')
   })
 
   it('names an opened shell card\'s dropped rows as the earlier ones', () => {
@@ -124,7 +126,7 @@ describe('cardDetailRows', () => {
     const shown = cardDetailRows(card(3, 'terminal'), { expanded: false, preview: 'shellTail' })
     expect(shown.lines).toHaveLength(3)
     expect(shown.hidden).toBe(0)
-    expect(shellFoldHint(shown.hidden)).toBeUndefined()
+    expect(shellFoldHint(shown.hidden, 'ctrl+o')).toBeUndefined()
   })
 
   it('shows every retained row while expanded', () => {

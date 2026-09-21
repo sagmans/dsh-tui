@@ -1,5 +1,6 @@
 import { type Component, visibleWidth, wrapTextWithAnsi } from '@earendil-works/pi-tui'
 import { cardDetailRows, shellFoldHint, shellRetentionHint, type CardPreview, type CardStat, type CardStatKind, type ToolCard } from '../cards.ts'
+import { defaultKeymap, hintKeys, type Keymap } from '../input/actions.ts'
 import { CUSTOM_ROW_NUMBER, type GateCard } from '../gates.ts'
 import { displayText } from '../text.ts'
 import type { TranscriptEntry, TranscriptModel } from '../transcript.ts'
@@ -27,8 +28,9 @@ const FALLBACK_ROW_TOKEN: TuiToken = 'tool.detail'
 const NO_CURSOR = ' '
 /** The words an opened card uses when retention, not the fold, dropped rows. */
 const CARD_HINT_RETAINED = 'more lines not shown'
-/** The key a folded reasoning row names, so a hidden thought stays reachable. */
-const REASONING_FOLD_HINT = 'shift+tab'
+/** What a hint names when the reader has unbound the key it would advertise. */
+const REASONING_FOLD_FALLBACK = 'shift+tab'
+const CARD_OPEN_FALLBACK = 'ctrl+o'
 /** What separates a card's header from its measured facts, and the facts from each other. */
 const STAT_LEAD = '  '
 const STAT_SEPARATOR = ' · '
@@ -89,6 +91,14 @@ export interface TranscriptViewOptions {
   readonly picker?: () => PickerCard | undefined
   /** Injectable so a test can see that a repaint reused the rows it had. */
   readonly rows?: RowCache<TranscriptEntry>
+  /**
+   * The keys in force, read live.
+   *
+   * A hint that names a key is a promise about what a press does, so it has to
+   * be drawn from the same table the press is matched against — including after
+   * a settings edit moved the key.
+   */
+  readonly keys?: () => Keymap
 }
 
 export class TranscriptView implements Component {
@@ -167,6 +177,15 @@ export class TranscriptView implements Component {
     })
   }
 
+  /** The live map, or the shipped one for a caller that did not lend one. */
+  private keymap(): Keymap {
+    return this.options.keys?.() ?? defaultKeymap()
+  }
+
+  private reasoningFoldHint(): string {
+    return hintKeys(this.keymap(), 'surface.reasoning') || REASONING_FOLD_FALLBACK
+  }
+
   private pushReasoning(lines: string[], entry: Extract<TranscriptEntry, { kind: 'reasoning' }>, width: number): void {
     if (!this.theme.visible('transcript.reasoning.summary')) return
     const glyph = this.theme.glyph('transcript.reasoning.summary')
@@ -176,7 +195,7 @@ export class TranscriptView implements Component {
     // rides the row rather than a line of its own, so naming the hidden body
     // costs no vertical space.
     const suffix = !this.viewState.expandReasoning && entry.body !== '' && this.theme.visible('transcript.reasoning.hint')
-      ? ` (${REASONING_FOLD_HINT})`
+      ? ` (${this.reasoningFoldHint()})`
       : ''
     // The key is kept whole: the summary is the part that gives up room.
     const room = Math.max(1, width - visibleWidth(suffix))
@@ -236,7 +255,9 @@ export class TranscriptView implements Component {
     // card is bounded by its preview window, an opened one by retention, so the
     // opened hint promises no more than memory kept.
     const hint = card.kind === 'terminal'
-      ? preview.expanded ? shellRetentionHint(hidden) : shellFoldHint(hidden)
+      ? preview.expanded
+        ? shellRetentionHint(hidden)
+        : shellFoldHint(hidden, hintKeys(this.keymap(), 'surface.toolDetail') || CARD_OPEN_FALLBACK)
       : preview.expanded ? `${hidden} ${CARD_HINT_RETAINED}` : undefined
     if (hint === undefined) return
     lines.push(this.theme.style('tool.hint', this.theme.cut(`${DETAIL_INDENT}${hint}`, width, '')))
