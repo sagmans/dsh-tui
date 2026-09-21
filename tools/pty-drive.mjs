@@ -130,7 +130,15 @@ const NAMED_KEYS = {
   // surface with a settings document: the chord has to arrive as the byte the
   // terminal sends for it, not as the name the map spells.
   'ctrl+g': '\u0007',
+  'ctrl+n': '\u000e',
   'alt+d': '\u001bd',
+  // A terminal that speaks the keyboard protocol reports alt+letter as a
+  // codepoint with a modifier rather than as an escape followed by the letter.
+  // Both spellings are listed, but neither reaches the surface through a pty
+  // driven this way — the shipped alt+d binding does not react to either — so
+  // no run here can prove an alt+letter binding; only the unit specs can.
+  'alt+d-kitty': '\u001b[100;3u',
+  'alt+z-kitty': '\u001b[122;3u',
   // The chord prefix has no printable byte: it arrives as the control the
   // terminal sends for the letter, which is what makes a two-key run drivable.
   'ctrl+x': '\u0018',
