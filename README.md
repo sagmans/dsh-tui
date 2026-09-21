@@ -245,21 +245,27 @@ never wiped by a stash finishing.
 
 The bank is one JSON file per directory under `$DSH_HOME/tui-stash`, written with
 owner-only permissions (`0700` directory, `0600` file) through a no-follow open,
-and every directory on the path, including the ones a link resolves to, must be
-owned by the reader (or by root) and not writable by anyone else — the sticky bit
-is the only exception, since it keeps renaming to an entry's owner. A directory
+and every directory the path passes through must be owned by the reader (or by
+root) and not writable by anyone else — the sticky bit is the only exception,
+since it keeps renaming to an entry's owner. Links are walked one hop at a time
+rather than resolved in one step, so a chain that jumps through a shared
+directory is refused at the directory it jumped through. A directory
 that another user or a group member could redirect the storage through is refused
 rather than trusted, which is also why a group-writable home directory fails the
 stash with the offending path named. Every update is a locked read-modify-write
 and an atomic temp-and-rename, so two surfaces in the same directory cannot lose
 each other's entries; reclaiming a lock whose owner is gone is serialized on a
-separate claim file, so two contenders cannot both decide the same lock is dead.
+separate claim file, and the removal only applies to the lock it judged, so a
+holder that released in between cannot have its successor's live lock deleted.
 
 A bank whose working directory is not this one, or whose bytes do not parse, is
 moved aside as `<name>.corrupt-<time>` and reported with its path — including when
 the directory holding the copy could not be synced. A bank written by a newer
 format, or one past the size cap, is refused in place rather than moved, because
-neither is corruption. Drafts are never written to a session log, and control and
+neither is corruption. A storage directory a save had to create is flushed
+through the directory that names it before the save reports anything, and taken
+away again if that flush fails, so a save that succeeds cannot leave a subtree a
+power loss is free to drop. Drafts are never written to a session log, and control and
 Unicode bidi controls are stripped when a draft is stored and again when it is
 read, so a hand-edited bank cannot park a terminal escape or a reordering trick in
 the bar.
