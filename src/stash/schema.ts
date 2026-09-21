@@ -18,6 +18,29 @@ const NUMERIC_SELECTOR_PATTERN = /^\d+$/u
 const INVALID_ENTRY_ID_MESSAGE = 'invalid stash entry id'
 const ENTRY_TOO_LARGE_MESSAGE = 'stashed draft is too large'
 
+/**
+ * Control characters a draft can never legitimately need: everything below the
+ * printable range except the tab and line feed that lay text out, plus DEL and
+ * the C1 block.
+ *
+ * A draft is written straight into a terminal, so a sequence that reached the
+ * bank through a hand-edited or hostile file would be executed as a command —
+ * clearing the screen, or replacing the reader's clipboard over OSC 52 — instead
+ * of appearing as the text they asked for. Stripping at the storage boundary
+ * covers every path a draft can take back to the screen.
+ *
+ * The bidi overrides are stripped with them: they draw nothing, so they cannot
+ * be seen and cannot be removed by hand, and what they reorder is what the reader
+ * is about to run. A terminal that shapes right-to-left text still has the
+ * letters themselves.
+ */
+const DISALLOWED_CONTROL_CHARACTERS =
+  /[\u0000-\u0008\u000B-\u001F\u007F-\u009F\u200E\u200F\u202A-\u202E\u2066-\u2069]/gu
+
+export function stripControlCharacters(text: string): string {
+  return text.replace(DISALLOWED_CONTROL_CHARACTERS, '')
+}
+
 export function isSafeEntryId(value: string): boolean {
   return value.length <= ENTRY_ID_MAX_LENGTH && ENTRY_ID_PATTERN.test(value)
 }
@@ -31,6 +54,11 @@ export function assertSafeStashText(text: string): void {
   if (Buffer.byteLength(text, 'utf8') > MAX_STASH_ENTRY_BYTES) throw new Error(ENTRY_TOO_LARGE_MESSAGE)
 }
 
+/** The form of a draft that is safe to hand back to a terminal. */
+export function sanitizeStashText(text: string): string {
+  return stripControlCharacters(text)
+}
+
 export interface StashEntry {
   readonly id: string
   readonly text: string
@@ -39,7 +67,14 @@ export interface StashEntry {
 
 export interface StashFile {
   readonly version: typeof STASH_SCHEMA_VERSION
-  /** The flattened cwd key this file belongs to, so a mis-keyed file is refused. */
+  /**
+   * The exact working directory this bank belongs to.
+   *
+   * The key alone cannot prove ownership: it is a flattened label that two
+   * directories could once have shared. The exact path is compared on every
+   * read, so a file that belongs to another directory is quarantined rather than
+   * read or deleted as this one's.
+   */
   readonly cwd: string
   readonly createdAt: number
   readonly updatedAt: number
@@ -69,15 +104,16 @@ export function normalizeEntry(raw: unknown): StashEntry | undefined {
   if (typeof id !== 'string' || !isSafeEntryId(id)) return undefined
   if (typeof text !== 'string') return undefined
   if (!isValidTimestamp(createdAt)) return undefined
-  return { id, text, createdAt }
+  return { id, text: sanitizeStashText(text), createdAt }
 }
 
 /**
  * Read one stash file, or nothing when it is not this surface's current format.
  *
- * Strict on purpose: a duplicate id, a missing timestamp, or a foreign cwd key
- * is corruption the store quarantines rather than a shape to repair, because a
- * silently repaired file can resurrect entries the reader thought they dropped.
+ * Strict on purpose: a duplicate id, a missing timestamp, or a foreign working
+ * directory is corruption the store quarantines rather than a shape to repair,
+ * because a silently repaired file can resurrect entries the reader thought they
+ * dropped — or hand another directory's drafts to this one.
  */
 export function parseStashFile(raw: unknown): StashFile | undefined {
   if (!isRecord(raw) || raw.version !== STASH_SCHEMA_VERSION) return undefined

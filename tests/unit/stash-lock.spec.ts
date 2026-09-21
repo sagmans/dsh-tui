@@ -109,6 +109,23 @@ describe('withStashMutationLock', () => {
     })
   })
 
+  it('keeps a committed mutation committed when the release fails too', async () => {
+    const file = scratchFile()
+    const failure = withStashMutationLock(file, async () => {
+      await stealLock(`${file}.lock`)
+      // The rename landed and only the directory sync failed, which is the
+      // committed-but-warned case a second failure must not downgrade: a caller
+      // that reads this as "nothing happened" retries a deletion that did.
+      throw new StashCommittedError('saved', { phase: 'directory-sync', error: new Error('fsync failed') })
+    })
+    await expect(failure).rejects.toBeInstanceOf(StashCommittedError)
+    await failure.catch((error: StashCommittedError) => {
+      expect(error.result).toBe('saved')
+      expect(error.failure.phase).toBe('directory-sync')
+      expect(error.releaseFailure?.phase).toBe('lock-release')
+    })
+  })
+
   it('keeps a refused mutation an ordinary failure', async () => {
     const file = scratchFile()
     const failure = withStashMutationLock(file, async () => {

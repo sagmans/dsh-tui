@@ -38,6 +38,7 @@ import {
   parseStashFile,
   type ResolvedEntry,
   resolveBySelector,
+  sanitizeStashText,
   STASH_SCHEMA_VERSION,
   type StashEntry,
   type StashFile,
@@ -52,6 +53,24 @@ export const MAX_STASH_FILE_BYTES = 16_777_216
 const DUPLICATE_STASH_ID_MESSAGE = 'duplicate stash id'
 const UNSUPPORTED_SCHEMA_GUIDANCE =
   'Upgrade dsh-tui before using this stash, or move the stash file aside for safe recovery.'
+const FILE_TOO_LARGE_MESSAGE = 'this directory has no room left for another draft; drop one first'
+
+/**
+ * A bank that cannot be written because it would no longer be readable.
+ *
+ * The cap is only useful if it is enforced before the write: a file that grows
+ * past it is refused by every later read, so letting one save through would turn
+ * a full bank into an unreadable one.
+ */
+export class StashFileTooLargeError extends Error {
+  readonly bytes: number
+
+  constructor(bytes: number) {
+    super(FILE_TOO_LARGE_MESSAGE)
+    this.name = 'StashFileTooLargeError'
+    this.bytes = bytes
+  }
+}
 
 export interface AddEntryInput {
   readonly text: string
@@ -63,8 +82,14 @@ export interface AddEntryInput {
 
 type LoadResult =
   | { kind: 'ready'; file: StashFile }
-  | { kind: 'corrupt'; quarantinedTo: string | undefined }
+  | { kind: 'corrupt'; quarantinedTo: string | undefined; quarantineSyncFailed: boolean }
   | { kind: 'unsupported'; version: number }
+
+/** Where a read moved an unreadable bank, and whether that move is durable. */
+export interface QuarantineRecord {
+  readonly path: string
+  readonly syncFailed: boolean
+}
 
 export interface StashWriteOutcome {
   readonly committed: true
@@ -91,7 +116,7 @@ export class UnsupportedStashSchemaError extends Error {
 
 export class StashStore {
   private file: StashFile
-  private corruptRecoveryPath: string | undefined
+  private corruptRecovery: QuarantineRecord | undefined
   private readonly filePath: string
   private readonly paths: StashPaths
   private readonly now: Clock
@@ -101,8 +126,11 @@ export class StashStore {
     this.paths = paths
     this.now = now
     this.write = write
-    this.file = loaded.kind === 'ready' ? loaded.file : createEmptyStashFile(paths.key, now())
-    this.corruptRecoveryPath = loaded.kind === 'corrupt' ? loaded.quarantinedTo : undefined
+    this.file = loaded.kind === 'ready' ? loaded.file : createEmptyStashFile(paths.cwd, now())
+    this.corruptRecovery =
+      loaded.kind === 'corrupt' && loaded.quarantinedTo !== undefined
+        ? { path: loaded.quarantinedTo, syncFailed: loaded.quarantineSyncFailed }
+        : undefined
     this.filePath = paths.file
   }
 
@@ -114,11 +142,11 @@ export class StashStore {
     return this.file.entries.length
   }
 
-  /** The one-shot path of a file quarantined by the last read, if any. */
-  takeQuarantinePath(): string | undefined {
-    const recoveryPath = this.corruptRecoveryPath
-    this.corruptRecoveryPath = undefined
-    return recoveryPath
+  /** The recovery location the last read produced, if any, reported once. */
+  takeQuarantine(): QuarantineRecord | undefined {
+    const recovery = this.corruptRecovery
+    this.corruptRecovery = undefined
+    return recovery
   }
 
   /** Resolve a selector against the entries currently held. */
@@ -134,10 +162,13 @@ export class StashStore {
     const id = input.id ?? createNewId()
     assertSafeEntryId(id)
     assertSafeStashText(input.text)
+    // A draft is stored in the form it is safe to draw again, so no path back to
+    // the screen has to remember to strip it.
+    const text = sanitizeStashText(input.text)
     return withStashMutationLock(this.filePath, async () => {
       await this.reloadFresh()
       if (this.file.entries.some(entry => entry.id === id)) throw new Error(DUPLICATE_STASH_ID_MESSAGE)
-      const entry: StashEntry = { id, text: input.text, createdAt: input.createdAt ?? this.now() }
+      const entry: StashEntry = { id, text, createdAt: input.createdAt ?? this.now() }
       const next: StashFile = {
         ...this.file,
         updatedAt: entry.createdAt,
@@ -171,13 +202,25 @@ export class StashStore {
     })
   }
 
-  /** Remove every entry, reporting how many were dropped. */
-  async clear(): Promise<number> {
+  /**
+   * Remove drafts, reporting how many were dropped.
+   *
+   * Ids restrict the removal to exactly what a reader confirmed. Clearing
+   * whatever is on disk instead would delete drafts another surface added while
+   * the confirmation was on screen, which is a loss nobody agreed to.
+   */
+  async clear(ids?: readonly string[]): Promise<number> {
     return withStashMutationLock(this.filePath, async () => {
       await this.reloadFresh()
-      const removed = this.file.entries.length
+      const confirmed = ids === undefined ? undefined : new Set(ids)
+      const kept = confirmed === undefined ? [] : this.file.entries.filter(entry => !confirmed.has(entry.id))
+      const removed = this.file.entries.length - kept.length
       if (removed === 0) return { didPersist: false, result: 0 }
-      const next = { ...createEmptyStashFile(this.paths.key, this.now()), updatedAt: this.now() }
+      const next: StashFile = {
+        ...createEmptyStashFile(this.paths.cwd, this.now()),
+        updatedAt: this.now(),
+        entries: kept,
+      }
       return this.persistMutation(next, removed)
     })
   }
@@ -204,7 +247,7 @@ export class StashStore {
   }
 
   private async reloadFresh(): Promise<void> {
-    const loaded = await readCurrentStashFile(this.filePath, this.paths.key, this.now())
+    const loaded = await readCurrentStashFile(this.filePath, this.paths.cwd, this.now())
     if (loaded.kind === 'ready') {
       this.file = loaded.file
       return
@@ -212,8 +255,11 @@ export class StashStore {
     if (loaded.kind === 'unsupported') throw new UnsupportedStashSchemaError(loaded.version)
     // Corrupt input is quarantined and replaced in memory, so later writes
     // cannot resurrect entries from the invalidated snapshot.
-    this.file = createEmptyStashFile(this.paths.key, this.now())
-    this.corruptRecoveryPath = loaded.quarantinedTo
+    this.file = createEmptyStashFile(this.paths.cwd, this.now())
+    this.corruptRecovery =
+      loaded.quarantinedTo === undefined
+        ? undefined
+        : { path: loaded.quarantinedTo, syncFailed: loaded.quarantineSyncFailed }
   }
 }
 
@@ -222,19 +268,19 @@ export async function loadStashStore(
   now: Clock = Date.now,
   write: StashWriter = writeStashFile,
 ): Promise<StashStore> {
-  const loaded = await withStashFileLock(paths.file, () => readCurrentStashFile(paths.file, paths.key, now()))
+  const loaded = await withStashFileLock(paths.file, () => readCurrentStashFile(paths.file, paths.cwd, now()))
   if (loaded.kind === 'unsupported') throw new UnsupportedStashSchemaError(loaded.version)
   return new StashStore(paths, loaded, now, write)
 }
 
-async function readCurrentStashFile(filePath: string, cwdKey: string, now: number): Promise<LoadResult> {
+async function readCurrentStashFile(filePath: string, cwd: string, now: number): Promise<LoadResult> {
   let source: PrivateTextFile
   try {
     source = await readPrivateTextFile(filePath, 'stash file', MAX_STASH_FILE_BYTES)
   } catch (error) {
     // A missing bank is an empty one; an oversized or unreadable bank is a real
     // failure the caller must report rather than silently start over from.
-    if (hasErrorCode(error, 'ENOENT')) return { kind: 'ready', file: createEmptyStashFile(cwdKey, now) }
+    if (hasErrorCode(error, 'ENOENT')) return { kind: 'ready', file: createEmptyStashFile(cwd, now) }
     throw error
   }
 
@@ -245,7 +291,7 @@ async function readCurrentStashFile(filePath: string, cwdKey: string, now: numbe
     return await quarantineCorrupt(filePath, source.identity)
   }
   const parsed = parseStashFile(raw)
-  if (parsed !== undefined && parsed.cwd === cwdKey) return { kind: 'ready', file: parsed }
+  if (parsed !== undefined && parsed.cwd === cwd) return { kind: 'ready', file: parsed }
   if (
     isRecord(raw) &&
     typeof raw.version === 'number' &&
@@ -261,8 +307,8 @@ async function quarantineCorrupt(
   filePath: string,
   identity: PrivateTextFile['identity'],
 ): Promise<LoadResult> {
-  const quarantinedTo = await quarantinePrivateFile(filePath, identity, `corrupt-${Date.now()}`)
-  return { kind: 'corrupt', quarantinedTo }
+  const quarantined = await quarantinePrivateFile(filePath, identity, `corrupt-${Date.now()}`)
+  return { kind: 'corrupt', quarantinedTo: quarantined.path, quarantineSyncFailed: quarantined.syncError !== undefined }
 }
 
 export async function writeStashFile(
@@ -273,6 +319,11 @@ export async function writeStashFile(
   await ensurePrivateDirectory(path.dirname(filePath))
   const tempPath = `${filePath}.${process.pid}.${Date.now()}.tmp`
   const data = `${JSON.stringify(file, null, 2)}\n`
+  // Every later read refuses a file past this cap, so a write that would cross
+  // it has to be refused here instead: the alternative is a bank that saves
+  // successfully, clears the editor, and can never be opened again.
+  const bytes = Buffer.byteLength(data)
+  if (bytes > MAX_STASH_FILE_BYTES) throw new StashFileTooLargeError(bytes)
   let tempCreated = false
   try {
     await writePrivateFileExclusive(tempPath, data)

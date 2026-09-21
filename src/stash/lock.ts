@@ -5,8 +5,13 @@
 // lock: none of them can lose another's entry to a read-modify-write race.
 // Ownership is recorded in the lock so a lock left by a crashed process is
 // reclaimed rather than wedging the bank forever.
+//
+// Reclaiming and releasing both *move* the lock out of its path with one atomic
+// rename before they judge or delete it. Deleting or emptying the path directly
+// would let a contender that paused mid-reclaim remove a lock another process
+// had just published, and two writers would then run at once.
 
-import { mkdir, rm } from 'node:fs/promises'
+import { mkdir, rename, rm } from 'node:fs/promises'
 import { hostname } from 'node:os'
 import path from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
@@ -26,7 +31,7 @@ const LOCK_RETRY_MS = 25
 const LOCK_TIMEOUT_MS = 2000
 const LOCK_STALE_MS = 30_000
 const LOCK_OWNER_FILE = 'owner.json'
-const LOCK_RECLAIM_SUFFIX = '.reclaim'
+const LOCK_TAKEOVER_SUFFIX = '.taken'
 const LOCK_CHANGED_MESSAGE = 'stash lock changed before release'
 
 /** Which step failed after a write already committed, so the loss is never implied. */
@@ -48,12 +53,20 @@ export class StashCommittedError<Result = unknown> extends Error {
   readonly committed = true
   readonly result: Result
   readonly failure: StashFailure
+  /** Set when the lock could not be released either, so both are reported. */
+  readonly releaseFailure: StashFailure | undefined
 
-  constructor(result: Result, failure: StashFailure) {
-    super(`stash mutation committed but ${failure.phase} failed`, { cause: failure.error })
+  constructor(result: Result, failure: StashFailure, releaseFailure?: StashFailure) {
+    super(
+      releaseFailure === undefined
+        ? `stash mutation committed but ${failure.phase} failed`
+        : `stash mutation committed but ${failure.phase} and ${releaseFailure.phase} failed`,
+      { cause: failure.error },
+    )
     this.name = 'StashCommittedError'
     this.result = result
     this.failure = failure
+    this.releaseFailure = releaseFailure
   }
 }
 
@@ -104,6 +117,16 @@ async function withStashLock<Result>(
     try {
       await releaseStashLock(lockDir, owner)
     } catch (releaseError) {
+      if (operationError instanceof StashCommittedError) {
+        // The mutation is on disk, and the caller has to keep hearing that: an
+        // AggregateError would read as a plain failure, and a retry of an
+        // index-based drop would then delete the draft that followed the one
+        // already removed. Both failed steps travel on the committed error.
+        throw new StashCommittedError(operationError.result, operationError.failure, {
+          phase: 'lock-release',
+          error: releaseError,
+        })
+      }
       throw new AggregateError([operationError, releaseError], 'stash operation and lock release both failed')
     }
     throw operationError
@@ -138,6 +161,13 @@ async function acquireStashLock(lockDir: string): Promise<LockOwner> {
         await assertPrivateDirectory(lockDir, 'stash lock')
         return await writeLockOwner(lockDir)
       } catch (error) {
+        // A contender that judged this lock abandoned can take it while it is
+        // still being published, so losing the directory here is a retry rather
+        // than a failure to hold a lock this process never finished taking.
+        if (hasErrorCode(error, 'ENOENT')) {
+          if (Date.now() >= deadline) throw lockTimeout(lockDir)
+          continue
+        }
         await rm(lockDir, { force: true, recursive: true })
         throw error
       }
@@ -150,10 +180,14 @@ async function acquireStashLock(lockDir: string): Promise<LockOwner> {
         throw validationError
       }
       if (await reclaimAbandonedLock(lockDir)) continue
-      if (Date.now() >= deadline) throw new Error(`timed out waiting for the stash lock at ${lockDir}`)
+      if (Date.now() >= deadline) throw lockTimeout(lockDir)
       await delay(LOCK_RETRY_MS)
     }
   }
+}
+
+function lockTimeout(lockDir: string): Error {
+  return new Error(`timed out waiting for the stash lock at ${lockDir}`)
 }
 
 async function writeLockOwner(lockDir: string): Promise<LockOwner> {
@@ -201,9 +235,50 @@ function isLockOwner(value: unknown): value is LockOwner {
 }
 
 async function releaseStashLock(lockDir: string, expected: LockOwner): Promise<void> {
-  const owner = await readLockOwner(lockDir)
-  if (owner?.token !== expected.token) throw new Error(LOCK_CHANGED_MESSAGE)
-  await rm(lockDir, { force: true, recursive: true })
+  const taken = await takeLockDirectory(lockDir)
+  if (taken === undefined) throw new Error(LOCK_CHANGED_MESSAGE)
+  const owner = await readLockOwner(taken)
+  if (owner?.token !== expected.token) {
+    await putBackLockDirectory(taken, lockDir)
+    throw new Error(LOCK_CHANGED_MESSAGE)
+  }
+  await removePrivateDirectory(taken, 'stash lock')
+}
+
+/**
+ * Move the lock out of its path, so only this caller can act on what it finds.
+ *
+ * One rename is atomic: two contenders cannot both take the same lock, and a
+ * lock published afterwards lands at the original path rather than under this
+ * name. Nothing is ever deleted through the path a fresh lock would occupy.
+ */
+async function takeLockDirectory(lockDir: string): Promise<string | undefined> {
+  const taken = `${lockDir}${LOCK_TAKEOVER_SUFFIX}.${createNewId()}`
+  try {
+    await rename(lockDir, taken)
+  } catch (error) {
+    if (hasErrorCode(error, 'ENOENT') || hasErrorCode(error, 'ENOTEMPTY') || hasErrorCode(error, 'EEXIST')) {
+      return undefined
+    }
+    throw error
+  }
+  return taken
+}
+
+/**
+ * Put a lock back that turned out to belong to someone else.
+ *
+ * A fresh lock at the original path means this one can never be restored, so the
+ * moved directory is dropped instead of littering; whoever held it will see a
+ * changed lock on release, which is a warning rather than a lost draft.
+ */
+async function putBackLockDirectory(taken: string, lockDir: string): Promise<void> {
+  try {
+    await rename(taken, lockDir)
+  } catch (error) {
+    if (hasErrorCode(error, 'ENOENT')) return
+    await rm(taken, { force: true, recursive: true }).catch(() => undefined)
+  }
 }
 
 /**
@@ -214,15 +289,14 @@ async function releaseStashLock(lockDir: string, expected: LockOwner): Promise<v
  * the same applies to a malformed owner. A foreign host is never provable, so
  * it stays held and the contender fails closed at the timeout.
  */
-async function isReclaimableLock(lockDir: string): Promise<boolean> {
+async function isReclaimableLock(lockDirectory: string, owner: LockOwner | undefined): Promise<boolean> {
   let stats: Awaited<ReturnType<typeof assertPrivateDirectory>>
   try {
-    stats = await assertPrivateDirectory(lockDir, 'stash lock')
+    stats = await assertPrivateDirectory(lockDirectory, 'stash lock')
   } catch (error) {
     if (hasErrorCode(error, 'ENOENT')) return false
     throw error
   }
-  const owner = await readLockOwner(lockDir)
   if (owner === undefined) return Date.now() - stats.mtimeMs > LOCK_STALE_MS
   if (owner.host !== hostname()) return false
   return !processIsAlive(owner.pid)
@@ -240,35 +314,24 @@ function processIsAlive(pid: number): boolean {
 }
 
 /**
- * Take a lock whose owner is gone, under a guard that stops two contenders from
- * deleting a freshly published lock at the same time.
+ * Take a lock whose owner is gone.
+ *
+ * A live lock is never even moved: the first look decides, and only a lock that
+ * already looks abandoned is taken out of its path. The look is then repeated on
+ * the directory that was actually moved, so a lock published in between is put
+ * straight back instead of being deleted — the removal always applies to the
+ * same directory the judgement did.
  */
 async function reclaimAbandonedLock(lockDir: string): Promise<boolean> {
-  const guardDir = `${lockDir}${LOCK_RECLAIM_SUFFIX}`
-  try {
-    await mkdir(guardDir, { mode: PRIVATE_DIR_MODE })
-  } catch (error) {
-    if (!hasErrorCode(error, 'EEXIST')) throw error
-    await clearStaleGuard(guardDir)
+  const observed = await readLockOwner(lockDir)
+  if (!(await isReclaimableLock(lockDir, observed))) return false
+  const taken = await takeLockDirectory(lockDir)
+  if (taken === undefined) return false
+  const movedOwner = await readLockOwner(taken)
+  if ((movedOwner?.token ?? undefined) !== (observed?.token ?? undefined)) {
+    await putBackLockDirectory(taken, lockDir)
     return false
   }
-  try {
-    await assertPrivateDirectory(guardDir, 'stash lock reclamation guard')
-    // Rechecking under the guard prevents deleting a lock published after the
-    // first look decided the old owner was gone.
-    if (!(await isReclaimableLock(lockDir))) return false
-    await removePrivateDirectory(lockDir, 'stash lock')
-    return true
-  } finally {
-    await rm(guardDir, { force: true, recursive: true })
-  }
-}
-
-async function clearStaleGuard(guardDir: string): Promise<void> {
-  try {
-    const stats = await assertPrivateDirectory(guardDir, 'stash lock reclamation guard')
-    if (Date.now() - stats.mtimeMs > LOCK_STALE_MS) await removePrivateDirectory(guardDir, 'stash lock reclamation guard')
-  } catch (error) {
-    if (!hasErrorCode(error, 'ENOENT')) throw error
-  }
+  await removePrivateDirectory(taken, 'stash lock')
+  return true
 }

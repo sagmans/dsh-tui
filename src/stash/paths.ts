@@ -3,10 +3,14 @@
 // A stash is scoped to the exact working directory: a linked worktree, a bare
 // checkout, and a plain folder are all just distinct cwd values, so keying on
 // cwd covers every case without any git discovery. The cwd is flattened into a
-// filename-safe key by escaping separators and joining segments with "--", which
-// stays human-readable in the agent directory while remaining injective. A deep
-// path that overflows a filename keeps a readable prefix plus a hash of the full
-// cwd, so two long paths never share a file.
+// filename-safe key that stays human-readable in the agent directory.
+//
+// Readability cannot be bought with injectivity: a separator made of hyphens
+// cannot be told apart from a hyphen inside a directory name, and truncating a
+// deep path can land on a name a shorter path already owns. Two working
+// directories sharing one bank would let one directory read or delete another's
+// drafts, so every key ends with a digest of the exact cwd. The readable part is
+// then only a label: two distinct cwds collide in the label, never in the file.
 
 import { createHash } from 'node:crypto'
 import { homedir } from 'node:os'
@@ -20,8 +24,8 @@ const STASH_DIR_NAME = 'tui-stash'
 
 // POSIX filenames may not contain "/" or NUL, and everything else is legal, so
 // once separators are flattened the result is filename-safe on the platforms
-// this surface targets. 200 keeps the on-disk name readable while staying well
-// under the common 255-byte filename limit.
+// this surface targets. 200 keeps the whole key, digest included, well under the
+// common 255-byte filename limit.
 const SANITIZE_MAX_LENGTH = 200
 const SEPARATOR = '--'
 const KEY_FORMAT_VERSION = 'v1'
@@ -32,10 +36,13 @@ const ESCAPED_SEPARATOR = '%2D%2D'
 const BACKSLASH = '\\'
 const ESCAPED_BACKSLASH = '%5C'
 const HASH_ALGORITHM = 'sha256'
+/** 64 bits of digest, which no deliberate name can be built to collide with. */
 const HASH_LENGTH = 16
 
 /** The stash file for one working directory. */
 export interface StashPaths {
+  /** The exact working directory this bank belongs to. */
+  readonly cwd: string
   /** Flattened cwd, used as the on-disk key. */
   readonly key: string
   /** JSON file holding this directory's stash entries. */
@@ -64,17 +71,11 @@ function truncateToUtf8Bytes(value: string, maxBytes: number): string {
 }
 
 export function sanitizeCwd(cwd: string): string {
-  const segments = cwd.split('/').filter(Boolean).map(escapeSegment)
-  const sanitized = `${KEY_PREFIX}${segments.join(SEPARATOR)}`
-  if (Buffer.byteLength(sanitized) <= SANITIZE_MAX_LENGTH) return sanitized
-
-  // An unusually deep cwd can overflow a filename. Keep the readable prefix and
-  // append a stable hash of the full cwd so two distinct long paths never
-  // collide while remaining identifiable.
+  const readable = cwd.split('/').filter(Boolean).map(escapeSegment).join(SEPARATOR)
   const digest = createHash(HASH_ALGORITHM).update(cwd, 'utf8').digest('hex').slice(0, HASH_LENGTH)
   const suffix = `${SEPARATOR}${digest}`
-  const prefix = truncateToUtf8Bytes(sanitized, SANITIZE_MAX_LENGTH - Buffer.byteLength(suffix))
-  return `${prefix}${suffix}`
+  const budget = SANITIZE_MAX_LENGTH - Buffer.byteLength(KEY_PREFIX) - Buffer.byteLength(suffix)
+  return `${KEY_PREFIX}${truncateToUtf8Bytes(readable, Math.max(budget, 0))}${suffix}`
 }
 
 /**
@@ -96,5 +97,5 @@ export function stashBaseDir(env: NodeJS.ProcessEnv = process.env, home: string 
 
 export function resolveStashPaths(cwd: string, baseDir: string = stashBaseDir()): StashPaths {
   const key = sanitizeCwd(cwd)
-  return { key, file: path.join(baseDir, `${key}.json`) }
+  return { cwd, key, file: path.join(baseDir, `${key}.json`) }
 }

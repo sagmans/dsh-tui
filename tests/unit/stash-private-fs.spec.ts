@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -33,6 +33,60 @@ describe('ensurePrivateDirectory', () => {
     await ensurePrivateDirectory(directory)
     expect(modeOf(directory)).toBe(0o700)
     await expect(assertPrivateDirectory(directory, 'stash directory')).resolves.toBeDefined()
+  })
+
+  /**
+   * The no-follow open protects the last component only, so an ancestor that
+   * another user can rewrite is enough to name a different directory by the same
+   * path. The check has to fail closed, because every later operation trusts the
+   * path it was given.
+   */
+  it('refuses to store under a directory other users can rewrite', async () => {
+    const open = join(scratch(), 'open')
+    mkdirSync(open, { recursive: true })
+    chmodSync(open, 0o777)
+    await expect(ensurePrivateDirectory(join(open, 'stash'), 'stash directory')).rejects.toThrow(
+      /writable by other users/,
+    )
+  })
+
+  it('accepts a sticky directory such as a shared temporary one', async () => {
+    const shared = join(scratch(), 'shared')
+    mkdirSync(shared, { recursive: true })
+    chmodSync(shared, 0o1777)
+    const directory = join(shared, 'stash')
+    await ensurePrivateDirectory(directory, 'stash directory')
+    expect(modeOf(directory)).toBe(0o700)
+  })
+
+  /**
+   * The check reads every prefix, and it has to read it as the filesystem would:
+   * a directory that only looks private because a link points somewhere open is
+   * a directory another user writes in.
+   */
+  it('rejects an ancestor whose link leads to a directory others can rewrite', async () => {
+    const open = join(scratch(), 'open')
+    mkdirSync(open, { recursive: true })
+    chmodSync(open, 0o777)
+    const link = join(scratch(), 'link')
+    symlinkSync(open, link)
+    await expect(ensurePrivateDirectory(join(link, 'stash'), 'stash directory')).rejects.toThrow(
+      /writable by other users/,
+    )
+  })
+
+  /**
+   * A directory that names a new child is the only record of it, so a first save
+   * that creates storage has to sync every directory it created through its
+   * parent; otherwise the drafts survive a crash and the storage does not.
+   */
+  it('syncs every directory it had to create, through that directory parent', async () => {
+    const root = scratch()
+    const synced: string[] = []
+    await ensurePrivateDirectory(join(root, 'nested', 'stash'), 'stash directory', async parent => {
+      synced.push(parent)
+    })
+    expect(synced).toEqual([join(root, 'nested'), root])
   })
 })
 
@@ -85,7 +139,7 @@ describe('quarantinePrivateFile', () => {
     const source = await readPrivateTextFile(path)
     const moved = await quarantinePrivateFile(path, source.identity, 'corrupt-1')
     expect(existsSync(path)).toBe(false)
-    expect(readFileSync(moved, 'utf8')).toBe('corrupt')
+    expect(readFileSync(moved.path, 'utf8')).toBe('corrupt')
   })
 
   it('steps aside when the first quarantine name is taken', async () => {
@@ -94,8 +148,32 @@ describe('quarantinePrivateFile', () => {
     writeFileSync(`${path}.corrupt-1`, 'earlier')
     const source = await readPrivateTextFile(path)
     const moved = await quarantinePrivateFile(path, source.identity, 'corrupt-1')
-    expect(moved).toBe(`${path}.corrupt-1-1`)
+    expect(moved.path).toBe(`${path}.corrupt-1-1`)
     expect(readFileSync(`${path}.corrupt-1`, 'utf8')).toBe('earlier')
+  })
+
+  /**
+   * The copy is already the only copy once the original is unlinked, so the
+   * caller still has to be told where it is: a failed sync must not turn a
+   * recoverable bank into a silent one.
+   */
+  it('names the recovery path even when its directory cannot be synced', async () => {
+    const path = join(scratch(), 'bank.json')
+    await writePrivateFileExclusive(path, 'corrupt')
+    const source = await readPrivateTextFile(path)
+    const moved = await quarantinePrivateFile(
+      path,
+      source.identity,
+      'corrupt-1',
+      async () => {
+        throw new Error('fsync failed')
+      },
+    )
+    expect(moved.path).toBe(`${path}.corrupt-1`)
+    expect(moved.syncError).toBeInstanceOf(Error)
+    expect(existsSync(moved.path)).toBe(true)
+    expect(readFileSync(moved.path, 'utf8')).toBe('corrupt')
+    expect(existsSync(path)).toBe(false)
   })
 })
 

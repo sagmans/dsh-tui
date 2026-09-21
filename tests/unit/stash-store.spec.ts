@@ -3,11 +3,13 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { resolveStashPaths } from '@/stash/paths.ts'
-import { STASH_SCHEMA_VERSION } from '@/stash/schema.ts'
+import { createEmptyStashFile, MAX_STASH_ENTRY_BYTES, STASH_SCHEMA_VERSION } from '@/stash/schema.ts'
 import { StashCommittedError } from '@/stash/lock.ts'
 import {
   loadStashStore,
+  StashFileTooLargeError,
   UnsupportedStashSchemaError,
+  writeStashFile,
   type StashWriter,
 } from '@/stash/store.ts'
 
@@ -47,7 +49,7 @@ describe('StashStore load', () => {
     const { baseDir, file } = scratch()
     seed(file, 'not json at all')
     const store = await loadStashStore(resolveStashPaths(CWD, baseDir), clock())
-    const quarantined = store.takeQuarantinePath()
+    const quarantined = store.takeQuarantine()?.path
     expect(quarantined).toBeDefined()
     expect(existsSync(quarantined as string)).toBe(true)
     expect(readFileSync(quarantined as string, 'utf8')).toBe('not json at all')
@@ -59,15 +61,15 @@ describe('StashStore load', () => {
     const { baseDir, file } = scratch()
     seed(
       file,
-      JSON.stringify({ version: STASH_SCHEMA_VERSION, cwd: 'v1--somewhere--else', createdAt: 1, updatedAt: 1, entries: [] }),
+      JSON.stringify({ version: STASH_SCHEMA_VERSION, cwd: '/somewhere/else', createdAt: 1, updatedAt: 1, entries: [] }),
     )
     const store = await loadStashStore(resolveStashPaths(CWD, baseDir), clock())
-    expect(store.takeQuarantinePath()).toBeDefined()
+    expect(store.takeQuarantine()).toBeDefined()
   })
 
   it('refuses a newer format without touching it', async () => {
     const { baseDir, file } = scratch()
-    seed(file, JSON.stringify({ version: STASH_SCHEMA_VERSION + 1, cwd: 'v1--work--me--app', entries: [] }))
+    seed(file, JSON.stringify({ version: STASH_SCHEMA_VERSION + 1, cwd: '/work/me/app', entries: [] }))
     await expect(loadStashStore(resolveStashPaths(CWD, baseDir), clock())).rejects.toBeInstanceOf(
       UnsupportedStashSchemaError,
     )
@@ -137,5 +139,123 @@ describe('StashStore mutations', () => {
     })
     // The entry is in the store's memory, because the write itself landed.
     expect(store.entryCount).toBe(1)
+  })
+
+  it('clears only the entries the reader confirmed', async () => {
+    const { baseDir } = scratch()
+    const paths = resolveStashPaths(CWD, baseDir)
+    const store = await loadStashStore(paths, clock())
+    await store.add({ id: 'a', text: 'one' })
+    await store.add({ id: 'b', text: 'two' })
+    const confirmed = store.entries.map(entry => entry.id)
+
+    // Another surface stashes while the confirmation is on screen. Its draft was
+    // never named by that confirmation, so clearing must not take it.
+    const other = await loadStashStore(paths, clock())
+    await other.add({ id: 'later', text: 'added while confirming' })
+
+    expect(await store.clear(confirmed)).toBe(2)
+    const reloaded = await loadStashStore(paths, clock())
+    expect(reloaded.entries.map(entry => entry.id)).toEqual(['later'])
+  })
+
+  it('strips terminal control characters on the way in and on the way out', async () => {
+    const { baseDir, file } = scratch()
+    const paths = resolveStashPaths(CWD, baseDir)
+    const store = await loadStashStore(paths, clock())
+    // OSC 52 replaces the clipboard, BEL ends it, and a bidi override reorders
+    // what follows without drawing anything a reader could notice.
+    await store.add({ id: 'a', text: 'before\u001b]52;c;aGFjaw==\u0007af\u202Eter' })
+    expect(store.entries[0]?.text).toBe('before]52;c;aGFjaw==after')
+    expect(readFileSync(paths.file, 'utf8')).not.toContain('\u001b')
+    expect(readFileSync(paths.file, 'utf8')).not.toContain('\u202E')
+
+    // A hand-edited bank is the other way a sequence can reach the terminal.
+    seed(
+      file,
+      JSON.stringify({
+        version: STASH_SCHEMA_VERSION,
+        cwd: CWD,
+        createdAt: 1,
+        updatedAt: 1,
+        entries: [{ id: 'hand', text: 'wipe\u001b[2Jthe\u202E screen', createdAt: 1 }],
+      }),
+    )
+    const loaded = await loadStashStore(paths, clock())
+    expect(loaded.entries[0]?.text).toBe('wipe[2Jthe screen')
+  })
+})
+
+describe('StashStore persistence', () => {
+  /**
+   * The read cap is only a guarantee if a write cannot cross it: a bank that
+   * saves successfully and then refuses to load would take the editor's draft
+   * with it and hand back nothing.
+   */
+  it('refuses a write that would land past the read cap, leaving the bank alone', async () => {
+    const { baseDir } = scratch()
+    const paths = resolveStashPaths(CWD, baseDir)
+    const seeded = { ...createEmptyStashFile(CWD, 1), entries: [{ id: 'kept', text: 'one', createdAt: 1 }] }
+    await writeStashFile(paths.file, seeded)
+    const before = readFileSync(paths.file, 'utf8')
+
+    const oversized = {
+      ...createEmptyStashFile(CWD, 1),
+      entries: Array.from({ length: 17 }, (_, index) => ({
+        id: `big-${index}`,
+        text: 'x'.repeat(MAX_STASH_ENTRY_BYTES),
+        createdAt: 1,
+      })),
+    }
+    await expect(writeStashFile(paths.file, oversized)).rejects.toBeInstanceOf(StashFileTooLargeError)
+    expect(readFileSync(paths.file, 'utf8')).toBe(before)
+    const reloaded = await loadStashStore(paths, clock())
+    expect(reloaded.entries.map(entry => entry.id)).toEqual(['kept'])
+  })
+
+  it('reopens the bytes a committed write left on disk after a sync failure', async () => {
+    const { baseDir } = scratch()
+    const paths = resolveStashPaths(CWD, baseDir)
+    // The real writer with only its last step failing: the rename has happened,
+    // so the entry must be readable again rather than merely remembered.
+    const failingSync: StashWriter = (filePath, file) =>
+      writeStashFile(filePath, file, async () => {
+        throw new Error('fsync failed')
+      })
+    const store = await loadStashStore(paths, clock(), failingSync)
+    const failure = store.add({ id: 'landed', text: 'one' })
+    await expect(failure).rejects.toBeInstanceOf(StashCommittedError)
+    await failure.catch((error: StashCommittedError) => {
+      expect(error.failure.phase).toBe('directory-sync')
+    })
+
+    const reloaded = await loadStashStore(paths, clock())
+    expect(reloaded.entries.map(entry => entry.text)).toEqual(['one'])
+  })
+
+  it('keeps the previous bytes when the write never reaches the rename', async () => {
+    const { baseDir } = scratch()
+    const paths = resolveStashPaths(CWD, baseDir)
+    const store = await loadStashStore(paths, clock())
+    await store.add({ id: 'kept', text: 'one' })
+    const before = readFileSync(paths.file, 'utf8')
+
+    const failing: StashWriter = async () => {
+      throw new Error('no space left on device')
+    }
+    const other = await loadStashStore(paths, clock(), failing)
+    await expect(other.add({ id: 'lost', text: 'two' })).rejects.toThrow(/no space left/)
+    expect(readFileSync(paths.file, 'utf8')).toBe(before)
+    expect((await loadStashStore(paths, clock())).entries.map(entry => entry.id)).toEqual(['kept'])
+  })
+
+  it('reads past a temp file a killed writer left behind', async () => {
+    const { baseDir } = scratch()
+    const paths = resolveStashPaths(CWD, baseDir)
+    const store = await loadStashStore(paths, clock())
+    await store.add({ id: 'kept', text: 'one' })
+    writeFileSync(`${paths.file}.999.1.tmp`, '{"half":', { mode: 0o600 })
+    const reloaded = await loadStashStore(paths, clock())
+    expect(reloaded.entries.map(entry => entry.id)).toEqual(['kept'])
   })
 })

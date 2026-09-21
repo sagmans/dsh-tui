@@ -7,7 +7,7 @@
 // shared machine or a network home.
 
 import { constants, type Stats } from 'node:fs'
-import { type FileHandle, link, lstat, mkdir, open, rm, unlink } from 'node:fs/promises'
+import { type FileHandle, link, lstat, mkdir, open, rm, stat, unlink } from 'node:fs/promises'
 import path from 'node:path'
 
 export const PRIVATE_DIR_MODE = 0o700
@@ -16,12 +16,24 @@ export const PRIVATE_FILE_MODE = 0o600
 const MAX_QUARANTINE_ATTEMPTS = 1000
 const NO_FOLLOW_FLAG = constants.O_NOFOLLOW ?? 0
 const DIRECTORY_FLAG = constants.O_DIRECTORY ?? 0
+const ROOT_UID = 0
+const WORLD_WRITABLE_MODE = 0o002
+const STICKY_MODE = 0o1000
+const UNTRUSTED_ANCESTOR_MESSAGE =
+  'is writable by other users, so a stash kept there could be redirected to another directory by anyone on this machine'
 
 type FileIdentity = Pick<Stats, 'dev' | 'ino'>
 
 export interface PrivateTextFile {
   readonly text: string
   readonly identity: FileIdentity
+}
+
+/** Where a quarantined file went, and whether that location reached the disk. */
+export interface QuarantineResult {
+  readonly path: string
+  /** Set when the directory naming the copy could not be synced. */
+  readonly syncError: unknown
 }
 
 /** A file that exceeded the caller's byte budget, which is a refusal, not corruption. */
@@ -32,11 +44,102 @@ export class FileTooLargeError extends Error {
   }
 }
 
-export async function ensurePrivateDirectory(directory: string, label = 'storage directory'): Promise<void> {
-  await mkdir(directory, { recursive: true, mode: PRIVATE_DIR_MODE })
+export async function ensurePrivateDirectory(
+  directory: string,
+  label = 'storage directory',
+  syncDirectory: typeof syncDirectoryHandle = syncDirectoryHandle,
+): Promise<void> {
+  await assertTrustedAncestors(directory, label)
+  const created = await createPrivateDirectory(directory)
   const handle = await openValidatedDirectory(directory, label)
   try {
     await handle.chmod(PRIVATE_DIR_MODE)
+    await handle.sync()
+  } finally {
+    await handle.close()
+  }
+  // A directory that names a new child holds the only record of that child, so
+  // each directory this call created is synced through its parent. Without this
+  // the drafts are durable but the storage that holds them is not, and a power
+  // loss can drop the whole subtree a successful save reported.
+  for (const parent of created) await syncDirectory(parent)
+}
+
+/** Create the directory chain, returning the directories that name something new. */
+async function createPrivateDirectory(directory: string): Promise<string[]> {
+  const missing: string[] = []
+  let current = path.resolve(directory)
+  for (;;) {
+    if (await pathExists(current)) break
+    missing.push(current)
+    const parent = path.dirname(current)
+    if (parent === current) break
+    current = parent
+  }
+  await mkdir(directory, { recursive: true, mode: PRIVATE_DIR_MODE })
+  // Deepest first, and only the directories that already existed: syncing a
+  // directory that was itself just created happens on the next step of the walk.
+  return missing.map(entry => path.dirname(entry))
+}
+
+/**
+ * Refuse a storage path that anyone but this user (or root) can rewrite.
+ *
+ * Opening the storage directory without following a link protects that one
+ * component, but an ancestor that another user can write is enough to rename the
+ * directory underneath it and hand every later open somewhere else. Ancestors
+ * are followed on purpose: a link like macOS's `/tmp` is not a threat, the
+ * permissions of the directory it resolves to are what count. A sticky
+ * world-writable directory such as `/tmp` is accepted, because its entries can
+ * only be replaced by their owner.
+ */
+async function assertTrustedAncestors(directory: string, label: string): Promise<void> {
+  const currentUid = process.getuid?.()
+  let current = path.resolve(directory)
+  for (;;) {
+    let stats: Stats
+    try {
+      stats = await stat(current)
+    } catch (error) {
+      // A directory that is not there yet is created by the caller; its
+      // ancestors still have to be checked, so a miss is not a failure here.
+      if (hasErrorCode(error, 'ENOENT')) {
+        const parent = path.dirname(current)
+        if (parent === current) return
+        current = parent
+        continue
+      }
+      throw error
+    }
+    if (currentUid !== undefined && stats.uid !== currentUid && stats.uid !== ROOT_UID) {
+      throw new Error(`${label} at ${current} is owned by another user`)
+    }
+    const mode = stats.mode
+    if ((mode & WORLD_WRITABLE_MODE) !== 0 && (mode & STICKY_MODE) === 0) {
+      throw new Error(`${label} at ${current} ${UNTRUSTED_ANCESTOR_MESSAGE}`)
+    }
+    const parent = path.dirname(current)
+    if (parent === current) return
+    current = parent
+  }
+}
+
+/**
+ * Flush one directory entry without asserting who owns the directory.
+ *
+ * An ancestor may legitimately be root-owned (`/tmp`, a mount point) and still
+ * have to be synced for the entry below it to survive a power loss, so the
+ * ownership rule that guards the storage directory itself is not applied here.
+ */
+async function syncDirectoryHandle(directory: string): Promise<void> {
+  let handle: FileHandle
+  try {
+    handle = await open(directory, constants.O_RDONLY | DIRECTORY_FLAG)
+  } catch (error) {
+    if (hasErrorCode(error, 'ENOENT')) return
+    throw error
+  }
+  try {
     await handle.sync()
   } finally {
     await handle.close()
@@ -119,7 +222,8 @@ export async function quarantinePrivateFile(
   filePath: string,
   identity: FileIdentity,
   label: string,
-): Promise<string> {
+  syncDirectory: typeof syncPrivateDirectory = syncPrivateDirectory,
+): Promise<QuarantineResult> {
   for (let attempt = 0; attempt < MAX_QUARANTINE_ATTEMPTS; attempt += 1) {
     const candidate = `${filePath}.${label}${attempt === 0 ? '' : `-${attempt}`}`
     try {
@@ -136,8 +240,16 @@ export async function quarantinePrivateFile(
       assertSameIdentity(sourceStats, identity, 'quarantine source')
       await unlink(filePath)
       moved = true
-      await syncPrivateDirectory(path.dirname(filePath))
-      return candidate
+      try {
+        await syncDirectory(path.dirname(filePath))
+      } catch (error) {
+        // The bytes are already under the recovery name and the original is
+        // gone, so the path is the one thing the reader must still be told.
+        // Throwing here would lose it and leave the next read starting empty
+        // with no notice at all.
+        return { path: candidate, syncError: error }
+      }
+      return { path: candidate, syncError: undefined }
     } finally {
       if (!moved) await unlink(candidate).catch(() => undefined)
     }
