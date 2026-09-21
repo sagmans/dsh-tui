@@ -74,6 +74,7 @@ const NUMBER_PATTERN = /[0-9]/
  * landing beside it would take a boundary bonus fzf never pays and outrank a
  * text fzf ranks higher.
  */
+const UNICODE_SPACE_PATTERN = /\p{White_Space}/u
 const UNICODE_LOWER_PATTERN = /\p{Ll}/u
 const UNICODE_UPPER_PATTERN = /\p{Lu}/u
 const UNICODE_NUMBER_PATTERN = /\p{N}/u
@@ -85,6 +86,7 @@ function classOf(character: string): number {
   if (NUMBER_PATTERN.test(character)) return NUMBER
   if (WHITE_CHARACTERS.includes(character)) return WHITE
   if (DELIMITER_CHARACTERS.includes(character)) return DELIMITER
+  if (UNICODE_SPACE_PATTERN.test(character)) return WHITE
   if (UNICODE_LOWER_PATTERN.test(character)) return LOWER
   if (UNICODE_UPPER_PATTERN.test(character)) return UPPER
   if (UNICODE_NUMBER_PATTERN.test(character)) return NUMBER

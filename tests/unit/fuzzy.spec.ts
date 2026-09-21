@@ -84,6 +84,14 @@ describe('fuzzyScore outside ASCII', () => {
     expect(fuzzyScore('i', 'İ')).toBeGreaterThan(0)
   })
 
+  it('reads a space outside ASCII as a space rather than a word break', () => {
+    // fzf scores ab the same after an em space as at the start of a text, and
+    // leaves a zero-width space a word break; both are pinned apart.
+    expect(fuzzyScore('ab', '\u2003ab')).toBe(62)
+    expect(fuzzyScore('ab', '\u200bab')).toBe(56)
+    expect(fuzzyScore('ab', 'x/ab')).toBe(59)
+  })
+
   it('reads a letter outside ASCII as a letter rather than a word break', () => {
     // fzf scores ab in éab as a plain run and ab in zAb across a hump, so the
     // hump wins; a word break at é would hand it a boundary bonus instead.
