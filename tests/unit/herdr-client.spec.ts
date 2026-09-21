@@ -34,6 +34,11 @@ afterEach(async () => {
  * framing, response matching, and the attempt budget are the parts that break in
  * production, and none of them survive being faked.
  */
+/** An answer that means the server went away, which a caller may retry. */
+const HANGUP = "hangup"
+/** How long a hangup waits, so a test can stop the transport mid-attempt. */
+const HANGUP_DELAY_MS = 30
+
 async function listen(answer: (request: Request) => unknown): Promise<FakeHerdr> {
   const dir = mkdtempSync(join(tmpdir(), 'dsh-tui-herdr-'))
   temporary = dir
@@ -46,6 +51,10 @@ async function listen(answer: (request: Request) => unknown): Promise<FakeHerdr>
       const request = JSON.parse(chunk.toString('utf8')) as Request
       requests.push(request)
       const response = answer(request)
+      if (response === HANGUP) {
+        setTimeout(() => socket.destroy(), HANGUP_DELAY_MS)
+        return
+      }
       if (response !== undefined) socket.end(`${JSON.stringify(response)}\n`)
     })
   })
@@ -252,18 +261,20 @@ describe('createHerdrClient', () => {
   })
 
   it('does not retry a report once the pane stops being an agent', async () => {
-    const herdr = await listen(() => undefined)
-    const client = createHerdrClient(env(herdr.path), { attempts: 4, timeoutMs: 80 })
+    const herdr = await listen(() => HANGUP)
+    const client = createHerdrClient(env(herdr.path), { attempts: 4, timeoutMs: 5_000 })
+    const started = Date.now()
 
     const report = client.reportState({ state: 'idle', message: undefined, seq: 1, sessionId: undefined })
     await new Promise(resolve => setTimeout(resolve, 5))
     client.stop()
 
-    // The attempts the report had left belong to a pane that is still an agent;
-    // spending them after the release would claim the row back.
+    // The first attempt fails on its own with three attempts and most of the
+    // budget left: what stops the retry is the pane no longer being an agent,
+    // because one that landed after the release would claim the row back.
     expect(await report).toBe(false)
-    await new Promise(resolve => setTimeout(resolve, 100))
     expect(herdr.requests.length).toBe(1)
+    expect(Date.now() - started).toBeLessThan(1_000)
   })
 
   it('settles at once when the transport owes nothing', async () => {

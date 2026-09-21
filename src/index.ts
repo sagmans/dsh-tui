@@ -511,24 +511,29 @@ export function apply(ctx: Context, config: unknown): void {
     if (exited) return
     exited = true
     clearInterval(statusTicker)
-    // The pane's agent row is given back while the process can still speak: a
-    // row left behind reads as a wait nobody can answer.
-    herdr.releaseSync()
-    // Hand the window label back before the screen does, so a shell that sets
-    // its own title can take over cleanly.
+    // The screen goes back at once, so leaving feels like leaving; the row goes
+    // back behind it. Reports already on the wire are settled first, because
+    // Herdr ignores the release of a pane nothing has claimed yet — the report
+    // that followed it would otherwise claim the row back during shutdown.
     terminal.write(CLEAR_TITLE)
     restore.restore()
-    // Everything below is written after the release: the alternate screen closes
-    // over whatever was painted on it, and a failure nobody can read is not a
-    // failure that was reported.
-    if (reason !== undefined) terminal.write(`\ndsh-tui: ${reason}\n`)
-    // The hint is computed here rather than read from the context because only
-    // the surface knows which session it is leaving: a fork or a switch moves it.
-    // A run that opened nothing has nothing to offer back: the identity it was
-    // launched with names no log, so pointing at it would send the reader to a
-    // conversation that does not exist.
-    if (sessionOpened) terminal.write(`\n${resumeHint(String(activeSession), PROFILE_NAME)}\n`)
-    appExit(code)
+    void herdr
+      .release()
+      // Nobody is left to report a release that failed on the way out, and a
+      // row that could not be cleared is not a reason to keep the process.
+      .catch(() => undefined)
+      .finally(() => {
+        // Everything below is written after the release: a failure nobody can
+        // read is not a failure that was reported.
+        if (reason !== undefined) terminal.write(`\ndsh-tui: ${reason}\n`)
+        // The hint is computed here rather than read from the context because
+        // only the surface knows which session it is leaving: a fork or a
+        // switch moves it. A run that opened nothing has nothing to offer back:
+        // the identity it was launched with names no log, so pointing at it
+        // would send the reader to a conversation that does not exist.
+        if (sessionOpened) terminal.write(`\n${resumeHint(String(activeSession), PROFILE_NAME)}\n`)
+        appExit(code)
+      })
   }
 
   const openGate = (next: PendingGate): void => {
