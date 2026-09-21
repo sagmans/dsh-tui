@@ -414,15 +414,15 @@ The list the dock and `/todo` draw follows the same lifetime every other surface
 |---|---|
 | the screen is taken, before any session opens | `idle`, claiming the pane's agent row |
 | `turn/start` | `working` |
-| an approval, a question, or a picker takes the keyboard | `blocked`, named by that card's title |
+| an approval, a question, or a picker takes the keyboard | `blocked`, with that card's title sent along |
 | the decision settles | `working` if a turn is open, otherwise `idle` |
 | `turn/end` | `idle` |
 | a session opens, resumes, forks, or is switched to | its id and reason, plus the `dsh_session` / `dsh_cwd` pane tokens |
 | exit, signal, or boot failure | `herdr pane release-agent`, so no row is left waiting on a process that is gone |
 
-A wait outranks a running turn: a turn waiting on a human is not making progress, and the wait is the only thing worth acting on from a wall of panes. Reports are sequenced per source, so a delivery that arrives late cannot undo the state the surface already moved past, and a state Herdr is already showing is not sent again.
+A wait outranks a running turn: a turn waiting on a human is not making progress, and the wait is the only thing worth acting on from a wall of panes. Reports are sequenced per source, so a delivery that arrives late cannot undo the state the surface already moved past, and a state Herdr is already showing is not sent again. The release carries the next number in that same sequence for the same reason: Herdr reads one that cannot beat the pane's last report as stale, and a stale release leaves the row waiting on a process that is gone.
 
-Herdr persists a session reference only for its own built-in integrations, so this pane's session identity travels as metadata tokens instead: a script or a companion plugin reads them back with `herdr pane get <id>` and resumes that exact conversation with `dsh --profile tui --resume=<id>`. What Herdr cannot do is identify the process itself — its detection table and its screen rules both name built-in agents only — so a pane that has not reported yet reads as an ordinary pane.
+Herdr persists a session reference only for its own built-in integrations, so this pane's session identity travels as metadata tokens instead: a script or a companion plugin reads them back with `herdr pane get <id>` and resumes that exact conversation with `dsh --profile tui --resume=<id>`. What Herdr cannot do is identify the process itself — its detection table and its screen rules both name built-in agents only — so a pane that has not reported yet reads as an ordinary pane, and is not yet a target: `herdr agent wait` on it fails with `agent_not_found` until the first report lands. Herdr 0.9.1 also keeps the title that accompanies a `blocked` state without showing it anywhere, so a reader sees the state and reads the card on screen.
 
 ## Development
 
