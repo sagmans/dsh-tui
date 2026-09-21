@@ -22,7 +22,7 @@ const CHORD_SUBMISSIONS: Readonly<Record<string, Submission>> = {
   'chord.model': { kind: 'model', argument: '' },
   'chord.plan': { kind: 'plan' },
   'chord.copy': { kind: 'copy' },
-  'chord.stash': { kind: 'stash', argument: '' },
+  'chord.stash': { kind: 'stash-draft' },
   'chord.stashes': { kind: 'stash-list' },
 }
 

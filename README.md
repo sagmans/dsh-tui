@@ -167,7 +167,7 @@ moves any of them — see [Keys](#keys).
 | `/history clear` | forget every recorded prompt, reporting how many went |
 | `/theme` | list every styled element and the value in force |
 | `/keys` | list every action and the keys in force; `/keys <layer>` narrows it (see [Keys](#keys)) |
-| `/stash [draft]` | park the current draft, or the text given after the command |
+| `/stash <draft>` | park the text given after the command (`ctrl+x` then `s` parks the editor) |
 | `/stash-pop [index\|id]` | put a stashed draft into the editor and remove it (newest by default) |
 | `/stash-apply [index\|id]` | put a stashed draft into the editor and keep it |
 | `/stash-list` | pick from this directory's stashed drafts; `enter` pops the marked one |
@@ -217,14 +217,15 @@ Any other `/command` goes to the command registry, so `/plan`, `/compact`, `/goa
 
 ## Prompt stash
 
-`/stash` parks the draft in the editor and clears it; `/stash <draft>` parks a
-draft typed on the command line. `/stash-pop` puts a parked draft back and
+`ctrl+x` then `s` parks the draft the editor is holding and clears it;
+`/stash <draft>` parks a draft typed on the command line. A bare `/stash` only
+says so, because submitting a command consumes the line it was typed on and there
+is nothing left of the draft to park. `/stash-pop` puts a parked draft back and
 removes it, so a prompt written for the wrong moment survives a restart instead
-of being retyped or sent. `s` starts a chord for the same stashing, and `l` opens
-the list. A stash belongs to the exact working directory, so the drafts parked in
-one checkout never appear in another; the footer shows `stash N` while any are
-waiting, ahead of the context and cache numbers so a row cut to width still says
-that work is parked.
+of being retyped or sent; `l` opens the list of them. A stash belongs to the exact
+working directory, so the drafts parked in one checkout never appear in another;
+the footer shows `stash N` while any are waiting, ranked above the context and
+cache numbers it shares a row with.
 
 A selector is the number the list shows in brackets — `0` is the newest — or the
 entry's own id; leaving it out takes the newest. `apply` and `pop` refuse to
@@ -238,24 +239,30 @@ terminal that is gone.
 Nothing is cleared until the write has landed. A refusal — no room left, a bank
 past its cap, another writer holding the lock — leaves the draft in the bar,
 including a draft typed after `/stash`, which is written back into the bar before
-the write is attempted.
+the write is attempted. The bar is only cleared while it still holds that same
+draft and no question has borrowed it, so an answer typed during the write is
+never wiped by a stash finishing.
 
 The bank is one JSON file per directory under `$DSH_HOME/tui-stash`, written with
 owner-only permissions (`0700` directory, `0600` file) through a no-follow open,
-and every directory on the path must be owned by the reader (or by root) and not
-writable by other users — a directory anyone could redirect the storage through is
-refused rather than trusted. Every update is a locked read-modify-write and an
-atomic temp-and-rename, so two surfaces in the same directory cannot lose each
-other's entries.
+and every directory on the path, including the ones a link resolves to, must be
+owned by the reader (or by root) and not writable by anyone else — the sticky bit
+is the only exception, since it keeps renaming to an entry's owner. A directory
+that another user or a group member could redirect the storage through is refused
+rather than trusted, which is also why a group-writable home directory fails the
+stash with the offending path named. Every update is a locked read-modify-write
+and an atomic temp-and-rename, so two surfaces in the same directory cannot lose
+each other's entries; reclaiming a lock whose owner is gone is serialized on a
+separate claim file, so two contenders cannot both decide the same lock is dead.
 
 A bank whose working directory is not this one, or whose bytes do not parse, is
 moved aside as `<name>.corrupt-<time>` and reported with its path — including when
 the directory holding the copy could not be synced. A bank written by a newer
 format, or one past the size cap, is refused in place rather than moved, because
 neither is corruption. Drafts are never written to a session log, and control and
-bidi characters are stripped when a draft is stored and again when it is read, so
-a hand-edited bank cannot park a terminal escape or a reordering trick in the
-bar.
+Unicode bidi controls are stripped when a draft is stored and again when it is
+read, so a hand-edited bank cannot park a terminal escape or a reordering trick in
+the bar.
 
 ## Settings
 
@@ -567,7 +574,7 @@ The workflow stores no npm token: the registry trusts `release.yml` on the `npm-
 - A card reads its tool's own render intent through the agent whose session is on screen, so a stored session with no live agent — one this process is not running, or a child that has already finished — folds to the generic card instead of the tool's own.
 - Reading a child's conversation does not move the terminal: commands, approvals, and the status line stay with the session you launched, and the transcript is the only thing that switches. The status line carries the way back, read from the map in force, so a remap shows up without reopening the view.
 - Delete is unimplemented: the session store exposes no delete, and the surface does not reach around that seam into its files. `/fork` covers the case that needs it — it branches into a new session and leaves the original alone.
-- The prompt stash holds text only. It does not read Pi's `pi-stash` data, does not migrate an older key format, and keeps no pasted images: a draft larger than 1 MiB, or a bank larger than 16 MiB, is refused rather than stored — the cap is checked against the bytes that would be written, before anything is written, so a refusal cannot leave a bank that saves and then refuses to load. A corrupt bank is quarantined and reported, never repaired in place; a bank from a newer format is refused where it lies, so an older build cannot swallow a newer build's drafts.
+- The prompt stash holds text only. It does not read Pi's `pi-stash` data, does not migrate an older key format, and keeps no pasted images: a draft larger than 1 MiB, or a bank larger than 16 MiB, is refused rather than stored — the cap is measured on the bytes the file will hold, escapes included, before anything is written, so a refusal cannot leave a bank that saves and then refuses to load. A corrupt bank is quarantined and reported, never repaired in place; a bank from a newer format is refused where it lies, so an older build cannot swallow a newer build's drafts.
 - Approvals and questions render inline and take the keyboard; a question batch is answered in order, and a question that lists options can always be answered with free text on row `0`.
 - Inside Herdr the pane reports its own state, and that report is the only thing that makes it an agent there: Herdr cannot start, resume, or prompt this surface, so launching and resuming stay with `dsh` itself (or a Herdr plugin that runs it).
 - Styling is per element and overridable; see [Settings](#settings). Shipped defaults are emitted as 24-bit colour where the terminal advertises it and degraded to 256 or 16 colours otherwise, so a light or dark terminal still follows its own palette where it has one.

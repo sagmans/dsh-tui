@@ -74,7 +74,9 @@ describe('the key tables', () => {
 
   it('asks for the stash, the model picker, the plan, and the copy through the command line submissions', () => {
     const bindings = chordBindings(defaultKeymap())
-    expect(bindings.find(entry => entry.key === 's')?.submission).toEqual({ kind: 'stash', argument: '' })
+    // The chord has its own kind because it parks the editor's own draft, which
+    // a submitted command cannot: the line it was typed on is gone by then.
+    expect(bindings.find(entry => entry.key === 's')?.submission).toEqual({ kind: 'stash-draft' })
     expect(bindings.find(entry => entry.key === 'l')?.submission).toEqual({ kind: 'stash-list' })
     expect(bindings.find(entry => entry.key === 'm')?.submission).toEqual({ kind: 'model', argument: '' })
     expect(bindings.find(entry => entry.key === 'p')?.submission).toEqual({ kind: 'plan' })

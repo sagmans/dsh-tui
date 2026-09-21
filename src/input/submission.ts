@@ -21,6 +21,8 @@ export type Submission =
   | { readonly kind: 'plan' }
   | { readonly kind: 'history'; readonly argument: string }
   | { readonly kind: 'stash'; readonly argument: string }
+  /** The chord: park whatever the editor is holding, which a typed command cannot do. */
+  | { readonly kind: 'stash-draft' }
   | { readonly kind: 'stash-pop'; readonly selector: string }
   | { readonly kind: 'stash-apply'; readonly selector: string }
   | { readonly kind: 'stash-list' }
@@ -54,7 +56,7 @@ export const LOCAL_COMMAND_DESCRIPTIONS: Readonly<Record<string, string>> = {
   '/export': 'write the visible transcript to a markdown file',
   '/clear': 'clear the visible transcript',
   '/resume': 'open another stored session',
-  '/stash': 'stash the current draft; /stash <draft> stores the text instead',
+  '/stash': 'store the draft typed after it; ctrl+x then s parks the editor',
   '/stash-pop': 'put a stashed draft (newest by default) into the editor and remove it',
   '/stash-apply': 'put a stashed draft (newest by default) into the editor and keep it',
   '/stash-list': 'open the stashes for this directory; enter pops one',

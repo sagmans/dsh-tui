@@ -1784,9 +1784,14 @@ export function apply(ctx: Context, config: unknown): void {
         runHistoryCommand(submission.argument)
         return
       case 'stash':
-        // A typed argument is parked through the editor, so the draft is still
-        // there to retry when the write is refused.
-        void stash?.stashEditor(submission.argument)
+        // Submitting a command consumes the line it was typed on, so this path
+        // can only carry a draft it was given; parking the bar's own draft is
+        // what the chord is for.
+        if (submission.argument.trim() === '') model.notice('usage: /stash <draft>, or ctrl+x then s to park the editor')
+        else void stash?.stashEditor(submission.argument)
+        return
+      case 'stash-draft':
+        void stash?.stashEditor()
         return
       case 'stash-pop':
         void stash?.pop(submission.selector)
