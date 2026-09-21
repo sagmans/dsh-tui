@@ -35,7 +35,7 @@ const ENTRY_TOO_LARGE_MESSAGE = 'stashed draft is too large'
  * letters themselves.
  */
 const DISALLOWED_CONTROL_CHARACTERS =
-  /[\u0000-\u0008\u000B-\u001F\u007F-\u009F\u200E\u200F\u202A-\u202E\u2066-\u2069]/gu
+  /[\u0000-\u0008\u000B-\u001F\u007F-\u009F\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/gu
 
 export function stripControlCharacters(text: string): string {
   return text.replace(DISALLOWED_CONTROL_CHARACTERS, '')
