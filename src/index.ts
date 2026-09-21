@@ -824,6 +824,9 @@ export function apply(ctx: Context, config: unknown): void {
         editor.setText(text)
         tui.requestRender()
       },
+      // A question answers in this editor, so a draft written into a borrowed bar
+      // would become somebody's answer instead of a parked prompt.
+      editorIsAvailable: () => !promptBar.isBorrowed(),
       notice: message => model.notice(message),
       pick: (entries, label) => openPicker(new StashPicker(entries, label, () => keymap)),
       confirm: async count => confirmedClear(await openPicker(new StashConfirmPicker(count, () => keymap))),
@@ -1781,10 +1784,9 @@ export function apply(ctx: Context, config: unknown): void {
         runHistoryCommand(submission.argument)
         return
       case 'stash':
-        // A bare /stash parks the draft on screen; an argument parks itself, so
-        // the two paths never disagree about what the editor holds.
-        if (submission.argument.trim() === '') void stash?.stashEditor()
-        else void stash?.stashText(submission.argument)
+        // A typed argument is parked through the editor, so the draft is still
+        // there to retry when the write is refused.
+        void stash?.stashEditor(submission.argument)
         return
       case 'stash-pop':
         void stash?.pop(submission.selector)

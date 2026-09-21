@@ -29,6 +29,11 @@ export class PromptBar implements Component {
     return build()
   }
 
+  /** Whether the editor is collecting an answer rather than a prompt. */
+  isBorrowed(): boolean {
+    return this.borrowed
+  }
+
   /** Give the editor back, with the prompt that was in it. */
   giveBack(): void {
     if (!this.borrowed) return
