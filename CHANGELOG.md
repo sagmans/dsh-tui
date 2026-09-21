@@ -8,6 +8,21 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+### Changed
+
+- Ctrl+C no longer leaves. It takes back one thing per press — the draft in the
+  bar, the prompts waiting in the agent's inbox (put back into the bar before the
+  turn is stopped, because an interrupt drops them), the running turn, or a
+  child's conversation — and with a picker, an approval, a question, or the
+  transcript search open it closes that first. A press with nothing left to
+  cancel does nothing rather than ending the session. Ctrl+D is the only key
+  that leaves, and only while the bar holds no text: a running turn is cancelled
+  on the way out, the resume command prints, and the terminal is restored as
+  before. `/quit` and `/exit` still leave.
+- A question gate gained an abandon key: Ctrl+C settles the batch with no
+  answers, the shape an aborted call already produces, while Esc keeps skipping
+  one question. An approval now cancels on Ctrl+C as well as Esc.
+
 ### Added
 
 - The bar's draft opens in the reader's own editor: `ctrl+x` then `e` hands the

@@ -125,7 +125,8 @@ moves any of them — see [Keys](#keys).
 |---|---|
 | Enter / Shift+Enter | break the line: a prompt is written before it is sent |
 | Ctrl+Enter / Alt+Enter / Ctrl+S | submit the prompt |
-| Ctrl+C | interrupt the running turn, or leave when idle |
+| Ctrl+C | take back one thing at a time: the draft in the bar, the prompts waiting in the agent's inbox, the running turn, or a child's conversation; with a picker, an approval, a question, or the transcript search open it closes that instead. With nothing left to cancel it does nothing — it never leaves |
+| Ctrl+D | leave and print the resume command, when the bar holds no text and nothing is open; a running turn is cancelled first |
 | Ctrl+O | open every tool card: its header plus every retained row. Folded, a card is one line, and a shell card keeps its command plus the last 20 rows of output with a hint naming what it dropped |
 | Ctrl+Y | show or hide the calls a PTC program dispatched: one two-space-indented entry per call under its `run_code` card, named and argued from the tool's own header and wrapped at the screen edge; shown by default |
 | Shift+Tab | expand or fold the reasoning behind an answer: folded, the row names itself, its token count, and the key; opened, it adds the thought, laid out as markdown |
@@ -136,12 +137,12 @@ moves any of them — see [Keys](#keys).
 | Ctrl+X then M | open the model picker |
 | Ctrl+X then Y | copy the last answer to the clipboard |
 | Ctrl+X then E | edit the draft in `$VISUAL` (or `$EDITOR`) and take back what it saves |
-| `y` / `n` / Esc | allow once, reject, or cancel a pending approval |
-| digits / space / ↑↓ / Enter / Esc | answer a question: pick or toggle, confirm, or skip one; `0` answers with your own text in the input bar |
+| `y` / `n` / Esc / Ctrl+C | allow once, reject, or cancel a pending approval |
+| digits / space / ↑↓ / Enter / Esc / Ctrl+C | answer a question: pick or toggle, confirm, or skip one with Esc; Ctrl+C abandons the whole batch with no answers, like an aborted call; `0` answers with your own text in the input bar |
 | typing in any picker or question | narrow the rows by fragment (`glm53` finds `GLM-5.3`); backspace widens, `esc` or Ctrl+C leaves |
 | `/` then Tab | complete commands, including every command this session registered |
 | `@` | open the workspace file menu, narrowed as you type; a path then Tab still completes a file reference |
-| `ctrl+shift+f` | search the transcript (`enter` next, `shift+enter` previous, `esc` close) |
+| `ctrl+shift+f` | search the transcript (`enter` next, `shift+enter` previous, `esc` or Ctrl+C close) |
 | `home` / `end` | jump to the start or the end of the transcript |
 | `ctrl+down` | jump to the next prompt |
 | `ctrl+b` | leave a child's conversation and return to this session (the status line names the key you have now) |
@@ -202,7 +203,7 @@ from the dock.
 
 An approval or a question draws inline above the editor and takes the keyboard. A question that lists options always adds row `0. other — type your own answer`: type or paste an answer the model did not offer, and the seam receives it as that question's free text — replacing a single-select choice, or supplementing a multi-select one. `0`, or `↓` past the last option, reaches the row; `↑` walks back to the list with the text kept, and `esc` does the same from that row, because a question skipped by accident is a question answered twice — an escape from the list skips it. Free text is written in the prompt bar's own editor, drawn under that row: movement, word and line deletion, undo, completion, and multi-line paste are all the editor the reader already uses, and the prompt bar steps aside while a question is open, so a prompt written but not sent comes back untouched once the question is answered. No question hides its answer — the reader is the one who has to check what they are about to send. Every gate row wraps at the screen edge under its own label, so a long option or question is readable rather than cut.
 
-While a turn runs, a prompt submitted into the editor waits in the agent's own inbox instead of disappearing: it is drawn above the editor in the input bar's own frame, faint and italic, and moves into the transcript when the agent takes it — where it keeps that frame in the prompt's own mint shade, so what the reader typed is never mistaken for what the agent said. Its markdown lays out inside that frame, so a list or a fence reads in the same box it was typed into. `editor.queued` and `editor.queued.more` restyle or hide the waiting rows; `transcript.user` restyles the submitted prompt.
+While a turn runs, a prompt submitted into the editor waits in the agent's own inbox instead of disappearing: it is drawn above the editor in the input bar's own frame, faint and italic, and moves into the transcript when the agent takes it — where it keeps that frame in the prompt's own mint shade, so what the reader typed is never mistaken for what the agent said. Its markdown lays out inside that frame, so a list or a fence reads in the same box it was typed into. `editor.queued` and `editor.queued.more` restyle or hide the waiting rows; `transcript.user` restyles the submitted prompt. `ctrl+c` takes them back: an interrupt drops whatever the agent has not started, so the waiting prompts are read first and put into the bar before the turn is stopped.
 
 Every submitted line is also kept in a global prompt history at
 `$DSH_HOME/prompt-history.json`. Typing the start of a prompt that was sent
@@ -423,9 +424,11 @@ control byte carries both `ctrl+-` and `ctrl+_`, and an escape with a letter
 reaches `alt+up` as readily as `alt+p`.
 
 A key the surface or a chord answers is a key the library never sees: that is
-how `ctrl+y` shows nested calls instead of yanking a line in the editor.
-`/keys` names every shadow your map introduces, and moving the surface key
-hands the library its own key back.
+how `ctrl+y` shows nested calls instead of yanking a line in the editor, how
+`ctrl+c` closes the transcript search the library owns, and how `ctrl+d` leaves
+rather than deleting forward while the bar holds nothing. `/keys` names every
+shadow your map introduces, and moving the surface key hands the library its own
+key back.
 
 Left alone, because they are typing rather than commands: the keys a question's
 filter narrows with and the ones that leave its free-text row, the digits and
@@ -594,7 +597,7 @@ The automated checks drive a real PTY, but they run on this machine's terminal. 
 | hand-edit `$DSH_HOME/tui-stash/<key>.json` into invalid JSON, then `/stash-list` | the surface reports the quarantine path, starts empty, and leaves the moved file readable |
 | `ctrl+x` then `e` with `$VISUAL` set to your editor | the alternate screen gives way to that editor with the draft in it; saving returns to the same frame with what was saved in the bar, and nothing is submitted |
 | the same with `$VISUAL` and `$EDITOR` unset | the draft stays in the bar, and a notice names the variables to set |
-| `/quit`, Ctrl+C while idle, `kill -TERM <pid>` | the shell returns with cursor, echo, mouse, and title restored |
+| `/quit`, Ctrl+D with an empty bar, `kill -TERM <pid>` | the shell returns with cursor, echo, mouse, and title restored |
 
 ## Releasing
 
