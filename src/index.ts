@@ -41,12 +41,12 @@ import {
   ChordReader,
   DEFAULT_PREFIX_KEY,
   DEFAULT_PREFIX_WINDOW_S,
-  SURFACE_KEYS,
+  chordBindings,
   chordKeysLine,
-  installEditorKeybindings,
+  installKeybindings,
   surfaceKeysLine,
-  type SurfaceKeyId,
 } from './input/keymap.ts'
+import { defaultKeymap, surfaceBindings, type Keymap, type SurfaceActionId } from './input/actions.ts'
 import { resolveConfig } from './config.ts'
 import { FoldCursor } from './fold-cursor.ts'
 import { createRestoreRegistry } from './terminal/restore.ts'
@@ -221,6 +221,8 @@ export function apply(ctx: Context, config: unknown): void {
   /** The key that starts a chord, and how long it waits; the settings document owns both. */
   let prefixKey = DEFAULT_PREFIX_KEY
   let prefixWindowMs = DEFAULT_PREFIX_WINDOW_S * MS_PER_SECOND
+  /** Every action's keys in force; the settings document owns it and a press reads it live. */
+  let keymap: Keymap = defaultKeymap()
   /**
    * The chord between a prefix and the action that follows it.
    *
@@ -229,7 +231,7 @@ export function apply(ctx: Context, config: unknown): void {
    * The repaint the window also wants is late-bound: only a key press reaches
    * it, and no key can arrive before the surface has started.
    */
-  const keyChord = new ChordReader(() => prefixKey, () => prefixWindowMs, () => tui.requestRender())
+  const keyChord = new ChordReader(() => prefixKey, () => chordBindings(keymap), () => prefixWindowMs, () => tui.requestRender())
   /**
    * Seed the display the reader configured.
    *
@@ -242,6 +244,10 @@ export function apply(ctx: Context, config: unknown): void {
     mermaidMode = section.mermaid
     prefixKey = section.prefix
     prefixWindowMs = section.prefixWindow * MS_PER_SECOND
+    keymap = section.keymap
+    // Installed where the library reads it, so a remap lands on the next press
+    // rather than at the next restart.
+    installKeybindings(keymap)
     // A chord armed under the keymap the reader just replaced is not their chord.
     keyChord.disarm()
   }
@@ -352,9 +358,10 @@ export function apply(ctx: Context, config: unknown): void {
     picker: () => pendingPicker?.picker.card(),
   })
   // The key map goes in before the bar exists, so no press can be read as the
-  // send the library submits on by default.
-  installEditorKeybindings()
-  const editor = new GateInputBar(tui, theme.editor)
+  // send the library submits on by default. A settings document read after this
+  // point installs over it, which is why the bar reads the map per press.
+  installKeybindings(keymap)
+  const editor = new GateInputBar(tui, theme.editor, () => keymap)
   // Answers are written in the reader's own editor, which is why a question
   // borrows the bar instead of drawing a second one beside it.
   const promptBar = new PromptBar(editor)
@@ -470,7 +477,7 @@ export function apply(ctx: Context, config: unknown): void {
    * Keyed by the table's own ids, so a key added to {@link SURFACE_KEYS}
    * without a handler here fails to compile rather than doing nothing.
    */
-  const surfaceActions: Readonly<Record<SurfaceKeyId, () => boolean>> = {
+  const surfaceActions: Readonly<Record<SurfaceActionId, () => boolean>> = {
     toolDetail: () => {
       viewState.expandCards = !viewState.expandCards
       tui.requestRender()
@@ -585,9 +592,9 @@ export function apply(ctx: Context, config: unknown): void {
       tui.requestRender()
       return { consume: true }
     }
-    for (const entry of SURFACE_KEYS) {
-      if (!matchesKey(data, entry.key)) continue
-      return surfaceActions[entry.id]() ? { consume: true } : undefined
+    for (const binding of surfaceBindings(keymap)) {
+      if (!matchesKey(data, binding.key)) continue
+      return surfaceActions[binding.action]() ? { consume: true } : undefined
     }
     return undefined
   }))
@@ -1443,7 +1450,7 @@ export function apply(ctx: Context, config: unknown): void {
       ? []
       : registry()?.list(current).map(command => `/${command.name}`) ?? []
     const commands = registered.length === 0 ? 'none registered yet' : registered.join(' ')
-    return `commands: ${commands} · surface: ${LOCAL_COMMANDS.join(' ')} · keys: ${surfaceKeysLine()} · ${chordKeysLine(prefixKey)}`
+    return `commands: ${commands} · surface: ${LOCAL_COMMANDS.join(' ')} · keys: ${surfaceKeysLine(keymap)} · ${chordKeysLine(keymap)}`
   }
 
   const runCommand = (name: string, line: string): void => {

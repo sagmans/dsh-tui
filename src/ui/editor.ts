@@ -8,6 +8,8 @@ import {
   type TuiMouseEvent,
   type TuiMouseEventResult,
 } from '@earendil-works/pi-tui'
+import { ENTER_KEY, defaultKeymap, type Keymap } from '../input/actions.ts'
+import { promptKeys } from '../input/keymap.ts'
 import { FRAME_COLUMNS, FRAME_GLYPHS, MIN_BOX_WIDTH, PADDING_X } from './frame.ts'
 
 /**
@@ -60,31 +62,34 @@ export class BoxedEditor extends Editor {
   /** Whether the last render drew a frame, which is what a click is mapped through. */
   private boxed = false
 
-  constructor(tui: TUI, theme: EditorTheme) {
+  constructor(tui: TUI, theme: EditorTheme, private readonly keymap: () => Keymap = defaultKeymap) {
     super(tui, theme, { paddingX: PADDING_X })
   }
 
   /**
    * Read the two presses the base class cannot place on its own.
    *
-   * Enter breaks the line here, so the press the base would submit with becomes
-   * a newline — except while it is picking a completion, the one press that
-   * chooses something instead of sending it, and except on a bar a question or
-   * a picker has borrowed, whose keys belong to whoever borrowed it.
+   * Enter breaks the line while the reader keeps that key for the line, so the
+   * press the base would submit with becomes a newline — except while it is
+   * picking a completion, the one press that chooses something instead of
+   * sending it, and except on a bar a question or a picker has borrowed, whose
+   * keys belong to whoever borrowed it.
    */
   override handleInput(data: string): void {
     if (this.disableSubmit) {
       super.handleInput(data)
       return
     }
-    if (matchesKey(data, 'enter') && !this.isShowingAutocomplete()) {
+    const keys = promptKeys(this.keymap())
+    if (keys.enterBreaksLine && matchesKey(data, ENTER_KEY) && !this.isShowingAutocomplete()) {
       super.handleInput(NEWLINE_BYTE)
       return
     }
     // Only while the terminal cannot tell alt+enter apart from a mapping: with
     // the protocol active the same sequence is the reader's shift+enter, which
-    // is a newline and has to stay one.
-    if (data === LEGACY_ALT_ENTER && !isKittyProtocolActive()) {
+    // is a newline and has to stay one. And only while a chord still sends,
+    // because otherwise the translation would be a press nothing answers.
+    if (data === LEGACY_ALT_ENTER && !isKittyProtocolActive() && keys.legacyAltEnterSubmits) {
       super.handleInput(KITTY_SUBMIT)
       return
     }
