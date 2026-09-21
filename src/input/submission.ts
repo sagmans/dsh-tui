@@ -20,12 +20,19 @@ export type Submission =
   | { readonly kind: 'copy' }
   | { readonly kind: 'plan' }
   | { readonly kind: 'history'; readonly argument: string }
+  | { readonly kind: 'stash'; readonly argument: string }
+  | { readonly kind: 'stash-pop'; readonly selector: string }
+  | { readonly kind: 'stash-apply'; readonly selector: string }
+  | { readonly kind: 'stash-list' }
+  | { readonly kind: 'stash-drop'; readonly selector: string }
+  | { readonly kind: 'stash-clear' }
   | { readonly kind: 'command'; readonly name: string; readonly line: string }
   | { readonly kind: 'prompt'; readonly text: string }
 
 /** Commands the surface answers itself, without a model turn. */
 export const LOCAL_COMMANDS = [
   '/help', '/status', '/model', '/preset', '/todo', '/theme', '/keys', '/jobs', '/subagents', '/fork', '/new', '/rename', '/export', '/copy', '/history', '/clear', '/resume', '/quit', '/exit',
+  '/stash', '/stash-pop', '/stash-apply', '/stash-list', '/stash-drop', '/stash-clear',
 ] as const
 
 /** What each local command does, shown in the editor's completion menu. */
@@ -47,6 +54,12 @@ export const LOCAL_COMMAND_DESCRIPTIONS: Readonly<Record<string, string>> = {
   '/export': 'write the visible transcript to a markdown file',
   '/clear': 'clear the visible transcript',
   '/resume': 'open another stored session',
+  '/stash': 'stash the current draft; /stash <draft> stores the text instead',
+  '/stash-pop': 'put a stashed draft (newest by default) into the editor and remove it',
+  '/stash-apply': 'put a stashed draft (newest by default) into the editor and keep it',
+  '/stash-list': 'open the stashes for this directory; enter pops one',
+  '/stash-drop': 'delete a stashed draft (newest by default) without using it',
+  '/stash-clear': 'delete every stashed draft for this directory after a confirmation',
   '/quit': 'leave and print the resume command',
   '/exit': 'leave and print the resume command',
 }
@@ -98,6 +111,20 @@ export function classifySubmission(text: string): Submission {
   }
   if (trimmed === '/new' || trimmed.startsWith('/new ')) {
     return { kind: 'new', title: trimmed.slice('/new'.length).trim() }
+  }
+  if (trimmed === '/stash-pop' || trimmed.startsWith('/stash-pop ')) {
+    return { kind: 'stash-pop', selector: trimmed.slice('/stash-pop'.length).trim() }
+  }
+  if (trimmed === '/stash-apply' || trimmed.startsWith('/stash-apply ')) {
+    return { kind: 'stash-apply', selector: trimmed.slice('/stash-apply'.length).trim() }
+  }
+  if (trimmed === '/stash-list') return { kind: 'stash-list' }
+  if (trimmed === '/stash-drop' || trimmed.startsWith('/stash-drop ')) {
+    return { kind: 'stash-drop', selector: trimmed.slice('/stash-drop'.length).trim() }
+  }
+  if (trimmed === '/stash-clear') return { kind: 'stash-clear' }
+  if (trimmed === '/stash' || trimmed.startsWith('/stash ')) {
+    return { kind: 'stash', argument: trimmed.slice('/stash'.length).trim() }
   }
   if (trimmed.startsWith('/')) {
     const [head = ''] = trimmed.slice(1).split(/\s+/u, 1)

@@ -31,6 +31,17 @@ describe('classifySubmission', () => {
     expect(classifySubmission('/new  fresh start')).toEqual({ kind: 'new', title: 'fresh start' })
   })
 
+  it('recognizes the stash commands and their selectors', () => {
+    expect(classifySubmission('/stash')).toEqual({ kind: 'stash', argument: '' })
+    expect(classifySubmission('/stash a draft to park')).toEqual({ kind: 'stash', argument: 'a draft to park' })
+    expect(classifySubmission('/stash-pop')).toEqual({ kind: 'stash-pop', selector: '' })
+    expect(classifySubmission('/stash-pop 2')).toEqual({ kind: 'stash-pop', selector: '2' })
+    expect(classifySubmission('/stash-apply older-id')).toEqual({ kind: 'stash-apply', selector: 'older-id' })
+    expect(classifySubmission('/stash-list')).toEqual({ kind: 'stash-list' })
+    expect(classifySubmission('/stash-drop 1')).toEqual({ kind: 'stash-drop', selector: '1' })
+    expect(classifySubmission('/stash-clear')).toEqual({ kind: 'stash-clear' })
+  })
+
   it('routes any other slash line as a command with its arguments', () => {
     expect(classifySubmission('/plan off')).toEqual({ kind: 'command', name: 'plan', line: '/plan off' })
     expect(classifySubmission('/PLAN')).toEqual({ kind: 'command', name: 'plan', line: '/PLAN' })
