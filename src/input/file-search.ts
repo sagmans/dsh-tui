@@ -218,6 +218,7 @@ export interface FileIndexOptions {
   readonly list?: FileLister
   readonly now?: () => number
   readonly ttlMs?: number
+  readonly scanTimeoutMs?: number
 }
 
 /**
@@ -229,6 +230,14 @@ export interface FileIndexOptions {
  */
 export interface FileIndex {
   candidates(signal: AbortSignal): Promise<readonly Candidate[]>
+  /**
+   * Whether a listed path still resolves to something this workspace holds.
+   *
+   * A listing is a snapshot, and what it described can be replaced between the
+   * listing and the menu: a proof taken when a row is offered is the only one
+   * that covers a link planted after the scan.
+   */
+  reachable(path: string, signal: AbortSignal): Promise<boolean>
 }
 
 /** How long a gathered listing is trusted before the tree is read again. */
@@ -248,8 +257,13 @@ const SCAN_TIMEOUT_MS = 5_000
  * name a build artifact or a secret the repository deliberately ignores. The
  * stage information is asked for too, because it is the only place the listing
  * says which entries are symbolic links.
+ *
+ * The two sets are asked for apart: an indexed record carries metadata before a
+ * tab and an untracked one is a bare path, so a tab inside an untracked name
+ * would otherwise look like metadata and hand back a path nobody wrote.
  */
-const GIT_LIST_ARGUMENTS = ['ls-files', '-s', '-z', '--cached', '--others', '--exclude-standard']
+const GIT_TRACKED_ARGUMENTS = ['ls-files', '-s', '-z', '--cached']
+const GIT_UNTRACKED_ARGUMENTS = ['ls-files', '-z', '--others', '--exclude-standard']
 
 /** The index modes that name something other than an ordinary file. */
 const GIT_SYMLINK_MODE = '120000'
@@ -314,12 +328,13 @@ export async function listWorkspaceFiles(cwd: string, signal: AbortSignal): Prom
   if (signal.aborted) return []
   const listing = await gitFiles(cwd, signal)
   if (signal.aborted) return []
-  if (listing.kind === 'listed') return await candidatesFrom(cwd, listing.entries)
-  if (listing.kind === 'not-a-repository') return await walkFiles(cwd, signal)
-  // Git owns this tree but could not answer, and a walk would ignore the very
-  // ignore-file that keeps secrets out of the suggestions. An empty menu is the
-  // honest answer until git can list the tree again.
-  return (await hasGitMarker(cwd)) ? [] : await walkFiles(cwd, signal)
+  if (listing.kind === 'listed') return await candidatesFrom(cwd, listing.entries, signal)
+  // A tree a marker claims is a tree whose ignore-files must hold, whether git
+  // owns it, lost it, or could not read it: a walk here would offer exactly the
+  // paths those files keep out. Only a directory no marker reaches above may be
+  // walked, and there nothing is being ignored in the first place.
+  if (await hasGitMarker(cwd)) return []
+  return await walkFiles(cwd, signal)
 }
 
 /** Whether git owns this directory, or one above it, without asking git itself. */
@@ -339,20 +354,43 @@ async function hasGitMarker(cwd: string): Promise<boolean> {
   return false
 }
 
-/** Git's answer, with the failure it reported when there was one. */
+/** One git question, and what its answer allows a caller to conclude. */
+type GitAnswer =
+  | { readonly kind: 'listed'; readonly records: readonly string[] }
+  | { readonly kind: 'not-a-repository' }
+  | { readonly kind: 'failed' }
+
+/** Git's answer for a workspace, from the two listings a suggestion set needs. */
 async function gitFiles(cwd: string, signal: AbortSignal): Promise<GitListing> {
   if (signal.aborted) return { kind: 'failed' }
-  return await new Promise<GitListing>(resolve => {
+  const [tracked, untracked] = await Promise.all([
+    runGit(cwd, GIT_TRACKED_ARGUMENTS, signal),
+    runGit(cwd, GIT_UNTRACKED_ARGUMENTS, signal),
+  ])
+  if (tracked.kind === 'listed' && untracked.kind === 'listed') {
+    return {
+      kind: 'listed',
+      entries: [...parseTrackedListing(tracked.records), ...parseUntrackedListing(untracked.records)],
+    }
+  }
+  if (tracked.kind === 'not-a-repository' || untracked.kind === 'not-a-repository') return { kind: 'not-a-repository' }
+  return { kind: 'failed' }
+}
+
+/** Ask git one question, and read its exit as a meaning rather than a number. */
+async function runGit(cwd: string, args: readonly string[], signal: AbortSignal): Promise<GitAnswer> {
+  if (signal.aborted) return { kind: 'failed' }
+  return await new Promise<GitAnswer>(resolve => {
     let settled = false
     let timer: ReturnType<typeof setTimeout> | undefined
-    const finish = (value: GitListing): void => {
+    const finish = (value: GitAnswer): void => {
       if (settled) return
       settled = true
       if (timer !== undefined) clearTimeout(timer)
       signal.removeEventListener('abort', onAbort)
       resolve(value)
     }
-    const child = spawn('git', GIT_LIST_ARGUMENTS, { cwd, stdio: ['ignore', 'pipe', 'pipe'] })
+    const child = spawn('git', [...args], { cwd, stdio: ['ignore', 'pipe', 'pipe'] })
     const onAbort = (): void => {
       child.kill('SIGKILL')
       finish({ kind: 'failed' })
@@ -377,7 +415,7 @@ async function gitFiles(cwd: string, signal: AbortSignal): Promise<GitListing> {
     child.on('error', () => finish({ kind: 'failed' }))
     child.on('close', code => {
       if (code === 0) {
-        finish({ kind: 'listed', entries: parseGitListing(stdout.split('\0')) })
+        finish({ kind: 'listed', records: stdout.split('\0') })
         return
       }
       if (code === GIT_EXIT_FATAL && GIT_NOT_A_REPOSITORY.test(stderr)) {
@@ -390,24 +428,24 @@ async function gitFiles(cwd: string, signal: AbortSignal): Promise<GitListing> {
 }
 
 /**
- * Read git's listing.
+ * Read the indexed listing.
  *
- * An indexed entry arrives as its mode, its object, and its stage, then a tab
- * and the path; an untracked one arrives as a bare path, because there is no
- * index entry to describe. One path can appear once per merge stage, and the
- * map keeps the last, so a conflicted file is not offered three times.
+ * An entry arrives as its mode, its object, and its stage, then a tab and the
+ * path. Only the first tab separates, so a name that carries one is read whole.
+ * A path can appear once per merge stage, and the map keeps the last, so a
+ * conflicted file is not offered three times.
  */
-function parseGitListing(records: readonly string[]): readonly GitEntry[] {
+function parseTrackedListing(records: readonly string[]): readonly GitEntry[] {
   const byPath = new Map<string, GitEntry>()
   for (const record of records) {
     if (record === '') continue
     const tab = record.indexOf('\t')
-    if (tab < 0) {
-      byPath.set(record, { path: record, symlink: false, submodule: false, untracked: true })
-      continue
-    }
+    // Nothing but metadata precedes the tab, so a record without one is not a
+    // line git wrote; reading it as a path would invent a name.
+    if (tab < 0) continue
     const mode = record.slice(0, GIT_MODE_LENGTH)
     const path = record.slice(tab + 1)
+    if (path === '') continue
     byPath.set(path, {
       path,
       symlink: mode === GIT_SYMLINK_MODE,
@@ -418,6 +456,16 @@ function parseGitListing(records: readonly string[]): readonly GitEntry[] {
   return [...byPath.values()]
 }
 
+/** Read the untracked listing, which carries no metadata to mistake for a path. */
+function parseUntrackedListing(records: readonly string[]): readonly GitEntry[] {
+  const entries: GitEntry[] = []
+  for (const record of records) {
+    if (record === '') continue
+    entries.push({ path: record, symlink: false, submodule: false, untracked: true })
+  }
+  return entries
+}
+
 /**
  * Turn git's entries into rows, deriving the directories they imply.
  *
@@ -426,12 +474,19 @@ function parseGitListing(records: readonly string[]): readonly GitEntry[] {
  * only while that target stays in the workspace: the reader would otherwise
  * attach a path the menu never showed them.
  */
-async function candidatesFrom(root: string, entries: readonly GitEntry[]): Promise<readonly Candidate[]> {
+async function candidatesFrom(
+  root: string,
+  entries: readonly GitEntry[],
+  signal: AbortSignal,
+): Promise<readonly Candidate[]> {
   const canonicalRoot = await canonicalOrUndefined(root)
   if (canonicalRoot === undefined) return []
   const files = new Map<string, Candidate>()
   const directories = new Set<string>()
   for (const entry of entries) {
+    // Every entry costs a stat at least, so a scan whose deadline passed stops
+    // here rather than walking the rest of a tree nobody waits for.
+    if (signal.aborted) return []
     if (!offerablePath(entry.path)) continue
     const linked = entry.symlink || (entry.untracked && await isSymlink(root, entry.path))
     let isDirectory = entry.submodule
@@ -532,14 +587,57 @@ export async function walkFiles(cwd: string, signal: AbortSignal): Promise<reado
   return found
 }
 
+/** One shared scan: the work, and the deadline signal a waiter may leave on. */
+interface Scan {
+  readonly run: Promise<readonly Candidate[]>
+  readonly signal: AbortSignal
+}
+
 /** A listing cache with a window, so a keystroke does not become a scan. */
 export function createFileIndex(cwd: string, options: FileIndexOptions = {}): FileIndex {
   const list = options.list ?? listWorkspaceFiles
   const now = options.now ?? Date.now
   const ttlMs = options.ttlMs ?? INDEX_TTL_MS
+  const scanTimeoutMs = options.scanTimeoutMs ?? SCAN_TIMEOUT_MS
   let cached: readonly Candidate[] | undefined
   let cachedAt = 0
-  let pending: Promise<readonly Candidate[]> | undefined
+  let pending: Scan | undefined
+  let root: Promise<string | undefined> | undefined
+
+  const startScan = (): Scan => {
+    // The scan is shared, so it cannot ride any one caller's signal: the first
+    // reader to look away would otherwise cancel the listing every other reader
+    // is still waiting on. It runs under its own bound and leaves its answer for
+    // the readers that follow.
+    const scan = new AbortController()
+    const run = list(cwd, scan.signal)
+      .then(found => {
+        // An answer that arrives after the deadline is the one the waiting
+        // readers were told to stop waiting for; keeping it would serve a
+        // listing the scan had already given up on.
+        if (!scan.signal.aborted) {
+          cached = found
+          cachedAt = now()
+        }
+        return found
+      })
+      .catch(() => [] as readonly Candidate[])
+    const entry: Scan = { run, signal: scan.signal }
+    pending = entry
+    const timer = setTimeout(() => {
+      scan.abort()
+      // A caller arriving after the deadline starts fresh work instead of
+      // joining a scan that outlived its bound.
+      if (pending === entry) pending = undefined
+    }, scanTimeoutMs)
+    void run.finally(() => {
+      clearTimeout(timer)
+      // A settled scan is no longer pending even when its listing was refused
+      // for arriving late; a fresh scan is the next caller's own business.
+      if (pending === entry) pending = undefined
+    })
+    return entry
+  }
 
   return {
     async candidates(signal: AbortSignal): Promise<readonly Candidate[]> {
@@ -547,47 +645,47 @@ export function createFileIndex(cwd: string, options: FileIndexOptions = {}): Fi
       // holds, without starting work it would not wait for.
       if (signal.aborted) return cached ?? []
       if (cached !== undefined && now() - cachedAt < ttlMs) return cached
-      if (pending === undefined) {
-        // The scan is shared, so it cannot ride any one caller's signal: the
-        // first reader to look away would otherwise cancel the listing every
-        // other reader is still waiting on. It runs under its own bound and
-        // leaves its answer for the readers that follow.
-        const scan = new AbortController()
-        const timer = setTimeout(() => scan.abort(), SCAN_TIMEOUT_MS)
-        pending = list(cwd, scan.signal)
-          .then(found => {
-            cached = found
-            cachedAt = now()
-            return found
-          })
-          .catch(() => [] as readonly Candidate[])
-          .finally(() => {
-            clearTimeout(timer)
-            pending = undefined
-          })
-      }
-      const found = await untilAborted(pending, signal)
+      const entry = pending ?? startScan()
+      // The deadline releases a waiter even when the work beneath it cannot be
+      // interrupted, which is the only way a blocked filesystem call stops
+      // holding the menu.
+      const found = await untilAborted(entry.run, signal, entry.signal)
       return found ?? cached ?? []
+    },
+    async reachable(path: string, signal: AbortSignal): Promise<boolean> {
+      if (signal.aborted) return false
+      root ??= canonicalOrUndefined(cwd)
+      const canonical = await root
+      if (canonical === undefined) return false
+      try {
+        const target = await realpath(join(cwd, path))
+        const inside = relative(canonical, target)
+        if (inside === '' || inside.startsWith('..') || isAbsolute(inside)) return false
+        return true
+      } catch {
+        // A path that no longer resolves is not one the prompt may name.
+        return false
+      }
     },
   }
 }
 
-/** Wait for shared work, but leave as soon as this caller's own signal fires. */
-function untilAborted<T>(work: Promise<T>, signal: AbortSignal): Promise<T | undefined> {
-  if (signal.aborted) return Promise.resolve(undefined)
+/** Wait for shared work, but leave as soon as any reason to stop waiting fires. */
+function untilAborted<T>(work: Promise<T>, ...signals: readonly AbortSignal[]): Promise<T | undefined> {
+  if (signals.some(signal => signal.aborted)) return Promise.resolve(undefined)
   return new Promise<T | undefined>((resolve, reject) => {
-    const onAbort = (): void => {
-      signal.removeEventListener('abort', onAbort)
+    const stopWaiting = (): void => {
+      for (const signal of signals) signal.removeEventListener('abort', stopWaiting)
       resolve(undefined)
     }
-    signal.addEventListener('abort', onAbort, { once: true })
+    for (const signal of signals) signal.addEventListener('abort', stopWaiting, { once: true })
     work.then(
       value => {
-        signal.removeEventListener('abort', onAbort)
+        for (const signal of signals) signal.removeEventListener('abort', stopWaiting)
         resolve(value)
       },
       error => {
-        signal.removeEventListener('abort', onAbort)
+        for (const signal of signals) signal.removeEventListener('abort', stopWaiting)
         reject(error instanceof Error ? error : new Error(String(error)))
       },
     )

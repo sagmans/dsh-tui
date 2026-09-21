@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { commandMenu, createCompletionProvider } from '@/input/completion.ts'
-import { createFileIndex } from '@/input/file-search.ts'
+import { createFileIndex, type FileIndex } from '@/input/file-search.ts'
 import { LOCAL_COMMANDS, LOCAL_COMMAND_DESCRIPTIONS } from '@/input/submission.ts'
 
 const signal = new AbortController().signal
@@ -12,10 +12,16 @@ afterEach(() => {
   for (const root of scratch.splice(0)) rmSync(root, { recursive: true, force: true })
 })
 
-function providerFor(paths: readonly string[], cwd = '/workspace', commands = [{ name: 'compact', description: 'compact' }]) {
+function indexFor(paths: readonly string[], reachable: (path: string) => boolean = () => true): FileIndex {
   // A fixed listing keeps the menu's order a fact of the test rather than of
-  // whatever tree the suite happens to run inside.
-  return createCompletionProvider(commands, cwd, createFileIndex(cwd, { list: async () => paths.map(path => ({ path, isDirectory: !path.includes('.') })) }))
+  // whatever tree the suite happens to run inside, and a fixed answer to
+  // reachability keeps a row from depending on a path no test wrote.
+  const candidates = paths.map(path => ({ path, isDirectory: !path.includes('.') }))
+  return { candidates: async () => candidates, reachable: async path => reachable(path) }
+}
+
+function providerFor(paths: readonly string[], cwd = '/workspace', commands = [{ name: 'compact', description: 'compact' }]) {
+  return createCompletionProvider(commands, cwd, indexFor(paths))
 }
 
 
@@ -121,6 +127,29 @@ describe('at-sign rows the menu must not draw', () => {
 
   it('never offers a row that climbs out of the workspace', async () => {
     const provider = providerFor(['../etc/passwd', '/etc/hosts', 'safe.ts'])
+    const found = await provider.getSuggestions(['@'], 0, 1, { signal })
+    expect(found?.items.map(item => item.value)).toEqual(['@safe.ts'])
+  })
+
+  it('drops a row the workspace no longer lets the prompt name', async () => {
+    const provider = createCompletionProvider([], '/workspace', indexFor(['src/real.ts', 'src/gone.ts'], path => path.endsWith('real.ts')))
+    const found = await provider.getSuggestions(['@src'], 0, 4, { signal })
+    expect(found?.items.map(item => item.value)).toEqual(['@src/real.ts'])
+  })
+
+  it('drops a row a link now points out of the workspace', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-menu-'))
+    const outside = mkdtempSync(join(tmpdir(), 'dsh-outside-'))
+    scratch.push(root, outside)
+    writeFileSync(join(outside, 'secret.env'), '')
+    writeFileSync(join(root, 'safe.ts'), '')
+    symlinkSync(join(outside, 'secret.env'), join(root, 'leak.env'))
+    const provider = createCompletionProvider([], root, createFileIndex(root, {
+      list: async () => [
+        { path: 'leak.env', isDirectory: false },
+        { path: 'safe.ts', isDirectory: false },
+      ],
+    }))
     const found = await provider.getSuggestions(['@'], 0, 1, { signal })
     expect(found?.items.map(item => item.value)).toEqual(['@safe.ts'])
   })
