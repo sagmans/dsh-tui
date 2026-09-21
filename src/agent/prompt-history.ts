@@ -1,4 +1,5 @@
-import { chmod, mkdir, open, readFile, rename, rm, stat, writeFile, type FileHandle } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
+import { chmod, link, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join, resolve as resolvePath } from 'node:path'
 import { displayText } from '../text.ts'
@@ -32,12 +33,14 @@ const PRIVATE_FILE_MODE = 0o600
 const PRIVATE_DIR_MODE = 0o700
 /** Suffix of the file that serializes mutations across sessions. */
 const LOCK_SUFFIX = '.lock'
+/** Suffix of the file a lock is staged in before it is published. */
+const LOCK_TEMP_SUFFIX = '.tmp'
 /** How long a mutation waits for another session's lock before giving up. */
 const LOCK_WAIT_MS = 2_000
-/** How long a lock may stand before it is treated as a crash leftover. */
-const LOCK_STALE_MS = 10_000
 /** Delay between lock attempts, so a short hold is not a spin. */
 const LOCK_RETRY_MS = 20
+/** Separates the fields a lock file names its holder with. */
+const LOCK_FIELD_SEPARATOR = ' '
 
 /** Why the store refuses to write, which is a reason the reader can act on. */
 export type HistoryBlockReason = 'corrupt_history' | 'unsupported_schema' | 'unreadable_history'
@@ -92,6 +95,8 @@ export interface PromptHistoryOptions {
   readonly cap: () => number
   readonly now?: () => Date
   readonly warn?: (message: string) => void
+  /** Lock wait a test can shorten; defaults to LOCK_WAIT_MS. */
+  readonly lockWaitMs?: number
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -106,43 +111,89 @@ function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
+/** The holder a lock file names, so a session can tell whom it would displace. */
+interface LockOwner {
+  readonly pid: number
+  readonly token: string
+}
+
+function serializeOwner(owner: LockOwner): string {
+  return owner.pid + LOCK_FIELD_SEPARATOR + owner.token + '\n'
+}
+
+function parseOwner(text: string): LockOwner | undefined {
+  const [pid, token] = text.trim().split(LOCK_FIELD_SEPARATOR)
+  const value = Number(pid)
+  if (!isPositiveInteger(value) || token === undefined || token === '') return undefined
+  return { pid: value, token }
+}
+
+/** Whether the recorded holder can still run; only ESRCH proves that it cannot. */
+function isOwnerAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    return !isRecord(error) || error.code !== 'ESRCH'
+  }
+}
+
 /**
  * Take the lock that serializes mutations across sessions.
  *
  * A second session that read the same entries before this one wrote would
  * otherwise replace the file with its own view and lose the first session's
- * prompts. A lock left behind by a crash is taken over once it is stale, and a
- * holder that never lets go costs one mutation rather than the whole file.
+ * prompts. The lock names its holder, so a dead session can be displaced while
+ * a running one is waited for, and a holder that never lets go costs one
+ * mutation rather than the whole file.
  */
-async function acquireLock(lockPath: string): Promise<FileHandle> {
-  const deadline = Date.now() + LOCK_WAIT_MS
+async function acquireLock(lockPath: string, waitMs: number): Promise<LockOwner> {
+  const deadline = Date.now() + waitMs
+  const owner: LockOwner = { pid: process.pid, token: randomUUID() }
   for (;;) {
+    // The holder is written before the lock path exists, so a contender can
+    // never read a half-published lock and displace a live session.
+    const staged = lockPath + '.' + owner.token + LOCK_TEMP_SUFFIX
+    await writeFile(staged, serializeOwner(owner), { encoding: 'utf8', mode: PRIVATE_FILE_MODE })
     try {
-      return await open(lockPath, 'wx', PRIVATE_FILE_MODE)
+      await link(staged, lockPath)
+      return owner
     } catch (error) {
       if (!isAlreadyExists(error)) throw error
+    } finally {
+      await rm(staged, { force: true }).catch(() => {})
     }
-    const held = await stat(lockPath).catch(() => undefined)
-    if (held !== undefined && Date.now() - held.mtimeMs > LOCK_STALE_MS) {
-      await rm(lockPath, { force: true })
+    const contents = await readFile(lockPath, 'utf8').catch(() => undefined)
+    if (contents === undefined) continue
+    const holder = parseOwner(contents)
+    if (holder !== undefined && isOwnerAlive(holder.pid)) {
+      if (Date.now() >= deadline) throw new Error('another session is writing the prompt history')
+      await delay(LOCK_RETRY_MS)
       continue
     }
-    if (Date.now() >= deadline) throw new Error('another session is writing the prompt history')
-    await delay(LOCK_RETRY_MS)
+    // Only a holder that cannot run is displaced, and only while the file still
+    // names that holder. Unlinking cannot be made conditional, so this one
+    // replacement stays best effort for a crashed or unreadable lock.
+    const current = await readFile(lockPath, 'utf8').catch(() => undefined)
+    if (current === contents) await rm(lockPath, { force: true })
   }
 }
 
+/** Give the lock back only while it still names this holder, never a successor. */
+async function releaseLock(lockPath: string, owner: LockOwner): Promise<void> {
+  const contents = await readFile(lockPath, 'utf8').catch(() => undefined)
+  if (contents !== serializeOwner(owner)) return
+  await rm(lockPath, { force: true }).catch(() => {})
+}
+
 /** Run one read-modify-replace under the lock, so nothing lands between them. */
-async function withLock<Result>(lockPath: string, operation: () => Promise<Result>): Promise<Result> {
+async function withLock<Result>(lockPath: string, waitMs: number, operation: () => Promise<Result>): Promise<Result> {
   await mkdir(dirname(lockPath), { recursive: true, mode: PRIVATE_DIR_MODE })
-  const handle = await acquireLock(lockPath)
+  const owner = await acquireLock(lockPath, waitMs)
   try {
     return await operation()
   } finally {
-    // A lock that cannot be removed is left for the stale window rather than
-    // turning a write that already landed into a reported failure.
-    await handle.close().catch(() => {})
-    await rm(lockPath, { force: true }).catch(() => {})
+    await releaseLock(lockPath, owner)
   }
 }
 
@@ -305,7 +356,7 @@ export function createPromptHistory(options: PromptHistoryOptions): PromptHistor
     record(text: string): void {
       if (text.trim() === '') return
       const prompt = displayText(text)
-      void enqueue(() => withLock(lockPath, async () => {
+      void enqueue(() => withLock(lockPath, options.lockWaitMs ?? LOCK_WAIT_MS, async () => {
         await load()
         if (blocked !== undefined) return
         entries = upsertEntry(entries, prompt, now().toISOString(), options.cap())
@@ -315,7 +366,7 @@ export function createPromptHistory(options: PromptHistoryOptions): PromptHistor
       })
     },
     clear(): Promise<number> {
-      return enqueue(() => withLock(lockPath, async () => {
+      return enqueue(() => withLock(lockPath, options.lockWaitMs ?? LOCK_WAIT_MS, async () => {
         await load()
         // A file that changed under the reader cannot be cleared safely, and
         // reporting a successful clear of nothing would be worse than refusing.

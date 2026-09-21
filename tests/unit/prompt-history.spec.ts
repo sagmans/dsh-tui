@@ -1,4 +1,4 @@
-import { chmod, mkdtemp, readFile, stat, utimes, writeFile } from 'node:fs/promises'
+import { chmod, mkdtemp, readFile, stat, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -14,6 +14,9 @@ import {
 } from '@/agent/prompt-history.ts'
 
 const AT = (seconds: number): string => new Date(Date.UTC(2026, 0, 1, 0, 0, seconds)).toISOString()
+
+/** A pid no process can hold, so a lock file naming it reads as a crash leftover. */
+const DEAD_PID = 2_147_483_647
 
 const entry = (text: string, seconds: number, useCount = 1): PromptEntry => ({
   text,
@@ -190,17 +193,34 @@ describe('createPromptHistory', () => {
     expect(await readFile(historyPath(home), 'utf8')).toBe(newer)
   })
 
-  it('takes over a lock left behind by a crash', async () => {
+  it('takes over a lock whose holder has died', async () => {
     const home = await scratchHome()
     const lock = historyPath(home) + '.lock'
-    await writeFile(lock, '')
-    const old = new Date(Date.now() - 60_000)
-    await utimes(lock, old, old)
-    const history = createPromptHistory({ home, cap: () => DEFAULT_MAX_ENTRIES, now: () => new Date(AT(1)) })
+    await writeFile(lock, DEAD_PID + ' dead-token\n')
+    const history = createPromptHistory({ home, cap: () => DEFAULT_MAX_ENTRIES, now: () => new Date(AT(1)), lockWaitMs: 100 })
     history.record('after the crash')
     await history.flush()
     expect(history.entries().map(item => item.text)).toEqual(['after the crash'])
     expect(await stat(lock).catch(() => undefined)).toBeUndefined()
+  })
+
+  it('leaves a lock whose holder is still running', async () => {
+    const home = await scratchHome()
+    const lock = historyPath(home) + '.lock'
+    const held = process.pid + ' live-token\n'
+    await writeFile(lock, held)
+    const warnings: string[] = []
+    const history = createPromptHistory({
+      home,
+      cap: () => DEFAULT_MAX_ENTRIES,
+      lockWaitMs: 50,
+      warn: message => warnings.push(message),
+    })
+    history.record('must wait')
+    await history.flush()
+    expect(history.entries()).toEqual([])
+    expect(warnings).toHaveLength(1)
+    expect(await readFile(lock, 'utf8')).toBe(held)
   })
 
   it('refuses a newer schema that appeared after startup', async () => {
