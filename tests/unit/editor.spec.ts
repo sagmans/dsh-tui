@@ -434,7 +434,7 @@ describe('prompt-history ghost completion', () => {
   it('matches a suggestion against the expanded text of a large paste', () => {
     const pasted = 'p'.repeat(1001)
     let seen = ''
-    const instance = new BoxedEditor(surface(), createTheme('none').editor, brush({
+    const instance = new BoxedEditor(surface(), createTheme('none').editor, defaultKeymap, brush({
       suggestion: input => {
         seen = input.text
         return undefined
@@ -448,7 +448,7 @@ describe('prompt-history ghost completion', () => {
 
   it('leaves the row alone when a wide grapheme cannot fit the freed cell', () => {
     const theme = createTheme('truecolor')
-    const painted = new BoxedEditor(surface(), theme.editor, {
+    const painted = new BoxedEditor(surface(), theme.editor, defaultKeymap, {
       enabled: () => true,
       suggestion: () => '界 ',
       paint: (text, cell) => (cell === 'cursor' ? '\u001b[7m' : '') + theme.style('editor.ghost', text) + '\u001b[0m',
