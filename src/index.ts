@@ -1675,17 +1675,28 @@ export function apply(ctx: Context, config: unknown): void {
       const gate = promptBar.borrow(() => new QuestionGate(questions, editor))
       // The seam takes mutable selection arrays and an optional custom field, so
       // the read-only gate answer is copied into that exact shape here.
-      openGate({
-        kind: 'question',
-        gate,
-        settle: answers => resolve({
+      const settle = (answers: GateAnswer[]): void => {
+        request.signal?.removeEventListener('abort', onAbort)
+        resolve({
           answers: answers.map(answer => ({
             id: answer.id,
             selected: [...answer.selected],
             ...(answer.custom === undefined ? {} : { custom: answer.custom }),
           })),
-        }),
-      })
+        })
+      }
+      // A question whose caller is gone has no reader, so the gate must release
+      // the keyboard instead of collecting an answer the aborted call discards.
+      const onAbort = (): void => {
+        gate.cancel()
+        if (pending?.gate === gate) closeGate()
+        settle([])
+      }
+      openGate({ kind: 'question', gate, settle })
+      request.signal?.addEventListener('abort', onAbort, { once: true })
+      // A signal that aborted before the listener existed never emits, so the
+      // state has to be read once after subscribing.
+      if (request.signal?.aborted === true) onAbort()
     })
   }))
 
