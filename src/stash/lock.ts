@@ -6,10 +6,11 @@
 // Ownership is recorded in the lock so a lock left by a crashed process is
 // reclaimed rather than wedging the bank forever.
 //
-// Reclaiming and releasing both *move* the lock out of its path with one atomic
-// rename before they judge or delete it. Deleting or emptying the path directly
-// would let a contender that paused mid-reclaim remove a lock another process
-// had just published, and two writers would then run at once.
+// Releasing *moves* the lock out of its path with one atomic rename before it
+// judges or deletes it, and reclaiming judges a lock and removes it under a
+// separate claim that only one contender can take. Removing the path on the
+// strength of an earlier look would let a contender delete the live lock that
+// replaced the one it judged, and two writers would then run at once.
 
 import { link, mkdir, rename, rm } from 'node:fs/promises'
 import { hostname } from 'node:os'
@@ -32,8 +33,14 @@ const LOCK_TIMEOUT_MS = 2000
 const LOCK_STALE_MS = 30_000
 const LOCK_OWNER_FILE = 'owner.json'
 const LOCK_TAKEOVER_SUFFIX = '.taken'
-/** The name reclaimers link their claim file onto, so exactly one of them wins. */
-const RECLAIM_SUFFIX = '.reclaiming'
+/**
+ * The name reclaimers link their claim file onto, so exactly one of them wins.
+ *
+ * It sits beside the lock rather than in the lock's own name: the name is fixed
+ * and short, so a key at the sanitizer's limit cannot push the claim past the
+ * longest name a filesystem accepts.
+ */
+const RECLAIM_MUTEX_FILE = '.reclaiming'
 const LOCK_CHANGED_MESSAGE = 'stash lock changed before release'
 
 /** Which step failed after a write already committed, so the loss is never implied. */
@@ -193,9 +200,15 @@ async function acquireStashLock(lockDir: string): Promise<LockOwner> {
 }
 
 function lockTimeout(lockDir: string): Error {
+  const mutex = reclaimMutexPath(lockDir)
   return new Error(
-    `timed out waiting for the stash lock at ${lockDir}; remove it and ${lockDir}${RECLAIM_SUFFIX} once no surface is running`,
+    `timed out waiting for the stash lock at ${lockDir}; remove it and ${mutex} once no surface is running`,
   )
+}
+
+/** The claim a reclaimer takes, which lives beside the lock under a fixed name. */
+function reclaimMutexPath(lockDir: string): string {
+  return path.join(path.dirname(lockDir), RECLAIM_MUTEX_FILE)
 }
 
 async function writeLockOwner(lockDir: string): Promise<LockOwner> {
@@ -290,27 +303,6 @@ async function putBackLockDirectory(taken: string, lockDir: string): Promise<voi
   }
 }
 
-/**
- * Whether a lock can be taken from a process that no longer holds it.
- *
- * A missing owner file means the holder may still be between `mkdir` and its
- * owner write, so it is reclaimable only once the directory itself is stale;
- * the same applies to a malformed owner. A foreign host is never provable, so
- * it stays held and the contender fails closed at the timeout.
- */
-async function isReclaimableLock(lockDirectory: string, owner: LockOwner | undefined): Promise<boolean> {
-  let stats: Awaited<ReturnType<typeof assertPrivateDirectory>>
-  try {
-    stats = await assertPrivateDirectory(lockDirectory, 'stash lock')
-  } catch (error) {
-    if (hasErrorCode(error, 'ENOENT')) return false
-    throw error
-  }
-  if (owner === undefined) return Date.now() - stats.mtimeMs > LOCK_STALE_MS
-  if (owner.host !== hostname()) return false
-  return !processIsAlive(owner.pid)
-}
-
 function processIsAlive(pid: number): boolean {
   try {
     process.kill(pid, 0)
@@ -323,16 +315,42 @@ function processIsAlive(pid: number): boolean {
 }
 
 /**
+ * What a reclaim is allowed to act on: one reading of the lock, with the
+ * identity of the directory it was read from.
+ *
+ * The owner bytes alone are not enough, because the directory that held them can
+ * be released and replaced between the reading and the removal. A lock is only
+ * removed when both the identity and the token still match what was judged.
+ */
+export interface LockObservation {
+  readonly owner: LockOwner | undefined
+  readonly device: number
+  readonly inode: number
+  readonly modified: number
+}
+
+/** Read a lock and the identity of the directory it was read from, in one pass. */
+export async function observeLock(lockDir: string): Promise<LockObservation | undefined> {
+  let stats: Awaited<ReturnType<typeof assertPrivateDirectory>>
+  try {
+    stats = await assertPrivateDirectory(lockDir, 'stash lock')
+  } catch (error) {
+    if (hasErrorCode(error, 'ENOENT')) return undefined
+    throw error
+  }
+  const owner = await readLockOwner(lockDir)
+  return { owner, device: stats.dev, inode: stats.ino, modified: stats.mtimeMs }
+}
+
+/**
  * Reclaim a lock whose owner is gone.
  *
- * The judgement and the removal have to be one step. A rename is atomic but not
- * conditional: a reclaimer that pauses after judging a dead lock can wake up
- * holding a live one that replaced it, and a second reclaimer that does the same
- * leaves two writers in the bank. Reclaimers therefore serialize on a claim file
- * created by link, which exactly one of them can win, and only the winner judges
- * and removes. Nothing else can publish a lock while the old name is still taken
- * — a publisher only succeeds once the name is free, and only the winner frees
- * it — so the removal cannot land on a lock published after the judgement.
+ * Reclaimers serialize on a claim file created by link, which exactly one of
+ * them can win, so only one of them ever judges and removes a given lock. The
+ * winner looks once, decides from that look, and then removes only if the lock
+ * still is the directory it looked at: a holder that released in between would
+ * otherwise leave its successor's live lock to be deleted, and both writers
+ * would then run at once.
  *
  * A reclaimer killed inside that section leaves the claim file behind, and every
  * later reclaim fails closed at the timeout instead of guessing. That message
@@ -340,18 +358,39 @@ function processIsAlive(pid: number): boolean {
  * cost an update.
  */
 async function reclaimAbandonedLock(lockDir: string): Promise<boolean> {
-  const mutex = `${lockDir}${RECLAIM_SUFFIX}`
+  const mutex = reclaimMutexPath(lockDir)
   const claim = await claimReclaim(mutex)
   if (claim === undefined) return false
   try {
-    const observed = await readLockOwner(lockDir)
-    if (!(await isReclaimableLock(lockDir, observed))) return false
-    await removePrivateDirectory(lockDir, 'stash lock')
-    return true
+    const observed = await observeLock(lockDir)
+    if (observed === undefined || !isAbandonedLock(observed)) return false
+    return await removeObservedLock(lockDir, observed)
   } finally {
     await rm(claim, { force: true }).catch(() => undefined)
     await rm(mutex, { force: true }).catch(() => undefined)
   }
+}
+
+/**
+ * Remove the lock a judgement was made about, and nothing that replaced it.
+ *
+ * Exported so the race this exists for can be driven from a test: hold an
+ * observation, publish a live lock in its place, and the removal has to refuse.
+ */
+export async function removeObservedLock(lockDir: string, observed: LockObservation): Promise<boolean> {
+  const current = await observeLock(lockDir)
+  if (current === undefined) return false
+  if (current.device !== observed.device || current.inode !== observed.inode) return false
+  if (current.owner?.token !== observed.owner?.token) return false
+  await removePrivateDirectory(lockDir, 'stash lock')
+  return true
+}
+
+/** Whether one observation of a lock shows an owner that can no longer hold it. */
+function isAbandonedLock(observed: LockObservation): boolean {
+  if (observed.owner === undefined) return Date.now() - observed.modified > LOCK_STALE_MS
+  if (observed.owner.host !== hostname()) return false
+  return !processIsAlive(observed.owner.pid)
 }
 
 /**

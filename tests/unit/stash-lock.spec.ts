@@ -1,11 +1,16 @@
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync } from 'node:fs'
 import { hostname } from 'node:os'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { afterEach, describe, expect, it } from 'vitest'
-import { StashCommittedError, withStashFileLock, withStashMutationLock } from '@/stash/lock.ts'
+import { observeLock, removeObservedLock, StashCommittedError, withStashFileLock, withStashMutationLock } from '@/stash/lock.ts'
 import { PRIVATE_DIR_MODE, writePrivateFileExclusive } from '@/stash/private-fs.ts'
+
+/** The claim a reclaimer links onto, which is fixed so a long key cannot overflow a name. */
+const RECLAIM_MUTEX_FILE = '.reclaiming'
+/** The sanitizer's limit for a generated key, which the lock names must survive. */
+const SANITIZE_MAX_LENGTH = 200
 
 const scratchDirs: string[] = []
 /** A pid beyond every platform's range, so it can never name a running process. */
@@ -104,6 +109,40 @@ describe('withStashFileLock', () => {
   })
 
   /**
+   * The race a reclaimer has to lose: an owner releases between the look and the
+   * removal, and the name is taken by a live lock before the removal lands. The
+   * observation is the barrier — the replacement is published between the two
+   * calls — so a removal that trusts its earlier look deletes a running holder.
+   */
+  it('refuses to remove a lock that replaced the one it judged', async () => {
+    const file = scratchFile()
+    const lockDir = `${file}.lock`
+    await holdLock(lockDir, { pid: DEAD_PID, host: hostname() })
+    const observed = await observeLock(lockDir)
+    expect(observed).toBeDefined()
+
+    rmSync(lockDir, { recursive: true })
+    await holdLock(lockDir, { pid: process.pid, host: hostname() })
+    const replacement = readFileSync(join(lockDir, 'owner.json'), 'utf8')
+
+    await expect(removeObservedLock(lockDir, observed!)).resolves.toBe(false)
+    expect(readFileSync(join(lockDir, 'owner.json'), 'utf8')).toBe(replacement)
+  })
+
+  /**
+   * Reclaim names are fixed rather than derived from the key, because a key at
+   * the sanitizer's limit plus a suffix and a token is longer than the longest
+   * name a filesystem accepts: recovery would fail exactly where it is needed.
+   */
+  it('reclaims a lock for a key at the length limit', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'dsh-stash-lock-'))
+    scratchDirs.push(directory)
+    const file = join(directory, `${'k'.repeat(SANITIZE_MAX_LENGTH)}.json`)
+    await holdLock(`${file}.lock`, { pid: DEAD_PID, host: hostname() })
+    await expect(withStashFileLock(file, async () => 'ran')).resolves.toBe('ran')
+  })
+
+  /**
    * Reclaiming is the one place a lock can be removed by a process that does not
    * hold it, so it is the place two contenders must not both get through: they
    * would each remove the other's fresh lock and both end up writing.
@@ -146,7 +185,7 @@ describe('withStashFileLock', () => {
     const file = scratchFile()
     const lockDir = `${file}.lock`
     await holdLock(lockDir, { pid: DEAD_PID, host: hostname() })
-    const mutex = `${lockDir}.reclaiming`
+    const mutex = join(dirname(lockDir), RECLAIM_MUTEX_FILE)
     await writePrivateFileExclusive(mutex, `${JSON.stringify({ pid: DEAD_PID, host: hostname() })}\n`)
     await expect(withStashFileLock(file, async () => 'ran')).rejects.toThrow(/timed out waiting for the stash lock/)
     expect(existsSync(mutex)).toBe(true)
