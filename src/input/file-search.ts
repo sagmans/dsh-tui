@@ -681,7 +681,9 @@ export function createFileIndex(cwd: string, options: FileIndexOptions = {}): Fi
       // stopped answering must not hold a menu open, and a proof that did not
       // arrive in time is a proof that never happened.
       const canonical = await withinBound(root, signal, proofTimeoutMs)
-      if (canonical === undefined) return false
+      // The caller may have looked away while the root was being proven, and row
+      // work started behind its back would have nothing left to answer for it.
+      if (canonical === undefined || signal.aborted) return false
       const target = await withinBound(resolvePath(join(cwd, path)), signal, proofTimeoutMs)
       if (target === undefined) return false
       const inside = relative(canonical, target)
@@ -692,7 +694,12 @@ export function createFileIndex(cwd: string, options: FileIndexOptions = {}): Fi
 
 /** Wait for one filesystem answer, but only while the caller is still waiting. */
 function withinBound<T>(work: Promise<T>, signal: AbortSignal, timeoutMs: number): Promise<T | undefined> {
-  if (signal.aborted) return Promise.resolve(undefined)
+  if (signal.aborted) {
+    // Work that was already started still has to be answered for, or a refusal
+    // it reports would reach the process instead of this caller.
+    void work.catch(() => undefined)
+    return Promise.resolve(undefined)
+  }
   return new Promise<T | undefined>(resolve => {
     let timer: ReturnType<typeof setTimeout> | undefined
     const finish = (value: T | undefined): void => {
@@ -709,7 +716,10 @@ function withinBound<T>(work: Promise<T>, signal: AbortSignal, timeoutMs: number
 
 /** Wait for shared work, but leave as soon as any reason to stop waiting fires. */
 function untilAborted<T>(work: Promise<T>, ...signals: readonly AbortSignal[]): Promise<T | undefined> {
-  if (signals.some(signal => signal.aborted)) return Promise.resolve(undefined)
+  if (signals.some(signal => signal.aborted)) {
+    void work.catch(() => undefined)
+    return Promise.resolve(undefined)
+  }
   return new Promise<T | undefined>((resolve, reject) => {
     const stopWaiting = (): void => {
       for (const signal of signals) signal.removeEventListener('abort', stopWaiting)

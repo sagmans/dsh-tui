@@ -464,6 +464,29 @@ describe('createFileIndex reachability', () => {
     await expect(createFileIndex(root).reachable('alias.ts', signal)).resolves.toBe(true)
   })
 
+  it('never leaves a started proof unhandled when the caller looked away with it', async () => {
+    const root = scratchDir()
+    const gone = new AbortController()
+    const index = createFileIndex(root, {
+      resolve: async () => {
+        gone.abort()
+        throw Object.assign(new Error('gone'), { code: 'ENOENT' })
+      },
+    })
+    const unhandled: unknown[] = []
+    const watch = (reason: unknown): void => {
+      unhandled.push(reason)
+    }
+    process.on('unhandledRejection', watch)
+    try {
+      await expect(index.reachable('a.ts', gone.signal)).resolves.toBe(false)
+      await new Promise(resolve => setTimeout(resolve, 0))
+    } finally {
+      process.off('unhandledRejection', watch)
+    }
+    expect(unhandled).toEqual([])
+  })
+
   it('leaves out a row whose proof never answers', async () => {
     const root = scratchDir()
     const index = createFileIndex(root, {
