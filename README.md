@@ -217,28 +217,45 @@ Any other `/command` goes to the command registry, so `/plan`, `/compact`, `/goa
 
 ## Prompt stash
 
-`/stash` parks the draft in the editor and clears it; `/stash-pop` puts a parked
-draft back and removes it, so a prompt written for the wrong moment survives a
-restart instead of being retyped or sent. `s` starts a chord for the same
-stashing, and `l` opens the list. A stash belongs to the exact working
-directory, so the drafts parked in one checkout never appear in another; the
-footer shows `stash N` while any are waiting.
+`/stash` parks the draft in the editor and clears it; `/stash <draft>` parks a
+draft typed on the command line. `/stash-pop` puts a parked draft back and
+removes it, so a prompt written for the wrong moment survives a restart instead
+of being retyped or sent. `s` starts a chord for the same stashing, and `l` opens
+the list. A stash belongs to the exact working directory, so the drafts parked in
+one checkout never appear in another; the footer shows `stash N` while any are
+waiting, ahead of the context and cache numbers so a row cut to width still says
+that work is parked.
 
-A selector is the number the list shows — `0` is the newest — or the entry's own
-id; leaving it out takes the newest. `apply` and `pop` refuse to overwrite a
-draft already in the editor, because losing an unsent prompt to a restore is the
-one outcome the feature exists to prevent. `pop` writes the editor first and
-removes the entry second, so a crash between the two leaves the draft in the
-bank rather than only in a terminal that is gone.
+A selector is the number the list shows in brackets — `0` is the newest — or the
+entry's own id; leaving it out takes the newest. `apply` and `pop` refuse to
+overwrite a draft already in the editor, because losing an unsent prompt to a
+restore is the one outcome the feature exists to prevent. They refuse while a
+question is borrowing the bar for the same reason: a draft written into an answer
+would be sent as one. `pop` writes the editor first and removes the entry second,
+so a crash between the two leaves the draft in the bank rather than only in a
+terminal that is gone.
+
+Nothing is cleared until the write has landed. A refusal — no room left, a bank
+past its cap, another writer holding the lock — leaves the draft in the bar,
+including a draft typed after `/stash`, which is written back into the bar before
+the write is attempted.
 
 The bank is one JSON file per directory under `$DSH_HOME/tui-stash`, written with
-owner-only permissions (`0700` directory, `0600` file) through a private,
-no-follow path; every update is a locked read-modify-write and an atomic
-temp-and-rename, so two surfaces in the same directory cannot lose each other's
-entries. A file this build cannot read is moved aside as
-`<name>.corrupt-<time>` and reported rather than overwritten. Drafts are never
-written to a session log, and the file is capped so one runaway paste cannot
-grow it without bound.
+owner-only permissions (`0700` directory, `0600` file) through a no-follow open,
+and every directory on the path must be owned by the reader (or by root) and not
+writable by other users — a directory anyone could redirect the storage through is
+refused rather than trusted. Every update is a locked read-modify-write and an
+atomic temp-and-rename, so two surfaces in the same directory cannot lose each
+other's entries.
+
+A bank whose working directory is not this one, or whose bytes do not parse, is
+moved aside as `<name>.corrupt-<time>` and reported with its path — including when
+the directory holding the copy could not be synced. A bank written by a newer
+format, or one past the size cap, is refused in place rather than moved, because
+neither is corruption. Drafts are never written to a session log, and control and
+bidi characters are stripped when a draft is stored and again when it is read, so
+a hand-edited bank cannot park a terminal escape or a reordering trick in the
+bar.
 
 ## Settings
 
@@ -550,11 +567,11 @@ The workflow stores no npm token: the registry trusts `release.yml` on the `npm-
 - A card reads its tool's own render intent through the agent whose session is on screen, so a stored session with no live agent — one this process is not running, or a child that has already finished — folds to the generic card instead of the tool's own.
 - Reading a child's conversation does not move the terminal: commands, approvals, and the status line stay with the session you launched, and the transcript is the only thing that switches. The status line carries the way back, read from the map in force, so a remap shows up without reopening the view.
 - Delete is unimplemented: the session store exposes no delete, and the surface does not reach around that seam into its files. `/fork` covers the case that needs it — it branches into a new session and leaves the original alone.
-- The prompt stash holds text only. It does not read Pi's `pi-stash` data, does not migrate an older key format, and keeps no pasted images: a draft larger than 1 MiB, or a bank larger than 16 MiB, is refused rather than stored. A corrupt bank is quarantined and reported, never repaired in place.
+- The prompt stash holds text only. It does not read Pi's `pi-stash` data, does not migrate an older key format, and keeps no pasted images: a draft larger than 1 MiB, or a bank larger than 16 MiB, is refused rather than stored — the cap is checked against the bytes that would be written, before anything is written, so a refusal cannot leave a bank that saves and then refuses to load. A corrupt bank is quarantined and reported, never repaired in place; a bank from a newer format is refused where it lies, so an older build cannot swallow a newer build's drafts.
 - Approvals and questions render inline and take the keyboard; a question batch is answered in order, and a question that lists options can always be answered with free text on row `0`.
 - Inside Herdr the pane reports its own state, and that report is the only thing that makes it an agent there: Herdr cannot start, resume, or prompt this surface, so launching and resuming stay with `dsh` itself (or a Herdr plugin that runs it).
 - Styling is per element and overridable; see [Settings](#settings). Shipped defaults are emitted as 24-bit colour where the terminal advertises it and degraded to 256 or 16 colours otherwise, so a light or dark terminal still follows its own palette where it has one.
-- Tool text, model text, and file content are escaped before rendering, so a hostile result cannot inject terminal control sequences; the cost is that a literal tab shows as \x09.
+- Tool text, model text, and file content are escaped before rendering, so a hostile result cannot inject terminal control sequences; the cost is that a literal tab shows as \x09. A stashed draft is stripped of control and bidi characters instead, because it is restored into a live editor rather than drawn as text.
 - Mermaid fences draw in assistant replies only, and only at the top level of one: a fence nested in a list, quoted inside another fence, or carried by a prompt, a thought, or a tool card stays source. Author `:::class` styling and diagram links are ignored — the renderer reports what each run is, and the theme decides how it looks.
 - Prompt history is global to this machine, not per project: `$DSH_HOME/prompt-history.json` holds every submitted line, deduplicated exactly, and a file this build cannot parse is left untouched with writes refused so a newer format is never overwritten. Every write re-reads the file under a lock shared by sessions, so a second session's prompts are folded in rather than overwritten, and a lock whose holder stopped is reclaimed or reported instead of guessed at; control characters are spelled out before a prompt is stored. A multiline suggestion draws its first line with `↵` marking the fold. `history.ghost: false` keeps reverse search without the suggestion, `history.enabled: false` stops recording and offering it, and `NO_COLOR`/`--no-color` suppresses the ghost because text the reader cannot see but could still accept is worse than none.
 
