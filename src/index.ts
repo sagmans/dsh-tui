@@ -56,6 +56,8 @@ import { WarningSafeTui } from './terminal/warning-screen.ts'
 import { BELL, shouldRingBell } from './terminal/bell.ts'
 import { clipboardSequence } from './terminal/clipboard.ts'
 import { CLEAR_TITLE, windowTitle } from './terminal/title.ts'
+import { sessionStartReason } from './herdr/state.ts'
+import { createHerdrReporter } from './herdr/reporter.ts'
 import { defaultExportFile, transcriptToText } from './export.ts'
 import { createTheme, forwardEditorTheme, forwardMarkdownTheme, type TuiTheme } from './theme.ts'
 import { detectColourMode, type ColourMode } from './theme-capability.ts'
@@ -462,6 +464,11 @@ export function apply(ctx: Context, config: unknown): void {
   // A window that outlived the surface would repaint a screen that is gone.
   disposers.push(() => keyChord.disarm())
 
+  // A containing Herdr is told what this pane is doing; away from one the
+  // reporter is inert, so the surface never depends on being multiplexed.
+  const herdr = createHerdrReporter()
+  disposers.push(herdr.registerExitRelease())
+
   restore.add(() => tui.stop())
   ctx.effect(() => () => {
     restore.restore()
@@ -491,6 +498,9 @@ export function apply(ctx: Context, config: unknown): void {
     if (exited) return
     exited = true
     clearInterval(statusTicker)
+    // The pane's agent row is given back while the process can still speak: a
+    // row left behind reads as a wait nobody can answer.
+    herdr.releaseSync()
     // Hand the window label back before the screen does, so a shell that sets
     // its own title can take over cleanly.
     terminal.write(CLEAR_TITLE)
@@ -510,6 +520,9 @@ export function apply(ctx: Context, config: unknown): void {
 
   const openGate = (next: PendingGate): void => {
     pending = next
+    // The card's own title names the decision, which is what a reader glancing
+    // at a wall of panes needs in order to know which one to open.
+    herdr.block(next.gate.card().title)
     // A gate owns the keyboard: the editor must not collect the decision keys.
     editor.disableSubmit = true
     tui.setFocus(null)
@@ -522,6 +535,7 @@ export function apply(ctx: Context, config: unknown): void {
 
   const closeGate = (): void => {
     pending = undefined
+    herdr.unblock()
     editor.disableSubmit = false
     // The question is answered or skipped, so the reader gets their prompt back
     // in the bar they left it in.
@@ -695,6 +709,7 @@ export function apply(ctx: Context, config: unknown): void {
   const settlePicker = (id: string | undefined): void => {
     const settle = pendingPicker?.settle
     pendingPicker = undefined
+    herdr.unblock()
     editor.disableSubmit = false
     tui.setFocus(editor)
     settle?.(id)
@@ -725,6 +740,9 @@ export function apply(ctx: Context, config: unknown): void {
   ): Promise<string | undefined> =>
     new Promise<string | undefined>(resolve => {
       pendingPicker = { picker, settle: resolve, vet }
+      // A picker owns the keyboard exactly as a gate does: nothing moves until
+      // the reader chooses, so it is the same kind of wait.
+      herdr.block(picker.card().title)
       editor.disableSubmit = true
       tui.setFocus(null)
       tui.requestRender()
@@ -979,6 +997,13 @@ export function apply(ctx: Context, config: unknown): void {
     activeSession = id
     viewedSession = id
     agent = handle
+    // The agent's own id is reported rather than the requested one: a resume can
+    // be answered by the session the log actually holds.
+    herdr.session({
+      id: String(handle.sessionId),
+      cwd: process.cwd(),
+      reason: sessionStartReason({ forked: fork !== undefined, resumed: resume }),
+    })
     // A session with no history to fold still has to present its first live
     // card through the right scope, so the scope is set before any event can.
     presentScope = handle.agent
@@ -1785,12 +1810,14 @@ export function apply(ctx: Context, config: unknown): void {
         turnOpen = true
         turnStartedAt = Date.now()
         terminal.write(windowTitle(process.cwd(), 'working'))
+        herdr.working()
       }
       if (event.type === 'turn/end') {
         const ranFor = turnStartedAt === undefined ? 0 : Date.now() - turnStartedAt
         turnOpen = false
         turnStartedAt = undefined
         terminal.write(windowTitle(process.cwd(), 'ready'))
+        herdr.idle()
         if (shouldRingBell({ bell: resolved.bell, ranForMs: ranFor, exiting: exited })) terminal.write(BELL)
         // A job the turn started may have settled while the reader was watching
         // something else, and nothing else refreshes a live board.
@@ -1964,6 +1991,9 @@ export function apply(ctx: Context, config: unknown): void {
     if (!resolved.resumePicker) await presetFor(resolved.sessionId, resolved.resume, undefined)
     tui.start()
     terminal.write(windowTitle(process.cwd(), 'ready'))
+    // Claiming the pane's agent row does not wait for a session: the pane is
+    // already on screen and already idle, and a session may still be chosen.
+    herdr.publish()
     // A refused settings edit is only visible now that the surface owns the
     // screen; whatever the scope found before this point prints here instead.
     settingsNotice.open(message => model.notice(message))
