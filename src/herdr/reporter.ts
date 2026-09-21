@@ -61,7 +61,9 @@ export function createHerdrReporter(options: HerdrReporterOptions = {}): HerdrRe
   const env = options.env ?? process.env
   const client = options.client ?? createHerdrClient(env)
   const nextSeq = createReportSequence(options.now ?? Date.now)
-  const release = options.releaseSync ?? ((): void => releaseAgentSync(env))
+  // A fresh sequence rides along: Herdr keeps the newest number per source and
+  // drops a release that cannot beat the reports this pane already sent.
+  const release = options.releaseSync ?? ((): void => releaseAgentSync(env, nextSeq()))
   let blockedCount = 0
   let blockedMessage: string | undefined
   let turnOpen = false
@@ -131,13 +133,18 @@ export function createHerdrReporter(options: HerdrReporterOptions = {}): HerdrRe
  * loop and Herdr would keep showing a state nothing owns any more — a pane that
  * reads as blocked forever is worse than one that reads as ordinary. The CLI is
  * the only channel that still works at this point.
+ *
+ * `seq` is what makes the release land, so it is required rather than optional:
+ * Herdr sequences reports per source and treats a release that cannot beat them
+ * as stale, which would leave the row of a process that is already gone.
  */
-export function releaseAgentSync(env: HerdrEnvironment): void {
+export function releaseAgentSync(env: HerdrEnvironment, seq: number): void {
   const paneId = env[HERDR_PANE_ID_VAR]
   if (env[HERDR_ENV_VAR] !== HERDR_ENV_FLAG || paneId === undefined || env[HERDR_SOCKET_PATH_VAR] === undefined) return
-  spawnSync(
-    env[HERDR_BIN_PATH_VAR] ?? 'herdr',
-    ['pane', 'release-agent', paneId, '--source', HERDR_SOURCE, '--agent', HERDR_AGENT],
-    { env: { ...process.env, ...env }, stdio: 'ignore', timeout: EXIT_RELEASE_TIMEOUT_MS },
-  )
+  const argv = ['pane', 'release-agent', paneId, '--source', HERDR_SOURCE, '--agent', HERDR_AGENT, '--seq', String(seq)]
+  spawnSync(env[HERDR_BIN_PATH_VAR] ?? 'herdr', argv, {
+    env: { ...process.env, ...env },
+    stdio: 'ignore',
+    timeout: EXIT_RELEASE_TIMEOUT_MS,
+  })
 }

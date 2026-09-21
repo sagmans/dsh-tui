@@ -8,7 +8,7 @@ import type { HerdrClient, HerdrEnvironment } from '@/herdr/client.ts'
 import type { StateReport } from '@/herdr/client.ts'
 
 interface Recorded {
-  readonly kind: 'state' | 'session' | 'metadata' | 'release'
+  readonly kind: 'state' | 'session' | 'metadata'
   readonly value: unknown
 }
 
@@ -22,7 +22,6 @@ function recordingClient(): { readonly calls: Recorded[]; readonly client: Herdr
       reportState: async (report: StateReport) => (calls.push({ kind: 'state', value: report }), true),
       reportSession: async report => (calls.push({ kind: 'session', value: report }), true),
       reportMetadata: async tokens => (calls.push({ kind: 'metadata', value: tokens }), true),
-      release: async () => (calls.push({ kind: 'release', value: undefined }), true),
     },
   }
 }
@@ -176,25 +175,43 @@ describe('createHerdrReporter', () => {
 })
 
 describe('releaseAgentSync', () => {
-  it('releases through the Herdr CLI, naming pane, source, and agent', () => {
+  const paneEnv = (fake: { readonly bin: string; readonly sink: string }): HerdrEnvironment => ({
+    HERDR_ENV: '1',
+    HERDR_PANE_ID: 'w3:p1',
+    HERDR_SOCKET_PATH: '/tmp/unused.sock',
+    HERDR_BIN_PATH: fake.bin,
+    ARGV_SINK: fake.sink,
+  })
+
+  it('releases through the Herdr CLI, naming pane, source, agent, and sequence', () => {
     const fake = fakeHerdrBinary()
-    const env: HerdrEnvironment = {
-      HERDR_ENV: '1',
-      HERDR_PANE_ID: 'w3:p1',
-      HERDR_SOCKET_PATH: '/tmp/unused.sock',
-      HERDR_BIN_PATH: fake.bin,
-      ARGV_SINK: fake.sink,
-    }
 
-    releaseAgentSync(env)
+    releaseAgentSync(paneEnv(fake), 4242)
 
-    expect(fake.argv()).toEqual(['pane', 'release-agent', 'w3:p1', '--source', HERDR_SOURCE, '--agent', HERDR_AGENT])
+    expect(fake.argv()).toEqual([
+      'pane', 'release-agent', 'w3:p1', '--source', HERDR_SOURCE, '--agent', HERDR_AGENT, '--seq', '4242',
+    ])
+  })
+
+  it('releases with a sequence that beats the reports it sent', () => {
+    const fake = fakeHerdrBinary()
+    const { calls, client } = recordingClient()
+    const reporter = createHerdrReporter({ client, env: paneEnv(fake), now: () => 1 })
+
+    reporter.working()
+    reporter.block('approval needed · Bash')
+    reporter.releaseSync()
+
+    const sent = states(calls).map(state => (state as StateReport).seq)
+    const argv = fake.argv()
+    expect(sent.length).toBe(2)
+    expect(Number(argv[argv.indexOf('--seq') + 1])).toBeGreaterThan(Math.max(...sent))
   })
 
   it('does nothing away from Herdr', () => {
     const fake = fakeHerdrBinary()
 
-    releaseAgentSync({ HERDR_PANE_ID: 'w3:p1', HERDR_BIN_PATH: fake.bin, ARGV_SINK: fake.sink })
+    releaseAgentSync({ HERDR_PANE_ID: 'w3:p1', HERDR_BIN_PATH: fake.bin, ARGV_SINK: fake.sink }, 1)
 
     expect(fake.argv()).toEqual([])
   })
@@ -202,7 +219,7 @@ describe('releaseAgentSync', () => {
   it('does nothing without a pane to release', () => {
     const fake = fakeHerdrBinary()
 
-    releaseAgentSync({ HERDR_ENV: '1', HERDR_SOCKET_PATH: '/tmp/unused.sock', HERDR_BIN_PATH: fake.bin, ARGV_SINK: fake.sink })
+    releaseAgentSync({ HERDR_ENV: '1', HERDR_SOCKET_PATH: '/tmp/unused.sock', HERDR_BIN_PATH: fake.bin, ARGV_SINK: fake.sink }, 1)
 
     expect(fake.argv()).toEqual([])
   })

@@ -123,16 +123,6 @@ describe('createHerdrClient', () => {
     })
   })
 
-  it('releases the pane under the same identity it claimed', async () => {
-    const herdr = await listen(ok)
-    const client = createHerdrClient(env(herdr.path))
-
-    await client.release()
-
-    expect(herdr.requests[0]?.method).toBe('pane.release_agent')
-    expect(herdr.requests[0]?.params).toEqual({ pane_id: PANE_ID, source: HERDR_SOURCE, agent: HERDR_AGENT })
-  })
-
   it('is inert away from Herdr and never dials', async () => {
     const started = Date.now()
     const client = createHerdrClient({ HERDR_ENV: '1', HERDR_SOCKET_PATH: '/nonexistent.sock' }, { timeoutMs: 5000 })

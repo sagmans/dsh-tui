@@ -50,7 +50,6 @@ export interface HerdrClient {
   reportState(report: StateReport): Promise<boolean>
   reportSession(report: SessionReport): Promise<boolean>
   reportMetadata(tokens: Readonly<Record<string, string | undefined>>): Promise<boolean>
-  release(): Promise<boolean>
 }
 
 /**
@@ -107,9 +106,6 @@ export function createHerdrClient(env: HerdrEnvironment = process.env, options: 
         applies_to_source: HERDR_SOURCE,
         tokens: acceptedTokens(tokens),
       })
-    },
-    release() {
-      return enqueue('pane.release_agent', {})
     },
   }
 }
