@@ -6,13 +6,16 @@ import {
 } from '@earendil-works/pi-tui'
 import {
   atToken,
+  atValue,
   createFileIndex,
+  offerablePath,
   rankFiles,
   SUGGESTION_LIMIT,
   type Candidate,
   type FileIndex,
 } from './file-search.ts'
 import { LOCAL_COMMANDS, LOCAL_COMMAND_DESCRIPTIONS } from './submission.ts'
+import { displayText } from '../text.ts'
 
 /** One command another package registered, as the registry reports it. */
 export interface RegisteredCommand {
@@ -76,7 +79,11 @@ class WorkspaceFileProvider extends CombinedAutocompleteProvider {
     if (token !== undefined && !isOutsideWorkspace(token.query)) {
       const candidates = await this.index.candidates(options.signal)
       if (options.signal.aborted) return null
-      const items = rankFiles(token.query, candidates, SUGGESTION_LIMIT).map(candidate => fileItem(candidate, token.quoted))
+      // An index is free to be some other source of rows, so the shape a pick
+      // inserts is checked here as well: a suggestion the menu cannot draw
+      // honestly must not reach the prompt.
+      const offerable = candidates.filter(candidate => offerablePath(candidate.path))
+      const items = rankFiles(token.query, offerable, SUGGESTION_LIMIT).map(candidate => fileItem(candidate, token.quoted))
       return items.length === 0 ? null : { items, prefix: token.prefix }
     }
     return await super.getSuggestions(lines, cursorLine, cursorCol, options)
@@ -95,10 +102,23 @@ function isOutsideWorkspace(query: string): boolean {
 
 /** One suggestion as the menu draws it, and the exact text a pick inserts. */
 function fileItem(candidate: Candidate, quoted: boolean): AutocompleteItem {
-  const path = candidate.isDirectory ? `${candidate.path}/` : candidate.path
+  const path = candidate.isDirectory ? candidate.path + '/' : candidate.path
   const name = candidate.path.slice(candidate.path.lastIndexOf('/') + 1)
   // The base class decides where the text goes and adds a space after a file,
   // so the value has to carry the at-sign and any quoting the path needs.
-  const value = quoted || path.includes(' ') ? `@"${path}"` : `@${path}`
-  return { value, label: `${name}${candidate.isDirectory ? '/' : ''}`, description: candidate.path }
+  return {
+    value: atValue(path, quoted, candidate.isDirectory),
+    label: rowText(candidate.isDirectory ? name + '/' : name),
+    description: rowText(candidate.path),
+  }
+}
+
+/**
+ * A row's text as a single line the terminal draws rather than obeys.
+ *
+ * The shared display escape keeps line feeds because a rendered block needs
+ * them, but a menu row that carried one would draw outside its own box.
+ */
+function rowText(raw: string): string {
+  return displayText(raw.replaceAll('\n', '\\n'))
 }

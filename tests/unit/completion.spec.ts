@@ -96,3 +96,33 @@ describe('file completion on the at-sign', () => {
     expect(file?.items.map(item => item.value)).toEqual(['alpha.txt'])
   })
 })
+
+describe('at-sign rows the menu must not draw', () => {
+  it('keeps a quoted directory pick open so the reader can drill into it', async () => {
+    const provider = providerFor(['docs/my" dir/notes.md', 'docs/my" dir'])
+    const found = await provider.getSuggestions(['@"my'], 0, 4, { signal })
+    const chosen = found?.items.find(item => item.value.endsWith('dir/'))
+    expect(chosen?.value).toBe('@"docs/my\\" dir/')
+    const next = await provider.getSuggestions([chosen?.value + 'n'], 0, (chosen?.value.length ?? 0) + 1, { signal })
+    expect(next?.items.map(item => item.value)).toEqual(['@"docs/my\\" dir/notes.md"'])
+  })
+
+  it('never offers a row whose path could drive the terminal', async () => {
+    const provider = providerFor(['bad\u001b[31m.ts', 'safe.ts'])
+    const found = await provider.getSuggestions(['@'], 0, 1, { signal })
+    expect(found?.items.map(item => item.value)).toEqual(['@safe.ts'])
+  })
+
+  it('never offers a row that climbs out of the workspace', async () => {
+    const provider = providerFor(['../etc/passwd', '/etc/hosts', 'safe.ts'])
+    const found = await provider.getSuggestions(['@'], 0, 1, { signal })
+    expect(found?.items.map(item => item.value)).toEqual(['@safe.ts'])
+  })
+
+  it('escapes a direction override in the text it draws', async () => {
+    const provider = providerFor(['src/\u202egnp.exe'])
+    const found = await provider.getSuggestions(['@gnp'], 0, 4, { signal })
+    expect(found?.items[0]?.label).toBe('\\u202Egnp.exe')
+    expect(found?.items[0]?.description).toBe('src/\\u202Egnp.exe')
+  })
+})
