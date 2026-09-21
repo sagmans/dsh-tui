@@ -117,6 +117,10 @@ dsh --profile tui --no-color
 dsh --profile tui --no-bell            # do not ring when a long turn finishes
 ```
 
+Every key below is a shipped default. `/keys` lists every action the surface
+and its library can perform with the keys in force, and the `keys:` section
+moves any of them — see [Keys](#keys).
+
 | Key | Action |
 |---|---|
 | Enter / Shift+Enter | break the line: a prompt is written before it is sent |
@@ -157,18 +161,21 @@ dsh --profile tui --no-bell            # do not ring when a long turn finishes
 | `/resume` | open another stored session without leaving the terminal |
 | `/clear` | clear the visible transcript |
 | `/theme` | list every styled element and the value in force |
+| `/keys` | list every action and the keys in force; `/keys <layer>` narrows it (see [Keys](#keys)) |
 | `/quit` | leave and print the resume command |
 
 `Ctrl+X` starts a chord. For the next two seconds the footer leads with the
 prefix alone — enough to say that a key is waiting, without reciting the map —
 and a key that finishes nothing is typed as usual rather than swallowed, so a
 prefix pressed by accident costs nothing; `/help` lists the chords, `m` for the
-model picker and `y` for the last answer. `prefix: alt+x` starts the chord with
-another key and `prefixWindow: 0` waits for the next key instead of lapsing; a
-prefix that is not a modifier chord, that the surface already answers
-(`ctrl+c`), or that the terminal keeps (`ctrl+s`) is refused with the reason,
-and the shipped keymap stays in force. The chords themselves are the commands
-they stand for: `m` and `y` ask the same dispatcher `/model` and `/copy` do.
+model picker and `y` for the last answer. `keys.chord.prefix: alt+x` starts the
+chord with another key and `prefixWindow: 0` waits for the next key instead of
+lapsing; both second keys are rows of their own (`chord.model`, `chord.copy`),
+so a chord can be respelled whole. A prefix that is not a modifier chord, that
+the surface or the prompt bar already answers (`ctrl+c`, `ctrl+s`), or that the
+terminal keeps (`ctrl+q`) is refused with the reason, and the shipped keymap
+stays in force. The chords themselves are the commands they stand for: `m` and
+`y` ask the same dispatcher `/model` and `/copy` do.
 
 An approval or a question draws inline above the editor and takes the keyboard. A question that lists options always adds row `0. other — type your own answer`: type or paste an answer the model did not offer, and the seam receives it as that question's free text — replacing a single-select choice, or supplementing a multi-select one. `0`, or `↓` past the last option, reaches the row; `↑` walks back to the list with the text kept, and `esc` does the same from that row, because a question skipped by accident is a question answered twice — an escape from the list skips it. Free text is written in the prompt bar's own editor, drawn under that row: movement, word and line deletion, undo, completion, and multi-line paste are all the editor the reader already uses, and the prompt bar steps aside while a question is open, so a prompt written but not sent comes back untouched once the question is answered. No question hides its answer — the reader is the one who has to check what they are about to send. Every gate row wraps at the screen edge under its own label, so a long option or question is readable rather than cut.
 
@@ -176,19 +183,23 @@ While a turn runs, a prompt submitted into the editor waits in the agent's own i
 
 Any other `/command` goes to the command registry, so `/plan`, `/compact`, `/goal`, and `/feedback` behave as they do on the other surfaces.
 
-## Theme
+## Settings
 
-Every styled element is a named token with a shipped default, so the surface can
-be restyled without touching code. Overrides live in the same user-settings
-document as every other preference (`$DSH_HOME/settings.yaml`), under a
-`dsh-tui:` section:
+Every styled element is a named token with a shipped default, and every key is
+an action with one, so the surface can be restyled and rebound without touching
+code. Preferences live in the same user-settings document as every other
+(`$DSH_HOME/settings.yaml`), under a `dsh-tui:` section:
 
 ```yaml
 dsh-tui:
   subcalls: collapsed         # fold the calls a PTC program dispatched (default inline)
   mermaid: streaming          # draw a reply's mermaid fences: off, final, or streaming (default streaming)
-  prefix: ctrl+x              # the key that starts a chord; must be a modifier chord, and not one the surface answers
-  prefixWindow: 2             # seconds the chord waits for its second key; 0 waits for the next key instead
+  prefixWindow: 2             # seconds a chord waits for its second key; 0 waits for the next key instead
+  keys:
+    chord.prefix: ctrl+x      # the key that starts a chord; "prefix:" is the older spelling of this row
+    prompt.submit: [ctrl+enter, alt+enter, ctrl+s]
+    surface.effort: ctrl+t    # one key, or a list of them
+    tui.editor.yank: ctrl+y   # any action the library draws, by the id /keys prints
   palette:
     muted: '#5c5c5c'          # one shade quiets every receding element
   tokens:
@@ -203,9 +214,10 @@ dsh-tui:
 ```
 
 Every field is optional, so a section that changes one shade is enough. The
-document is hot-reloaded: an edit restyles a running session, and `/theme` shows
-each element's effective value and whether it came from an override, the
-palette, or the default.
+document is hot-reloaded: an edit restyles a running session and re-arms the
+keymap on the next press, and `/theme` shows each element's effective value and
+whether it came from an override, the palette, or the default.
+
 
 The section is not only shades. By default every session draws the calls a PTC
 program dispatched under their card, and `subcalls: collapsed` starts with the
@@ -242,6 +254,38 @@ reader's own turns stand apart from the reply without reading either.
 outrank everything in this section. A token or palette name the surface does not
 have is refused with the offending name, and the surface prints the refusal as a
 notice when the document loads, so a typo cannot quietly paint nothing.
+
+### Keys
+
+Every press the surface answers is an action with an id and a shipped key.
+`/keys` prints all of them with the keys in force, marks the rows you wrote,
+names the library keys you took, and shows the `keys:` section that would say
+the same thing; `/keys prompt`, `surface`, `chord`, `gate`, `question`,
+`picker`, and `library` narrow that list to one part of the surface.
+
+An entry is one key or a list of them. A key is a modifier chord
+(`ctrl`/`alt`/`shift` joined by `+`, written in that order), a named key
+(`enter`, `escape`, `tab`, `space`, `backspace`, `delete`, `home`, `end`,
+`pageUp`, `pageDown`, the arrows, `f1`–`f12`), or a bare character where the
+layer reads one: `y` and `n` for an approval, or a chord's second key. Ids
+beginning `tui.` are pi-tui's own actions, so the editor, the search, and the
+transcript move where you tell them to.
+
+Refused, with the reason in a notice and the shipped map left in force: an
+action the surface does not have, a key no terminal reports, `ctrl+q` (the
+terminal keeps it), a bare character outside the chord and gate layers, two
+actions of one layer on one key, a `chord.prefix` that is not a modifier chord
+or that takes a key the surface or the prompt bar answers, and `prefix:` beside
+`keys.chord.prefix:`, which are the same row under two names.
+
+A key the surface or a chord answers is a key the library never sees: that is
+how `ctrl+y` shows nested calls instead of yanking a line in the editor.
+`/keys` names every such shadow, and moving the surface key hands the library
+its own key back.
+
+Left alone, because they are typing rather than commands: the keys a question's
+filter narrows with and the ones that leave its free-text row, the digits and
+row `0` that name an option, and the mouse.
 
 One residual escapes that promise, and it is not the surface's to close. After a
 component returns its rows, the framework appends a reset to each row and closes
@@ -286,7 +330,7 @@ The fold is durable-only: the live stream decorates the row that is still being 
 
 Tool cards are folded by default: a card draws its header and nothing else, so a long read, diff, or search cannot bury the conversation. A shell card is the exception, because its output is the answer the reader asked for: it names the tool in its header, always shows the command that ran, keeps the last 20 output rows, and adds a hint naming the rows it dropped. `Ctrl+O` opens every card to its header plus every retained row.
 
-A PTC card is the one card with children: every call the `run_code` program dispatched hangs off the card that made it, and each draws under the header as the tool's own name and argument, wrapping rather than being cut. `Ctrl+Y` folds them away again, and `subcalls: collapsed` starts every session folded; see [Theme](#theme).
+A PTC card is the one card with children: every call the `run_code` program dispatched hangs off the card that made it, and each draws under the header as the tool's own name and argument, wrapping rather than being cut. `Ctrl+Y` folds them away again, and `subcalls: collapsed` starts every session folded; see [Settings](#settings).
 
 A card's header names the tool, then the argument the call was made with — a path or a command — in the `tool.args` colour, then the facts the result measured: a read reports its line range, line count, and token size; a file change that carried no prior content to compare against reports its lines and tokens; one that did reports added, changed, and removed lines as `+n ~n -n` in green, yellow, and red. Each stat is its own token, so any of them can be recoloured or hidden independently.
 
@@ -376,7 +420,7 @@ The workflow stores no npm token: the registry trusts `release.yml` on the `npm-
 - Reading a child's conversation does not move the terminal: commands, approvals, and the status line stay with the session you launched, and the transcript is the only thing that switches.
 - Delete is unimplemented: the session store exposes no delete, and the surface does not reach around that seam into its files. `/fork` covers the case that needs it — it branches into a new session and leaves the original alone.
 - Approvals and questions render inline and take the keyboard; a question batch is answered in order, and a question that lists options can always be answered with free text on row `0`.
-- Styling is per element and overridable; see [Theme](#theme). Shipped defaults are emitted as 24-bit colour where the terminal advertises it and degraded to 256 or 16 colours otherwise, so a light or dark terminal still follows its own palette where it has one.
+- Styling is per element and overridable; see [Settings](#settings). Shipped defaults are emitted as 24-bit colour where the terminal advertises it and degraded to 256 or 16 colours otherwise, so a light or dark terminal still follows its own palette where it has one.
 - Tool text, model text, and file content are escaped before rendering, so a hostile result cannot inject terminal control sequences; the cost is that a literal tab shows as \x09.
 - Mermaid fences draw in assistant replies only, and only at the top level of one: a fence nested in a list, quoted inside another fence, or carried by a prompt, a thought, or a tool card stays source. Author `:::class` styling and diagram links are ignored — the renderer reports what each run is, and the theme decides how it looks.
 
