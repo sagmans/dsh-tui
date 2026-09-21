@@ -12,6 +12,7 @@
 // strength of an earlier look would let a contender delete the live lock that
 // replaced the one it judged, and two writers would then run at once.
 
+import { createHash } from 'node:crypto'
 import { link, mkdir, rename, rm } from 'node:fs/promises'
 import { hostname } from 'node:os'
 import path from 'node:path'
@@ -36,11 +37,14 @@ const LOCK_TAKEOVER_SUFFIX = '.taken'
 /**
  * The name reclaimers link their claim file onto, so exactly one of them wins.
  *
- * It sits beside the lock rather than in the lock's own name: the name is fixed
- * and short, so a key at the sanitizer's limit cannot push the claim past the
- * longest name a filesystem accepts.
+ * A storage directory holds a bank per working directory, so the claim is named
+ * after the bank it guards: one crashed reclaimer then stops recovery for that
+ * bank alone instead of for every directory that shares the storage. The name is
+ * a digest rather than the key itself, because a key at the sanitizer's limit
+ * plus a suffix and a token is longer than the longest name a filesystem accepts.
  */
-const RECLAIM_MUTEX_FILE = '.reclaiming'
+const RECLAIM_PREFIX = '.claim-'
+const RECLAIM_DIGEST_LENGTH = 16
 const LOCK_CHANGED_MESSAGE = 'stash lock changed before release'
 
 /** Which step failed after a write already committed, so the loss is never implied. */
@@ -174,14 +178,15 @@ async function acquireStashLock(lockDir: string): Promise<LockOwner> {
         await assertPrivateDirectory(lockDir, 'stash lock')
         return await writeLockOwner(lockDir)
       } catch (error) {
-        // A contender that judged this lock abandoned can take it while it is
-        // still being published, so losing the directory here is a retry rather
-        // than a failure to hold a lock this process never finished taking.
-        if (hasErrorCode(error, 'ENOENT')) {
+        // Losing the name while publishing it is a retry, not a failure: a
+        // contender that judged a lock abandoned can take the name away, and the
+        // owner write then either finds the name gone or finds a successor's
+        // owner file. Deleting the directory in either case would be deleting a
+        // lock this process never held, and the successor would lose its turn.
+        if (hasErrorCode(error, 'ENOENT') || hasErrorCode(error, 'EEXIST')) {
           if (Date.now() >= deadline) throw lockTimeout(lockDir)
           continue
         }
-        await rm(lockDir, { force: true, recursive: true })
         throw error
       }
     } catch (error) {
@@ -206,9 +211,14 @@ function lockTimeout(lockDir: string): Error {
   )
 }
 
-/** The claim a reclaimer takes, which lives beside the lock under a fixed name. */
-function reclaimMutexPath(lockDir: string): string {
-  return path.join(path.dirname(lockDir), RECLAIM_MUTEX_FILE)
+/**
+ * The claim a reclaimer takes, named after the bank whose lock it guards.
+ *
+ * Exported because it is the path a timeout tells the reader to clear by hand.
+ */
+export function reclaimMutexPath(lockDir: string): string {
+  const digest = createHash('sha256').update(path.basename(lockDir), 'utf8').digest('hex')
+  return path.join(path.dirname(lockDir), `${RECLAIM_PREFIX}${digest.slice(0, RECLAIM_DIGEST_LENGTH)}`)
 }
 
 async function writeLockOwner(lockDir: string): Promise<LockOwner> {

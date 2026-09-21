@@ -136,6 +136,30 @@ describe('ensurePrivateDirectory', () => {
     )
   })
 
+  /**
+   * A `..` after a link belongs to the directory the link points at, not to the
+   * directory the link is written in. Collapsing it while reading the target would
+   * walk a path the kernel never visits and miss the writable directory the real
+   * resolution passes through.
+   */
+  it('resolves a .. after a link the way the filesystem does', async () => {
+    const root = scratch()
+    const shared = join(root, 'shared')
+    const deep = join(shared, 'deep')
+    const safe = join(root, 'safe')
+    for (const directory of [shared, deep, safe]) mkdirSync(directory, { recursive: true })
+    chmodSync(shared, 0o777)
+    chmodSync(deep, 0o700)
+    chmodSync(safe, 0o700)
+    mkdirSync(join(shared, 'private'), { recursive: true })
+    symlinkSync(deep, join(safe, 'jump'))
+    const alias = join(safe, 'alias')
+    symlinkSync(`${join(safe, 'jump')}/../private`, alias)
+    await expect(ensurePrivateDirectory(join(alias, 'stash'), 'stash directory')).rejects.toThrow(
+      /writable by other users/,
+    )
+  })
+
   it('refuses a link chain that never ends', async () => {
     const root = scratch()
     const first = join(root, 'first')
@@ -153,13 +177,14 @@ describe('ensurePrivateDirectory', () => {
    * directory this call created has to be flushed through its parent; otherwise
    * the drafts survive a crash and the storage that holds them does not.
    */
-  it('flushes each directory it created through the directory that names it', async () => {
+  it('flushes every directory it created through the directory that names it', async () => {
     const root = scratch()
     const synced: string[] = []
-    await ensurePrivateDirectory(join(root, 'nested', 'stash'), 'stash directory', async parent => {
+    // Three levels, so the promise is not just about one nested directory.
+    await ensurePrivateDirectory(join(root, 'one', 'two', 'stash'), 'stash directory', async parent => {
       synced.push(parent)
     })
-    expect(synced).toEqual([join(root, 'nested'), root])
+    expect(synced).toEqual([join(root, 'one', 'two'), join(root, 'one'), root])
   })
 
   it('flushes nothing when the directories were already there', async () => {
@@ -171,6 +196,26 @@ describe('ensurePrivateDirectory', () => {
       synced.push(parent)
     })
     expect(synced).toEqual([])
+  })
+
+  /**
+   * Another surface can reach a directory this call just created and save into it
+   * while this one is still flushing. A rollback that removes the tree would then
+   * delete that surface's committed bank — a lost draft — where an entry left
+   * unflushed only costs durability.
+   */
+  it('never removes a directory another writer has already saved into', async () => {
+    const root = scratch()
+    const stash = join(root, 'one', 'stash')
+    const bank = join(stash, 'bank.json')
+    const savingAndFailing = async (): Promise<void> => {
+      writeFileSync(bank, '{"kept":true}\n', { mode: 0o600 })
+      throw new Error('fsync failed')
+    }
+    await expect(
+      ensurePrivateDirectory(stash, 'stash directory', savingAndFailing),
+    ).rejects.toThrow('fsync failed')
+    expect(readFileSync(bank, 'utf8')).toBe('{"kept":true}\n')
   })
 
   /**
@@ -186,9 +231,9 @@ describe('ensurePrivateDirectory', () => {
       if (calls === 2) throw new Error('fsync failed')
     }
     await expect(
-      ensurePrivateDirectory(join(root, 'nested', 'stash'), 'stash directory', failing),
+      ensurePrivateDirectory(join(root, 'one', 'two', 'stash'), 'stash directory', failing),
     ).rejects.toThrow('fsync failed')
-    expect(existsSync(join(root, 'nested'))).toBe(false)
+    expect(existsSync(join(root, 'one'))).toBe(false)
     expect(existsSync(root)).toBe(true)
   })
 })

@@ -1,14 +1,19 @@
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync } from 'node:fs'
 import { hostname } from 'node:os'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { afterEach, describe, expect, it } from 'vitest'
-import { observeLock, removeObservedLock, StashCommittedError, withStashFileLock, withStashMutationLock } from '@/stash/lock.ts'
+import {
+  observeLock,
+  reclaimMutexPath,
+  removeObservedLock,
+  StashCommittedError,
+  withStashFileLock,
+  withStashMutationLock,
+} from '@/stash/lock.ts'
 import { PRIVATE_DIR_MODE, writePrivateFileExclusive } from '@/stash/private-fs.ts'
 
-/** The claim a reclaimer links onto, which is fixed so a long key cannot overflow a name. */
-const RECLAIM_MUTEX_FILE = '.reclaiming'
 /** The sanitizer's limit for a generated key, which the lock names must survive. */
 const SANITIZE_MAX_LENGTH = 200
 
@@ -81,6 +86,22 @@ describe('withStashFileLock', () => {
     const file = scratchFile()
     await holdLock(`${file}.lock`, { pid: process.pid, host: hostname() })
     await expect(withStashFileLock(file, async () => 'ran')).rejects.toThrow(/timed out waiting for the stash lock/)
+  })
+
+  /**
+   * A contender never removes a lock it does not hold: a publisher that lost the
+   * name to a successor has to walk away from it, because the successor's lock is
+   * the one keeping two writers out of the bank.
+   */
+  it('leaves a live lock alone when publishing loses the name', async () => {
+    const file = scratchFile()
+    const lockDir = `${file}.lock`
+    // The name is already taken by a live successor when the owner write runs.
+    await holdLock(lockDir, { pid: process.pid, host: hostname() })
+    const before = readFileSync(join(lockDir, 'owner.json'), 'utf8')
+    await expect(withStashFileLock(file, async () => 'ran')).rejects.toThrow(/timed out waiting/)
+    expect(readFileSync(join(lockDir, 'owner.json'), 'utf8')).toBe(before)
+    expect(existsSync(lockDir)).toBe(true)
   })
 
   /**
@@ -185,11 +206,28 @@ describe('withStashFileLock', () => {
     const file = scratchFile()
     const lockDir = `${file}.lock`
     await holdLock(lockDir, { pid: DEAD_PID, host: hostname() })
-    const mutex = join(dirname(lockDir), RECLAIM_MUTEX_FILE)
+    const mutex = reclaimMutexPath(lockDir)
     await writePrivateFileExclusive(mutex, `${JSON.stringify({ pid: DEAD_PID, host: hostname() })}\n`)
     await expect(withStashFileLock(file, async () => 'ran')).rejects.toThrow(/timed out waiting for the stash lock/)
     expect(existsSync(mutex)).toBe(true)
     expect(existsSync(lockDir)).toBe(true)
+  })
+
+  /**
+   * One storage directory holds a bank per working directory, so a claim left by
+   * a crashed reclaimer has to stop recovery for the bank it guards and no other.
+   */
+  it('keeps a stuck claim from stopping recovery for another bank', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'dsh-stash-lock-'))
+    scratchDirs.push(directory)
+    const blocked = join(directory, 'one.json')
+    const free = join(directory, 'two.json')
+    await holdLock(`${blocked}.lock`, { pid: DEAD_PID, host: hostname() })
+    await holdLock(`${free}.lock`, { pid: DEAD_PID, host: hostname() })
+    await writePrivateFileExclusive(reclaimMutexPath(`${blocked}.lock`), '{"pid":1,"host":"elsewhere"}\n')
+
+    await expect(withStashFileLock(free, async () => 'ran')).resolves.toBe('ran')
+    expect(existsSync(reclaimMutexPath(`${blocked}.lock`))).toBe(true)
   })
 })
 

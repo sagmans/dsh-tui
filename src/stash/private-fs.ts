@@ -7,7 +7,7 @@
 // shared machine or a network home.
 
 import { constants, type Stats } from 'node:fs'
-import { type FileHandle, link, lstat, mkdir, open, readlink, rm, unlink } from 'node:fs/promises'
+import { type FileHandle, link, lstat, mkdir, open, readlink, rmdir, rm, unlink } from 'node:fs/promises'
 import path from 'node:path'
 
 export const PRIVATE_DIR_MODE = 0o700
@@ -54,10 +54,15 @@ export class FileTooLargeError extends Error {
  *
  * A directory that names a new child holds the only record of that child, so
  * every directory this call creates is flushed through its parent before the
- * call returns. A flush that fails takes the created directories away again:
+ * call returns. A step that fails takes the created directories away again:
  * leaving them behind would turn the next attempt into one that finds nothing
  * left to flush, and a save could then report success for a tree that a power
- * loss is free to drop. Rolling back keeps the retry honest instead.
+ * loss is free to drop.
+ *
+ * The rollback only ever removes an empty directory. Another surface can reach a
+ * directory this call just created and save into it while this one is flushing,
+ * and a recursive removal would then delete that surface's committed bank: an
+ * entry left unflushed costs durability, while a removed bank costs the draft.
  */
 export async function ensurePrivateDirectory(
   directory: string,
@@ -66,18 +71,26 @@ export async function ensurePrivateDirectory(
 ): Promise<void> {
   await assertTrustedAncestors(directory, label)
   const { created, namingParents } = await createPrivateDirectory(directory)
-  const handle = await openValidatedDirectory(directory, label)
   try {
-    await handle.chmod(PRIVATE_DIR_MODE)
-    await handle.sync()
-  } finally {
-    await handle.close()
-  }
-  try {
+    const handle = await openValidatedDirectory(directory, label)
+    try {
+      await handle.chmod(PRIVATE_DIR_MODE)
+      await handle.sync()
+    } finally {
+      await handle.close()
+    }
     for (const parent of namingParents) await syncDirectory(parent)
   } catch (error) {
     // Deepest first, so a directory is only removed once nothing is named by it.
-    for (const entry of created) await rm(entry, { recursive: true, force: true }).catch(() => undefined)
+    for (const entry of created) {
+      try {
+        await rmdir(entry)
+      } catch {
+        // Anything still in the way belongs to another writer now, and leaving it
+        // is the whole point of not removing the tree recursively.
+        break
+      }
+    }
     throw error
   }
 }
@@ -143,14 +156,23 @@ async function assertTrustedAncestors(directory: string, label: string): Promise
       pending.push(...parentsOf(current))
       continue
     }
-    // The link itself is checked through the directories that name it and the
-    // directories its target passes through, not through its own mode: a link's
-    // permissions are not what decides who can replace it.
+    // A link's own mode decides nothing, but its owner decides everything: in a
+    // directory that is sticky, the one account that can repoint a link is the
+    // one that owns it, so a link this user does not own is not followed.
     if (stats.isSymbolicLink()) {
+      if (currentUid !== undefined && stats.uid !== currentUid && stats.uid !== ROOT_UID) {
+        throw new Error(`${label} at ${current} is owned by another user`)
+      }
       hops += 1
       if (hops > MAX_LINK_HOPS) throw new Error(`${label} at ${current} ${TOO_MANY_LINKS_MESSAGE}`)
-      const target = path.resolve(path.dirname(current), await readlink(current))
-      pending.push(target, ...parentsOf(current))
+      // The target is not normalized: `..` after a link has to be resolved by the
+      // filesystem against what the link points at, and collapsing it here would
+      // walk a directory the kernel never visits.
+      const target = await readlink(current)
+      pending.push(
+        path.isAbsolute(target) ? target : `${path.dirname(current)}/${target}`,
+        ...parentsOf(current),
+      )
       continue
     }
     assertTrustedStats(stats, current, label, currentUid)
