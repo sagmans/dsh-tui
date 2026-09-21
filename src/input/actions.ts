@@ -1,4 +1,4 @@
-import { Key, TUI_KEYBINDINGS, matchesKey, type KeyId } from '@earendil-works/pi-tui'
+import { Key, TUI_KEYBINDINGS, isKittyProtocolActive, matchesKey, setKittyProtocolActive, type KeyId } from '@earendil-works/pi-tui'
 
 /**
  * Every action a reader may bind, in one table.
@@ -359,29 +359,113 @@ function readKeys(action: Action, value: string | readonly string[]): readonly K
   return keys
 }
 
-/** How many control characters a probe walks: every byte a bare terminal can send for a press. */
-const PROBE_BYTES = 0x20
+/** How many single-byte presses a probe walks: every byte a terminal can send on its own. */
+const PROBE_BYTES = 0x80
 
 /**
- * The bytes a press can arrive as, so an overlap is read from the matcher.
+ * The sequences one press can arrive as, so an overlap is read from the matcher.
  *
- * The library is the only authority on which spellings are one press, and it
- * folds more than a spelling table could say: a bare terminal reports Return for
- * both Enter and Ctrl+M, a line feed for Ctrl+J and — without the keyboard
- * protocol — Return as well, and Ctrl+- for Ctrl+_ too. Probing the matcher
- * answers what is true rather than what the ids look like.
+ * The library is the only authority on which sequences are one press, and its
+ * reading is looser than a spelling table could say: a bare terminal reports
+ * Return for both Enter and Ctrl+M, one control byte carries Ctrl+- and Ctrl+_
+ * alike, and escape-prefixed bytes reach more than one alt key — an escape and a
+ * letter answers Alt+Up as well as Alt+P. Both protocol modes are read over the
+ * same bytes, because a terminal without the protocol folds spellings together
+ * that one with it keeps apart. The answer is cached: which sequences reach a key
+ * is a property of the key rather than of the map.
  */
-const PRESS_PROBES: readonly string[] = [
-  ...Array.from({ length: PROBE_BYTES }, (_, code) => String.fromCharCode(code)),
-  '\u007f',
-]
+const PRESS_PROBES: readonly string[] = Array.from(
+  { length: PROBE_BYTES },
+  (_, code) => String.fromCharCode(code),
+).flatMap(byte => [byte, `\u001b${byte}`])
 
-/** The probe names that reach a key, or its own id when no single byte does. */
+/** One sequence named so two rows can agree on it without carrying the bytes. */
+function spellingOf(sequence: string): string {
+  return `seq:${[...sequence].map(character => character.charCodeAt(0).toString(16)).join('-')}`
+}
+
+const pressSpellings = new Map<string, readonly string[]>()
+
+/** The sequences that reach a key in either protocol mode, or its own id when none does. */
 function matchPresses(key: KeyId): readonly string[] {
-  const probes = PRESS_PROBES
-    .filter(probe => matchesKey(probe, key))
-    .map(probe => `byte:${probe.charCodeAt(0)}`)
-  return probes.length === 0 ? [`key:${key}`] : probes
+  const cached = pressSpellings.get(key)
+  if (cached !== undefined) return cached
+  const spelled = new Set<string>()
+  const wasKitty = isKittyProtocolActive()
+  try {
+    for (const kitty of [false, true]) {
+      setKittyProtocolActive(kitty)
+      for (const probe of PRESS_PROBES) {
+        if (matchesKey(probe, key)) spelled.add(spellingOf(probe))
+      }
+    }
+  } finally {
+    setKittyProtocolActive(wasKitty)
+  }
+  const answer: readonly string[] = spelled.size === 0 ? [`key:${key}`] : [...spelled]
+  pressSpellings.set(key, answer)
+  return answer
+}
+
+/** One row as a press table reads it: what answers a press, and the key it was written as. */
+interface PressRow {
+  readonly id: string
+  readonly key: KeyId
+}
+
+/** A press more than one row reads: the rows, one spelling of it, and the sequences they share. */
+interface PressOverlap {
+  readonly ids: readonly string[]
+  readonly key: KeyId
+  readonly spellings: readonly string[]
+}
+
+/**
+ * Group the rows one terminal sequence reaches, so a group is a press that cannot
+ * be split between them.
+ */
+function pressOverlaps(rows: readonly PressRow[]): PressOverlap[] {
+  const rowAt = (index: number): PressRow => rows[index]!
+  const reached = new Map<string, number[]>()
+  rows.forEach((row, index) => {
+    for (const spelling of matchPresses(row.key)) {
+      const found = reached.get(spelling) ?? []
+      if (!found.includes(index)) found.push(index)
+      reached.set(spelling, found)
+    }
+  })
+  const parent = rows.map((_, index) => index)
+  const find = (index: number): number => {
+    const kept = parent[index] ?? index
+    if (kept === index) return index
+    const root = find(kept)
+    parent[index] = root
+    return root
+  }
+  for (const indexes of reached.values()) {
+    for (const index of indexes.slice(1)) {
+      const left = find(indexes[0]!)
+      const right = find(index)
+      if (left !== right) parent[right] = left
+    }
+  }
+  const groups = new Map<number, number[]>()
+  rows.forEach((_, index) => {
+    const root = find(index)
+    const found = groups.get(root) ?? []
+    found.push(index)
+    groups.set(root, found)
+  })
+  const overlaps: PressOverlap[] = []
+  for (const found of groups.values()) {
+    const ids = [...new Set(found.map(index => rowAt(index).id))].sort()
+    if (ids.length < 2) continue
+    const spellings = [...new Set(found.flatMap(index => matchPresses(rowAt(index).key)))]
+      .filter(spelling => (reached.get(spelling) ?? []).filter(index => found.includes(index)).length > 1)
+      .sort()
+    overlaps.push({ ids, key: rowAt(found[0]!).key, spellings })
+  }
+  return overlaps
 }
 
 /**
@@ -395,45 +479,14 @@ function matchPresses(key: KeyId): readonly string[] {
  */
 function refuseMatcherClashes(effective: Readonly<Record<string, readonly KeyId[]>>): void {
   for (const layer of ['surface', 'chord', 'gate', 'question', 'picker'] as const) {
-    const rows: Array<{ readonly id: string; readonly key: KeyId }> = []
+    const rows: PressRow[] = []
     for (const action of ACTION_CATALOG) {
       if (action.layer !== layer) continue
       for (const key of effective[action.id] ?? []) rows.push({ id: action.id, key })
     }
-    // Union by shared probe: the relation is "some byte reaches both", which no
-    // single signature per key can express.
-    const parent = rows.map((_, index) => index)
-    const find = (index: number): number => {
-      const kept = parent[index] ?? index
-      if (kept === index) return index
-      const root = find(kept)
-      parent[index] = root
-      return root
-    }
-    const seen = new Map<string, number>()
-    rows.forEach((row, index) => {
-      for (const press of matchPresses(row.key)) {
-        const owner = seen.get(press)
-        if (owner === undefined) {
-          seen.set(press, index)
-          continue
-        }
-        const left = find(owner)
-        const right = find(index)
-        if (left !== right) parent[right] = left
-      }
-    })
-    const groups = new Map<number, Set<string>>()
-    rows.forEach((row, index) => {
-      const root = find(index)
-      const ids = groups.get(root) ?? new Set<string>()
-      ids.add(row.id)
-      groups.set(root, ids)
-    })
-    for (const ids of groups.values()) {
-      if (ids.size < 2) continue
-      const key = rows.find(row => ids.has(row.id))?.key ?? ''
-      throw new Error(`key "${key}" is bound to both ${[...ids].join(' and ')}`)
+    const overlap = pressOverlaps(rows)[0]
+    if (overlap !== undefined) {
+      throw new Error(`key "${overlap.key}" is bound to both ${overlap.ids.join(' and ')}`)
     }
   }
 }
@@ -556,18 +609,53 @@ function sharedPresses(rows: Readonly<Record<string, readonly KeyId[]>>): Map<st
 }
 
 /**
+ * The overlaps the library's own rows carry, one component at a time.
+ *
+ * The bar's own two rows are left out: they are read by the bar before the
+ * library's matcher runs, so a line feed is send when the reader bound it and a
+ * line otherwise, and comparing them by every sequence the matcher folds would
+ * forbid a choice the bar can honour.
+ */
+function libraryOverlaps(rows: Readonly<Record<string, readonly KeyId[]>>): PressOverlap[] {
+  const overlaps: PressOverlap[] = []
+  for (const component of ['editor', 'select', 'viewport', 'other'] as const) {
+    const own: PressRow[] = []
+    for (const [id, keys] of Object.entries(rows)) {
+      if (id === 'tui.input.submit' || id === 'tui.input.newLine') continue
+      if (libraryComponent(id) !== component) continue
+      for (const key of keys) own.push({ id, key })
+    }
+    overlaps.push(...pressOverlaps(own))
+  }
+  return overlaps
+}
+
+/** What makes two overlaps the same fight: the rows, and the sequences they share. */
+function overlapIdentity(overlap: PressOverlap): string {
+  return `${overlap.ids.join(',')}\u0000${overlap.spellings.join('|')}`
+}
+
+/**
  * Refuse two rows the library reads on one press.
  *
  * The library's own manager reports a clash between rows the reader wrote and
  * nothing else, which would let a new binding quietly take a key from a row the
- * reader never touched. The pairs the library itself ships shared are left
- * alone: those are rows it already knows how to tell apart.
+ * reader never touched. Rows are compared twice: by the press they were written
+ * as, which is what the bar's own rows are matched by, and by every sequence the
+ * matcher folds, which is what catches one control byte carrying two spellings.
+ * The overlaps the library itself ships are left alone: those are rows it
+ * already knows how to tell apart.
  */
 function refuseLibraryClashes(effective: Readonly<Record<string, readonly KeyId[]>>): void {
   const shipped = new Set([...sharedPresses(shippedLibraryRows())].map(([press, ids]) => `${press}\u0000${ids.join(',')}`))
   for (const [press, ids] of sharedPresses(libraryRows(effective))) {
     if (shipped.has(`${press}\u0000${ids.join(',')}`)) continue
     throw new Error(`key "${press}" is bound to both ${ids.join(' and ')}; move one of them or pick another key`)
+  }
+  const shippedOverlaps = new Set(libraryOverlaps(shippedLibraryRows()).map(overlapIdentity))
+  for (const overlap of libraryOverlaps(libraryRows(effective))) {
+    if (shippedOverlaps.has(overlapIdentity(overlap))) continue
+    throw new Error(`key "${overlap.key}" is bound to both ${overlap.ids.join(' and ')}; move one of them or pick another key`)
   }
 }
 
@@ -614,27 +702,23 @@ function shippedRows(): Record<string, KeyId[]> {
 
 /** One press, the viewport row that reads it first, and a row that would never see it. */
 interface ViewportPair {
-  readonly press: string
+  readonly key: KeyId
+  readonly spellings: readonly string[]
   readonly viewport: string
   readonly other: string
 }
 
 function viewportPairs(rows: Readonly<Record<string, readonly KeyId[]>>): ViewportPair[] {
-  const byPress = new Map<string, string[]>()
+  const table: PressRow[] = []
   for (const [id, keys] of Object.entries(rows)) {
-    for (const key of keys) {
-      const press = pressOf(key)
-      const list = byPress.get(press) ?? []
-      if (!list.includes(id)) list.push(id)
-      byPress.set(press, list)
-    }
+    for (const key of keys) table.push({ id, key })
   }
   const pairs: ViewportPair[] = []
-  for (const [press, ids] of byPress) {
-    const viewport = ids.filter(id => VIEWPORT_FIRST_ROWS.includes(id))
+  for (const overlap of pressOverlaps(table)) {
+    const viewport = overlap.ids.filter(id => VIEWPORT_FIRST_ROWS.includes(id))
     for (const row of viewport) {
-      for (const other of ids.filter(id => id !== row && !VIEWPORT_FIRST_ROWS.includes(id))) {
-        pairs.push({ press, viewport: row, other })
+      for (const other of overlap.ids.filter(id => id !== row && !VIEWPORT_FIRST_ROWS.includes(id))) {
+        pairs.push({ key: overlap.key, spellings: overlap.spellings, viewport: row, other })
       }
     }
   }
@@ -651,7 +735,7 @@ function viewportPairs(rows: Readonly<Record<string, readonly KeyId[]>>): Viewpo
  * apart from the overlap the library already ships.
  */
 function refuseViewportTakingKeys(effective: Readonly<Record<string, readonly KeyId[]>>, written: ReadonlySet<string>): void {
-  const pairKey = (pair: ViewportPair): string => `${pair.viewport}\u0000${pair.other}`
+  const pairKey = (pair: ViewportPair): string => `${pair.viewport}\u0000${pair.other}\u0000${pair.spellings.join('|')}`
   const shipped = new Set(viewportPairs(shippedRows()).map(pairKey))
   // A prompt row is read through a library row of the bar's own, so the reader's
   // name for the row is the action they wrote rather than the mirror.
@@ -662,10 +746,10 @@ function refuseViewportTakingKeys(effective: Readonly<Record<string, readonly Ke
   for (const pair of viewportPairs(dispatchRows(effective))) {
     if (shipped.has(pairKey(pair))) continue
     if (isWritten(pair.other)) {
-      throw new Error(`key "${pair.press}" on ${pair.other} is read by ${pair.viewport} first; move that row or pick another key`)
+      throw new Error(`key "${pair.key}" on ${pair.other} is read by ${pair.viewport} first; move that row or pick another key`)
     }
     if (isWritten(pair.viewport)) {
-      throw new Error(`key "${pair.press}" on ${pair.viewport} would take it from ${pair.other}, which never sees the press; pick another key`)
+      throw new Error(`key "${pair.key}" on ${pair.viewport} would take it from ${pair.other}, which never sees the press; pick another key`)
     }
   }
 }

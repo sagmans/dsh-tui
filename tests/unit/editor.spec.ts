@@ -298,6 +298,19 @@ describe('the prompt keys', () => {
     expect(sent).toEqual([])
   })
 
+  it('leaves the legacy alt+enter to the line when the reader never bound it', () => {
+    // Those bytes are the only spelling a terminal without modifiers has, and a
+    // reader who kept only Ctrl+Enter never bound them: answering them with a
+    // send would submit on a key the map does not hold.
+    const map = resolveKeymap({ 'prompt.submit': ['ctrl+enter'] })
+    installKeybindings(map)
+    const { instance, sent } = sender(map)
+    instance.setText('hello')
+    instance.handleInput('\u001b\r')
+    expect(instance.getText()).toBe('hello\n')
+    expect(sent).toEqual([])
+  })
+
   it('sends on the legacy alt+enter when that is the only chord the reader sends with', () => {
     const map = resolveKeymap({ 'prompt.submit': ['alt+enter'] })
     installKeybindings(map)

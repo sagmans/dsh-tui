@@ -247,6 +247,21 @@ describe('resolveKeymap', () => {
     expect(() => resolveKeymap({ 'question.confirm': 'ctrl+j', 'question.skip': 'enter' })).toThrow(/bound to both question\./)
   })
 
+  it('refuses two actions one escape-prefixed byte cannot tell apart', () => {
+    // Escape and a letter is a loose spelling in a bare terminal: it reaches
+    // Alt+Up as readily as Alt+P, so a decision bound to one of them would
+    // answer for the other.
+    expect(() => resolveKeymap({ 'gate.allow': 'alt+up', 'gate.reject': 'alt+p' })).toThrow(/gate\.allow and gate\.reject/)
+    expect(() => resolveKeymap({ 'gate.allow': 'alt+enter', 'gate.reject': 'ctrl+alt+m' })).toThrow(/gate\.allow and gate\.reject/)
+  })
+
+  it('refuses a library key whose byte the library already answers', () => {
+    // One control byte carries two spellings, and the library reads the row it
+    // shipped first: a reader moving another row onto the same byte would be
+    // pressing the shipped row instead.
+    expect(() => resolveKeymap({ 'tui.editor.cursorLineEnd': 'ctrl+_' })).toThrow(/tui\.editor\.cursorLineEnd/)
+  })
+
   it('lets one action carry two spellings of the same press', () => {
     // Writing the same key twice is the reader's way of saying one thing, not a
     // clash: only two rows fighting over the byte would be one that never runs.
@@ -270,6 +285,9 @@ describe('resolveKeymap', () => {
     // The other direction: moving the viewport row onto a key the surface
     // answers would take that key away from the surface.
     expect(() => resolveKeymap({ 'tui.altScreen.search': 'ctrl+t' })).toThrow(/surface\.effort/)
+    // The pair is read from the sequences, not from the spelling: this search
+    // key and that gate key are one escape and a letter in a bare terminal.
+    expect(() => resolveKeymap({ 'tui.altScreen.search': 'alt+p', 'gate.reject': 'alt+up' })).toThrow(/tui\.altScreen\.search/)
     // The overlaps the library ships are its own business and stay allowed.
     expect(() => resolveKeymap({})).not.toThrow()
   })

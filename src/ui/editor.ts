@@ -45,7 +45,6 @@ const LEGACY_ALT_ENTER = '\u001b\r'
  * guards a real chord meets, instead of a second sender beside it.
  */
 const KITTY_ALT_ENTER = '\u001b[13;3u'
-const KITTY_CTRL_ENTER = '\u001b[13;5u'
 const KITTY_CTRL_J = '\u001b[106;5u'
 
 /**
@@ -97,20 +96,15 @@ export class BoxedEditor extends Editor {
       super.handleInput(NEWLINE_BYTE)
       return
     }
-    // Only while the terminal cannot tell alt+enter apart from a mapping: with
-    // the protocol active the same sequence is the reader's shift+enter, which
-    // is a newline and has to stay one. A reader who keeps that sequence for a
-    // line is answered by the library's own rule, so the spelling follows the
-    // binding only once the line break is off it.
-    if (data === LEGACY_ALT_ENTER && !isKittyProtocolActive() && !keys.newLine.includes('alt+enter')) {
-      if (keys.submit.includes('alt+enter')) {
-        super.handleInput(KITTY_ALT_ENTER)
-        return
-      }
-      if (keys.submit.includes('ctrl+enter')) {
-        super.handleInput(KITTY_CTRL_ENTER)
-        return
-      }
+    // Only while the terminal cannot tell alt+enter apart from a mapping, and
+    // only for the reader who bound that key: with the protocol active the same
+    // sequence is the reader's shift+enter, and a bar that answered it as a send
+    // because some other chord contains the same bytes would be submitting a key
+    // the reader never bound. A reader who keeps the sequence for a line is
+    // answered by the library's own rule.
+    if (data === LEGACY_ALT_ENTER && !isKittyProtocolActive() && keys.submit.includes('alt+enter')) {
+      super.handleInput(KITTY_ALT_ENTER)
+      return
     }
     super.handleInput(data)
   }

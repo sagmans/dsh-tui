@@ -280,15 +280,19 @@ transcript move where you tell them to.
 Refused, with the reason in a notice and the shipped map left in force: an
 action the surface does not have, a key no terminal reports, `ctrl+q` (the
 terminal keeps it), a bare character outside the chord and gate layers, two
-actions of one layer on one press whatever the spelling — a bare terminal reports
-Return for `enter` and `ctrl+m`, a line feed for `ctrl+j` and, without the
-keyboard protocol, Return as well, and one control byte carries both `ctrl+-` and
-`ctrl+_` — a key the library already answers on a row you never wrote, a key the
-viewport reads before the surface sees it, whichever of the two the map moved onto
-it (`pageUp`, or `tui.altScreen.search` moved onto a surface key), a `chord.prefix`
-that is not a modifier chord or that takes a key the surface or the prompt bar
-answers, and `prefix:` beside `keys.chord.prefix:`, which are the same row under
-two names.
+actions of one layer on one press, a key the library already answers on a row you
+never wrote, a key the viewport reads before the surface sees it, whichever of the
+two the map moved onto it (`pageUp`, or `tui.altScreen.search` moved onto a
+surface key), a `chord.prefix` that is not a modifier chord or that takes a key
+the surface or the prompt bar answers, and `prefix:` beside
+`keys.chord.prefix:`, which are the same row under two names.
+
+Two rows count as one press when some sequence reaches both, not merely when they
+are spelled alike, because one press can arrive as several bytes and one byte can
+spell several keys. A bare terminal reports Return for `enter` and `ctrl+m`, a
+line feed for `ctrl+j` and, without the keyboard protocol, Return as well, one
+control byte carries both `ctrl+-` and `ctrl+_`, and an escape with a letter
+reaches `alt+up` as readily as `alt+p`.
 
 A key the surface or a chord answers is a key the library never sees: that is
 how `ctrl+y` shows nested calls instead of yanking a line in the editor.
