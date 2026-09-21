@@ -745,7 +745,9 @@ export function apply(ctx: Context, config: unknown): void {
       tui.requestRender()
       return
     }
-    const picked = await openPicker(new HistoryPicker(() => promptHistory.entries(), editor.getText(), () => keymap))
+    // The expanded text is what the reader wrote; a large paste sits in the bar
+    // as a marker, and seeding with it would filter out the prompt it came from.
+    const picked = await openPicker(new HistoryPicker(() => promptHistory.entries(), editor.getExpandedText(), () => keymap))
     if (picked === undefined) return
     editor.setText(picked)
     tui.requestRender()
@@ -1628,10 +1630,23 @@ export function apply(ctx: Context, config: unknown): void {
         tui.requestRender()
         return
       }
+      // A refused write cannot remove anything, so saying "forgot 0 prompts"
+      // would describe a successful clear the file never had.
+      const blocked = promptHistory.blockedReason()
+      if (blocked !== undefined) {
+        model.notice('prompt history is unavailable: ' + blocked)
+        tui.requestRender()
+        return
+      }
       return promptHistory.clear().then(removed => {
         model.notice('forgot ' + removed + (removed === 1 ? ' prompt' : ' prompts'))
         tui.requestRender()
       })
+    }).catch(error => {
+      // The store keeps what the file still holds, so the reader is told the
+      // clear failed rather than being shown a count that never landed.
+      model.notice('could not clear prompt history: ' + (error instanceof Error ? error.message : String(error)))
+      tui.requestRender()
     })
   }
 

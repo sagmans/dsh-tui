@@ -1,6 +1,7 @@
 import { chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join, resolve as resolvePath } from 'node:path'
+import { displayText } from '../text.ts'
 
 /**
  * Global prompt history for the terminal surface.
@@ -143,7 +144,10 @@ function normalizeEntry(raw: unknown): PromptEntry | undefined {
   if (typeof raw.text !== 'string' || raw.text.trim() === '') return undefined
   if (typeof raw.updatedAt !== 'string') return undefined
   if (!isPositiveInteger(raw.useCount)) return undefined
-  return { text: raw.text, updatedAt: raw.updatedAt, useCount: raw.useCount }
+  // A prompt reaches the ghost, the picker, and the bar again, and the terminal
+  // executes what it is given: the stored text is the one boundary every later
+  // consumer crosses, so a control sequence is spelled out before it is kept.
+  return { text: displayText(raw.text), updatedAt: raw.updatedAt, useCount: raw.useCount }
 }
 
 /**
@@ -186,7 +190,9 @@ export function createPromptHistory(options: PromptHistoryOptions): PromptHistor
 
   // Every mutation rides one chain so a clear can never be overtaken by a record
   // that started earlier; without it a slow initial read could resurrect an
-  // entry the reader just removed.
+  // entry the reader just removed. Each mutation also re-reads the file, because
+  // a second session may have written since this one loaded and its prompts must
+  // be folded in rather than overwritten.
   let chain: Promise<void> = load()
 
   async function load(): Promise<void> {
@@ -235,9 +241,11 @@ export function createPromptHistory(options: PromptHistoryOptions): PromptHistor
     blockedReason: () => blocked,
     record(text: string): void {
       if (text.trim() === '') return
+      const prompt = displayText(text)
       void enqueue(async () => {
+        await load()
         if (blocked !== undefined) return
-        entries = upsertEntry(entries, text, now().toISOString(), options.cap())
+        entries = upsertEntry(entries, prompt, now().toISOString(), options.cap())
         await write()
       }).catch(() => {
         warnOnce('write', 'prompt history could not be written; this session keeps it in memory only')
@@ -245,10 +253,19 @@ export function createPromptHistory(options: PromptHistoryOptions): PromptHistor
     },
     clear(): Promise<number> {
       return enqueue(async () => {
+        await load()
         if (blocked !== undefined) return 0
         const removed = entries.length
+        const previous = entries
         entries = []
-        await write()
+        try {
+          await write()
+        } catch (error) {
+          // The file still holds the prompts, so memory follows it back rather
+          // than reporting a clear the reader would meet again on next start.
+          entries = previous
+          throw error
+        }
         return removed
       })
     },

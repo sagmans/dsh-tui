@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, stat, writeFile } from 'node:fs/promises'
+import { chmod, mkdtemp, readFile, stat, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -77,6 +77,18 @@ describe('parseHistoryFile', () => {
     })
   })
 
+  it('spells out control characters so a stored prompt cannot drive the terminal', () => {
+    const raw = JSON.stringify({
+      version: HISTORY_SCHEMA_VERSION,
+      updatedAt: AT(1),
+      entries: [entry('a\u001b[2Jb', 1)],
+    })
+    const parsed = parseHistoryFile(raw)
+    expect(parsed.kind).toBe('ready')
+    if (parsed.kind !== 'ready') return
+    expect(parsed.file.entries[0]?.text).toBe('a\\x1B[2Jb')
+  })
+
   it('accepts a file with no entries', () => {
     const parsed = parseHistoryFile(JSON.stringify({
       version: HISTORY_SCHEMA_VERSION,
@@ -134,6 +146,51 @@ describe('createPromptHistory', () => {
     expect(history.entries().map(item => item.text)).toEqual(['typed immediately', 'from disk'])
   })
 
+  it('keeps a prompt another store wrote after it loaded', async () => {
+    const home = await scratchHome()
+    const first = createPromptHistory({ home, cap: () => DEFAULT_MAX_ENTRIES, now: () => new Date(AT(1)) })
+    const second = createPromptHistory({ home, cap: () => DEFAULT_MAX_ENTRIES, now: () => new Date(AT(2)) })
+    await Promise.all([first.flush(), second.flush()])
+    first.record('from the first session')
+    await first.flush()
+    second.record('from the second session')
+    await second.flush()
+    const read = async (): Promise<string[]> =>
+      (JSON.parse(await readFile(historyPath(home), 'utf8')) as { entries: PromptEntry[] }).entries.map(item => item.text)
+    expect(await read()).toEqual(['from the second session', 'from the first session'])
+
+    first.record('from the first session')
+    await first.flush()
+    expect(await read()).toEqual(['from the first session', 'from the second session'])
+  })
+
+  it('refuses a newer schema that appeared after startup', async () => {
+    const home = await scratchHome()
+    const history = createPromptHistory({ home, cap: () => DEFAULT_MAX_ENTRIES })
+    await history.flush()
+    const newer = JSON.stringify({ version: HISTORY_SCHEMA_VERSION + 1, updatedAt: AT(1), entries: [] })
+    await writeFile(historyPath(home), newer)
+    history.record('must not clobber')
+    await history.flush()
+    expect(history.blockedReason()).toBe('unsupported_schema')
+    expect(await readFile(historyPath(home), 'utf8')).toBe(newer)
+  })
+
+  it('keeps the entries when a clear cannot be written', async () => {
+    const home = await scratchHome()
+    const history = createPromptHistory({ home, cap: () => DEFAULT_MAX_ENTRIES, now: () => new Date(AT(1)) })
+    history.record('keep me')
+    await history.flush()
+    await chmod(home, 0o500)
+    try {
+      await expect(history.clear()).rejects.toThrow()
+      expect(history.entries().map(item => item.text)).toEqual(['keep me'])
+      expect(JSON.parse(await readFile(history.path(), 'utf8'))).toMatchObject({ entries: [{ text: 'keep me' }] })
+    } finally {
+      await chmod(home, 0o700)
+    }
+  })
+
   it('clears the file and reports how many entries went', async () => {
     const home = await scratchHome()
     const history = createPromptHistory({ home, cap: () => DEFAULT_MAX_ENTRIES, now: () => new Date(AT(1)) })
@@ -166,6 +223,15 @@ describe('createPromptHistory', () => {
     history.record('c')
     await history.flush()
     expect(history.entries().map(item => item.text)).toEqual(['c', 'b'])
+  })
+
+  it('never records a control sequence a brush could draw or insert', async () => {
+    const home = await scratchHome()
+    const history = createPromptHistory({ home, cap: () => DEFAULT_MAX_ENTRIES, now: () => new Date(AT(1)) })
+    history.record('a\u001b[2Jb')
+    await history.flush()
+    expect(history.entries()[0]?.text).toBe('a\\x1B[2Jb')
+    expect(JSON.parse(await readFile(history.path(), 'utf8')).entries[0].text).toBe('a\\x1B[2Jb')
   })
 
   it('ignores a blank prompt', async () => {
