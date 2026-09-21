@@ -11,7 +11,7 @@
 // would let a contender that paused mid-reclaim remove a lock another process
 // had just published, and two writers would then run at once.
 
-import { mkdir, rename, rm } from 'node:fs/promises'
+import { link, mkdir, rename, rm } from 'node:fs/promises'
 import { hostname } from 'node:os'
 import path from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
@@ -32,6 +32,8 @@ const LOCK_TIMEOUT_MS = 2000
 const LOCK_STALE_MS = 30_000
 const LOCK_OWNER_FILE = 'owner.json'
 const LOCK_TAKEOVER_SUFFIX = '.taken'
+/** The name reclaimers link their claim file onto, so exactly one of them wins. */
+const RECLAIM_SUFFIX = '.reclaiming'
 const LOCK_CHANGED_MESSAGE = 'stash lock changed before release'
 
 /** Which step failed after a write already committed, so the loss is never implied. */
@@ -137,7 +139,11 @@ async function withStashLock<Result>(
     if (mutation && isPersistedMutation(result)) {
       throw new StashCommittedError(result.result, { phase: 'lock-release', error: releaseError })
     }
-    throw releaseError
+    // A read already has its answer, and the answer cannot be wrong because the
+    // lock outlived it: the next contender reclaims a lock whose owner is gone.
+    // Failing here would throw away what the caller just learned — including the
+    // path of a bank that was quarantined while it was being read.
+    if (mutation) throw releaseError
   }
   return result
 }
@@ -187,7 +193,9 @@ async function acquireStashLock(lockDir: string): Promise<LockOwner> {
 }
 
 function lockTimeout(lockDir: string): Error {
-  return new Error(`timed out waiting for the stash lock at ${lockDir}`)
+  return new Error(
+    `timed out waiting for the stash lock at ${lockDir}; remove it and ${lockDir}${RECLAIM_SUFFIX} once no surface is running`,
+  )
 }
 
 async function writeLockOwner(lockDir: string): Promise<LockOwner> {
@@ -268,16 +276,17 @@ async function takeLockDirectory(lockDir: string): Promise<string | undefined> {
 /**
  * Put a lock back that turned out to belong to someone else.
  *
- * A fresh lock at the original path means this one can never be restored, so the
- * moved directory is dropped instead of littering; whoever held it will see a
- * changed lock on release, which is a warning rather than a lost draft.
+ * A fresh lock at the original path means this one can never be restored. It is
+ * left where it is rather than deleted: whoever holds it is running, so a lock
+ * that is merely hard to find costs a warning on release, while a deleted one
+ * costs a second writer in the bank.
  */
 async function putBackLockDirectory(taken: string, lockDir: string): Promise<void> {
   try {
     await rename(taken, lockDir)
   } catch (error) {
     if (hasErrorCode(error, 'ENOENT')) return
-    await rm(taken, { force: true, recursive: true }).catch(() => undefined)
+    throw error
   }
 }
 
@@ -314,24 +323,53 @@ function processIsAlive(pid: number): boolean {
 }
 
 /**
- * Take a lock whose owner is gone.
+ * Reclaim a lock whose owner is gone.
  *
- * A live lock is never even moved: the first look decides, and only a lock that
- * already looks abandoned is taken out of its path. The look is then repeated on
- * the directory that was actually moved, so a lock published in between is put
- * straight back instead of being deleted — the removal always applies to the
- * same directory the judgement did.
+ * The judgement and the removal have to be one step. A rename is atomic but not
+ * conditional: a reclaimer that pauses after judging a dead lock can wake up
+ * holding a live one that replaced it, and a second reclaimer that does the same
+ * leaves two writers in the bank. Reclaimers therefore serialize on a claim file
+ * created by link, which exactly one of them can win, and only the winner judges
+ * and removes. Nothing else can publish a lock while the old name is still taken
+ * — a publisher only succeeds once the name is free, and only the winner frees
+ * it — so the removal cannot land on a lock published after the judgement.
+ *
+ * A reclaimer killed inside that section leaves the claim file behind, and every
+ * later reclaim fails closed at the timeout instead of guessing. That message
+ * names the file, because clearing it by hand is the one recovery that cannot
+ * cost an update.
  */
 async function reclaimAbandonedLock(lockDir: string): Promise<boolean> {
-  const observed = await readLockOwner(lockDir)
-  if (!(await isReclaimableLock(lockDir, observed))) return false
-  const taken = await takeLockDirectory(lockDir)
-  if (taken === undefined) return false
-  const movedOwner = await readLockOwner(taken)
-  if ((movedOwner?.token ?? undefined) !== (observed?.token ?? undefined)) {
-    await putBackLockDirectory(taken, lockDir)
-    return false
+  const mutex = `${lockDir}${RECLAIM_SUFFIX}`
+  const claim = await claimReclaim(mutex)
+  if (claim === undefined) return false
+  try {
+    const observed = await readLockOwner(lockDir)
+    if (!(await isReclaimableLock(lockDir, observed))) return false
+    await removePrivateDirectory(lockDir, 'stash lock')
+    return true
+  } finally {
+    await rm(claim, { force: true }).catch(() => undefined)
+    await rm(mutex, { force: true }).catch(() => undefined)
   }
-  await removePrivateDirectory(taken, 'stash lock')
-  return true
+}
+
+/**
+ * Win the right to reclaim, by linking a private claim file onto one name.
+ *
+ * `link` is the atomic test-and-set this needs: it fails when the name exists,
+ * and it never replaces what is already there, so a contender that loses reads
+ * the winner's claim rather than breaking it.
+ */
+async function claimReclaim(mutex: string): Promise<string | undefined> {
+  const claim = `${mutex}.${createNewId()}`
+  await writePrivateFileExclusive(claim, `${JSON.stringify({ pid: process.pid, host: hostname() })}\n`)
+  try {
+    await link(claim, mutex)
+    return claim
+  } catch (error) {
+    await rm(claim, { force: true }).catch(() => undefined)
+    if (hasErrorCode(error, 'EEXIST')) return undefined
+    throw error
+  }
 }

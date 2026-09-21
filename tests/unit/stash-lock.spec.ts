@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, utimesSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync } from 'node:fs'
 import { hostname } from 'node:os'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -8,6 +8,8 @@ import { StashCommittedError, withStashFileLock, withStashMutationLock } from '@
 import { PRIVATE_DIR_MODE, writePrivateFileExclusive } from '@/stash/private-fs.ts'
 
 const scratchDirs: string[] = []
+/** A pid beyond every platform's range, so it can never name a running process. */
+const DEAD_PID = 2_147_483_646
 
 function scratchFile(): string {
   const directory = mkdtempSync(join(tmpdir(), 'dsh-stash-lock-'))
@@ -57,8 +59,7 @@ describe('withStashFileLock', () => {
 
   it('reclaims a lock whose owner process is gone', async () => {
     const file = scratchFile()
-    // A pid beyond the platform's range can never be running.
-    await holdLock(`${file}.lock`, { pid: 2_147_483_646, host: hostname() })
+    await holdLock(`${file}.lock`, { pid: DEAD_PID, host: hostname() })
     await expect(withStashFileLock(file, async () => 'ran')).resolves.toBe('ran')
   })
 
@@ -77,14 +78,79 @@ describe('withStashFileLock', () => {
     await expect(withStashFileLock(file, async () => 'ran')).rejects.toThrow(/timed out waiting for the stash lock/)
   })
 
-  it('refuses to release a lock that another holder replaced', async () => {
+  /**
+   * A read that already produced its answer must keep it: a lock outliving the
+   * read is recoverable, while throwing here would lose what the read learned —
+   * including where a corrupt bank was quarantined.
+   */
+  it('keeps the read result when the lock cannot be released', async () => {
     const file = scratchFile()
     await expect(
       withStashFileLock(file, async () => {
         await stealLock(`${file}.lock`)
-        return 'done'
+        return 'read'
       }),
-    ).rejects.toThrow(/changed before release/)
+    ).resolves.toBe('read')
+  })
+
+  it('reports a lock that cannot be released as a committed mutation, not a lost one', async () => {
+    const file = scratchFile()
+    await expect(
+      withStashMutationLock(file, async () => {
+        await stealLock(`${file}.lock`)
+        return { didPersist: true, result: 'written' }
+      }),
+    ).rejects.toThrow(/mutation committed but lock-release failed/)
+  })
+
+  /**
+   * Reclaiming is the one place a lock can be removed by a process that does not
+   * hold it, so it is the place two contenders must not both get through: they
+   * would each remove the other's fresh lock and both end up writing.
+   */
+  it('lets one reclaimer through when several find the same dead lock', async () => {
+    const file = scratchFile()
+    await holdLock(`${file}.lock`, { pid: DEAD_PID, host: hostname() })
+    let active = 0
+    let peak = 0
+    await Promise.all(
+      [0, 1, 2, 3].map(async () => {
+        await withStashFileLock(file, async () => {
+          active += 1
+          peak = Math.max(peak, active)
+          await delay(20)
+          active -= 1
+        })
+      }),
+    )
+    expect(peak).toBe(1)
+    expect(existsSync(`${file}.lock.reclaiming`)).toBe(false)
+  })
+
+  it('leaves a live lock exactly where it is while looking at it', async () => {
+    const file = scratchFile()
+    const lockDir = `${file}.lock`
+    await holdLock(lockDir, { pid: process.pid, host: hostname() })
+    const before = readFileSync(join(lockDir, 'owner.json'), 'utf8')
+    await expect(withStashFileLock(file, async () => 'ran')).rejects.toThrow(/timed out waiting/)
+    expect(readFileSync(join(lockDir, 'owner.json'), 'utf8')).toBe(before)
+    expect(readdirSync(lockDir)).toEqual(['owner.json'])
+  })
+
+  /**
+   * A reclaimer killed between winning the claim and clearing it is the one
+   * state a reader has to resolve by hand, so the contender has to stop and say
+   * which file is in the way rather than guess that nobody is reclaiming.
+   */
+  it('fails closed while a dead reclaimer still holds the claim', async () => {
+    const file = scratchFile()
+    const lockDir = `${file}.lock`
+    await holdLock(lockDir, { pid: DEAD_PID, host: hostname() })
+    const mutex = `${lockDir}.reclaiming`
+    await writePrivateFileExclusive(mutex, `${JSON.stringify({ pid: DEAD_PID, host: hostname() })}\n`)
+    await expect(withStashFileLock(file, async () => 'ran')).rejects.toThrow(/timed out waiting for the stash lock/)
+    expect(existsSync(mutex)).toBe(true)
+    expect(existsSync(lockDir)).toBe(true)
   })
 })
 
