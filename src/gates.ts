@@ -229,7 +229,7 @@ const CUSTOM_ROW_EXITS = '↑↓ or esc'
 
 /** The keys that answer the free-text row, where typing is the answer rather than a filter. */
 function customHint(map: Keymap): string {
-  return `type or paste an answer · ${namedKeys(map, 'question.confirm', 'confirm')} · ${CUSTOM_ROW_EXITS} to options`
+  return `type or paste an answer · ${namedKeys(map, 'question.confirm', 'confirm')} · ${namedKeys(map, 'question.cancel', 'abandon')} · ${CUSTOM_ROW_EXITS} to options`
 }
 
 /**
@@ -406,6 +406,15 @@ export class QuestionGate {
       this.absorb(this.typingAnswer(question) ? data : paste)
       return undefined
     }
+    // Abandoning the batch is the one decision that belongs to no row: the
+    // reader asked to be out of the questions, and the row the cursor happens
+    // to sit on is not an answer to that. It settles the way an aborted call
+    // does, with no answers at all, so a partial batch is never handed over as
+    // if the reader had walked through it.
+    if (matchesAction(this.keys(), 'question.cancel', data)) {
+      this.cancel()
+      return []
+    }
     // The free-text row is a text field, so the keys that walk or pick a list
     // would otherwise take the very characters an answer is made of.
     if (this.atCustom) return this.handleCustomKey(data)
@@ -579,7 +588,7 @@ export class QuestionGate {
         // The editor is the only place the text lands, so it is drawn even while
         // empty: a question answered by typing needs somewhere to paste a key.
         answerInput: this.input,
-        hint: `type or paste an answer · ${namedKeys(this.keys(), 'question.confirm', 'confirm')} · ${namedKeys(this.keys(), 'question.skip', 'skip')}`,
+        hint: `type or paste an answer · ${namedKeys(this.keys(), 'question.confirm', 'confirm')} · ${namedKeys(this.keys(), 'question.skip', 'skip')} · ${namedKeys(this.keys(), 'question.cancel', 'abandon')}`,
       }
     }
     if (this.typed !== '') detail.push(`filter: ${this.typed}`)
@@ -614,7 +623,7 @@ export class QuestionGate {
       answerInput: this.atCustom || written ? this.input : undefined,
       hint: this.atCustom
         ? customHint(this.keys())
-        : `${namedKeys(this.keys(), 'question.toggle', question.multiSelect ? 'toggle' : 'select')} · digits pick · ${CUSTOM_ROW_SHORTHAND} · type to filter · ${namedKeys(this.keys(), 'question.confirm', 'confirm')} · ${namedKeys(this.keys(), 'question.skip', 'skip')}`,
+        : `${namedKeys(this.keys(), 'question.toggle', question.multiSelect ? 'toggle' : 'select')} · digits pick · ${CUSTOM_ROW_SHORTHAND} · type to filter · ${namedKeys(this.keys(), 'question.confirm', 'confirm')} · ${namedKeys(this.keys(), 'question.skip', 'skip')} · ${namedKeys(this.keys(), 'question.cancel', 'abandon')}`,
     }
   }
 }
