@@ -10,6 +10,7 @@ const theme = createTheme('none')
 
 const facts = (overrides: Partial<StatusFacts> = {}): StatusFacts => ({
   chord: undefined,
+  back: undefined,
   activity: 'idle',
   elapsedMs: undefined,
   provider: 'deepseek-official',
@@ -94,6 +95,15 @@ describe('cacheRate', () => {
     expect(cacheRate({})).toBeUndefined()
     expect(cacheRate({ cacheReadTokens: 0, uncachedInputTokens: 0 })).toBeUndefined()
     expect(cacheRate(undefined)).toBeUndefined()
+  })
+
+  it('states the way back while another session is on screen', () => {
+    // The hint has to follow the map the reader has now rather than the one the
+    // session was opened under, so it is a fact of the row and not of the text.
+    expect(formatStatus(facts({ back: 'ctrl+g returns to this session' }), 200, theme)).toContain('ctrl+g returns to this session')
+    expect(formatStatus(facts(), 200, theme)).not.toContain('returns to this session')
+    // It leads the row with the chord, so a narrow terminal cuts the facts first.
+    expect(formatStatus(facts({ back: 'ctrl+g returns to this session' }), 30, theme)).toContain('ctrl+g returns')
   })
 
   it('ignores counts a backend reported as something other than a number', () => {

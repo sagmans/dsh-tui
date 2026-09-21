@@ -164,7 +164,8 @@ export const SUBCALL_MAX = 100
  * printed thousands of lines cannot promise ctrl+o will reveal every dropped
  * one.
  */
-const CARD_HINT_EARLIER = 'earlier lines · ctrl+o shows more'
+/** The fold hint names the key that opens the card, which the reader owns. */
+const cardHintEarlier = (showMoreKey: string): string => `earlier lines · ${showMoreKey} shows more`
 
 /**
  * The tail of the hint an opened shell card draws when retention dropped rows.
@@ -340,8 +341,8 @@ export function cardDetailRows(card: ToolCard, preview: CardPreview): { lines: r
 }
 
 /** The hint row for a folded shell card, or undefined when its preview dropped nothing. */
-export function shellFoldHint(hidden: number): string | undefined {
-  return hidden <= 0 ? undefined : `… ${hidden} ${CARD_HINT_EARLIER}`
+export function shellFoldHint(hidden: number, showMoreKey: string): string | undefined {
+  return hidden <= 0 ? undefined : `… ${hidden} ${cardHintEarlier(showMoreKey)}`
 }
 
 /** The hint row for an opened shell card whose retention dropped the run's earlier rows. */

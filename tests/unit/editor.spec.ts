@@ -8,7 +8,8 @@ import {
   type TuiMouseEvent,
 } from '@earendil-works/pi-tui'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { installEditorKeybindings } from '@/input/keymap.ts'
+import { defaultKeymap, resolveKeymap, type Keymap } from '@/input/actions.ts'
+import { installKeybindings } from '@/input/keymap.ts'
 import { createTheme } from '@/theme.ts'
 import { BoxedEditor } from '@/ui/editor.ts'
 
@@ -23,8 +24,8 @@ const surface = (): TUI => ({
   requestRender: () => {},
 }) as unknown as TUI
 
-const editor = (): BoxedEditor => {
-  const instance = new BoxedEditor(surface(), createTheme('none').editor)
+const editor = (map: Keymap = defaultKeymap()): BoxedEditor => {
+  const instance = new BoxedEditor(surface(), createTheme('none').editor, () => map)
   instance.focused = true
   return instance
 }
@@ -139,7 +140,7 @@ describe('BoxedEditor', () => {
 
 describe('the prompt keys', () => {
   beforeEach(() => {
-    installEditorKeybindings()
+    installKeybindings(defaultKeymap())
   })
 
   afterEach(() => {
@@ -147,8 +148,8 @@ describe('the prompt keys', () => {
   })
 
   /** The bar wired to a list of what it sent, so a press either sends or does not. */
-  const sender = (): { instance: BoxedEditor; sent: string[] } => {
-    const instance = editor()
+  const sender = (map: Keymap = defaultKeymap()): { instance: BoxedEditor; sent: string[] } => {
+    const instance = editor(map)
     const sent: string[] = []
     instance.onSubmit = text => {
       sent.push(text)
@@ -235,5 +236,118 @@ describe('the prompt keys', () => {
     expect(keys.matches('\r', 'tui.input.newLine')).toBe(false)
     expect(keys.matches('\u001b[13;2u', 'tui.input.newLine')).toBe(true)
     expect(keys.matches('\n', 'tui.input.newLine')).toBe(true)
+  })
+
+  it('sends on the key the reader chose, and no longer on the shipped one', () => {
+    const map = resolveKeymap({ 'prompt.submit': 'ctrl+g' })
+    installKeybindings(map)
+    const { instance, sent } = sender(map)
+    instance.setText('hello')
+    instance.handleInput('\u0013')
+    expect(sent).toEqual([])
+    instance.handleInput('\u0007')
+    expect(sent).toEqual(['hello'])
+  })
+
+  it('lets Enter send once the reader moves the line break off it', () => {
+    const map = resolveKeymap({ 'prompt.submit': ['enter'], 'prompt.newLine': ['shift+enter'] })
+    installKeybindings(map)
+    const { instance, sent } = sender(map)
+    instance.setText('hello')
+    instance.handleInput('\r')
+    expect(sent).toEqual(['hello'])
+    expect(instance.getText()).toBe('')
+  })
+
+  it('sends on Ctrl+J once the reader moved the line break off it', () => {
+    // The library reads a bare line feed as a line break whatever the map says,
+    // so the bar has to hand it over as the chord the reader bound instead.
+    const map = resolveKeymap({ 'prompt.submit': ['ctrl+j'], 'prompt.newLine': ['enter', 'shift+enter'] })
+    installKeybindings(map)
+    const { instance, sent } = sender(map)
+    instance.setText('hello')
+    instance.handleInput('\n')
+    expect(sent).toEqual(['hello'])
+    expect(instance.getText()).toBe('')
+  })
+
+  it('keeps the legacy alt+enter a line while the reader keeps it for the line', () => {
+    // A terminal without modifiers spells shift+enter as escape+return: the map
+    // says that sequence is a line, so it stays one even though the reader also
+    // sends with a chord a fallback would translate the same bytes into.
+    const map = resolveKeymap({ 'prompt.submit': ['ctrl+enter'], 'prompt.newLine': ['enter', 'alt+enter'] })
+    installKeybindings(map)
+    const { instance, sent } = sender(map)
+    instance.setText('hello')
+    instance.handleInput('\u001b\r')
+    expect(instance.getText()).toBe('hello\n')
+    expect(sent).toEqual([])
+  })
+
+  it('keeps the line feed a line while the protocol spells shift+enter through it', () => {
+    // A terminal that speaks the protocol may report shift+enter as a bare line
+    // feed, which the library reads as that key and as nothing else until the
+    // reader binds Ctrl+J. Handing it over as the chord would decide for them.
+    setKittyProtocolActive(true)
+    const map = resolveKeymap({ 'prompt.submit': ['ctrl+j'], 'prompt.newLine': ['enter', 'shift+enter'] })
+    installKeybindings(map)
+    const { instance, sent } = sender(map)
+    instance.setText('hello')
+    instance.handleInput('\n')
+    expect(instance.getText()).toBe('hello\n')
+    expect(sent).toEqual([])
+  })
+
+  it('leaves the legacy alt+enter to the line when the reader never bound it', () => {
+    // Those bytes are the only spelling a terminal without modifiers has, and a
+    // reader who kept only Ctrl+Enter never bound them: answering them with a
+    // send would submit on a key the map does not hold.
+    const map = resolveKeymap({ 'prompt.submit': ['ctrl+enter'] })
+    installKeybindings(map)
+    const { instance, sent } = sender(map)
+    instance.setText('hello')
+    instance.handleInput('\u001b\r')
+    expect(instance.getText()).toBe('hello\n')
+    expect(sent).toEqual([])
+  })
+
+  it('sends on the legacy alt+enter when that is the only chord the reader sends with', () => {
+    const map = resolveKeymap({ 'prompt.submit': ['alt+enter'] })
+    installKeybindings(map)
+    const { instance, sent } = sender(map)
+    instance.setText('hello')
+    instance.handleInput('\u001b\r')
+    expect(sent).toEqual(['hello'])
+    expect(instance.getText()).toBe('')
+  })
+
+  it('keeps the bare line feed a line while the reader keeps it for the line', () => {
+    const { instance, sent } = sender()
+    instance.setText('first')
+    instance.handleInput('\n')
+    expect(instance.getText()).toBe('first\n')
+    expect(sent).toEqual([])
+  })
+
+  it('breaks the line on the key the reader kept for it', () => {
+    const map = resolveKeymap({ 'prompt.newLine': ['alt+n'], 'prompt.submit': ['ctrl+g'] })
+    installKeybindings(map)
+    const { instance, sent } = sender(map)
+    instance.setText('first')
+    instance.handleInput('\u001bn')
+    expect(instance.getText()).toBe('first\n')
+    expect(sent).toEqual([])
+  })
+
+  it('stops translating the alt+enter sequence once the reader no longer sends with it', () => {
+    // Nothing answers the translation any more, so the press goes back to being
+    // whatever the library makes of those bytes: a line break.
+    const map = resolveKeymap({ 'prompt.submit': 'ctrl+g' })
+    installKeybindings(map)
+    const { instance, sent } = sender(map)
+    instance.setText('hello')
+    instance.handleInput('\u001b\r')
+    expect(instance.getText()).toBe('hello\n')
+    expect(sent).toEqual([])
   })
 })

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { defaultKeymap, resolveKeymap, type Keymap } from '@/input/actions.ts'
 import type { StoredSession } from '@/agent/history.ts'
 import { modelRouteKey, type ModelChoice, type ModelRoute } from '@/agent/model.ts'
 import type { PresetSummary } from '@/agent/presets.ts'
@@ -12,8 +13,8 @@ const session = (id: string, overrides: Partial<StoredSession> = {}): StoredSess
   ...overrides,
 })
 
-const pickerOf = (sessions: StoredSession[], titles: Record<string, string> = {}): SessionPicker =>
-  new SessionPicker(sessions, () => new Map(Object.entries(titles)), () => 1_000_000)
+const pickerOf = (sessions: StoredSession[], titles: Record<string, string> = {}, keys: () => Keymap = defaultKeymap): SessionPicker =>
+  new SessionPicker(sessions, () => new Map(Object.entries(titles)), () => 1_000_000, keys)
 
 describe('describeAge', () => {
   it('reads as a moment rather than a timestamp', () => {
@@ -37,6 +38,29 @@ describe('SessionPicker', () => {
 
   it('cancels on the interrupt key too, rather than swallowing it', () => {
     expect(pickerOf([session('a')]).handleKey('\u0003')).toEqual({ kind: 'cancel' })
+  })
+
+  it('reads the hint of an open list from the map in force', () => {
+    // A settings edit while the list is open lands on the card the reader is
+    // looking at: the surface repaints it rather than building a new one.
+    let map: Keymap = defaultKeymap()
+    const picker = pickerOf([session('a')], {}, () => map)
+    expect(picker.card().hint).toContain('enter open')
+    map = resolveKeymap({ 'picker.confirm': 'alt+y' })
+    expect(picker.card().hint).toContain('alt+y open')
+  })
+
+  it('picks, cancels, and moves on the keys the reader chose', () => {
+    const map = resolveKeymap({ 'picker.confirm': 'alt+y', 'picker.cancel': 'alt+g', 'picker.down': 'alt+d', 'picker.up': 'alt+u' })
+    const picker = pickerOf([session('a'), session('b')], {}, () => map)
+    expect(picker.card().hint).toBe('alt+u or alt+d move · alt+y open · alt+g cancel · type to filter')
+    expect(picker.handleKey('\r')).toBeUndefined()
+    expect(picker.handleKey('\u001b[B')).toBeUndefined()
+    expect(picker.card().rows[0]?.current).toBe(true)
+    expect(picker.handleKey('\u001bd')).toBeUndefined()
+    expect(picker.card().rows[1]?.current).toBe(true)
+    expect(picker.handleKey('\u001bg')).toEqual({ kind: 'cancel' })
+    expect(picker.handleKey('\u001by')).toEqual({ kind: 'pick', id: 'b' })
   })
 
   it('filters by title, id, and directory', () => {
@@ -120,7 +144,7 @@ const PRESETS: readonly PresetSummary[] = [
 
 describe('PresetPicker', () => {
   it('matches a fragment of a mode name and picks the row it left', () => {
-    const picker = new PresetPicker(() => PRESETS, () => 'standard')
+    const picker = new PresetPicker(() => PRESETS, () => 'standard', defaultKeymap)
     for (const key of 'mnml') picker.handleKey(key)
     expect(picker.visible().map(preset => preset.id)).toEqual(['minimal'])
     expect(picker.handleKey('\r')).toEqual({ kind: 'pick', id: 'minimal' })
@@ -134,7 +158,7 @@ const EFFORTS: readonly EffortChoice[] = [
 ]
 
 const effortPicker = (): EffortPicker =>
-  new EffortPicker(() => EFFORTS, 'reasoning effort · kimi-coding/k2')
+  new EffortPicker(() => EFFORTS, 'reasoning effort · kimi-coding/k2', defaultKeymap)
 
 describe('EffortPicker', () => {
   it('picks the row under the cursor, including the provider default', () => {
@@ -189,7 +213,7 @@ const ROUTES: readonly ModelRoute[] = [
 const modelPicker = (
   routes: readonly ModelRoute[] = ROUTES,
   current: ModelChoice | undefined = { provider: 'kimi-coding', model: 'k2' },
-): ModelPicker => new ModelPicker(() => routes, () => current)
+): ModelPicker => new ModelPicker(() => routes, () => current, defaultKeymap)
 
 describe('ModelPicker', () => {
   it('picks the highlighted route on enter', () => {
@@ -219,14 +243,14 @@ describe('ModelPicker', () => {
       { provider: 'kimi-coding', model: 'g-l-m-5-3', name: 'Scattered' },
       { provider: 'zai-coding-cn', model: 'glm-5.3', name: 'GLM 5.3' },
     ]
-    const picker = new ModelPicker(() => routes, () => undefined)
+    const picker = new ModelPicker(() => routes, () => undefined, defaultKeymap)
     for (const key of 'glm53') picker.handleKey(key)
     expect(picker.visible().map(route => route.model)).toEqual(['glm-5.3', 'g-l-m-5-3'])
   })
 
   it('shows rows that arrive after it opened, without reopening it', () => {
     const routes: ModelRoute[] = []
-    const picker = new ModelPicker(() => routes, () => undefined)
+    const picker = new ModelPicker(() => routes, () => undefined, defaultKeymap)
     picker.handleKey('l')
     picker.handleKey('a')
     routes.push({ provider: 'kimi-coding', model: 'k2-latest', name: 'K2 Latest' })

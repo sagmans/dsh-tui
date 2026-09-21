@@ -1,7 +1,9 @@
 import type { KeyId } from '@earendil-works/pi-tui'
 import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-settings'
-import { DEFAULT_PREFIX_KEY, DEFAULT_PREFIX_WINDOW_S, validatePrefix } from './input/keymap.ts'
+import { defaultKeymap, keysFor, resolveKeymap, type KeyListValue, type Keymap } from './input/actions.ts'
+import { KeymapSectionSchema, isActionId } from './input/keymap-settings.ts'
+import { DEFAULT_PREFIX_KEYS, DEFAULT_PREFIX_WINDOW_S } from './input/keymap.ts'
 import {
   DEFAULT_PALETTE,
   PALETTE_NAMES,
@@ -79,8 +81,13 @@ const SECTION = z.object({
   mermaid: z.union([...MERMAID_MODES]).default(DEFAULT_MERMAID_MODE),
   // A free string rather than an enumerated union: the keymap module owns which
   // keys exist, and its refusal is the message a reader can act on.
-  prefix: z.string().default(DEFAULT_PREFIX_KEY),
+  //
+  // No default, unlike the fields around it: a registration fills every declared
+  // field, so a default here would hand back the old spelling as written and the
+  // reader's own keys.chord.prefix would read as a second spelling of it.
+  prefix: z.string(),
   prefixWindow: z.number().min(0).max(MAX_PREFIX_WINDOW_S).default(DEFAULT_PREFIX_WINDOW_S),
+  keys: KeymapSectionSchema.default({}),
 })
 
 /**
@@ -96,7 +103,7 @@ const TOKEN_NAMES = new Set<string>(TUI_TOKENS)
 const PALETTE_NAME_SET = new Set<string>(PALETTE_NAMES)
 
 /** The section's own keys: schemastery keeps what it does not declare, so a misspelling has to be refused here. */
-const SECTION_KEYS = new Set(['palette', 'tokens', 'subcalls', 'mermaid', 'prefix', 'prefixWindow'])
+const SECTION_KEYS = new Set(['palette', 'tokens', 'subcalls', 'mermaid', 'prefix', 'prefixWindow', 'keys'])
 
 /**
  * Validate the raw section, refusing a name the surface does not have.
@@ -121,6 +128,10 @@ function rejectUnknownKeys(raw: unknown): void {
   if (unknownPalette.length > 0) {
     throw new Error(`unknown ${TUI_SETTINGS_NAMESPACE} palette entr${unknownPalette.length === 1 ? 'y' : 'ies'}: ${unknownPalette.join(', ')}`)
   }
+  const unknownActions = Object.keys(asRecord(section.keys) ?? {}).filter(name => !isActionId(name))
+  if (unknownActions.length > 0) {
+    throw new Error(`unknown ${TUI_SETTINGS_NAMESPACE} key action${unknownActions.length === 1 ? '' : 's'}: ${unknownActions.join(', ')}`)
+  }
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -138,6 +149,7 @@ export function parseSettings(raw: unknown): TuiSettings {
     mermaid: MermaidMode
     prefix: string
     prefixWindow: number
+    keys: Record<string, KeyListValue>
   }
   // Only what the reader actually wrote is an override: the schema fills every
   // field so validation can see a whole section, but returning those fills
@@ -160,15 +172,31 @@ export function parseSettings(raw: unknown): TuiSettings {
     if (value === undefined || !hasAnyField(parsed.tokens[name])) continue
     tokens[name] = parsed.tokens[name] ?? {}
   }
+  const writtenKeys = asRecord(section.keys) ?? {}
+  // The old spelling and the map set the same key; accepting both would make
+  // the document mean two things at once.
+  if (section.prefix !== undefined && writtenKeys['chord.prefix'] !== undefined) {
+    throw new Error('prefix and keys.chord.prefix set the same key; write keys.chord.prefix alone')
+  }
+  // Only what the reader wrote reaches the map: the schema fills every action so
+  // validation can see a whole section, and a fill-in would report every action
+  // as overridden.
+  const overrides: Record<string, KeyListValue> = {}
+  for (const [id, value] of Object.entries(parsed.keys)) {
+    if (value !== undefined) overrides[id] = value
+  }
+  if (parsed.prefix !== undefined) overrides['chord.prefix'] = parsed.prefix
+  // Validated here rather than in the schema because every refusal depends on
+  // the catalog and on the layers the map already claims, which a schema cannot see.
+  const keymap = resolveKeymap(overrides)
   return {
     palette: palette as Readonly<Partial<Record<PaletteName, string>>>,
     tokens: tokens as Readonly<Partial<Record<TuiToken, StyleSpec>>>,
     subcalls: parsed.subcalls,
     mermaid: parsed.mermaid,
-    // Validated here rather than in the schema because the refusal depends on
-    // the surface's own keys, which the schema has no way to see.
-    prefix: validatePrefix(parsed.prefix),
+    prefixes: keysFor(keymap, 'chord.prefix'),
     prefixWindow: parsed.prefixWindow,
+    keymap,
   }
 }
 
@@ -184,10 +212,12 @@ export interface TuiSettings {
   readonly tokens: Readonly<Partial<Record<TuiToken, StyleSpec>>>
   readonly subcalls: SubCallDisplay
   readonly mermaid: MermaidMode
-  /** The key that starts a chord; a key the surface answers itself is refused at parse. */
-  readonly prefix: KeyId
+  /** The keys that start a chord; a key the surface answers itself is refused at parse. */
+  readonly prefixes: readonly KeyId[]
   /** How long an armed chord waits for its second key, in seconds; zero waits for the next key. */
   readonly prefixWindow: number
+  /** Every action's keys, with the reader's overrides already merged over the shipped ones. */
+  readonly keymap: Keymap
 }
 
 /** The section as it reads when the reader has written nothing. */
@@ -197,8 +227,9 @@ export function defaultSettings(): TuiSettings {
     tokens: {},
     subcalls: 'inline',
     mermaid: DEFAULT_MERMAID_MODE,
-    prefix: DEFAULT_PREFIX_KEY,
+    prefixes: [...DEFAULT_PREFIX_KEYS],
     prefixWindow: DEFAULT_PREFIX_WINDOW_S,
+    keymap: defaultKeymap(),
   }
 }
 

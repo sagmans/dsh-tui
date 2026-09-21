@@ -8,6 +8,8 @@ import {
   type TuiMouseEvent,
   type TuiMouseEventResult,
 } from '@earendil-works/pi-tui'
+import { ENTER_KEY, defaultKeymap, type Keymap } from '../input/actions.ts'
+import { promptKeys } from '../input/keymap.ts'
 import { FRAME_COLUMNS, FRAME_GLYPHS, MIN_BOX_WIDTH, PADDING_X } from './frame.ts'
 
 /**
@@ -35,14 +37,15 @@ const NEWLINE_BYTE = '\n'
 const LEGACY_ALT_ENTER = '\u001b\r'
 
 /**
- * Ctrl+Enter as the keyboard protocol spells it.
+ * The chords as the keyboard protocol spells them.
  *
- * A legacy alt+enter arrives as the very sequence the base class reads as a
- * newline before it ever looks for a submit key, so the press is translated
- * into the chord the base does look for. The submit path then runs whole, with
- * the same guards a real chord meets, instead of a second sender beside it.
+ * The base class reads a legacy alt+enter and a bare line feed as line breaks
+ * before it looks at any binding, so each press is handed over as the chord the
+ * map actually holds for it. The submit path then runs whole, with the same
+ * guards a real chord meets, instead of a second sender beside it.
  */
-const KITTY_SUBMIT = '\u001b[13;5u'
+const KITTY_ALT_ENTER = '\u001b[13;3u'
+const KITTY_CTRL_J = '\u001b[106;5u'
 
 /**
  * The input bar drawn as a box, with its completion menu above it.
@@ -60,32 +63,47 @@ export class BoxedEditor extends Editor {
   /** Whether the last render drew a frame, which is what a click is mapped through. */
   private boxed = false
 
-  constructor(tui: TUI, theme: EditorTheme) {
+  constructor(tui: TUI, theme: EditorTheme, private readonly keymap: () => Keymap = defaultKeymap) {
     super(tui, theme, { paddingX: PADDING_X })
   }
 
   /**
    * Read the two presses the base class cannot place on its own.
    *
-   * Enter breaks the line here, so the press the base would submit with becomes
-   * a newline — except while it is picking a completion, the one press that
-   * chooses something instead of sending it, and except on a bar a question or
-   * a picker has borrowed, whose keys belong to whoever borrowed it.
+   * Enter breaks the line while the reader keeps that key for the line, so the
+   * press the base would submit with becomes a newline — except while it is
+   * picking a completion, the one press that chooses something instead of
+   * sending it, and except on a bar a question or a picker has borrowed, whose
+   * keys belong to whoever borrowed it.
    */
   override handleInput(data: string): void {
     if (this.disableSubmit) {
       super.handleInput(data)
       return
     }
-    if (matchesKey(data, 'enter') && !this.isShowingAutocomplete()) {
+    const keys = promptKeys(this.keymap())
+    // A bare line feed is a line break in the base class whatever the map says,
+    // so a reader who moved the line break off ctrl+j and sends with it would
+    // keep getting lines. It is read before the Return guard because a terminal
+    // without the protocol reports that byte as Return as well — and only
+    // without it, because a terminal that speaks the protocol sends the chord
+    // itself and reports a line feed for a key the reader meant as a line.
+    if (data === NEWLINE_BYTE && !isKittyProtocolActive() && keys.submit.includes('ctrl+j')) {
+      super.handleInput(KITTY_CTRL_J)
+      return
+    }
+    if (keys.enterBreaksLine && matchesKey(data, ENTER_KEY) && !this.isShowingAutocomplete()) {
       super.handleInput(NEWLINE_BYTE)
       return
     }
-    // Only while the terminal cannot tell alt+enter apart from a mapping: with
-    // the protocol active the same sequence is the reader's shift+enter, which
-    // is a newline and has to stay one.
-    if (data === LEGACY_ALT_ENTER && !isKittyProtocolActive()) {
-      super.handleInput(KITTY_SUBMIT)
+    // Only while the terminal cannot tell alt+enter apart from a mapping, and
+    // only for the reader who bound that key: with the protocol active the same
+    // sequence is the reader's shift+enter, and a bar that answered it as a send
+    // because some other chord contains the same bytes would be submitting a key
+    // the reader never bound. A reader who keeps the sequence for a line is
+    // answered by the library's own rule.
+    if (data === LEGACY_ALT_ENTER && !isKittyProtocolActive() && keys.submit.includes('alt+enter')) {
+      super.handleInput(KITTY_ALT_ENTER)
       return
     }
     super.handleInput(data)

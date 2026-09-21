@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { type Component, ProcessTerminal, ScrollView, VStack, isKeyRelease, matchesKey } from '@earendil-works/pi-tui'
+import { type Component, type KeyId, ProcessTerminal, ScrollView, VStack, isKeyRelease, matchesKey } from '@earendil-works/pi-tui'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 // Type-only: the command registry publishes the change event this surface
@@ -39,14 +39,14 @@ import { LOCAL_COMMANDS, classifySubmission, type Submission } from './input/sub
 import { createDeferredNotice } from './settings-notice.ts'
 import {
   ChordReader,
-  DEFAULT_PREFIX_KEY,
+  DEFAULT_PREFIX_KEYS,
   DEFAULT_PREFIX_WINDOW_S,
-  SURFACE_KEYS,
+  chordBindings,
   chordKeysLine,
-  installEditorKeybindings,
+  installKeybindings,
   surfaceKeysLine,
-  type SurfaceKeyId,
 } from './input/keymap.ts'
+import { defaultKeymap, hintKeys, surfaceBindings, type Keymap, type SurfaceActionId } from './input/actions.ts'
 import { resolveConfig } from './config.ts'
 import { FoldCursor } from './fold-cursor.ts'
 import { createRestoreRegistry } from './terminal/restore.ts'
@@ -60,10 +60,11 @@ import { detectColourMode, type ColourMode } from './theme-capability.ts'
 import { defaultSettings, readScope, settingsProblemMessage, toOverrides, TUI_SETTINGS_NAMESPACE, TuiSettingsSchema, type MermaidMode, type TuiSettings } from './theme-settings.ts'
 import { pendingPrompts } from './queue.ts'
 import { renderThemeTable } from './theme-command.ts'
+import { KEYMAP_LAYERS, keymapLayer, renderKeymap } from './keys-command.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { formatTokens } from './tokens.ts'
 import { TranscriptModel } from './transcript.ts'
-import { WorkFold, describeTodos } from './work.ts'
+import { WorkFold, describeTodos, planSelectedActive, planToggleLine, readPlanState, type PlanModeState } from './work.ts'
 import { WorkDock } from './ui/dock.ts'
 import { GateInputBar } from './ui/gate-input.ts'
 import { PromptBar } from './ui/prompt.ts'
@@ -97,8 +98,11 @@ export const inject = ['agents', 'tools']
 /** One second in the unit a chord window is scheduled in. */
 const MS_PER_SECOND = 1000
 
-/** The one thing to say about a view a reader did not open. */
-const LOCAL_KEYS_BACK = 'ctrl+b returns'
+/** What the back hint names when the reader has unbound the key it would advertise. */
+const BACK_HINT_FALLBACK = 'ctrl+b'
+
+/** What the reader presses to leave a view they did not open. */
+const backHint = (map: Keymap): string => `${hintKeys(map, 'surface.back') || BACK_HINT_FALLBACK} returns to this session`
 
 /** Stored sessions titled at once when the picker opens. */
 const TITLE_CONCURRENCY = 4
@@ -109,6 +113,11 @@ const STATUS_TICK_MS = 1000
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined
+}
+
+/** The preset registry, asked for a service the agent's own composition holds. */
+interface ServiceFor {
+  serviceFor(agent: unknown, name: string): unknown
 }
 
 /**
@@ -218,9 +227,11 @@ export function apply(ctx: Context, config: unknown): void {
    * follow the edit.
    */
   let mermaidMode: MermaidMode = defaultSettings().mermaid
-  /** The key that starts a chord, and how long it waits; the settings document owns both. */
-  let prefixKey = DEFAULT_PREFIX_KEY
+  /** The keys that start a chord, and how long one waits; the settings document owns all of it. */
+  let prefixKeys: readonly KeyId[] = DEFAULT_PREFIX_KEYS
   let prefixWindowMs = DEFAULT_PREFIX_WINDOW_S * MS_PER_SECOND
+  /** Every action's keys in force; the settings document owns it and a press reads it live. */
+  let keymap: Keymap = defaultKeymap()
   /**
    * The chord between a prefix and the action that follows it.
    *
@@ -229,7 +240,7 @@ export function apply(ctx: Context, config: unknown): void {
    * The repaint the window also wants is late-bound: only a key press reaches
    * it, and no key can arrive before the surface has started.
    */
-  const keyChord = new ChordReader(() => prefixKey, () => prefixWindowMs, () => tui.requestRender())
+  const keyChord = new ChordReader(() => prefixKeys, () => chordBindings(keymap), () => prefixWindowMs, () => tui.requestRender())
   /**
    * Seed the display the reader configured.
    *
@@ -240,8 +251,12 @@ export function apply(ctx: Context, config: unknown): void {
   const applyDisplay = (section: TuiSettings): void => {
     viewState.expandSubCalls = section.subcalls === 'inline'
     mermaidMode = section.mermaid
-    prefixKey = section.prefix
+    prefixKeys = section.prefixes
     prefixWindowMs = section.prefixWindow * MS_PER_SECOND
+    keymap = section.keymap
+    // Installed where the library reads it, so a remap lands on the next press
+    // rather than at the next restart.
+    installKeybindings(keymap)
     // A chord armed under the keymap the reader just replaced is not their chord.
     keyChord.disarm()
   }
@@ -350,11 +365,13 @@ export function apply(ctx: Context, config: unknown): void {
     state: () => viewState,
     gate: () => pending?.gate.card(),
     picker: () => pendingPicker?.picker.card(),
+    keys: () => keymap,
   })
   // The key map goes in before the bar exists, so no press can be read as the
-  // send the library submits on by default.
-  installEditorKeybindings()
-  const editor = new GateInputBar(tui, theme.editor)
+  // send the library submits on by default. A settings document read after this
+  // point installs over it, which is why the bar reads the map per press.
+  installKeybindings(keymap)
+  const editor = new GateInputBar(tui, theme.editor, () => keymap)
   // Answers are written in the reader's own editor, which is why a question
   // borrows the bar instead of drawing a second one beside it.
   const promptBar = new PromptBar(editor)
@@ -382,6 +399,10 @@ export function apply(ctx: Context, config: unknown): void {
     override: () => modelSwitch.current(),
     home: process.env.HOME,
     chord: () => keyChord.hint(),
+    // Read per paint rather than written into the marker the view left behind:
+    // a hint stored with the transcript would keep naming the key of the day it
+    // was written, and the reader may remap it with the row already on screen.
+    back: () => (viewedSession === activeSession ? undefined : backHint(keymap)),
   })
   const statusBar = new StatusBar(statusFacts, theme)
   const dock = new WorkDock(() => work.state(), theme, () => jobs, () => roster.list())
@@ -470,7 +491,7 @@ export function apply(ctx: Context, config: unknown): void {
    * Keyed by the table's own ids, so a key added to {@link SURFACE_KEYS}
    * without a handler here fails to compile rather than doing nothing.
    */
-  const surfaceActions: Readonly<Record<SurfaceKeyId, () => boolean>> = {
+  const surfaceActions: Readonly<Record<SurfaceActionId, () => boolean>> = {
     toolDetail: () => {
       viewState.expandCards = !viewState.expandCards
       tui.requestRender()
@@ -585,9 +606,9 @@ export function apply(ctx: Context, config: unknown): void {
       tui.requestRender()
       return { consume: true }
     }
-    for (const entry of SURFACE_KEYS) {
-      if (!matchesKey(data, entry.key)) continue
-      return surfaceActions[entry.id]() ? { consume: true } : undefined
+    for (const binding of surfaceBindings(keymap)) {
+      if (!matchesKey(data, binding.key)) continue
+      return surfaceActions[binding.action]() ? { consume: true } : undefined
     }
     return undefined
   }))
@@ -617,7 +638,7 @@ export function apply(ctx: Context, config: unknown): void {
   const askForSession = async (history: SessionHistory, sessions: readonly StoredSession[]): Promise<SessionId | undefined> => {
     const titles = new Map<string, string>()
     void loadTitles(history, sessions, titles)
-    const picked = await openPicker(new SessionPicker(sessions, () => titles), refuseReason)
+    const picked = await openPicker(new SessionPicker(sessions, () => titles, undefined, () => keymap), refuseReason)
     return picked === undefined ? undefined : SessionId(picked)
   }
 
@@ -667,7 +688,7 @@ export function apply(ctx: Context, config: unknown): void {
   const askForPreset = async (currentId: string | undefined): Promise<string | undefined> => {
     if (agentPresets === undefined) return undefined
     presetRows = await agentPresets.list()
-    return await openPicker(new PresetPicker(() => presetRows, () => currentId))
+    return await openPicker(new PresetPicker(() => presetRows, () => currentId, () => keymap))
   }
 
   /** Title the listed sessions without making the reader wait for the slowest log. */
@@ -797,9 +818,7 @@ export function apply(ctx: Context, config: unknown): void {
       model.notice(`could not read that session: ${error instanceof Error ? error.message : String(error)}`)
     }
     const returned = id === activeSession && previous !== activeSession
-    model.marker(returned
-      ? 'back to the session this terminal drives'
-      : `viewing ${id}${id === activeSession ? '' : ` — ${LOCAL_KEYS_BACK}`}`)
+    model.marker(returned ? 'back to the session this terminal drives' : `viewing ${id}`)
     tui.requestRender()
   }
 
@@ -1292,6 +1311,7 @@ export function apply(ctx: Context, config: unknown): void {
       const picked = await openPicker(new EffortPicker(
         () => effortChoices(efforts, effective),
         `reasoning effort · ${route.provider}/${route.model}`,
+        () => keymap,
       ))
       if (picked !== undefined) applyEffort(route.provider, route.model, picked)
     } catch (error) {
@@ -1334,7 +1354,7 @@ export function apply(ctx: Context, config: unknown): void {
           // One adapter's discovery failure is not the list's to explain.
         })
       }
-      const picked = await openPicker(new ModelPicker(() => routes, effectiveRoute))
+      const picked = await openPicker(new ModelPicker(() => routes, effectiveRoute, () => keymap))
       if (picked === undefined) return
       const route = readModelRouteKey(picked)
       if (route === undefined) return
@@ -1377,6 +1397,7 @@ export function apply(ctx: Context, config: unknown): void {
       const picked = await openPicker(new EffortPicker(
         () => effortChoices(efforts, facts.effort),
         `reasoning effort · ${facts.provider}/${facts.model}`,
+        () => keymap,
       ))
       if (picked !== undefined) applyEffort(facts.provider, facts.model, picked)
     } catch (error) {
@@ -1443,8 +1464,27 @@ export function apply(ctx: Context, config: unknown): void {
       ? []
       : registry()?.list(current).map(command => `/${command.name}`) ?? []
     const commands = registered.length === 0 ? 'none registered yet' : registered.join(' ')
-    return `commands: ${commands} · surface: ${LOCAL_COMMANDS.join(' ')} · keys: ${surfaceKeysLine()} · ${chordKeysLine(prefixKey)}`
+    return `commands: ${commands} · surface: ${LOCAL_COMMANDS.join(' ')} · keys: ${surfaceKeysLine(keymap)} · ${chordKeysLine(keymap)}`
   }
+
+  /**
+   * Whether the agent this surface is driving is in plan mode.
+   *
+   * The dock's fold is the fallback, for a composition without the plan
+   * package: with the controller present its answer is the agent's own state
+   * rather than a replay of the events this surface happened to see.
+   */
+  const planState = (): PlanModeState | undefined => {
+    const current = agent?.agent
+    if (current === undefined) return undefined
+    const presets = ctx.get('agentPresets') as ServiceFor | undefined
+    return readPlanState({
+      direct: name => ctx.get(name),
+      forAgent: (target, name) => presets?.serviceFor(target, name),
+    }, current)
+  }
+
+  const planActive = (): boolean => planSelectedActive(planState(), work.state().planMode)
 
   const runCommand = (name: string, line: string): void => {
     const current = agent
@@ -1534,6 +1574,16 @@ export function apply(ctx: Context, config: unknown): void {
         for (const line of renderThemeTable(toOverrides(readSection()))) model.notice(line)
         tui.requestRender()
         return
+      case 'keys': {
+        const layer = submission.argument === '' ? undefined : keymapLayer(submission.argument)
+        if (submission.argument !== '' && layer === undefined) {
+          model.notice(`unknown layer "${submission.argument}" · ${KEYMAP_LAYERS.join(' ')}`)
+        } else {
+          for (const line of renderKeymap(keymap, layer)) model.notice(line)
+        }
+        tui.requestRender()
+        return
+      }
       case 'copy':
         runCopyCommand()
         return
@@ -1573,6 +1623,11 @@ export function apply(ctx: Context, config: unknown): void {
           model.notice(`could not resume: ${error instanceof Error ? error.message : String(error)}`)
           tui.requestRender()
         })
+        return
+      // Plan mode is a command the harness owns, so the chord asks the host for
+      // the state and names the command for the other one: one key, both ways.
+      case 'plan':
+        runCommand('plan', planToggleLine(planActive()))
         return
       case 'command':
         runCommand(submission.name, submission.line)
@@ -1656,7 +1711,7 @@ export function apply(ctx: Context, config: unknown): void {
   disposers.push(ctx.on('approval/request', (request, next) => {
     if (request.agent.id !== activeSession) return next()
     return new Promise<ApprovalOutcome>(resolve => {
-      const gate = new ApprovalGate(request.toolName, request.reason)
+      const gate = new ApprovalGate(request.toolName, request.reason, () => keymap)
       request.signal?.addEventListener('abort', () => {
         gate.cancel()
         if (pending?.gate === gate) closeGate()
@@ -1672,7 +1727,7 @@ export function apply(ctx: Context, config: unknown): void {
     const questions = toGateQuestions(request)
     if (questions.length === 0) return next()
     return new Promise<AskUserQuestionAnswer>(resolve => {
-      const gate = promptBar.borrow(() => new QuestionGate(questions, editor))
+      const gate = promptBar.borrow(() => new QuestionGate(questions, editor, () => keymap))
       // The seam takes mutable selection arrays and an optional custom field, so
       // the read-only gate answer is copied into that exact shape here.
       const settle = (answers: GateAnswer[]): void => {

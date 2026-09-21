@@ -16,13 +16,15 @@ export type Submission =
   | { readonly kind: 'new'; readonly title: string }
   | { readonly kind: 'todo' }
   | { readonly kind: 'theme' }
+  | { readonly kind: 'keys'; readonly argument: string }
   | { readonly kind: 'copy' }
+  | { readonly kind: 'plan' }
   | { readonly kind: 'command'; readonly name: string; readonly line: string }
   | { readonly kind: 'prompt'; readonly text: string }
 
 /** Commands the surface answers itself, without a model turn. */
 export const LOCAL_COMMANDS = [
-  '/help', '/status', '/model', '/preset', '/todo', '/theme', '/jobs', '/subagents', '/fork', '/new', '/rename', '/export', '/copy', '/clear', '/resume', '/quit', '/exit',
+  '/help', '/status', '/model', '/preset', '/todo', '/theme', '/keys', '/jobs', '/subagents', '/fork', '/new', '/rename', '/export', '/copy', '/clear', '/resume', '/quit', '/exit',
 ] as const
 
 /** What each local command does, shown in the editor's completion menu. */
@@ -35,6 +37,7 @@ export const LOCAL_COMMAND_DESCRIPTIONS: Readonly<Record<string, string>> = {
   '/subagents': 'list delegations; /subagents open <id|last> reads one, /subagents kill <id> stops one',
   '/todo': 'show the list of tasks the agent is keeping',
   '/theme': 'list every styled element and the value in force',
+  '/keys': 'list every action and the keys in force; /keys <layer> narrows it',
   '/fork': 'branch this conversation and continue in the branch',
   '/new': 'start a fresh session without leaving the terminal',
   '/copy': 'copy the last answer to the clipboard through the terminal',
@@ -84,6 +87,9 @@ export function classifySubmission(text: string): Submission {
   }
   if (trimmed === '/todo') return { kind: 'todo' }
   if (trimmed === '/theme') return { kind: 'theme' }
+  if (trimmed === '/keys' || trimmed.startsWith('/keys ')) {
+    return { kind: 'keys', argument: trimmed.slice('/keys'.length).trim() }
+  }
   if (trimmed === '/copy') return { kind: 'copy' }
   if (trimmed === '/new' || trimmed.startsWith('/new ')) {
     return { kind: 'new', title: trimmed.slice('/new'.length).trim() }

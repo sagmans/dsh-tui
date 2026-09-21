@@ -1,16 +1,16 @@
-import { getKeybindings } from '@earendil-works/pi-tui'
+import { getKeybindings, type KeyId } from '@earendil-works/pi-tui'
 import { describe, expect, it } from 'vitest'
+import { defaultKeymap, resolveKeymap } from '@/input/actions.ts'
 import {
-  CHORD_BINDINGS,
   ChordReader,
+  DEFAULT_PREFIX_KEYS,
   DEFAULT_PREFIX_KEY,
   DEFAULT_PREFIX_WINDOW_S,
-  EDITOR_SUBMIT_KEYS,
-  SURFACE_KEYS,
-  installEditorKeybindings,
+  chordBindings,
   chordKeysLine,
+  installKeybindings,
+  promptKeys,
   surfaceKeysLine,
-  validatePrefix,
   type ChordTimers,
 } from '@/input/keymap.ts'
 
@@ -48,64 +48,116 @@ function fakeClock(): FakeClock {
 
 let expired = 0
 
-function reader(prefix: string = DEFAULT_PREFIX_KEY, windowMs = DEFAULT_PREFIX_WINDOW_S * 1000): { chord: ChordReader; clock: FakeClock } {
+function reader(prefixes: readonly KeyId[] = DEFAULT_PREFIX_KEYS, windowMs = DEFAULT_PREFIX_WINDOW_S * 1000, map = defaultKeymap()): { chord: ChordReader; clock: FakeClock } {
   const clock = fakeClock()
   return {
-    chord: new ChordReader(() => prefix as never, () => windowMs, () => {
+    chord: new ChordReader(() => prefixes, () => chordBindings(map), () => windowMs, () => {
       expired += 1
     }, clock),
     clock,
   }
 }
 
-describe('validatePrefix', () => {
-  it('takes a modifier chord', () => {
-    expect(validatePrefix('ctrl+x')).toBe('ctrl+x')
-    expect(validatePrefix('alt+x')).toBe('alt+x')
-    expect(validatePrefix('ctrl+shift+m')).toBe('ctrl+shift+m')
-  })
-
-  it('refuses a bare key, which would eat the reader typing it', () => {
-    expect(() => validatePrefix('x')).toThrow(/modifier chord/)
-    expect(() => validatePrefix('enter')).toThrow(/modifier chord/)
-    expect(() => validatePrefix('ctrl+')).toThrow(/modifier chord/)
-    expect(() => validatePrefix('CTRL+X')).toThrow(/modifier chord/)
-  })
-
-  it('refuses a key the surface answers itself', () => {
-    for (const entry of SURFACE_KEYS) expect(() => validatePrefix(entry.key)).toThrow(/surface/)
-    expect(() => validatePrefix('ctrl+c')).toThrow(/interrupt or exit/)
-  })
-
-  it('refuses a key the surface sends with, which a prefix would swallow', () => {
-    expect(() => validatePrefix('ctrl+s')).toThrow(/submit/)
-  })
-
-  it('refuses a key the terminal owns, which would never arrive', () => {
-    expect(() => validatePrefix('ctrl+q')).toThrow(/terminal/)
-  })
-})
-
 describe('the key tables', () => {
   it('names every key the surface answers, for help and for the refusal message', () => {
-    expect(surfaceKeysLine()).toContain('ctrl+o tool detail')
-    expect(surfaceKeysLine().split(' · ')).toHaveLength(SURFACE_KEYS.length)
+    const line = surfaceKeysLine(defaultKeymap())
+    expect(line).toContain('ctrl+o tool detail')
+    expect(line.split(' · ')).toHaveLength(6)
   })
 
-  it('installs the send chords over the Enter the library ships', () => {
-    installEditorKeybindings()
-    const keys = getKeybindings()
-    for (const chord of EDITOR_SUBMIT_KEYS) {
-      const data = chord === 'ctrl+enter' ? '\u001b[13;5u' : chord === 'alt+enter' ? '\u001b[13;3u' : '\u0013'
-      expect(keys.matches(data, 'tui.input.submit'), chord).toBe(true)
-    }
-    expect(keys.matches('\r', 'tui.input.submit')).toBe(false)
+  it('reads the keys the reader wrote wherever help is asked for', () => {
+    const line = surfaceKeysLine(resolveKeymap({ 'surface.effort': 'ctrl+e' }))
+    expect(line).toContain('ctrl+e reasoning effort')
+    expect(line).not.toContain('ctrl+t')
   })
 
   it('asks for the model picker and the copy through the command line submissions', () => {
-    expect(CHORD_BINDINGS.find(entry => entry.key === 'm')?.submission).toEqual({ kind: 'model', argument: '' })
-    expect(CHORD_BINDINGS.find(entry => entry.key === 'y')?.submission).toEqual({ kind: 'copy' })
-    expect(chordKeysLine('ctrl+x')).toBe('ctrl+x then m model · y copy')
+    const bindings = chordBindings(defaultKeymap())
+    expect(bindings.find(entry => entry.key === 'm')?.submission).toEqual({ kind: 'model', argument: '' })
+    expect(bindings.find(entry => entry.key === 'y')?.submission).toEqual({ kind: 'copy' })
+    expect(chordKeysLine(defaultKeymap())).toBe('ctrl+x then m model · p plan mode · y copy')
+  })
+
+  it('reads a chord the reader moved, and a prefix they changed', () => {
+    const map = resolveKeymap({ 'chord.prefix': 'alt+z', 'chord.model': 'n' })
+    expect(chordKeysLine(map)).toBe('alt+z then n model · p plan mode · y copy')
+    expect(chordBindings(map).find(entry => entry.label === 'model')?.key).toBe('n')
+  })
+})
+
+describe('installKeybindings', () => {
+  it('installs the send chords over the Enter the library ships', () => {
+    installKeybindings(defaultKeymap())
+    const keys = getKeybindings()
+    expect(keys.matches('\u001b[13;5u', 'tui.input.submit')).toBe(true)
+    expect(keys.matches('\u001b[13;3u', 'tui.input.submit')).toBe(true)
+    expect(keys.matches('\u0013', 'tui.input.submit')).toBe(true)
+    expect(keys.matches('\r', 'tui.input.submit')).toBe(false)
+  })
+
+  it('installs a send key the reader chose in place of the shipped ones', () => {
+    installKeybindings(resolveKeymap({ 'prompt.submit': 'ctrl+g' }))
+    const keys = getKeybindings()
+    expect(keys.matches('\u0007', 'tui.input.submit')).toBe(true)
+    expect(keys.matches('\u0013', 'tui.input.submit')).toBe(false)
+  })
+
+  it('installs a library action the reader bound', () => {
+    installKeybindings(resolveKeymap({ 'tui.editor.yank': 'ctrl+g', 'tui.editor.historyPrevious': 'alt+p' }))
+    const keys = getKeybindings()
+    expect(keys.matches('\u0007', 'tui.editor.yank')).toBe(true)
+    expect(keys.matches('\u001bp', 'tui.editor.historyPrevious')).toBe(true)
+  })
+
+  it('leaves a library action the reader did not write on the library own keys', () => {
+    installKeybindings(resolveKeymap({ 'tui.editor.yank': 'ctrl+g' }))
+    expect(getKeybindings().matches('\u001b[1;3D', 'tui.editor.cursorWordLeft')).toBe(true)
+  })
+
+  it('unbinds the library newline keys when the reader leaves the line to Enter alone', () => {
+    installKeybindings(resolveKeymap({ 'prompt.newLine': ['enter'], 'prompt.submit': 'ctrl+g' }))
+    const keys = getKeybindings()
+    expect(keys.matches('\u001b[13;2u', 'tui.input.newLine')).toBe(false)
+    expect(keys.matches('\n', 'tui.input.newLine')).toBe(false)
+  })
+
+  it('installs a reloaded map where the library is what answers a press', () => {
+    // A settings edit re-installs the tables, and the library is what the editor
+    // asks: the key the reader moved to has to land there and the shipped one
+    // has to stop answering.
+    installKeybindings(resolveKeymap({}))
+    expect(getKeybindings().matches('\u0007', 'tui.input.submit')).toBe(false)
+    installKeybindings(resolveKeymap({ 'prompt.submit': 'ctrl+g' }))
+    expect(getKeybindings().matches('\u0007', 'tui.input.submit')).toBe(true)
+    expect(getKeybindings().matches('\u0013', 'tui.input.submit')).toBe(false)
+  })
+
+  it('keeps Enter out of the library newline binding, which the bar answers itself', () => {
+    installKeybindings(defaultKeymap())
+    const keys = getKeybindings()
+    expect(keys.matches('\u001b[13;2u', 'tui.input.newLine')).toBe(true)
+    expect(keys.matches('\n', 'tui.input.newLine')).toBe(true)
+    expect(keys.matches('\r', 'tui.input.newLine')).toBe(false)
+  })
+})
+
+describe('promptKeys', () => {
+  it('keeps Enter for the line and reads the shipped send chords', () => {
+    const keys = promptKeys(defaultKeymap())
+    expect(keys.submit).toEqual(['ctrl+enter', 'alt+enter', 'ctrl+s'])
+    expect(keys.newLine).toEqual(['enter', 'shift+enter', 'ctrl+j'])
+    expect(keys.enterBreaksLine).toBe(true)
+  })
+
+  it('lets Enter send once the reader moves the line break off it', () => {
+    const keys = promptKeys(resolveKeymap({ 'prompt.submit': ['enter'], 'prompt.newLine': ['shift+enter'] }))
+    expect(keys.enterBreaksLine).toBe(false)
+  })
+
+  it('reads whatever the reader sends with, including one chord alone', () => {
+    expect(promptKeys(resolveKeymap({ 'prompt.submit': 'ctrl+g' })).submit).toEqual(['ctrl+g'])
+    expect(promptKeys(resolveKeymap({ 'prompt.submit': ['alt+enter'] })).submit).toEqual(['alt+enter'])
+    expect(promptKeys(resolveKeymap({ 'prompt.submit': ['ctrl+j'], 'prompt.newLine': ['enter', 'shift+enter'] })).submit).toEqual(['ctrl+j'])
   })
 })
 
@@ -116,7 +168,7 @@ describe('ChordReader', () => {
     expect(chord.handle('\u0018')).toEqual({ kind: 'armed' })
     expect(chord.pending).toBe(true)
     expect(chord.hint()).toBe('ctrl+x')
-    expect(chord.handle('m')).toEqual({ kind: 'action', binding: CHORD_BINDINGS[0] })
+    expect(chord.handle('m')).toEqual({ kind: 'action', binding: chordBindings(defaultKeymap())[0] })
     expect(chord.pending).toBe(false)
     expect(chord.hint()).toBeUndefined()
   })
@@ -124,7 +176,30 @@ describe('ChordReader', () => {
   it('dispatches the copy chord', () => {
     const { chord } = reader()
     chord.handle('\u0018')
-    expect(chord.handle('y')).toEqual({ kind: 'action', binding: CHORD_BINDINGS[1] })
+    expect(chord.handle('y')).toEqual({ kind: 'action', binding: chordBindings(defaultKeymap()).find(entry => entry.label === 'copy') })
+  })
+
+  it('dispatches the plan chord', () => {
+    const { chord } = reader()
+    chord.handle('\u0018')
+    expect(chord.handle('p')).toEqual({ kind: 'action', binding: chordBindings(defaultKeymap()).find(entry => entry.label === 'plan mode') })
+    expect(chord.handle('p')).toBeUndefined()
+  })
+
+  it('takes a second key the reader moved, and no longer the shipped one', () => {
+    const map = resolveKeymap({ 'chord.model': 'n' })
+    const { chord } = reader([DEFAULT_PREFIX_KEY], DEFAULT_PREFIX_WINDOW_S * 1000, map)
+    chord.handle('\u0018')
+    expect(chord.handle('m')).toBeUndefined()
+    chord.handle('\u0018')
+    expect(chord.handle('n')).toEqual({ kind: 'action', binding: chordBindings(map)[0] })
+  })
+
+  it('takes a second key that is itself a chord', () => {
+    const map = resolveKeymap({ 'chord.copy': 'ctrl+y' })
+    const { chord } = reader([DEFAULT_PREFIX_KEY], DEFAULT_PREFIX_WINDOW_S * 1000, map)
+    chord.handle('\u0018')
+    expect(chord.handle('\u0019')).toEqual({ kind: 'action', binding: chordBindings(map).find(entry => entry.label === 'copy') })
   })
 
   it('hands an unbound second key back rather than swallowing it', () => {
@@ -165,7 +240,7 @@ describe('ChordReader', () => {
   })
 
   it('schedules nothing when the reader asks for a sticky chord', () => {
-    const { chord, clock } = reader(DEFAULT_PREFIX_KEY, 0)
+    const { chord, clock } = reader([DEFAULT_PREFIX_KEY], 0)
     chord.handle('\u0018')
     expect(clock.scheduled()).toBeUndefined()
     expect(chord.pending).toBe(true)
@@ -177,13 +252,42 @@ describe('ChordReader', () => {
     expect(chord.pending).toBe(false)
   })
 
+  it('arms on any prefix the reader listed, and names the one that was pressed', () => {
+    const { chord } = reader(['ctrl+x', 'ctrl+g'])
+    expect(chord.handle('\u0007')).toEqual({ kind: 'armed' })
+    expect(chord.hint()).toBe('ctrl+g')
+    chord.disarm()
+    expect(chord.handle('\u0018')).toEqual({ kind: 'armed' })
+    expect(chord.hint()).toBe('ctrl+x')
+  })
+
+  it('hands the next key back when a settings edit lands mid-chord', () => {
+    // The surface disarms on a reload: the second key of a chord armed under the
+    // old map is not a key the reader chose in the new one.
+    let prefixes: readonly KeyId[] = ['ctrl+x']
+    let bindings = chordBindings(defaultKeymap())
+    const chord = new ChordReader(() => prefixes, () => bindings, () => 0, () => {})
+    expect(chord.handle('\u0018')).toEqual({ kind: 'armed' })
+    prefixes = ['alt+x']
+    bindings = chordBindings(resolveKeymap({ 'chord.model': 'n' }))
+    chord.disarm()
+    expect(chord.pending).toBe(false)
+    expect(chord.hint()).toBeUndefined()
+    expect(chord.handle('m')).toBeUndefined()
+    expect(chord.handle('\u001bx')).toEqual({ kind: 'armed' })
+    expect(chord.handle('n')).toEqual({ kind: 'action', binding: bindings[0] })
+  })
+
   it('follows a prefix the reader changed without being rebuilt', () => {
-    let prefix = 'ctrl+x'
-    const chord = new ChordReader(() => prefix as never, () => 0, () => {})
+    let prefixes: readonly KeyId[] = ['ctrl+x']
+    let bindings = chordBindings(defaultKeymap())
+    const chord = new ChordReader(() => prefixes, () => bindings, () => 0, () => {})
     expect(chord.handle('\u0018')).toEqual({ kind: 'armed' })
     chord.disarm()
-    prefix = 'alt+x'
+    prefixes = ['alt+x']
+    bindings = chordBindings(resolveKeymap({ 'chord.model': 'n' }))
     expect(chord.handle('\u0018')).toBeUndefined()
     expect(chord.handle('\u001bx')).toEqual({ kind: 'armed' })
+    expect(chord.handle('n')).toEqual({ kind: 'action', binding: bindings[0] })
   })
 })

@@ -1,6 +1,7 @@
 import { type TUI } from '@earendil-works/pi-tui'
 import { describe, expect, it } from 'vitest'
 import { ApprovalGate, type GateQuestion, QuestionGate, toGateQuestions } from '@/gates.ts'
+import { defaultKeymap, resolveKeymap, type Keymap } from '@/input/actions.ts'
 import { createTheme } from '@/theme.ts'
 import { GateInputBar } from '@/ui/gate-input.ts'
 
@@ -14,7 +15,7 @@ const STUB_TUI = { requestRender: () => {}, terminal: { rows: 24, cols: 80 } } a
 const answerBar = (): GateInputBar => new GateInputBar(STUB_TUI, createTheme('none').editor)
 
 /** A question gate over a fresh bar, which is how the surface builds one. */
-const gateOver = (questions: readonly GateQuestion[]): QuestionGate => new QuestionGate(questions, answerBar())
+const gateOver = (questions: readonly GateQuestion[], keys: () => Keymap = defaultKeymap): QuestionGate => new QuestionGate(questions, answerBar(), keys)
 
 /** What the bar holds, which is what an enter sends. */
 const answerText = (gate: QuestionGate): string | undefined => gate.card().answerInput?.getExpandedText()
@@ -31,36 +32,44 @@ const BACKSPACE = '\x7f'
 
 describe('ApprovalGate', () => {
   it('allows once on y and rejects on n', () => {
-    expect(new ApprovalGate('bash', 'needs network').handleKey('y')).toBe('allowed-once')
-    expect(new ApprovalGate('bash', undefined).handleKey('n')).toBe('rejected')
+    expect(new ApprovalGate('bash', 'needs network', defaultKeymap).handleKey('y')).toBe('allowed-once')
+    expect(new ApprovalGate('bash', undefined, defaultKeymap).handleKey('n')).toBe('rejected')
   })
 
   it('treats escape as a cancellation rather than a silent allow', () => {
-    expect(new ApprovalGate('bash', undefined).handleKey(ESC)).toBe('cancelled')
+    expect(new ApprovalGate('bash', undefined, defaultKeymap).handleKey(ESC)).toBe('cancelled')
   })
 
   it('ignores keys that are not decisions', () => {
-    const gate = new ApprovalGate('bash', undefined)
+    const gate = new ApprovalGate('bash', undefined, defaultKeymap)
     expect(gate.handleKey('x')).toBeUndefined()
     expect(gate.resolved).toBe(false)
   })
 
   it('settles only once', () => {
-    const gate = new ApprovalGate('bash', undefined)
+    const gate = new ApprovalGate('bash', undefined, defaultKeymap)
     expect(gate.handleKey('y')).toBe('allowed-once')
     expect(gate.handleKey('n')).toBeUndefined()
     expect(gate.resolved).toBe(true)
   })
 
   it('lets an abort cancel a request nobody answered', () => {
-    const gate = new ApprovalGate('bash', undefined)
+    const gate = new ApprovalGate('bash', undefined, defaultKeymap)
     gate.cancel()
     expect(gate.resolved).toBe(true)
     expect(gate.handleKey('y')).toBeUndefined()
   })
 
+  it('decides on the keys the reader chose, and names those in its card', () => {
+    const map = resolveKeymap({ 'gate.allow': 'a', 'gate.reject': 'r', 'gate.cancel': 'alt+g' })
+    const gate = new ApprovalGate('bash', undefined, () => map)
+    expect(gate.card().hint).toBe('a allow once · r reject · alt+g cancel')
+    expect(gate.handleKey('y')).toBeUndefined()
+    expect(gate.handleKey('a')).toBe('allowed-once')
+  })
+
   it('shows the tool, the reason, and the keys that decide', () => {
-    const card = new ApprovalGate('bash', 'write outside the workspace').card()
+    const card = new ApprovalGate('bash', 'write outside the workspace', defaultKeymap).card()
     expect(card.kind).toBe('approval')
     expect(card.title).toBe('approval needed · bash')
     expect(card.detail).toEqual(['write outside the workspace'])
@@ -127,6 +136,29 @@ describe('QuestionGate', () => {
     accumulation.handleKey('1')
     accumulation.handleKey('2')
     expect(accumulation.handleKey(ENTER)).toEqual([{ id: 'q1', selected: ['a', 'b'] }])
+  })
+
+  it('moves, picks, and answers on the keys the reader chose', () => {
+    const map = resolveKeymap({
+      'question.up': 'alt+u',
+      'question.down': 'alt+d',
+      'question.toggle': 'alt+t',
+      'question.confirm': 'alt+y',
+      'question.skip': 'alt+g',
+    })
+    const gate = gateOver(single, () => map)
+    expect(gate.card().hint).toContain('alt+t select')
+    gate.handleKey('\u001bd')
+    gate.handleKey('\u001bt')
+    expect(gate.handleKey(ESC)).toBeUndefined()
+    expect(gate.handleKey('\u001by')).toEqual([{ id: 'q1', selected: ['no'] }])
+  })
+
+  it('skips only on the key the reader kept for skipping', () => {
+    const map = resolveKeymap({ 'question.skip': 'alt+g' })
+    const gate = gateOver(single, () => map)
+    expect(gate.handleKey(ESC)).toBeUndefined()
+    expect(gate.handleKey('\u001bg')).toEqual([{ id: 'q1', selected: [] }])
   })
 
   it('skips the current question on escape with an empty selection', () => {
@@ -369,7 +401,8 @@ describe('QuestionGate free-text row', () => {
     const card = gate.card()
     expect(card.custom?.current).toBe(true)
     expect(card.options.every(option => !option.current)).toBe(true)
-    expect(card.hint).toContain('back to options')
+    // The hint names the field's own exits, which are not the question's keys.
+    expect(card.hint).toContain('↑↓ or esc to options')
   })
 
   it('answers with what was typed on row 0 instead of filtering by it', () => {
@@ -576,7 +609,7 @@ describe('QuestionGate free-text row', () => {
     bar.setText('an answer nobody sent')
     const gate = new QuestionGate(toGateQuestions({
       questions: [{ id: 'q1', question: 'why?', options: [{ label: 'because' }] }],
-    }), bar)
+    }), bar, defaultKeymap)
     expect(gate.card().answerInput).toBeUndefined()
     gate.handleKey('0')
     expect(answerText(gate)).toBe('')
