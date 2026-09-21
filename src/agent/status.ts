@@ -90,7 +90,7 @@ export interface StatusSources {
    */
   readonly back?: (() => string | undefined) | undefined
   /**
-   * How many drafts this directory has parked, read per paint so the count
+   * How many drafts this session has parked, read per paint so the count
    * follows a stash or a pop without the surface having to push an update.
    */
   readonly stash?: (() => number | undefined) | undefined

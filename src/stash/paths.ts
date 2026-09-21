@@ -1,16 +1,17 @@
 // Disk layout for prompt stashes.
 //
-// A stash is scoped to the exact working directory: a linked worktree, a bare
-// checkout, and a plain folder are all just distinct cwd values, so keying on
-// cwd covers every case without any git discovery. The cwd is flattened into a
-// filename-safe key that stays human-readable in the agent directory.
+// A bank is scoped to one session: two terminals working in the same directory
+// keep separate drafts, and a resumed session finds the drafts it parked before
+// the restart, because the session id is what a resume preserves. The id is
+// flattened into a filename-safe key that stays human-readable in the agent
+// directory.
 //
 // Readability cannot be bought with injectivity: a separator made of hyphens
-// cannot be told apart from a hyphen inside a directory name, and truncating a
-// deep path can land on a name a shorter path already owns. Two working
-// directories sharing one bank would let one directory read or delete another's
-// drafts, so every key ends with a digest of the exact cwd. The readable part is
-// then only a label: two distinct cwds collide in the label, never in the file.
+// cannot be told apart from a hyphen inside a session id, and truncating a long
+// id can land on a name a shorter id already owns. Two sessions sharing one bank
+// would let one read or delete another's drafts, so every key ends with a digest
+// of the exact session id. The readable part is then only a label: two distinct
+// ids collide in the label, never in the file.
 
 import { createHash } from 'node:crypto'
 import { homedir } from 'node:os'
@@ -28,7 +29,7 @@ const STASH_DIR_NAME = 'tui-stash'
 // common 255-byte filename limit.
 const SANITIZE_MAX_LENGTH = 200
 const SEPARATOR = '--'
-const KEY_FORMAT_VERSION = 'v1'
+const KEY_FORMAT_VERSION = 'v2'
 const KEY_PREFIX = `${KEY_FORMAT_VERSION}${SEPARATOR}`
 const ESCAPE_CHARACTER = '%'
 const ESCAPED_ESCAPE_CHARACTER = '%25'
@@ -39,17 +40,17 @@ const HASH_ALGORITHM = 'sha256'
 /** 64 bits of digest, which no deliberate name can be built to collide with. */
 const HASH_LENGTH = 16
 
-/** The stash file for one working directory. */
+/** The stash file for one session. */
 export interface StashPaths {
-  /** The exact working directory this bank belongs to. */
-  readonly cwd: string
-  /** Flattened cwd, used as the on-disk key. */
+  /** The exact session this bank belongs to. */
+  readonly sessionId: string
+  /** Flattened session id, used as the on-disk key. */
   readonly key: string
-  /** JSON file holding this directory's stash entries. */
+  /** JSON file holding this session's stash entries. */
   readonly file: string
 }
 
-/** Escape one path segment so it cannot collide with the separator or an escape. */
+/** Escape one key segment so it cannot collide with the separator or an escape. */
 function escapeSegment(segment: string): string {
   return segment
     .replaceAll(ESCAPE_CHARACTER, ESCAPED_ESCAPE_CHARACTER)
@@ -70,9 +71,9 @@ function truncateToUtf8Bytes(value: string, maxBytes: number): string {
   return result
 }
 
-export function sanitizeCwd(cwd: string): string {
-  const readable = cwd.split('/').filter(Boolean).map(escapeSegment).join(SEPARATOR)
-  const digest = createHash(HASH_ALGORITHM).update(cwd, 'utf8').digest('hex').slice(0, HASH_LENGTH)
+export function sanitizeSessionId(sessionId: string): string {
+  const readable = sessionId.split('/').filter(Boolean).map(escapeSegment).join(SEPARATOR)
+  const digest = createHash(HASH_ALGORITHM).update(sessionId, 'utf8').digest('hex').slice(0, HASH_LENGTH)
   const suffix = `${SEPARATOR}${digest}`
   const budget = SANITIZE_MAX_LENGTH - Buffer.byteLength(KEY_PREFIX) - Buffer.byteLength(suffix)
   return `${KEY_PREFIX}${truncateToUtf8Bytes(readable, Math.max(budget, 0))}${suffix}`
@@ -90,12 +91,12 @@ export function dshHomeDir(env: NodeJS.ProcessEnv = process.env, home: string = 
   return configured === undefined || configured === '' ? path.join(home, DEFAULT_DSH_HOME_DIR) : configured
 }
 
-/** The root every working directory's stash file sits under. */
+/** The root every session's stash file sits under. */
 export function stashBaseDir(env: NodeJS.ProcessEnv = process.env, home: string = homedir()): string {
   return path.join(dshHomeDir(env, home), STASH_DIR_NAME)
 }
 
-export function resolveStashPaths(cwd: string, baseDir: string = stashBaseDir()): StashPaths {
-  const key = sanitizeCwd(cwd)
-  return { cwd, key, file: path.join(baseDir, `${key}.json`) }
+export function resolveStashPaths(sessionId: string, baseDir: string = stashBaseDir()): StashPaths {
+  const key = sanitizeSessionId(sessionId)
+  return { sessionId, key, file: path.join(baseDir, `${key}.json`) }
 }

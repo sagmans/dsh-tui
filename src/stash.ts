@@ -8,7 +8,7 @@
 
 import { FileTooLargeError } from './stash/private-fs.ts'
 import { StashCommittedError } from './stash/lock.ts'
-import { resolveStashPaths, stashBaseDir, type StashPaths } from './stash/paths.ts'
+import { resolveStashPaths, stashBaseDir } from './stash/paths.ts'
 import type { ResolvedEntry } from './stash/schema.ts'
 import {
   loadStashStore,
@@ -61,7 +61,14 @@ export interface StashHost {
 }
 
 export interface PromptStashOptions {
-  readonly cwd: string
+  /**
+   * The session whose bank commands act on, read per operation.
+   *
+   * A surface can move to another session without leaving the terminal, so the
+   * bank has to follow it: a bank captured at construction would let a command
+   * read or delete drafts that belong to the session just left.
+   */
+  readonly sessionId: () => string
   /** Override the storage root; tests keep it inside a scratch directory. */
   readonly baseDir?: string | undefined
   readonly now?: (() => number) | undefined
@@ -76,10 +83,12 @@ function describeFailure(error: unknown): string {
 }
 
 export class PromptStash {
-  private readonly paths: StashPaths
+  private readonly baseDir: string
   private readonly now: (() => number) | undefined
   private readonly write: StashWriter | undefined
   private store: StashStore | undefined
+  /** The session `store` was read for, so a switch can be told from a re-read. */
+  private scope: string | undefined
   private count = 0
   /** The queue a second command waits behind, so writes never interleave. */
   private tail: Promise<void> = Promise.resolve()
@@ -88,24 +97,30 @@ export class PromptStash {
     private readonly host: StashHost,
     private readonly options: PromptStashOptions,
   ) {
-    this.paths = resolveStashPaths(options.cwd, options.baseDir ?? stashBaseDir())
+    this.baseDir = options.baseDir ?? stashBaseDir()
     this.now = options.now
     this.write = options.write
   }
 
-  /** How many drafts this directory holds, as last read. */
+  /** How many drafts this session holds, as last read. */
   get entryCount(): number {
     return this.count
   }
 
-  /** Load the bank once at startup so the status count is real before a command. */
-  async open(): Promise<void> {
-    try {
-      await this.ensure()
-    } catch (error) {
-      this.host.notice(describeFailure(error))
-    }
-    this.sync()
+  /**
+   * Read the bank of the session in force, so the status count is real before a
+   * command and after the surface moves to another session. A read creates
+   * nothing on disk, so a session that never stashes leaves no file behind.
+   */
+  open(): Promise<void> {
+    return this.enqueue(async () => {
+      try {
+        await this.ensure()
+      } catch (error) {
+        this.host.notice(describeFailure(error))
+      }
+      this.sync()
+    })
   }
 
   /**
@@ -294,9 +309,11 @@ export class PromptStash {
   }
 
   private async ensure(): Promise<StashStore> {
-    if (this.store !== undefined) return this.store
-    const store = await loadStashStore(this.paths, this.now, this.write)
+    const sessionId = this.options.sessionId()
+    if (this.store !== undefined && this.scope === sessionId) return this.store
+    const store = await loadStashStore(resolveStashPaths(sessionId, this.baseDir), this.now, this.write)
     this.store = store
+    this.scope = sessionId
     return store
   }
 
@@ -321,7 +338,9 @@ export class PromptStash {
   /** Publish the bank's size and any quarantine the last read produced. */
   private sync(): void {
     if (this.store !== undefined) {
-      this.count = this.store.entryCount
+      // A store read for a session the surface has left is not the count to
+      // draw; the open that follows the switch publishes the right one.
+      this.count = this.scope === this.options.sessionId() ? this.store.entryCount : 0
       const quarantine = this.store.takeQuarantine()
       if (quarantine !== undefined) {
         const durability = quarantine.syncFailed ? CORRUPT_RECOVERY_UNSYNCED_MESSAGE : ''

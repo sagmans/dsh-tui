@@ -17,7 +17,7 @@ const entry = (id: string, text = id, createdAt = 1_000): StashEntry => ({ id, t
 
 const file = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
   version: STASH_SCHEMA_VERSION,
-  cwd: 'v1--work',
+  sessionId: 'tui-session-work',
   createdAt: 1,
   updatedAt: 2,
   entries: [entry('a')],
@@ -39,10 +39,10 @@ describe('stash entry ids', () => {
 })
 
 describe('createEmptyStashFile', () => {
-  it('starts a fresh, versioned bank for one directory', () => {
-    expect(createEmptyStashFile('v1--work', 42)).toEqual({
+  it('starts a fresh, versioned bank for one session', () => {
+    expect(createEmptyStashFile('tui-session-work', 42)).toEqual({
       version: STASH_SCHEMA_VERSION,
-      cwd: 'v1--work',
+      sessionId: 'tui-session-work',
       createdAt: 42,
       updatedAt: 42,
       entries: [],
@@ -73,7 +73,7 @@ describe('parseStashFile', () => {
   })
 
   it('refuses a file whose entries could be ambiguous or unusable', () => {
-    expect(parseStashFile(file({ cwd: 3 }))).toBeUndefined()
+    expect(parseStashFile(file({ sessionId: 3 }))).toBeUndefined()
     expect(parseStashFile(file({ createdAt: 'yesterday' }))).toBeUndefined()
     expect(parseStashFile(file({ updatedAt: undefined }))).toBeUndefined()
     expect(parseStashFile(file({ entries: 'none' }))).toBeUndefined()

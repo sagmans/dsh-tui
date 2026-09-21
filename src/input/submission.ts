@@ -59,9 +59,9 @@ export const LOCAL_COMMAND_DESCRIPTIONS: Readonly<Record<string, string>> = {
   '/stash': 'store the draft typed after it; ctrl+x then s parks the editor',
   '/stash-pop': 'put a stashed draft (newest by default) into the editor and remove it',
   '/stash-apply': 'put a stashed draft (newest by default) into the editor and keep it',
-  '/stash-list': 'open the stashes for this directory; enter pops one',
+  '/stash-list': "open this session's stashes; enter pops one",
   '/stash-drop': 'delete a stashed draft (newest by default) without using it',
-  '/stash-clear': 'delete every stashed draft for this directory after a confirmation',
+  '/stash-clear': 'delete every draft stashed in this session after a confirmation',
   '/quit': 'leave and print the resume command',
   '/exit': 'leave and print the resume command',
 }
