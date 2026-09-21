@@ -99,12 +99,18 @@ describe('file completion on the at-sign', () => {
 
 describe('at-sign rows the menu must not draw', () => {
   it('keeps a quoted directory pick open so the reader can drill into it', async () => {
-    const provider = providerFor(['docs/my" dir/notes.md', 'docs/my" dir'])
+    const provider = providerFor(['docs/my"dir/notes.md', 'docs/my"dir'])
     const found = await provider.getSuggestions(['@"my'], 0, 4, { signal })
     const chosen = found?.items.find(item => item.value.endsWith('dir/'))
-    expect(chosen?.value).toBe('@"docs/my\\" dir/')
+    expect(chosen?.value).toBe('@"docs/my\\"dir/')
     const next = await provider.getSuggestions([chosen?.value + 'n'], 0, (chosen?.value.length ?? 0) + 1, { signal })
-    expect(next?.items.map(item => item.value)).toEqual(['@"docs/my\\" dir/notes.md"'])
+    expect(next?.items.map(item => item.value)).toEqual(['@"docs/my\\"dir/notes.md"'])
+  })
+
+  it('does not offer a directory the reader could never narrow further', async () => {
+    const provider = providerFor(['my docs/notes.md', 'my docs'])
+    const found = await provider.getSuggestions(['@my'], 0, 3, { signal })
+    expect(found?.items.map(item => item.value)).toEqual(['@"my docs/notes.md"'])
   })
 
   it('never offers a row whose path could drive the terminal', async () => {

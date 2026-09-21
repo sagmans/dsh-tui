@@ -8,7 +8,7 @@ import {
   atToken,
   atValue,
   createFileIndex,
-  offerablePath,
+  offerableCandidate,
   rankFiles,
   SUGGESTION_LIMIT,
   type Candidate,
@@ -79,10 +79,10 @@ class WorkspaceFileProvider extends CombinedAutocompleteProvider {
     if (token !== undefined && !isOutsideWorkspace(token.query)) {
       const candidates = await this.index.candidates(options.signal)
       if (options.signal.aborted) return null
-      // An index is free to be some other source of rows, so the shape a pick
-      // inserts is checked here as well: a suggestion the menu cannot draw
-      // honestly must not reach the prompt.
-      const offerable = candidates.filter(candidate => offerablePath(candidate.path))
+      // An index is free to be some other source of rows, so what a pick may
+      // insert is checked here as well: a row the menu cannot draw honestly,
+      // or cannot follow up on, must not reach the prompt.
+      const offerable = candidates.filter(candidate => offerableCandidate(candidate))
       const items = rankFiles(token.query, offerable, SUGGESTION_LIMIT).map(candidate => fileItem(candidate, token.quoted))
       return items.length === 0 ? null : { items, prefix: token.prefix }
     }

@@ -142,6 +142,22 @@ export function offerablePath(path: string): boolean {
   return path !== '' && !path.startsWith('/') && !path.split('/').includes('..') && !CONTROL_CHARACTERS.test(path)
 }
 
+/** What a token cannot carry without being split, as the editor's own trigger reads it. */
+const WHITESPACE_CHARACTER = /\s/
+
+/**
+ * Whether a row may be offered at all.
+ *
+ * A directory is a place to keep typing, and the editor only asks for
+ * suggestions while the typed token holds no whitespace: offering a directory
+ * whose path has one would leave the reader stuck after the pick. Its files
+ * are still offered on their own, each with a value that needs no narrowing.
+ */
+export function offerableCandidate(candidate: Candidate): boolean {
+  if (!offerablePath(candidate.path)) return false
+  return !candidate.isDirectory || !WHITESPACE_CHARACTER.test(candidate.path)
+}
+
 /**
  * The rows that best answer the fragment, best first.
  *
