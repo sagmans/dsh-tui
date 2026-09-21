@@ -4,7 +4,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { MessageSource } from '@deepseek-ai/dsh-llm'
 import type { UserMessage } from '@deepseek-ai/dsh-session'
-import type { PostToolDecision, ToolExecution } from '@deepseek-ai/dsh-tools'
+import type { PostToolDecision, ToolExecution, ToolExecutionResult } from '@deepseek-ai/dsh-tools'
 import { projectionState } from './agent/projections.ts'
 import type { TodoEntry } from './work.ts'
 
@@ -31,6 +31,8 @@ export const TODO_WRITE_TOOL = 'todo_write'
 /** The durable events the counter follows. */
 const TURN_START = 'turn/start'
 const STEP_START = 'step/start'
+/** The tool's own snapshot event, appended only once a write is committed. */
+const TODO_WRITE_EVENT = 'todo/write'
 
 /** Projection keys the harness registers for the tool and for plan mode. */
 const TODOS_KEY = 'todos'
@@ -134,12 +136,24 @@ interface Counters {
   remindedThisStep: boolean
 }
 
+/**
+ * What one read of the `todos` projection found.
+ *
+ * `absent` is the tool's own "nothing written yet"; `unavailable` is a registry
+ * that cannot answer at all. The guard promises silence for the second, so the
+ * two must not collapse into one.
+ */
+export type TodoListRead =
+  | { readonly kind: 'listed'; readonly todos: readonly TodoEntry[] }
+  | { readonly kind: 'absent' }
+  | { readonly kind: 'unavailable' }
+
 /** What the guard reads about one agent before deciding whether to speak. */
 export interface TodoObservation {
   readonly toolName: string
   readonly hasTodoTool: boolean
   readonly planActive: boolean
-  readonly todos: readonly TodoEntry[] | undefined
+  readonly todos: TodoListRead
 }
 
 /**
@@ -166,25 +180,28 @@ export class TodoGuard {
     if (type === STEP_START) {
       counters.steps += 1
       counters.remindedThisStep = false
+      return
     }
+    // Only a committed write restarts the age. An attempt the tool rejected
+    // never reaches this event, so it cannot buy the stale list quiet steps.
+    if (type === TODO_WRITE_EVENT) counters.steps = 0
   }
 
   /** The reminder this tool result should carry, or undefined to stay silent. */
   observe(session: object, observation: TodoObservation): TodoReminder | undefined {
     const counters = this.countersFor(session)
-    // A write is the agent answering us; the next count starts from it.
-    if (observation.toolName === TODO_WRITE_TOOL) {
-      counters.steps = 0
-      return undefined
-    }
+    // Never speak on the write's own result; the committed event restarts the
+    // count, so a rejected attempt does not silence the guard either.
+    if (observation.toolName === TODO_WRITE_TOOL) return undefined
     if (!observation.hasTodoTool || observation.planActive) return undefined
+    if (observation.todos.kind === 'unavailable') return undefined
     if (counters.remindedThisStep || counters.reminders >= this.config.maxRemindersPerTurn) return undefined
-    const open = (observation.todos ?? []).filter(isOpenTodo)
+    const open = observation.todos.kind === 'listed' ? observation.todos.todos.filter(isOpenTodo) : []
     const reminder = open.length > 0
       ? counters.steps >= this.config.staleSteps
         ? staleReminder(open, counters.steps, this.config.previewItems)
         : undefined
-      : observation.todos === undefined && counters.steps >= this.config.missingListSteps
+      : observation.todos.kind === 'absent' && counters.steps >= this.config.missingListSteps
         ? missingListReminder(counters.steps)
         : undefined
     if (reminder === undefined) return undefined
@@ -222,10 +239,13 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
 
 const TODO_STATUSES: ReadonlySet<string> = new Set(['pending', 'in_progress', 'completed'])
 
-/** The current whole list from the harness projection, or undefined when none is open. */
-function readTodos(ctx: Context, session: object): readonly TodoEntry[] | undefined {
+/** The current whole list from the harness projection. */
+function readTodos(ctx: Context, session: object): TodoListRead {
   const state = projectionState(ctx, session, TODOS_KEY)
-  if (!Array.isArray(state)) return undefined
+  // The projection is an array once the tool has written and `null` before
+  // that; anything else is a registry that cannot answer, which silences us.
+  if (state === null) return { kind: 'absent' }
+  if (!Array.isArray(state)) return { kind: 'unavailable' }
   const todos: TodoEntry[] = []
   for (const item of state) {
     const record = asRecord(item)
@@ -235,7 +255,7 @@ function readTodos(ctx: Context, session: object): readonly TodoEntry[] | undefi
     if (typeof status !== 'string' || !TODO_STATUSES.has(status)) continue
     todos.push({ content, status: status as TodoEntry['status'] })
   }
-  return todos
+  return { kind: 'listed', todos }
 }
 
 /** Whether this session is in plan mode, where the todo tool is deliberately discouraged. */
@@ -245,22 +265,18 @@ function readPlanActive(ctx: Context, session: object): boolean {
 }
 
 /** Whether `todo_write` is reachable from this agent, so a tool-less preset stays silent. */
-function todoToolAvailable(ctx: Context, agent: Agent, cache: WeakMap<object, boolean>): boolean {
-  const known = cache.get(agent)
-  if (known !== undefined) return known
-  let present: boolean | undefined
+function todoToolAvailable(ctx: Context, agent: Agent): boolean {
   try {
     // `get` is presentation-agnostic: under PTC the model sees only `run_code`,
     // but the sub-dispatch it programs still reaches `todo_write`, so a scan of
     // the wire schemas would wrongly silence the guard in the default mode.
-    present = ctx.tools.get(TODO_WRITE_TOOL, agent) !== undefined
+    // Read live: a cached answer would outlive a registry that changed.
+    return ctx.tools.get(TODO_WRITE_TOOL, agent) !== undefined
   } catch {
-    // A torn-down scope answers nothing; do not cache a transient failure.
-    present = undefined
+    // A torn-down scope answers nothing; the next call asks again rather than
+    // remembering a transient failure as a permanent silence.
+    return false
   }
-  if (present === undefined) return false
-  cache.set(agent, present)
-  return present
 }
 
 /**
@@ -273,17 +289,18 @@ function todoToolAvailable(ctx: Context, agent: Agent, cache: WeakMap<object, bo
 export function apply(ctx: Context, config: Partial<TodoGuardConfig> = {}): void {
   const resolved = resolveTodoGuardConfig(config)
   const guard = new TodoGuard(resolved)
-  const toolPresence = new WeakMap<object, boolean>()
 
   ctx.on('session/event', (session, event) => { guard.onEvent(session, event.type) })
 
-  ctx.on('tools/post-execute', async (exec: ToolExecution, _result, next): Promise<PostToolDecision> => {
+  ctx.on('tools/post-execute', async (exec: ToolExecution, result: Readonly<ToolExecutionResult>, next): Promise<PostToolDecision> => {
     const agent = exec.agent
     // Observe before delegating so a downstream block cannot hide the fact that
     // the step happened; the reminder then rides whatever decision comes back.
-    const reminder = agent === undefined ? undefined : guard.observe(agent.session, {
+    // A concluding result ends the turn at this step, so a context here would
+    // only buy one more step after the tools have already wound down.
+    const reminder = agent === undefined || result.concludesTurn === true ? undefined : guard.observe(agent.session, {
       toolName: exec.name,
-      hasTodoTool: todoToolAvailable(ctx, agent, toolPresence),
+      hasTodoTool: todoToolAvailable(ctx, agent),
       planActive: readPlanActive(ctx, agent.session),
       todos: readTodos(ctx, agent.session),
     })
