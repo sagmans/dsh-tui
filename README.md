@@ -2,7 +2,7 @@
 
 Interactive terminal (TUI) surface for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): use `dsh` in a terminal instead of a browser.
 
-Status: **v1 feature-complete; published on npm as `@sagmans/dsh-tui`.** The surface owns the alternate screen, streams assistant text as markdown, renders every tool's own card, answers approvals and questions, restores and names stored conversations, switches model mid-session, runs any of the four shipped agent modes and switches between them before a session's first turn, reads a child agent's conversation in place, keeps the goal, plan mode, todo list, delegations, and background jobs above the editor with a status line below it, and hands the terminal back on every graceful exit. Publication is tag-driven with GitHub OIDC provenance and no stored npm token; see [RELEASE.md](RELEASE.md).
+Status: **v1 feature-complete; published on npm as `@sagmans/dsh-tui`.** The surface owns the alternate screen, streams assistant text as markdown, renders every tool's own card, answers approvals and questions, restores and names stored conversations, switches model mid-session, runs any of the four shipped agent modes and switches between them before a session's first turn, reads a child agent's conversation in place, keeps the goal, plan mode, todo list, delegations, and background jobs above the editor with a status line below it, nudges an agent whose plan has aged without an update, and hands the terminal back on every graceful exit. Publication is tag-driven with GitHub OIDC provenance and no stored npm token; see [RELEASE.md](RELEASE.md).
 
 ## Install
 
@@ -339,6 +339,7 @@ The package is a Cordis plugin bundle that stacks over `@deepseek-ai/dsh-base`:
 - `@deepseek-ai/dsh-agent-presets` is the roster of modes, holding the id a session starts in when nobody names one.
 - `@deepseek-ai/dsh-code-runtime-worker-thread` and `@deepseek-ai/dsh-cordis-host-runner` are the host machinery PTC mode and creator mode need; only the Web bundle shipped them, so a terminal profile has to mount them to offer those modes at all.
 - `@sagmans/dsh-tui` owns the terminal: it creates or resumes one agent through `ctx.agents`, folds `session/event` into transcript rows and work state, renders them with `@earendil-works/pi-tui`, and releases the terminal on exit, on a boot failure, and on a signal.
+- `@sagmans/dsh-tui/todo-guard` is the one advisory row this bundle adds to the agent plane: it watches the harness's own `todos` and `plan` projections and rides the next tool result with a reminder when a plan ages. See [Todo discipline](#todo-discipline).
 
 A question whose id ends in `:secret` declares its typed answer a credential: the bar hides everything but its first and last four characters, and the free-text row a question with options offers is labelled `API KEY`. Wording is not a declaration, because hiding every question that mentions a key would hide answers their authors meant to be read.
 
@@ -351,6 +352,31 @@ A PTC card is the one card with children: every call the `run_code` program disp
 A card's header names the tool, then the argument the call was made with — a path or a command — in the `tool.args` colour, then the facts the result measured: a read reports its line range, line count, and token size; a file change that carried no prior content to compare against reports its lines and tokens; one that did reports added, changed, and removed lines as `+n ~n -n` in green, yellow, and red. Each stat is its own token, so any of them can be recoloured or hidden independently.
 
 The bundle also takes the base's global agent rows out of the composition, twenty-three of them. Every one is a row the shipped modes supply per session instead, so leaving it mounted registers the same tool names in two layers and doubles each prompt section it owns. What stays mounted is the host: sessions, storage, models, permissions, jobs, and the command registry.
+
+### Todo discipline
+
+The todo tool and its list belong to the agent; this bundle owns the surface and one advisory guard. `@sagmans/dsh-tui/todo-guard` mounts host-plane, reads the harness's own `todos` and `plan` projections, and — when a non-empty list has gone a threshold of model steps without a `todo_write`, or a long turn has produced no list at all — rides the next tool result with a model-visible reminder. It never vetoes a call, never steers a stopped turn, and never adds a prompt section, so its request prefix stays stable across deployments. A reminder costs the loop one extra model step to consume; the per-turn cap bounds that. It stays silent in plan mode, in a mode whose catalog has no `todo_write`, and when the projections are absent.
+
+| Option | Default | Effect |
+|---|---|---|
+| `staleSteps` | `6` | model steps a non-empty open list may age before the guard speaks |
+| `missingListSteps` | `12` | steps in a turn before the guard suggests a first list |
+| `maxRemindersPerTurn` | `3` | hard cap on reminders, and on the extra steps they cost, per turn |
+| `previewItems` | `5` | open items quoted in a reminder; the rest become a count |
+
+Override them from the home-level patch, which outranks the profile's own layers. An id-targeted patch replaces the whole config, so restate every field you keep:
+
+```yaml
+# $DSH_HOME/cordis.patch.yml
+- id: tui-todo-guard
+  config:
+    staleSteps: 4
+    missingListSteps: 12
+    maxRemindersPerTurn: 3
+    previewItems: 5
+```
+
+The list the dock and `/todo` draw follows the same lifetime every other surface shows: it is cleared when the next turn opens, because a fresh task must not inherit the previous turn's checklist.
 
 ## Development
 
@@ -430,7 +456,7 @@ The workflow stores no npm token: the registry trusts `release.yml` on the `npm-
 - `/model` changes the route and reasoning effort for the running session only. Catalog membership is advisory — an adapter may accept an id it does not advertise, while an explicit effort is checked against the route's own levels before it is applied. The picker offers the routes this deployment configured, not the ones it can prove credentialed: a provider whose key or sign-in is still missing appears like any other, and its first request names the missing credential.
 - Scrolling is the mouse wheel, or the terminal's own scrollback keys where it offers them.
 - A turn that ran longer than ten seconds rings the terminal bell when it ends, because the reader may have walked away; `--no-bell` turns that off.
-- The dock shows the goal, plan mode, the todo items still to do, and any background job or delegation still running; a settled item leaves rather than turns into a completed row. The transcript marks where older history was compacted away. `/plan` toggles plan mode; `/plan <message>` also steers that message, which is the base command's own behaviour.
+- The dock shows the goal, plan mode, the todo items still to do, and any background job or delegation still running; a settled item leaves rather than turns into a completed row, and the list clears when the next turn opens so a fresh task never inherits the previous one's checklist. The transcript marks where older history was compacted away. `/plan` toggles plan mode; `/plan <message>` also steers that message, which is the base command's own behaviour.
 - Background jobs and subagent runs are live process state, not durable events: they disappear when the run ends, and a resumed session starts with an empty board and roster.
 - A card reads its tool's own render intent through the agent whose session is on screen, so a stored session with no live agent — one this process is not running, or a child that has already finished — folds to the generic card instead of the tool's own.
 - Reading a child's conversation does not move the terminal: commands, approvals, and the status line stay with the session you launched, and the transcript is the only thing that switches. The status line carries the way back, read from the map in force, so a remap shows up without reopening the view.
