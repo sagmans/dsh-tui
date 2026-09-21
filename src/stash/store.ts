@@ -1,0 +1,291 @@
+// StashStore: on-disk CRUD for stash entries, scoped to one working directory.
+//
+// Entries are stored newest-first (`entries[0]` is `stash@{0}`), mirroring git's
+// index-0-is-tip convention. Every mutation re-reads the file inside an
+// exclusive lock so two surfaces in the same directory cannot lose updates to a
+// read-modify-write race. Writes are atomic (exclusive temp + rename + directory
+// fsync) with tight 0o600/0o700 permissions, because a stashed draft may hold
+// anything the reader was about to send. A corrupt file is quarantined rather
+// than overwritten, so a hand-edit mistake never silently destroys saved drafts.
+
+import { rename, rm } from 'node:fs/promises'
+import path from 'node:path'
+
+import {
+  StashCommittedError,
+  withStashFileLock,
+  withStashMutationLock,
+  type StashFailurePhase,
+  type StashMutationResult,
+} from './lock.ts'
+import type { StashPaths } from './paths.ts'
+import {
+  ensurePrivateDirectory,
+  hasErrorCode,
+  type PrivateTextFile,
+  quarantinePrivateFile,
+  readPrivateTextFile,
+  syncPrivateDirectory,
+  writePrivateFileExclusive,
+} from './private-fs.ts'
+import {
+  assertSafeEntryId,
+  assertSafeStashText,
+  type Clock,
+  createEmptyStashFile,
+  createNewId,
+  isRecord,
+  parseStashFile,
+  type ResolvedEntry,
+  resolveBySelector,
+  STASH_SCHEMA_VERSION,
+  type StashEntry,
+  type StashFile,
+} from './schema.ts'
+
+/**
+ * A stash file larger than this is refused, never quarantined: hiding a
+ * legitimate bank because it grew past a cap would be worse than refusing it.
+ */
+export const MAX_STASH_FILE_BYTES = 16_777_216
+
+const DUPLICATE_STASH_ID_MESSAGE = 'duplicate stash id'
+const UNSUPPORTED_SCHEMA_GUIDANCE =
+  'Upgrade dsh-tui before using this stash, or move the stash file aside for safe recovery.'
+
+export interface AddEntryInput {
+  readonly text: string
+  /** Caller-supplied id; generated when omitted. */
+  readonly id?: string
+  /** Caller-supplied timestamp, used only when a recovery path restores an entry. */
+  readonly createdAt?: number
+}
+
+type LoadResult =
+  | { kind: 'ready'; file: StashFile }
+  | { kind: 'corrupt'; quarantinedTo: string | undefined }
+  | { kind: 'unsupported'; version: number }
+
+export interface StashWriteOutcome {
+  readonly committed: true
+  readonly phase: StashFailurePhase
+  readonly error: unknown
+}
+
+export type StashWriter = (filePath: string, file: StashFile) => Promise<void | StashWriteOutcome>
+
+/** Stash data written by a newer build, which this one must not touch. */
+export class UnsupportedStashSchemaError extends Error {
+  readonly detectedVersion: number
+  readonly supportedVersion: number
+
+  constructor(detectedVersion: number, supportedVersion: number = STASH_SCHEMA_VERSION) {
+    super(
+      `stash data uses version ${detectedVersion}; this build supports versions through ${supportedVersion}. ${UNSUPPORTED_SCHEMA_GUIDANCE}`,
+    )
+    this.name = 'UnsupportedStashSchemaError'
+    this.detectedVersion = detectedVersion
+    this.supportedVersion = supportedVersion
+  }
+}
+
+export class StashStore {
+  private file: StashFile
+  private corruptRecoveryPath: string | undefined
+  private readonly filePath: string
+  private readonly paths: StashPaths
+  private readonly now: Clock
+  private readonly write: StashWriter
+
+  constructor(paths: StashPaths, loaded: LoadResult, now: Clock = Date.now, write: StashWriter = writeStashFile) {
+    this.paths = paths
+    this.now = now
+    this.write = write
+    this.file = loaded.kind === 'ready' ? loaded.file : createEmptyStashFile(paths.key, now())
+    this.corruptRecoveryPath = loaded.kind === 'corrupt' ? loaded.quarantinedTo : undefined
+    this.filePath = paths.file
+  }
+
+  get entries(): readonly StashEntry[] {
+    return this.file.entries
+  }
+
+  get entryCount(): number {
+    return this.file.entries.length
+  }
+
+  /** The one-shot path of a file quarantined by the last read, if any. */
+  takeQuarantinePath(): string | undefined {
+    const recoveryPath = this.corruptRecoveryPath
+    this.corruptRecoveryPath = undefined
+    return recoveryPath
+  }
+
+  /** Resolve a selector against the entries currently held. */
+  find(selector: string | undefined): ResolvedEntry | undefined {
+    return resolveBySelector(this.file.entries, selector)
+  }
+
+  async refresh(): Promise<void> {
+    await withStashFileLock(this.filePath, () => this.reloadFresh())
+  }
+
+  async add(input: AddEntryInput): Promise<ResolvedEntry> {
+    const id = input.id ?? createNewId()
+    assertSafeEntryId(id)
+    assertSafeStashText(input.text)
+    return withStashMutationLock(this.filePath, async () => {
+      await this.reloadFresh()
+      if (this.file.entries.some(entry => entry.id === id)) throw new Error(DUPLICATE_STASH_ID_MESSAGE)
+      const entry: StashEntry = { id, text: input.text, createdAt: input.createdAt ?? this.now() }
+      const next: StashFile = {
+        ...this.file,
+        updatedAt: entry.createdAt,
+        entries: [entry, ...this.file.entries],
+      }
+      return this.persistMutation(next, { entry, index: 0 })
+    })
+  }
+
+  /** Remove one entry by its exact id, reporting what was removed. */
+  async removeById(id: string): Promise<ResolvedEntry | undefined> {
+    assertSafeEntryId(id)
+    return withStashMutationLock(this.filePath, async () => {
+      await this.reloadFresh()
+      return this.removeAt(selector => selector === id)
+    })
+  }
+
+  /** Remove the entry a selector names, reporting what was removed. */
+  async drop(selector: string | undefined): Promise<ResolvedEntry | undefined> {
+    return withStashMutationLock(this.filePath, async () => {
+      await this.reloadFresh()
+      const resolved = resolveBySelector(this.file.entries, selector)
+      if (resolved === undefined) return { didPersist: false, result: undefined }
+      const next: StashFile = {
+        ...this.file,
+        updatedAt: this.now(),
+        entries: this.file.entries.filter((_, index) => index !== resolved.index),
+      }
+      return this.persistMutation(next, resolved)
+    })
+  }
+
+  /** Remove every entry, reporting how many were dropped. */
+  async clear(): Promise<number> {
+    return withStashMutationLock(this.filePath, async () => {
+      await this.reloadFresh()
+      const removed = this.file.entries.length
+      if (removed === 0) return { didPersist: false, result: 0 }
+      const next = { ...createEmptyStashFile(this.paths.key, this.now()), updatedAt: this.now() }
+      return this.persistMutation(next, removed)
+    })
+  }
+
+  private async removeAt(match: (id: string) => boolean): Promise<StashMutationResult<ResolvedEntry | undefined>> {
+    const index = this.file.entries.findIndex(entry => match(entry.id))
+    const found = index < 0 ? undefined : this.file.entries[index]
+    if (found === undefined) return { didPersist: false, result: undefined }
+    const next: StashFile = {
+      ...this.file,
+      updatedAt: this.now(),
+      entries: this.file.entries.filter((_, position) => position !== index),
+    }
+    return this.persistMutation(next, { entry: found, index })
+  }
+
+  private async persistMutation<Result>(next: StashFile, result: Result): Promise<StashMutationResult<Result>> {
+    const outcome = await this.write(this.filePath, next)
+    this.file = next
+    if (outcome?.committed === true) {
+      throw new StashCommittedError(result, { phase: outcome.phase, error: outcome.error })
+    }
+    return { didPersist: true, result }
+  }
+
+  private async reloadFresh(): Promise<void> {
+    const loaded = await readCurrentStashFile(this.filePath, this.paths.key, this.now())
+    if (loaded.kind === 'ready') {
+      this.file = loaded.file
+      return
+    }
+    if (loaded.kind === 'unsupported') throw new UnsupportedStashSchemaError(loaded.version)
+    // Corrupt input is quarantined and replaced in memory, so later writes
+    // cannot resurrect entries from the invalidated snapshot.
+    this.file = createEmptyStashFile(this.paths.key, this.now())
+    this.corruptRecoveryPath = loaded.quarantinedTo
+  }
+}
+
+export async function loadStashStore(
+  paths: StashPaths,
+  now: Clock = Date.now,
+  write: StashWriter = writeStashFile,
+): Promise<StashStore> {
+  const loaded = await withStashFileLock(paths.file, () => readCurrentStashFile(paths.file, paths.key, now()))
+  if (loaded.kind === 'unsupported') throw new UnsupportedStashSchemaError(loaded.version)
+  return new StashStore(paths, loaded, now, write)
+}
+
+async function readCurrentStashFile(filePath: string, cwdKey: string, now: number): Promise<LoadResult> {
+  let source: PrivateTextFile
+  try {
+    source = await readPrivateTextFile(filePath, 'stash file', MAX_STASH_FILE_BYTES)
+  } catch (error) {
+    // A missing bank is an empty one; an oversized or unreadable bank is a real
+    // failure the caller must report rather than silently start over from.
+    if (hasErrorCode(error, 'ENOENT')) return { kind: 'ready', file: createEmptyStashFile(cwdKey, now) }
+    throw error
+  }
+
+  let raw: unknown
+  try {
+    raw = JSON.parse(source.text)
+  } catch {
+    return await quarantineCorrupt(filePath, source.identity)
+  }
+  const parsed = parseStashFile(raw)
+  if (parsed !== undefined && parsed.cwd === cwdKey) return { kind: 'ready', file: parsed }
+  if (
+    isRecord(raw) &&
+    typeof raw.version === 'number' &&
+    Number.isSafeInteger(raw.version) &&
+    raw.version > STASH_SCHEMA_VERSION
+  ) {
+    return { kind: 'unsupported', version: raw.version }
+  }
+  return await quarantineCorrupt(filePath, source.identity)
+}
+
+async function quarantineCorrupt(
+  filePath: string,
+  identity: PrivateTextFile['identity'],
+): Promise<LoadResult> {
+  const quarantinedTo = await quarantinePrivateFile(filePath, identity, `corrupt-${Date.now()}`)
+  return { kind: 'corrupt', quarantinedTo }
+}
+
+export async function writeStashFile(
+  filePath: string,
+  file: StashFile,
+  syncDirectory: typeof syncPrivateDirectory = syncPrivateDirectory,
+): Promise<void | StashWriteOutcome> {
+  await ensurePrivateDirectory(path.dirname(filePath))
+  const tempPath = `${filePath}.${process.pid}.${Date.now()}.tmp`
+  const data = `${JSON.stringify(file, null, 2)}\n`
+  let tempCreated = false
+  try {
+    await writePrivateFileExclusive(tempPath, data)
+    tempCreated = true
+    await rename(tempPath, filePath)
+    tempCreated = false
+  } catch (error) {
+    if (tempCreated) await rm(tempPath, { force: true })
+    throw error
+  }
+  try {
+    await syncDirectory(path.dirname(filePath))
+  } catch (error) {
+    return { committed: true, phase: 'directory-sync', error }
+  }
+}
