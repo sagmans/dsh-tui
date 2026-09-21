@@ -24,6 +24,7 @@ const SHIPPED: Readonly<Record<string, readonly string[]>> = {
   'surface.interrupt': ['ctrl+c'],
   'chord.prefix': ['ctrl+x'],
   'chord.model': ['m'],
+  'chord.plan': ['p'],
   'chord.copy': ['y'],
   'gate.allow': ['y'],
   'gate.reject': ['n'],

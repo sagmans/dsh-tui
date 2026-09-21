@@ -1594,6 +1594,11 @@ export function apply(ctx: Context, config: unknown): void {
           tui.requestRender()
         })
         return
+      // Plan mode is a command the harness owns, so the chord reads the state the
+      // dock shows and asks for the other one: one key, both directions.
+      case 'plan':
+        runCommand('plan', work.state().planMode ? '/plan off' : '/plan')
+        return
       case 'command':
         runCommand(submission.name, submission.line)
         return

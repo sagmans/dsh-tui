@@ -74,12 +74,12 @@ describe('the key tables', () => {
     const bindings = chordBindings(defaultKeymap())
     expect(bindings.find(entry => entry.key === 'm')?.submission).toEqual({ kind: 'model', argument: '' })
     expect(bindings.find(entry => entry.key === 'y')?.submission).toEqual({ kind: 'copy' })
-    expect(chordKeysLine(defaultKeymap())).toBe('ctrl+x then m model · y copy')
+    expect(chordKeysLine(defaultKeymap())).toBe('ctrl+x then m model · p plan mode · y copy')
   })
 
   it('reads a chord the reader moved, and a prefix they changed', () => {
     const map = resolveKeymap({ 'chord.prefix': 'alt+z', 'chord.model': 'n' })
-    expect(chordKeysLine(map)).toBe('alt+z then n model · y copy')
+    expect(chordKeysLine(map)).toBe('alt+z then n model · p plan mode · y copy')
     expect(chordBindings(map).find(entry => entry.label === 'model')?.key).toBe('n')
   })
 })
@@ -164,7 +164,14 @@ describe('ChordReader', () => {
   it('dispatches the copy chord', () => {
     const { chord } = reader()
     chord.handle('\u0018')
-    expect(chord.handle('y')).toEqual({ kind: 'action', binding: chordBindings(defaultKeymap())[1] })
+    expect(chord.handle('y')).toEqual({ kind: 'action', binding: chordBindings(defaultKeymap()).find(entry => entry.label === 'copy') })
+  })
+
+  it('dispatches the plan chord', () => {
+    const { chord } = reader()
+    chord.handle('\u0018')
+    expect(chord.handle('p')).toEqual({ kind: 'action', binding: chordBindings(defaultKeymap()).find(entry => entry.label === 'plan mode') })
+    expect(chord.handle('p')).toBeUndefined()
   })
 
   it('takes a second key the reader moved, and no longer the shipped one', () => {

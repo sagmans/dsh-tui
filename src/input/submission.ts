@@ -18,6 +18,7 @@ export type Submission =
   | { readonly kind: 'theme' }
   | { readonly kind: 'keys'; readonly argument: string }
   | { readonly kind: 'copy' }
+  | { readonly kind: 'plan' }
   | { readonly kind: 'command'; readonly name: string; readonly line: string }
   | { readonly kind: 'prompt'; readonly text: string }
 

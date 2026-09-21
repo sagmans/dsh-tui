@@ -17,6 +17,7 @@ export const DEFAULT_PREFIX_KEY: KeyId = keysFor(defaultKeymap(), 'chord.prefix'
  */
 const CHORD_SUBMISSIONS: Readonly<Record<string, Submission>> = {
   'chord.model': { kind: 'model', argument: '' },
+  'chord.plan': { kind: 'plan' },
   'chord.copy': { kind: 'copy' },
 }
 

@@ -132,6 +132,7 @@ export const SURFACE_ACTIONS: readonly (Action & { readonly name: SurfaceActionI
 const CHORD_ACTIONS: readonly Action[] = [
   { id: 'chord.prefix', layer: 'chord', defaultKeys: ['ctrl+x'], label: 'start a chord', mayUseBare: false, mayUnbind: false, keyShape: 'chord' },
   { id: 'chord.model', layer: 'chord', defaultKeys: ['m'], label: 'model', mayUseBare: true, mayUnbind: false },
+  { id: 'chord.plan', layer: 'chord', defaultKeys: ['p'], label: 'plan mode', mayUseBare: true, mayUnbind: false },
   { id: 'chord.copy', layer: 'chord', defaultKeys: ['y'], label: 'copy', mayUseBare: true, mayUnbind: false },
 ]
 
