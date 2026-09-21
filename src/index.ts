@@ -43,6 +43,7 @@ import {
   DEFAULT_PREFIX_WINDOW_S,
   SURFACE_KEYS,
   chordKeysLine,
+  installEditorKeybindings,
   surfaceKeysLine,
   type SurfaceKeyId,
 } from './input/keymap.ts'
@@ -350,6 +351,9 @@ export function apply(ctx: Context, config: unknown): void {
     gate: () => pending?.gate.card(),
     picker: () => pendingPicker?.picker.card(),
   })
+  // The key map goes in before the bar exists, so no press can be read as the
+  // send the library submits on by default.
+  installEditorKeybindings()
   const editor = new GateInputBar(tui, theme.editor)
   // Answers are written in the reader's own editor, which is why a question
   // borrows the bar instead of drawing a second one beside it.

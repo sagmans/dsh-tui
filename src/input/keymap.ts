@@ -1,4 +1,4 @@
-import { type KeyId, matchesKey } from '@earendil-works/pi-tui'
+import { KeybindingsManager, TUI_KEYBINDINGS, type KeyId, matchesKey, setKeybindings } from '@earendil-works/pi-tui'
 import { pastedText } from '../input.ts'
 import type { Submission } from './submission.ts'
 
@@ -41,7 +41,30 @@ export const SURFACE_KEYS: readonly SurfaceKey[] = [
  * flow control, so accepting it would configure a chord that silently does
  * nothing at all.
  */
-const TERMINAL_OWNED_KEYS: readonly KeyId[] = ['ctrl+s', 'ctrl+q']
+const TERMINAL_OWNED_KEYS: readonly KeyId[] = ['ctrl+q']
+
+/**
+ * The keys that send what the reader wrote.
+ *
+ * A prompt is prose before it is a request, so the bar keeps Enter for the
+ * paragraph — it breaks the line on the library's own newline keys — and asks
+ * for one of these chords to post what is in it. The same table keeps a prefix
+ * from taking a key the reader needs to send with.
+ */
+export const EDITOR_SUBMIT_KEYS: readonly KeyId[] = ['ctrl+enter', 'alt+enter', 'ctrl+s']
+
+/**
+ * Install the submit chords in place of the library's own Enter.
+ *
+ * The library reads a key before the bar does, so the binding is changed where
+ * it is read rather than intercepted: every other meaning of a press, including
+ * the guard that keeps a borrowed bar from submitting an answer, stays the
+ * library's own. Bindings are process-wide, which suits a surface that draws on
+ * the only terminal it has.
+ */
+export function installEditorKeybindings(): void {
+  setKeybindings(new KeybindingsManager(TUI_KEYBINDINGS, { 'tui.input.submit': [...EDITOR_SUBMIT_KEYS] }))
+}
 
 /** The modifiers a key id may carry. */
 const MODIFIERS = new Set(['ctrl', 'alt', 'shift', 'super'])
@@ -76,6 +99,7 @@ export function validatePrefix(raw: string): KeyId {
   // refused for that reason, which is the one a reader can act on.
   const taken = SURFACE_KEYS.find(entry => entry.key === raw)
   if (taken !== undefined) throw new Error(`prefix "${raw}" is the surface's own ${taken.label} key`)
+  if (EDITOR_SUBMIT_KEYS.includes(raw as KeyId)) throw new Error(`prefix "${raw}" is the editor's submit key`)
   if (TERMINAL_OWNED_KEYS.includes(raw as KeyId)) throw new Error(`prefix "${raw}" is the terminal's own key`)
   if (!isChordShape(raw)) throw new Error(`prefix "${raw}" must be a modifier chord like ctrl+x`)
   // The shape above admits exactly the modifier chords of the KeyId union.

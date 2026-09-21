@@ -19,6 +19,8 @@
  *   node tools/pty-drive.mjs --prompt "" --answer "8:0,9:eu-central,11:left,12:left,13:X,15:enter" \
  *     --args "--patch /tmp/ask.patch.yml"   # edit a typed answer mid-text
  *   node tools/pty-drive.mjs --prompt "say hi" --signal TERM
+ *   node tools/pty-drive.mjs --prompt "say hi" --submit ctrl+enter
+ *   node tools/pty-drive.mjs --prompt "say hi" --submit alt-enter   # legacy ESC CR
  *   node tools/pty-drive.mjs --launcher /path/to/dsh/lib/bin.js --prompt "say hi"
  *
  * Every run ends by reporting the child's exit code and whether the terminal
@@ -105,6 +107,12 @@ const prelude = option('prelude', '')
  */
 const NAMED_KEYS = {
   enter: '\r',
+  // Sending a prompt is a chord in this bar, because Enter breaks the line: the
+  // byte a terminal sends for the letter, and the two spellings of the chord a
+  // terminal that reports modifiers can send for it.
+  submit: '\u0013',
+  'ctrl+enter': '\u001b[13;5u',
+  'alt-enter': '\u001b\r',
   space: ' ',
   up: '\u001b[A',
   down: '\u001b[B',
@@ -137,6 +145,14 @@ const NAMED_KEYS = {
  * would have typed one at a time.
  */
 const PASTE_PREFIX = 'paste:'
+/**
+ * The chord that sends the prompt, named from the table a gate answer uses.
+ *
+ * A run that says nothing sends with Ctrl+S, which reaches the surface in every
+ * terminal; naming a chord drives the path a real keyboard would instead.
+ */
+const submitName = option('submit', 'submit')
+const submit = NAMED_KEYS[submitName] ?? submitName
 const answers = option('answer', '')
   .split(',')
   .filter(entry => entry !== '')
@@ -214,10 +230,11 @@ const at = (ms, action) => setTimeout(action, ms)
 const PRELUDE_AT_MS = 6000
 const PRELUDE_LEAD_MS = 1500
 const promptAt = PRELUDE_AT_MS + (prelude === '' ? 0 : PRELUDE_LEAD_MS)
-if (prelude !== '') at(PRELUDE_AT_MS, () => child.write(`${prelude}\r`))
+if (prelude !== '') at(PRELUDE_AT_MS, () => child.write(`${prelude}${submit}`))
 // An empty prompt drives a surface that asks its own question first, such as
-// the session picker a bare --resume opens.
-if (prompt !== '') at(promptAt, () => child.write(`${prompt}\r`))
+// the session picker a bare --resume opens. A prompt that is sent ends with the
+// submit chord rather than Enter, which writes a line instead.
+if (prompt !== '') at(promptAt, () => child.write(`${prompt}${submit}`))
 if (approve > 0) at(promptAt + approve * 1000, () => child.write('y'))
 for (const answer of answers) at(promptAt + answer.at * 1000, () => child.write(answer.value))
 /** Sequences a terminal must see before the shell is usable again. */
@@ -231,7 +248,7 @@ if (signal === '') {
   at(promptAt + seconds * 1000, () => child.write('\u0003'))
   // Kill the line first: a stray key left in the editor would turn the quit
   // sequence into an ordinary prompt and leave the session running.
-  at(promptAt + seconds * 1000 + 500, () => child.write('\u0015/quit\r'))
+  at(promptAt + seconds * 1000 + 500, () => child.write(`\u0015/quit${submit}`))
 } else {
   at(promptAt + seconds * 1000, () => {
     // The pty child is a session leader whose own child is the harness's real

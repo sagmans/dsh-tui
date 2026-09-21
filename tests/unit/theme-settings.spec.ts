@@ -54,7 +54,7 @@ describe('the dsh-tui settings section', () => {
   it('rejects a prefix the reader could never use, naming why', () => {
     expect(() => parseSettings({ prefix: 'x' })).toThrow(/modifier chord/)
     expect(() => parseSettings({ prefix: 'ctrl+c' })).toThrow(/surface/)
-    expect(() => parseSettings({ prefix: 'ctrl+s' })).toThrow(/terminal/)
+    expect(() => parseSettings({ prefix: 'ctrl+s' })).toThrow(/submit/)
     expect(() => parseSettings({ prefixWindow: -1 })).toThrow()
     expect(() => parseSettings({ prefixWindow: 600 })).toThrow()
   })

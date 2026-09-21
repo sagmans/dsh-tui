@@ -1,10 +1,13 @@
+import { getKeybindings } from '@earendil-works/pi-tui'
 import { describe, expect, it } from 'vitest'
 import {
   CHORD_BINDINGS,
   ChordReader,
   DEFAULT_PREFIX_KEY,
   DEFAULT_PREFIX_WINDOW_S,
+  EDITOR_SUBMIT_KEYS,
   SURFACE_KEYS,
+  installEditorKeybindings,
   chordKeysLine,
   surfaceKeysLine,
   validatePrefix,
@@ -74,8 +77,11 @@ describe('validatePrefix', () => {
     expect(() => validatePrefix('ctrl+c')).toThrow(/interrupt or exit/)
   })
 
+  it('refuses a key the surface sends with, which a prefix would swallow', () => {
+    expect(() => validatePrefix('ctrl+s')).toThrow(/submit/)
+  })
+
   it('refuses a key the terminal owns, which would never arrive', () => {
-    expect(() => validatePrefix('ctrl+s')).toThrow(/terminal/)
     expect(() => validatePrefix('ctrl+q')).toThrow(/terminal/)
   })
 })
@@ -84,6 +90,16 @@ describe('the key tables', () => {
   it('names every key the surface answers, for help and for the refusal message', () => {
     expect(surfaceKeysLine()).toContain('ctrl+o tool detail')
     expect(surfaceKeysLine().split(' · ')).toHaveLength(SURFACE_KEYS.length)
+  })
+
+  it('installs the send chords over the Enter the library ships', () => {
+    installEditorKeybindings()
+    const keys = getKeybindings()
+    for (const chord of EDITOR_SUBMIT_KEYS) {
+      const data = chord === 'ctrl+enter' ? '\u001b[13;5u' : chord === 'alt+enter' ? '\u001b[13;3u' : '\u0013'
+      expect(keys.matches(data, 'tui.input.submit'), chord).toBe(true)
+    }
+    expect(keys.matches('\r', 'tui.input.submit')).toBe(false)
   })
 
   it('asks for the model picker and the copy through the command line submissions', () => {
