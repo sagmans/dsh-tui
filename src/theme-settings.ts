@@ -81,7 +81,11 @@ const SECTION = z.object({
   mermaid: z.union([...MERMAID_MODES]).default(DEFAULT_MERMAID_MODE),
   // A free string rather than an enumerated union: the keymap module owns which
   // keys exist, and its refusal is the message a reader can act on.
-  prefix: z.string().default(DEFAULT_PREFIX_KEY),
+  //
+  // No default, unlike the fields around it: a registration fills every declared
+  // field, so a default here would hand back the old spelling as written and the
+  // reader's own keys.chord.prefix would read as a second spelling of it.
+  prefix: z.string(),
   prefixWindow: z.number().min(0).max(MAX_PREFIX_WINDOW_S).default(DEFAULT_PREFIX_WINDOW_S),
   keys: KeymapSectionSchema.default({}),
 })
@@ -181,7 +185,7 @@ export function parseSettings(raw: unknown): TuiSettings {
   for (const [id, value] of Object.entries(parsed.keys)) {
     if (value !== undefined) overrides[id] = value
   }
-  if (section.prefix !== undefined) overrides['chord.prefix'] = parsed.prefix
+  if (parsed.prefix !== undefined) overrides['chord.prefix'] = parsed.prefix
   // Validated here rather than in the schema because every refusal depends on
   // the catalog and on the layers the map already claims, which a schema cannot see.
   const keymap = resolveKeymap(overrides)

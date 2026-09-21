@@ -135,6 +135,15 @@ describe('the keys section', () => {
     expect(keysFor(parseSettings({ prefix: 'alt+z' }).keymap, 'chord.prefix')).toEqual(['alt+z'])
   })
 
+  it('takes the map spelling from the section a registered scope hands back', () => {
+    // A registration fills every declared field, so the old spelling reads as
+    // written even when the document never mentioned it. Only the field the
+    // document wrote decides which spelling the section is using.
+    const filled = TuiSettingsSchema({ keys: { 'chord.prefix': 'alt+z' } })
+    expect(parseSettings(filled).prefix).toBe('alt+z')
+    expect(keysFor(parseSettings(filled).keymap, 'chord.prefix')).toEqual(['alt+z'])
+  })
+
   it('refuses both spellings of the chord starter at once', () => {
     expect(() => parseSettings({ prefix: 'alt+z', keys: { 'chord.prefix': 'ctrl+a' } })).toThrow(/chord\.prefix/)
   })
