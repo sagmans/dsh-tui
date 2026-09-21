@@ -17,6 +17,10 @@ breaking change, and a patch carries only fixes.
   characters stripped. A non-zero exit still keeps the saved text, no
   editor configured is a notice rather than a failure, and a draft past 1 MiB is
   left on disk with its path instead of loaded into the bar.
+- A related-plugins section closes the README: the two companion bundles that
+  stack onto a profile — an absolute compaction budget and extra provider
+  routes — with the commands that mount them and how each meets this bundle's
+  own composition.
 
 ### Changed
 
