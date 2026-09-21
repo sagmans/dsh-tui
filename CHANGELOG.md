@@ -8,6 +8,8 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-21
+
 ### Added
 
 - Every action's keys are settable: the `keys:` section of `settings.yaml`
@@ -130,7 +132,8 @@ breaking change, and a patch carries only fixes.
 - Publication through npm OIDC trusted publishing, with the first version
   bootstrapped by hand ([#5](https://github.com/sagmans/dsh-tui/pull/5)).
 
-[Unreleased]: https://github.com/sagmans/dsh-tui/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/sagmans/dsh-tui/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/sagmans/dsh-tui/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/sagmans/dsh-tui/compare/v0.1.2...v0.2.0
 [0.1.2]: https://github.com/sagmans/dsh-tui/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/sagmans/dsh-tui/compare/v0.1.0...v0.1.1
