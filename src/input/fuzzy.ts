@@ -7,14 +7,21 @@
  * character is worth a fixed amount, starting a word is worth more, continuing
  * a run is worth more than the gap it avoids, and every skipped character
  * costs — a little inside a run, more when it opens a new gap. A reader typing
- * `edtr` or `srccomp` gets a ranking their fingers recognize.
+ * edtr or srccomp gets a ranking their fingers recognize.
  *
  * Classes are read from the original text, so a camel hump keeps its bonus
- * while the comparison itself stays case-insensitive.
+ * while the comparison itself stays case-insensitive. Matching works in code
+ * points rather than UTF-16 units, and each one is folded on its own, so a
+ * letter outside ASCII cannot change how many positions the text has.
  *
  * Where the match starts is deliberately unscored: a caller that ranks
  * different kinds of rows needs that concern in its own bands, and the bands
  * in {@link matchScore} keep an early hit above a late one.
+ *
+ * One deliberate divergence from fzf: for a one-character fragment fzf stops
+ * at the first word boundary it meets, because its scan wants to stay cheap,
+ * while this reads every position and keeps the best. A short fragment still
+ * deserves the row that matches it best, and a test pins the difference.
  */
 
 /**
@@ -92,6 +99,64 @@ function bonusFor(previous: number, current: number): number {
 }
 
 /**
+ * The lowercase of one code point, always exactly one code point back.
+ *
+ * JavaScript's whole-string lowercase can expand a character into two, or pick
+ * a form that depends on its neighbours, and either one would move every index
+ * after it in a table that has to line up with the original text.
+ */
+function simpleLower(code: number): number {
+  if (code >= 0x41 && code <= 0x5a) return code + 0x20
+  if (code < 0x80) return code
+  return String.fromCodePoint(code).toLowerCase().codePointAt(0) ?? code
+}
+
+/** The comparison view of a text: one folded code point and one bonus per code point. */
+interface PreparedText {
+  readonly folded: Uint32Array
+  readonly bonuses: Int32Array
+}
+
+function prepare(text: string): PreparedText {
+  const characters = [...text]
+  const folded = new Uint32Array(characters.length)
+  const bonuses = new Int32Array(characters.length)
+  let previousClass = INITIAL_CLASS
+  for (let at = 0; at < characters.length; at += 1) {
+    const character = characters[at] ?? ''
+    const currentClass = classOf(character)
+    folded[at] = simpleLower(character.codePointAt(0) ?? 0)
+    bonuses[at] = bonusFor(previousClass, currentClass)
+    previousClass = currentClass
+  }
+  return { folded, bonuses }
+}
+
+function foldQuery(needle: string): Uint32Array {
+  const characters = [...needle]
+  const folded = new Uint32Array(characters.length)
+  for (let at = 0; at < characters.length; at += 1) {
+    folded[at] = simpleLower((characters[at] ?? '').codePointAt(0) ?? 0)
+  }
+  return folded
+}
+
+/**
+ * The case-folded text the scorer compares against.
+ *
+ * A caller that ranks in bands decides with the same view of a row the scorer
+ * will use, so the fold is shared rather than spelled a second time: a second
+ * case mapping could disagree on characters outside ASCII.
+ */
+export function foldSimple(text: string): string {
+  let folded = ''
+  for (const character of text) {
+    folded += String.fromCodePoint(simpleLower(character.codePointAt(0) ?? 0))
+  }
+  return folded
+}
+
+/**
  * The best reading of `needle` inside `haystack`, or undefined when its
  * characters do not all appear in order.
  *
@@ -99,57 +164,50 @@ function bonusFor(previous: number, current: number): number {
  * nothing.
  */
 export function fuzzyScore(needle: string, haystack: string): number | undefined {
-  const query = needle.trim().toLowerCase()
-  if (query === '') return 0
+  const query = foldQuery(needle.trim())
   const queryLength = query.length
-  const textLength = haystack.length
+  if (queryLength === 0) return 0
+  const text = prepare(haystack)
+  const textLength = text.folded.length
   if (queryLength > textLength) return undefined
 
-  // Cheap rejection first: most candidates in a workspace do not contain the
+  // The earliest each character of the fragment can sit, so a row never reads
+  // left of where its own character could first match. The scan is also the
+  // cheap rejection: most candidates in a workspace do not contain the
   // fragment at all, and an alignment table for each would cost more than the
   // list of them is worth.
-  const folded = haystack.toLowerCase()
-  let scanned = 0
-  for (const character of query) {
-    const found = folded.indexOf(character, scanned)
-    if (found < 0) return undefined
-    scanned = found + 1
-  }
-
-  // The bonus each position would earn, read from the original text so a camel
-  // hump still reads as one.
-  const bonuses = new Float64Array(textLength)
-  let previousClass = INITIAL_CLASS
-  for (let at = 0; at < textLength; at += 1) {
-    const currentClass = classOf(haystack[at] ?? '')
-    bonuses[at] = bonusFor(previousClass, currentClass)
-    previousClass = currentClass
-  }
-
-  // The earliest each character of the fragment can sit, so a row never reads
-  // left of where its own character could first match.
   const earliest = new Int32Array(queryLength)
   let searched = 0
   for (let index = 0; index < queryLength; index += 1) {
-    const found = folded.indexOf(query[index] ?? '', searched)
+    const character = query[index] ?? 0
+    let found = -1
+    for (let at = searched; at < textLength; at += 1) {
+      if (text.folded[at] === character) {
+        found = at
+        break
+      }
+    }
     if (found < 0) return undefined
     earliest[index] = found
     searched = found + 1
   }
   // The last place the fragment's final character appears: no alignment can
   // reach past it, so no row is scored there.
-  const latest = folded.lastIndexOf(query[queryLength - 1] ?? '')
+  const lastCharacter = query[queryLength - 1] ?? 0
+  let latest = textLength - 1
+  while (latest > 0 && text.folded[latest] !== lastCharacter) latest -= 1
 
   // Row zero: the best score for the fragment's first character at each
   // position, clamped at zero the way a local alignment is.
-  let previousRow = new Float64Array(textLength)
-  let previousRuns = new Float64Array(textLength)
+  const previousRow = new Int32Array(textLength)
+  const previousRuns = new Int32Array(textLength)
   let best = 0
   let running = 0
   let inGap = false
+  const firstCharacter = query[0] ?? 0
   for (let at = 0; at < textLength; at += 1) {
-    if (folded[at] === query[0]) {
-      running = SCORE_MATCH + (bonuses[at] ?? 0) * BONUS_FIRST_CHAR_MULTIPLIER
+    if (text.folded[at] === firstCharacter) {
+      running = SCORE_MATCH + (text.bonuses[at] ?? 0) * BONUS_FIRST_CHAR_MULTIPLIER
       previousRuns[at] = 1
       inGap = false
     } else {
@@ -161,9 +219,9 @@ export function fuzzyScore(needle: string, haystack: string): number | undefined
   }
 
   for (let index = 1; index < queryLength; index += 1) {
-    const row = new Float64Array(textLength)
-    const runs = new Float64Array(textLength)
-    const character = query[index] ?? ''
+    const row = new Int32Array(textLength)
+    const runs = new Int32Array(textLength)
+    const character = query[index] ?? 0
     let left = 0
     inGap = false
     const from = earliest[index] ?? 0
@@ -171,13 +229,13 @@ export function fuzzyScore(needle: string, haystack: string): number | undefined
       const skipped: number = left + (inGap ? SCORE_GAP_EXTENSION : SCORE_GAP_START)
       let matched = 0
       let consecutive = 0
-      if (folded[at] === character) {
+      if (text.folded[at] === character) {
         matched = (previousRow[at - 1] ?? 0) + SCORE_MATCH
-        const bonus = bonuses[at] ?? 0
+        const bonus = text.bonuses[at] ?? 0
         consecutive = (previousRuns[at - 1] ?? 0) + 1
         let credit = bonus
         if (consecutive > 1) {
-          const chunkStart = bonuses[at - consecutive + 1] ?? 0
+          const chunkStart = text.bonuses[at - consecutive + 1] ?? 0
           // A fresh word start inside a run is a new chunk, not a longer one.
           if (bonus >= BONUS_BOUNDARY && bonus > chunkStart) {
             consecutive = 1
@@ -199,8 +257,10 @@ export function fuzzyScore(needle: string, haystack: string): number | undefined
       left = score
       if (index === queryLength - 1 && score > best) best = score
     }
-    previousRow = row
-    previousRuns = runs
+    // The rows are rebuilt for each character of the fragment, so the arrays
+    // that hold the previous one are replaced rather than copied.
+    previousRow.set(row)
+    previousRuns.set(runs)
   }
 
   return best

@@ -64,3 +64,36 @@ describe('fuzzyScore', () => {
     expect(boundary).toBeGreaterThan(inside ?? 0)
   })
 })
+
+/**
+ * fzf folds each rune on its own. JavaScript's whole-string lowercase can
+ * expand one character into two or change a letter into a form that depends on
+ * its neighbours, and either one slides every later index out of alignment.
+ */
+describe('fuzzyScore outside ASCII', () => {
+  it('matches a letter whose lowercase depends on where it sits', () => {
+    expect(fuzzyScore('Σ', 'ΟΣ')).toBeDefined()
+    expect(fuzzyScore('σ', 'ΟΣ')).toBeDefined()
+  })
+
+  it('keeps its place when a lowercase would expand to two code points', () => {
+    expect(fuzzyScore('a', 'İa')).toBeGreaterThan(0)
+  })
+
+  it('folds a dotted capital into the letter a reader would type', () => {
+    expect(fuzzyScore('i', 'İ')).toBeGreaterThan(0)
+  })
+})
+
+describe('fuzzyScore single characters', () => {
+  /**
+   * fzf answers a one-character fragment at the first word boundary it meets,
+   * because its scan is built to stop early. This scorer reads every position
+   * and keeps the best, so a boundary that sits later can still win; the
+   * divergence is deliberate and pinned rather than left to drift.
+   */
+  it('keeps the best hit instead of the first boundary fzf would stop at', () => {
+    expect(fuzzyScore('a', '-a a')).toBe(36)
+    expect(fuzzyScore('a', 'x/a')).toBe(34)
+  })
+})
