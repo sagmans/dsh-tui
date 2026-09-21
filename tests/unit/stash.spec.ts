@@ -10,6 +10,7 @@ import { loadStashStore, writeStashFile, type StashWriter } from '@/stash/store.
 
 const SESSION = 'tui-session-spec'
 const OTHER_SESSION = 'tui-session-other'
+const SESSION_CHANGED = 'the session changed; the stash stayed with the session it belonged to'
 const scratchDirs: string[] = []
 
 function scratchBase(): string {
@@ -79,6 +80,19 @@ function bank(
     baseDir: overrides.baseDir ?? scratchBase(),
     ...(overrides.write === undefined ? {} : { write: overrides.write }),
   })
+}
+
+/**
+/**
+ * A writer that moves the surface before it lands, so a test can switch
+ * sessions after one command has resolved its bank but before the commands
+ * queued behind it are reached.
+ */
+function movingWriter(onWrite: () => void): StashWriter {
+  return async (file, contents) => {
+    onWrite()
+    return await writeStashFile(file, contents)
+  }
 }
 
 describe('stashing the editor draft', () => {
@@ -556,6 +570,87 @@ describe('session scope', () => {
     expect(stash.entryCount).toBe(1)
     await stash.apply(undefined)
     expect(host.editorText).toBe('first')
+  })
+
+  /**
+   * The queue can hold a command past a session switch. A command names the
+   * bank the reader was looking at when they asked for it, so it must not
+   * resolve the session again when its turn comes.
+   */
+  it('drops from the session that issued the command, not the one on screen later', async () => {
+    const baseDir = scratchBase()
+    await bank(new FakeHost(), { baseDir, sessionId: () => OTHER_SESSION }).stashEditor('theirs')
+
+    let session = SESSION
+    const host = new FakeHost()
+    const stash = bank(host, {
+      baseDir,
+      write: movingWriter(() => { session = OTHER_SESSION }),
+      sessionId: () => session,
+    })
+
+    // The first write has already resolved this session when the surface moves,
+    // and the drop behind it was asked for on this session too.
+    const parked = stash.stashEditor('parked')
+    const dropped = stash.drop(undefined)
+    const opened = stash.open()
+    await Promise.all([parked, dropped, opened])
+
+    const mine = await loadStashStore(resolveStashPaths(SESSION, baseDir))
+    expect(mine.entries).toEqual([])
+    const theirs = await loadStashStore(resolveStashPaths(OTHER_SESSION, baseDir))
+    expect(theirs.entries.map(entry => entry.text)).toEqual(['theirs'])
+    expect(stash.entryCount).toBe(1)
+  })
+
+  it('keeps a queued pop out of the bar of the session the surface moved to', async () => {
+    const baseDir = scratchBase()
+    await bank(new FakeHost(), { baseDir }).stashEditor('mine')
+    await bank(new FakeHost(), { baseDir, sessionId: () => OTHER_SESSION }).stashEditor('theirs')
+
+    let session = SESSION
+    const host = new FakeHost()
+    const stash = bank(host, {
+      baseDir,
+      write: movingWriter(() => { session = OTHER_SESSION }),
+      sessionId: () => session,
+    })
+
+    const held = stash.stashEditor('holding the queue')
+    const popped = stash.pop(undefined)
+    const opened = stash.open()
+    await Promise.all([held, popped, opened])
+
+    // Nothing was taken from the bank the pop named, and nothing was typed into
+    // the bar that now belongs to the session the surface moved to.
+    expect(host.editorText).toBe('holding the queue')
+    expect(host.notices).toContain(SESSION_CHANGED)
+    const mine = await loadStashStore(resolveStashPaths(SESSION, baseDir))
+    expect(mine.entries.map(entry => entry.text)).toEqual(['holding the queue', 'mine'])
+    const theirs = await loadStashStore(resolveStashPaths(OTHER_SESSION, baseDir))
+    expect(theirs.entries.map(entry => entry.text)).toEqual(['theirs'])
+  })
+
+  it('parks the bar the reader had when the command was issued', async () => {
+    const baseDir = scratchBase()
+    let session = SESSION
+    const host = new FakeHost()
+    const stash = bank(host, {
+      baseDir,
+      write: movingWriter(() => { session = OTHER_SESSION }),
+      sessionId: () => session,
+    })
+
+    const first = stash.stashEditor('first')
+    host.editorText = 'the draft the reader sees'
+    const second = stash.stashEditor()
+    host.editorText = 'typed in the other session'
+    const opened = stash.open()
+    await Promise.all([first, second, opened])
+
+    const mine = await loadStashStore(resolveStashPaths(SESSION, baseDir))
+    expect(mine.entries.map(entry => entry.text)).toEqual(['the draft the reader sees', 'first'])
+    expect(host.editorText).toBe('typed in the other session')
   })
 })
 
