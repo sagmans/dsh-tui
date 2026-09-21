@@ -342,6 +342,25 @@ describe('listWorkspaceFiles containment', () => {
     })
   })
 
+  it.skipIf(process.platform === 'win32')('does not walk a marker that points nowhere', async () => {
+    const root = scratchDir()
+    symlinkSync(join(root, 'gone'), join(root, '.git'))
+    writeFileSync(join(root, 'secret.env'), '')
+    await withFakeGit(NOT_A_REPOSITORY, async () => {
+      expect(await listWorkspaceFiles(root, signal)).toEqual([])
+    })
+  })
+
+  it.skipIf(!hasGit)('refuses the walk when the climb cannot reach a filesystem root', async () => {
+    let deep = scratchDir()
+    for (let level = 0; level < 41; level += 1) {
+      deep = join(deep, 'd')
+      mkdirSync(deep)
+    }
+    writeFileSync(join(deep, 'secret.env'), '')
+    expect(await listWorkspaceFiles(deep, signal)).toEqual([])
+  })
+
   it.skipIf(!hasGit)('never reads a tab inside an untracked name as index metadata', async () => {
     const root = gitRepo()
     writeFileSync(join(root, '.gitignore'), 'secret.env\n')
@@ -443,6 +462,24 @@ describe('createFileIndex reachability', () => {
     writeFileSync(join(root, 'src', 'app.ts'), '')
     symlinkSync(join(root, 'src', 'app.ts'), join(root, 'alias.ts'))
     await expect(createFileIndex(root).reachable('alias.ts', signal)).resolves.toBe(true)
+  })
+
+  it('leaves out a row whose proof never answers', async () => {
+    const root = scratchDir()
+    const index = createFileIndex(root, {
+      resolve: () => new Promise<string>(() => {}),
+      proofTimeoutMs: 10,
+    })
+    await expect(index.reachable('a.ts', signal)).resolves.toBe(false)
+  })
+
+  it('stops proving as soon as the caller looks away', async () => {
+    const root = scratchDir()
+    const index = createFileIndex(root, { resolve: () => new Promise<string>(() => {}) })
+    const gone = new AbortController()
+    const proof = index.reachable('a.ts', gone.signal)
+    gone.abort()
+    await expect(proof).resolves.toBe(false)
   })
 
   it('proves nothing for a caller that already looked away', async () => {

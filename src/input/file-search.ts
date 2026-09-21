@@ -219,6 +219,8 @@ export interface FileIndexOptions {
   readonly now?: () => number
   readonly ttlMs?: number
   readonly scanTimeoutMs?: number
+  readonly resolve?: (path: string) => Promise<string>
+  readonly proofTimeoutMs?: number
 }
 
 /**
@@ -248,6 +250,9 @@ const GIT_TIMEOUT_MS = 3_000
 
 /** How long one scan may run before the index abandons it, awaited or not. */
 const SCAN_TIMEOUT_MS = 5_000
+
+/** How long proving one row may hold the menu before that row is left out. */
+const ROW_PROOF_TIMEOUT_MS = 500
 
 /**
  * The git listing that answers for a workspace.
@@ -337,21 +342,36 @@ export async function listWorkspaceFiles(cwd: string, signal: AbortSignal): Prom
   return await walkFiles(cwd, signal)
 }
 
-/** Whether git owns this directory, or one above it, without asking git itself. */
+/**
+ * Whether git owns this directory, or one above it, without asking git itself.
+ *
+ * A marker is the name itself, even when it is a link whose target is gone:
+ * git reads that link, so this has to see it too. A stat that fails for any
+ * reason but absence, and a climb that runs out of levels before a filesystem
+ * root, both leave the question open — and an open question is answered by
+ * refusing to walk, because a walk offers the very paths an ignore-file is
+ * there to keep out.
+ */
 async function hasGitMarker(cwd: string): Promise<boolean> {
   let directory = cwd
   for (let level = 0; level < MAX_PARENT_DIRECTORIES; level += 1) {
     try {
-      await stat(join(directory, GIT_MARKER))
+      await lstat(join(directory, GIT_MARKER))
       return true
-    } catch {
-      // Keep climbing: a subdirectory is owned by the repository above it.
+    } catch (error) {
+      if (!isAbsent(error)) return true
     }
     const parent = dirname(directory)
     if (parent === directory) return false
     directory = parent
   }
-  return false
+  return true
+}
+
+/** Whether a stat failed because nothing carries that name. */
+function isAbsent(error: unknown): boolean {
+  const code = (error as { readonly code?: unknown } | null)?.code
+  return code === 'ENOENT' || code === 'ENOTDIR'
 }
 
 /** One git question, and what its answer allows a caller to conclude. */
@@ -599,6 +619,8 @@ export function createFileIndex(cwd: string, options: FileIndexOptions = {}): Fi
   const now = options.now ?? Date.now
   const ttlMs = options.ttlMs ?? INDEX_TTL_MS
   const scanTimeoutMs = options.scanTimeoutMs ?? SCAN_TIMEOUT_MS
+  const resolvePath = options.resolve ?? realpath
+  const proofTimeoutMs = options.proofTimeoutMs ?? ROW_PROOF_TIMEOUT_MS
   let cached: readonly Candidate[] | undefined
   let cachedAt = 0
   let pending: Scan | undefined
@@ -655,19 +677,34 @@ export function createFileIndex(cwd: string, options: FileIndexOptions = {}): Fi
     async reachable(path: string, signal: AbortSignal): Promise<boolean> {
       if (signal.aborted) return false
       root ??= canonicalOrUndefined(cwd)
-      const canonical = await root
+      // Both the root and the row are bound the same way: a filesystem that
+      // stopped answering must not hold a menu open, and a proof that did not
+      // arrive in time is a proof that never happened.
+      const canonical = await withinBound(root, signal, proofTimeoutMs)
       if (canonical === undefined) return false
-      try {
-        const target = await realpath(join(cwd, path))
-        const inside = relative(canonical, target)
-        if (inside === '' || inside.startsWith('..') || isAbsolute(inside)) return false
-        return true
-      } catch {
-        // A path that no longer resolves is not one the prompt may name.
-        return false
-      }
+      const target = await withinBound(resolvePath(join(cwd, path)), signal, proofTimeoutMs)
+      if (target === undefined) return false
+      const inside = relative(canonical, target)
+      return inside !== '' && !inside.startsWith('..') && !isAbsolute(inside)
     },
   }
+}
+
+/** Wait for one filesystem answer, but only while the caller is still waiting. */
+function withinBound<T>(work: Promise<T>, signal: AbortSignal, timeoutMs: number): Promise<T | undefined> {
+  if (signal.aborted) return Promise.resolve(undefined)
+  return new Promise<T | undefined>(resolve => {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const finish = (value: T | undefined): void => {
+      if (timer !== undefined) clearTimeout(timer)
+      signal.removeEventListener('abort', stop)
+      resolve(value)
+    }
+    const stop = (): void => finish(undefined)
+    timer = setTimeout(stop, timeoutMs)
+    signal.addEventListener('abort', stop, { once: true })
+    work.then(value => finish(value), () => finish(undefined))
+  })
 }
 
 /** Wait for shared work, but leave as soon as any reason to stop waiting fires. */

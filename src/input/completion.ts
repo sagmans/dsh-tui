@@ -83,15 +83,15 @@ class WorkspaceFileProvider extends CombinedAutocompleteProvider {
       // insert is checked here as well: a row the menu cannot draw honestly,
       // or cannot follow up on, must not reach the prompt.
       const offerable = candidates.filter(candidate => offerableCandidate(candidate))
-      const rows: Candidate[] = []
-      for (const candidate of rankFiles(token.query, offerable, SUGGESTION_LIMIT)) {
-        // The listing is a snapshot, so each row is proven again as it is
-        // offered: a path the workspace no longer holds, or one whose link now
-        // points out of it, must not reach the prompt.
-        if (await this.index.reachable(candidate.path, options.signal)) rows.push(candidate)
-        if (options.signal.aborted) return null
-      }
-      const items = rows.map(candidate => fileItem(candidate, token.quoted))
+      const ranked = rankFiles(token.query, offerable, SUGGESTION_LIMIT)
+      // The listing is a snapshot, so every row is proven again as it is
+      // offered: a path the workspace no longer holds, or one whose link now
+      // points out of it, must not reach the prompt. The proofs run together so
+      // the menu waits for the slowest row, and each leaves when this caller
+      // looks away rather than when the filesystem answers.
+      const proven = await Promise.all(ranked.map(candidate => this.index.reachable(candidate.path, options.signal)))
+      if (options.signal.aborted) return null
+      const items = ranked.filter((_, at) => proven[at] === true).map(candidate => fileItem(candidate, token.quoted))
       return items.length === 0 ? null : { items, prefix: token.prefix }
     }
     return await super.getSuggestions(lines, cursorLine, cursorCol, options)
