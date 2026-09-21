@@ -70,23 +70,35 @@ export function canFrame(width: number, borderVisible: boolean): boolean {
 }
 
 /**
- * One block of text as a bar draws it: wrapped to the frame's own width, and
- * closed into it when the frame can be drawn.
+ * One block of already-rendered rows as a bar draws it: padded to the frame's
+ * own text width, and closed into it when the frame can be drawn.
  *
- * A block with a limit is a preview, and the rows it drops are counted on the
- * closing rule: a reader who cannot see the whole text still has to see that it
- * continues. A block without a limit is the prompt itself, which is never cut.
+ * Markdown lays itself out to the width it is given, so its rows may not be
+ * wrapped again here: a second pass would break a fence or a table the markdown
+ * just drew. A block with a limit is a preview, and the rows it drops are
+ * counted on the closing rule: a reader who cannot see the whole text still has
+ * to see that it continues.
  */
-export function frameText(text: string, width: number, faces: FrameFaces, limit = Number.POSITIVE_INFINITY): string[] {
+export function frameLines(lines: readonly string[], width: number, faces: FrameFaces, limit = Number.POSITIVE_INFINITY): string[] {
   const inside = faces.framed ? width - FRAME_COLUMNS : width
-  const wrapped = wrapTextWithAnsi(displayText(text), textWidth(inside))
-  const body = wrapped.slice(0, Math.max(0, limit))
+  const body = lines.slice(0, Math.max(0, limit))
   const rows = body.map(line => textRow(faces.text(line), inside))
   if (!faces.framed) return rows
   const side = faces.border(FRAME_GLYPHS.side)
   return [
     faces.border(`${FRAME_GLYPHS.topLeft}${frameRule(inside, 0)}${FRAME_GLYPHS.topRight}`),
     ...rows.map(row => `${side}${row}${side}`),
-    faces.border(`${FRAME_GLYPHS.bottomLeft}${frameRule(inside, wrapped.length - body.length)}${FRAME_GLYPHS.bottomRight}`),
+    faces.border(`${FRAME_GLYPHS.bottomLeft}${frameRule(inside, lines.length - body.length)}${FRAME_GLYPHS.bottomRight}`),
   ]
+}
+
+/**
+ * One block of plain text as a bar draws it.
+ *
+ * A block without a limit is the prompt itself, which is never cut; the text is
+ * wrapped here because nothing upstream knows the frame's own width.
+ */
+export function frameText(text: string, width: number, faces: FrameFaces, limit = Number.POSITIVE_INFINITY): string[] {
+  const inside = faces.framed ? width - FRAME_COLUMNS : width
+  return frameLines(wrapTextWithAnsi(displayText(text), textWidth(inside)), width, faces, limit)
 }

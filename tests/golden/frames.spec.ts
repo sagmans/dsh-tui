@@ -188,6 +188,36 @@ function mermaidFixture(frameTheme = theme): TranscriptView {
   })
 }
 
+/** A prompt and a thought that carry markdown, with the thought opened. */
+const MARKDOWN_PROMPT = 'summarize this:\n\n- first item\n- second item\n\n```ts\nconst x = 1\n```'
+const MARKDOWN_THOUGHT = '**weigh** the options\n\n1. keep the parser\n2. drop the cache'
+
+/**
+ * The frame owns the prompt's markdown width and the thought's indent, so these
+ * frames pin where a list and a fence land inside the box, and that an opened
+ * thought's markdown stays in its own shade rather than the answer's.
+ */
+function markdownMessages(frameTheme = theme): TranscriptView {
+  const model = new TranscriptModel()
+  model.apply({ type: 'user/message', data: { content: [{ type: 'text', text: MARKDOWN_PROMPT }], source: { kind: 'user' } } })
+  model.apply({
+    type: 'assistant/message',
+    data: {
+      message: {
+        content: [
+          { type: 'reasoning', text: MARKDOWN_THOUGHT },
+          { type: 'text', text: 'Kept the parser.' },
+        ],
+      },
+    },
+  })
+  return new TranscriptView(model, frameTheme, new MarkdownRenderer(frameTheme.markdown), {
+    state: () => ({ expandCards: false, expandReasoning: true, expandSubCalls: false }),
+    gate: () => undefined,
+    picker: () => undefined,
+  })
+}
+
 /** One frozen moment, so a frame with elapsed times is still a stable artefact. */
 const NOW = 1_700_000_000_000
 
@@ -366,6 +396,18 @@ describe('a mermaid reply', () => {
 
   it('renders the diagram with its escapes', () => {
     expect(mermaidFixture(createTheme('truecolor')).render(80)).toMatchSnapshot()
+  })
+})
+
+describe('markdown messages', () => {
+  for (const width of WIDTHS) {
+    it(`renders a prompt and a thought as markdown at ${width} columns`, () => {
+      expect(markdownMessages().render(width)).toMatchSnapshot()
+    })
+  }
+
+  it('renders the prompt and the thought with their escapes', () => {
+    expect(markdownMessages(createTheme('truecolor')).render(80)).toMatchSnapshot()
   })
 })
 
