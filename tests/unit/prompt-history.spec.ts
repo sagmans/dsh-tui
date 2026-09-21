@@ -223,6 +223,27 @@ describe('createPromptHistory', () => {
     expect(await readFile(lock, 'utf8')).toBe(held)
   })
 
+  it('refuses to displace a reclaimer that stopped', async () => {
+    const home = await scratchHome()
+    const lock = historyPath(home) + '.lock'
+    await writeFile(lock, DEAD_PID + ' dead-holder\n')
+    await writeFile(lock + '.reclaim', DEAD_PID + ' dead-reclaimer\n')
+    const warnings: string[] = []
+    const history = createPromptHistory({
+      home,
+      cap: () => DEFAULT_MAX_ENTRIES,
+      lockWaitMs: 50,
+      warn: message => warnings.push(message),
+    })
+    history.record('must not land')
+    await history.flush()
+    expect(history.entries()).toEqual([])
+    expect(warnings).toHaveLength(1)
+    expect(warnings[0]).toMatch(/names a session that stopped/)
+    expect(await stat(lock).catch(() => undefined)).toBeDefined()
+    expect(await stat(lock + '.reclaim').catch(() => undefined)).toBeDefined()
+  })
+
   it('refuses a newer schema that appeared after startup', async () => {
     const home = await scratchHome()
     const history = createPromptHistory({ home, cap: () => DEFAULT_MAX_ENTRIES })

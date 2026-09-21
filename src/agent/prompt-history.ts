@@ -33,6 +33,8 @@ const PRIVATE_FILE_MODE = 0o600
 const PRIVATE_DIR_MODE = 0o700
 /** Suffix of the file that serializes mutations across sessions. */
 const LOCK_SUFFIX = '.lock'
+/** Suffix of the lock that guards replacing a lock whose holder stopped. */
+const LOCK_RECLAIM_SUFFIX = '.reclaim'
 /** Suffix of the file a lock is staged in before it is published. */
 const LOCK_TEMP_SUFFIX = '.tmp'
 /** How long a mutation waits for another session's lock before giving up. */
@@ -151,31 +153,71 @@ async function acquireLock(lockPath: string, waitMs: number): Promise<LockOwner>
   const deadline = Date.now() + waitMs
   const owner: LockOwner = { pid: process.pid, token: randomUUID() }
   for (;;) {
-    // The holder is written before the lock path exists, so a contender can
-    // never read a half-published lock and displace a live session.
-    const staged = lockPath + '.' + owner.token + LOCK_TEMP_SUFFIX
-    await writeFile(staged, serializeOwner(owner), { encoding: 'utf8', mode: PRIVATE_FILE_MODE })
-    try {
-      await link(staged, lockPath)
-      return owner
-    } catch (error) {
-      if (!isAlreadyExists(error)) throw error
-    } finally {
-      await rm(staged, { force: true }).catch(() => {})
-    }
     const contents = await readFile(lockPath, 'utf8').catch(() => undefined)
-    if (contents === undefined) continue
+    if (contents !== undefined) {
+      const holder = parseOwner(contents)
+      if (holder !== undefined && isOwnerAlive(holder.pid)) {
+        if (Date.now() >= deadline) throw new Error('another session is writing the prompt history')
+        await delay(LOCK_RETRY_MS)
+        continue
+      }
+      await reclaimLock(lockPath, contents, Math.max(1, deadline - Date.now()))
+      continue
+    }
+    if (await publishLock(lockPath, owner)) return owner
+  }
+}
+
+/** Publish a lock naming `owner`; false when another holder got there first. */
+async function publishLock(lockPath: string, owner: LockOwner): Promise<boolean> {
+  // The holder is written before the lock path exists, so a contender can never
+  // read a half-published lock and displace a live session.
+  const staged = lockPath + '.' + owner.token + LOCK_TEMP_SUFFIX
+  await writeFile(staged, serializeOwner(owner), { encoding: 'utf8', mode: PRIVATE_FILE_MODE })
+  try {
+    await link(staged, lockPath)
+    return true
+  } catch (error) {
+    if (!isAlreadyExists(error)) throw error
+    return false
+  } finally {
+    await rm(staged, { force: true }).catch(() => {})
+  }
+}
+
+/**
+ * Replace a lock whose holder cannot run, under a lock of its own.
+ *
+ * Two sessions that both judge the same lock dead would otherwise each remove
+ * it, and one could remove the lock the other had just published, admitting two
+ * writers. Displacing a stopped reclaimer would need a third lock, so that case
+ * refuses instead: a wrong guess here means concurrent writers.
+ */
+async function reclaimLock(lockPath: string, deadContents: string, waitMs: number): Promise<void> {
+  const reclaimPath = lockPath + LOCK_RECLAIM_SUFFIX
+  const owner: LockOwner = { pid: process.pid, token: randomUUID() }
+  const deadline = Date.now() + waitMs
+  for (;;) {
+    const contents = await readFile(reclaimPath, 'utf8').catch(() => undefined)
+    if (contents === undefined) {
+      if (await publishLock(reclaimPath, owner)) break
+      continue
+    }
     const holder = parseOwner(contents)
     if (holder !== undefined && isOwnerAlive(holder.pid)) {
-      if (Date.now() >= deadline) throw new Error('another session is writing the prompt history')
+      if (Date.now() >= deadline) throw new Error('another session is reclaiming the prompt history lock')
       await delay(LOCK_RETRY_MS)
       continue
     }
-    // Only a holder that cannot run is displaced, and only while the file still
-    // names that holder. Unlinking cannot be made conditional, so this one
-    // replacement stays best effort for a crashed or unreadable lock.
+    throw new Error('prompt history lock at ' + reclaimPath + ' names a session that stopped; remove it to continue')
+  }
+  try {
+    // No other reclaimer runs now, and a path cannot be published over, so the
+    // dead lock is still the one this session judged.
     const current = await readFile(lockPath, 'utf8').catch(() => undefined)
-    if (current === contents) await rm(lockPath, { force: true })
+    if (current === deadContents) await rm(lockPath, { force: true })
+  } finally {
+    await releaseLock(reclaimPath, owner)
   }
 }
 
@@ -361,8 +403,11 @@ export function createPromptHistory(options: PromptHistoryOptions): PromptHistor
         if (blocked !== undefined) return
         entries = upsertEntry(entries, prompt, now().toISOString(), options.cap())
         await write()
-      })).catch(() => {
-        warnOnce('write', 'prompt history could not be written; this session keeps it in memory only')
+      })).catch((error: unknown) => {
+        // The reason can name the lock file that must be removed by hand, so it
+        // belongs in the notice rather than behind a single opaque sentence.
+        const reason = error instanceof Error && error.message !== '' ? ': ' + error.message : ''
+        warnOnce('write' + reason, 'prompt history could not be written; this session keeps it in memory only' + reason)
       })
     },
     clear(): Promise<number> {
