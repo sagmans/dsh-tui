@@ -195,6 +195,10 @@ breaking change, and a patch carries only fixes.
   an edit, a read, or a search opened to nothing; the outcome the model was shown
   is now kept for every kind, and a failure takes back the change it declared
   rather than drawing rows for work that never happened.
+- `/new` no longer leaves the conversation it starts blank: the transcript was
+  still measuring the fresh session's rows against the numbering of the one it
+  replaced, so the submitted prompt, every settled row, and the calls a PTC
+  program dispatched under its card were dropped from the new session.
 
 ## [0.4.0] - 2026-09-21
 

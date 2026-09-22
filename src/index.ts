@@ -1224,26 +1224,26 @@ export function apply(ctx: Context, config: unknown): void {
   const foldCursor = new FoldCursor()
 
   /** Feed one durable event to the model, unless a fold has already folded it. */
-  const applyDurable = (event: ForkEvent): void => {
-    if (foldCursor.accept(event)) applyEvent(event)
+  const applyDurable = (session: SessionId, event: ForkEvent): void => {
+    if (foldCursor.accept(session, event)) applyEvent(event)
   }
 
   const foldHistory = async (id: SessionId): Promise<number> => {
     // Resolved before the fold so every card reads its tool through the scope
     // that actually registered it; a stored session nobody runs has none.
     presentScope = ctx.agents?.get(id)
-    // Every fold starts a cleared transcript, so this session's own numbering is
-    // where the cursor begins rather than the previous session's.
+    // Every fold starts a cleared transcript, so a session already known to the
+    // cursor is read from its first event rather than from where it left off.
     foldCursor.reset()
     const inMemory = liveSession(id)?.snapshotEvents?.()
     if (inMemory !== undefined) {
-      for (const event of inMemory) applyDurable(event)
+      for (const event of inMemory) applyDurable(id, event)
       return inMemory.length
     }
     const history = createSessionHistory(ctx)
     if (history === undefined) return 0
     const events = await history.read(id)
-    for (const event of events) applyDurable(event)
+    for (const event of events) applyDurable(id, event)
     return events.length
   }
 
@@ -2281,7 +2281,7 @@ export function apply(ctx: Context, config: unknown): void {
     }
     if (session.id !== viewedSession) return
     presentScope = ctx.agents?.get(session.id)
-    applyDurable(event)
+    applyDurable(session.id, event)
     tui.requestRender()
   }))
 
