@@ -6,7 +6,17 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html) with the 0.x
 caveat [RELEASE.md](RELEASE.md) states: while at 0.x, a minor bump may carry a
 breaking change, and a patch carries only fixes.
 
-## [Unreleased]
+## [0.5.1] - 2026-09-23
+
+### Fixed
+
+- The manifest pinned every harness peer at one exact prerelease. npm answered
+  with `ERESOLVE` as soon as the harness's own floating peers resolved past
+  that pin, so the package could not be installed with npm at all; the pins also
+  let npm place a private copy of a singleton the host already provides. The
+  peers now declare the harness range the manifest already promises and are
+  marked optional, so an npm tree keeps the host's copy and the install
+  resolves ([#67](https://github.com/sagmans/dsh-tui/pull/67)).
 
 ## [0.5.0] - 2026-09-22
 
@@ -368,7 +378,8 @@ breaking change, and a patch carries only fixes.
 - Publication through npm OIDC trusted publishing, with the first version
   bootstrapped by hand ([#5](https://github.com/sagmans/dsh-tui/pull/5)).
 
-[Unreleased]: https://github.com/sagmans/dsh-tui/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/sagmans/dsh-tui/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/sagmans/dsh-tui/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/sagmans/dsh-tui/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/sagmans/dsh-tui/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/sagmans/dsh-tui/compare/v0.2.0...v0.3.0
