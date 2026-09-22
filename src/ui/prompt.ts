@@ -1,4 +1,4 @@
-import type { Component } from '@earendil-works/pi-tui'
+import { VStack } from '@earendil-works/pi-tui'
 import type { BoxedEditor } from './editor.ts'
 
 /**
@@ -10,11 +10,19 @@ import type { BoxedEditor } from './editor.ts'
  * The bar hides while the question is open, and the prompt nobody has sent yet
  * is held aside and put back afterwards.
  */
-export class PromptBar implements Component {
+export class PromptBar extends VStack {
   private borrowed = false
   private held = ''
 
-  constructor(private readonly editor: BoxedEditor) {}
+  constructor(private readonly editor: BoxedEditor) {
+    super([])
+    // The editor is the bar's layout child rather than a row this wrapper paints
+    // itself. A pointer is then dispatched to the editor, which is the component
+    // that drew the text and the only one that can take focus for it; a wrapper
+    // that merely forwarded the event would still be focused in its place, and
+    // the keyboard would go to a component with no input handling at all.
+    this.addChild(editor, { visible: () => !this.borrowed })
+  }
 
   /**
    * Borrow the editor for a gate that collects answers in it.
@@ -54,11 +62,11 @@ export class PromptBar implements Component {
   }
 
   /** The rows the bar occupies, which a borrowing question leaves empty. */
-  render(width: number): string[] {
-    return this.borrowed ? [] : this.editor.render(width)
+  override render(width: number): string[] {
+    return this.borrowed ? [] : super.render(width)
   }
 
-  invalidate(): void {
+  override invalidate(): void {
     this.editor.invalidate()
   }
 }

@@ -22,9 +22,28 @@ breaking change, and a patch carries only fixes.
 - A question gate gained an abandon key: Ctrl+C settles the batch with no
   answers, the shape an aborted call already produces, while Esc keeps skipping
   one question. An approval now cancels on Ctrl+C as well as Esc.
+- A folded tool card is one row for every tool, bash included: the row carries
+  the tool, its command clipped at the screen edge, the exit status, and the
+  count of output rows waiting behind the fold, instead of spending twenty
+  rows on shell output by default. `output: tail` restores a preview window per
+  tool, and a PTC card's dispatched calls stay one row each under the header.
+- A thought and the row naming it both recede to a shade below the muted
+  family, and only the row is italic, so the signpost no longer competes with
+  the text it introduces.
 
 ### Added
 
+- A PTC program's dispatched calls stay visible as one row each under the
+  `run_code` header without opening the card, and a click opens one call's
+  argument in full while its neighbours stay as they were; opening a shell call
+  also shows the rows it printed, which the program's return value alone often
+  drops. A thought opens and folds on a click too, instead of only through the
+  key that moves every one.
+- Tool cards fold one message at a time: a click on a card opens or folds that
+  row alone, and a `dsh-tui: tools:` block decides how each tool starts —
+  whether its cards start folded and whether a fold hides its rows or keeps a
+  `tail` of them. Ctrl+O still opens or folds every card at once, and a
+  message the reader clicked keeps the state the click gave it.
 - The bar's draft opens in the reader's own editor: `ctrl+x` then `e` hands the
   terminal to `$VISUAL` (or `$EDITOR`) with the draft in an owner-only scratch
   file, waits for the child, repaints, and takes back what was saved through one
@@ -48,6 +67,25 @@ breaking change, and a patch carries only fixes.
   prompt lays its markdown out inside its own frame, and an opened thought
   parses lists, fences, and emphasis in the thought's own shade. A thought's
   mermaid fence stays source instead of carrying the answer's weight.
+
+### Fixed
+
+- A fold no longer keeps sub-call indexing from a session that was dropped, a
+  thought the stream never settled no longer stays live into the next turn, and
+  every thought a replayed turn recorded is painted instead of every other one.
+- A click in the prompt bar reaches the editor that drew it, the work board
+  gives up rows before the input bar does — which keeps a frame's worth of rows
+  no shrink can take — and live text and failures fold into the session the
+  reader is looking at rather than the one this terminal drives.
+- A click lands on the row it was made on while a thought is still streaming,
+  and a folded thought fits a terminal too narrow to hold both its signpost and
+  its fold key.
+- A row that carried a line break — a background job's label, a command a PTC
+  program wrote across lines, a path, or any other fact a component draws on one
+  row — no longer writes the rest of itself over the row below it, which is how
+  a tool row could reach the editor's frame. The one line a cut promises is now
+  one line, and the status row flattens what a fact brought even when it never
+  needed a cut.
 
 ## [0.4.0] - 2026-09-21
 

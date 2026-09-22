@@ -33,9 +33,22 @@ describe('the token table', () => {
     // ordinary text. Muted names the palette entry, and that entry is a hex
     // shade rather than an index, so the surface owns the contrast.
     expect(DEFAULT_PALETTE.muted).toMatch(/^#/u)
-    for (const token of ['transcript.reasoning.body', 'transcript.reasoning.summary', 'tool.detail'] as const) {
+    for (const token of ['tool.detail'] as const) {
       expect(DEFAULT_TOKENS[token].fg, `${token} does not follow the muted entry`).toBe('muted')
     }
+  })
+
+  it('recedes a thought and its signpost past the muted family', () => {
+    // The row that names a thought must not compete with the thought itself:
+    // both take the shade below muted, and only the row is italic, because the
+    // body is read while the row is scanned.
+    const signpost = DEFAULT_TOKENS['transcript.reasoning.summary']
+    expect(signpost.fg).toBe('faint')
+    expect(signpost.italic).toBe(true)
+    expect(DEFAULT_TOKENS['transcript.reasoning.hint']).toEqual(signpost)
+    expect(DEFAULT_TOKENS['transcript.reasoning.body']).toEqual({ fg: 'faint' })
+    const shade = (hex: string) => Number.parseInt(hex.slice(1), 16)
+    expect(shade(DEFAULT_PALETTE.faint) < shade(DEFAULT_PALETTE.muted)).toBe(true)
   })
 
   it('ships no glyphs by default', () => {
@@ -53,7 +66,7 @@ describe('the token table', () => {
 
 describe('resolveToken', () => {
   it('resolves a muted token to an explicit grey', () => {
-    const style = resolveToken('transcript.reasoning.body', overrides({}), DEFAULT_PALETTE, 'truecolor')
+    const style = resolveToken('tool.detail', overrides({}), DEFAULT_PALETTE, 'truecolor')
     expect(style.prefix).toBe('\u001B[38;2;138;138;138m')
     expect(style.suffix).toBe('\u001B[0m')
   })

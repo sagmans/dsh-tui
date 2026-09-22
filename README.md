@@ -128,8 +128,8 @@ moves any of them — see [Keys](#keys).
 | Ctrl+C | take back one thing at a time: the draft in the bar, the prompts waiting in the agent's inbox, the running turn, or a child's conversation; with a picker, an approval, a question, or the transcript search open it closes that instead. With nothing left to cancel it does nothing — it never leaves |
 | Ctrl+D | leave and print the resume command, when the bar holds no text and nothing is open; a running turn is cancelled first |
 | Ctrl+O | open every tool card: its header plus every retained row. Folded, a card is one line, and a shell card keeps its command plus the last 20 rows of output with a hint naming what it dropped |
-| Ctrl+Y | show or hide the calls a PTC program dispatched: one two-space-indented entry per call under its `run_code` card, named and argued from the tool's own header and wrapped at the screen edge; shown by default |
-| Shift+Tab | expand or fold the reasoning behind an answer: folded, the row names itself, its token count, and the key; opened, it adds the thought, laid out as markdown |
+| Ctrl+Y | show or hide the calls a PTC program dispatched: one two-space-indented row per call under its `run_code` card, named and argued from the tool's own header and cut at the screen edge; clicking one row opens that call's argument in full; shown by default |
+| Shift+Tab | expand or fold every thought behind the answers: folded, the row names itself, its token count, and the key; opened, it adds the thought, laid out as markdown; a click decides for one thought instead |
 | Ctrl+T | pick the reasoning effort for the next step |
 | Ctrl+R | reverse-search recorded prompts: the list opens filtered by whatever is in the bar, `enter` puts one back, `esc` keeps the draft |
 | Ctrl+X then S | stash the current draft |
@@ -317,6 +317,10 @@ code. Preferences live in the same user-settings document as every other
 dsh-tui:
   subcalls: collapsed         # fold the calls a PTC program dispatched (default inline)
   mermaid: streaming          # draw a reply's mermaid fences: off, final, or streaming (default streaming)
+  tools:
+    default: { collapsed: true, output: hidden }  # how every tool's card starts
+    bash: { output: tail, tail: 5 }   # keep the last five output rows behind bash's fold
+    read: { collapsed: false }        # start reads open
   prefixWindow: 2             # seconds a chord waits for its second key; 0 waits for the next key instead
   keys:
     chord.prefix: ctrl+x      # the key that starts a chord; "prefix:" is the older spelling of this row
@@ -330,7 +334,7 @@ dsh-tui:
   palette:
     muted: '#5c5c5c'          # one shade quiets every receding element
   tokens:
-    transcript.reasoning.body:
+    transcript.notice:
       fg: '#7a7a7a'
       italic: true
     tool.title:
@@ -346,11 +350,22 @@ keymap on the next press, and `/theme` shows each element's effective value and
 whether it came from an override, the palette, or the default.
 
 
-The section is not only shades. By default every session draws the calls a PTC
-program dispatched under their card, and `subcalls: collapsed` starts with the
-card alone instead. `Ctrl+Y` toggles the same choice for the current session,
-and an edit to the document re-seeds it. An unknown key or value is
+The section is not only shades. By default every session draws one row per call
+a PTC program dispatched under its card, and `subcalls: collapsed` starts with
+the card alone instead. `Ctrl+Y` toggles the same choice for the current
+session, and an edit to the document re-seeds it. An unknown key or value is
 refused with a notice naming it, so a typo cannot quietly do nothing.
+
+The `tools` block decides how each tool's cards draw. `collapsed` starts a
+tool folded to one header row (default `true`), and `output` is `hidden`
+(default) or `tail`, where `tail` is how many output rows a folded card keeps
+(default `20`). A folded row ends a few columns short of the screen edge and
+the argument is what gives up that room: a wide terminal shows more of the call,
+a narrow one still shows the tool, how it ended, and how much waits behind the
+fold. The reserved `default` row applies to every tool without its own, and a
+tool name nothing declares is inert: the surface cannot know which tools a
+profile mounts. Clicking a card opens or folds that one message, and `Ctrl+O`
+still decides for every message nobody clicked.
 
 The `history` block tunes the prompt history. `enabled: false` stops recording
 and offering it; `ghost: false` keeps reverse search but stops the dimmed
@@ -372,14 +387,16 @@ restyleable like anything else through `markdown.diagram.border`,
 lists it with the rest. Nothing is lost by drawing: `/export` and the session
 file keep the reply exactly as the model wrote it.
 
-`fg` and `bg` accept `#rrggbb`, a palette name (`default`, `muted`, `accent`,
-`arg`, `warn`, `added`, `removed`, `user`, `assistant`), or an index. A colour is
+`fg` and `bg` accept `#rrggbb`, a palette name (`default`, `muted`, `faint`,
+`accent`, `arg`, `warn`, `added`, `removed`, `user`, `assistant`), or an index. A colour is
 emitted as 24-bit when the terminal advertises it (`COLORTERM`) and degraded to
 the nearest 256-colour entry or 16-colour slot otherwise; a hue keeps its family
 there, so an addition stays green instead of collapsing to black. Muted elements
 name the palette rather than a terminal slot, so on anything but a 16-colour
 terminal their contrast does not depend on what the reader's colour scheme maps
-slot 8 to. `arg` is the pale blue a card gives the argument it was called with,
+slot 8 to. `faint` is the shade below `muted`: a thought and the row naming it both take
+it, and only the row is italic, so the signpost does not compete with the text
+it introduces. `arg` is the pale blue a card gives the argument it was called with,
 so `tool.args` is restyled on its own and stays distinct from the tool's own
 label and from its output. `user` is the mint a submitted prompt takes, so a
 reader's own turns stand apart from the reply without reading either.
@@ -476,9 +493,9 @@ A question whose id ends in `:secret` declares its typed answer a credential: th
 
 The fold is durable-only: the live stream decorates the row that is still being written, and everything else — cards, reasoning, work state, compaction markers — comes from the log, so a resumed session renders what the live one did. Subagent start and finish are the exception: they arrive as service events, and the transcript shows them as decoration because the durable record of a delegation is the tool call that asked for it.
 
-Tool cards are folded by default: a card draws its header and nothing else, so a long read, diff, or search cannot bury the conversation. A shell card is the exception, because its output is the answer the reader asked for: it names the tool in its header, always shows the command that ran, keeps the last 20 output rows, and adds a hint naming the rows it dropped. `Ctrl+O` opens every card to its header plus every retained row.
+Tool cards are folded by default: a card draws one header row — the tool, its argument clipped to the configured budget, and the facts the result measured — so a long read, diff, or search cannot bury the conversation. A shell card's row also carries the exit status and the count of output rows waiting behind the fold, because its output is the answer the reader asked for and a fold that left no trace of it would read as a call that produced nothing. Clicking a card opens or folds that one message; `Ctrl+O` opens or folds every card at once, and `tools:` in the [settings](#settings) decides how each tool starts and whether a fold hides its rows or keeps a `tail` of them.
 
-A PTC card is the one card with children: every call the `run_code` program dispatched hangs off the card that made it, and each draws under the header as the tool's own name and argument, wrapping rather than being cut. `Ctrl+Y` folds them away again, and `subcalls: collapsed` starts every session folded; see [Settings](#settings).
+A PTC card is the one card with children: every call the `run_code` program dispatched hangs off the card that made it, and each draws under the header as the tool's own name and argument, on one row cut at the screen edge whether the card itself is open or folded — a program's work must stay legible without opening its card. Clicking one of those rows opens that call's argument in full and leaves its neighbours and the card as they were; a shell call also brings back the rows it printed, because the program's return value is all the card itself keeps. `Ctrl+Y` hides or shows them all, and `subcalls: collapsed` starts every session with them hidden; see [Settings](#settings).
 
 A card's header names the tool, then the argument the call was made with — a path or a command — in the `tool.args` colour, then the facts the result measured: a read reports its line range, line count, and token size; a file change that carried no prior content to compare against reports its lines and tokens; one that did reports added, changed, and removed lines as `+n ~n -n` in green, yellow, and red. Each stat is its own token, so any of them can be recoloured or hidden independently.
 
@@ -568,10 +585,16 @@ The automated checks drive a real PTY, but they run on this machine's terminal. 
 | `NO_COLOR=1 dsh --profile tui` | no styling anywhere, layout unchanged |
 | `dsh --profile tui --no-bell` | a turn that runs for minutes still ends silently |
 | `dsh --profile tui --preset ptc`, then a turn | the status line names `ptc`, and the agent reaches its tools through one TypeScript program rather than one shell call at a time |
-| a PTC turn | one entry per dispatched call draws two spaces indented under the `run_code` header, from the first frame and with no keypress |
-| that turn in a terminal narrower than a call's own argument | the argument wraps onto continuation rows indented to the same two spaces, with no ellipsis |
-| that same turn, then `ctrl+y` | the lines fold away; `ctrl+y` again draws them back |
-| `dsh-tui: { subcalls: collapsed }` in `$DSH_HOME/settings.yaml`, then a PTC turn | the card arrives alone, and editing the document to `inline` unfolds a running session |
+| a PTC turn | one row per dispatched call draws two spaces indented under the `run_code` header without opening it |
+| that turn, then a click on one of those rows | that call's argument unfolds in full across continuation rows at the same indent, a shell call adds the rows it printed under it, and its neighbours and the card stay as they were |
+| that same turn, then `ctrl+y` | the rows fold away; `ctrl+y` again draws them back |
+| `dsh-tui: { subcalls: collapsed }` in `$DSH_HOME/settings.yaml`, then a PTC turn | the card arrives alone, and editing the document to `inline` draws the one-line calls in a running session |
+| a thought, folded | a click on the row opens the thought under its summary; a click on the body folds it back, and the other thoughts keep their own state |
+| a bash card, then a click on it | the row opens to its command, its retained output, and its exit status; a click folds it back to one row |
+| `dsh-tui: { tools: { bash: { output: tail, tail: 5 } } }`, then a bash run | the folded row keeps the last five output rows and counts the rest |
+| `dsh-tui: { tools: { read: { collapsed: false } } }`, then a read | the card starts open; folded on a narrow terminal, the path gives up room first and the row stops short of the edge |
+| `dsh-tui: { tools: { nope: { collapsed: false } } }` | accepted and inert, because the surface cannot know which tools a profile mounts |
+| `dsh-tui: { tools: { bash: { collapse: true } } }` | refused with a notice naming `bash.collapse` |
 | a reply carrying a mermaid fence | it draws as box art at the transcript width, with the prose around it untouched |
 | that reply in a terminal narrower than the drawing | the fence stays source, and widening the window draws it without a new turn |
 | `dsh-tui: { mermaid: off }` in `$DSH_HOME/settings.yaml`, then a mermaid reply | the fence stays source; editing the value to `streaming` draws a settled reply without a restart |

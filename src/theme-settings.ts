@@ -6,6 +6,14 @@ import { defaultKeymap, keysFor, resolveKeymap, type KeyListValue, type Keymap }
 import { KeymapSectionSchema, isActionId } from './input/keymap-settings.ts'
 import { DEFAULT_PREFIX_KEYS, DEFAULT_PREFIX_WINDOW_S } from './input/keymap.ts'
 import {
+  TOOL_DISPLAY_LIMITS,
+  TOOL_OUTPUT_DISPLAYS,
+  toolDisplayTable,
+  type ToolDisplayTable,
+  type ToolOutputDisplay,
+  type WrittenToolDisplay,
+} from './tool-display.ts'
+import {
   DEFAULT_PALETTE,
   PALETTE_NAMES,
   TUI_TOKENS,
@@ -109,6 +117,10 @@ const SECTION = z.object({
   prefixWindow: z.number().min(0).max(MAX_PREFIX_WINDOW_S).default(DEFAULT_PREFIX_WINDOW_S),
   keys: KeymapSectionSchema.default({}),
   history: HistorySchema.default({ enabled: DEFAULT_HISTORY_ENABLED, ghost: DEFAULT_HISTORY_GHOST, maxEntries: DEFAULT_MAX_ENTRIES }),
+  // Declared so a registered scope keeps the block when the document is saved,
+  // but validated by hand below: its keys are tool names, which no closed shape
+  // can enumerate, and schemastery's `dict` accepts every one of them.
+  tools: z.any(),
 })
 
 /**
@@ -124,7 +136,10 @@ const TOKEN_NAMES = new Set<string>(TUI_TOKENS)
 const PALETTE_NAME_SET = new Set<string>(PALETTE_NAMES)
 
 /** The section's own keys: schemastery keeps what it does not declare, so a misspelling has to be refused here. */
-const SECTION_KEYS = new Set(['palette', 'tokens', 'subcalls', 'mermaid', 'prefix', 'prefixWindow', 'keys', 'history'])
+const SECTION_KEYS = new Set(['palette', 'tokens', 'subcalls', 'mermaid', 'prefix', 'prefixWindow', 'keys', 'history', 'tools'])
+
+/** The fields one tool's row may carry, for the same reason the section's own keys are spelled out. */
+const TOOL_FIELDS = new Set(['collapsed', 'output', 'tail'])
 
 /**
  * Validate the raw section, refusing a name the surface does not have.
@@ -157,17 +172,68 @@ function rejectUnknownKeys(raw: unknown): void {
   if (unknownHistory.length > 0) {
     throw new Error('unknown ' + TUI_SETTINGS_NAMESPACE + ' history key' + (unknownHistory.length === 1 ? '' : 's') + ': ' + unknownHistory.join(', '))
   }
+  const unknownToolFields = Object.entries(asRecord(section.tools) ?? {})
+    .flatMap(([tool, spec]) => Object.keys(asRecord(spec) ?? {})
+      .filter(field => !TOOL_FIELDS.has(field))
+      .map(field => `${tool}.${field}`))
+  if (unknownToolFields.length > 0) {
+    throw new Error('unknown ' + TUI_SETTINGS_NAMESPACE + ' tool field' + (unknownToolFields.length === 1 ? '' : 's') + ': ' + unknownToolFields.join(', '))
+  }
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined
 }
 
+/** One display flag as the reader wrote it. */
+function toolFlag(value: unknown, field: string): boolean {
+  if (typeof value !== 'boolean') throw new Error(`${field} must be a boolean`)
+  return value
+}
+
+/** One bounded count as the reader wrote it. */
+function toolInteger(value: unknown, field: string, bounds: { readonly min: number; readonly max: number }): number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < bounds.min || value > bounds.max) {
+    throw new Error(`${field} must be an integer between ${bounds.min} and ${bounds.max}`)
+  }
+  return value
+}
+
+/** One `output` value as the reader wrote it. */
+function toolOutput(value: unknown, field: string): ToolOutputDisplay {
+  if (typeof value !== 'string' || !(TOOL_OUTPUT_DISPLAYS as readonly string[]).includes(value)) {
+    throw new Error(`${field} must be one of: ${TOOL_OUTPUT_DISPLAYS.join(', ')}`)
+  }
+  return value as ToolOutputDisplay
+}
+
+/**
+ * The `tools:` block as the reader wrote it.
+ *
+ * The reserved `default` row and every tool name are the same shape, so they
+ * are validated the same way; a name nothing declares is inert rather than an
+ * error, because the surface cannot know which tools a profile mounts.
+ */
+function parseTools(raw: unknown): Record<string, WrittenToolDisplay> {
+  const block = asRecord(raw) ?? {}
+  const specs: Record<string, WrittenToolDisplay> = {}
+  for (const [tool, value] of Object.entries(block)) {
+    const spec = asRecord(value)
+    if (spec === undefined) throw new Error(`tools.${tool} must be a mapping of display fields`)
+    const written: WrittenToolDisplay = {}
+    if (spec.collapsed !== undefined) written.collapsed = toolFlag(spec.collapsed, `tools.${tool}.collapsed`)
+    if (spec.output !== undefined) written.output = toolOutput(spec.output, `tools.${tool}.output`)
+    if (spec.tail !== undefined) written.tail = toolInteger(spec.tail, `tools.${tool}.tail`, TOOL_DISPLAY_LIMITS.tail)
+    specs[tool] = written
+  }
+  return specs
+}
+
 /** The reader-facing shape of the `dsh-tui:` section. */
 export function parseSettings(raw: unknown): TuiSettings {
   rejectUnknownKeys(raw)
   const section = asRecord(raw) ?? {}
-  const parsed = SECTION(section) as {
+  const parsed = SECTION(section) as unknown as {
     palette: Record<PaletteName, string>
     tokens: Record<string, StyleSpec>
     subcalls: SubCallDisplay
@@ -219,6 +285,7 @@ export function parseSettings(raw: unknown): TuiSettings {
     palette: palette as Readonly<Partial<Record<PaletteName, string>>>,
     tokens: tokens as Readonly<Partial<Record<TuiToken, StyleSpec>>>,
     subcalls: parsed.subcalls,
+    tools: toolDisplayTable(parseTools(section.tools)),
     mermaid: parsed.mermaid,
     prefixes: keysFor(keymap, 'chord.prefix'),
     prefixWindow: parsed.prefixWindow,
@@ -257,6 +324,8 @@ export interface TuiSettings {
   readonly keymap: Keymap
   /** The prompt-history affordances, grouped so one key tunes them together. */
   readonly history: HistorySettings
+  /** How each tool's cards draw: the block's own default, then the reader's per-tool rows. */
+  readonly tools: ToolDisplayTable
 }
 
 /** The section as it reads when the reader has written nothing. */
@@ -265,6 +334,7 @@ export function defaultSettings(): TuiSettings {
     palette: {},
     tokens: {},
     subcalls: 'inline',
+    tools: toolDisplayTable(),
     mermaid: DEFAULT_MERMAID_MODE,
     prefixes: [...DEFAULT_PREFIX_KEYS],
     prefixWindow: DEFAULT_PREFIX_WINDOW_S,

@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { rowText, SUBCALL_MAX, type ToolCard, type ToolPresenter } from '@/cards.ts'
+import { cardOfCall, cardOfResult, contentLines, rowText, SUBCALL_MAX, type ToolCard, type ToolPresenter } from '@/cards.ts'
 import { REASONING_CHAR_LIMIT, TranscriptModel } from '@/transcript.ts'
 
 const text = (value: string) => [{ type: 'text', text: value }]
 
-const card = (title: string, detail: string[] = []): ToolCard =>
-  ({ kind: 'generic', title, detail: detail.map(text => ({ parts: [{ class: 'detail' as const, text }] })), failed: false, totalLines: detail.length })
+const card = (title: string, detail: string[] = [], tool = title): ToolCard =>
+  ({ kind: 'generic', tool, title, detail: detail.map(text => ({ parts: [{ class: 'detail' as const, text }] })), failed: false, totalLines: detail.length })
 
 /** Presenter that records what it was asked, so pairing can be asserted. */
 function recordingPresenter(): ToolPresenter & { readonly calls: string[]; readonly results: string[] } {
@@ -16,11 +16,11 @@ function recordingPresenter(): ToolPresenter & { readonly calls: string[]; reado
     results,
     call(name, argumentsJson) {
       calls.push(`${name}:${argumentsJson}`)
-      return card(`${name} pending`, ['from presenter'])
+      return card(`${name} pending`, ['from presenter'], name)
     },
     result(name, input) {
       results.push(`${name}:${input.argumentsJson}:${input.isError ? 'error' : 'ok'}`)
-      return card(`${name} settled`, ['result line'])
+      return card(`${name} settled`, ['result line'], name)
     },
   }
 }
@@ -89,11 +89,13 @@ describe('TranscriptModel reasoning', () => {
     model.applyStreamChunk({ type: 'reasoning-delta', text: 'ing' })
     clock = 4_000
     expect(model.entries()).toEqual([
-      { kind: 'reasoning', summary: 'reasoning · 2 tokens · 3s · streaming', body: 'thinking', live: true },
+      { kind: 'reasoning', id: '1', summary: 'reasoning · 2 tokens · 3s · streaming', body: 'thinking', live: true },
     ])
     model.apply({ type: 'assistant/message', data: { message: { content: text('answer') } } })
+    // The settled row keeps the live row's id, so a click made while the model
+    // was still thinking stays on the thought it was made on.
     expect(model.entries()).toEqual([
-      { kind: 'reasoning', summary: 'reasoning · 2 tokens · 3s', body: 'thinking', live: false },
+      { kind: 'reasoning', id: '1', summary: 'reasoning · 2 tokens · 3s', body: 'thinking', live: false },
       { kind: 'assistant', text: 'answer' },
     ])
   })
@@ -105,7 +107,7 @@ describe('TranscriptModel reasoning', () => {
     clock = 2_000
     model.applyStreamChunk({ type: 'block-end', block: { type: 'reasoning' } })
     expect(model.entries()).toEqual([
-      { kind: 'reasoning', summary: 'reasoning · 1 token · 2s', body: 'a\nb', live: false },
+      { kind: 'reasoning', id: '1', summary: 'reasoning · 1 token · 2s', body: 'a\nb', live: false },
     ])
   })
 
@@ -134,7 +136,7 @@ describe('TranscriptModel reasoning', () => {
       },
     })
     expect(model.entries()).toEqual([
-      { kind: 'reasoning', summary: 'reasoning · 5 tokens', body: 'weigh the options', live: false },
+      { kind: 'reasoning', id: '1', summary: 'reasoning · 5 tokens', body: 'weigh the options', live: false },
       { kind: 'assistant', text: 'the answer' },
     ])
   })
@@ -166,9 +168,54 @@ describe('TranscriptModel reasoning', () => {
       },
     })
     expect(model.entries()).toEqual([
-      { kind: 'reasoning', summary: 'reasoning · 1 token · 2s', body: 'a\nb', live: false },
+      { kind: 'reasoning', id: '1', summary: 'reasoning · 1 token · 2s', body: 'a\nb', live: false },
       { kind: 'assistant', text: 'the answer' },
     ])
+  })
+
+  it('paints every recorded thought when a turn replays several messages', () => {
+    const model = new TranscriptModel()
+    const message = (thought: string, answer: string) => ({
+      type: 'assistant/message',
+      data: { message: { content: [{ type: 'reasoning', text: thought }, { type: 'text', text: answer }] } },
+    })
+    // History replay has no streams at all, so each message's thought is news;
+    // one message's recorded thought must not swallow the next one's.
+    model.apply(message('first', 'one'))
+    model.apply(message('second', 'two'))
+    model.apply(message('third', 'three'))
+    const bodies = model.entries().flatMap(entry => (entry.kind === 'reasoning' ? [entry.body] : []))
+    expect(bodies).toEqual(['first', 'second', 'third'])
+  })
+
+  it('retires a thought the turn never settled', () => {
+    const model = new TranscriptModel()
+    model.applyStreamChunk({ type: 'reasoning-delta', text: 'old' })
+    model.apply({ type: 'turn/end', data: { reason: { kind: 'aborted', reason: { kind: 'user' } } } })
+    // A thought the turn never settled must not stay live across the gap: the
+    // next turn's deltas would read as a continuation of it.
+    expect(model.entries()).toEqual([{ kind: 'notice', text: 'turn aborted (user)' }])
+    model.applyStreamChunk({ type: 'reasoning-delta', text: 'new' })
+    expect(model.entries()).toEqual([
+      { kind: 'notice', text: 'turn aborted (user)' },
+      { kind: 'reasoning', id: '2', summary: expect.any(String), body: 'new', live: true },
+    ])
+  })
+
+  it('gives each thought its own id and never reuses one after a reset', () => {
+    const model = new TranscriptModel()
+    const message = (...thoughts: string[]) => ({
+      type: 'assistant/message',
+      data: { message: { content: [...thoughts.map(text => ({ type: 'reasoning', text })), { type: 'text', text: 'answer' }] } },
+    })
+    model.apply(message('one', 'two'))
+    const ids = model.entries().flatMap(entry => (entry.kind === 'reasoning' ? [entry.id] : []))
+    expect(ids).toEqual(['1', '2'])
+    // A session switch clears the rows, not the id space: reusing an id would
+    // hand a click the reader made in the old session to the new session's row.
+    model.reset()
+    model.apply(message('three'))
+    expect(model.entries()[0]).toMatchObject({ kind: 'reasoning', id: '3' })
   })
 })
 
@@ -198,14 +245,14 @@ describe('TranscriptModel tool cards', () => {
     const presenter = recordingPresenter()
     const model = new TranscriptModel(presenter)
     model.apply({ type: 'tool/call', data: { name: 'bash', arguments: '{"command":"ls"}', callId: 'c1' } })
-    expect(model.entries()).toEqual([{ kind: 'tool', card: card('bash pending', ['from presenter']) }])
+    expect(model.entries()).toEqual([{ kind: 'tool', id: 'c1', card: card('bash pending', ['from presenter'], 'bash') }])
     model.apply({
       type: 'tool/result',
       data: { message: { content: [{ type: 'tool-result', toolCallId: 'c1', text: 'out' }], isError: false }, meta: { any: 1 } },
     })
     const entries = model.entries()
     expect(entries).toHaveLength(1)
-    expect(entries[0]).toEqual({ kind: 'tool', card: card('bash pending', ['result line']) })
+    expect(entries[0]).toEqual({ kind: 'tool', id: 'c1', card: card('bash pending', ['result line'], 'bash') })
     expect(presenter.calls).toEqual(['bash:{"command":"ls"}'])
     expect(presenter.results).toEqual(['bash:{"command":"ls"}:ok'])
   })
@@ -226,7 +273,7 @@ describe('TranscriptModel tool cards', () => {
       data: { message: { content: [{ type: 'tool-result', toolCallId: 'missing', text: 'orphan' }], isError: false } },
     })
     expect(model.entries()).toEqual([
-      { kind: 'tool', card: card('tool', ['orphan']) },
+      { kind: 'tool', id: 'missing', card: card('tool', ['orphan']) },
     ])
   })
 
@@ -234,7 +281,7 @@ describe('TranscriptModel tool cards', () => {
     const model = new TranscriptModel()
     model.apply({ type: 'tool/call', data: { name: 'grep', arguments: '{"q":"x"}', callId: 'c1' } })
     expect(model.entries()).toEqual([
-      { kind: 'tool', card: card('grep', ['{"q":"x"}']) },
+      { kind: 'tool', id: 'c1', card: card('grep', ['{"q":"x"}']) },
     ])
   })
 
@@ -242,7 +289,7 @@ describe('TranscriptModel tool cards', () => {
     // The command belongs to the call, so a declined result must not drop the
     // one thing a folded shell card always shows.
     const presenter: ToolPresenter = {
-      call: () => ({ kind: 'terminal', title: 'bash', argument: 'echo hi', detail: [], failed: false, totalLines: 0 }),
+      call: () => ({ kind: 'terminal', tool: 'bash', title: 'bash', argument: 'echo hi', detail: [], failed: false, totalLines: 0 }),
       result: () => undefined,
     }
     const model = new TranscriptModel(presenter)
@@ -344,9 +391,9 @@ describe('TranscriptModel nested PTC calls', () => {
     type: 'tool/ptc-dispatch-start',
     data: { rootCallId, parentCallId: rootCallId, subCallId, name, arguments: args },
   })
-  const settle = (subCallId: string, name: string, args: unknown, isError: boolean) => ({
+  const settle = (subCallId: string, name: string, args: unknown, isError: boolean, content: readonly unknown[] = []) => ({
     type: 'tool/ptc-dispatch',
-    data: { rootCallId: 'root', parentCallId: 'root', subCallId, name, arguments: args, isError, content: [] },
+    data: { rootCallId: 'root', parentCallId: 'root', subCallId, name, arguments: args, isError, content },
   })
 
   it('draws a nested call on the card that dispatched it, and restates it with its outcome', () => {
@@ -355,16 +402,72 @@ describe('TranscriptModel nested PTC calls', () => {
     model.apply(runCall)
     model.apply(start('root:ptc:1', 'read', { file_path: 'src/x.ts' }))
     const opened = model.entries()[0]
-    expect(opened?.kind === 'tool' && opened.card.subCalls).toEqual([{ title: 'read pending', failed: false }])
+    expect(opened?.kind === 'tool' && opened.card.subCalls).toEqual([{ id: 'root:ptc:1', title: 'read pending', failed: false }])
     expect(presenter.calls).toEqual(['run_code:{"code":"x","description":"search"}', 'read:{"file_path":"src/x.ts"}'])
 
     model.apply(settle('root:ptc:1', 'read', { file_path: 'src/x.ts' }, true))
     const failed = model.entries()[0]
-    expect(failed?.kind === 'tool' && failed.card.subCalls).toEqual([{ title: 'read pending', failed: true }])
+    expect(failed?.kind === 'tool' && failed.card.subCalls).toEqual([{ id: 'root:ptc:1', title: 'read pending', failed: true }])
 
     model.apply(runResult)
     const settled = model.entries()[0]
-    expect(settled?.kind === 'tool' && settled.card.subCalls).toEqual([{ title: 'read pending', failed: true }])
+    expect(settled?.kind === 'tool' && settled.card.subCalls).toEqual([{ id: 'root:ptc:1', title: 'read pending', failed: true }])
+  })
+
+  it('accepts a replayed dispatch after the fold was reset', () => {
+    const model = new TranscriptModel(recordingPresenter())
+    model.apply(runCall)
+    model.apply(start('root:ptc:1', 'read', { file_path: 'src/x.ts' }))
+    model.reset()
+    // A session switch replays the same ids through the same fold; the remembered
+    // child index belongs to the fold that was dropped, not to this one.
+    model.apply(runCall)
+    model.apply(start('root:ptc:1', 'read', { file_path: 'src/x.ts' }))
+    const replayed = model.entries()[0]
+    expect(replayed?.kind === 'tool' && replayed.card.subCalls).toHaveLength(1)
+  })
+
+  it('forgets a call it did not keep when the run that dispatched it settles', () => {
+    const model = new TranscriptModel(recordingPresenter())
+    model.apply({ type: 'tool/call', data: { name: 'run_code', arguments: '{}', callId: 'a' } })
+    for (let at = 0; at < SUBCALL_MAX; at++) model.apply(start(`a:${at}`, 'read', { file_path: 'f' }, 'a'))
+    model.apply(start('a:overflow', 'read', { file_path: 'f' }, 'a'))
+    model.apply({ type: 'tool/result', data: { message: { content: [{ type: 'tool-result', toolCallId: 'a', text: 'done' }], isError: false } } })
+    // An overflow row has no row to clean up after, so its bookkeeping has to be
+    // retired with the run; kept, it would refuse the same id to the next run.
+    model.apply({ type: 'tool/call', data: { name: 'run_code', arguments: '{}', callId: 'b' } })
+    model.apply(start('a:overflow', 'read', { file_path: 'f' }, 'b'))
+    const second = model.entries()[1]
+    expect(second?.kind === 'tool' && second.card.subCalls).toHaveLength(1)
+  })
+
+  it("keeps a dispatched shell call's output for the row a click opens", () => {
+    // The program answers with its own return value, so a call's own stdout has
+    // nowhere else to live; only a shell view carries it, because that output is
+    // what a reader opens the row to see.
+    const presenter: ToolPresenter = {
+      call: name => (name === 'bash' ? cardOfCall({ card: 'terminal', title: 'echo hi' }, name) : undefined),
+      result: (name, input) => (name === 'bash'
+        ? cardOfResult(
+            { card: 'terminal', output: contentLines(input.content).join('\n'), exitCode: 0 },
+            { name, failed: input.isError, contentLines: contentLines(input.content) },
+          )
+        : undefined),
+    }
+    const model = new TranscriptModel(presenter)
+    model.apply(runCall)
+    model.apply(start('root:ptc:1', 'bash', { command: 'echo hi' }))
+    model.apply(settle('root:ptc:1', 'bash', { command: 'echo hi' }, false, text('hi\nthere')))
+    const opened = model.entries()[0]
+    const output = opened?.kind === 'tool' ? opened.card.subCalls?.[0]?.output : undefined
+    expect(output?.kind).toBe('terminal')
+    expect(output?.rows.map(row => rowText(row))).toEqual(['hi', 'there'])
+    expect(output?.totalLines).toBe(2)
+
+    model.apply(start('root:ptc:2', 'read', { file_path: 'src/x.ts' }))
+    model.apply(settle('root:ptc:2', 'read', { file_path: 'src/x.ts' }, false, text('file body')))
+    const withRead = model.entries()[0]
+    expect(withRead?.kind === 'tool' && withRead.card.subCalls?.[1]?.output).toBeUndefined()
   })
 
   it('keeps the calls in dispatch order and counts every one', () => {
@@ -398,7 +501,7 @@ describe('TranscriptModel nested PTC calls', () => {
 
   it('keeps the nested calls when the result presenter declines', () => {
     const presenter: ToolPresenter = {
-      call: name => ({ kind: 'generic', title: name, detail: [], failed: false, totalLines: 0 }),
+      call: name => ({ kind: 'generic', tool: name, title: name, detail: [], failed: false, totalLines: 0 }),
       result: () => undefined,
     }
     const model = new TranscriptModel(presenter)

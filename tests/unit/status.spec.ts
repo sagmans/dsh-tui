@@ -38,6 +38,12 @@ describe('an armed chord', () => {
   it('is absent until a prefix is pressed', () => {
     expect(formatStatus(facts(), 200, theme)).not.toContain('ctrl+x')
   })
+
+  it('keeps a fact that carries a break on one row', () => {
+    // A path is the reader's own, and a break in it would put the rest of the
+    // row over the row below instead of wrapping.
+    expect(formatStatus(facts({ cwd: '/tmp/one\ntwo' }), 200, theme)).not.toContain('\n')
+  })
 })
 
 describe('the parked-draft count', () => {

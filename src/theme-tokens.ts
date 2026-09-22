@@ -23,6 +23,14 @@ export function resetSequence(): string {
 export const MUTED_GREY = '#8a8a8a'
 
 /**
+ * The shade the reasoning signpost recedes to.
+ *
+ * The row naming a thought is a signpost, not the thought: it sits below the
+ * muted family so the body it introduces stays the thing being read.
+ */
+export const FAINT_GREY = '#666666'
+
+/**
  * The shade a tool's argument takes.
  *
  * A call's argument is the one part of a card the reader scans for, and it must
@@ -41,7 +49,7 @@ export const ARGUMENT_BLUE = '#8db3d9'
 export const USER_PROMPT_MINT = '#27F5C8'
 
 /** Palette entries a token may name instead of a literal colour. */
-export const PALETTE_NAMES = ['default', 'muted', 'accent', 'arg', 'warn', 'added', 'removed', 'user', 'assistant'] as const
+export const PALETTE_NAMES = ['default', 'muted', 'faint', 'accent', 'arg', 'warn', 'added', 'removed', 'user', 'assistant'] as const
 
 /** A named palette entry. */
 export type PaletteName = (typeof PALETTE_NAMES)[number]
@@ -244,6 +252,7 @@ export const CARD_ROW_TOKEN: Readonly<Record<string, Readonly<Partial<Record<Car
 export const DEFAULT_PALETTE: Readonly<Record<PaletteName, string>> = {
   default: '#d0d0d0',
   muted: MUTED_GREY,
+  faint: FAINT_GREY,
   accent: '#5fafd7',
   arg: ARGUMENT_BLUE,
   warn: '#d7af5f',
@@ -262,6 +271,23 @@ export const DEFAULT_PALETTE: Readonly<Record<PaletteName, string>> = {
  * colour is named, so carrying it would be a setting that does nothing.
  */
 const muted: StyleSpec = { fg: 'muted' }
+
+/**
+ * The reasoning row recedes past the muted family, hence its own entry.
+ *
+ * Italic is what separates the signpost from the thought it introduces; the
+ * darker grey is what makes the thought itself the brightest thing there.
+ */
+const signpost: StyleSpec = { fg: 'faint', italic: true }
+
+/**
+ * A thought shares the signpost's shade but not its slant.
+ *
+ * The body is read rather than scanned, so it keeps an upright face while the
+ * row naming it stays italic; one shade for both is what makes a thought read
+ * as one element instead of two colours arguing.
+ */
+const thought: StyleSpec = { fg: 'faint' }
 const plain: StyleSpec = {}
 
 /**
@@ -275,9 +301,9 @@ export const DEFAULT_TOKENS: Readonly<Record<TuiToken, StyleSpec>> = {
   'transcript.user': { fg: 'user' },
   'transcript.notice': muted,
   'transcript.marker': muted,
-  'transcript.reasoning.summary': muted,
-  'transcript.reasoning.body': muted,
-  'transcript.reasoning.hint': muted,
+  'transcript.reasoning.summary': signpost,
+  'transcript.reasoning.body': thought,
+  'transcript.reasoning.hint': signpost,
 
   'tool.title': { fg: 'warn' },
   'tool.glyph': { fg: 'warn' },

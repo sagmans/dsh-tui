@@ -1,4 +1,4 @@
-import { cardFromLines, carriedFields, mergeCards, subCallOf, SUBCALL_MAX, type ToolCard, type ToolPresenter } from './cards.ts'
+import { cardFromLines, carriedFields, contentLines, mergeCards, subCallOf, SUBCALL_MAX, type ToolCard, type ToolPresenter, type ToolSubCallOutput } from './cards.ts'
 import { countTokens } from './tokens.ts'
 
 /** One renderable transcript row. */
@@ -7,8 +7,8 @@ export type TranscriptEntry =
   | { readonly kind: 'assistant'; readonly text: string }
   | { readonly kind: 'notice'; readonly text: string }
   | { readonly kind: 'marker'; readonly text: string }
-  | { readonly kind: 'tool'; readonly card: ToolCard }
-  | { readonly kind: 'reasoning'; readonly summary: string; readonly body: string; readonly live: boolean }
+  | { readonly kind: 'tool'; readonly card: ToolCard; readonly id: string }
+  | { readonly kind: 'reasoning'; readonly id: string; readonly summary: string; readonly body: string; readonly live: boolean }
 
 /** Reasoning kept per settled block, so one runaway thought cannot grow the transcript without bound. */
 export const REASONING_CHAR_LIMIT = 20_000
@@ -149,6 +149,14 @@ export class TranscriptModel {
    * message, so the recorded copy is a repeat rather than a second thought.
    */
   private reasoningPaintedThisStep = false
+  /**
+   * Ids for thought rows, and the id the live thought will settle under.
+   *
+   * The counter never restarts: a click outlives the entry it was made on, and
+   * a reused id would hand that choice to a later session's thought.
+   */
+  private thoughtSeq = 0
+  private liveReasoningId: string | undefined
 
   constructor(
     private readonly presenter?: ToolPresenter,
@@ -163,6 +171,9 @@ export class TranscriptModel {
       const ranFor = this.reasoningStartedAt === undefined ? undefined : this.now() - this.reasoningStartedAt
       entries.push({
         kind: 'reasoning',
+        // The live row and the row it settles into share an id, so a click made
+        // while the model is still thinking survives the thought landing.
+        id: this.liveReasoningId ?? '',
         summary: `reasoning · ${describeTokens(this.liveReasoning)}${ranFor === undefined ? '' : ` · ${Math.max(1, Math.round(ranFor / 1000))}s`} · streaming`,
         body: this.liveReasoning,
         live: true,
@@ -191,8 +202,13 @@ export class TranscriptModel {
   reset(): void {
     this.settled.length = 0
     this.pending.clear()
+    // The sub-call bookkeeping names rows of the fold being dropped, so it goes
+    // with them: an index kept across the reset would refuse a replayed call the
+    // row it is entitled to.
+    this.pendingSub.clear()
     this.live = ''
     this.liveReasoning = ''
+    this.liveReasoningId = undefined
     this.reasoningStartedAt = undefined
     this.reasoningPaintedThisStep = false
   }
@@ -218,6 +234,7 @@ export class TranscriptModel {
       case 'reasoning-delta':
         if (typeof record.text !== 'string') return
         this.reasoningStartedAt ??= this.now()
+        this.liveReasoningId ??= String(++this.thoughtSeq)
         this.liveReasoning += record.text
         return
       case 'block-end': {
@@ -266,13 +283,17 @@ export class TranscriptModel {
   private paintReasoning(text: string, ranFor: number | undefined): void {
     const timing = ranFor === undefined ? '' : ` · ${Math.max(1, Math.round(ranFor / 1000))}s`
     const cut = text.length > REASONING_CHAR_LIMIT ? `\n… truncated at ${REASONING_CHAR_LIMIT} chars` : ''
+    // The live thought keeps the id the stream gave it; a thought only the
+    // recorded message carries takes the next one.
+    const id = this.liveReasoningId ?? String(++this.thoughtSeq)
+    this.liveReasoningId = undefined
     this.settled.push({
       kind: 'reasoning',
+      id,
       summary: `reasoning · ${describeTokens(text)}${timing}`,
       body: text.slice(0, REASONING_CHAR_LIMIT) + cut,
       live: false,
     })
-    this.reasoningPaintedThisStep = true
   }
 
   /** Settle the reasoning streamed so far into a row of its own. */
@@ -283,6 +304,9 @@ export class TranscriptModel {
     this.liveReasoning = ''
     this.reasoningStartedAt = undefined
     this.paintReasoning(text, ranFor)
+    // This thought arrived as a stream, so the recorded copy the step ends with
+    // restates it rather than reporting a second one.
+    this.reasoningPaintedThisStep = true
   }
 
   apply(event: FoldableEvent): void {
@@ -301,6 +325,12 @@ export class TranscriptModel {
         // A turn that ended without a recorded message must not leave streamed
         // text on screen as though it had settled.
         this.live = ''
+        // The same goes for the thought that was streaming: left in place it
+        // would stay live across the gap and the next turn's deltas would be
+        // appended to a thought that turn never had.
+        this.liveReasoning = ''
+        this.liveReasoningId = undefined
+        this.reasoningStartedAt = undefined
         // A step that ended without a message cannot own the next one's thoughts.
         this.reasoningPaintedThisStep = false
         return
@@ -349,13 +379,16 @@ export class TranscriptModel {
       case 'tool/call': {
         const name = typeof data.name === 'string' ? data.name : 'tool'
         const argumentsJson = typeof data.arguments === 'string' ? data.arguments : ''
+        const callId = typeof data.callId === 'string' ? data.callId : ''
         const card = this.presenter?.call(name, argumentsJson)
         this.settled.push({
           kind: 'tool',
+          // The id is what keeps a reader's click on this message after the
+          // result replaces the card: the entry object does not survive, the id does.
+          id: callId,
           // Without a presenter the row still has to say what ran and with what.
-          card: card ?? cardFromLines('generic', name, argumentsJson === '' ? [] : argumentsJson.split('\n'), false),
+          card: card ?? cardFromLines('generic', name, name, argumentsJson === '' ? [] : argumentsJson.split('\n'), false),
         })
-        const callId = typeof data.callId === 'string' ? data.callId : ''
         if (callId !== '') this.pending.set(callId, { name, argumentsJson, index: this.settled.length - 1, subs: [] })
         return
       }
@@ -392,30 +425,60 @@ export class TranscriptModel {
     const entry = this.settled[root.index]
     const card = entry !== undefined && entry.kind === 'tool' ? entry.card : undefined
     if (card === undefined) return
-    const known = this.pendingSub.get(subCallId)
-    if (known !== undefined) {
-      // A settle only restates the row its start already drew, and only when the
-      // call failed; nothing else about the row can change.
-      if (!settled || known.childIndex < 0 || data.isError !== true) return
-      const subCalls = (card.subCalls ?? []).map((call, at) => (at === known.childIndex ? { ...call, failed: true } : call))
-      this.settled[root.index] = { kind: 'tool', card: { ...card, subCalls } }
-      return
-    }
     const name = typeof data.name === 'string' ? data.name : 'tool'
     const argumentsJson = argumentsJsonOf(data.arguments)
-    const call = { ...subCallOf(name, argumentsJson, this.presenter?.call(name, argumentsJson)), failed: settled && data.isError === true }
+    const output = settled ? this.subCallOutput(name, argumentsJson, data) : undefined
+    const known = this.pendingSub.get(subCallId)
+    if (known !== undefined) {
+      // A settle restates the row its start drew: it can add a failure and the
+      // output a reader opens the row for, and nothing else about the row moves.
+      if (!settled || known.childIndex < 0) return
+      const failed = data.isError === true
+      if (!failed && output === undefined) return
+      const subCalls = (card.subCalls ?? []).map((call, at) => at === known.childIndex
+        ? { ...call, ...(failed ? { failed: true } : {}), ...(output === undefined ? {} : { output }) }
+        : call)
+      this.settled[root.index] = { kind: 'tool', id: rootCallId, card: { ...card, subCalls } }
+      return
+    }
+    const call = {
+      ...subCallOf(subCallId, name, argumentsJson, this.presenter?.call(name, argumentsJson)),
+      failed: settled && data.isError === true,
+      ...(output === undefined ? {} : { output }),
+    }
     const kept = card.subCalls ?? []
     const total = (card.subCallsTotal ?? 0) + 1
     if (kept.length >= SUBCALL_MAX) {
       // Retention keeps the head, where the calls that shaped the program are;
-      // the count still reports everything it dispatched.
+      // the count still reports everything it dispatched. The id is remembered
+      // so a settle is not counted twice, and listed on the root so the root's
+      // own cleanup forgets it — an overflow row has no row to clean up after.
       this.pendingSub.set(subCallId, { rootIndex: root.index, childIndex: -1 })
-      this.settled[root.index] = { kind: 'tool', card: { ...card, subCallsTotal: total } }
+      root.subs.push(subCallId)
+      this.settled[root.index] = { kind: 'tool', id: rootCallId, card: { ...card, subCallsTotal: total } }
       return
     }
     root.subs.push(subCallId)
     this.pendingSub.set(subCallId, { rootIndex: root.index, childIndex: kept.length })
-    this.settled[root.index] = { kind: 'tool', card: { ...card, subCalls: [...kept, call], subCallsTotal: total } }
+    this.settled[root.index] = { kind: 'tool', id: rootCallId, card: { ...card, subCalls: [...kept, call], subCallsTotal: total } }
+  }
+
+  /**
+   * The output a dispatched shell call printed, for the row a click opens.
+   *
+   * Only a terminal view carries it: other tools present their outcome through
+   * the program's own return value, while a shell's output is what a program
+   * usually reduces to an exit status, and the row is opened to read it. A
+   * presenter that declines the result still gets its content lines, so a
+   * shell call never opens to an empty row.
+   */
+  private subCallOutput(name: string, argumentsJson: string, data: Record<string, unknown>): ToolSubCallOutput | undefined {
+    if (this.presenter?.call(name, argumentsJson)?.kind !== 'terminal') return undefined
+    const failed = data.isError === true
+    const card = this.presenter?.result(name, { argumentsJson, content: data.content, isError: failed, meta: data.meta })
+      ?? cardFromLines('terminal', name, name, contentLines(data.content), failed)
+    if (card.detail.length === 0) return undefined
+    return { kind: card.kind, rows: card.detail, totalLines: card.totalLines }
   }
 
   private settleToolResult(data: Record<string, unknown>): void {
@@ -439,7 +502,8 @@ export class TranscriptModel {
       // No matching call in this fold: a resumed transcript may start mid-call.
       this.settled.push({
         kind: 'tool',
-        card: result ?? cardFromLines('generic', name, contentLinesOf(message?.content), isError),
+        id: callId,
+        card: result ?? cardFromLines('generic', name, name, contentLinesOf(message?.content), isError),
       })
       return
     }
@@ -449,13 +513,13 @@ export class TranscriptModel {
       // No presenter answered: the model-facing content is still what happened,
       // and a reader without it would see a tool row that never reported back.
       const reported = contentLinesOf(message?.content)
-      const base = call ?? cardFromLines('generic', name, [], false)
+      const base = call ?? cardFromLines('generic', name, name, [], false)
       const rebuilt = reported.length === 0
         ? { ...base, failed: isError }
-        : { ...cardFromLines(base.kind, base.title, reported, isError), ...carriedFields(base) }
-      this.settled[pending.index] = { kind: 'tool', card: rebuilt }
+        : { ...cardFromLines(base.kind, base.tool, base.title, reported, isError), ...carriedFields(base) }
+      this.settled[pending.index] = { kind: 'tool', id: callId, card: rebuilt }
       return
     }
-    this.settled[pending.index] = { kind: 'tool', card: mergeCards(call, { ...result, failed: isError }) }
+    this.settled[pending.index] = { kind: 'tool', id: callId, card: mergeCards(call, { ...result, failed: isError }) }
   }
 }
