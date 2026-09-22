@@ -9,7 +9,6 @@ import {
 import { cardDetailRows, clip, oneLine, shellFoldHint, shellRetentionHint, type CardPreview, type CardRow, type CardStat, type CardStatKind, type ToolCard, type ToolCardKind, type ToolSubCall } from '../cards.ts'
 import { defaultKeymap, hintKeys, type Keymap } from '../input/actions.ts'
 import { CUSTOM_ROW_NUMBER, type GateCard } from '../gates.ts'
-import { displayText } from '../text.ts'
 import type { TranscriptEntry, TranscriptModel } from '../transcript.ts'
 import { DEFAULT_TOOL_DISPLAY, type ToolDisplaySpec } from '../tool-display.ts'
 import { CARD_ROW_TOKEN, type TuiToken } from '../theme-tokens.ts'
@@ -267,19 +266,26 @@ export class TranscriptView implements Component {
     this.rows.clear()
   }
 
-  /** Wrap one text block under a prefix, keeping the prefix's column budget. */
+  /**
+   * Wrap one text block under a prefix, keeping the prefix's column budget.
+   *
+   * The block is drawn before it is wrapped: a sequence a terminal would have
+   * acted on has to be gone before pi-tui measures the row, and a tab has to
+   * land on the stop the writer saw rather than one a wrapper would guess at.
+   * The prefix seeds that stop, because it is already on the row.
+   */
   private pushWrapped(
     lines: string[],
     text: string,
     width: number,
     prefix: string,
-    style: (text: string) => string,
+    token: TuiToken,
   ): void {
     const lead = visibleWidth(prefix)
     const indent = ' '.repeat(lead)
-    const wrapped = wrapTextWithAnsi(displayText(text), Math.max(1, width - lead))
+    const wrapped = wrapTextWithAnsi(this.theme.rich(text, { token, column: lead }), Math.max(1, width - lead))
     wrapped.forEach((line, index) => {
-      lines.push(style(this.theme.cut(`${index === 0 ? prefix : indent}${line}`, width, '')))
+      lines.push(this.theme.cut(`${index === 0 ? prefix : indent}${line}`, width, ''))
     })
   }
 
@@ -301,10 +307,15 @@ export class TranscriptView implements Component {
     })
   }
 
-  /** The rows one markdown message draws, with the padding pi-tui adds for background styling removed. */
-  private markdownLines(text: string, width: number, live: boolean, face: MarkdownFace): string[] {
+  /**
+   * The rows one markdown message draws, with the padding pi-tui adds for background styling removed.
+   *
+   * The source is drawn first so the markdown renderer never measures a sequence
+   * it cannot see; its own spans are applied around the result afterwards.
+   */
+  private markdownLines(text: string, width: number, live: boolean, face: MarkdownFace, column = 0): string[] {
     return this.markdown
-      .render(displayText(text), Math.max(1, width), live, face)
+      .render(this.theme.rich(text, { column }), Math.max(1, width), live, face)
       .map(line => line.replace(/[ \t]+$/u, ''))
   }
 
@@ -323,7 +334,7 @@ export class TranscriptView implements Component {
     indent = '',
   ): void {
     const lead = visibleWidth(indent)
-    for (const line of this.markdownLines(text, Math.max(1, width - lead), live, face)) {
+    for (const line of this.markdownLines(text, Math.max(1, width - lead), live, face, lead)) {
       // A blank markdown line stays blank: it shows nothing, so it holds nothing.
       if (line === '') {
         lines.push('')
@@ -374,7 +385,7 @@ export class TranscriptView implements Component {
       : ''
     // The key is kept whole: the summary is the part that gives up room.
     const room = Math.max(1, width - visibleWidth(suffix))
-    const summary = this.theme.style('transcript.reasoning.summary', this.theme.cut(`${lead}${displayText(entry.summary)}`, room, ''))
+    const summary = this.theme.cut(this.theme.rich(`${lead}${entry.summary}`, { token: 'transcript.reasoning.summary', column: visibleWidth(lead) }), room, '')
     const lined = suffix === '' ? summary : `${summary}${this.theme.style('transcript.reasoning.hint', suffix)}`
     // The key is kept whole only while the row has room for it: a row wider than
     // the surface loses its tail to the terminal, and the terminal's clamp is not
@@ -417,7 +428,7 @@ export class TranscriptView implements Component {
     // them behind the card's own fold made a program's work invisible.
     if (this.viewState.expandSubCalls) this.pushSubCalls(lines, entry, width, spans)
     if (expanded && card.kind === 'terminal' && card.argument !== undefined && card.argument !== '' && this.theme.visible('tool.args')) {
-      this.pushStyledWrapped(lines, this.theme.style('tool.args', displayText(card.argument)), width, DETAIL_INDENT)
+      this.pushStyledWrapped(lines, this.theme.rich(card.argument, { token: 'tool.args', column: visibleWidth(DETAIL_INDENT) }), width, DETAIL_INDENT)
     }
     for (const row of detail) {
       const drawn = this.detailRow(row, card.kind)
@@ -430,7 +441,7 @@ export class TranscriptView implements Component {
     // inside it: a run bounded to its tail still reports how it ended. Folded,
     // it rides the header instead, where it costs no row of its own.
     if (expanded && card.kind === 'terminal' && card.status !== undefined && this.theme.visible('tool.terminal.status')) {
-      lines.push(this.theme.cut(`${DETAIL_INDENT}${this.theme.style('tool.terminal.status', displayText(card.status))}`, width, ''))
+      lines.push(this.theme.cut(`${DETAIL_INDENT}${this.theme.rich(card.status, { token: 'tool.terminal.status', column: visibleWidth(DETAIL_INDENT) })}`, width, ''))
     }
     // A shell card's rows are kept from the end, so a hidden count always names
     // the rows *before* what is on screen and the hint has to say so; every
@@ -466,10 +477,11 @@ export class TranscriptView implements Component {
       const start = lines.length
       const open = this.subCallOpen(entry.id, call.id)
       const titleToken = call.failed ? 'tool.failed.title' : 'tool.subcall.title'
-      const title = this.theme.visible(titleToken) ? this.theme.style(titleToken, displayText(call.title)) : ''
+      const column = visibleWidth(SUBCALL_INDENT)
+      const title = this.theme.visible(titleToken) ? this.theme.rich(call.title, { token: titleToken, column }) : ''
       const argument = call.argument === undefined || !this.theme.visible('tool.subcall.args')
         ? ''
-        : ` ${this.theme.style('tool.subcall.args', displayText(call.argument))}`
+        : ` ${this.theme.rich(call.argument, { token: 'tool.subcall.args', column })}`
       const drawn = `${title}${argument}`
       // A row whose every part is hidden draws nothing, and nothing must not
       // cost a line the card does not have.
@@ -530,7 +542,7 @@ export class TranscriptView implements Component {
     // precedes them, so the folded line reads as one sentence about the run.
     let tail = this.renderStats(card.stats)
     const status = card.kind === 'terminal' && card.status !== undefined && this.theme.visible('tool.terminal.status')
-      ? this.theme.style('tool.terminal.status', displayText(card.status))
+      ? this.theme.rich(card.status, { token: 'tool.terminal.status' })
       : ''
     if (status !== '') tail += `${separator}${status}`
     if (card.kind === 'terminal' && hidden > 0) {
@@ -558,7 +570,7 @@ export class TranscriptView implements Component {
     return row.parts
       .map(part => {
         const token = CARD_ROW_TOKEN[kind]?.[part.class] ?? FALLBACK_ROW_TOKEN
-        return this.theme.visible(token) ? this.theme.style(token, displayText(part.text)) : ''
+        return this.theme.visible(token) ? this.theme.rich(part.text, { token, column: visibleWidth(DETAIL_INDENT) }) : ''
       })
       .join('')
   }
@@ -571,14 +583,14 @@ export class TranscriptView implements Component {
 
   /** A card's label, styled, or nothing when the theme hides it. */
   private cardTitle(card: ToolCard, titleToken: TuiToken): string {
-    return this.theme.visible(titleToken) ? this.theme.style(titleToken, displayText(card.title)) : ''
+    return this.theme.visible(titleToken) ? this.theme.rich(card.title, { token: titleToken }) : ''
   }
 
   /** A card's argument, styled and flattened, clipped to `limit` when one is given. */
   private cardArgument(card: ToolCard, limit?: number): string {
     if (card.argument === undefined || card.argument === '' || !this.theme.visible('tool.args')) return ''
     const shown = limit === undefined ? card.argument : clip(oneLine(card.argument), limit)
-    return this.theme.style('tool.args', displayText(shown))
+    return this.theme.rich(shown, { token: 'tool.args' })
   }
 
   /**
@@ -613,7 +625,7 @@ export class TranscriptView implements Component {
     if (stats === undefined || stats.length === 0) return ''
     const drawn = stats
       .filter(stat => this.theme.visible(STAT_TOKEN[stat.kind]))
-      .map(stat => this.theme.style(STAT_TOKEN[stat.kind], `${STAT_SYMBOL[stat.kind]}${displayText(stat.text)}`))
+      .map(stat => this.theme.rich(`${STAT_SYMBOL[stat.kind]}${stat.text}`, { token: STAT_TOKEN[stat.kind] }))
     if (drawn.length === 0) return ''
     return `${lead}${drawn.join(this.statSeparator())}`
   }
@@ -633,11 +645,11 @@ export class TranscriptView implements Component {
       const glyph = this.theme.glyph(glyphToken) || (gate.kind === 'approval' ? APPROVAL_MARK : QUESTION_MARK)
       // The question is the thing being decided, so it wraps rather than being
       // cut: a reader cannot answer a sentence they were not shown.
-      this.pushWrapped(lines, gate.title, width, `${glyph} `, text => this.theme.style('gate.title', text))
+      this.pushWrapped(lines, gate.title, width, `${glyph} `, 'gate.title')
     }
     if (this.theme.visible('gate.detail')) {
       for (const detail of gate.detail) {
-        this.pushWrapped(lines, detail, width, DETAIL_INDENT, text => this.theme.style('gate.detail', text))
+        this.pushWrapped(lines, detail, width, DETAIL_INDENT, 'gate.detail')
       }
     }
     gate.options.forEach((option, position) => {
@@ -679,7 +691,7 @@ export class TranscriptView implements Component {
     // The keys are how the gate is answered at all, so they wrap rather than
     // lose their tail at a narrow edge.
     if (this.theme.visible('gate.hint')) {
-      this.pushWrapped(lines, gate.hint, width, OPTION_INDENT, text => this.theme.style('gate.hint', text))
+      this.pushWrapped(lines, gate.hint, width, OPTION_INDENT, 'gate.hint')
     }
   }
 
@@ -697,9 +709,9 @@ export class TranscriptView implements Component {
     const box = row.selected ? CHECKBOX_ON : CHECKBOX_OFF
     const lead = `${OPTION_INDENT}${cursor} ${box} ${row.number}. `
     const text = row.description === undefined ? row.label : `${row.label} — ${row.description}`
-    // The text reaches pushWrapped unescaped: it escapes once, and escaping a
-    // second time would show the reader the escape instead of the character.
-    this.pushWrapped(lines, text, width, lead, body => this.theme.style(token, body))
+    // The text reaches pushWrapped undrawn: it is read once there, and reading
+    // it twice would show the reader the escape instead of the character.
+    this.pushWrapped(lines, text, width, lead, token)
   }
 
   /** The rows one transcript entry becomes; `live` marks the entry the turn is still writing. */
@@ -732,11 +744,11 @@ export class TranscriptView implements Component {
       }
       case 'notice':
         if (!this.theme.visible('transcript.notice')) return
-        this.pushWrapped(lines, entry.text, width, this.elementLead('transcript.notice'), text => this.theme.style('transcript.notice', text))
+        this.pushWrapped(lines, entry.text, width, this.elementLead('transcript.notice'), 'transcript.notice')
         return
       case 'marker':
         if (!this.theme.visible('transcript.marker')) return
-        this.pushWrapped(lines, entry.text, width, this.elementLead('transcript.marker'), text => this.theme.style('transcript.marker', text))
+        this.pushWrapped(lines, entry.text, width, this.elementLead('transcript.marker'), 'transcript.marker')
         return
     }
   }

@@ -1,5 +1,5 @@
 import { truncateToWidth, visibleWidth, wrapTextWithAnsi } from '@earendil-works/pi-tui'
-import { displayText } from '../text.ts'
+import { renderTerminalText } from '../terminal-text.ts'
 
 /**
  * The frame every prompt is closed into.
@@ -101,9 +101,12 @@ export function frameLines(lines: readonly string[], width: number, faces: Frame
  * One block of plain text as a bar draws it.
  *
  * A block without a limit is the prompt itself, which is never cut; the text is
- * wrapped here because nothing upstream knows the frame's own width.
+ * wrapped here because nothing upstream knows the frame's own width. The text is
+ * drawn without colour: a frame holds the surface's own drafts, whose styling is
+ * the frame's, and a sequence that reached one would fight the frame that owns it.
  */
 export function frameText(text: string, width: number, faces: FrameFaces, limit = Number.POSITIVE_INFINITY): string[] {
   const inside = faces.framed ? width - FRAME_COLUMNS : width
-  return frameLines(wrapTextWithAnsi(displayText(text), textWidth(inside)), width, faces, limit)
+  const drawn = renderTerminalText(text, { color: 'none' })
+  return frameLines(wrapTextWithAnsi(drawn, textWidth(inside)), width, faces, limit)
 }

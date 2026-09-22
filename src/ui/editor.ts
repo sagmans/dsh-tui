@@ -13,7 +13,7 @@ import {
 import { ENTER_KEY, defaultKeymap, type Keymap } from '../input/actions.ts'
 import { ghostDisplayLine, ghostGraphemes, isCursorAtTextEnd, nextGhostWord, type EditorCursor } from '../input/ghost.ts'
 import { promptKeys } from '../input/keymap.ts'
-import { displayText } from '../text.ts'
+import { renderTerminalText } from '../terminal-text.ts'
 import { FRAME_COLUMNS, FRAME_GLYPHS, MIN_BOX_WIDTH, PADDING_X } from './frame.ts'
 
 /**
@@ -189,7 +189,9 @@ export class BoxedEditor extends Editor {
     // any other brush. The expanded text is what was actually written; a large
     // paste is stored as a marker and would otherwise match nothing.
     const suffix = brush.suggestion({ text: this.getExpandedText(), lines, cursor })
-    return suffix === undefined ? undefined : displayText(suffix)
+    // The bar paints this text itself, so it is drawn without colour: a sequence
+    // the brush offered must not escape the face the bar is drawing it in.
+    return suffix === undefined ? undefined : renderTerminalText(suffix, { color: 'none' })
   }
 
   /**

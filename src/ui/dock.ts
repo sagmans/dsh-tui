@@ -1,7 +1,6 @@
-import { type Component } from '@earendil-works/pi-tui'
+import { visibleWidth, type Component } from '@earendil-works/pi-tui'
 import { DOCK_JOB_LIMIT, describeJob, isLive, type JobSummary } from '../jobs.ts'
 import { DOCK_SUBAGENT_LIMIT, describeSubagent, type SubagentRun } from '../subagents.ts'
-import { displayText } from '../text.ts'
 import type { TuiToken } from '../theme-tokens.ts'
 import type { TuiTheme } from '../theme.ts'
 import type { TodoEntry, WorkState } from '../work.ts'
@@ -80,7 +79,8 @@ export class WorkDock implements Component {
     for (const todo of ordered.slice(0, DOCK_TODO_LIMIT)) {
       const token = TODO_TOKENS[todo.status]
       if (!this.theme.visible(token)) continue
-      lines.push(this.theme.style(token, this.theme.cut(`  ${TODO_GLYPHS[todo.status]} ${displayText(todo.content)}`, width, '…')))
+      const lead = `  ${TODO_GLYPHS[todo.status]} `
+      lines.push(this.theme.cut(this.theme.rich(`${lead}${todo.content}`, { token, column: visibleWidth(lead) }), width, '…'))
     }
     if (ordered.length > DOCK_TODO_LIMIT && this.theme.visible('dock.todos.overflow')) {
       lines.push(this.theme.style('dock.todos.overflow', this.theme.cut(`  … ${ordered.length - DOCK_TODO_LIMIT} more`, width, '…')))
@@ -98,7 +98,8 @@ export class WorkDock implements Component {
     const now = this.now()
     for (const run of running.slice(0, DOCK_SUBAGENT_LIMIT)) {
       if (!this.theme.visible('dock.subagents.running')) continue
-      lines.push(this.theme.style('dock.subagents.running', this.theme.cut(`  ${RUNNING_MARK} ${displayText(describeSubagent(run, now))}`, width, '…')))
+      const lead = `  ${RUNNING_MARK} `
+      lines.push(this.theme.cut(this.theme.rich(`${lead}${describeSubagent(run, now)}`, { token: 'dock.subagents.running', column: visibleWidth(lead) }), width, '…'))
     }
     if (running.length > DOCK_SUBAGENT_LIMIT && this.theme.visible('dock.subagents.overflow')) {
       lines.push(this.theme.style('dock.subagents.overflow', this.theme.cut(`  … ${running.length - DOCK_SUBAGENT_LIMIT} more`, width, '…')))
@@ -118,7 +119,8 @@ export class WorkDock implements Component {
     const now = this.now()
     for (const job of ordered.slice(0, DOCK_JOB_LIMIT)) {
       if (!this.theme.visible('dock.jobs.running')) continue
-      lines.push(this.theme.style('dock.jobs.running', this.theme.cut(`  ${RUNNING_MARK} ${displayText(describeJob(job, now))}`, width, '…')))
+      const lead = `  ${RUNNING_MARK} `
+      lines.push(this.theme.cut(this.theme.rich(`${lead}${describeJob(job, now)}`, { token: 'dock.jobs.running', column: visibleWidth(lead) }), width, '…'))
     }
     if (ordered.length > DOCK_JOB_LIMIT && this.theme.visible('dock.jobs.overflow')) {
       lines.push(this.theme.style('dock.jobs.overflow', this.theme.cut(`  … ${ordered.length - DOCK_JOB_LIMIT} more`, width, '…')))
@@ -136,7 +138,8 @@ export class WorkDock implements Component {
       // The row itself decides where a long objective ends, so the reader
       // always sees that something was left out.
       const objective = state.goal.objective.replace(/\s+/gu, ' ')
-      lines.push(this.theme.style('dock.goal', this.theme.cut(`${GOAL_MARK} goal ${rounds} · ${displayText(objective)}`, width, '…')))
+      const lead = `${GOAL_MARK} goal ${rounds} · `
+      lines.push(this.theme.cut(this.theme.rich(`${lead}${objective}`, { token: 'dock.goal', column: visibleWidth(lead) }), width, '…'))
     }
     if (state.planMode && this.theme.visible('dock.planMode')) {
       lines.push(this.theme.style('dock.planMode', this.theme.cut(`${PLAN_MODE_MARK} plan mode · answer the plan before edits happen`, width, '…')))

@@ -1,5 +1,5 @@
 import { type Component, type SizeValue, visibleWidth, wrapTextWithAnsi } from '@earendil-works/pi-tui'
-import { displayText } from '../text.ts'
+import type { TuiToken } from '../theme-tokens.ts'
 import type { TuiTheme } from '../theme.ts'
 import { canFrame, frameLines, FRAME_COLUMNS } from './frame.ts'
 import type { PickerCard } from './picker.ts'
@@ -13,11 +13,12 @@ const CURSOR_MARK = '❯'
 const NO_CURSOR = ' '
 
 /** One wrapped block of plain text under a prefix, at the width the card has. */
-function pushWrapped(lines: string[], text: string, width: number, prefix: string, style: (text: string) => string, theme: TuiTheme): void {
-  const indent = ' '.repeat(visibleWidth(prefix))
-  const wrapped = wrapTextWithAnsi(displayText(text), Math.max(1, width - visibleWidth(prefix)))
+function pushWrapped(lines: string[], text: string, width: number, prefix: string, token: TuiToken, theme: TuiTheme): void {
+  const lead = visibleWidth(prefix)
+  const indent = ' '.repeat(lead)
+  const wrapped = wrapTextWithAnsi(theme.rich(text, { token, column: lead }), Math.max(1, width - lead))
   wrapped.forEach((line, index) => {
-    lines.push(style(theme.cut(`${index === 0 ? prefix : indent}${line}`, width, '')))
+    lines.push(theme.cut(`${index === 0 ? prefix : indent}${line}`, width, ''))
   })
 }
 
@@ -34,13 +35,13 @@ export function pickerCardLines(picker: PickerCard, width: number, theme: TuiThe
   if (theme.visible('picker.title')) {
     const glyph = theme.glyph('picker.glyph')
     const lead = glyph === '' ? '' : `${glyph} `
-    lines.push(theme.style('picker.title', theme.cut(`${lead}${displayText(picker.title)}`, width, '')))
+    lines.push(theme.cut(theme.rich(`${lead}${picker.title}`, { token: 'picker.title', column: visibleWidth(lead) }), width, ''))
   }
   if (picker.note !== undefined && theme.visible('picker.note')) {
-    pushWrapped(lines, picker.note, width, TEXT_INDENT, text => theme.style('picker.note', text), theme)
+    pushWrapped(lines, picker.note, width, TEXT_INDENT, 'picker.note', theme)
   }
   if (picker.filter !== '' && theme.visible('picker.filter')) {
-    lines.push(theme.style('picker.filter', theme.cut(`${TEXT_INDENT}filter: ${displayText(picker.filter)}`, width, '')))
+    lines.push(theme.cut(theme.rich(`${TEXT_INDENT}filter: ${picker.filter}`, { token: 'picker.filter', column: visibleWidth(TEXT_INDENT) }), width, ''))
   }
   if (picker.above > 0 && theme.visible('picker.scrollNewer')) {
     lines.push(theme.style('picker.scrollNewer', theme.cut(`${ROW_INDENT}… ${picker.above} newer`, width, '')))
@@ -52,7 +53,7 @@ export function pickerCardLines(picker: PickerCard, width: number, theme: TuiThe
     const text = row.description === undefined
       ? `${cursor} ${row.label}`
       : `${cursor} ${row.label} — ${row.description}`
-    lines.push(theme.style(token, theme.cut(`${ROW_INDENT}${displayText(text)}`, width, '')))
+    lines.push(theme.cut(theme.rich(`${ROW_INDENT}${text}`, { token, column: visibleWidth(ROW_INDENT) }), width, ''))
   }
   if (picker.below > 0 && theme.visible('picker.scrollOlder')) {
     lines.push(theme.style('picker.scrollOlder', theme.cut(`${ROW_INDENT}… ${picker.below} older`, width, '')))
@@ -60,7 +61,7 @@ export function pickerCardLines(picker: PickerCard, width: number, theme: TuiThe
   if (theme.visible('picker.hint')) {
     // The hint names the keys that leave the list, so it folds rather than
     // being cut: a narrow screen must still be told the way out.
-    pushWrapped(lines, picker.hint, width, ROW_INDENT, text => theme.style('picker.hint', text), theme)
+    pushWrapped(lines, picker.hint, width, ROW_INDENT, 'picker.hint', theme)
   }
   return lines
 }

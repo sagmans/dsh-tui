@@ -15,7 +15,7 @@ import {
   type FileIndex,
 } from './file-search.ts'
 import { LOCAL_COMMANDS, LOCAL_COMMAND_DESCRIPTIONS } from './submission.ts'
-import { displayText } from '../text.ts'
+import { renderTerminalText } from '../terminal-text.ts'
 
 /** One command another package registered, as the registry reports it. */
 export interface RegisteredCommand {
@@ -124,9 +124,10 @@ function fileItem(candidate: Candidate, quoted: boolean): AutocompleteItem {
 /**
  * A row's text as a single line the terminal draws rather than obeys.
  *
- * The shared display escape keeps line feeds because a rendered block needs
- * them, but a menu row that carried one would draw outside its own box.
+ * A menu row that carried a line feed would draw outside its own box, so one is
+ * shown as its escape; everything else a terminal would act on is consumed, and
+ * nothing is coloured because the menu paints its rows itself.
  */
 function rowText(raw: string): string {
-  return displayText(raw.replaceAll('\n', '\\n'))
+  return renderTerminalText(raw.replaceAll('\n', '\\n'), { color: 'none' })
 }

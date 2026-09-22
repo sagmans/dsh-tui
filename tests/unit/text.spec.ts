@@ -17,8 +17,14 @@ describe('displayText', () => {
     expect(displayText(`${CSI}2J`)).toBe('\\x9B2J')
   })
 
-  it('escapes carriage return, tab, bell, and delete', () => {
-    expect(displayText('a\rb\tc\u0007d\u007f')).toBe('a\\x0Db\\x09c\\x07d\\x7F')
+  it('escapes carriage return, bell, and delete, and lands a tab on its stop', () => {
+    expect(displayText('a\rb\tc\u0007d\u007f')).toBe('a\\x0Db  c\\x07d\\x7F')
+    expect(displayText('a\tb')).toBe(`a${' '.repeat(7)}b`)
+    expect(displayText('\tb', { column: 4 })).toBe(`${' '.repeat(4)}b`)
+  })
+
+  it('keeps a tab when the text is meant to be stored or restored rather than drawn', () => {
+    expect(displayText('a\tb', { tab: 'keep' })).toBe('a\tb')
   })
 
   it('escapes directional overrides that could reorder the frame', () => {

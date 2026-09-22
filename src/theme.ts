@@ -1,5 +1,6 @@
 import { truncateToWidth, type EditorTheme, type MarkdownTheme, type SelectListTheme } from '@earendil-works/pi-tui'
 import { oneRow } from './text.ts'
+import { renderTerminalText } from './terminal-text.ts'
 import { detectColourMode, type ColourMode } from './theme-capability.ts'
 import { presetTokens } from './theme-presets.ts'
 import { DEFAULT_PALETTE, DEFAULT_TOKENS, resetSequence, resolveToken, type ResolvedStyle, type TuiToken } from './theme-tokens.ts'
@@ -16,6 +17,14 @@ const NO_OVERRIDES: ThemeOverrides = { palette: DEFAULT_PALETTE, tokens: new Map
  */
 let themeRevision = 0
 
+/** What a drawn fragment needs to know: the element it belongs to, and where it starts. */
+export interface RichTextOptions {
+  /** The element the fragment is drawn inside, whose colour is the ground it returns to. */
+  readonly token?: TuiToken
+  /** The column the fragment starts at, so its first tab lands on the terminal's next stop. */
+  readonly column?: number
+}
+
 /**
  * Styling the surface applies, and the editor/select themes pi-tui needs.
  *
@@ -27,6 +36,15 @@ export interface TuiTheme {
   readonly color: boolean
   /** Draw one named element. */
   style(token: TuiToken, text: string): string
+  /**
+   * Draw text a tool, a model, or a file wrote the way a terminal would have.
+   *
+   * Unlike {@link style}, the text is not assumed to be the surface's own: its
+   * sequences are read, the safe ones are drawn, and the rest are consumed. The
+   * named element supplies the ground a foreign reset returns to, so a tool that
+   * ends its colour cannot clear the colour the row was drawn in.
+   */
+  rich(raw: string, options?: RichTextOptions): string
   /** Cut a row to a width, so no renderer has to reach for the raw helper. */
   cut(text: string, width: number, ellipsis?: string): string
   /** The mark that introduces an element, empty unless the reader set one. */
@@ -117,10 +135,26 @@ export function createTheme(mode: ColourMode = detectColourMode(process.env), ov
     return mode === 'none' ? truncated.replaceAll(resetSequence(), '') : truncated
   }
   const visible = (token: TuiToken): boolean => !resolve(token).hidden
+  /**
+   * Drawn foreign text, with the element's own prefix as its ground.
+   *
+   * The prefix is passed as the base rather than painted around the result, so
+   * the ground a foreign reset restores is the same sequence the row opened
+   * with; a hidden element draws nothing at all rather than drawing unstyled,
+   * because a reader who removed an element is not asking to see it plainly.
+   */
+  const rich = (raw: string, options: RichTextOptions = {}): string => {
+    const token = options.token
+    if (token === undefined) return renderTerminalText(raw, { color: mode, column: options.column })
+    const { prefix, suffix, hidden } = resolve(token)
+    if (hidden) return ''
+    return `${prefix}${renderTerminalText(raw, { color: mode, base: prefix, column: options.column })}${suffix}`
+  }
   return {
     revision: ++themeRevision,
     color: mode !== 'none',
     style,
+    rich,
     cut,
     glyph: token => resolve(token).glyph,
     visible,

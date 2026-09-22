@@ -140,19 +140,34 @@ describe('TranscriptView text', () => {
     expect(viewOf(model).render(40)).toEqual(['compacted 12 events'])
   })
 
-  it('escapes control sequences out of model and tool text', () => {
-    // Any control sequence the presenter hands over has to be neutralized; the
-    // row it lands on can be the header, which is what a folded card shows.
+  it('draws a title the way the terminal that wrote it would have', () => {
+    // Any sequence the presenter hands over is read here: what a terminal would
+    // act on cannot reach the row, and what is really text still can.
     const model = new TranscriptModel({
       call: () => ({ kind: 'generic', tool: 'bash', title: '\u001b[31mred\u0007', detail: [], failed: false, totalLines: 0 }),
       result: () => undefined,
     })
     model.apply(toolCall())
     model.apply(toolResult('plain'))
-    const lines = viewOf(model).render(60)
-    const rendered = lines.join('\n')
-    expect(rendered).toContain('\\x1B[31mred\\x07')
+    const rendered = viewOf(model).render(60).join('\n')
+    // These rows run with colour off, so the colour sequence is consumed rather
+    // than shown; a bell is not a sequence, so it is spelled, not swallowed.
+    expect(rendered).toContain('red\\x07')
     expect(rendered).not.toContain('\u001b')
+  })
+
+  it('keeps a tool colour the terminal can draw, and still spells a stray control', () => {
+    const colour = createTheme('truecolor')
+    const model = new TranscriptModel({
+      call: () => ({ kind: 'generic', tool: 'bash', title: '\u001b[31mred\u001b[0mplain\u0007', detail: [], failed: false, totalLines: 0 }),
+      result: () => undefined,
+    })
+    model.apply(toolCall())
+    model.apply(toolResult('plain'))
+    const view = new TranscriptView(model, colour, new MarkdownRenderer(colour.markdown), { state: () => COLLAPSED })
+    const rendered = view.render(60).join('\n')
+    expect(rendered).toContain('\u001b[38;5;1mred')
+    expect(rendered).toContain('plain\\x07')
   })
 
   it('renders a recorded thought, folded or open, dimmed, and leaves the answer alone', () => {
@@ -730,6 +745,7 @@ describe('TranscriptView theming', () => {
       get revision() { return active.revision },
       get color() { return active.color },
       style: (token, text) => active.style(token, text),
+      rich: (raw, options) => active.rich(raw, options),
       cut: (text, width, ellipsis) => active.cut(text, width, ellipsis),
       glyph: token => active.glyph(token),
       visible: token => active.visible(token),
