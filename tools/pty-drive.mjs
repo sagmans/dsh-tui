@@ -151,6 +151,10 @@ const NAMED_KEYS = {
   // The chord prefix has no printable byte: it arrives as the control the
   // terminal sends for the letter, which is what makes a two-key run drivable.
   'ctrl+x': '\u0018',
+  // The map's own second key is a printable byte, so a run sends it as itself;
+  // it is named here because this table is the account of what a run can press,
+  // and a second key with no row would read as one the harness cannot reach.
+  '?': '?',
   // Shift+Tab is CBT (CSI Z), distinct from the plain Tab an editor completes on.
   'shift+tab': '\u001b[Z',
   // The transcript search opens on shift+ctrl+f, a chord no single byte carries,

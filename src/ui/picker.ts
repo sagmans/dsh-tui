@@ -172,20 +172,30 @@ export class ListPicker<Row> {
     return undefined
   }
 
-  card(): PickerCard {
+  /**
+   * The card as it draws right now, in the window the caller can afford.
+   *
+   * The window is a parameter because the caller is the one that knows how many
+   * rows it has to give: a list at the end of the transcript takes the usual
+   * window whatever the terminal, while a box over it has to leave room for its
+   * own frame on a short screen. The rule stays here, so both windows keep the
+   * cursor centred and the counts above and below honest.
+   */
+  card(window = PICKER_WINDOW): PickerCard {
     const rows = this.visible()
     const cursor = Math.min(this.cursor, Math.max(0, rows.length - 1))
-    const start = Math.max(0, Math.min(cursor - Math.floor(PICKER_WINDOW / 2), rows.length - PICKER_WINDOW))
-    const window = rows.slice(start, start + PICKER_WINDOW)
+    const size = Math.max(1, Math.min(window, rows.length))
+    const start = Math.max(0, Math.min(cursor - Math.floor(size / 2), rows.length - size))
+    const shown = rows.slice(start, start + size)
     return {
       title: this.heading(),
       note: this.note,
-      rows: window.map((row, index) => ({
+      rows: shown.map((row, index) => ({
         ...this.describe(row),
         current: start + index === cursor,
       })),
       above: start,
-      below: Math.max(0, rows.length - start - window.length),
+      below: Math.max(0, rows.length - start - shown.length),
       filter: singleLine(this.filter),
       hint: rows.length === 0 ? this.hints.empty() : this.hints.listed(),
     }

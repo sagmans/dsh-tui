@@ -10,6 +10,10 @@ breaking change, and a patch carries only fixes.
 
 ### Changed
 
+- `/keys` opens the key map as a list you filter as you type instead of
+  printing every row into the transcript. `/keys <layer>` opens the same list
+  already narrowed to one layer, and a layer name the surface does not have is
+  still refused with the names it does.
 - Ctrl+C no longer leaves. It takes back one thing per press — the draft in the
   bar, the prompts waiting in the agent's inbox (put back into the bar before the
   turn is stopped, because an interrupt drops them), the running turn, or a
@@ -40,6 +44,11 @@ breaking change, and a patch carries only fixes.
 
 ### Added
 
+- `Ctrl+X` then `?` opens the key map as a searchable list: one row per action
+  with the keys in force, one row for every key the map took from the library,
+  and a filter reaching the action id, the layer, a key, or what the row does.
+  The list is drawn in a box over the transcript, so looking a key up no longer
+  costs the reader their place in it.
 - A PTC program's dispatched calls stay visible as one row each under the
   `run_code` header without opening the card, and a click opens one call's
   argument in full while its neighbours stay as they were; opening a shell call

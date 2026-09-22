@@ -27,6 +27,7 @@ const CHORD_SUBMISSIONS: Readonly<Record<string, Submission>> = {
   // The editor, like the stash, only exists as a chord: a typed command has
   // already consumed the line it would otherwise have carried.
   'chord.editor': { kind: 'editor' },
+  'chord.keys': { kind: 'keys', argument: '' },
 }
 
 /** One chord: the key that follows the prefix, and the line that key asks for. */

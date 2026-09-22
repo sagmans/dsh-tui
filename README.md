@@ -117,9 +117,9 @@ dsh --profile tui --no-color
 dsh --profile tui --no-bell            # do not ring when a long turn finishes
 ```
 
-Every key below is a shipped default. `/keys` lists every action the surface
-and its library can perform with the keys in force, and the `keys:` section
-moves any of them — see [Keys](#keys).
+Every key below is a shipped default. `/keys` opens every action the surface
+and its library can perform as a list you filter as you type, with the keys in
+force, and the `keys:` section moves any of them — see [Keys](#keys).
 
 | Key | Action |
 |---|---|
@@ -137,6 +137,7 @@ moves any of them — see [Keys](#keys).
 | Ctrl+X then M | open the model picker |
 | Ctrl+X then Y | copy the last answer to the clipboard |
 | Ctrl+X then E | edit the draft in `$VISUAL` (or `$EDITOR`) and take back what it saves |
+| Ctrl+X then ? | search the key map: every action and the keys in force, in a box over the transcript |
 | `y` / `n` / Esc / Ctrl+C | allow once, reject, or cancel a pending approval |
 | digits / space / ↑↓ / Enter / Esc / Ctrl+C | answer a question: pick or toggle, confirm, or skip one with Esc; Ctrl+C abandons the whole batch with no answers, like an aborted call; `0` answers with your own text in the input bar |
 | ↑↓ / Ctrl+P / Ctrl+N | move through the open list: a picker's rows, a question's options, or the completion menu above the bar |
@@ -169,7 +170,7 @@ moves any of them — see [Keys](#keys).
 | `/history` | show how many prompts are recorded and where the file is |
 | `/history clear` | forget every recorded prompt, reporting how many went |
 | `/theme` | list every styled element and the value in force |
-| `/keys` | list every action and the keys in force; `/keys <layer>` narrows it (see [Keys](#keys)) |
+| `/keys` | open the key map as a list you filter as you type; `/keys <layer>` opens it already narrowed to one layer (see [Keys](#keys)) |
 | `/stash <draft>` | park the text given after the command (`ctrl+x` then `s` parks the editor) |
 | `/stash-pop [index\|id]` | put a stashed draft into the editor and remove it (newest by default) |
 | `/stash-apply [index\|id]` | put a stashed draft into the editor and keep it |
@@ -185,18 +186,19 @@ prefix alone — enough to say that a key is waiting, without reciting the map �
 and a key that finishes nothing is typed as usual rather than swallowed, so a
 prefix pressed by accident costs nothing; `/help` lists the chords, `m` for the
 model picker, `p` for plan mode, `y` for the last answer, `s` to stash the
-draft, `l` for the stashes, and `e` for the draft in the reader's own editor.
+draft, `l` for the stashes, `e` for the draft in the reader's own editor,
+and `?` for the key map.
 `keys.chord.prefix: alt+x` starts the chord with another key — or with a list of
 them, as so many ways in — and `prefixWindow: 0` waits for the next key instead
 of lapsing; every second key is a row of its own (`chord.model`, `chord.plan`,
-`chord.copy`, `chord.stash`, `chord.stashes`, `chord.editor`), so a chord can be
-respelled whole. A prefix that is not a modifier chord, that
+`chord.copy`, `chord.stash`, `chord.stashes`, `chord.editor`, `chord.keys`), so
+a chord can be respelled whole. A prefix that is not a modifier chord, that
 the surface or the prompt bar already answers (`ctrl+c`, `ctrl+s`), or that the
 terminal keeps (`ctrl+q`) is refused with the reason, and the shipped keymap
 stays in force. The chords themselves are the commands they stand for: `m`, `p`,
-`y`, `s`, and `l` ask the same dispatcher `/model`, `/plan`, `/copy`, `/stash`,
-and `/stash-list` do; `e` is the one chord with no command behind it, because it
-opens a program rather than running a line. Plan mode is
+`y`, `s`, `l`, and `?` ask the same dispatcher `/model`, `/plan`, `/copy`,
+`/stash`, `/stash-list`, and `/keys` do; `e` is the one chord with no command
+behind it, because it opens a program rather than running a line. Plan mode is
 the one pair that cannot share a name: `/plan` only enters, so the chord names
 `/plan off` instead when the agent is in plan mode — or is waiting for the turn
 boundary to become so — and reads that state from the plan package rather than
@@ -325,6 +327,7 @@ dsh-tui:
   prefixWindow: 2             # seconds a chord waits for its second key; 0 waits for the next key instead
   keys:
     chord.prefix: ctrl+x      # the key that starts a chord; "prefix:" is the older spelling of this row
+    chord.keys: '?'           # quoted: a bare ? is a YAML indicator, not a key
     prompt.submit: [ctrl+enter, alt+enter, ctrl+s]
     surface.effort: ctrl+t    # one key, or a list of them
     tui.editor.yank: ctrl+y   # any action the library draws, by the id /keys prints
@@ -410,19 +413,24 @@ notice when the document loads, so a typo cannot quietly paint nothing.
 ### Keys
 
 Every press the surface answers is an action with an id and a shipped key.
-`/keys` prints all of them with the keys in force, marks the rows you wrote,
-names the keys your map took from the library, and ends with a sample `keys:`
-section rather than a whole one; the table above it is the complete account.
-`/keys prompt`, `surface`, `chord`, `gate`, `question`,
-`picker`, and `library` narrow that list to one part of the surface.
+`/keys`, or `Ctrl+X` then `?`, opens the whole map in a box over the
+transcript: one row per action with the keys in force, one row for every key your
+map took from the library, and a filter over all of it — `gate` for a layer,
+`ctrl+o` for a key, `stash` for what a row does. The heading counts the actions
+shown and how many of them you wrote, the box gives up rows rather than grow past
+four fifths of the screen, and `enter` or `esc` closes it with the transcript
+exactly as it was. `/keys prompt`, `surface`, `chord`, `gate`, `question`,
+`picker`, and `library` open it already narrowed to one part of the surface, and
+a name that is none of them is refused with the names. The table above is the
+complete account of the shipped keys.
 
 An entry is one key or a list of them. A key is a modifier chord
 (`ctrl`/`alt`/`shift` joined by `+`, written in that order), a named key
 (`enter`, `escape`, `tab`, `space`, `backspace`, `delete`, `home`, `end`,
 `pageUp`, `pageDown`, the arrows, `f1`–`f12`), or a bare character where the
-layer reads one: `y` and `n` for an approval, or a chord's second key. Ids
-beginning `tui.` are pi-tui's own actions, so the editor, the search, and the
-transcript move where you tell them to.
+layer reads one: `y` and `n` for an approval, or a chord's second key (`?` for
+the key map, `m` for the model). Ids beginning `tui.` are pi-tui's own actions,
+so the editor, the search, and the transcript move where you tell them to.
 
 Ctrl+P and Ctrl+N ship as alternatives to ↑ and ↓ wherever a list moves — a
 picker, a question's options, and the editor's completion menu. They are
@@ -450,9 +458,10 @@ reaches `alt+up` as readily as `alt+p`.
 A key the surface or a chord answers is a key the library never sees: that is
 how `ctrl+y` shows nested calls instead of yanking a line in the editor, how
 `ctrl+c` closes the transcript search the library owns, and how `ctrl+d` leaves
-rather than deleting forward while the bar holds nothing. `/keys` names every
-shadow your map introduces, and moving the surface key hands the library its own
-key back.
+rather than deleting forward while the bar holds nothing. The key map carries a
+row for every shadow your map introduces, naming the action that wins and the
+library row that loses, and moving the surface key hands the library its own key
+back.
 
 Left alone, because they are typing rather than commands: the keys a question's
 filter narrows with and the ones that leave its free-text row, the digits and

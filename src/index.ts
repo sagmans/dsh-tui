@@ -49,7 +49,7 @@ import {
   installKeybindings,
   surfaceKeysLine,
 } from './input/keymap.ts'
-import { defaultKeymap, hintKeys, surfaceBindings, type Keymap, type SurfaceActionId } from './input/actions.ts'
+import { defaultKeymap, hintKeys, surfaceBindings, type ActionLayer, type Keymap, type SurfaceActionId } from './input/actions.ts'
 import { resolveConfig } from './config.ts'
 import { FoldCursor } from './fold-cursor.ts'
 import { createRestoreRegistry } from './terminal/restore.ts'
@@ -68,7 +68,7 @@ import { defaultSettings, readScope, settingsProblemMessage, toOverrides, TUI_SE
 import { toolDisplayFor, type ToolDisplayTable } from './tool-display.ts'
 import { pendingPrompts } from './queue.ts'
 import { renderThemeTable } from './theme-command.ts'
-import { KEYMAP_LAYERS, keymapLayer, renderKeymap } from './keys-command.ts'
+import { KEYMAP_LAYERS, keymapLayer } from './keys-command.ts'
 import { resetSequence } from './theme-tokens.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { formatTokens } from './tokens.ts'
@@ -79,6 +79,8 @@ import { GateInputBar } from './ui/gate-input.ts'
 import type { GhostBrush } from './ui/editor.ts'
 import { HistoryPicker } from './ui/history-picker.ts'
 import { surfaceLayout } from './ui/layout.ts'
+import { KeymapPicker } from './ui/keymap-picker.ts'
+import { PickerPopup, POPUP_MAX_HEIGHT, popupWidth } from './ui/picker-card.ts'
 import { PromptBar } from './ui/prompt.ts'
 import { MarkdownRenderer } from './ui/markdown.ts'
 import { createMermaidTransform } from './ui/mermaid.ts'
@@ -425,9 +427,16 @@ export function apply(ctx: Context, config: unknown): void {
   let activeSession = resolved.sessionId
   /** The session the transcript is showing, which can be one of its children. */
   let viewedSession = resolved.sessionId
+  /** What the surface needs of a list to drive it, wherever that list is drawn. */
+  interface Picker {
+    handleKey(data: string): PickerAction | undefined
+    /** The row window the caller can afford, or the shipped window when it names none. */
+    card(window?: number): PickerCard
+    setNote(text: string | undefined): void
+  }
   /** The one picker a terminal can present at a time, and how it settles its caller. */
   interface PendingPicker {
-    readonly picker: { handleKey(data: string): PickerAction | undefined; card(): PickerCard; setNote(text: string | undefined): void }
+    readonly picker: Picker
     readonly settle: (id: string | undefined) => void
     /**
      * Why this run cannot open an id, or undefined when it can.
@@ -436,6 +445,17 @@ export function apply(ctx: Context, config: unknown): void {
      * the menu they are already looking at instead of ending the run.
      */
     readonly vet: ((id: string) => Promise<string | undefined>) | undefined
+    /**
+     * The card as the transcript draws it, or undefined when this list is drawn
+     * over the transcript instead.
+     *
+     * A popup keeps its rows to itself: the work the reader paused stays the
+     * context for what they are choosing, and repeating the list under the box
+     * would only push that work off the screen.
+     */
+    readonly card: (() => PickerCard) | undefined
+    /** Give back whatever this list was given: the screen a popup was shown on. */
+    readonly release: (() => void) | undefined
   }
   let pending: PendingGate | undefined
   let pendingPicker: PendingPicker | undefined
@@ -444,7 +464,7 @@ export function apply(ctx: Context, config: unknown): void {
   const view = new TranscriptView(model, theme, markdown, {
     state: () => viewState,
     gate: () => pending?.gate.card(),
-    picker: () => pendingPicker?.picker.card(),
+    picker: () => pendingPicker?.card?.(),
     keys: () => keymap,
     toolDisplay: tool => toolDisplayFor(toolDisplay, tool),
   })
@@ -822,6 +842,9 @@ export function apply(ctx: Context, config: unknown): void {
   /** Give the keyboard back to the editor and answer whoever opened the picker. */
   const settlePicker = (id: string | undefined): void => {
     const settle = pendingPicker?.settle
+    // The screen goes back before the keyboard does: a box left behind a settled
+    // list would sit over the transcript until something else repainted.
+    pendingPicker?.release?.()
     pendingPicker = undefined
     herdr.unblock()
     editor.disableSubmit = false
@@ -847,13 +870,44 @@ export function apply(ctx: Context, config: unknown): void {
     }
   }
 
-  /** Take the keyboard for a picker and answer with the id it settled on. */
+  /**
+   * Take the keyboard for a picker and answer with the id it settled on.
+   *
+   * Where the list is drawn is the caller's decision, because it is a decision
+   * about the reader's attention. A list that is the destination — a session to
+   * open, a model to switch to — joins the transcript and is read with it. A
+   * list that is a reference for the work in front of the reader is drawn over
+   * that work instead, so looking something up does not cost them their place.
+   * The keyboard is owned the same way either way.
+   */
   const openPicker = (
-    picker: PendingPicker['picker'],
+    picker: Picker,
     vet?: (id: string) => Promise<string | undefined>,
+    placement: 'inline' | 'popup' = 'inline',
   ): Promise<string | undefined> =>
     new Promise<string | undefined>(resolve => {
-      pendingPicker = { picker, settle: resolve, vet }
+      const overlay = placement === 'popup'
+        ? tui.showOverlay(
+            new PickerPopup(rows => picker.card(rows), () => terminal.rows, theme),
+            {
+              width: popupWidth(terminal.columns),
+              maxHeight: POPUP_MAX_HEIGHT,
+              anchor: 'center',
+              margin: 1,
+              // The surface's own listener reads every press before a focused
+              // component does, so the box needs no focus to be driven; taking it
+              // would only move focus away from where the reader left it.
+              nonCapturing: true,
+            },
+          )
+        : undefined
+      pendingPicker = {
+        picker,
+        settle: resolve,
+        vet,
+        card: overlay === undefined ? () => picker.card() : undefined,
+        release: overlay === undefined ? undefined : () => overlay.hide(),
+      }
       // A picker owns the keyboard exactly as a gate does: nothing moves until
       // the reader chooses, so it is the same kind of wait.
       herdr.block(picker.card().title)
@@ -861,6 +915,17 @@ export function apply(ctx: Context, config: unknown): void {
       tui.setFocus(null)
       tui.requestRender()
     })
+
+  /**
+   * Open the key map over the surface.
+   *
+   * Nothing here is a pick: a row names an action and the keys reaching it, so
+   * the id the list settles on is thrown away. What the reader came for is the
+   * list itself, and the filter that narrows it.
+   */
+  const openKeyMap = (layer: ActionLayer | undefined): void => {
+    void openPicker(new KeymapPicker(() => keymap, layer), undefined, 'popup')
+  }
 
   /**
    * Reverse search over recorded prompts, seeded with whatever is in the bar.
@@ -1909,12 +1974,14 @@ export function apply(ctx: Context, config: unknown): void {
         return
       case 'keys': {
         const layer = submission.argument === '' ? undefined : keymapLayer(submission.argument)
+        // A layer that does not exist is not a filter that matches nothing: the
+        // reader asked for something by name, so the answer names the names.
         if (submission.argument !== '' && layer === undefined) {
           model.notice(`unknown layer "${submission.argument}" · ${KEYMAP_LAYERS.join(' ')}`)
-        } else {
-          for (const line of renderKeymap(keymap, layer)) model.notice(line)
+          tui.requestRender()
+          return
         }
-        tui.requestRender()
+        openKeyMap(layer)
         return
       }
       case 'copy':

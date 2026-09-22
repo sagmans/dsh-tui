@@ -16,6 +16,7 @@ import { CARD_ROW_TOKEN, type TuiToken } from '../theme-tokens.ts'
 import type { TuiTheme } from '../theme.ts'
 import { canFrame, frameLines, FRAME_COLUMNS, textWidth } from './frame.ts'
 import { ANSWER_FACE, type MarkdownFace, type MarkdownRenderer } from './markdown.ts'
+import { pickerCardLines } from './picker-card.ts'
 import type { PickerCard } from './picker.ts'
 import { RowCache, type RowCacheStats } from './rows.ts'
 
@@ -619,35 +620,10 @@ export class TranscriptView implements Component {
 
   private pushPicker(lines: string[], picker: PickerCard, width: number): void {
     lines.push('')
-    if (this.theme.visible('picker.title')) {
-      const glyph = this.theme.glyph('picker.glyph')
-      const lead = glyph === '' ? '' : `${glyph} `
-      lines.push(this.theme.style('picker.title', this.theme.cut(`${lead}${displayText(picker.title)}`, width, '')))
-    }
-    if (picker.note !== undefined && this.theme.visible('picker.note')) {
-      this.pushWrapped(lines, picker.note, width, DETAIL_INDENT, text => this.theme.style('picker.note', text))
-    }
-    if (picker.filter !== '' && this.theme.visible('picker.filter')) {
-      lines.push(this.theme.style('picker.filter', this.theme.cut(`${DETAIL_INDENT}filter: ${displayText(picker.filter)}`, width, '')))
-    }
-    if (picker.above > 0 && this.theme.visible('picker.scrollNewer')) {
-      lines.push(this.theme.style('picker.scrollNewer', this.theme.cut(`${OPTION_INDENT}… ${picker.above} newer`, width, '')))
-    }
-    for (const row of picker.rows) {
-      const token = row.current ? 'picker.rowCurrent' : 'picker.row'
-      if (!this.theme.visible(token)) continue
-      const cursor = row.current ? this.theme.glyph('picker.cursor') || CURSOR_MARK : NO_CURSOR
-      const text = row.description === undefined
-        ? `${cursor} ${row.label}`
-        : `${cursor} ${row.label} — ${row.description}`
-      lines.push(this.theme.style(token, this.theme.cut(`${OPTION_INDENT}${displayText(text)}`, width, '')))
-    }
-    if (picker.below > 0 && this.theme.visible('picker.scrollOlder')) {
-      lines.push(this.theme.style('picker.scrollOlder', this.theme.cut(`${OPTION_INDENT}… ${picker.below} older`, width, '')))
-    }
-    if (this.theme.visible('picker.hint')) {
-      lines.push(this.theme.style('picker.hint', this.theme.cut(`${OPTION_INDENT}${displayText(picker.hint)}`, width, '')))
-    }
+    // The rows come from the renderer a popup also draws through, so a card
+    // reads the same whether it sits at the end of the transcript or in a box
+    // over it, and a field added to a card reaches both at once.
+    lines.push(...pickerCardLines(picker, width, this.theme))
   }
 
   private pushGate(lines: string[], gate: GateCard, width: number): void {

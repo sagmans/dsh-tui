@@ -84,12 +84,20 @@ describe('the key tables', () => {
     expect(bindings.find(entry => entry.key === 'p')?.submission).toEqual({ kind: 'plan' })
     expect(bindings.find(entry => entry.key === 'y')?.submission).toEqual({ kind: 'copy' })
     expect(bindings.find(entry => entry.key === 'e')?.submission).toEqual({ kind: 'editor' })
-    expect(chordKeysLine(defaultKeymap())).toBe('ctrl+x then m model · p plan mode · y copy · s stash the draft · l stashed drafts · e external editor')
+    // The map is a viewer, so its chord carries the very line `/keys` produces.
+    expect(bindings.find(entry => entry.key === '?')?.submission).toEqual({ kind: 'keys', argument: '' })
+    expect(chordKeysLine(defaultKeymap())).toBe('ctrl+x then m model · p plan mode · y copy · s stash the draft · l stashed drafts · e external editor · ? key map')
+  })
+
+  it('opens the key map on the question mark that follows the prefix', () => {
+    const { chord } = reader()
+    expect(chord.handle('\u0018')).toEqual({ kind: 'armed' })
+    expect(chord.handle('?')).toEqual({ kind: 'action', binding: chordBindings(defaultKeymap()).find(entry => entry.key === '?') })
   })
 
   it('reads a chord the reader moved, and a prefix they changed', () => {
     const map = resolveKeymap({ 'chord.prefix': 'alt+z', 'chord.model': 'n' })
-    expect(chordKeysLine(map)).toBe('alt+z then n model · p plan mode · y copy · s stash the draft · l stashed drafts · e external editor')
+    expect(chordKeysLine(map)).toBe('alt+z then n model · p plan mode · y copy · s stash the draft · l stashed drafts · e external editor · ? key map')
     expect(chordBindings(map).find(entry => entry.label === 'model')?.key).toBe('n')
   })
 })

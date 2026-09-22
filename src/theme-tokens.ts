@@ -176,6 +176,10 @@ export const TUI_TOKENS = [
   'picker.scrollOlder',
   'picker.hint',
   'picker.cursor',
+  // A picker drawn as a box rather than a list at the end of the transcript:
+  // the frame has to read as an overlay on the rows behind it, not as one more
+  // element of them.
+  'picker.border',
   // Gate
   'gate.title',
   'gate.glyphApproval',
@@ -370,6 +374,7 @@ export const DEFAULT_TOKENS: Readonly<Record<TuiToken, StyleSpec>> = {
   'picker.scrollOlder': muted,
   'picker.hint': muted,
   'picker.cursor': plain,
+  'picker.border': muted,
 
   'gate.title': { bold: true },
   'gate.glyphApproval': { bold: true },
