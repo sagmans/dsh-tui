@@ -11,6 +11,9 @@ const MODES = ['truecolor', '256', '16', 'none'] as const
 /** The theme the reader asked to be brought over, by the name it answers to. */
 const VIOLET = 'violet-orbit'
 
+/** The surface's own theme: the shipped table, in the blue the project answers to. */
+const BLUE = 'deepseek-blue'
+
 const library = builtinLibrary()
 
 /** The theme as a renderer holds it, which is what a reader actually sees. */
@@ -19,7 +22,9 @@ const themed = (name: string, mode: (typeof MODES)[number] = 'truecolor') =>
 
 describe('the shipped themes', () => {
   it('ships a file for every name it offers', () => {
-    expect(builtinNames(library)).toEqual([SHIPPED_THEME, VIOLET])
+    // Sorted on both sides: which files exist is the claim, and the order a
+    // library offers names in is the loader's business rather than this one's.
+    expect([...builtinNames(library)].sort()).toEqual([SHIPPED_THEME, VIOLET, BLUE].sort())
   })
 
   it('names only elements and palette entries the surface has', () => {
@@ -76,6 +81,30 @@ describe('the shipped themes', () => {
     // theme writes no literal for still follows the theme's own shades.
     const theme = themed(VIOLET)
     expect(theme.style('transcript.reasoning.body', 'x')).toContain('38;2;103;109;149')
+  })
+})
+
+describe('deepseek-blue', () => {
+  it('draws the surface in the brand blue rather than the shipped cyan', () => {
+    expect(themed(BLUE).style('markdown.heading', 'x')).toContain('38;2;109;134;255')
+  })
+
+  it('leaves the semantic shades in the hues a reader already reads them in', () => {
+    // A theme that repainted these would make every reader learn them again on
+    // the one screen where reading them wrong costs the most.
+    expect(themed(BLUE).style('tool.diff.added', 'x')).toContain('38;2;34;197;94')
+    expect(themed(BLUE).style('tool.diff.removed', 'x')).toContain('38;2;239;68;68')
+    expect(themed(BLUE).style('markdown.diagram.warning', 'x')).toContain('38;2;251;191;36')
+  })
+
+  it('gives a tool card the brand blue, where the shipped table gives it a warning shade', () => {
+    // The label is the loudest thing on the row, and nothing about a call is wrong.
+    expect(themed(BLUE).style('tool.title', 'x')).toContain('38;2;109;134;255')
+    expect(themed(SHIPPED_THEME).style('tool.title', 'x')).toContain('38;2;215;175;95')
+  })
+
+  it('holds the bar a reader types into in the pale blue rather than one more grey', () => {
+    expect(themed(BLUE).style('editor.border', 'x')).toContain('38;2;169;188;255')
   })
 })
 

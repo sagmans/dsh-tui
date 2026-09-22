@@ -400,11 +400,12 @@ lists it with the rest. Nothing is lost by drawing: `/export` and the session
 file keep the reply exactly as the model wrote it.
 
 A theme restyles the whole surface by name, and a theme is a file. The package
-ships two: `shipped`, the default table written out in full, and `violet-orbit`,
-a port of the pi theme of the same name — its palette, plus the elements it draws
-its own way, down to the violet band a submitted prompt sits on. Your own themes
-live in `$DSH_HOME/themes/`, which the surface creates at start-up and watches, so
-saving a file there is how you change the surface you are looking at. A bare
+ships three: `shipped`, the default table written out in full; `deepseek-blue`,
+that same table in the blue the project answers to; and `violet-orbit`, a port of
+pi's theme of that name — its palette, plus the elements it draws its own way,
+down to the violet band a submitted prompt sits on. Your own themes live in
+`$DSH_HOME/themes/`, which the surface creates at start-up and watches, so saving
+a file there is how you change the surface you are looking at. A bare
 `/theme` opens the list of them, narrowing as you type, and the screen paints the
 row under the cursor as it moves: two themes are compared on your own transcript,
 and nothing is written until one is taken, so leaving the list puts back the theme
@@ -412,8 +413,11 @@ that was in force. `theme: violet-orbit` applies one from the document, `shipped
 returns to the default table, and a name nothing answers to is reported with the
 names that do, drawing the shipped table instead.
 
-Both shipped files name every element and every palette entry, so a copy of one is
-a complete theme rather than a diff against something you cannot see. `/theme
+Every shipped file names every element and every palette entry, so a copy of one is
+a complete theme rather than a diff against something you cannot see;
+`deepseek-blue` is the one to copy to move a single shade, because it is the
+shipped table with ten palette entries of its own and every element follows them.
+`/theme
 export <built-in>` writes that copy into your own directory as
 `<built-in>_export_<n>.yaml`, adding one comment naming the release it came from:
 the package's own file is replaced whenever the package updates, so the copy is the

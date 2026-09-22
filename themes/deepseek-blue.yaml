@@ -1,0 +1,152 @@
+# deepseek-blue — the table the surface ships, in DeepSeek's blue.
+#
+# Ten palette entries carry the whole theme: every element below names one rather
+# than a shade of its own, which is what lets a reader move the brand hue in one
+# line. Three elements name a different entry than the shipped table names, and
+# say why where they do.
+#
+# The semantic shades are deliberately not blue. Something added is green and
+# something removed is red on every surface a reader already uses, and a hue that
+# moved with the theme would have to be learned again with each one.
+#
+# The accent is the brand's hue rather than its exact hex: #4d6bfe is drawn for a
+# light page, and on a dark terminal it reads under what a link or a code span
+# needs. Changing the one line is enough for a reader who wants it exact.
+
+palette:
+  default: '#d7dcf0'  # body text, cooled toward the brand
+  muted: '#949fc3'  # secondary rows
+  faint: '#6e7899'  # the shade below muted
+  accent: '#6d86ff'  # the brand's hue, lifted for a dark terminal
+  arg: '#a9bcff'  # a tool's argument, pale enough to stay apart from its label
+  warn: '#fbbf24'  # amber: something to look at
+  added: '#22c55e'  # green: something that arrived
+  removed: '#ef4444'  # red: something that went
+  user: '#27f5c8'  # the mint a reader's own turn takes
+  assistant: '#d7dcf0'  # a reply reads as body text
+
+tokens:
+  # A row of the conversation.
+  transcript.user: { fg: user }
+  transcript.notice: { fg: muted }
+  transcript.marker: { fg: muted }
+  transcript.reasoning.summary: { fg: faint, italic: true }
+  transcript.reasoning.body: { fg: faint }
+  transcript.reasoning.hint: { fg: faint, italic: true }
+  # A tool card, drawn in layers: every card, then one kind of card.
+  # A call is not a warning, and its label is the loudest thing on the row, so
+  # it carries the brand instead of the amber the shipped table gives it.
+  tool.title: { fg: accent }
+  tool.glyph: { fg: accent }
+  tool.args: { fg: arg }
+  tool.stat.added: { fg: added }
+  tool.stat.changed: { fg: warn }
+  tool.stat.removed: { fg: removed }
+  tool.stat.size: { fg: muted }
+  tool.stat.separator: { fg: muted }
+  tool.detail: { fg: muted }
+  tool.hint: { fg: muted }
+  tool.failed.title: { fg: removed }
+  tool.failed.glyph: { fg: removed }
+  tool.subcall.title: { fg: muted }
+  tool.subcall.args: { fg: arg }
+  tool.diff.header: { fg: muted }
+  tool.diff.hunk: { fg: muted }
+  tool.diff.added: { fg: added }
+  tool.diff.removed: { fg: removed }
+  tool.read.header: { fg: muted }
+  tool.read.lineNumber: { fg: muted }
+  tool.read.line: { fg: muted }
+  tool.search.path: { fg: muted }
+  tool.search.lineNumber: { fg: muted }
+  tool.search.match: { fg: muted }
+  tool.search.truncated: { fg: muted }
+  tool.terminal.cwd: { fg: muted }
+  tool.terminal.status: { fg: muted }
+  tool.terminal.output: { fg: muted }
+  tool.web.url: { fg: muted }
+  tool.web.source: { fg: muted }
+  tool.web.truncated: { fg: muted }
+  tool.generic.detail: { fg: muted }
+  # A reply, which is markdown, and the diagrams in it.
+  markdown.heading: { fg: accent, bold: true }
+  markdown.link: { fg: accent, underline: true }
+  markdown.linkUrl: { fg: muted }
+  markdown.code: { fg: accent }
+  markdown.codeBlock: {}
+  markdown.codeBlockBorder: { fg: muted }
+  markdown.quote: { fg: muted }
+  markdown.quoteBorder: { fg: muted }
+  markdown.hr: { fg: muted }
+  markdown.listBullet: { fg: accent }
+  markdown.bold: { bold: true }
+  markdown.italic: { italic: true }
+  markdown.strikethrough: { strike: true }
+  markdown.underline: { underline: true }
+  markdown.diagram.border: { fg: muted }
+  markdown.diagram.text: {}
+  markdown.diagram.edge: { fg: accent }
+  markdown.diagram.edgeLabel: { fg: muted }
+  markdown.diagram.title: { fg: accent, bold: true }
+  markdown.diagram.warning: { fg: warn }
+  # A list drawn over the transcript.
+  picker.title: { bold: true }
+  picker.glyph: { bold: true }
+  picker.note: { bold: true }
+  picker.filter: { fg: muted }
+  picker.row: {}
+  picker.rowCurrent: { bold: true }
+  picker.scrollNewer: { fg: muted }
+  picker.scrollOlder: { fg: muted }
+  picker.hint: { fg: muted }
+  picker.cursor: {}
+  picker.border: { fg: muted }
+  # A question or an approval, which stops the turn until it is answered.
+  gate.title: { bold: true }
+  gate.glyphApproval: { bold: true }
+  gate.glyphQuestion: { bold: true }
+  gate.detail: { fg: muted }
+  gate.option: {}
+  gate.optionCurrent: { bold: true }
+  gate.cursor: {}
+  gate.hint: { fg: muted }
+  # The work panel above the editor.
+  dock.goal: { bold: true }
+  dock.planMode: { bold: true }
+  dock.todos.heading: { bold: true }
+  dock.todos.pending: { fg: muted }
+  dock.todos.inProgress: { fg: muted }
+  dock.todos.overflow: { fg: muted }
+  dock.subagents.heading: { bold: true }
+  dock.subagents.running: { fg: muted }
+  dock.subagents.overflow: { fg: muted }
+  dock.jobs.heading: { bold: true }
+  dock.jobs.running: { fg: muted }
+  dock.jobs.overflow: { fg: muted }
+  # The footer.
+  status.prefix: { fg: accent }
+  status.back: { fg: accent }
+  status.activity.working: { fg: muted }
+  status.activity.ready: { fg: muted }
+  status.elapsed: { fg: muted }
+  status.agentPreset: { fg: muted }
+  status.model: { fg: muted }
+  status.effort: { fg: muted }
+  status.permission: { fg: muted }
+  status.context: { fg: muted }
+  status.cache: { fg: muted }
+  status.stash: { fg: accent }
+  status.cwd: { fg: muted }
+  status.separator: { fg: muted }
+  # The prompt bar.
+  # The one border in the surface that is not a divider: it holds what the reader
+  # is writing, so it takes the pale blue.
+  editor.border: { fg: arg }
+  editor.queued: { dim: true, italic: true }
+  editor.queued.more: { fg: muted }
+  editor.ghost: { dim: true }
+  editor.selectList.selectedPrefix: { fg: accent }
+  editor.selectList.selectedText: { bold: true }
+  editor.selectList.description: { fg: muted }
+  editor.selectList.scrollInfo: { fg: muted }
+  editor.selectList.noMatch: { fg: muted }

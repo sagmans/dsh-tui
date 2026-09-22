@@ -66,7 +66,8 @@ breaking change, and a patch carries only fixes.
 ### Added
 
 - Themes are files. The package ships each one in full — `shipped`, the default
-  table written out element by element, and `violet-orbit` — and your own live in
+  table written out element by element, `deepseek-blue`, that table in the blue
+  the project answers to, and `violet-orbit` — and your own live in
   `$DSH_HOME/themes/`, which the surface creates at start-up and watches, so
   saving a file there restyles the running session without a restart. `/theme
   export <built-in>` copies a built-in into that directory as
@@ -75,6 +76,10 @@ breaking change, and a patch carries only fixes.
   shipped files name every element and palette entry, so a copy is a complete
   theme rather than a diff against something invisible. A file whose name is a
   built-in's is ignored, and reported at start-up with the rename that fixes it.
+  Every shipped file names every element and palette entry, and `deepseek-blue`
+  names only palette entries, so moving the brand hue is one line rather than a
+  table: it also gives a tool card's label the brand instead of the amber the
+  shipped table draws a warning in, and holds the prompt bar in pale blue.
 - `Ctrl+X` then `?` opens the key map as a searchable list: one row per action
   with the keys in force, one row for every key the map took from the library,
   and a filter reaching the action id, the layer, a key, or what the row does.
