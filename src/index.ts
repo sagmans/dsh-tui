@@ -100,6 +100,7 @@ import { StatusBar } from './ui/status.ts'
 import { DEFAULT_VIEW_STATE, TranscriptView } from './ui/view.ts'
 import { PromptStash } from './stash.ts'
 import { confirmedClear, StashConfirmPicker, StashPicker } from './ui/stash-picker.ts'
+import { ThemePicker } from './ui/theme-picker.ts'
 
 export const name = 'tui'
 
@@ -234,8 +235,43 @@ export function apply(ctx: Context, config: unknown): void {
    */
   const settingsNotice = createDeferredNotice()
   let current = createTheme(themeMode())
+  /**
+   * The section as it was last read.
+   *
+   * Held so a preview can rebuild the table without reading the document again:
+   * the picker repaints on every arrow key, and a read there would report a
+   * refused section once per press.
+   */
+  let appliedSection: TuiSettings | undefined
+  /**
+   * The theme the picker's cursor is on, while its list is open.
+   *
+   * A preview is a name and nothing else — the document is not written — so
+   * leaving the list is one more rebuild from the section, and a session that
+   * ends mid-preview has still persisted only what the reader chose.
+   */
+  let previewTheme: string | undefined
   const applyTheme = (section: TuiSettings): void => {
-    current = createTheme(themeMode(), toOverrides(section, themeLibrary))
+    // The row under the cursor outranks the document while a list is open, so a
+    // theme is judged on the reader's own transcript before it is taken.
+    current = createTheme(themeMode(), toOverrides({ ...section, theme: previewTheme ?? section.theme }, themeLibrary))
+  }
+  /**
+   * Show a theme without choosing it.
+   *
+   * The list's cursor is the preview: every row paints the surface and writes
+   * nothing, so two themes are compared on the reader's own transcript rather
+   * than on a name. Clearing the name puts back what the document says, which is
+   * what cancelling the list has to leave behind.
+   */
+  const showTheme = (name: string | undefined): void => {
+    previewTheme = name
+    // Nothing to rebuild from before the first read, and nothing to show either.
+    if (appliedSection === undefined) return
+    applyTheme(appliedSection)
+    markdown.invalidate()
+    view.invalidate()
+    tui.requestRender()
   }
   const theme: TuiTheme = {
     get revision() { return current.revision },
@@ -321,6 +357,10 @@ export function apply(ctx: Context, config: unknown): void {
    */
   const applySettings = (): void => {
     const section = readSection()
+    appliedSection = section
+    // A settings edit ends any preview: what the document says is now the choice,
+    // and a name left over from a list would outrank it.
+    previewTheme = undefined
     reportMissingTheme(section)
     applyTheme(section)
     applyDisplay(section)
@@ -969,6 +1009,32 @@ export function apply(ctx: Context, config: unknown): void {
    */
   const openKeyMap = (layer: ActionLayer | undefined): void => {
     void openPicker(new KeymapPicker(() => keymap, layer), undefined, 'popup')
+  }
+
+  /**
+   * Choose a theme from a list the screen follows.
+   *
+   * Enter writes the choice through the settings document, the same path a typed
+   * name takes, so what lands is what the reader was looking at. Leaving the list
+   * restores the theme in force, because the document never changed while they
+   * looked.
+   */
+  const openThemePicker = async (): Promise<void> => {
+    const picked = await openPicker(new ThemePicker(
+      () => themeLibrary,
+      () => appliedSection?.theme,
+      () => keymap,
+      theme => showTheme(theme?.name),
+    ))
+    if (picked === undefined) {
+      showTheme(undefined)
+      return
+    }
+    // The row stays on screen until the document carries it: restoring first
+    // would flash the theme the reader just left. The write clears the preview as
+    // it lands, and a write that fails says so, leaving a theme that is still one
+    // of theirs rather than shades nothing chose.
+    chooseTheme(picked)
   }
 
   /**
@@ -2014,14 +2080,21 @@ export function apply(ctx: Context, config: unknown): void {
         return
       case 'theme': {
         const argument = submission.argument
-        // A bare command asks what the elements are; a named one asks for a
-        // theme, and is the only way to change one without leaving the session.
+        // A bare command is the list: a theme is judged by looking at it, so
+        // choosing one belongs in a list the screen follows rather than in a name
+        // the reader has to already know.
         if (argument === '') {
+          void openThemePicker()
+          return
+        }
+        const [head = '', ...rest] = argument.split(/\s+/u)
+        // The table answers the other question a theme raises — which layer drew a
+        // shade — and stays reachable by name now that the list has the command.
+        if (head === 'tokens') {
           for (const line of renderThemeTable(toOverrides(readSection(), themeLibrary), themeLibrary)) model.notice(line)
           tui.requestRender()
           return
         }
-        const [head = '', ...rest] = argument.split(/\s+/u)
         // The one way a built-in becomes editable. Its file ships inside the
         // package and the next version replaces it, so a reader who wants to
         // change one needs a copy that is theirs — and the copy is a theme the

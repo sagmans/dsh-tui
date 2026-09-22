@@ -53,7 +53,7 @@ export const LOCAL_COMMAND_DESCRIPTIONS: Readonly<Record<string, string>> = {
   '/jobs': 'list background jobs, read one, or kill one',
   '/subagents': 'list delegations; /subagents open <id|last> reads one, /subagents kill <id> stops one',
   '/todo': 'show the list of tasks the agent is keeping',
-  '/theme': 'list every styled element and the value in force; /theme <name> applies a shipped theme',
+  '/theme': 'open the theme picker, the screen previewing each row; /theme <name> applies one; /theme tokens lists the elements',
   '/keys': 'open the key map and filter it by typing; /keys <layer> narrows it',
   '/fork': 'branch this conversation and continue in the branch',
   '/new': 'start a fresh session without leaving the terminal',

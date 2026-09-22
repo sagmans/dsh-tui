@@ -106,6 +106,15 @@ export class ListPicker<Row> {
     private readonly keys: () => Keymap,
     /** A draft to open already filtered by, so a search can start where the reader is. */
     initialFilter = '',
+    /**
+     * Told which row the cursor is on whenever it moves.
+     *
+     * A list whose rows can be shown as well as taken needs the row under the
+     * cursor before it is picked — a theme is judged by looking at the screen it
+     * paints — and only the list knows where the cursor landed once a filter has
+     * reordered the rows under it.
+     */
+    private readonly onCursor?: (row: Row | undefined) => void,
   ) {
     this.filter = initialFilter
   }
@@ -136,6 +145,29 @@ export class ListPicker<Row> {
 
   /** Apply one key press; returns an action only when the picker settles. */
   handleKey(data: string): PickerAction | undefined {
+    const action = this.step(data)
+    // A press that settles the list needs no announcement: the row it settled on
+    // is the row already on screen.
+    if (action === undefined) this.announce()
+    return action
+  }
+
+  /**
+   * Say which row the cursor is on now.
+   *
+   * Announced after every press rather than on the arrows alone: typing a filter
+   * moves the cursor to the best match, and a row the filter just hid must not
+   * stay on screen as the one being shown. A filter that matches nothing reports
+   * no row, which is the one answer that is not a row.
+   */
+  private announce(): void {
+    if (this.onCursor === undefined) return
+    const rows = this.visible()
+    this.onCursor(rows[Math.min(this.cursor, Math.max(0, rows.length - 1))])
+  }
+
+  /** One key press, without the announcement every way out of it owes. */
+  private step(data: string): PickerAction | undefined {
     this.note = undefined
     const rows = this.visible()
     // A picker owns the keyboard while it is open, so the interrupt key has to

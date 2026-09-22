@@ -17,6 +17,11 @@ breaking change, and a patch carries only fixes.
   reports a themed element's origin as `theme` rather than `preset`, and its
   footer names the themes actually on disk, marking the ones in your directory,
   with the export hint.
+- `/theme` opens a list of the themes on disk instead of printing the table. The
+  list narrows as you type and the screen paints the row under the cursor, so two
+  themes are compared on the reader's own transcript; nothing is written until one
+  is taken, and leaving the list puts back the theme that was in force. The table
+  is still there, as `/theme tokens`.
 - `/keys` opens the key map as a list you filter as you type instead of
   printing every row into the transcript. `/keys <layer>` opens the same list
   already narrowed to one layer, and a layer name the surface does not have is

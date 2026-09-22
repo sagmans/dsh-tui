@@ -86,6 +86,50 @@ describe('ListPicker card window', () => {
   })
 })
 
+describe('ListPicker cursor announcements', () => {
+  const picker = (onCursor: (row: { label: string } | undefined) => void): ListPicker<{ label: string }> =>
+    new ListPicker(
+      () => [{ label: 'row 0' }, { label: 'row 1' }],
+      () => 'rows',
+      row => row.label,
+      row => ({ label: row.label, description: undefined, current: false }),
+      row => row.label,
+      { empty: () => 'nothing matches', listed: () => 'listed' },
+      defaultKeymap,
+      '',
+      onCursor,
+    )
+
+  it('announces the row under the cursor on every press, not only on the arrows', () => {
+    const seen: (string | undefined)[] = []
+    const moving = picker(row => seen.push(row?.label))
+    moving.handleKey('\u001b[B')
+    moving.handleKey('\u007f')
+    expect(seen).toEqual(['row 1', 'row 0'])
+  })
+
+  it('announces the row a filter leaves under the cursor', () => {
+    const seen: (string | undefined)[] = []
+    const moving = picker(row => seen.push(row?.label))
+    moving.handleKey('1')
+    expect(seen).toEqual(['row 1'])
+  })
+
+  it('announces no row when the filter leaves nothing to point at', () => {
+    const seen: (string | undefined)[] = []
+    const moving = picker(row => seen.push(row?.label))
+    moving.handleKey('z')
+    expect(seen).toEqual([undefined])
+  })
+
+  it('says nothing more when a press settles the list', () => {
+    const seen: (string | undefined)[] = []
+    const moving = picker(row => seen.push(row?.label))
+    expect(moving.handleKey('\r')).toEqual({ kind: 'pick', id: 'row 0' })
+    expect(seen).toEqual([])
+  })
+})
+
 describe('SessionPicker', () => {
   it('picks the highlighted session on enter', () => {
     const picker = pickerOf([session('a'), session('b')])
