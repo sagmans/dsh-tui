@@ -71,8 +71,12 @@ describe('the surface root layout', () => {
     })
     const frame = renderLayoutFrame(root, 80, 24, () => {})
     const textRow = frame.lines.findIndex(line => line.includes('abcdef'))
-    const box = getLayoutBoxesAt(frame, 1, textRow).find(candidate => candidate.component === prompt)
-    expect(box).toBeDefined()
+    const boxes = getLayoutBoxesAt(frame, 1, textRow)
+    // The deepest box is the editor itself, which is what makes the click focus
+    // the component that can take the keyboard; a wrapper box would be focused
+    // instead and every key after the click would be swallowed.
+    const box = boxes[0]
+    expect(box?.component).toBe(editor)
     // The transform the renderer applies before it calls the component.
     const event: TuiMouseEvent = {
       type: 'click',
