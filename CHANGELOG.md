@@ -6,6 +6,16 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html) with the 0.x
 caveat [RELEASE.md](RELEASE.md) states: while at 0.x, a minor bump may carry a
 breaking change, and a patch carries only fixes.
 
+## [Unreleased]
+
+### Fixed
+
+- A goal that was marked complete no longer keeps a row in the work board: the
+  harness keeps the completed snapshot as the session's last goal, so the row
+  read as a loop still running until the goal was cleared or replaced. A paused
+  or blocked goal now names its phase on the row rather than showing only its
+  round counter.
+
 ## [0.5.1] - 2026-09-23
 
 ### Fixed

@@ -135,10 +135,13 @@ export class WorkDock implements Component {
       const rounds = state.goal.maxRounds === undefined
         ? `round ${state.goal.roundsStarted}`
         : `round ${state.goal.roundsStarted}/${state.goal.maxRounds}`
+      // A stalled goal has to say so on the row: the round counter alone would
+      // let a paused or blocked objective read as a loop still making progress.
+      const phase = state.goal.phase === 'active' ? '' : `${state.goal.phase} · `
       // The row itself decides where a long objective ends, so the reader
       // always sees that something was left out.
       const objective = state.goal.objective.replace(/\s+/gu, ' ')
-      const lead = `${GOAL_MARK} goal ${rounds} · `
+      const lead = `${GOAL_MARK} goal ${phase}${rounds} · `
       lines.push(this.theme.cut(this.theme.rich(`${lead}${objective}`, { token: 'dock.goal', column: visibleWidth(lead) }), width, '…'))
     }
     if (state.planMode && this.theme.visible('dock.planMode')) {
