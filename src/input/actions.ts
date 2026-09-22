@@ -160,6 +160,9 @@ const CHORD_ACTIONS: readonly Action[] = [
   { id: 'chord.stash', layer: 'chord', defaultKeys: ['s'], label: 'stash the draft', mayUseBare: true, mayUnbind: false },
   { id: 'chord.stashes', layer: 'chord', defaultKeys: ['l'], label: 'stashed drafts', mayUseBare: true, mayUnbind: false },
   { id: 'chord.editor', layer: 'chord', defaultKeys: ['e'], label: 'external editor', mayUseBare: true, mayUnbind: false },
+  // The map is the one thing a reader needs while their hands are already on the
+  // keys, so it earns a chord rather than only a command they have to spell.
+  { id: 'chord.keys', layer: 'chord', defaultKeys: ['?'], label: 'key map', mayUseBare: true, mayUnbind: false },
 ]
 
 const GATE_ACTIONS: readonly Action[] = [

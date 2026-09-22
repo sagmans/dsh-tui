@@ -51,6 +51,41 @@ describe('ListPicker seeded filter', () => {
   })
 })
 
+describe('ListPicker card window', () => {
+  const picker = (rows: number): ListPicker<{ label: string }> =>
+    new ListPicker(
+      () => Array.from({ length: rows }, (_, index) => ({ label: `row ${index}` })),
+      () => 'rows',
+      row => row.label,
+      row => ({ label: row.label, description: undefined, current: false }),
+      row => row.label,
+      { empty: () => 'nothing matches', listed: () => 'listed' },
+      defaultKeymap,
+    )
+
+  it('draws the window its caller can afford, and counts what it left out', () => {
+    const card = picker(30).card(5)
+    expect(card.rows).toHaveLength(5)
+    expect(card.rows.filter(row => row.current)).toHaveLength(1)
+    expect(card.above + card.below).toBe(25)
+  })
+
+  it('centres the cursor in that window', () => {
+    const long = picker(30)
+    for (let index = 0; index < 10; index += 1) long.handleKey('\u001b[B')
+    const card = long.card(5)
+    expect(card.above).toBe(8)
+    expect(card.below).toBe(17)
+    expect(card.rows[2]?.current).toBe(true)
+  })
+
+  it('keeps the shipped window when its caller names none', () => {
+    expect(picker(30).card().rows).toHaveLength(PICKER_WINDOW)
+    expect(picker(3).card().rows).toHaveLength(3)
+    expect(picker(0).card().rows).toHaveLength(0)
+  })
+})
+
 describe('SessionPicker', () => {
   it('picks the highlighted session on enter', () => {
     const picker = pickerOf([session('a'), session('b')])
