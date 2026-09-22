@@ -66,7 +66,7 @@ breaking change, and a patch carries only fixes.
 ### Added
 
 - Themes are files. The package ships each one in full — `shipped`, the default
-  table written out element by element, and `violet-orbit` — and your own live in
+  table written out element by element, and `deepseek-blue` — and your own live in
   `$DSH_HOME/themes/`, which the surface creates at start-up and watches, so
   saving a file there restyles the running session without a restart. `/theme
   export <built-in>` copies a built-in into that directory as
@@ -106,7 +106,7 @@ breaking change, and a patch carries only fixes.
   rows, a question's options and the free-text row that leaves them, and the
   editor's completion menu. They are ordinary bindings, so `/keys` prints them
   and the `keys:` section moves them.
-- Themes are chosen by name. `dsh-tui: theme: violet-orbit` applies a port of
+- Themes are chosen by name. `dsh-tui: theme: deepseek-blue` applies a port of
   the pi theme of the same name: its palette, plus the elements it draws its own
   way. A theme is a layer rather than a replacement, so anything it says nothing
   about keeps its shipped appearance and a reader's own `tokens:` entry still

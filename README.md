@@ -321,7 +321,7 @@ code. Preferences live in the same user-settings document as every other
 
 ```yaml
 dsh-tui:
-  theme: violet-orbit         # restyle the whole surface by name (default: the shipped table)
+  theme: deepseek-blue        # restyle the whole surface by name (default: the shipped table)
   subcalls: collapsed         # fold the calls a PTC program dispatched (default inline)
   mermaid: streaming          # draw a reply's mermaid fences: off, final, or streaming (default streaming)
   tools:
@@ -400,15 +400,15 @@ lists it with the rest. Nothing is lost by drawing: `/export` and the session
 file keep the reply exactly as the model wrote it.
 
 A theme restyles the whole surface by name, and a theme is a file. The package
-ships two: `shipped`, the default table written out in full, and `violet-orbit`,
-a port of the pi theme of the same name — its palette, plus the elements it draws
-its own way, down to the violet band a submitted prompt sits on. Your own themes
+ships two: `shipped`, the default table written out in full, and `deepseek-blue`,
+a port of pi's `violet-orbit` — its palette, plus the elements it draws its own
+way, down to the violet band a submitted prompt sits on. Your own themes
 live in `$DSH_HOME/themes/`, which the surface creates at start-up and watches, so
 saving a file there is how you change the surface you are looking at. A bare
 `/theme` opens the list of them, narrowing as you type, and the screen paints the
 row under the cursor as it moves: two themes are compared on your own transcript,
 and nothing is written until one is taken, so leaving the list puts back the theme
-that was in force. `theme: violet-orbit` applies one from the document, `shipped`
+that was in force. `theme: deepseek-blue` applies one from the document, `shipped`
 returns to the default table, and a name nothing answers to is reported with the
 names that do, drawing the shipped table instead.
 

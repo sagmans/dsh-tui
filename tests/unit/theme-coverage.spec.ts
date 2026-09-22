@@ -77,14 +77,14 @@ describe('/theme', () => {
   })
 
   it('names the theme in force, so the reader knows what they are looking at', () => {
-    expect(renderThemeTable(toOverrides(parseSettings({ theme: 'violet-orbit' }), library), library)[0]).toContain('violet-orbit')
-    expect(renderThemeTable(toOverrides(parseSettings({}), library), library)[0]).not.toContain('violet-orbit')
+    expect(renderThemeTable(toOverrides(parseSettings({ theme: 'deepseek-blue' }), library), library)[0]).toContain('deepseek-blue')
+    expect(renderThemeTable(toOverrides(parseSettings({}), library), library)[0]).not.toContain('deepseek-blue')
   })
 
   it('reports a themed element as the theme, not as the reader', () => {
     // The whole point of the table is telling the reader which layer won, and
     // the file to edit differs: a theme row is not something they wrote.
-    const lines = renderThemeTable(toOverrides(parseSettings({ theme: 'violet-orbit' }), library), library)
+    const lines = renderThemeTable(toOverrides(parseSettings({ theme: 'deepseek-blue' }), library), library)
     const title = lines.filter(line => line.includes('tool.title'))
     expect(title).toHaveLength(1)
     expect(title[0]).toContain('#8197f7')
@@ -97,7 +97,7 @@ describe('/theme', () => {
     // the theme does not name at all is reported as the palette, which the
     // table drawn with no theme above covers.
     const lines = renderThemeTable(toOverrides(parseSettings({
-      theme: 'violet-orbit',
+      theme: 'deepseek-blue',
       tokens: { 'status.cwd': { fg: '#ff00ff' } },
     }), library), library)
     expect(lines.some(line => line.includes('transcript.reasoning.body') && line.includes('(theme)'))).toBe(true)
