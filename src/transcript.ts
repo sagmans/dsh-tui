@@ -1,4 +1,5 @@
 import { cardFromLines, carriedFields, contentLines, mergeCards, subCallOf, SUBCALL_MAX, type ToolCard, type ToolPresenter, type ToolSubCallOutput } from './cards.ts'
+import { injectionSummary } from './injection.ts'
 import { sliceGraphemes, tailGraphemes } from './text.ts'
 import { countTokens } from './tokens.ts'
 
@@ -111,22 +112,6 @@ function messageOf(value: unknown): string {
   if (typeof record.message === 'string') return record.message
   if (typeof record.code === 'string') return record.code
   return ''
-}
-
-/**
- * Summarize an injected context block.
- *
- * Injected instructions can be thousands of lines and are rewritten by the
- * model, not read by the human, so the row names the producer and its size and
- * keeps one line of preview instead of pushing the conversation off screen.
- */
-function injectionSummary(data: Record<string, unknown>, text: string): string {
-  const source = asRecord(data.source) ?? {}
-  const plugin = typeof source.plugin === 'string' ? source.plugin : 'plugin'
-  const lines = text.split('\n').filter(line => line.trim() !== '')
-  const first = lines[0]?.trim() ?? ''
-  const preview = first.length > 72 ? `${first.slice(0, 71)}…` : first
-  return `injected ${plugin} · ${lines.length} lines${preview === '' ? '' : ` — ${preview}`}`
 }
 
 /**
