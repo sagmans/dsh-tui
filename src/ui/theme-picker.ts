@@ -1,5 +1,5 @@
 import { hintKeys, moveHint, type Keymap } from '../input/actions.ts'
-import { SHIPPED_THEME, type LoadedTheme, type ThemeLibrary } from '../theme-files.ts'
+import { DEFAULT_THEME, type LoadedTheme, type ThemeLibrary } from '../theme-files.ts'
 import { ListPicker, type PickerHints, type PickerRow } from './picker.ts'
 
 /**
@@ -65,9 +65,9 @@ export class ThemePicker extends ListPicker<LoadedTheme> {
     /** The theme to show, or undefined to show the one the document names again. */
     preview: (theme: LoadedTheme | undefined) => void,
   ) {
-    // A document naming no theme is a surface drawing the shipped table, so the
+    // A document naming no theme is a surface drawing the package's own, so the
     // row the cursor starts on and the screen agree whichever way it was left.
-    const inUse = (): string => chosen() ?? SHIPPED_THEME
+    const inUse = (): string => chosen() ?? DEFAULT_THEME
     super(
       () => orderedThemes(library(), inUse()),
       () => `theme · ${library().list().length} available`,

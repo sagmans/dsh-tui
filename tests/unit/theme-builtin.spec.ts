@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { builtinNames, SHIPPED_THEME } from '@/theme-files.ts'
+import { builtinNames, DEFAULT_THEME } from '@/theme-files.ts'
 import { parseSettings, themeLayer, toOverrides } from '@/theme-settings.ts'
 import { mergeTokenSpec, PALETTE_NAMES, TUI_TOKENS, type PaletteName, type StyleSpec } from '@/theme-tokens.ts'
 import { createTheme } from '@/theme.ts'
@@ -7,6 +7,9 @@ import { builtinLibrary } from '../support/themes.ts'
 
 /** Every capability the surface can meet, so no theme is only drawn on one. */
 const MODES = ['truecolor', '256', '16', 'none'] as const
+
+/** The table under every theme, which is what the compiled defaults are. */
+const untinted = (mode: (typeof MODES)[number] = 'truecolor') => createTheme(mode)
 
 /** The theme the reader asked to be brought over, by the name it answers to. */
 const VIOLET = 'violet-orbit'
@@ -24,7 +27,13 @@ describe('the shipped themes', () => {
   it('ships a file for every name it offers', () => {
     // Sorted on both sides: which files exist is the claim, and the order a
     // library offers names in is the loader's business rather than this one's.
-    expect([...builtinNames(library)].sort()).toEqual([SHIPPED_THEME, VIOLET, BLUE].sort())
+    expect([...builtinNames(library)].sort()).toEqual([VIOLET, BLUE].sort())
+  })
+
+  it("draws the package's own theme when the document names none", () => {
+    // The surface always draws a theme, so an unnamed section is not a bare table:
+    // it is this file, which is why the file has to be in the package at all.
+    expect(toOverrides(parseSettings({}), library).theme?.name).toBe(DEFAULT_THEME)
   })
 
   it('names only elements and palette entries the surface has', () => {
@@ -100,7 +109,7 @@ describe('deepseek-blue', () => {
   it('gives a tool card the brand blue, where the shipped table gives it a warning shade', () => {
     // The label is the loudest thing on the row, and nothing about a call is wrong.
     expect(themed(BLUE).style('tool.title', 'x')).toContain('38;2;103;158;254')
-    expect(themed(SHIPPED_THEME).style('tool.title', 'x')).toContain('38;2;215;175;95')
+    expect(untinted().style('tool.title', 'x')).toContain('38;2;215;175;95')
   })
 
   it('holds the bar a reader types into in the brand, where the product puts its send button', () => {
@@ -111,7 +120,7 @@ describe('deepseek-blue', () => {
     // The product marks that turn with a background rather than a hue of its own,
     // so this is the one element the theme gives a band to.
     expect(themed(BLUE).style('transcript.user', 'x')).toContain('48;2;44;44;46')
-    expect(themed(SHIPPED_THEME).style('transcript.user', 'x')).not.toContain('48;')
+    expect(untinted().style('transcript.user', 'x')).not.toContain('48;')
   })
 })
 

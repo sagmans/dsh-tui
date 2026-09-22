@@ -12,7 +12,7 @@ breaking change, and a patch carries only fixes.
 
 - A theme name the surface does not have is no longer a settings error. The names
   are files, so a name nothing answers to is reported as a notice listing the ones
-  that do, and the shipped table is drawn meanwhile; a settings document naming a
+  that do, and the default theme is drawn meanwhile; a settings document naming a
   theme therefore loads even if the file is renamed or deleted later. `/theme`
   reports a themed element's origin as `theme` rather than `preset`, and its
   footer names the themes actually on disk, marking the ones in your directory,
@@ -65,11 +65,12 @@ breaking change, and a patch carries only fixes.
 
 ### Added
 
-- Themes are files. The package ships each one in full — `shipped`, the default
-  table written out element by element, `deepseek-blue`, that table in the blue
-  the project answers to, and `violet-orbit` — and your own live in
-  `$DSH_HOME/themes/`, which the surface creates at start-up and watches, so
-  saving a file there restyles the running session without a restart. `/theme
+- Themes are files. The package ships each one in full — `deepseek-blue`, the
+  table written out element by element in the colours the project answers to, and
+  `violet-orbit` — and your own live in `$DSH_HOME/themes/`, which the surface
+  creates at start-up and watches, so saving a file there restyles the running
+  session without a restart. `deepseek-blue` is what a section naming no theme
+  draws, so the default look is a file a reader can read, list, and copy. `/theme
   export <built-in>` copies a built-in into that directory as
   `<built-in>_export_<n>.yaml`, with one comment naming the release it came from,
   because the package's own file is replaced whenever the package updates. Every
@@ -118,11 +119,10 @@ breaking change, and a patch carries only fixes.
   way. A theme is a layer rather than a replacement, so anything it says nothing
   about keeps its shipped appearance and a reader's own `tokens:` entry still
   wins over it one field at a time. `/theme <name>` applies one to the running
-  session and writes the choice to the document, `shipped` returns to the
-  default table, and a name the surface does not ship is refused with the names
-  it does. A bare `/theme` names the theme in force in its heading and reports
-  each element as `override`, `preset`, `palette`, or `default`, so a screen
-  that looks wrong can be traced to the layer that drew it. The port keeps a
+  session and writes the choice to the document, and a name the surface does not
+  ship is refused with the names it does. `/theme tokens` names the theme in force
+  in its heading and reports each element as `override`, `theme`, `palette`, or
+  `default`, so a screen that looks wrong can be traced to the layer that drew it. The port keeps a
   prompt's frame but not the fill pi puts behind it, because a band inside a
   frame treats one fact twice and reads as a selected row; and it lifts a tool's
   argument out of pi's link blue, which sat too close to the periwinkle pi gives

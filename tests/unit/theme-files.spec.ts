@@ -2,14 +2,14 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { DEFAULT_PALETTE, DEFAULT_TOKENS, PALETTE_NAMES, TUI_TOKENS } from '@/theme-tokens.ts'
+import { PALETTE_NAMES, TUI_TOKENS } from '@/theme-tokens.ts'
 import {
   builtinThemesDir,
+  DEFAULT_THEME,
   ensureThemesHome,
   exportTheme,
   loadThemes,
   MAX_THEME_FILE_BYTES,
-  SHIPPED_THEME,
   themesHomeDir,
 } from '@/theme-files.ts'
 
@@ -37,8 +37,8 @@ tokens:
 describe('loading', () => {
   it('resolves a built-in and one of the reader\'s own by the same lookup', () => {
     const library = loadThemes(dirOf({ 'mine.yaml': THEME }), dirOf({ 'theirs.yaml': THEME }))
-    // The package's first, then the reader's, with the shipped name always there.
-    expect(library.names()).toEqual(['shipped', 'theirs', 'mine'])
+    // The package's first, then the reader's.
+    expect(library.names()).toEqual(['theirs', 'mine'])
     expect(library.get('theirs')?.builtin).toBe(true)
     expect(library.get('mine')?.builtin).toBe(false)
     expect(library.get('mine')?.tokens['tool.title']).toEqual({ fg: 'accent' })
@@ -53,13 +53,6 @@ describe('loading', () => {
 
   it('reads a .yml as well as a .yaml', () => {
     expect(loadThemes(dirOf({ 'mine.yml': THEME }), dirOf()).get('mine')?.tokens).toEqual({ 'tool.title': { fg: 'accent' } })
-  })
-
-  it('always resolves the shipped name, with or without a file behind it', () => {
-    const library = loadThemes(dirOf(), dirOf())
-    const shipped = library.get(SHIPPED_THEME)
-    expect(shipped?.tokens).toEqual({})
-    expect(shipped?.palette).toEqual({})
   })
 
   it('keeps the names it could read and reports the file it could not', () => {
@@ -134,10 +127,13 @@ describe('the built-ins the package ships', () => {
     }
   })
 
-  it('keeps shipped.yaml the code default table, value for value', () => {
-    const shipped = builtins.get(SHIPPED_THEME)
-    expect(shipped?.tokens).toEqual(DEFAULT_TOKENS)
-    expect(shipped?.palette).toEqual(DEFAULT_PALETTE)
+  it('ships the theme the surface draws until a reader names another', () => {
+    // The fallback is a name rather than the compiled table, so this file is what
+    // an unnamed document draws: losing it would leave every surface with a notice
+    // and the bare table instead of the look the package is proud of.
+    const theme = builtins.get(DEFAULT_THEME)
+    expect(theme?.builtin).toBe(true)
+    expect(theme?.path).not.toBe('')
   })
 
   it('reads them without a complaint', () => {
@@ -188,7 +184,7 @@ describe('the reader\'s directory', () => {
   it('is created when it is missing, so an export has somewhere to land', () => {
     const missing = join(dirOf(), 'themes')
     expect(ensureThemesHome(missing)).toEqual([])
-    expect(loadThemes(missing, dirOf()).names()).toEqual([SHIPPED_THEME])
+    expect(loadThemes(missing, dirOf()).names()).toEqual([])
   })
 
   it('sits under the harness home the environment names', () => {

@@ -1,4 +1,8 @@
-import { describe, expect, it } from 'vitest'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it } from 'vitest'
+import { builtinThemesDir, loadThemes } from '@/theme-files.ts'
 import { DEFAULT_PALETTE, DEFAULT_TOKENS, TUI_TOKENS, type TuiToken, resolveToken } from '@/theme-tokens.ts'
 import { createTheme } from '@/theme.ts'
 import { parseSettings, toOverrides } from '@/theme-settings.ts'
@@ -7,6 +11,20 @@ import { builtinLibrary } from '../support/themes.ts'
 
 /** The package's themes, which is what a name in a section resolves against. */
 const library = builtinLibrary()
+
+const created: string[] = []
+
+/** A scratch directory of theme files, standing in for one side of the search path. */
+function dirOf(files: Record<string, string>): string {
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-theme-coverage-'))
+  created.push(dir)
+  for (const [name, body] of Object.entries(files)) writeFileSync(join(dir, name), body)
+  return dir
+}
+
+afterEach(() => {
+  for (const dir of created.splice(0)) rmSync(dir, { recursive: true, force: true })
+})
 
 /** Every capability the surface can meet, so no token is only tested in one. */
 const MODES = ['truecolor', '256', '16', 'none'] as const
@@ -73,7 +91,21 @@ describe('/theme', () => {
       expect(lines.some(line => line.includes(token)), `${token} missing from /theme`).toBe(true)
     }
     expect(lines.some(line => line.includes('transcript.user') && line.includes('#ff0000') && line.includes('override'))).toBe(true)
-    expect(lines.some(line => line.includes('transcript.reasoning.body') && line.includes('palette'))).toBe(true)
+  })
+
+  it('tells an element a theme wrote from one only the palette reaches', () => {
+    // A theme is a layer, so an element it says nothing about keeps the compiled
+    // spec, which names a palette entry rather than a shade. The two answer
+    // differently because the file to edit differs: the theme's, or one palette
+    // line — and the package's own themes name every element, so only a theme with
+    // holes in it can still show the difference.
+    const partial = loadThemes(
+      dirOf({ 'partial.yaml': 'tokens:\n  tool.title: { fg: accent }\n' }),
+      builtinThemesDir(),
+    )
+    const lines = renderThemeTable(toOverrides(parseSettings({ theme: 'partial' }), partial), partial)
+    expect(lines.some(line => line.includes('tool.title') && line.includes('(theme)'))).toBe(true)
+    expect(lines.some(line => line.includes('transcript.reasoning.body') && line.includes('(palette)'))).toBe(true)
   })
 
   it('names the theme in force, so the reader knows what they are looking at', () => {
@@ -93,9 +125,9 @@ describe('/theme', () => {
 
   it('tells the reader which of the two files a row came from', () => {
     // A complete theme names every element, so the origin column is what says
-    // which file to open: the theme's copy, or the line the reader wrote. What
-    // the theme does not name at all is reported as the palette, which the
-    // table drawn with no theme above covers.
+    // which file to open: the theme's copy, or the line the reader wrote. An
+    // element no theme names at all is reported as the palette, which the theme
+    // with holes above covers.
     const lines = renderThemeTable(toOverrides(parseSettings({
       theme: 'violet-orbit',
       tokens: { 'status.cwd': { fg: '#ff00ff' } },

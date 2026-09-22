@@ -1,4 +1,4 @@
-import { SHIPPED_THEME, type ThemeLibrary } from './theme-files.ts'
+import type { ThemeLibrary } from './theme-files.ts'
 import { themeLayer, type ThemeOverrides } from './theme-settings.ts'
 import {
   mergeTokenSpec,
@@ -68,9 +68,9 @@ export function renderThemeTable(overrides: ThemeOverrides, library: ThemeLibrar
   const themed = themeLayer(overrides)
   const chosen = overrides.theme
   // The name is in the heading rather than the footer because a reader who opened
-  // this to find out why a shade moved needs it before the table; the shipped
-  // name is the absence of a choice rather than a choice worth reporting.
-  const heading = chosen === undefined || chosen.name === SHIPPED_THEME ? 'theme' : `theme · ${chosen.name}`
+  // this to find out why a shade moved needs it before the table; it is missing
+  // only when nothing answered to the name the document carries.
+  const heading = chosen === undefined ? 'theme' : `theme · ${chosen.name}`
   const lines = [`${heading} · ${TUI_TOKENS.length} elements`, '']
   let group = ''
   for (const token of TUI_TOKENS) {

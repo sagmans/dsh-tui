@@ -13,7 +13,7 @@ import {
   type ToolOutputDisplay,
   type WrittenToolDisplay,
 } from './tool-display.ts'
-import { SHIPPED_THEME, type LoadedTheme, type ThemeLibrary } from './theme-files.ts'
+import { DEFAULT_THEME, type LoadedTheme, type ThemeLibrary } from './theme-files.ts'
 import {
   asRecord,
   PALETTE_NAME_SET,
@@ -62,12 +62,15 @@ const HistorySchema = z.object({
 })
 
 const SECTION = z.object({
-  // No default, for the same reason `prefix` has none: a fill-in would report
-  // the shipped table as a theme the reader chose. A free string rather than an
-  // enumerated union, also for the same reason as `prefix`: the names are files
-  // the reader owns, and one appears the moment they save it — which no schema
-  // compiled into this build can enumerate. A name nothing answers to is refused
-  // where the names that do answer can actually be listed.
+  // No default even though the surface draws one, for the same reason `prefix`
+  // has none: a registration fills every declared field, and a fill-in here would
+  // hand back a choice the reader never made, which the next save would then write
+  // into their document as if they had. Which theme answers an unnamed section is
+  // the library's question, asked where the name is looked up. A free string
+  // rather than an enumerated union, also for the same reason as `prefix`: the
+  // names are files the reader owns, and one appears the moment they save it —
+  // which no schema compiled into this build can enumerate. A name nothing answers
+  // to is refused where the names that do answer can actually be listed.
   theme: z.string(),
   palette: PaletteSchema.default({}),
   tokens: TokensSchema.default({}),
@@ -273,7 +276,7 @@ export interface HistorySettings {
 
 /** What the section holds once parsed: only what the reader wrote. */
 export interface TuiSettings {
-  /** The theme the reader named, or nothing for the table as it ships. */
+  /** The theme the reader named, or nothing to draw the package's own. */
   readonly theme: string | undefined
   readonly palette: Readonly<Partial<Record<PaletteName, string>>>
   readonly tokens: Readonly<Partial<Record<TuiToken, StyleSpec>>>
@@ -325,15 +328,14 @@ export interface ThemeOverrides {
 }
 
 /**
- * The layer the chosen theme contributes, or nothing when there is none.
+ * The layer the theme in force contributes, or nothing when no file answered.
  *
- * The shipped name is the baseline rather than a layer over it: its file is the
- * table every other theme is written against, so naming it has to leave both the
- * surface and what `/theme` says about a shade's origin exactly as they were.
+ * The table every theme is written against is the compiled one, so a theme is
+ * always a layer over it and never a replacement: an element no theme names keeps
+ * the shade the surface ships with.
  */
 export function themeLayer(overrides: ThemeOverrides): ThemedSpecs | undefined {
-  const theme = overrides.theme
-  return theme === undefined || theme.name === SHIPPED_THEME ? undefined : theme.tokens
+  return overrides.theme?.tokens
 }
 
 /**
@@ -405,11 +407,14 @@ function salvageHistory(raw: unknown): HistorySettings {
  * the normal case rather than something the resolver has to guard against.
  *
  * The name is looked up rather than trusted: a reader can rename or rewrite the
- * file behind it between two reads, and a theme that is gone leaves the table as
- * it ships rather than leaving the surface with nothing to draw.
+ * file behind it between two reads, and a theme that is gone leaves the package's
+ * own in force rather than leaving the surface with nothing to draw.
  */
 export function toOverrides(settings: TuiSettings, library: ThemeLibrary): ThemeOverrides {
-  const theme = library.get(settings.theme)
+  // An unnamed section and an unknown name land on the same answer: the theme the
+  // package draws by default. The unknown name is reported beside this read, so
+  // the reader hears which name stopped answering rather than guessing from shades.
+  const theme = library.get(settings.theme) ?? library.get(DEFAULT_THEME)
   const tokens = new Map<TuiToken, StyleSpec>()
   for (const [token, spec] of Object.entries(settings.tokens)) {
     if (spec !== undefined) tokens.set(token as TuiToken, spec)

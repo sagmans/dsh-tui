@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { defaultKeymap } from '@/input/actions.ts'
-import { loadThemes, type LoadedTheme, type ThemeLibrary } from '@/theme-files.ts'
+import { DEFAULT_THEME, loadThemes, type LoadedTheme, type ThemeLibrary } from '@/theme-files.ts'
 import { ThemePicker } from '@/ui/theme-picker.ts'
 
 const created: string[] = []
@@ -40,10 +40,18 @@ const picker = (
   preview: (theme: LoadedTheme | undefined) => void = () => {},
 ): ThemePicker => new ThemePicker(() => library, () => chosen, defaultKeymap, preview)
 
-/** Two built-ins and one of the reader's own: enough to order and to label a list. */
+/**
+ * Three built-ins and one of the reader's own: enough to order a list and to label
+ * its rows. The package's default is among them, because a document naming no
+ * theme is drawn with it and the list is where that shows.
+ */
 const library = (): ThemeLibrary => libraryOf(
   { 'mine.yaml': bodyOf('tool.title') },
-  { 'one.yaml': bodyOf('tool.title', 'tool.args'), 'two.yaml': bodyOf('tool.title') },
+  {
+    'one.yaml': bodyOf('tool.title', 'tool.args'),
+    'two.yaml': bodyOf('tool.title'),
+    [`${DEFAULT_THEME}.yaml`]: bodyOf('tool.title'),
+  },
 )
 
 describe('ThemePicker rows', () => {
@@ -58,14 +66,14 @@ describe('ThemePicker rows', () => {
     const labels = card.rows.map(row => row.label)
     // The order the rest keep is the loader's, which this list does not own.
     expect(labels[0]).toBe('mine')
-    expect([...labels].sort()).toEqual(['mine', 'one', 'shipped', 'two'])
+    expect([...labels].sort()).toEqual([DEFAULT_THEME, 'mine', 'one', 'two'].sort())
     expect(card.rows[0]?.description).toContain('in use')
     expect(card.rows.filter(row => row.description?.includes('in use'))).toHaveLength(1)
   })
 
-  it('reads a document that names no theme as the shipped table being in use', () => {
+  it("reads a document that names no theme as the package's own being in use", () => {
     const card = picker(library(), undefined).card()
-    expect(card.rows[0]?.label).toBe('shipped')
+    expect(card.rows[0]?.label).toBe(DEFAULT_THEME)
     expect(card.rows[0]?.description).toContain('in use')
   })
 
@@ -84,7 +92,7 @@ describe('ThemePicker preview', () => {
     const moving = picker(library(), undefined, theme => seen.push(theme?.name))
     moving.handleKey('\u001b[B')
     moving.handleKey('\u007f')
-    expect(seen).toEqual(['one', 'shipped'])
+    expect(seen).toEqual(['one', DEFAULT_THEME])
   })
 
   it('narrows to the name being typed and previews what is left', () => {

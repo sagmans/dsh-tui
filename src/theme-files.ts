@@ -30,13 +30,13 @@ import type { PaletteName, StyleSpec, ThemedSpecs } from './theme-tokens.ts'
 export const THEMES_DIR_NAME = 'themes'
 
 /**
- * The name that always answers, and means "the table the surface ships".
+ * The theme the surface draws until the reader names another.
  *
- * An entry rather than the absence of one, because a theme chosen at runtime has
- * to be un-choosable the same way: the settings seam merges a patch, and only a
- * value can travel through one.
+ * A name rather than the table underneath, because the default look should be one
+ * a reader can read, list, and copy: the package's own theme takes its place in
+ * the list beside every other, so no default hides behind an absence.
  */
-export const SHIPPED_THEME = 'shipped'
+export const DEFAULT_THEME = 'deepseek-blue'
 
 /** The extensions a theme file may carry, best first. */
 const THEME_EXTENSIONS = ['.yaml', '.yml'] as const
@@ -62,7 +62,7 @@ const WATCH_DEBOUNCE_MS = 150
 export interface LoadedTheme {
   /** The name it answers to, which is the file's stem. */
   readonly name: string
-  /** The file it was read from; empty for the shipped name with no file behind it. */
+  /** The file it was read from. */
   readonly path: string
   /** Whether the package ships it, which is what a reader may not edit. */
   readonly builtin: boolean
@@ -220,13 +220,6 @@ export function loadThemes(homeDir: string, builtinDir: string): ThemeLibrary {
     }
     const theme = readThemeFile(file, false, problems)
     if (theme !== undefined) themes.set(theme.name, theme)
-  }
-  const shipped = themes.get(SHIPPED_THEME)
-  if (shipped === undefined) {
-    // The name always answers, so a reader who chose it is never left with nothing
-    // to draw: a missing or unreadable file leaves the code defaults, which are
-    // the same table whenever `shipped.yaml` is intact.
-    themes.set(SHIPPED_THEME, { name: SHIPPED_THEME, path: '', builtin: true, palette: {}, tokens: {} })
   }
   const list = [...themes.values()].sort((left, right) =>
     (left.builtin === right.builtin ? 0 : left.builtin ? -1 : 1) || left.name.localeCompare(right.name))

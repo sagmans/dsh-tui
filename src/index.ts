@@ -68,7 +68,7 @@ import { defaultSettings, readScope, settingsProblemMessage, toOverrides, TUI_SE
 import { toolDisplayFor, type ToolDisplayTable } from './tool-display.ts'
 import { pendingPrompts } from './queue.ts'
 import { renderThemeTable } from './theme-command.ts'
-import { builtinNames, builtinThemesDir, ensureThemesHome, exportTheme, loadThemes, themesHomeDir, watchThemes } from './theme-files.ts'
+import { DEFAULT_THEME, builtinNames, builtinThemesDir, ensureThemesHome, exportTheme, loadThemes, themesHomeDir, watchThemes } from './theme-files.ts'
 import { KEYMAP_LAYERS, keymapLayer } from './keys-command.ts'
 import { resetSequence } from './theme-tokens.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
@@ -370,15 +370,15 @@ export function apply(ctx: Context, config: unknown): void {
    *
    * The schema cannot refuse the name: a theme is a file, so the set of names is
    * known to the directory rather than to this build, and one can stop answering
-   * between two reads. Falling back to the shipped table without a word would
-   * leave the reader looking at shades they did not choose, so the refusal lands
-   * here instead — beside the read that found it, and alongside the rest of the
+   * between two reads. Falling back to the default without a word would leave the
+   * reader looking at shades they did not choose, so the refusal lands here
+   * instead — beside the read that found it, and alongside the rest of the
    * section, which is still theirs.
    */
   const reportMissingTheme = (section: TuiSettings): void => {
     const name = section.theme
     if (name === undefined || themeLibrary.get(name) !== undefined) return
-    settingsNotice.post(`dsh-tui theme "${name}" is not a theme · themes: ${themeLibrary.names().join(' · ')} · the table as it ships is drawn instead`)
+    settingsNotice.post(`dsh-tui theme "${name}" is not a theme · themes: ${themeLibrary.names().join(' · ')} · the default, ${DEFAULT_THEME}, is drawn instead`)
   }
   /**
    * Own the section, so the harness validates and persists it for the reader.

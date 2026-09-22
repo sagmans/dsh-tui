@@ -321,7 +321,7 @@ code. Preferences live in the same user-settings document as every other
 
 ```yaml
 dsh-tui:
-  theme: violet-orbit         # restyle the whole surface by name (default: the shipped table)
+  theme: violet-orbit         # restyle the whole surface by name (default: deepseek-blue)
   subcalls: collapsed         # fold the calls a PTC program dispatched (default inline)
   mermaid: streaming          # draw a reply's mermaid fences: off, final, or streaming (default streaming)
   tools:
@@ -400,26 +400,25 @@ lists it with the rest. Nothing is lost by drawing: `/export` and the session
 file keep the reply exactly as the model wrote it.
 
 A theme restyles the whole surface by name, and a theme is a file. The package
-ships three: `shipped`, the default table written out in full; `deepseek-blue`,
-that same table in the blue the project answers to; and `violet-orbit`, a port of
-pi's theme of that name — its palette, plus the elements it draws its own way,
-down to the violet band a submitted prompt sits on. Your own themes live in
+ships two: `deepseek-blue`, the table written out in full in the colours the
+project answers to, and `violet-orbit`, a port of pi's theme of that name — its
+palette, plus the elements it draws its own way. `deepseek-blue` is also what a
+document naming no theme draws, so the default look is a file you can read, list,
+and copy rather than a table compiled in. Your own themes live in
 `$DSH_HOME/themes/`, which the surface creates at start-up and watches, so saving
-a file there is how you change the surface you are looking at. A bare
-`/theme` opens the list of them, narrowing as you type, and the screen paints the
-row under the cursor as it moves: two themes are compared on your own transcript,
-and nothing is written until one is taken, so leaving the list puts back the theme
-that was in force. `theme: violet-orbit` applies one from the document, `shipped`
-returns to the default table, and a name nothing answers to is reported with the
-names that do, drawing the shipped table instead.
+a file there is how you change the surface you are looking at. A bare `/theme`
+opens the list of them, narrowing as you type, and the screen paints the row under
+the cursor as it moves: two themes are compared on your own transcript, and nothing
+is written until one is taken, so leaving the list puts back the theme that was in
+force. `theme: violet-orbit` applies one from the document, and a name nothing
+answers to is reported with the names that do, drawing the default while you fix it.
 
-Every shipped file names every element and every palette entry, so a copy of one is
-a complete theme rather than a diff against something you cannot see;
-`deepseek-blue` is the one to copy to move a single shade: it is the shipped
-table over ten palette entries taken from DeepSeek's own design tokens, each line
-naming the token it came from, and every element follows them.
-`/theme
-export <built-in>` writes that copy into your own directory as
+Both files name every element and every palette entry, so a copy of one is a
+complete theme rather than a diff against something you cannot see.
+`deepseek-blue` is the one to copy to move a single shade, because every element
+follows one of its ten palette entries, each taken from DeepSeek's own design
+tokens with the token named beside it — and the accent is one line.
+`/theme export <built-in>` writes that copy into your own directory as
 `<built-in>_export_<n>.yaml`, adding one comment naming the release it came from:
 the package's own file is replaced whenever the package updates, so the copy is the
 only one worth editing. A file whose name is a built-in's is ignored, and reported
