@@ -469,6 +469,28 @@ describe('TranscriptView picker', () => {
     expect(lines.some(line => line.includes('enter open'))).toBe(true)
   })
 
+  it('folds the picker keys under a narrow screen instead of cutting the way out off', () => {
+    const picker: PickerCard = {
+      title: 'resume a session · 2 stored',
+      note: undefined,
+      rows: [{ label: 'fix the parser', description: '/work · 3m ago', current: true }],
+      filter: '',
+      hint: '↑/ctrl+p or ↓/ctrl+n move · enter open · esc/ctrl+c cancel · type to filter',
+      above: 0,
+      below: 0,
+    }
+    const view = new TranscriptView(new TranscriptModel(), theme, new MarkdownRenderer(theme.markdown), {
+      picker: () => picker,
+    })
+    const lines = view.render(40)
+    // The hint is how a reader learns to leave the list, so a narrow screen
+    // folds it rather than dropping the keys a press still answers.
+    const hint = lines.join(' ').replace(/\s+/gu, ' ')
+    expect(hint).toContain('esc/ctrl+c cancel')
+    expect(hint).toContain('type to filter')
+    for (const line of lines) expect(visibleWidth(line)).toBeLessThanOrEqual(40)
+  })
+
   it('wraps the reason a pick was refused under the heading', () => {
     const picker: PickerCard = {
       title: 'resume a session · 1 stored',
