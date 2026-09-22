@@ -317,6 +317,10 @@ code. Preferences live in the same user-settings document as every other
 dsh-tui:
   subcalls: collapsed         # fold the calls a PTC program dispatched (default inline)
   mermaid: streaming          # draw a reply's mermaid fences: off, final, or streaming (default streaming)
+  tools:
+    default: { collapsed: true, maxArgument: 100, output: hidden }  # how every tool's card starts
+    bash: { output: tail, tail: 5 }   # keep the last five output rows behind bash's fold
+    read: { collapsed: false }        # start reads open
   prefixWindow: 2             # seconds a chord waits for its second key; 0 waits for the next key instead
   keys:
     chord.prefix: ctrl+x      # the key that starts a chord; "prefix:" is the older spelling of this row
@@ -351,6 +355,15 @@ program dispatched under their card, and `subcalls: collapsed` starts with the
 card alone instead. `Ctrl+Y` toggles the same choice for the current session,
 and an edit to the document re-seeds it. An unknown key or value is
 refused with a notice naming it, so a typo cannot quietly do nothing.
+
+The `tools` block decides how each tool's cards draw. `collapsed` starts a
+tool folded to one header row (default `true`), `maxArgument` is how many
+characters that row keeps of the argument before clipping it (default `100`),
+and `output` is `hidden` (default) or `tail`, where `tail` is how many output
+rows a folded card keeps (default `20`). The reserved `default` row applies to
+every tool without its own, and a tool name nothing declares is inert: the
+surface cannot know which tools a profile mounts. Clicking a card opens or folds
+that one message, and `Ctrl+O` still decides for every message nobody clicked.
 
 The `history` block tunes the prompt history. `enabled: false` stops recording
 and offering it; `ghost: false` keeps reverse search but stops the dimmed
@@ -476,9 +489,9 @@ A question whose id ends in `:secret` declares its typed answer a credential: th
 
 The fold is durable-only: the live stream decorates the row that is still being written, and everything else — cards, reasoning, work state, compaction markers — comes from the log, so a resumed session renders what the live one did. Subagent start and finish are the exception: they arrive as service events, and the transcript shows them as decoration because the durable record of a delegation is the tool call that asked for it.
 
-Tool cards are folded by default: a card draws its header and nothing else, so a long read, diff, or search cannot bury the conversation. A shell card is the exception, because its output is the answer the reader asked for: it names the tool in its header, always shows the command that ran, keeps the last 20 output rows, and adds a hint naming the rows it dropped. `Ctrl+O` opens every card to its header plus every retained row.
+Tool cards are folded by default: a card draws one header row — the tool, its argument clipped to the configured budget, and the facts the result measured — so a long read, diff, or search cannot bury the conversation. A shell card's row also carries the exit status and the count of output rows waiting behind the fold, because its output is the answer the reader asked for and a fold that left no trace of it would read as a call that produced nothing. Clicking a card opens or folds that one message; `Ctrl+O` opens or folds every card at once, and `tools:` in the [settings](#settings) decides how each tool starts and whether a fold hides its rows or keeps a `tail` of them.
 
-A PTC card is the one card with children: every call the `run_code` program dispatched hangs off the card that made it, and each draws under the header as the tool's own name and argument, wrapping rather than being cut. `Ctrl+Y` folds them away again, and `subcalls: collapsed` starts every session folded; see [Settings](#settings).
+A PTC card is the one card with children: every call the `run_code` program dispatched hangs off the card that made it, and each draws under the header as the tool's own name and argument, wrapping rather than being cut. The children follow the card's fold, so a folded `run_code` still costs one row; `Ctrl+Y` hides them on an opened card, and `subcalls: collapsed` starts every session with them hidden; see [Settings](#settings).
 
 A card's header names the tool, then the argument the call was made with — a path or a command — in the `tool.args` colour, then the facts the result measured: a read reports its line range, line count, and token size; a file change that carried no prior content to compare against reports its lines and tokens; one that did reports added, changed, and removed lines as `+n ~n -n` in green, yellow, and red. Each stat is its own token, so any of them can be recoloured or hidden independently.
 
@@ -568,10 +581,15 @@ The automated checks drive a real PTY, but they run on this machine's terminal. 
 | `NO_COLOR=1 dsh --profile tui` | no styling anywhere, layout unchanged |
 | `dsh --profile tui --no-bell` | a turn that runs for minutes still ends silently |
 | `dsh --profile tui --preset ptc`, then a turn | the status line names `ptc`, and the agent reaches its tools through one TypeScript program rather than one shell call at a time |
-| a PTC turn | one entry per dispatched call draws two spaces indented under the `run_code` header, from the first frame and with no keypress |
-| that turn in a terminal narrower than a call's own argument | the argument wraps onto continuation rows indented to the same two spaces, with no ellipsis |
-| that same turn, then `ctrl+y` | the lines fold away; `ctrl+y` again draws them back |
+| a PTC turn | click the `run_code` card (or press `ctrl+o`): one entry per dispatched call draws two spaces indented under the header |
+| that turn in a terminal narrower than a call's own argument | with the card open, the argument wraps onto continuation rows indented to the same two spaces, with no ellipsis |
+| that same turn, then `ctrl+y` | with the card open, the lines fold away; `ctrl+y` again draws them back |
 | `dsh-tui: { subcalls: collapsed }` in `$DSH_HOME/settings.yaml`, then a PTC turn | the card arrives alone, and editing the document to `inline` unfolds a running session |
+| a bash card, then a click on it | the row opens to its command, its retained output, and its exit status; a click folds it back to one row |
+| `dsh-tui: { tools: { bash: { output: tail, tail: 5 } } }`, then a bash run | the folded row keeps the last five output rows and counts the rest |
+| `dsh-tui: { tools: { read: { collapsed: false, maxArgument: 40 } } }`, then a read | the card starts open, and folding it clips the path to 40 characters |
+| `dsh-tui: { tools: { nope: { collapsed: false } } }` | accepted and inert, because the surface cannot know which tools a profile mounts |
+| `dsh-tui: { tools: { bash: { collapse: true } } }` | refused with a notice naming `bash.collapse` |
 | a reply carrying a mermaid fence | it draws as box art at the transcript width, with the prose around it untouched |
 | that reply in a terminal narrower than the drawing | the fence stays source, and widening the window draws it without a new turn |
 | `dsh-tui: { mermaid: off }` in `$DSH_HOME/settings.yaml`, then a mermaid reply | the fence stays source; editing the value to `streaming` draws a settled reply without a restart |

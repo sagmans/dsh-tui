@@ -22,9 +22,19 @@ breaking change, and a patch carries only fixes.
 - A question gate gained an abandon key: Ctrl+C settles the batch with no
   answers, the shape an aborted call already produces, while Esc keeps skipping
   one question. An approval now cancels on Ctrl+C as well as Esc.
+- A folded tool card is one row for every tool, bash included: the row carries
+  the tool, its command clipped to the configured budget, the exit status, and
+  the count of output rows waiting behind the fold, instead of spending twenty
+  rows on shell output by default. `output: tail` restores a preview window per
+  tool, and a PTC card's dispatched calls now wait for the card to be opened.
 
 ### Added
 
+- Tool cards fold one message at a time: a click on a card opens or folds that
+  row alone, and a `dsh-tui: tools:` block decides how each tool starts — how
+  many argument characters a folded header keeps, and whether a fold hides its
+  rows or keeps a `tail` of them. Ctrl+O still opens or folds every card at
+  once, and a message the reader clicked keeps the state the click gave it.
 - The bar's draft opens in the reader's own editor: `ctrl+x` then `e` hands the
   terminal to `$VISUAL` (or `$EDITOR`) with the draft in an owner-only scratch
   file, waits for the child, repaints, and takes back what was saved through one
