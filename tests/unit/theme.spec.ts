@@ -41,9 +41,11 @@ describe('createTheme', () => {
 
   it('paints muted elements an explicit grey, not a palette slot', () => {
     const theme = createTheme('truecolor')
-    expect(theme.style('transcript.reasoning.body', 'x')).toBe('\u001B[38;2;138;138;138mx\u001B[0m')
-    // The signpost is italic and one step darker, so the thought stays louder.
-    expect(theme.style('transcript.reasoning.summary', 'x')).toBe('\u001B[3;38;2;117;117;117mx\u001B[0m')
+    expect(theme.style('tool.detail', 'x')).toBe('\u001B[38;2;138;138;138mx\u001B[0m')
+    // A thought and its signpost share the shade below muted; only the signpost
+    // takes the slant.
+    expect(theme.style('transcript.reasoning.body', 'x')).toBe('\u001B[38;2;102;102;102mx\u001B[0m')
+    expect(theme.style('transcript.reasoning.summary', 'x')).toBe('\u001B[3;38;2;102;102;102mx\u001B[0m')
     expect(theme.style('tool.detail', 'x')).toContain('38;2;')
   })
 

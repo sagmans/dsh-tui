@@ -334,7 +334,7 @@ dsh-tui:
   palette:
     muted: '#5c5c5c'          # one shade quiets every receding element
   tokens:
-    transcript.reasoning.body:
+    transcript.notice:
       fg: '#7a7a7a'
       italic: true
     tool.title:
@@ -394,8 +394,9 @@ the nearest 256-colour entry or 16-colour slot otherwise; a hue keeps its family
 there, so an addition stays green instead of collapsing to black. Muted elements
 name the palette rather than a terminal slot, so on anything but a 16-colour
 terminal their contrast does not depend on what the reader's colour scheme maps
-slot 8 to. `faint` is the shade below `muted`: the row naming a thought takes it,
-italic, so a signpost does not compete with the thought it introduces. `arg` is the pale blue a card gives the argument it was called with,
+slot 8 to. `faint` is the shade below `muted`: a thought and the row naming it both take
+it, and only the row is italic, so the signpost does not compete with the text
+it introduces. `arg` is the pale blue a card gives the argument it was called with,
 so `tool.args` is restyled on its own and stays distinct from the tool's own
 label and from its output. `user` is the mint a submitted prompt takes, so a
 reader's own turns stand apart from the reply without reading either.

@@ -28,7 +28,7 @@ export const MUTED_GREY = '#8a8a8a'
  * The row naming a thought is a signpost, not the thought: it sits below the
  * muted family so the body it introduces stays the thing being read.
  */
-export const FAINT_GREY = '#757575'
+export const FAINT_GREY = '#666666'
 
 /**
  * The shade a tool's argument takes.
@@ -276,9 +276,18 @@ const muted: StyleSpec = { fg: 'muted' }
  * The reasoning row recedes past the muted family, hence its own entry.
  *
  * Italic is what separates the signpost from the thought it introduces; the
- * darker grey is what keeps the thought the brightest thing on the row.
+ * darker grey is what makes the thought itself the brightest thing there.
  */
-const faint: StyleSpec = { fg: 'faint', italic: true }
+const signpost: StyleSpec = { fg: 'faint', italic: true }
+
+/**
+ * A thought shares the signpost's shade but not its slant.
+ *
+ * The body is read rather than scanned, so it keeps an upright face while the
+ * row naming it stays italic; one shade for both is what makes a thought read
+ * as one element instead of two colours arguing.
+ */
+const thought: StyleSpec = { fg: 'faint' }
 const plain: StyleSpec = {}
 
 /**
@@ -292,9 +301,9 @@ export const DEFAULT_TOKENS: Readonly<Record<TuiToken, StyleSpec>> = {
   'transcript.user': { fg: 'user' },
   'transcript.notice': muted,
   'transcript.marker': muted,
-  'transcript.reasoning.summary': faint,
-  'transcript.reasoning.body': muted,
-  'transcript.reasoning.hint': faint,
+  'transcript.reasoning.summary': signpost,
+  'transcript.reasoning.body': thought,
+  'transcript.reasoning.hint': signpost,
 
   'tool.title': { fg: 'warn' },
   'tool.glyph': { fg: 'warn' },

@@ -174,15 +174,15 @@ describe('TranscriptView text', () => {
     expect(folded).toEqual(expect.arrayContaining([expect.stringContaining('reasoning · 7 tokens')]))
     // The signpost is its own faint shade, italic, not the muted grey the body
     // takes: the row names the thought, it is not the thought.
-    expect(folded[0]).toContain('\u001b[3;38;2;117;117;117m')
+    expect(folded[0]).toContain('\u001b[3;38;2;102;102;102m')
     expect(folded[0]).not.toContain('\u001b[38;2;138;138;138m')
     expect(folded.some(line => line.includes('second thought'))).toBe(false)
 
     const opened = new TranscriptView(model, colour, markdown, { state: () => ({ expandCards: false, expandReasoning: true, expandSubCalls: false }) }).render(60)
     expect(opened).toHaveLength(4)
-    expect(opened[0]).toContain('\u001b[3;38;2;117;117;117m')
-    // The explicit grey, not a palette slot: this is the whole point.
-    for (const line of opened.slice(1, 3)) expect(line).toContain('\u001b[38;2;138;138;138m')
+    expect(opened[0]).toContain('\u001b[3;38;2;102;102;102m')
+    // The thought shares the signpost's faint shade, not the muted family's.
+    for (const line of opened.slice(1, 3)) expect(line).toContain('\u001b[38;2;102;102;102m')
     expect(opened[3]).toBe('the answer')
   })
 
@@ -204,9 +204,9 @@ describe('TranscriptView text', () => {
     // answer's accent must not leak into a row meant to stay recessive. A blank
     // row holds no text and so has no shade to check, and the signpost row above
     // the body carries its own fainter one.
-    expect(opened[0]).toContain('\u001b[3;38;2;117;117;117m')
+    expect(opened[0]).toContain('\u001b[3;38;2;102;102;102m')
     for (const line of opened.slice(1, -1).filter(line => line !== '')) {
-      expect(line).toContain('\u001b[38;2;138;138;138m')
+      expect(line).toContain('\u001b[38;2;102;102;102m')
     }
     expect(opened.at(-1)).toBe('the answer')
   })
