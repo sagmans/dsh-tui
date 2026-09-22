@@ -86,25 +86,32 @@ describe('the shipped themes', () => {
 
 describe('deepseek-blue', () => {
   it('draws the surface in the brand blue rather than the shipped cyan', () => {
-    expect(themed(BLUE).style('markdown.heading', 'x')).toContain('38;2;109;134;255')
+    expect(themed(BLUE).style('markdown.heading', 'x')).toContain('38;2;103;158;254')
   })
 
   it('leaves the semantic shades in the hues a reader already reads them in', () => {
     // A theme that repainted these would make every reader learn them again on
     // the one screen where reading them wrong costs the most.
     expect(themed(BLUE).style('tool.diff.added', 'x')).toContain('38;2;34;197;94')
-    expect(themed(BLUE).style('tool.diff.removed', 'x')).toContain('38;2;239;68;68')
-    expect(themed(BLUE).style('markdown.diagram.warning', 'x')).toContain('38;2;251;191;36')
+    expect(themed(BLUE).style('tool.diff.removed', 'x')).toContain('38;2;242;90;90')
+    expect(themed(BLUE).style('markdown.diagram.warning', 'x')).toContain('38;2;245;158;11')
   })
 
   it('gives a tool card the brand blue, where the shipped table gives it a warning shade', () => {
     // The label is the loudest thing on the row, and nothing about a call is wrong.
-    expect(themed(BLUE).style('tool.title', 'x')).toContain('38;2;109;134;255')
+    expect(themed(BLUE).style('tool.title', 'x')).toContain('38;2;103;158;254')
     expect(themed(SHIPPED_THEME).style('tool.title', 'x')).toContain('38;2;215;175;95')
   })
 
-  it('holds the bar a reader types into in the pale blue rather than one more grey', () => {
-    expect(themed(BLUE).style('editor.border', 'x')).toContain('38;2;169;188;255')
+  it('holds the bar a reader types into in the brand, where the product puts its send button', () => {
+    expect(themed(BLUE).style('editor.border', 'x')).toContain('38;2;103;158;254')
+  })
+
+  it("sits the reader's own turn on the product's bubble fill", () => {
+    // The product marks that turn with a background rather than a hue of its own,
+    // so this is the one element the theme gives a band to.
+    expect(themed(BLUE).style('transcript.user', 'x')).toContain('48;2;44;44;46')
+    expect(themed(SHIPPED_THEME).style('transcript.user', 'x')).not.toContain('48;')
   })
 })
 

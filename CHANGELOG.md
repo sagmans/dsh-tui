@@ -72,14 +72,16 @@ breaking change, and a patch carries only fixes.
   saving a file there restyles the running session without a restart. `/theme
   export <built-in>` copies a built-in into that directory as
   `<built-in>_export_<n>.yaml`, with one comment naming the release it came from,
-  because the package's own file is replaced whenever the package updates. Both
-  shipped files name every element and palette entry, so a copy is a complete
+  because the package's own file is replaced whenever the package updates. Every
+  shipped file names every element and palette entry, so a copy is a complete
   theme rather than a diff against something invisible. A file whose name is a
   built-in's is ignored, and reported at start-up with the rename that fixes it.
-  Every shipped file names every element and palette entry, and `deepseek-blue`
-  names only palette entries, so moving the brand hue is one line rather than a
-  table: it also gives a tool card's label the brand instead of the amber the
-  shipped table draws a warning in, and holds the prompt bar in pale blue.
+  `deepseek-blue` takes every shade from the product's own design tokens, at the
+  steps its dark theme names, and writes the token beside each value, so the
+  surface can be re-derived rather than guessed at; the accent is the step the
+  product keeps for the brand as text. It names only palette entries, so the brand
+  moves in one line, and it marks a reader's own turn with the product's bubble
+  fill rather than a hue of its own.
 - `Ctrl+X` then `?` opens the key map as a searchable list: one row per action
   with the keys in force, one row for every key the map took from the library,
   and a filter reaching the action id, the layer, a key, or what the row does.

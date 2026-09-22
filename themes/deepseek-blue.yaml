@@ -1,43 +1,59 @@
-# deepseek-blue — the table the surface ships, in DeepSeek's blue.
+# deepseek-blue — the table the surface ships, in the colours DeepSeek draws.
+#
+# Every shade here is a step of the product's own design system rather than a
+# colour picked for this file, and each palette line names the token it came
+# from, so the surface can be re-derived from the product instead of guessed at.
+# The steps are the product's dark-theme ones, because a terminal is dark:
+#
+#   default, assistant   label-primary     neutral-bluish-50   #f9fafb
+#   muted                label-secondary   neutral-bluish-300  #cfd3d6
+#   faint                label-tertiary    neutral-bluish-400  #adb2b8
+#   accent               brand-text        deepseek-400        #679efe
+#   arg                  —                 deepseek-300        #b7c8fe
+#   warn                 state-warn        amber-500           #f59e0b
+#   added                state-success     green-500           #22c55e
+#   removed              state-error       red-400             #f25a5a
+#   user                 bubble            neutral-bluish-850  #2c2c2e
+#
+# The brand itself is deepseek-500 #3964fe, drawn as deepseek-450 #5686fe on a
+# dark surface. The accent is one step lighter than either because what it paints
+# is text — links, code, headings — and the product keeps its own step for the
+# brand as text. That single line is where a reader moves the brand.
 #
 # Ten palette entries carry the whole theme: every element below names one rather
-# than a shade of its own, which is what lets a reader move the brand hue in one
-# line. Three elements name a different entry than the shipped table names, and
-# say why where they do.
+# than a shade of its own. Three elements name a different entry than the shipped
+# table names, and say why where they do.
 #
-# The semantic shades are deliberately not blue. Something added is green and
-# something removed is red on every surface a reader already uses, and a hue that
-# moved with the theme would have to be learned again with each one.
-#
-# The accent is the brand's hue rather than its exact hex: #4d6bfe is drawn for a
-# light page, and on a dark terminal it reads under what a link or a code span
-# needs. Changing the one line is enough for a reader who wants it exact.
+# The semantic shades stay the product's green, red, and amber. Something added
+# is green and something removed is red on every surface a reader already uses,
+# and a hue that moved with the theme would have to be learned again with each
+# one.
 
 palette:
-  default: '#d7dcf0'  # body text, cooled toward the brand
-  muted: '#949fc3'  # secondary rows
-  faint: '#6e7899'  # the shade below muted
-  accent: '#6d86ff'  # the brand's hue, lifted for a dark terminal
-  arg: '#a9bcff'  # a tool's argument, pale enough to stay apart from its label
-  warn: '#fbbf24'  # amber: something to look at
-  added: '#22c55e'  # green: something that arrived
-  removed: '#ef4444'  # red: something that went
-  user: '#27f5c8'  # the mint a reader's own turn takes
-  assistant: '#d7dcf0'  # a reply reads as body text
+  default: '#f9fafb'  # label-primary, neutral-bluish-50
+  muted: '#cfd3d6'  # label-secondary, neutral-bluish-300
+  faint: '#adb2b8'  # label-tertiary, neutral-bluish-400
+  accent: '#679efe'  # brand-text, deepseek-400
+  arg: '#b7c8fe'  # deepseek-300
+  warn: '#f59e0b'  # state-warn, amber-500
+  added: '#22c55e'  # state-success, green-500
+  removed: '#f25a5a'  # state-error on a dark surface, red-400
+  user: '#2c2c2e'  # the bubble fill, neutral-bluish-850
+  assistant: '#f9fafb'  # label-primary, neutral-bluish-50
 
 tokens:
   # A row of the conversation.
-  transcript.user: { fg: user }
+  transcript.user: { fg: default, bg: user }  # the product marks your own turn with a bubble, not a hue
   transcript.notice: { fg: muted }
   transcript.marker: { fg: muted }
   transcript.reasoning.summary: { fg: faint, italic: true }
   transcript.reasoning.body: { fg: faint }
   transcript.reasoning.hint: { fg: faint, italic: true }
   # A tool card, drawn in layers: every card, then one kind of card.
-  # A call is not a warning, and its label is the loudest thing on the row, so
-  # it carries the brand instead of the amber the shipped table gives it.
+  # A call is not a warning: the product keeps amber for state, and this label is
+  # the loudest thing on the row, so it carries the brand instead.
   tool.title: { fg: accent }
-  tool.glyph: { fg: accent }
+  tool.glyph: { fg: accent }  # follows the label it sits beside
   tool.args: { fg: arg }
   tool.stat.added: { fg: added }
   tool.stat.changed: { fg: warn }
@@ -140,8 +156,8 @@ tokens:
   status.separator: { fg: muted }
   # The prompt bar.
   # The one border in the surface that is not a divider: it holds what the reader
-  # is writing, so it takes the pale blue.
-  editor.border: { fg: arg }
+  # is writing, which is where the product puts the brand on its send button.
+  editor.border: { fg: accent }
   editor.queued: { dim: true, italic: true }
   editor.queued.more: { fg: muted }
   editor.ghost: { dim: true }

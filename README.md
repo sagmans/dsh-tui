@@ -415,8 +415,9 @@ names that do, drawing the shipped table instead.
 
 Every shipped file names every element and every palette entry, so a copy of one is
 a complete theme rather than a diff against something you cannot see;
-`deepseek-blue` is the one to copy to move a single shade, because it is the
-shipped table with ten palette entries of its own and every element follows them.
+`deepseek-blue` is the one to copy to move a single shade: it is the shipped
+table over ten palette entries taken from DeepSeek's own design tokens, each line
+naming the token it came from, and every element follows them.
 `/theme
 export <built-in>` writes that copy into your own directory as
 `<built-in>_export_<n>.yaml`, adding one comment naming the release it came from:
