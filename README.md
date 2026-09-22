@@ -157,6 +157,7 @@ force, and the `keys:` section moves any of them — see [Keys](#keys).
 | `/model <provider>/<model>/<effort>` | use that route and reasoning effort (the effort must be one the route advertises) |
 | `/preset` | pick the agent mode for this session from the roster |
 | `/preset <id>` | switch to that mode, while the session is still blank |
+| `/new [title]` | start a fresh session without leaving the terminal (`ctrl+x` then `n` starts one untitled) |
 | `/jobs` | list background jobs with their state and duration |
 | `/jobs read <id>` / `/jobs kill <id>` | show the tail of a job's output, or stop it |
 | `/subagents` | list the delegations this session started, with their provider and age |
@@ -188,24 +189,24 @@ Typing `@` opens this workspace's files above the editor, ranked as the fragment
 prefix alone — enough to say that a key is waiting, without reciting the map —
 and a key that finishes nothing is typed as usual rather than swallowed, so a
 prefix pressed by accident costs nothing; `/help` lists the chords, `m` for the
-model picker, `p` for plan mode, `y` for the last answer, `s` to stash the
-draft, `l` for the stashes, `e` for the draft in the reader's own editor,
-and `?` for the key map.
+model picker, `p` for plan mode, `n` for a fresh session, `y` for the last
+answer, `s` to stash the draft, `l` for the stashes, `e` for the draft in the
+reader's own editor, and `?` for the key map.
 `keys.chord.prefix: alt+x` starts the chord with another key — or with a list of
 them, as so many ways in — and `prefixWindow: 0` waits for the next key instead
 of lapsing; every second key is a row of its own (`chord.model`, `chord.plan`,
-`chord.copy`, `chord.stash`, `chord.stashes`, `chord.editor`, `chord.keys`), so
-a chord can be respelled whole. A prefix that is not a modifier chord, that
-the surface or the prompt bar already answers (`ctrl+c`, `ctrl+s`), or that the
-terminal keeps (`ctrl+q`) is refused with the reason, and the shipped keymap
-stays in force. The chords themselves are the commands they stand for: `m`, `p`,
-`y`, `s`, `l`, and `?` ask the same dispatcher `/model`, `/plan`, `/copy`,
-`/stash`, `/stash-list`, and `/keys` do; `e` is the one chord with no command
-behind it, because it opens a program rather than running a line. Plan mode is
-the one pair that cannot share a name: `/plan` only enters, so the chord names
-`/plan off` instead when the agent is in plan mode — or is waiting for the turn
-boundary to become so — and reads that state from the plan package rather than
-from the dock.
+`chord.new`, `chord.copy`, `chord.stash`, `chord.stashes`, `chord.editor`,
+`chord.keys`), so a chord can be respelled whole. A prefix that is not a modifier
+chord, that the surface or the prompt bar already answers (`ctrl+c`, `ctrl+s`),
+or that the terminal keeps (`ctrl+q`) is refused with the reason, and the
+shipped keymap stays in force. The chords themselves are the commands they stand
+for: `m`, `p`, `n`, `y`, `s`, `l`, and `?` ask the same dispatcher `/model`,
+`/plan`, `/new`, `/copy`, `/stash`, `/stash-list`, and `/keys` do; `e` is the
+one chord with no command behind it, because it opens a program rather than
+running a line. Plan mode is the one pair that cannot share a name: `/plan` only
+enters, so the chord names `/plan off` instead when the agent is in plan mode —
+or is waiting for the turn boundary to become so — and reads that state from the
+plan package rather than from the dock.
 
 An approval or a question draws inline above the editor and takes the keyboard. A question that lists options always adds row `0. other — type your own answer`: type or paste an answer the model did not offer, and the seam receives it as that question's free text — replacing a single-select choice, or supplementing a multi-select one. `0`, or `↓` past the last option, reaches the row; `↑` walks back to the list with the text kept, and `esc` does the same from that row, because a question skipped by accident is a question answered twice — an escape from the list skips it. Free text is written in the prompt bar's own editor, drawn under that row: movement, word and line deletion, undo, completion, and multi-line paste are all the editor the reader already uses, and the prompt bar steps aside while a question is open, so a prompt written but not sent comes back untouched once the question is answered. No question hides its answer — the reader is the one who has to check what they are about to send. Every gate row wraps at the screen edge under its own label, so a long option or question is readable rather than cut.
 

@@ -139,6 +139,8 @@ breaking change, and a patch carries only fixes.
   colours, a read's lines, a search's hits. What the call declared is kept from
   the moment it starts, so the row opens while the call still runs and keeps the
   state the reader gave it when the outcome lands.
+- `Ctrl+X` then `n` starts a fresh session, the session `/new` starts, without
+  the typed line that would have replaced the draft in the bar.
 
 ### Changed
 

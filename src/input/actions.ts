@@ -163,6 +163,9 @@ const CHORD_ACTIONS: readonly Action[] = [
   // The map is the one thing a reader needs while their hands are already on the
   // keys, so it earns a chord rather than only a command they have to spell.
   { id: 'chord.keys', layer: 'chord', defaultKeys: ['?'], label: 'key map', mayUseBare: true, mayUnbind: false },
+  // Starting over is asked for while the bar still holds a draft, and a typed
+  // `/new` would have taken that draft's place rather than kept it.
+  { id: 'chord.new', layer: 'chord', defaultKeys: ['n'], label: 'new session', mayUseBare: true, mayUnbind: false },
 ]
 
 const GATE_ACTIONS: readonly Action[] = [
