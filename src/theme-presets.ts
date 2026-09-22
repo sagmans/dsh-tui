@@ -42,7 +42,8 @@ export interface ThemePreset {
  * where this one names the transcript row that draws it — so the port keeps
  * pi's shades verbatim and re-applies them here by what an element *is*. Each
  * shade below therefore names the pi key it came from, which is the only thing
- * that makes a later change to either theme reviewable.
+ * that makes a later change to either theme reviewable. One shade has no pi key
+ * to name — pi keeps no colour for the job — and says why it is here instead.
  */
 const VIOLET_ORBIT: ThemePreset = {
   palette: {
