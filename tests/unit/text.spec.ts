@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { displayText, oneRow, sliceGraphemes, stripControlCharacters } from '@/text.ts'
+import { displayText, oneRow, sliceGraphemes, stripControlCharacters, tailGraphemes } from '@/text.ts'
 
 const ESCAPE = '\u001b'
 const CSI = '\u009b'
@@ -83,5 +83,21 @@ describe('sliceGraphemes', () => {
   it('answers the whole text when the budget already covers it', () => {
     expect(sliceGraphemes('short', 10)).toBe('short')
     expect(sliceGraphemes('short', 0)).toBe('')
+  })
+})
+
+describe('tailGraphemes', () => {
+  it('keeps a joined emoji whole when the budget lands inside it', () => {
+    const family = '👨‍👩‍👧'
+    expect(tailGraphemes('a' + family + 'b', 2)).toBe(family + 'b')
+  })
+
+  it('keeps a combining mark with the letter it modifies', () => {
+    expect(tailGraphemes('xe\u0301', 1)).toBe('e\u0301')
+  })
+
+  it('answers the whole text when the budget already covers it', () => {
+    expect(tailGraphemes('short', 10)).toBe('short')
+    expect(tailGraphemes('short', 0)).toBe('')
   })
 })

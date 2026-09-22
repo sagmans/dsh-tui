@@ -122,6 +122,25 @@ describe('TranscriptModel reasoning', () => {
     expect(body.endsWith(`… truncated at ${REASONING_CHAR_LIMIT} chars`)).toBe(true)
   })
 
+  it('bounds what a streaming thought holds, keeping the newest text', () => {
+    const model = new TranscriptModel()
+    const bodyOf = (): string => {
+      const entry = model.entries()[0]
+      return entry?.kind === 'reasoning' ? entry.body : ''
+    }
+    model.applyStreamChunk({ type: 'reasoning-delta', text: 'a'.repeat(REASONING_CHAR_LIMIT) })
+    model.applyStreamChunk({ type: 'reasoning-delta', text: 'b'.repeat(REASONING_CHAR_LIMIT) })
+    // Inside the slack the thought is kept whole, so nothing the reader is
+    // following disappears while it is still short.
+    expect(bodyOf()).toHaveLength(REASONING_CHAR_LIMIT * 2)
+    model.applyStreamChunk({ type: 'reasoning-delta', text: 'c'.repeat(REASONING_CHAR_LIMIT) })
+    model.applyStreamChunk({ type: 'reasoning-delta', text: 'newest' })
+    const body = bodyOf()
+    expect(body.length).toBeLessThanOrEqual(REASONING_CHAR_LIMIT * 2)
+    expect(body.startsWith('c')).toBe(true)
+    expect(body.endsWith('newest')).toBe(true)
+  })
+
   it('paints a recorded thought as its own row and keeps it out of the answer', () => {
     const model = new TranscriptModel()
     model.apply({

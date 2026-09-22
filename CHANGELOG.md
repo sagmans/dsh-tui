@@ -78,6 +78,8 @@ breaking change, and a patch carries only fixes.
   unhandled-rejection report, a stack trace — waits until the surface gives the
   screen back instead of landing inside a frame, where it would be painted over
   and then skipped as unchanged.
+- A thought still streaming is bounded like the row it settles into, so a long
+  one cannot make every frame it draws slower than the last.
 - A cached transcript row is kept for the life of the entry it belongs to instead
   of being evicted at a fixed count, so a session longer than that count no
   longer re-wraps every row on every repaint.

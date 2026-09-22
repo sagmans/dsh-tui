@@ -108,6 +108,22 @@ export function sliceGraphemes(text: string, limit: number): string {
 }
 
 /**
+ * The last `limit` grapheme clusters of text.
+ *
+ * A live thought grows from the end, so the head is what can be given up; the cut
+ * still falls between clusters, because half a character at the top of the row is
+ * the same glitch as half a character at the end of it.
+ */
+export function tailGraphemes(text: string, limit: number): string {
+  if (limit <= 0) return ''
+  // Code units are never fewer than clusters, so a short string needs no scan.
+  if (text.length <= limit) return text
+  const clusters: string[] = []
+  for (const { segment } of GRAPHEMES.segment(text)) clusters.push(segment)
+  return clusters.length <= limit ? text : clusters.slice(-limit).join('')
+}
+
+/**
  * Control characters text kept for a terminal can never legitimately need:
  * everything below the printable range except the tab and line feed that lay
  * text out, plus DEL, the C1 block, and the bidi overrides.

@@ -1,5 +1,5 @@
 import { cardFromLines, carriedFields, contentLines, mergeCards, subCallOf, SUBCALL_MAX, type ToolCard, type ToolPresenter, type ToolSubCallOutput } from './cards.ts'
-import { sliceGraphemes } from './text.ts'
+import { sliceGraphemes, tailGraphemes } from './text.ts'
 import { countTokens } from './tokens.ts'
 
 /** One renderable transcript row. */
@@ -13,6 +13,14 @@ export type TranscriptEntry =
 
 /** Reasoning kept per settled block, so one runaway thought cannot grow the transcript without bound. */
 export const REASONING_CHAR_LIMIT = 20_000
+
+/**
+ * How far a live thought may grow past that budget before its head is dropped.
+ *
+ * The slice itself is linear, so a burst of slack makes it happen once per
+ * thought rather than on every delta that crosses the limit.
+ */
+const LIVE_THOUGHT_SLACK = 2
 
 /** The token count with its noun, because "1 tokens" reads as a bug. */
 function describeTokens(text: string): string {
@@ -237,6 +245,13 @@ export class TranscriptModel {
         this.reasoningStartedAt ??= this.now()
         this.liveReasoningId ??= String(++this.thoughtSeq)
         this.liveReasoning += record.text
+        // A live thought is not bounded until the block it belongs to ends, and
+        // every frame re-wraps what this holds: past a burst of slack the head is
+        // dropped in one step, so a runaway thought costs a bounded wrap per frame
+        // instead of a growing one. The recorded text, not this, is what settles.
+        if (this.liveReasoning.length > REASONING_CHAR_LIMIT * LIVE_THOUGHT_SLACK) {
+          this.liveReasoning = tailGraphemes(this.liveReasoning, REASONING_CHAR_LIMIT)
+        }
         return
       case 'block-end': {
         const block = asRecord(record.block)
