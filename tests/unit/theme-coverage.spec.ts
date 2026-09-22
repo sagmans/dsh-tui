@@ -71,4 +71,24 @@ describe('/theme', () => {
     expect(lines.some(line => line.includes('transcript.user') && line.includes('#ff0000') && line.includes('override'))).toBe(true)
     expect(lines.some(line => line.includes('transcript.reasoning.body') && line.includes('palette'))).toBe(true)
   })
+
+  it('names the theme in force, so the reader knows what they are looking at', () => {
+    expect(renderThemeTable(toOverrides(parseSettings({ theme: 'violet-orbit' })))[0]).toContain('violet-orbit')
+    expect(renderThemeTable(toOverrides(parseSettings({})))[0]).not.toContain('violet-orbit')
+  })
+
+  it('reports a themed element as the theme, not as the reader', () => {
+    // The whole point of the table is telling the reader which layer won, and
+    // the file to edit differs: a theme row is not something they wrote.
+    const lines = renderThemeTable(toOverrides(parseSettings({ theme: 'violet-orbit' })))
+    const title = lines.filter(line => line.includes('tool.title'))
+    expect(title).toHaveLength(1)
+    expect(title[0]).toContain('#8197f7')
+    expect(title[0]).toContain('(preset)')
+  })
+
+  it('still reports an element the theme leaves alone as the palette', () => {
+    const lines = renderThemeTable(toOverrides(parseSettings({ theme: 'violet-orbit' })))
+    expect(lines.some(line => line.includes('transcript.reasoning.body') && line.includes('palette'))).toBe(true)
+  })
 })

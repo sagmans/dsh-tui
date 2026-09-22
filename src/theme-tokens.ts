@@ -456,25 +456,40 @@ function writtenFields(spec: StyleSpec | undefined): StyleSpec {
   return written as StyleSpec
 }
 
+/** The elements a named theme draws its own way, as the layer a resolver takes. */
+export type ThemedSpecs = Readonly<Partial<Record<TuiToken, StyleSpec>>>
+
 /**
- * Merge one token's default, its `inherit` target, and the reader's override.
+ * Merge one token's default, its `inherit` target, a theme, and the reader.
  *
  * The inherited token's fields replace this token's defaults, because that is
- * what "start from another token" means; the reader's own fields still win.
+ * what "start from another token" means. A theme sits between the two because
+ * it is a layer the reader chose rather than one they wrote: it moves every
+ * element it names, and their own fields still have the last word.
  * A path-scoped set turns a cycle into a stop, and still lets two branches
  * inherit one token rather than sharing a single visit.
  */
-export function mergeTokenSpec(token: TuiToken, overrides: ReadonlyMap<TuiToken, StyleSpec>): StyleSpec {
+export function mergeTokenSpec(
+  token: TuiToken,
+  overrides: ReadonlyMap<TuiToken, StyleSpec>,
+  themed?: ThemedSpecs,
+): StyleSpec {
   const visiting = new Set<TuiToken>()
   const merge = (name: TuiToken): StyleSpec => {
     if (visiting.has(name)) return {}
     visiting.add(name)
     const own = DEFAULT_TOKENS[name]
+    const fromTheme = themed?.[name]
     const override = overrides.get(name)
-    const parent = override?.inherit ?? own.inherit
+    const parent = override?.inherit ?? fromTheme?.inherit ?? own.inherit
     const inherited = parent === undefined ? {} : merge(parent)
     visiting.delete(name)
-    return { ...withoutInherit(own), ...inherited, ...withoutInherit(writtenFields(override)) }
+    return {
+      ...withoutInherit(own),
+      ...inherited,
+      ...withoutInherit(writtenFields(fromTheme)),
+      ...withoutInherit(writtenFields(override)),
+    }
   }
   return merge(token)
 }
@@ -495,8 +510,9 @@ export function resolveToken(
   overrides: ReadonlyMap<TuiToken, StyleSpec>,
   palette: Readonly<Record<PaletteName, string>>,
   mode: ColourMode,
+  themed?: ThemedSpecs,
 ): ResolvedStyle {
-  const merged = mergeTokenSpec(token, overrides) as Record<string, unknown>
+  const merged = mergeTokenSpec(token, overrides, themed) as Record<string, unknown>
   if (merged.hidden === true) return { prefix: '', suffix: '', glyph: '', hidden: true }
 
   // With no colour capability the whole promise is "emit nothing", which

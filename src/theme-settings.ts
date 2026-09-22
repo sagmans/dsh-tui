@@ -13,6 +13,7 @@ import {
   type ToolOutputDisplay,
   type WrittenToolDisplay,
 } from './tool-display.ts'
+import { THEME_NAMES, THEME_PRESETS, type ThemeName } from './theme-presets.ts'
 import {
   DEFAULT_PALETTE,
   PALETTE_NAMES,
@@ -103,6 +104,9 @@ const HistorySchema = z.object({
 })
 
 const SECTION = z.object({
+  // No default, for the same reason `prefix` has none: a fill-in would report
+  // the shipped table as a theme the reader chose.
+  theme: z.union([...THEME_NAMES]),
   palette: PaletteSchema.default({}),
   tokens: TokensSchema.default({}),
   subcalls: z.union([...SUBCALL_DISPLAYS]).default('inline'),
@@ -136,7 +140,7 @@ const TOKEN_NAMES = new Set<string>(TUI_TOKENS)
 const PALETTE_NAME_SET = new Set<string>(PALETTE_NAMES)
 
 /** The section's own keys: schemastery keeps what it does not declare, so a misspelling has to be refused here. */
-const SECTION_KEYS = new Set(['palette', 'tokens', 'subcalls', 'mermaid', 'prefix', 'prefixWindow', 'keys', 'history', 'tools'])
+const SECTION_KEYS = new Set(['theme', 'palette', 'tokens', 'subcalls', 'mermaid', 'prefix', 'prefixWindow', 'keys', 'history', 'tools'])
 
 /** The fields one tool's row may carry, for the same reason the section's own keys are spelled out. */
 const TOOL_FIELDS = new Set(['collapsed', 'output', 'tail'])
@@ -234,6 +238,7 @@ export function parseSettings(raw: unknown): TuiSettings {
   rejectUnknownKeys(raw)
   const section = asRecord(raw) ?? {}
   const parsed = SECTION(section) as unknown as {
+    theme: ThemeName | undefined
     palette: Record<PaletteName, string>
     tokens: Record<string, StyleSpec>
     subcalls: SubCallDisplay
@@ -282,6 +287,7 @@ export function parseSettings(raw: unknown): TuiSettings {
   // the catalog and on the layers the map already claims, which a schema cannot see.
   const keymap = resolveKeymap(overrides)
   return {
+    theme: parsed.theme,
     palette: palette as Readonly<Partial<Record<PaletteName, string>>>,
     tokens: tokens as Readonly<Partial<Record<TuiToken, StyleSpec>>>,
     subcalls: parsed.subcalls,
@@ -312,6 +318,8 @@ export interface HistorySettings {
 
 /** What the section holds once parsed: only what the reader wrote. */
 export interface TuiSettings {
+  /** The shipped theme the reader named, or nothing for the table as it ships. */
+  readonly theme: ThemeName | undefined
   readonly palette: Readonly<Partial<Record<PaletteName, string>>>
   readonly tokens: Readonly<Partial<Record<TuiToken, StyleSpec>>>
   readonly subcalls: SubCallDisplay
@@ -331,6 +339,7 @@ export interface TuiSettings {
 /** The section as it reads when the reader has written nothing. */
 export function defaultSettings(): TuiSettings {
   return {
+    theme: undefined,
     palette: {},
     tokens: {},
     subcalls: 'inline',
@@ -345,8 +354,18 @@ export function defaultSettings(): TuiSettings {
 
 /** The theme inputs a parsed section implies. */
 export interface ThemeOverrides {
+  /** The shades in force: the shipped palette, then a theme's, then the reader's. */
   readonly palette: Readonly<Record<PaletteName, string>>
+  /** Every element the reader drew themselves; a theme is a layer apart from this. */
   readonly tokens: ReadonlyMap<TuiToken, StyleSpec>
+  /**
+   * The shipped theme in force, when the reader named one.
+   *
+   * Kept out of {@link tokens} because the layers answer differently: a theme
+   * moves every element it names, while a reader's field wins over it one at a
+   * time — and `/theme` reports which of the two a shade came from.
+   */
+  readonly preset?: ThemeName | undefined
 }
 
 /**
@@ -418,9 +437,16 @@ function salvageHistory(raw: unknown): HistorySettings {
  * the normal case rather than something the resolver has to guard against.
  */
 export function toOverrides(settings: TuiSettings): ThemeOverrides {
+  const preset = settings.theme === undefined ? undefined : THEME_PRESETS[settings.theme]
   const tokens = new Map<TuiToken, StyleSpec>()
   for (const [token, spec] of Object.entries(settings.tokens)) {
     if (spec !== undefined) tokens.set(token as TuiToken, spec)
   }
-  return { palette: { ...DEFAULT_PALETTE, ...settings.palette }, tokens }
+  // The theme travels as its own layer rather than folded in here, so a reader's
+  // field merges over it one element at a time instead of replacing it.
+  return {
+    palette: { ...DEFAULT_PALETTE, ...preset?.palette, ...settings.palette },
+    tokens,
+    preset: settings.theme,
+  }
 }

@@ -68,6 +68,7 @@ import { defaultSettings, readScope, settingsProblemMessage, toOverrides, TUI_SE
 import { toolDisplayFor, type ToolDisplayTable } from './tool-display.ts'
 import { pendingPrompts } from './queue.ts'
 import { renderThemeTable } from './theme-command.ts'
+import { isThemeName, THEME_NAMES, type ThemeName } from './theme-presets.ts'
 import { KEYMAP_LAYERS, keymapLayer } from './keys-command.ts'
 import { resetSequence } from './theme-tokens.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
@@ -208,6 +209,15 @@ export function apply(ctx: Context, config: unknown): void {
    */
   let readSection = (): TuiSettings => defaultSettings()
   /**
+   * Persist a theme choice, replaced once the section is registered.
+   *
+   * A theme picked mid-session has to outlive it, so the choice is written
+   * through the same scope the reader's document is read from instead of kept
+   * in memory: the host persists it, and the change comes back through
+   * `settings/updated` like any other edit — which is what restyles the screen.
+   */
+  let chooseTheme = (_name: ThemeName): void => {}
+  /**
    * A refused settings edit, kept until the surface can show it: stderr is
    * behind the alt screen, and the section is read on a schedule of its own.
    */
@@ -315,7 +325,7 @@ export function apply(ctx: Context, config: unknown): void {
     // schema itself refuses throws here — inside a fiber whose failure the
     // screen never shows. Reporting it through the same holder keeps a typo
     // from costing the reader every setting they wrote, silently.
-    let scope: { get(): unknown }
+    let scope: { get(): unknown; update(patch: object): Promise<void> }
     try {
       scope = settingsCtx.settings.register(TUI_SETTINGS_NAMESPACE, TuiSettingsSchema)
     } catch (error) {
@@ -326,6 +336,12 @@ export function apply(ctx: Context, config: unknown): void {
       return
     }
     readSection = () => readScope(scope, message => settingsNotice.post(message))
+    chooseTheme = name => {
+      void scope.update({ theme: name }).then(
+        () => model.notice(`theme · ${name} · written to the settings document`),
+        (error: unknown) => settingsNotice.post(settingsProblemMessage(error)),
+      )
+    }
     applySettings()
   })
   /**
@@ -1968,10 +1984,25 @@ export function apply(ctx: Context, config: unknown): void {
       case 'todo':
         runTodoCommand()
         return
-      case 'theme':
-        for (const line of renderThemeTable(toOverrides(readSection()))) model.notice(line)
-        tui.requestRender()
+      case 'theme': {
+        const name = submission.argument
+        // A bare command asks what the elements are; a named one asks for a
+        // theme, and is the only way to change one without leaving the session.
+        if (name === '') {
+          for (const line of renderThemeTable(toOverrides(readSection()))) model.notice(line)
+          tui.requestRender()
+          return
+        }
+        // A name the surface does not ship is refused by name, like an unknown
+        // key layer: the reader asked for something, so the answer names names.
+        if (!isThemeName(name)) {
+          model.notice(`unknown theme "${name}" · themes: ${THEME_NAMES.join(' ')}`)
+          tui.requestRender()
+          return
+        }
+        chooseTheme(name)
         return
+      }
       case 'keys': {
         const layer = submission.argument === '' ? undefined : keymapLayer(submission.argument)
         // A layer that does not exist is not a filter that matches nothing: the

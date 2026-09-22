@@ -151,6 +151,40 @@ describe('the dsh-tui settings section', () => {
     const overrides = toOverrides(parseSettings({ palette: { muted: '#777777' } }))
     expect(overrides.palette.muted).toBe('#777777')
   })
+
+  it('applies no shipped theme until the reader names one', () => {
+    expect(parseSettings({}).theme).toBeUndefined()
+    expect(parseSettings({ theme: 'violet-orbit' }).theme).toBe('violet-orbit')
+  })
+
+  it('rejects a theme the surface does not ship, naming it', () => {
+    expect(() => parseSettings({ theme: 'violet-orbitt' })).toThrow()
+  })
+
+  it('names the theme and the palette it moves', () => {
+    const overrides = toOverrides(parseSettings({ theme: 'violet-orbit' }))
+    expect(overrides.preset).toBe('violet-orbit')
+    expect(overrides.palette.accent).toBe('#8080ff')
+  })
+
+  it('keeps the theme out of the map the reader writes in', () => {
+    // /theme answers "where did this come from?", and the answer for a themed
+    // element has to name the theme: calling it the reader's own row sends them
+    // into their own file to look for a line that is not there.
+    const overrides = toOverrides(parseSettings({ theme: 'violet-orbit' }))
+    expect([...overrides.tokens.keys()]).toEqual([])
+  })
+
+  it('reports what the reader wrote when no theme is in force', () => {
+    const overrides = toOverrides(parseSettings({ tokens: { 'status.cwd': { fg: '#ff00ff' } } }))
+    expect([...overrides.tokens.keys()]).toEqual(['status.cwd'])
+    expect(overrides.preset).toBeUndefined()
+  })
+
+  it('lets the reader palette win over the theme palette', () => {
+    const overrides = toOverrides(parseSettings({ theme: 'violet-orbit', palette: { accent: '#123456' } }))
+    expect(overrides.palette.accent).toBe('#123456')
+  })
 })
 
 describe('the keys section', () => {
