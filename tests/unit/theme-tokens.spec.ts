@@ -33,9 +33,20 @@ describe('the token table', () => {
     // ordinary text. Muted names the palette entry, and that entry is a hex
     // shade rather than an index, so the surface owns the contrast.
     expect(DEFAULT_PALETTE.muted).toMatch(/^#/u)
-    for (const token of ['transcript.reasoning.body', 'transcript.reasoning.summary', 'tool.detail'] as const) {
+    for (const token of ['transcript.reasoning.body', 'tool.detail'] as const) {
       expect(DEFAULT_TOKENS[token].fg, `${token} does not follow the muted entry`).toBe('muted')
     }
+  })
+
+  it('recedes the reasoning signpost past the muted family', () => {
+    // The row that names a thought must not compete with the thought itself:
+    // it is italic, and its own shade is darker than every muted element.
+    const faint = DEFAULT_TOKENS['transcript.reasoning.summary']
+    expect(faint.fg).toBe('faint')
+    expect(faint.italic).toBe(true)
+    expect(DEFAULT_TOKENS['transcript.reasoning.hint']).toEqual(faint)
+    const shade = (hex: string) => Number.parseInt(hex.slice(1), 16)
+    expect(shade(DEFAULT_PALETTE.faint) < shade(DEFAULT_PALETTE.muted)).toBe(true)
   })
 
   it('ships no glyphs by default', () => {

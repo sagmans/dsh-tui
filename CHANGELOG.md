@@ -27,6 +27,8 @@ breaking change, and a patch carries only fixes.
   count of output rows waiting behind the fold, instead of spending twenty
   rows on shell output by default. `output: tail` restores a preview window per
   tool, and a PTC card's dispatched calls stay one row each under the header.
+- The row that names a thought is italic and a shade below the muted family, so
+  the signpost no longer competes with the thought it introduces.
 
 ### Added
 
