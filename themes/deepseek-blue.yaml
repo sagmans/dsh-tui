@@ -44,6 +44,10 @@ palette:
 tokens:
   # A row of the conversation.
   transcript.user: { fg: default, bg: user }  # the product marks your own turn with a bubble, not a hue
+  # The reply's own frame. A border is a container rather than a fact, so it may
+  # not take a signal shade; a warm neutral keeps the answer held without moving
+  # it into the amber the surface reserves for state.
+  transcript.assistant.border: { fg: '#d6c29a' }
   transcript.notice: { fg: muted }
   transcript.marker: { fg: muted }
   transcript.reasoning.summary: { fg: faint, italic: true }
