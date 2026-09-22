@@ -113,6 +113,9 @@ describe('renderTerminalText', () => {
     expect(renderTerminalText('abc\rXY', { color: '16' })).toBe('XYc')
     expect(renderTerminalText('10%\r20%\r100%', { color: '16' })).toBe('100%')
     expect(renderTerminalText('abc\r', { color: '16' })).toBe('abc')
+    // The column a fragment starts at is a left margin: a carriage return in tool
+    // output must repaint the fragment, never the indentation that holds it.
+    expect(renderTerminalText('abcd\rXY', { color: '16', column: 4 })).toBe('XYcd')
     expect(renderTerminalText('one\r\ntwo', { color: '16' })).toBe('one\ntwo')
     expect(renderTerminalText('abc\bX', { color: '16' })).toBe('abX')
   })

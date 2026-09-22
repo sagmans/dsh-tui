@@ -230,6 +230,7 @@ export function apply(ctx: Context, config: unknown): void {
     get revision() { return current.revision },
     get color() { return current.color },
     style: (token, text) => current.style(token, text),
+    rich: (raw, options) => current.rich(raw, options),
     cut: (text, width, ellipsis) => current.cut(text, width, ellipsis),
     glyph: token => current.glyph(token),
     visible: token => current.visible(token),

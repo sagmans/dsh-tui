@@ -33,16 +33,16 @@ export type TabPolicy = 'expand' | 'keep'
 
 export interface EscapeTextOptions {
   /** The column the text starts at, so its first tab lands on the terminal's next stop. */
-  readonly column?: number
-  readonly tab?: TabPolicy
+  readonly column?: number | undefined
+  readonly tab?: TabPolicy | undefined
 }
 
 export interface RenderTextOptions {
   /** The colour budget the session has; `none` drops tool styling entirely. */
   readonly color: ColourMode
   /** SGR already in effect — an element's own colour, which a foreign reset returns to. */
-  readonly base?: string
-  readonly column?: number
+  readonly base?: string | undefined
+  readonly column?: number | undefined
 }
 
 const ESC = '\u001b'
@@ -511,10 +511,13 @@ interface Cell {
 /**
  * Draw text as the terminal that produced it would have drawn it.
  *
- * A carriage return repaints the row from column 0 and a backspace moves one
- * column left, so a progress bar collapses to the state it settled on instead
- * of showing every repaint in a row. Styling is kept per cell, so what survives
- * a repaint keeps the colour it was written with.
+ * A carriage return repaints the row from the column the fragment starts at
+ * and a backspace moves one column left, so a progress bar collapses to the
+ * state it settled on instead of showing every repaint in a row. That starting
+ * column is also a left margin: a row indented by the layout cannot be repainted
+ * by the text it holds, which is the one thing a carriage return could
+ * otherwise do to the frame. Styling is kept per cell, so what survives a
+ * repaint keeps the colour it was written with.
  */
 export function renderTerminalText(raw: string, options: RenderTextOptions): string {
   if (!NEEDS_READING.test(raw)) return raw
@@ -541,7 +544,7 @@ export function renderTerminalText(raw: string, options: RenderTextOptions): str
 
   const flush = (): void => {
     if (cells.length > 0) {
-      let drawn = 0
+      let drawn = column
       for (const cell of cells) {
         if (cell.col > drawn) {
           out += codes.between(previous, GROUND)
@@ -555,7 +558,7 @@ export function renderTerminalText(raw: string, options: RenderTextOptions): str
       }
     }
     cells = []
-    cursor = 0
+    cursor = column
   }
 
   for (const piece of scan(raw)) {
@@ -571,10 +574,10 @@ export function renderTerminalText(raw: string, options: RenderTextOptions): str
         cursor = nextStop(cursor)
         break
       case 'carriageReturn':
-        cursor = 0
+        cursor = column
         break
       case 'backspace':
-        cursor = Math.max(0, cursor - 1)
+        cursor = Math.max(column, cursor - 1)
         break
       case 'sgr':
         style = applySgr(style, piece.token.params, color)

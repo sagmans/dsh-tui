@@ -730,6 +730,7 @@ describe('TranscriptView theming', () => {
       get revision() { return active.revision },
       get color() { return active.color },
       style: (token, text) => active.style(token, text),
+      rich: (raw, options) => active.rich(raw, options),
       cut: (text, width, ellipsis) => active.cut(text, width, ellipsis),
       glyph: token => active.glyph(token),
       visible: token => active.visible(token),

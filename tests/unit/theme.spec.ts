@@ -113,6 +113,45 @@ describe('createTheme', () => {
   })
 })
 
+describe('rich', () => {
+  const ESC = '\u001b'
+  const RESET = `${ESC}[0m`
+
+  it('draws what the producing terminal would have drawn, with nothing to return to', () => {
+    const theme = createTheme('truecolor')
+    // The colour capability helper reads a basic slot through the palette, so
+    // the indexed form is what a truecolor terminal is asked for.
+    expect(theme.rich(`${ESC}[31mred${ESC}[0mplain`)).toBe(`${ESC}[38;5;1mred${ESC}[39mplain`)
+  })
+
+  it('returns a foreign reset to the element\'s own colour rather than the terminal default', () => {
+    const theme = createTheme('truecolor')
+    const drawn = theme.rich(`${ESC}[31mred${ESC}[0mplain`, { token: 'tool.detail' })
+    expect(drawn).toContain(`${ESC}[38;2;138;138;138m${ESC}[38;5;1mred`)
+    // The reset a tool wrote ends its run; it must not end the card's own colour.
+    expect(drawn).toContain(`${ESC}[39m${ESC}[38;2;138;138;138mplain`)
+    expect(drawn.endsWith(RESET)).toBe(true)
+    expect(drawn.slice(0, -RESET.length)).not.toContain(RESET)
+  })
+
+  it('draws nothing for an element the reader turned off', () => {
+    const theme = createTheme('truecolor', overrides({ 'tool.detail': { hidden: true } }))
+    expect(theme.rich('anything at all', { token: 'tool.detail' })).toBe('')
+  })
+
+  it('still lands tabs and drops styling when colour is off', () => {
+    const theme = createTheme('none')
+    const drawn = theme.rich(`${ESC}[31mred${ESC}[0m\tplain`)
+    expect(drawn).not.toContain(ESC)
+    expect(drawn).toBe(`red${' '.repeat(5)}plain`)
+  })
+
+  it('seeds the first tab stop from the column the element starts at', () => {
+    const theme = createTheme('none')
+    expect(theme.rich('a\tb', { token: 'tool.detail', column: 4 })).toBe(`a${' '.repeat(3)}b`)
+  })
+})
+
 describe('theme identity', () => {
   it('gives each table a revision, so a cache can tell them apart', () => {
     expect(createTheme('none').revision).not.toBe(createTheme('none').revision)
