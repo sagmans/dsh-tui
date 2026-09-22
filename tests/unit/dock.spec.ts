@@ -101,6 +101,16 @@ describe('WorkDock', () => {
     const state: WorkState = { ...EMPTY, todos: [{ content: 'y'.repeat(200), status: 'pending' }] }
     for (const line of dockOf(state).render(30)) expect(visibleWidth(line)).toBeLessThanOrEqual(30)
   })
+
+  it('keeps a job label that carries a break on one row', () => {
+    // A label is the registry's own text, and a command written across lines is
+    // a break the row must not carry: a line feed would put the rest of the dock
+    // over the row below it instead of wrapping.
+    const jobs = [{ id: 'bash-1', kind: 'bash', label: 'line one\nline two', status: 'running' as const, startedAt: Date.now(), finishedAt: undefined }]
+    const lines = new WorkDock(() => EMPTY, theme, () => jobs).render(80)
+    expect(lines).toHaveLength(2)
+    for (const line of lines) expect(line).not.toContain('\n')
+  })
 })
 
 describe('WorkDock theming', () => {

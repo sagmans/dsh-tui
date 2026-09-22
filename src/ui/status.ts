@@ -1,5 +1,5 @@
 import { type Component, visibleWidth } from '@earendil-works/pi-tui'
-import { displayText } from '../text.ts'
+import { displayText, oneRow } from '../text.ts'
 import { formatTokens } from '../tokens.ts'
 import type { TuiToken } from '../theme-tokens.ts'
 import type { TuiTheme } from '../theme.ts'
@@ -134,7 +134,9 @@ export function formatStatus(facts: StatusFacts, width: number, theme: TuiTheme)
   }
   if (facts.cacheRate !== undefined) push('status.cache', `cache ${Math.round(facts.cacheRate * 100)}%`)
   push('status.cwd', shortPath(facts.cwd, facts.home))
-  return renderSegments(segments, width, theme)
+  // The row is one row whatever a fact carried: a break that survived the cut
+  // would be written as a move down, over the row beneath the bar.
+  return oneRow(renderSegments(segments, width, theme))
 }
 
 /**

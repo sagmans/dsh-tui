@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { displayText, stripControlCharacters } from '@/text.ts'
+import { displayText, oneRow, stripControlCharacters } from '@/text.ts'
 
 const ESCAPE = '\u001b'
 const CSI = '\u009b'
@@ -37,6 +37,17 @@ describe('displayText', () => {
 
   it('keeps a full escape sequence inert for the terminal', () => {
     expect(displayText(`${ESCAPE}]0;pwned\u0007`)).toBe('\\x1B]0;pwned\\x07')
+  })
+})
+
+describe('oneRow', () => {
+  it('keeps ordinary text and joins the rows a break separated', () => {
+    expect(oneRow('plain é')).toBe('plain é')
+    expect(oneRow('one\ntwo\r\nthree')).toBe('one two three')
+  })
+
+  it('joins the separators a terminal would treat as a new row', () => {
+    expect(oneRow('a b c')).toBe('a b c')
   })
 })
 

@@ -69,6 +69,22 @@ export function displayText(raw: string): string {
 }
 
 /**
+ * The breaks a one-row cut must not carry.
+ *
+ * A line feed is the one control a renderer understands, so it survives
+ * {@link displayText}; a row that kept it would write the rest of itself on the
+ * row below, because the alternate screen runs with autowrap off and the break
+ * moves the cursor down instead of wrapping. Cutting is where a caller promises
+ * a single row, so the flattening happens there.
+ */
+const ROW_BREAKS = /[\r\n\u2028\u2029]+/gu
+
+/** One row of text: every run of line breaks becomes the space between its rows. */
+export function oneRow(text: string): string {
+  return text.replace(ROW_BREAKS, ' ')
+}
+
+/**
  * Control characters text kept for a terminal can never legitimately need:
  * everything below the printable range except the tab and line feed that lay
  * text out, plus DEL, the C1 block, and the bidi overrides.

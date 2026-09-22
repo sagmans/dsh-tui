@@ -68,6 +68,15 @@ breaking change, and a patch carries only fixes.
   parses lists, fences, and emphasis in the thought's own shade. A thought's
   mermaid fence stays source instead of carrying the answer's weight.
 
+### Fixed
+
+- A row that carried a line break — a background job's label, a command a PTC
+  program wrote across lines, a path, or any other fact a component draws on one
+  row — no longer writes the rest of itself over the row below it, which is how
+  a tool row could reach the editor's frame. The one line a cut promises is now
+  one line, and the status row flattens what a fact brought even when it never
+  needed a cut.
+
 ## [0.4.0] - 2026-09-21
 
 ### Added

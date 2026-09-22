@@ -1,4 +1,5 @@
 import { truncateToWidth, type EditorTheme, type MarkdownTheme, type SelectListTheme } from '@earendil-works/pi-tui'
+import { oneRow } from './text.ts'
 import { detectColourMode, type ColourMode } from './theme-capability.ts'
 import { DEFAULT_PALETTE, DEFAULT_TOKENS, resetSequence, resolveToken, type ResolvedStyle, type TuiToken } from './theme-tokens.ts'
 import type { ThemeOverrides } from './theme-settings.ts'
@@ -106,7 +107,9 @@ export function createTheme(mode: ColourMode = detectColourMode(process.env), ov
    * dropping them restores the contract without changing what is drawn.
    */
   const cut = (text: string, width: number, ellipsis = ''): string => {
-    const truncated = truncateToWidth(text, width, ellipsis)
+    // A row is one row: a break that reached the cut would be written as a move
+    // to the next line, over whatever the frame put there.
+    const truncated = truncateToWidth(oneRow(text), width, ellipsis)
     return mode === 'none' ? truncated.replaceAll(resetSequence(), '') : truncated
   }
   const visible = (token: TuiToken): boolean => !resolve(token).hidden

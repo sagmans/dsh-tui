@@ -975,6 +975,11 @@ describe('TranscriptView nested PTC calls', () => {
     expect(lines.slice(1)).toEqual(['  read src/x.ts', '  bash git status'])
   })
 
+  it('keeps a dispatched command that carries a break on one row', () => {
+    const model = foldedProgram([{ name: 'bash', args: { command: 'echo one\necho two' } }])
+    expect(viewOf(model, FOLDED).render(60)).toEqual(['search the tree', '  bash echo one echo two'])
+  })
+
   it('draws each call on one two-space-indented line under the header', () => {
     const model = foldedProgram([
       { name: 'read', args: { file_path: 'src/x.ts' } },
