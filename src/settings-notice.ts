@@ -16,21 +16,23 @@ export interface DeferredNotice {
  * is read either before the surface owns the screen or after it: one holder,
  * opened when the screen is taken, keeps both orders honest — and a notice
  * written to stderr alone would have been buried under the alternate screen.
+ *
+ * Everything held is printed, not just the last: a boot can find several things
+ * wrong at once — a refused section and the themes beside it — and showing one of
+ * them would leave the reader fixing what they were told about while the rest
+ * waited for a restart.
  */
 export function createDeferredNotice(): DeferredNotice {
   let sink: NoticeSink | undefined
-  let pending: string | undefined
+  const held: string[] = []
   return {
     open(next) {
       sink = next
-      if (pending === undefined) return
-      const held = pending
-      pending = undefined
-      next(held)
+      for (const message of held.splice(0)) next(message)
     },
     post(message) {
       if (sink === undefined) {
-        pending = message
+        held.push(message)
         return
       }
       sink(message)

@@ -1,67 +1,79 @@
 import { describe, expect, it } from 'vitest'
-import { presetTokens, THEME_NAMES, THEME_PRESETS } from '@/theme-presets.ts'
+import { builtinNames, SHIPPED_THEME } from '@/theme-files.ts'
+import { parseSettings, themeLayer, toOverrides } from '@/theme-settings.ts'
 import { mergeTokenSpec, PALETTE_NAMES, TUI_TOKENS, type PaletteName, type StyleSpec } from '@/theme-tokens.ts'
 import { createTheme } from '@/theme.ts'
-import { parseSettings, toOverrides } from '@/theme-settings.ts'
+import { builtinLibrary } from '../support/themes.ts'
 
 /** Every capability the surface can meet, so no theme is only drawn on one. */
 const MODES = ['truecolor', '256', '16', 'none'] as const
 
 /** The theme the reader asked to be brought over, by the name it answers to. */
-const VIOLET = 'violet-orbit' as const
+const VIOLET = 'violet-orbit'
+
+const library = builtinLibrary()
 
 /** The theme as a renderer holds it, which is what a reader actually sees. */
 const themed = (name: string, mode: (typeof MODES)[number] = 'truecolor') =>
-  createTheme(mode, toOverrides(parseSettings({ theme: name })))
+  createTheme(mode, toOverrides(parseSettings({ theme: name }), library))
 
 describe('the shipped themes', () => {
-  it('ships a table for every name it offers', () => {
-    expect(Object.keys(THEME_PRESETS).sort()).toEqual([...THEME_NAMES].sort())
+  it('ships a file for every name it offers', () => {
+    expect(builtinNames(library)).toEqual([SHIPPED_THEME, VIOLET])
   })
 
   it('names only elements and palette entries the surface has', () => {
-    // The tables are typed, but a theme is data: a name that drifted out of the
-    // token list has to fail here rather than paint nothing for the reader.
+    // A theme file is data and js-yaml accepts any key, so a name that drifted
+    // out of the token list has to fail here rather than paint nothing.
     const palette = new Set<string>(PALETTE_NAMES)
     const tokens = new Set<string>(TUI_TOKENS)
-    for (const [name, preset] of Object.entries(THEME_PRESETS)) {
-      for (const entry of Object.keys(preset.palette)) {
-        expect(palette.has(entry), `${name} names palette entry ${entry}`).toBe(true)
+    for (const theme of library.list()) {
+      for (const entry of Object.keys(theme.palette)) {
+        expect(palette.has(entry), `${theme.name} names palette entry ${entry}`).toBe(true)
       }
-      for (const token of Object.keys(preset.tokens)) {
-        expect(tokens.has(token), `${name} names element ${token}`).toBe(true)
+      for (const token of Object.keys(theme.tokens)) {
+        expect(tokens.has(token), `${theme.name} names element ${token}`).toBe(true)
       }
     }
   })
 
+  it('names every element and palette entry, so a copy is a complete theme', () => {
+    // A reference that leaves entries out is a diff against something the reader
+    // cannot see, and it lets a new element ship with no theme answering for it.
+    for (const theme of library.list()) {
+      expect(Object.keys(theme.tokens).sort(), `${theme.name} elements`).toEqual([...TUI_TOKENS].sort())
+      expect(Object.keys(theme.palette).sort(), `${theme.name} palette`).toEqual([...PALETTE_NAMES].sort())
+    }
+  })
+
   it('names only colours the surface can draw', () => {
-    // A misspelled hex is silent at runtime, so it is refused here instead.
+    // A misspelled hex survives js-yaml, so it is refused here instead.
     const hex = /^#[0-9a-f]{6}$/iu
     const palette = new Set<string>(PALETTE_NAMES)
-    for (const [name, preset] of Object.entries(THEME_PRESETS)) {
-      const specs = Object.values(preset.tokens).filter((spec): spec is StyleSpec => spec !== undefined)
+    for (const theme of library.list()) {
+      const specs = Object.values(theme.tokens).filter((spec): spec is StyleSpec => spec !== undefined)
       const colours = [
-        ...Object.values(preset.palette),
+        ...Object.values(theme.palette),
         ...specs.flatMap(spec => [spec.fg, spec.bg]),
       ].filter((value): value is string => typeof value === 'string')
       for (const colour of colours) {
         const drawable = hex.test(colour) || palette.has(colour as PaletteName)
-        expect(drawable, `${name} cannot draw ${colour}`).toBe(true)
+        expect(drawable, `${theme.name} cannot draw ${colour}`).toBe(true)
       }
     }
   })
 
   it('draws on every terminal the surface can meet', () => {
-    for (const name of THEME_NAMES) {
+    for (const name of library.names()) {
       for (const mode of MODES) {
         expect(() => themed(name, mode), `${name} in ${mode}`).not.toThrow()
       }
     }
   })
 
-  it('leaves an element it does not name on the palette it ships', () => {
-    // A theme is a layer, not a replacement: everything it says nothing about
-    // still has to be drawn, and drawn from the shades it did set.
+  it('draws an element a theme moves no shade for from the palette it did move', () => {
+    // The palette half is what makes a full table maintainable: an element the
+    // theme writes no literal for still follows the theme's own shades.
     const theme = themed(VIOLET)
     expect(theme.style('transcript.reasoning.body', 'x')).toContain('38;2;103;109;149')
   })
@@ -98,9 +110,9 @@ describe('violet-orbit', () => {
 
   it('draws a tool argument lighter than the label beside it', () => {
     // The label and the argument share a row, and pi hands both jobs a mid-tone
-    // blue from the same family; a reader scanning for the call cannot tell
-    // where the name stops. Lifting the argument out of that family is what
-    // makes one row readable as two facts.
+    // blue from the same family; a reader scanning for the call cannot tell where
+    // the name stops. Lifting the argument out of that family is what makes one
+    // row readable as two facts.
     const theme = themed(VIOLET)
     expect(theme.style('tool.title', 'x')).toContain('38;2;129;151;247')
     expect(theme.style('tool.args', 'x')).toContain('38;2;210;201;240')
@@ -110,8 +122,8 @@ describe('violet-orbit', () => {
   it('merges a reader field over a themed element field by field', () => {
     // The two layers meet on one element: the reader naming one attribute must
     // not discard the shade the theme gave that same element.
-    const overrides = toOverrides(parseSettings({ theme: VIOLET, tokens: { 'tool.title': { bold: true } } }))
-    expect(mergeTokenSpec('tool.title', overrides.tokens, presetTokens(overrides.preset)))
+    const overrides = toOverrides(parseSettings({ theme: VIOLET, tokens: { 'tool.title': { bold: true } } }), library)
+    expect(mergeTokenSpec('tool.title', overrides.tokens, themeLayer(overrides)))
       .toEqual({ fg: '#8197f7', bold: true })
   })
 
@@ -119,7 +131,7 @@ describe('violet-orbit', () => {
     const theme = createTheme('truecolor', toOverrides(parseSettings({
       theme: VIOLET,
       tokens: { 'tool.title': { fg: '#ff0000' } },
-    })))
+    }), library))
     expect(theme.style('tool.title', 'x')).toContain('38;2;255;0;0')
   })
 })

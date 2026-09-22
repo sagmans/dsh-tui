@@ -2,9 +2,8 @@ import { truncateToWidth, type EditorTheme, type MarkdownTheme, type SelectListT
 import { oneRow } from './text.ts'
 import { renderTerminalText } from './terminal-text.ts'
 import { detectColourMode, type ColourMode } from './theme-capability.ts'
-import { presetTokens } from './theme-presets.ts'
 import { DEFAULT_PALETTE, DEFAULT_TOKENS, resetSequence, resolveToken, type ResolvedStyle, type TuiToken } from './theme-tokens.ts'
-import type { ThemeOverrides } from './theme-settings.ts'
+import { themeLayer, type ThemeOverrides } from './theme-settings.ts'
 
 /** What a caller gets when it has written no settings at all. */
 const NO_OVERRIDES: ThemeOverrides = { palette: DEFAULT_PALETTE, tokens: new Map() }
@@ -108,7 +107,7 @@ export function createTheme(mode: ColourMode = detectColourMode(process.env), ov
   const resolved = new Map<TuiToken, ResolvedStyle>()
   // Looked up once: a theme is one layer of every token's answer, not a
   // per-token decision, and a repaint asks for all of them.
-  const themed = presetTokens(overrides.preset)
+  const themed = themeLayer(overrides)
   const resolve = (token: TuiToken): ResolvedStyle => {
     const cached = resolved.get(token)
     if (cached !== undefined) return cached

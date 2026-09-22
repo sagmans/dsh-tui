@@ -132,6 +132,13 @@ export function ensureThemesHome(dir: string): readonly string[] {
   }
 }
 
+/** The names the package ships a file for, which are the ones an export can copy. */
+export function builtinNames(library: ThemeLibrary): string[] {
+  return library.list()
+    .filter(theme => theme.builtin && theme.path !== '')
+    .map(theme => theme.name)
+}
+
 /**
  * The name a copy of `name` takes, given the names already in use.
  *

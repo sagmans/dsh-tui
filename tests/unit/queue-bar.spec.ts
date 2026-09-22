@@ -1,6 +1,10 @@
 import { visibleWidth, type TUI } from '@earendil-works/pi-tui'
 import { describe, expect, it } from 'vitest'
 import { createTheme } from '@/theme.ts'
+import { builtinLibrary } from '../support/themes.ts'
+
+/** The package's themes, which is what a name in a section resolves against. */
+const library = builtinLibrary()
 import { parseSettings, toOverrides } from '@/theme-settings.ts'
 import { BoxedEditor } from '@/ui/editor.ts'
 import { QUEUE_LIMIT, QUEUE_TEXT_ROWS, QueueBar } from '@/ui/queue.ts'
@@ -20,7 +24,7 @@ const bar = (prompts: readonly string[], theme = createTheme('none')): QueueBar 
 
 /** A theme whose one named element is set, for the contracts a reader can change. */
 const themed = (tokens: Record<string, Record<string, unknown>>, mode: 'none' | 'truecolor' = 'none') =>
-  createTheme(mode, toOverrides(parseSettings({ tokens })))
+  createTheme(mode, toOverrides(parseSettings({ tokens }), library))
 
 /** The text a framed row carries, without its sides or its padding. */
 const inner = (row: string): string => row.slice(1, -1).trim()

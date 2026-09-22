@@ -3,6 +3,10 @@ import { DEFAULT_PALETTE, DEFAULT_TOKENS, TUI_TOKENS, type TuiToken, resolveToke
 import { createTheme } from '@/theme.ts'
 import { parseSettings, toOverrides } from '@/theme-settings.ts'
 import { renderThemeTable } from '@/theme-command.ts'
+import { builtinLibrary } from '../support/themes.ts'
+
+/** The package's themes, which is what a name in a section resolves against. */
+const library = builtinLibrary()
 
 /** Every capability the surface can meet, so no token is only tested in one. */
 const MODES = ['truecolor', '256', '16', 'none'] as const
@@ -46,7 +50,7 @@ describe('token coverage', () => {
     // says; this drives each one through an override and requires an effect.
     for (const token of TUI_TOKENS) {
       const settings = parseSettings({ tokens: { [token]: { fg: '#ff00ff', bold: true } } })
-      const theme = createTheme('truecolor', toOverrides(settings))
+      const theme = createTheme('truecolor', toOverrides(settings, library))
       const styled = theme.style(token as TuiToken, 'x')
       expect(styled, `${token} ignored its override`).toContain('38;2;255;0;255')
     }
@@ -55,7 +59,7 @@ describe('token coverage', () => {
   it('lets every token be hidden', () => {
     for (const token of TUI_TOKENS) {
       const settings = parseSettings({ tokens: { [token]: { hidden: true } } })
-      const theme = createTheme('truecolor', toOverrides(settings))
+      const theme = createTheme('truecolor', toOverrides(settings, library))
       expect(theme.visible(token as TuiToken), `${token} cannot be hidden`).toBe(false)
     }
   })
@@ -63,8 +67,8 @@ describe('token coverage', () => {
 
 describe('/theme', () => {
   it('lists every element with the value in force and where it came from', () => {
-    const overrides = toOverrides(parseSettings({ tokens: { 'transcript.user': { fg: '#ff0000' } } }))
-    const lines = renderThemeTable(overrides)
+    const overrides = toOverrides(parseSettings({ tokens: { 'transcript.user': { fg: '#ff0000' } } }), library)
+    const lines = renderThemeTable(overrides, library)
     for (const token of TUI_TOKENS) {
       expect(lines.some(line => line.includes(token)), `${token} missing from /theme`).toBe(true)
     }
@@ -73,22 +77,30 @@ describe('/theme', () => {
   })
 
   it('names the theme in force, so the reader knows what they are looking at', () => {
-    expect(renderThemeTable(toOverrides(parseSettings({ theme: 'violet-orbit' })))[0]).toContain('violet-orbit')
-    expect(renderThemeTable(toOverrides(parseSettings({})))[0]).not.toContain('violet-orbit')
+    expect(renderThemeTable(toOverrides(parseSettings({ theme: 'violet-orbit' }), library), library)[0]).toContain('violet-orbit')
+    expect(renderThemeTable(toOverrides(parseSettings({}), library), library)[0]).not.toContain('violet-orbit')
   })
 
   it('reports a themed element as the theme, not as the reader', () => {
     // The whole point of the table is telling the reader which layer won, and
     // the file to edit differs: a theme row is not something they wrote.
-    const lines = renderThemeTable(toOverrides(parseSettings({ theme: 'violet-orbit' })))
+    const lines = renderThemeTable(toOverrides(parseSettings({ theme: 'violet-orbit' }), library), library)
     const title = lines.filter(line => line.includes('tool.title'))
     expect(title).toHaveLength(1)
     expect(title[0]).toContain('#8197f7')
-    expect(title[0]).toContain('(preset)')
+    expect(title[0]).toContain('(theme)')
   })
 
-  it('still reports an element the theme leaves alone as the palette', () => {
-    const lines = renderThemeTable(toOverrides(parseSettings({ theme: 'violet-orbit' })))
-    expect(lines.some(line => line.includes('transcript.reasoning.body') && line.includes('palette'))).toBe(true)
+  it('tells the reader which of the two files a row came from', () => {
+    // A complete theme names every element, so the origin column is what says
+    // which file to open: the theme's copy, or the line the reader wrote. What
+    // the theme does not name at all is reported as the palette, which the
+    // table drawn with no theme above covers.
+    const lines = renderThemeTable(toOverrides(parseSettings({
+      theme: 'violet-orbit',
+      tokens: { 'status.cwd': { fg: '#ff00ff' } },
+    }), library), library)
+    expect(lines.some(line => line.includes('transcript.reasoning.body') && line.includes('(theme)'))).toBe(true)
+    expect(lines.some(line => line.includes('status.cwd') && line.includes('(override)'))).toBe(true)
   })
 })
