@@ -32,8 +32,10 @@ breaking change, and a patch carries only fixes.
 
 - A PTC program's dispatched calls stay visible as one row each under the
   `run_code` header without opening the card, and a click opens one call's
-  argument in full while its neighbours stay as they were. A thought opens and
-  folds on a click too, instead of only through the key that moves every one.
+  argument in full while its neighbours stay as they were; opening a shell call
+  also shows the rows it printed, which the program's return value alone often
+  drops. A thought opens and folds on a click too, instead of only through the
+  key that moves every one.
 - Tool cards fold one message at a time: a click on a card opens or folds that
   row alone, and a `dsh-tui: tools:` block decides how each tool starts —
   whether its cards start folded and whether a fold hides its rows or keeps a

@@ -379,6 +379,16 @@ describe('TranscriptView expansion', () => {
     expect(view.render(60)).toEqual(folded)
   })
 
+  it('shows the output a clicked shell card kept', () => {
+    const view = viewOf(withRows(3, 'bash'))
+    expect(view.render(60)).toEqual(['bash Run echo rows · exit 0 · 3 lines'])
+    // A click opens the one card and reveals what the command printed.
+    view.handleMouse(mouse('click', 'left', 0))
+    const opened = view.render(60)
+    expect(opened.filter(line => line.startsWith('    row '))).toHaveLength(3)
+    expect(opened).toContain('    exit 0')
+  })
+
   it('names where the thought is when the row is folded', () => {
     let clock = 0
     const model = new TranscriptModel(undefined, () => clock)
@@ -917,17 +927,23 @@ describe('TranscriptView nested PTC calls', () => {
       if (typeof args.command === 'string') return cardOfCall({ card: 'terminal', title: args.command }, name)
       return cardOfCall({ card: 'generic', title: 'Read', kind: 'read', locations: [{ path: String(args.file_path ?? '') }] }, name)
     },
-    result: () => undefined,
+    result: (name, input) => name === 'bash'
+      ? cardOfResult(
+          { card: 'terminal', output: contentLines(input.content).join('\n'), exitCode: 0 },
+          { name, failed: input.isError, contentLines: contentLines(input.content) },
+        )
+      : undefined,
   }
 
-  /** One run_code program, its dispatches, and its result, in the order the log records them. */
-  const foldedProgram = (calls: readonly { readonly name: string; readonly args: Record<string, unknown>; readonly failed?: boolean }[]): TranscriptModel => {
+  /** One run_code program, its dispatches, and their results, in the order the log records them. */
+  const foldedProgram = (calls: readonly { readonly name: string; readonly args: Record<string, unknown>; readonly failed?: boolean; readonly content?: string }[]): TranscriptModel => {
     const model = new TranscriptModel(nestedPresenter)
     model.apply({ type: 'tool/call', data: { name: 'run_code', arguments: '{"description":"search the tree"}', callId: 'root' } })
     calls.forEach((call, at) => {
       const subCallId = `root:ptc:${at + 1}`
       model.apply({ type: 'tool/ptc-dispatch-start', data: { rootCallId: 'root', parentCallId: 'root', subCallId, name: call.name, arguments: call.args } })
-      model.apply({ type: 'tool/ptc-dispatch', data: { rootCallId: 'root', parentCallId: 'root', subCallId, name: call.name, arguments: call.args, isError: call.failed === true, content: [] } })
+      const content = call.content === undefined ? [] : [{ type: 'text', text: call.content }]
+      model.apply({ type: 'tool/ptc-dispatch', data: { rootCallId: 'root', parentCallId: 'root', subCallId, name: call.name, arguments: call.args, isError: call.failed === true, content } })
     })
     model.apply({ type: 'tool/result', data: { message: { content: [{ type: 'tool-result', toolCallId: 'root', text: 'done' }], isError: false } } })
     return model
@@ -975,6 +991,21 @@ describe('TranscriptView nested PTC calls', () => {
     const calls = Array.from({ length: SUBCALL_MAX + 1 }, (_, at) => ({ name: 'read', args: { file_path: `src/${at}.ts` } }))
     const lines = viewOf(foldedProgram(calls), INLINE).render(60)
     expect(lines).toContain('  … 1 more calls')
+  })
+
+  it('opens a dispatched shell call to the rows it printed', () => {
+    const model = foldedProgram([
+      { name: 'bash', args: { command: 'echo hi' }, content: 'hi\nthere' },
+      { name: 'read', args: { file_path: 'src/y.ts' } },
+    ])
+    const view = viewOf(model, FOLDED)
+    expect(view.render(60)).toEqual(['search the tree', '  bash echo hi', '  read src/y.ts'])
+    // The output is the reason to open the row, and only the clicked call gets it.
+    view.handleMouse(mouse('click', 'left', 1))
+    expect(view.render(60)).toEqual(['search the tree', '  bash echo hi', '    hi', '    there', '  read src/y.ts'])
+    // A click anywhere on the opened call closes it, output and all.
+    view.handleMouse(mouse('click', 'left', 2))
+    expect(view.render(60)).toEqual(['search the tree', '  bash echo hi', '  read src/y.ts'])
   })
 
   it('clips a call to one row and opens that call when it is clicked', () => {

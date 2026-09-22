@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { rowText, SUBCALL_MAX, type ToolCard, type ToolPresenter } from '@/cards.ts'
+import { cardOfCall, cardOfResult, contentLines, rowText, SUBCALL_MAX, type ToolCard, type ToolPresenter } from '@/cards.ts'
 import { REASONING_CHAR_LIMIT, TranscriptModel } from '@/transcript.ts'
 
 const text = (value: string) => [{ type: 'text', text: value }]
@@ -362,9 +362,9 @@ describe('TranscriptModel nested PTC calls', () => {
     type: 'tool/ptc-dispatch-start',
     data: { rootCallId, parentCallId: rootCallId, subCallId, name, arguments: args },
   })
-  const settle = (subCallId: string, name: string, args: unknown, isError: boolean) => ({
+  const settle = (subCallId: string, name: string, args: unknown, isError: boolean, content: readonly unknown[] = []) => ({
     type: 'tool/ptc-dispatch',
-    data: { rootCallId: 'root', parentCallId: 'root', subCallId, name, arguments: args, isError, content: [] },
+    data: { rootCallId: 'root', parentCallId: 'root', subCallId, name, arguments: args, isError, content },
   })
 
   it('draws a nested call on the card that dispatched it, and restates it with its outcome', () => {
@@ -383,6 +383,35 @@ describe('TranscriptModel nested PTC calls', () => {
     model.apply(runResult)
     const settled = model.entries()[0]
     expect(settled?.kind === 'tool' && settled.card.subCalls).toEqual([{ id: 'root:ptc:1', title: 'read pending', failed: true }])
+  })
+
+  it("keeps a dispatched shell call's output for the row a click opens", () => {
+    // The program answers with its own return value, so a call's own stdout has
+    // nowhere else to live; only a shell view carries it, because that output is
+    // what a reader opens the row to see.
+    const presenter: ToolPresenter = {
+      call: name => (name === 'bash' ? cardOfCall({ card: 'terminal', title: 'echo hi' }, name) : undefined),
+      result: (name, input) => (name === 'bash'
+        ? cardOfResult(
+            { card: 'terminal', output: contentLines(input.content).join('\n'), exitCode: 0 },
+            { name, failed: input.isError, contentLines: contentLines(input.content) },
+          )
+        : undefined),
+    }
+    const model = new TranscriptModel(presenter)
+    model.apply(runCall)
+    model.apply(start('root:ptc:1', 'bash', { command: 'echo hi' }))
+    model.apply(settle('root:ptc:1', 'bash', { command: 'echo hi' }, false, text('hi\nthere')))
+    const opened = model.entries()[0]
+    const output = opened?.kind === 'tool' ? opened.card.subCalls?.[0]?.output : undefined
+    expect(output?.kind).toBe('terminal')
+    expect(output?.rows.map(row => rowText(row))).toEqual(['hi', 'there'])
+    expect(output?.totalLines).toBe(2)
+
+    model.apply(start('root:ptc:2', 'read', { file_path: 'src/x.ts' }))
+    model.apply(settle('root:ptc:2', 'read', { file_path: 'src/x.ts' }, false, text('file body')))
+    const withRead = model.entries()[0]
+    expect(withRead?.kind === 'tool' && withRead.card.subCalls?.[1]?.output).toBeUndefined()
   })
 
   it('keeps the calls in dispatch order and counts every one', () => {

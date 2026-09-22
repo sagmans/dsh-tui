@@ -6,7 +6,7 @@ import {
   visibleWidth,
   wrapTextWithAnsi,
 } from '@earendil-works/pi-tui'
-import { cardDetailRows, clip, oneLine, shellFoldHint, shellRetentionHint, type CardPreview, type CardStat, type CardStatKind, type ToolCard } from '../cards.ts'
+import { cardDetailRows, clip, oneLine, shellFoldHint, shellRetentionHint, type CardPreview, type CardRow, type CardStat, type CardStatKind, type ToolCard, type ToolCardKind, type ToolSubCall } from '../cards.ts'
 import { defaultKeymap, hintKeys, type Keymap } from '../input/actions.ts'
 import { CUSTOM_ROW_NUMBER, type GateCard } from '../gates.ts'
 import { displayText } from '../text.ts'
@@ -415,15 +415,7 @@ export class TranscriptView implements Component {
       this.pushStyledWrapped(lines, this.theme.style('tool.args', displayText(card.argument)), width, DETAIL_INDENT)
     }
     for (const row of detail) {
-      // The row says what it is, so the renderer never guesses from the text:
-      // a diff line beginning with "+" is an addition because the presenter
-      // said so, not because of its first character.
-      const drawn = row.parts
-        .map(part => {
-          const token = CARD_ROW_TOKEN[card.kind]?.[part.class] ?? FALLBACK_ROW_TOKEN
-          return this.theme.visible(token) ? this.theme.style(token, displayText(part.text)) : ''
-        })
-        .join('')
+      const drawn = this.detailRow(row, card.kind)
       // A row whose every part is hidden draws nothing, and nothing must not
       // cost a line: the indent would read as an empty row the card does not have.
       if (drawn === '') continue
@@ -477,13 +469,38 @@ export class TranscriptView implements Component {
       // A row whose every part is hidden draws nothing, and nothing must not
       // cost a line the card does not have.
       if (drawn === '') continue
-      if (open) this.pushStyledWrapped(lines, drawn, width, SUBCALL_INDENT)
-      else lines.push(this.theme.cut(`${SUBCALL_INDENT}${drawn}`, collapsedEdge(width), '…'))
+      if (open) {
+        this.pushStyledWrapped(lines, drawn, width, SUBCALL_INDENT)
+        this.pushSubCallOutput(lines, call, width)
+      } else {
+        lines.push(this.theme.cut(`${SUBCALL_INDENT}${drawn}`, collapsedEdge(width), '…'))
+      }
       spans.push({ key: subCallClickKey(entry.id, call.id), start, end: lines.length, expanded: open })
     }
     const hidden = (card.subCallsTotal ?? subCalls.length) - subCalls.length
     if (hidden > 0 && this.theme.visible('tool.hint')) {
       lines.push(this.theme.style('tool.hint', this.theme.cut(`${SUBCALL_INDENT}… ${hidden} more calls`, width, '')))
+    }
+  }
+
+  /**
+   * The rows a dispatched shell call printed, under the argument a click opened.
+   *
+   * The parent card keeps only the program's return value, so a call's own
+   * output is otherwise gone; a reader who opens the row is asking for it. The
+   * retention is the card's, so a long run still says what it dropped.
+   */
+  private pushSubCallOutput(lines: string[], call: ToolSubCall, width: number): void {
+    const output = call.output
+    if (output === undefined) return
+    for (const row of output.rows) {
+      const drawn = this.detailRow(row, output.kind)
+      if (drawn === '') continue
+      lines.push(this.theme.cut(`${DETAIL_INDENT}${drawn}`, width, ''))
+    }
+    const hidden = output.totalLines - output.rows.length
+    if (hidden > 0 && this.theme.visible('tool.hint')) {
+      lines.push(this.theme.style('tool.hint', this.theme.cut(`${DETAIL_INDENT}${shellRetentionHint(hidden)}`, width, '')))
     }
   }
 
@@ -523,6 +540,22 @@ export class TranscriptView implements Component {
     // that begins with a separator reads as a row that lost its first word.
     if (head === '' && tail.startsWith(separator)) tail = tail.slice(separator.length)
     return `${lead}${head}${tail}`
+  }
+
+  /**
+   * One detail row, drawn with its own kind's colours or nothing at all.
+   *
+   * The row says what it is, so the renderer never guesses from the text: a diff
+   * line beginning with "+" is an addition because the presenter said so, not
+   * because of its first character.
+   */
+  private detailRow(row: CardRow, kind: ToolCardKind): string {
+    return row.parts
+      .map(part => {
+        const token = CARD_ROW_TOKEN[kind]?.[part.class] ?? FALLBACK_ROW_TOKEN
+        return this.theme.visible(token) ? this.theme.style(token, displayText(part.text)) : ''
+      })
+      .join('')
   }
 
   /** The mark that introduces a card, empty when the theme hides its label. */

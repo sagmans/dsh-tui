@@ -1,4 +1,4 @@
-import { cardFromLines, carriedFields, mergeCards, subCallOf, SUBCALL_MAX, type ToolCard, type ToolPresenter } from './cards.ts'
+import { cardFromLines, carriedFields, contentLines, mergeCards, subCallOf, SUBCALL_MAX, type ToolCard, type ToolPresenter, type ToolSubCallOutput } from './cards.ts'
 import { countTokens } from './tokens.ts'
 
 /** One renderable transcript row. */
@@ -413,18 +413,27 @@ export class TranscriptModel {
     const entry = this.settled[root.index]
     const card = entry !== undefined && entry.kind === 'tool' ? entry.card : undefined
     if (card === undefined) return
+    const name = typeof data.name === 'string' ? data.name : 'tool'
+    const argumentsJson = argumentsJsonOf(data.arguments)
+    const output = settled ? this.subCallOutput(name, argumentsJson, data) : undefined
     const known = this.pendingSub.get(subCallId)
     if (known !== undefined) {
-      // A settle only restates the row its start already drew, and only when the
-      // call failed; nothing else about the row can change.
-      if (!settled || known.childIndex < 0 || data.isError !== true) return
-      const subCalls = (card.subCalls ?? []).map((call, at) => (at === known.childIndex ? { ...call, failed: true } : call))
+      // A settle restates the row its start drew: it can add a failure and the
+      // output a reader opens the row for, and nothing else about the row moves.
+      if (!settled || known.childIndex < 0) return
+      const failed = data.isError === true
+      if (!failed && output === undefined) return
+      const subCalls = (card.subCalls ?? []).map((call, at) => at === known.childIndex
+        ? { ...call, ...(failed ? { failed: true } : {}), ...(output === undefined ? {} : { output }) }
+        : call)
       this.settled[root.index] = { kind: 'tool', id: rootCallId, card: { ...card, subCalls } }
       return
     }
-    const name = typeof data.name === 'string' ? data.name : 'tool'
-    const argumentsJson = argumentsJsonOf(data.arguments)
-    const call = { ...subCallOf(subCallId, name, argumentsJson, this.presenter?.call(name, argumentsJson)), failed: settled && data.isError === true }
+    const call = {
+      ...subCallOf(subCallId, name, argumentsJson, this.presenter?.call(name, argumentsJson)),
+      failed: settled && data.isError === true,
+      ...(output === undefined ? {} : { output }),
+    }
     const kept = card.subCalls ?? []
     const total = (card.subCallsTotal ?? 0) + 1
     if (kept.length >= SUBCALL_MAX) {
@@ -437,6 +446,24 @@ export class TranscriptModel {
     root.subs.push(subCallId)
     this.pendingSub.set(subCallId, { rootIndex: root.index, childIndex: kept.length })
     this.settled[root.index] = { kind: 'tool', id: rootCallId, card: { ...card, subCalls: [...kept, call], subCallsTotal: total } }
+  }
+
+  /**
+   * The output a dispatched shell call printed, for the row a click opens.
+   *
+   * Only a terminal view carries it: other tools present their outcome through
+   * the program's own return value, while a shell's output is what a program
+   * usually reduces to an exit status, and the row is opened to read it. A
+   * presenter that declines the result still gets its content lines, so a
+   * shell call never opens to an empty row.
+   */
+  private subCallOutput(name: string, argumentsJson: string, data: Record<string, unknown>): ToolSubCallOutput | undefined {
+    if (this.presenter?.call(name, argumentsJson)?.kind !== 'terminal') return undefined
+    const failed = data.isError === true
+    const card = this.presenter?.result(name, { argumentsJson, content: data.content, isError: failed, meta: data.meta })
+      ?? cardFromLines('terminal', name, name, contentLines(data.content), failed)
+    if (card.detail.length === 0) return undefined
+    return { kind: card.kind, rows: card.detail, totalLines: card.totalLines }
   }
 
   private settleToolResult(data: Record<string, unknown>): void {

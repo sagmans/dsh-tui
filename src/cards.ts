@@ -91,6 +91,24 @@ export interface ToolSubCall {
   readonly title: string
   readonly argument?: string
   readonly failed: boolean
+  /** What a shell call printed, kept only for the reader who opens the row. */
+  readonly output?: ToolSubCallOutput
+}
+
+/**
+ * The outcome a nested shell call printed.
+ *
+ * A program answers with its own return value, so the output of the calls it
+ * dispatched is otherwise gone; a reader opening one of those rows is asking
+ * for exactly this, and the row it belongs to is where it must live.
+ */
+export interface ToolSubCallOutput {
+  /** The view kind that drew the call, so its rows use that tool's colours. */
+  readonly kind: ToolCardKind
+  /** Rows retained for rendering, already capped at CARD_DETAIL_MAX. */
+  readonly rows: readonly CardRow[]
+  /** Rows the call actually printed, which retention may have cut short. */
+  readonly totalLines: number
 }
 
 /** One renderable tool row: a header plus the detail rows kept for rendering. */
