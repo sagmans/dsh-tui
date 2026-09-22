@@ -8,69 +8,14 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-22
+
 ### Added
 
 - An assistant reply is drawn inside a frame of its own, in the
   `transcript.assistant.border` element, so one exchange reads as two objects
   rather than as a box followed by a stream of rows. Hiding that element draws the
   reply bare, exactly as hiding `editor.border` does for a prompt.
-
-### Changed
-
-- A theme name the surface does not have is no longer a settings error. The names
-  are files, so a name nothing answers to is reported as a notice listing the ones
-  that do, and the default theme is drawn meanwhile; a settings document naming a
-  theme therefore loads even if the file is renamed or deleted later. `/theme`
-  reports a themed element's origin as `theme` rather than `preset`, and its
-  footer names the themes actually on disk, marking the ones in your directory,
-  with the export hint.
-- `/theme` opens a list of the themes on disk instead of printing the table. The
-  list narrows as you type and the screen paints the row under the cursor, so two
-  themes are compared on the reader's own transcript; nothing is written until one
-  is taken, and leaving the list puts back the theme that was in force. The table
-  is still there, as `/theme tokens`.
-- `/keys` opens the key map as a list you filter as you type instead of
-  printing every row into the transcript. `/keys <layer>` opens the same list
-  already narrowed to one layer, and a layer name the surface does not have is
-  still refused with the names it does.
-- Ctrl+C no longer leaves. It takes back one thing per press — the draft in the
-  bar, the prompts waiting in the agent's inbox (put back into the bar before the
-  turn is stopped, because an interrupt drops them), the running turn, or a
-  child's conversation — and with a picker, an approval, a question, or the
-  transcript search open it closes that first. A press with nothing left to
-  cancel does nothing rather than ending the session. Ctrl+D is the only key
-  that leaves, and only while the bar holds no text: a running turn is cancelled
-  on the way out, the resume command prints, and the terminal is restored as
-  before. `/quit` and `/exit` still leave.
-- A question gate gained an abandon key: Ctrl+C settles the batch with no
-  answers, the shape an aborted call already produces, while Esc keeps skipping
-  one question. An approval now cancels on Ctrl+C as well as Esc.
-- A folded tool card is one row for every tool, bash included: the row carries
-  the tool, its command clipped at the screen edge, the exit status, and the
-  count of output rows waiting behind the fold, instead of spending twenty
-  rows on shell output by default. `output: tail` restores a preview window per
-  tool, and a PTC card's dispatched calls stay one row each under the header.
-- A thought and the row naming it both recede to a shade below the muted
-  family, and only the row is italic, so the signpost no longer competes with
-  the text it introduces.
-- Injected context rows name what arrived instead of only the producer: the
-  workspace-instructions row lists the instruction files it loaded
-  (`~/.dsh/AGENTS.md`, `AGENTS.md`, or the nested file a later delta touched),
-  the skill catalog reports how many entries it published, a runtime snapshot
-  names its sections, and notices, relays, goals, and cross-session recalls get
-  labels of their own. A source that declares no form keeps the previous
-  `producer · N lines — preview` row.
-- Tool output, model text, and file content are drawn the way a terminal would
-  draw them instead of being escaped into visible bytes: a colour the terminal
-  can show is shown at the session's colour budget, a tab lands on the column
-  its writer saw, and a carriage return collapses to the state its row settled
-  on. Cursor moves, screen clears, window titles, and clipboard writes are still
-  consumed, so a hostile result cannot reach the terminal, and a stray control
-  byte is spelled out rather than dropped. Text the surface paints itself — a
-  ghost suggestion, a completion row, a queued prompt, an export — carries no
-  colour, because the surface is already styling it.
-
-### Added
 
 - Themes are files. The package ships each one in full — `deepseek-blue`, the
   table written out element by element in the colours the project answers to, and
@@ -150,6 +95,59 @@ breaking change, and a patch carries only fixes.
   the typed line that would have replaced the draft in the bar.
 
 ### Changed
+
+- A theme name the surface does not have is no longer a settings error. The names
+  are files, so a name nothing answers to is reported as a notice listing the ones
+  that do, and the default theme is drawn meanwhile; a settings document naming a
+  theme therefore loads even if the file is renamed or deleted later. `/theme`
+  reports a themed element's origin as `theme` rather than `preset`, and its
+  footer names the themes actually on disk, marking the ones in your directory,
+  with the export hint.
+- `/theme` opens a list of the themes on disk instead of printing the table. The
+  list narrows as you type and the screen paints the row under the cursor, so two
+  themes are compared on the reader's own transcript; nothing is written until one
+  is taken, and leaving the list puts back the theme that was in force. The table
+  is still there, as `/theme tokens`.
+- `/keys` opens the key map as a list you filter as you type instead of
+  printing every row into the transcript. `/keys <layer>` opens the same list
+  already narrowed to one layer, and a layer name the surface does not have is
+  still refused with the names it does.
+- Ctrl+C no longer leaves. It takes back one thing per press — the draft in the
+  bar, the prompts waiting in the agent's inbox (put back into the bar before the
+  turn is stopped, because an interrupt drops them), the running turn, or a
+  child's conversation — and with a picker, an approval, a question, or the
+  transcript search open it closes that first. A press with nothing left to
+  cancel does nothing rather than ending the session. Ctrl+D is the only key
+  that leaves, and only while the bar holds no text: a running turn is cancelled
+  on the way out, the resume command prints, and the terminal is restored as
+  before. `/quit` and `/exit` still leave.
+- A question gate gained an abandon key: Ctrl+C settles the batch with no
+  answers, the shape an aborted call already produces, while Esc keeps skipping
+  one question. An approval now cancels on Ctrl+C as well as Esc.
+- A folded tool card is one row for every tool, bash included: the row carries
+  the tool, its command clipped at the screen edge, the exit status, and the
+  count of output rows waiting behind the fold, instead of spending twenty
+  rows on shell output by default. `output: tail` restores a preview window per
+  tool, and a PTC card's dispatched calls stay one row each under the header.
+- A thought and the row naming it both recede to a shade below the muted
+  family, and only the row is italic, so the signpost no longer competes with
+  the text it introduces.
+- Injected context rows name what arrived instead of only the producer: the
+  workspace-instructions row lists the instruction files it loaded
+  (`~/.dsh/AGENTS.md`, `AGENTS.md`, or the nested file a later delta touched),
+  the skill catalog reports how many entries it published, a runtime snapshot
+  names its sections, and notices, relays, goals, and cross-session recalls get
+  labels of their own. A source that declares no form keeps the previous
+  `producer · N lines — preview` row.
+- Tool output, model text, and file content are drawn the way a terminal would
+  draw them instead of being escaped into visible bytes: a colour the terminal
+  can show is shown at the session's colour budget, a tab lands on the column
+  its writer saw, and a carriage return collapses to the state its row settled
+  on. Cursor moves, screen clears, window titles, and clipboard writes are still
+  consumed, so a hostile result cannot reach the terminal, and a stray control
+  byte is spelled out rather than dropped. Text the surface paints itself — a
+  ghost suggestion, a completion row, a queued prompt, an export — carries no
+  colour, because the surface is already styling it.
 
 - A prompt stash belongs to the session that parked it rather than to the
   working directory: a second terminal in the same checkout no longer sees or
@@ -370,7 +368,8 @@ breaking change, and a patch carries only fixes.
 - Publication through npm OIDC trusted publishing, with the first version
   bootstrapped by hand ([#5](https://github.com/sagmans/dsh-tui/pull/5)).
 
-[Unreleased]: https://github.com/sagmans/dsh-tui/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/sagmans/dsh-tui/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/sagmans/dsh-tui/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/sagmans/dsh-tui/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/sagmans/dsh-tui/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/sagmans/dsh-tui/compare/v0.1.2...v0.2.0
