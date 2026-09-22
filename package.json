@@ -33,6 +33,7 @@
   },
   "files": [
     "lib",
+    "themes",
     "cordis.patch.yml",
     "README.md"
   ],
@@ -80,6 +81,7 @@
     "@deepseek-ai/schemastery": "3.18.2",
     "@earendil-works/pi-tui": "0.85.1",
     "commander": "^15.0.0",
+    "js-yaml": "4.3.2",
     "lovely-mermaid": "0.3.3"
   },
   "peerDependencies": {
