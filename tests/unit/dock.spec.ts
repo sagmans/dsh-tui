@@ -16,12 +16,19 @@ describe('WorkDock', () => {
   })
 
   it('states the goal with its round budget', () => {
-    const lines = dockOf({ ...EMPTY, goal: { objective: 'complete the plan', roundsStarted: 3, maxRounds: 256 } }).render(80)
+    const lines = dockOf({ ...EMPTY, goal: { objective: 'complete the plan', roundsStarted: 3, maxRounds: 256, phase: 'active' } }).render(80)
     expect(lines).toEqual(['◎ goal round 3/256 · complete the plan'])
   })
 
+  it('names a stalled goal so it never reads as running', () => {
+    const paused = dockOf({ ...EMPTY, goal: { objective: 'complete the plan', roundsStarted: 3, maxRounds: 256, phase: 'paused' } }).render(80)
+    expect(paused).toEqual(['◎ goal paused · round 3/256 · complete the plan'])
+    const blocked = dockOf({ ...EMPTY, goal: { objective: 'complete the plan', roundsStarted: 3, maxRounds: 256, phase: 'blocked' } }).render(80)
+    expect(blocked).toEqual(['◎ goal blocked · round 3/256 · complete the plan'])
+  })
+
   it('marks where a goal was cut off', () => {
-    const lines = dockOf({ ...EMPTY, goal: { objective: 'x'.repeat(400), roundsStarted: 1, maxRounds: undefined } }).render(80)
+    const lines = dockOf({ ...EMPTY, goal: { objective: 'x'.repeat(400), roundsStarted: 1, maxRounds: undefined, phase: 'active' } }).render(80)
     expect(visibleWidth(lines[0] ?? '')).toBeLessThanOrEqual(80)
     expect(lines[0]).toContain('…')
   })

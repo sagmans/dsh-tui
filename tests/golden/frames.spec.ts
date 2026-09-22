@@ -229,7 +229,7 @@ function busyDock(frameTheme = theme): WorkDock {
     { content: 'write the dock', status: 'completed' },
     { content: 'verify the dock', status: 'in_progress' },
   ] } })
-  work.apply({ type: 'goal/change', data: { operation: 'create', roundsStarted: 6, goal: { objective: 'complete the plan for this dsh-tui plugin', maxGoalRounds: 256 } } })
+  work.apply({ type: 'goal/change', data: { operation: 'create', roundsStarted: 6, goal: { objective: 'complete the plan for this dsh-tui plugin', phase: 'active', maxGoalRounds: 256 } } })
   const jobs = [
     { id: 'bash-1', kind: 'bash', label: 'sleep 45 && echo bg-done', status: 'running' as const, startedAt: NOW - 12_000, finishedAt: undefined },
   ]

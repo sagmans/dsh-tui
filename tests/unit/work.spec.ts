@@ -51,11 +51,38 @@ describe('WorkFold', () => {
   it('follows a goal and forgets it on the clear tombstone', () => {
     const fold = foldWith({
       type: 'goal/change',
-      data: { operation: 'create', roundsStarted: 2, goal: { objective: 'ship it', maxGoalRounds: 256 } },
+      data: { operation: 'create', roundsStarted: 2, goal: { objective: 'ship it', phase: 'active', maxGoalRounds: 256 } },
     })
-    expect(fold.state().goal).toEqual({ objective: 'ship it', roundsStarted: 2, maxRounds: 256 })
+    expect(fold.state().goal).toEqual({ objective: 'ship it', roundsStarted: 2, maxRounds: 256, phase: 'active' })
     fold.apply({ type: 'goal/change', data: { operation: 'clear', cleared: { id: 'g' } } })
     expect(fold.state().goal).toBeUndefined()
+  })
+
+  it('forgets a goal the harness marks complete', () => {
+    // Completion is a full snapshot with phase complete, not a clear tombstone:
+    // the harness keeps the last goal, and the dock must not read it as running.
+    const fold = foldWith(
+      { type: 'goal/change', data: { operation: 'create', roundsStarted: 2, goal: { objective: 'ship it', phase: 'active', maxGoalRounds: 256 } } },
+      { type: 'goal/change', data: { operation: 'complete', roundsStarted: 2, goal: { objective: 'ship it', phase: 'complete', maxGoalRounds: 256 } } },
+    )
+    expect(fold.state().goal).toBeUndefined()
+    // A completed goal is replaceable, and the replacement is the only goal on the row.
+    fold.apply({ type: 'goal/change', data: { operation: 'create', roundsStarted: 0, goal: { objective: 'next', phase: 'active', maxGoalRounds: 8 } } })
+    expect(fold.state().goal).toEqual({ objective: 'next', roundsStarted: 0, maxRounds: 8, phase: 'active' })
+  })
+
+  it('keeps a stalled goal with the phase that names it', () => {
+    const fold = foldWith({
+      type: 'goal/change',
+      data: { operation: 'create', roundsStarted: 2, goal: { objective: 'ship it', phase: 'active', maxGoalRounds: 256 } },
+    })
+    fold.apply({ type: 'goal/change', data: { operation: 'pause', roundsStarted: 2, goal: { objective: 'ship it', phase: 'paused', maxGoalRounds: 256 } } })
+    expect(fold.state().goal).toEqual({ objective: 'ship it', roundsStarted: 2, maxRounds: 256, phase: 'paused' })
+    fold.apply({
+      type: 'goal/change',
+      data: { operation: 'block', roundsStarted: 2, goal: { objective: 'ship it', phase: 'blocked', maxGoalRounds: 256, blockedReason: { code: 'needs-answer', message: 'waiting on a decision' } } },
+    })
+    expect(fold.state().goal).toEqual({ objective: 'ship it', roundsStarted: 2, maxRounds: 256, phase: 'blocked' })
   })
 
   it('resets to a blank state', () => {

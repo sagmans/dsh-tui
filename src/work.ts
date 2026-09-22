@@ -11,6 +11,14 @@ export interface GoalState {
   readonly objective: string
   readonly roundsStarted: number
   readonly maxRounds: number | undefined
+  /**
+   * The phase the row has to name.
+   *
+   * Completion never reaches the dock: the harness keeps the completed snapshot
+   * as the session's last goal, and a settled item leaves the board instead of
+   * turning into a completed row.
+   */
+  readonly phase: 'active' | 'paused' | 'blocked'
 }
 
 /** What the agent is working on, folded from durable events. */
@@ -191,14 +199,25 @@ export class WorkFold {
         const goal = asRecord(data.goal)
         const objective = goal?.objective
         if (typeof objective !== 'string') return
+        // Completion commits a full snapshot instead of a clear tombstone and
+        // stays as the session's last goal: work that is over has to leave the
+        // board, or its row keeps reading as a loop still running.
+        if (data.operation === 'complete' || goal?.phase === 'complete') {
+          this.goal = undefined
+          return
+        }
         const maxRounds = goal?.maxGoalRounds
         const roundsStarted = typeof data.roundsStarted === 'number'
           ? data.roundsStarted
           : typeof goal?.roundsStarted === 'number' ? goal.roundsStarted : 0
+        const phase = goal?.phase
         this.goal = {
           objective,
           roundsStarted,
           maxRounds: typeof maxRounds === 'number' ? maxRounds : undefined,
+          // A phase the harness did not name is a goal this fold cannot label as
+          // stalled, so it reads as active rather than claiming more than it knows.
+          phase: phase === 'paused' || phase === 'blocked' ? phase : 'active',
         }
         return
       }
