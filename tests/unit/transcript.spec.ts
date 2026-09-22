@@ -173,6 +173,35 @@ describe('TranscriptModel reasoning', () => {
     ])
   })
 
+  it('paints every recorded thought when a turn replays several messages', () => {
+    const model = new TranscriptModel()
+    const message = (thought: string, answer: string) => ({
+      type: 'assistant/message',
+      data: { message: { content: [{ type: 'reasoning', text: thought }, { type: 'text', text: answer }] } },
+    })
+    // History replay has no streams at all, so each message's thought is news;
+    // one message's recorded thought must not swallow the next one's.
+    model.apply(message('first', 'one'))
+    model.apply(message('second', 'two'))
+    model.apply(message('third', 'three'))
+    const bodies = model.entries().flatMap(entry => (entry.kind === 'reasoning' ? [entry.body] : []))
+    expect(bodies).toEqual(['first', 'second', 'third'])
+  })
+
+  it('retires a thought the turn never settled', () => {
+    const model = new TranscriptModel()
+    model.applyStreamChunk({ type: 'reasoning-delta', text: 'old' })
+    model.apply({ type: 'turn/end', data: { reason: { kind: 'aborted', reason: { kind: 'user' } } } })
+    // A thought the turn never settled must not stay live across the gap: the
+    // next turn's deltas would read as a continuation of it.
+    expect(model.entries()).toEqual([{ kind: 'notice', text: 'turn aborted (user)' }])
+    model.applyStreamChunk({ type: 'reasoning-delta', text: 'new' })
+    expect(model.entries()).toEqual([
+      { kind: 'notice', text: 'turn aborted (user)' },
+      { kind: 'reasoning', id: '2', summary: expect.any(String), body: 'new', live: true },
+    ])
+  })
+
   it('gives each thought its own id and never reuses one after a reset', () => {
     const model = new TranscriptModel()
     const message = (...thoughts: string[]) => ({
@@ -383,6 +412,33 @@ describe('TranscriptModel nested PTC calls', () => {
     model.apply(runResult)
     const settled = model.entries()[0]
     expect(settled?.kind === 'tool' && settled.card.subCalls).toEqual([{ id: 'root:ptc:1', title: 'read pending', failed: true }])
+  })
+
+  it('accepts a replayed dispatch after the fold was reset', () => {
+    const model = new TranscriptModel(recordingPresenter())
+    model.apply(runCall)
+    model.apply(start('root:ptc:1', 'read', { file_path: 'src/x.ts' }))
+    model.reset()
+    // A session switch replays the same ids through the same fold; the remembered
+    // child index belongs to the fold that was dropped, not to this one.
+    model.apply(runCall)
+    model.apply(start('root:ptc:1', 'read', { file_path: 'src/x.ts' }))
+    const replayed = model.entries()[0]
+    expect(replayed?.kind === 'tool' && replayed.card.subCalls).toHaveLength(1)
+  })
+
+  it('forgets a call it did not keep when the run that dispatched it settles', () => {
+    const model = new TranscriptModel(recordingPresenter())
+    model.apply({ type: 'tool/call', data: { name: 'run_code', arguments: '{}', callId: 'a' } })
+    for (let at = 0; at < SUBCALL_MAX; at++) model.apply(start(`a:${at}`, 'read', { file_path: 'f' }, 'a'))
+    model.apply(start('a:overflow', 'read', { file_path: 'f' }, 'a'))
+    model.apply({ type: 'tool/result', data: { message: { content: [{ type: 'tool-result', toolCallId: 'a', text: 'done' }], isError: false } } })
+    // An overflow row has no row to clean up after, so its bookkeeping has to be
+    // retired with the run; kept, it would refuse the same id to the next run.
+    model.apply({ type: 'tool/call', data: { name: 'run_code', arguments: '{}', callId: 'b' } })
+    model.apply(start('a:overflow', 'read', { file_path: 'f' }, 'b'))
+    const second = model.entries()[1]
+    expect(second?.kind === 'tool' && second.card.subCalls).toHaveLength(1)
   })
 
   it("keeps a dispatched shell call's output for the row a click opens", () => {

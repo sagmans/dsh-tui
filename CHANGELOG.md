@@ -70,6 +70,9 @@ breaking change, and a patch carries only fixes.
 
 ### Fixed
 
+- A fold no longer keeps sub-call indexing from a session that was dropped, a
+  thought the stream never settled no longer stays live into the next turn, and
+  every thought a replayed turn recorded is painted instead of every other one.
 - A click in the prompt bar reaches the editor that drew it, the work board
   gives up rows before the input bar does — which keeps a frame's worth of rows
   no shrink can take — and live text and failures fold into the session the

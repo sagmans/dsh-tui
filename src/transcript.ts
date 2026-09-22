@@ -202,6 +202,10 @@ export class TranscriptModel {
   reset(): void {
     this.settled.length = 0
     this.pending.clear()
+    // The sub-call bookkeeping names rows of the fold being dropped, so it goes
+    // with them: an index kept across the reset would refuse a replayed call the
+    // row it is entitled to.
+    this.pendingSub.clear()
     this.live = ''
     this.liveReasoning = ''
     this.liveReasoningId = undefined
@@ -290,7 +294,6 @@ export class TranscriptModel {
       body: text.slice(0, REASONING_CHAR_LIMIT) + cut,
       live: false,
     })
-    this.reasoningPaintedThisStep = true
   }
 
   /** Settle the reasoning streamed so far into a row of its own. */
@@ -301,6 +304,9 @@ export class TranscriptModel {
     this.liveReasoning = ''
     this.reasoningStartedAt = undefined
     this.paintReasoning(text, ranFor)
+    // This thought arrived as a stream, so the recorded copy the step ends with
+    // restates it rather than reporting a second one.
+    this.reasoningPaintedThisStep = true
   }
 
   apply(event: FoldableEvent): void {
@@ -319,6 +325,12 @@ export class TranscriptModel {
         // A turn that ended without a recorded message must not leave streamed
         // text on screen as though it had settled.
         this.live = ''
+        // The same goes for the thought that was streaming: left in place it
+        // would stay live across the gap and the next turn's deltas would be
+        // appended to a thought that turn never had.
+        this.liveReasoning = ''
+        this.liveReasoningId = undefined
+        this.reasoningStartedAt = undefined
         // A step that ended without a message cannot own the next one's thoughts.
         this.reasoningPaintedThisStep = false
         return
@@ -438,8 +450,11 @@ export class TranscriptModel {
     const total = (card.subCallsTotal ?? 0) + 1
     if (kept.length >= SUBCALL_MAX) {
       // Retention keeps the head, where the calls that shaped the program are;
-      // the count still reports everything it dispatched.
+      // the count still reports everything it dispatched. The id is remembered
+      // so a settle is not counted twice, and listed on the root so the root's
+      // own cleanup forgets it — an overflow row has no row to clean up after.
       this.pendingSub.set(subCallId, { rootIndex: root.index, childIndex: -1 })
+      root.subs.push(subCallId)
       this.settled[root.index] = { kind: 'tool', id: rootCallId, card: { ...card, subCallsTotal: total } }
       return
     }
