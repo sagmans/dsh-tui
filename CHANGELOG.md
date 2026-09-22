@@ -98,6 +98,11 @@ breaking change, and a patch carries only fixes.
   frame treats one fact twice and reads as a selected row; and it lifts a tool's
   argument out of pi's link blue, which sat too close to the periwinkle pi gives
   a tool's name for one row to read as the two facts it carries.
+- Every tool's dispatched call opens on a click to what that tool declared and
+  what it produced, not only a shell's output: an edit's diff in the diff
+  colours, a read's lines, a search's hits. What the call declared is kept from
+  the moment it starts, so the row opens while the call still runs and keeps the
+  state the reader gave it when the outcome lands.
 
 ### Changed
 
@@ -149,6 +154,11 @@ breaking change, and a patch carries only fixes.
   needed a cut.
 - A picker's hint folds under its indent instead of being cut, so a narrow
   screen still names the keys that leave the list (`esc/ctrl+c`).
+- A failed call's own details are reachable. A program's dispatched call kept
+  rows only when its tool drew a shell view, so the red row a reader clicked for
+  an edit, a read, or a search opened to nothing; the outcome the model was shown
+  is now kept for every kind, and a failure takes back the change it declared
+  rather than drawing rows for work that never happened.
 
 ## [0.4.0] - 2026-09-21
 

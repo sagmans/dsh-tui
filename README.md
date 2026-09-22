@@ -128,7 +128,7 @@ force, and the `keys:` section moves any of them — see [Keys](#keys).
 | Ctrl+C | take back one thing at a time: the draft in the bar, the prompts waiting in the agent's inbox, the running turn, or a child's conversation; with a picker, an approval, a question, or the transcript search open it closes that instead. With nothing left to cancel it does nothing — it never leaves |
 | Ctrl+D | leave and print the resume command, when the bar holds no text and nothing is open; a running turn is cancelled first |
 | Ctrl+O | open every tool card: its header plus every retained row. Folded, a card is one line, and a shell card keeps its command plus the last 20 rows of output with a hint naming what it dropped |
-| Ctrl+Y | show or hide the calls a PTC program dispatched: one two-space-indented row per call under its `run_code` card, named and argued from the tool's own header and cut at the screen edge; clicking one row opens that call's argument in full; shown by default |
+| Ctrl+Y | show or hide the calls a PTC program dispatched: one two-space-indented row per call under its `run_code` card, named and argued from the tool's own header and cut at the screen edge; clicking one row opens that call in full — the change it declared, then what it produced — for every tool, a failed call included; shown by default |
 | Shift+Tab | expand or fold every thought behind the answers: folded, the row names itself, its token count, and the key; opened, it adds the thought, laid out as markdown; a click decides for one thought instead |
 | Ctrl+T | pick the reasoning effort for the next step |
 | Ctrl+R | reverse-search recorded prompts: the list opens filtered by whatever is in the bar, `enter` puts one back, `esc` keeps the draft |
@@ -370,8 +370,12 @@ the argument is what gives up that room: a wide terminal shows more of the call,
 a narrow one still shows the tool, how it ended, and how much waits behind the
 fold. The reserved `default` row applies to every tool without its own, and a
 tool name nothing declares is inert: the surface cannot know which tools a
-profile mounts. Clicking a card opens or folds that one message, and `Ctrl+O`
-still decides for every message nobody clicked.
+profile mounts. Clicking a card opens or folds that one message, and a dispatched
+call's row opens on the same click to what the tool itself drew for it — an
+edit's diff in the diff colours, a read's numbered lines, a command and its
+output — followed by the outcome it produced; a call that failed opens to the
+reason it reported instead of rows for work that never happened. `Ctrl+O` still
+decides for every message nobody clicked.
 
 The `history` block tunes the prompt history. `enabled: false` stops recording
 and offering it; `ghost: false` keeps reverse search but stops the dimmed
@@ -640,11 +644,13 @@ The automated checks drive a real PTY, but they run on this machine's terminal. 
 | `dsh --profile tui --no-bell` | a turn that runs for minutes still ends silently |
 | `dsh --profile tui --preset ptc`, then a turn | the status line names `ptc`, and the agent reaches its tools through one TypeScript program rather than one shell call at a time |
 | a PTC turn | one row per dispatched call draws two spaces indented under the `run_code` header without opening it |
-| that turn, then a click on one of those rows | that call's argument unfolds in full across continuation rows at the same indent, a shell call adds the rows it printed under it, and its neighbours and the card stay as they were |
+| that turn, then a click on one of those rows | that call unfolds in full at the same indent: its argument, then what the tool itself drew — an edit's diff in the diff colours, a read's lines, a shell's output — and its neighbours and the card stay as they were |
+| a PTC turn in which a dispatched call failed, then a click on that red row | the row opens to the reason the call reported, and a click on those rows folds it back |
 | that same turn, then `ctrl+y` | the rows fold away; `ctrl+y` again draws them back |
 | `dsh-tui: { subcalls: collapsed }` in `$DSH_HOME/settings.yaml`, then a PTC turn | the card arrives alone, and editing the document to `inline` draws the one-line calls in a running session |
 | a thought, folded | a click on the row opens the thought under its summary; a click on the body folds it back, and the other thoughts keep their own state |
 | a bash card, then a click on it | the row opens to its command, its retained output, and its exit status; a click folds it back to one row |
+| a call that failed, then a click on its card | the card opens to the reason it failed — the same words the model was shown — and a click folds it back |
 | `dsh-tui: { tools: { bash: { output: tail, tail: 5 } } }`, then a bash run | the folded row keeps the last five output rows and counts the rest |
 | `dsh-tui: { tools: { read: { collapsed: false } } }`, then a read | the card starts open; folded on a narrow terminal, the path gives up room first and the row stops short of the edge |
 | `dsh-tui: { tools: { nope: { collapsed: false } } }` | accepted and inert, because the surface cannot know which tools a profile mounts |
