@@ -1,0 +1,168 @@
+# deepseek-blue — the table the surface ships, in the colours DeepSeek draws.
+#
+# Every shade here is a step of the product's own design system rather than a
+# colour picked for this file, and each palette line names the token it came
+# from, so the surface can be re-derived from the product instead of guessed at.
+# The steps are the product's dark-theme ones, because a terminal is dark:
+#
+#   default, assistant   label-primary     neutral-bluish-50   #f9fafb
+#   muted                label-secondary   neutral-bluish-300  #cfd3d6
+#   faint                label-tertiary    neutral-bluish-400  #adb2b8
+#   accent               brand-text        deepseek-400        #679efe
+#   arg                  —                 deepseek-300        #b7c8fe
+#   warn                 state-warn        amber-500           #f59e0b
+#   added                state-success     green-500           #22c55e
+#   removed              state-error       red-400             #f25a5a
+#   user                 bubble            neutral-bluish-850  #2c2c2e
+#
+# The brand itself is deepseek-500 #3964fe, drawn as deepseek-450 #5686fe on a
+# dark surface. The accent is one step lighter than either because what it paints
+# is text — links, code, headings — and the product keeps its own step for the
+# brand as text. That single line is where a reader moves the brand.
+#
+# Ten palette entries carry the whole theme: every element below names one rather
+# than a shade of its own. Three elements name a different entry than the shipped
+# table names, and say why where they do.
+#
+# The semantic shades stay the product's green, red, and amber. Something added
+# is green and something removed is red on every surface a reader already uses,
+# and a hue that moved with the theme would have to be learned again with each
+# one.
+
+palette:
+  default: '#f9fafb'  # label-primary, neutral-bluish-50
+  muted: '#cfd3d6'  # label-secondary, neutral-bluish-300
+  faint: '#adb2b8'  # label-tertiary, neutral-bluish-400
+  accent: '#679efe'  # brand-text, deepseek-400
+  arg: '#b7c8fe'  # deepseek-300
+  warn: '#f59e0b'  # state-warn, amber-500
+  added: '#22c55e'  # state-success, green-500
+  removed: '#f25a5a'  # state-error on a dark surface, red-400
+  user: '#2c2c2e'  # the bubble fill, neutral-bluish-850
+  assistant: '#f9fafb'  # label-primary, neutral-bluish-50
+
+tokens:
+  # A row of the conversation.
+  transcript.user: { fg: default, bg: user }  # the product marks your own turn with a bubble, not a hue
+  transcript.notice: { fg: muted }
+  transcript.marker: { fg: muted }
+  transcript.reasoning.summary: { fg: faint, italic: true }
+  transcript.reasoning.body: { fg: faint }
+  transcript.reasoning.hint: { fg: faint, italic: true }
+  # A tool card, drawn in layers: every card, then one kind of card.
+  # A call is not a warning: the product keeps amber for state, and this label is
+  # the loudest thing on the row, so it carries the brand instead.
+  tool.title: { fg: accent }
+  tool.glyph: { fg: accent }  # follows the label it sits beside
+  tool.args: { fg: arg }
+  tool.stat.added: { fg: added }
+  tool.stat.changed: { fg: warn }
+  tool.stat.removed: { fg: removed }
+  tool.stat.size: { fg: muted }
+  tool.stat.separator: { fg: muted }
+  tool.detail: { fg: muted }
+  tool.hint: { fg: muted }
+  tool.failed.title: { fg: removed }
+  tool.failed.glyph: { fg: removed }
+  tool.subcall.title: { fg: muted }
+  tool.subcall.args: { fg: arg }
+  tool.diff.header: { fg: muted }
+  tool.diff.hunk: { fg: muted }
+  tool.diff.added: { fg: added }
+  tool.diff.removed: { fg: removed }
+  tool.read.header: { fg: muted }
+  tool.read.lineNumber: { fg: muted }
+  tool.read.line: { fg: muted }
+  tool.search.path: { fg: muted }
+  tool.search.lineNumber: { fg: muted }
+  tool.search.match: { fg: muted }
+  tool.search.truncated: { fg: muted }
+  tool.terminal.cwd: { fg: muted }
+  tool.terminal.status: { fg: muted }
+  tool.terminal.output: { fg: muted }
+  tool.web.url: { fg: muted }
+  tool.web.source: { fg: muted }
+  tool.web.truncated: { fg: muted }
+  tool.generic.detail: { fg: muted }
+  # A reply, which is markdown, and the diagrams in it.
+  markdown.heading: { fg: accent, bold: true }
+  markdown.link: { fg: accent, underline: true }
+  markdown.linkUrl: { fg: muted }
+  markdown.code: { fg: accent }
+  markdown.codeBlock: {}
+  markdown.codeBlockBorder: { fg: muted }
+  markdown.quote: { fg: muted }
+  markdown.quoteBorder: { fg: muted }
+  markdown.hr: { fg: muted }
+  markdown.listBullet: { fg: accent }
+  markdown.bold: { bold: true }
+  markdown.italic: { italic: true }
+  markdown.strikethrough: { strike: true }
+  markdown.underline: { underline: true }
+  markdown.diagram.border: { fg: muted }
+  markdown.diagram.text: {}
+  markdown.diagram.edge: { fg: accent }
+  markdown.diagram.edgeLabel: { fg: muted }
+  markdown.diagram.title: { fg: accent, bold: true }
+  markdown.diagram.warning: { fg: warn }
+  # A list drawn over the transcript.
+  picker.title: { bold: true }
+  picker.glyph: { bold: true }
+  picker.note: { bold: true }
+  picker.filter: { fg: muted }
+  picker.row: {}
+  picker.rowCurrent: { bold: true }
+  picker.scrollNewer: { fg: muted }
+  picker.scrollOlder: { fg: muted }
+  picker.hint: { fg: muted }
+  picker.cursor: {}
+  picker.border: { fg: muted }
+  # A question or an approval, which stops the turn until it is answered.
+  gate.title: { bold: true }
+  gate.glyphApproval: { bold: true }
+  gate.glyphQuestion: { bold: true }
+  gate.detail: { fg: muted }
+  gate.option: {}
+  gate.optionCurrent: { bold: true }
+  gate.cursor: {}
+  gate.hint: { fg: muted }
+  # The work panel above the editor.
+  dock.goal: { bold: true }
+  dock.planMode: { bold: true }
+  dock.todos.heading: { bold: true }
+  dock.todos.pending: { fg: muted }
+  dock.todos.inProgress: { fg: muted }
+  dock.todos.overflow: { fg: muted }
+  dock.subagents.heading: { bold: true }
+  dock.subagents.running: { fg: muted }
+  dock.subagents.overflow: { fg: muted }
+  dock.jobs.heading: { bold: true }
+  dock.jobs.running: { fg: muted }
+  dock.jobs.overflow: { fg: muted }
+  # The footer.
+  status.prefix: { fg: accent }
+  status.back: { fg: accent }
+  status.activity.working: { fg: muted }
+  status.activity.ready: { fg: muted }
+  status.elapsed: { fg: muted }
+  status.agentPreset: { fg: muted }
+  status.model: { fg: muted }
+  status.effort: { fg: muted }
+  status.permission: { fg: muted }
+  status.context: { fg: muted }
+  status.cache: { fg: muted }
+  status.stash: { fg: accent }
+  status.cwd: { fg: muted }
+  status.separator: { fg: muted }
+  # The prompt bar.
+  # The one border in the surface that is not a divider: it holds what the reader
+  # is writing, which is where the product puts the brand on its send button.
+  editor.border: { fg: accent }
+  editor.queued: { dim: true, italic: true }
+  editor.queued.more: { fg: muted }
+  editor.ghost: { dim: true }
+  editor.selectList.selectedPrefix: { fg: accent }
+  editor.selectList.selectedText: { bold: true }
+  editor.selectList.description: { fg: muted }
+  editor.selectList.scrollInfo: { fg: muted }
+  editor.selectList.noMatch: { fg: muted }

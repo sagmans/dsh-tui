@@ -68,7 +68,7 @@ import { defaultSettings, readScope, settingsProblemMessage, toOverrides, TUI_SE
 import { toolDisplayFor, type ToolDisplayTable } from './tool-display.ts'
 import { pendingPrompts } from './queue.ts'
 import { renderThemeTable } from './theme-command.ts'
-import { isThemeName, THEME_NAMES, type ThemeName } from './theme-presets.ts'
+import { DEFAULT_THEME, builtinNames, builtinThemesDir, ensureThemesHome, exportTheme, loadThemes, themesHomeDir, watchThemes } from './theme-files.ts'
 import { KEYMAP_LAYERS, keymapLayer } from './keys-command.ts'
 import { resetSequence } from './theme-tokens.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
@@ -100,6 +100,7 @@ import { StatusBar } from './ui/status.ts'
 import { DEFAULT_VIEW_STATE, TranscriptView } from './ui/view.ts'
 import { PromptStash } from './stash.ts'
 import { confirmedClear, StashConfirmPicker, StashPicker } from './ui/stash-picker.ts'
+import { ThemePicker } from './ui/theme-picker.ts'
 
 export const name = 'tui'
 
@@ -209,6 +210,17 @@ export function apply(ctx: Context, config: unknown): void {
    */
   let readSection = (): TuiSettings => defaultSettings()
   /**
+   * The themes this session can draw.
+   *
+   * Read from disk rather than compiled in, so a file the reader saves is a theme
+   * the moment the save lands. Held beside the settings rather than inside them
+   * because the two answer different questions: the section says which name the
+   * reader chose, and this says which names exist — including the one they typed
+   * into the directory a second ago.
+   */
+  const themesHome = themesHomeDir()
+  let themeLibrary = loadThemes(themesHome, builtinThemesDir())
+  /**
    * Persist a theme choice, replaced once the section is registered.
    *
    * A theme picked mid-session has to outlive it, so the choice is written
@@ -216,15 +228,50 @@ export function apply(ctx: Context, config: unknown): void {
    * in memory: the host persists it, and the change comes back through
    * `settings/updated` like any other edit — which is what restyles the screen.
    */
-  let chooseTheme = (_name: ThemeName): void => {}
+  let chooseTheme = (_name: string): void => {}
   /**
    * A refused settings edit, kept until the surface can show it: stderr is
    * behind the alt screen, and the section is read on a schedule of its own.
    */
   const settingsNotice = createDeferredNotice()
   let current = createTheme(themeMode())
+  /**
+   * The section as it was last read.
+   *
+   * Held so a preview can rebuild the table without reading the document again:
+   * the picker repaints on every arrow key, and a read there would report a
+   * refused section once per press.
+   */
+  let appliedSection: TuiSettings | undefined
+  /**
+   * The theme the picker's cursor is on, while its list is open.
+   *
+   * A preview is a name and nothing else — the document is not written — so
+   * leaving the list is one more rebuild from the section, and a session that
+   * ends mid-preview has still persisted only what the reader chose.
+   */
+  let previewTheme: string | undefined
   const applyTheme = (section: TuiSettings): void => {
-    current = createTheme(themeMode(), toOverrides(section))
+    // The row under the cursor outranks the document while a list is open, so a
+    // theme is judged on the reader's own transcript before it is taken.
+    current = createTheme(themeMode(), toOverrides({ ...section, theme: previewTheme ?? section.theme }, themeLibrary))
+  }
+  /**
+   * Show a theme without choosing it.
+   *
+   * The list's cursor is the preview: every row paints the surface and writes
+   * nothing, so two themes are compared on the reader's own transcript rather
+   * than on a name. Clearing the name puts back what the document says, which is
+   * what cancelling the list has to leave behind.
+   */
+  const showTheme = (name: string | undefined): void => {
+    previewTheme = name
+    // Nothing to rebuild from before the first read, and nothing to show either.
+    if (appliedSection === undefined) return
+    applyTheme(appliedSection)
+    markdown.invalidate()
+    view.invalidate()
+    tui.requestRender()
   }
   const theme: TuiTheme = {
     get revision() { return current.revision },
@@ -310,8 +357,28 @@ export function apply(ctx: Context, config: unknown): void {
    */
   const applySettings = (): void => {
     const section = readSection()
+    appliedSection = section
+    // A settings edit ends any preview: what the document says is now the choice,
+    // and a name left over from a list would outrank it.
+    previewTheme = undefined
+    reportMissingTheme(section)
     applyTheme(section)
     applyDisplay(section)
+  }
+  /**
+   * Say so when the reader named a theme that nothing answers to.
+   *
+   * The schema cannot refuse the name: a theme is a file, so the set of names is
+   * known to the directory rather than to this build, and one can stop answering
+   * between two reads. Falling back to the default without a word would leave the
+   * reader looking at shades they did not choose, so the refusal lands here
+   * instead — beside the read that found it, and alongside the rest of the
+   * section, which is still theirs.
+   */
+  const reportMissingTheme = (section: TuiSettings): void => {
+    const name = section.theme
+    if (name === undefined || themeLibrary.get(name) !== undefined) return
+    settingsNotice.post(`dsh-tui theme "${name}" is not a theme · themes: ${themeLibrary.names().join(' · ')} · the default, ${DEFAULT_THEME}, is drawn instead`)
   }
   /**
    * Own the section, so the harness validates and persists it for the reader.
@@ -942,6 +1009,32 @@ export function apply(ctx: Context, config: unknown): void {
    */
   const openKeyMap = (layer: ActionLayer | undefined): void => {
     void openPicker(new KeymapPicker(() => keymap, layer), undefined, 'popup')
+  }
+
+  /**
+   * Choose a theme from a list the screen follows.
+   *
+   * Enter writes the choice through the settings document, the same path a typed
+   * name takes, so what lands is what the reader was looking at. Leaving the list
+   * restores the theme in force, because the document never changed while they
+   * looked.
+   */
+  const openThemePicker = async (): Promise<void> => {
+    const picked = await openPicker(new ThemePicker(
+      () => themeLibrary,
+      () => appliedSection?.theme,
+      () => keymap,
+      theme => showTheme(theme?.name),
+    ))
+    if (picked === undefined) {
+      showTheme(undefined)
+      return
+    }
+    // The row stays on screen until the document carries it: restoring first
+    // would flash the theme the reader just left. The write clears the preview as
+    // it lands, and a write that fails says so, leaving a theme that is still one
+    // of theirs rather than shades nothing chose.
+    chooseTheme(picked)
   }
 
   /**
@@ -1986,22 +2079,51 @@ export function apply(ctx: Context, config: unknown): void {
         runTodoCommand()
         return
       case 'theme': {
-        const name = submission.argument
-        // A bare command asks what the elements are; a named one asks for a
-        // theme, and is the only way to change one without leaving the session.
-        if (name === '') {
-          for (const line of renderThemeTable(toOverrides(readSection()))) model.notice(line)
+        const argument = submission.argument
+        // A bare command is the list: a theme is judged by looking at it, so
+        // choosing one belongs in a list the screen follows rather than in a name
+        // the reader has to already know.
+        if (argument === '') {
+          void openThemePicker()
+          return
+        }
+        const [head = '', ...rest] = argument.split(/\s+/u)
+        // The table answers the other question a theme raises — which layer drew a
+        // shade — and stays reachable by name now that the list has the command.
+        if (head === 'tokens') {
+          for (const line of renderThemeTable(toOverrides(readSection(), themeLibrary), themeLibrary)) model.notice(line)
           tui.requestRender()
           return
         }
-        // A name the surface does not ship is refused by name, like an unknown
-        // key layer: the reader asked for something, so the answer names names.
-        if (!isThemeName(name)) {
-          model.notice(`unknown theme "${name}" · themes: ${THEME_NAMES.join(' ')}`)
+        // The one way a built-in becomes editable. Its file ships inside the
+        // package and the next version replaces it, so a reader who wants to
+        // change one needs a copy that is theirs — and the copy is a theme the
+        // moment it lands, which is why the table is re-read rather than patched.
+        if (head === 'export') {
+          const chosen = rest.join(' ').trim()
+          if (chosen === '') {
+            model.notice(`theme export · which built-in? ${builtinNames(themeLibrary).join(' · ')}`)
+            tui.requestRender()
+            return
+          }
+          const outcome = exportTheme(themeLibrary, chosen)
+          if (outcome.ok) {
+            themeLibrary = loadThemes(themesHome, builtinThemesDir())
+            model.notice(`theme · exported ${chosen} to ${outcome.path} · /theme ${outcome.select} applies it`)
+          } else {
+            model.notice(outcome.problem)
+          }
           tui.requestRender()
           return
         }
-        chooseTheme(name)
+        // A name nothing answers to is refused by name, like an unknown key
+        // layer: the reader asked for something, so the answer lists names.
+        if (themeLibrary.get(head) === undefined) {
+          model.notice(`unknown theme "${head}" · themes: ${themeLibrary.names().join(' · ')}`)
+          tui.requestRender()
+          return
+        }
+        chooseTheme(head)
         return
       }
       case 'keys': {
@@ -2278,6 +2400,41 @@ export function apply(ctx: Context, config: unknown): void {
     applySettings()
     // Both caches hold rows under the old table, so they have to be told the
     // table moved; a repaint alone would reuse what they already stored.
+    markdown.invalidate()
+    view.invalidate()
+    tui.requestRender()
+  }))
+
+  /**
+   * The reader's own themes: created, reported, and then watched.
+   *
+   * Created because a directory that is not there is a command that cannot work —
+   * `/theme export` names a path the reader should find where the surface said it
+   * would be. Watched because a theme is a file they are editing by hand, so
+   * saving one is how they ask for it; a session that needed a restart per shade
+   * would make the whole table useless for tuning. Everything unreadable is
+   * reported through the deferred notice rather than stderr, which the alternate
+   * screen is drawn over.
+   */
+  let reportedThemes = new Set<string>()
+  const reportThemes = (): void => {
+    // Only what is newly wrong: the watcher re-reads the whole directory on every
+    // save, so an unfixed file would otherwise repeat its complaint on each one,
+    // and a reader who has just been told is not helped by being told again.
+    const problems = themeLibrary.problems()
+    for (const problem of problems) {
+      if (!reportedThemes.has(problem)) settingsNotice.post(problem)
+    }
+    reportedThemes = new Set(problems)
+  }
+  for (const problem of ensureThemesHome(themesHome)) settingsNotice.post(problem)
+  reportThemes()
+  disposers.push(watchThemes(themesHome, () => {
+    themeLibrary = loadThemes(themesHome, builtinThemesDir())
+    reportThemes()
+    // The file that was just saved may be the theme already in force, so the
+    // table is rebuilt rather than only repainted.
+    applySettings()
     markdown.invalidate()
     view.invalidate()
     tui.requestRender()

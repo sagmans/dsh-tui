@@ -25,6 +25,13 @@ const REQUIRED = [
   'package/lib/startup.js',
 ]
 
+// Derived rather than listed: the surface reads the built-in themes out of the
+// installed package, so one the manifest forgets to pack is a name it offers and
+// cannot draw.
+for (const theme of readdirSync(join(ROOT, 'themes'))) {
+  if (theme.endsWith('.yaml')) REQUIRED.push(`package/themes/${theme}`)
+}
+
 /** Entries that must never ship. */
 const FORBIDDEN = [
   /^package\/src\//u,

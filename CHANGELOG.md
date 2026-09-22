@@ -10,6 +10,18 @@ breaking change, and a patch carries only fixes.
 
 ### Changed
 
+- A theme name the surface does not have is no longer a settings error. The names
+  are files, so a name nothing answers to is reported as a notice listing the ones
+  that do, and the default theme is drawn meanwhile; a settings document naming a
+  theme therefore loads even if the file is renamed or deleted later. `/theme`
+  reports a themed element's origin as `theme` rather than `preset`, and its
+  footer names the themes actually on disk, marking the ones in your directory,
+  with the export hint.
+- `/theme` opens a list of the themes on disk instead of printing the table. The
+  list narrows as you type and the screen paints the row under the cursor, so two
+  themes are compared on the reader's own transcript; nothing is written until one
+  is taken, and leaving the list puts back the theme that was in force. The table
+  is still there, as `/theme tokens`.
 - `/keys` opens the key map as a list you filter as you type instead of
   printing every row into the transcript. `/keys <layer>` opens the same list
   already narrowed to one layer, and a layer name the surface does not have is
@@ -53,6 +65,24 @@ breaking change, and a patch carries only fixes.
 
 ### Added
 
+- Themes are files. The package ships each one in full — `deepseek-blue`, the
+  table written out element by element in the colours the project answers to, and
+  `violet-orbit` — and your own live in `$DSH_HOME/themes/`, which the surface
+  creates at start-up and watches, so saving a file there restyles the running
+  session without a restart. `deepseek-blue` is what a section naming no theme
+  draws, so the default look is a file a reader can read, list, and copy. `/theme
+  export <built-in>` copies a built-in into that directory as
+  `<built-in>_export_<n>.yaml`, with one comment naming the release it came from,
+  because the package's own file is replaced whenever the package updates. Every
+  shipped file names every element and palette entry, so a copy is a complete
+  theme rather than a diff against something invisible. A file whose name is a
+  built-in's is ignored, and reported at start-up with the rename that fixes it.
+  `deepseek-blue` takes every shade from the product's own design tokens, at the
+  steps its dark theme names, and writes the token beside each value, so the
+  surface can be re-derived rather than guessed at; the accent is the step the
+  product keeps for the brand as text. It names only palette entries, so the brand
+  moves in one line, and it marks a reader's own turn with the product's bubble
+  fill rather than a hue of its own.
 - `Ctrl+X` then `?` opens the key map as a searchable list: one row per action
   with the keys in force, one row for every key the map took from the library,
   and a filter reaching the action id, the layer, a key, or what the row does.
@@ -89,11 +119,10 @@ breaking change, and a patch carries only fixes.
   way. A theme is a layer rather than a replacement, so anything it says nothing
   about keeps its shipped appearance and a reader's own `tokens:` entry still
   wins over it one field at a time. `/theme <name>` applies one to the running
-  session and writes the choice to the document, `shipped` returns to the
-  default table, and a name the surface does not ship is refused with the names
-  it does. A bare `/theme` names the theme in force in its heading and reports
-  each element as `override`, `preset`, `palette`, or `default`, so a screen
-  that looks wrong can be traced to the layer that drew it. The port keeps a
+  session and writes the choice to the document, and a name the surface does not
+  ship is refused with the names it does. `/theme tokens` names the theme in force
+  in its heading and reports each element as `override`, `theme`, `palette`, or
+  `default`, so a screen that looks wrong can be traced to the layer that drew it. The port keeps a
   prompt's frame but not the fill pi puts behind it, because a band inside a
   frame treats one fact twice and reads as a selected row; and it lifts a tool's
   argument out of pi's link blue, which sat too close to the periwinkle pi gives

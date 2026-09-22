@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { defaultKeymap, keysFor } from '@/input/actions.ts'
+import { DEFAULT_THEME } from '@/theme-files.ts'
 import { createTheme } from '@/theme.ts'
+import { builtinLibrary } from '../support/themes.ts'
+
+/** The package's themes, which is what a name in a section resolves against. */
+const library = builtinLibrary()
 import { TUI_SETTINGS_NAMESPACE, parseSettings,
   TuiSettingsSchema, defaultSettings, readScope, toOverrides } from '@/theme-settings.ts'
 
@@ -142,28 +147,33 @@ describe('the dsh-tui settings section', () => {
   })
 
   it('turns a section into overrides', () => {
-    const overrides = toOverrides(parseSettings({ tokens: { 'transcript.user': { fg: '#ff0000' } } }))
+    const overrides = toOverrides(parseSettings({ tokens: { 'transcript.user': { fg: '#ff0000' } } }), library)
     expect(overrides.tokens.get('transcript.user')).toEqual({ fg: '#ff0000' })
     expect(overrides.palette.muted).toBeDefined()
   })
 
   it('lets a palette override win over the shipped palette', () => {
-    const overrides = toOverrides(parseSettings({ palette: { muted: '#777777' } }))
+    const overrides = toOverrides(parseSettings({ palette: { muted: '#777777' } }), library)
     expect(overrides.palette.muted).toBe('#777777')
   })
 
-  it('applies no shipped theme until the reader names one', () => {
+  it('holds no theme name until the reader writes one', () => {
     expect(parseSettings({}).theme).toBeUndefined()
     expect(parseSettings({ theme: 'violet-orbit' }).theme).toBe('violet-orbit')
   })
 
-  it('rejects a theme the surface does not ship, naming it', () => {
-    expect(() => parseSettings({ theme: 'violet-orbitt' })).toThrow()
+  it('carries a name nothing answers to as written, and draws the default meanwhile', () => {
+    // The names are files, so a schema is the wrong place to refuse one: it
+    // cannot see the directory, and a name can stop answering between two reads.
+    // What the name resolves to is the library's answer, and the surface reports
+    // the name it could not use beside the read that found it.
+    expect(parseSettings({ theme: 'violet-orbitt' }).theme).toBe('violet-orbitt')
+    expect(toOverrides(parseSettings({ theme: 'violet-orbitt' }), library).theme?.name).toBe(DEFAULT_THEME)
   })
 
   it('names the theme and the palette it moves', () => {
-    const overrides = toOverrides(parseSettings({ theme: 'violet-orbit' }))
-    expect(overrides.preset).toBe('violet-orbit')
+    const overrides = toOverrides(parseSettings({ theme: 'violet-orbit' }), library)
+    expect(overrides.theme?.name).toBe('violet-orbit')
     expect(overrides.palette.accent).toBe('#8080ff')
   })
 
@@ -171,18 +181,18 @@ describe('the dsh-tui settings section', () => {
     // /theme answers "where did this come from?", and the answer for a themed
     // element has to name the theme: calling it the reader's own row sends them
     // into their own file to look for a line that is not there.
-    const overrides = toOverrides(parseSettings({ theme: 'violet-orbit' }))
+    const overrides = toOverrides(parseSettings({ theme: 'violet-orbit' }), library)
     expect([...overrides.tokens.keys()]).toEqual([])
   })
 
-  it('reports what the reader wrote when no theme is in force', () => {
-    const overrides = toOverrides(parseSettings({ tokens: { 'status.cwd': { fg: '#ff00ff' } } }))
+  it('reports what the reader wrote apart from the theme drawn underneath it', () => {
+    const overrides = toOverrides(parseSettings({ tokens: { 'status.cwd': { fg: '#ff00ff' } } }), library)
     expect([...overrides.tokens.keys()]).toEqual(['status.cwd'])
-    expect(overrides.preset).toBeUndefined()
+    expect(overrides.theme?.name).toBe(DEFAULT_THEME)
   })
 
   it('lets the reader palette win over the theme palette', () => {
-    const overrides = toOverrides(parseSettings({ theme: 'violet-orbit', palette: { accent: '#123456' } }))
+    const overrides = toOverrides(parseSettings({ theme: 'violet-orbit', palette: { accent: '#123456' } }), library)
     expect(overrides.palette.accent).toBe('#123456')
   })
 })
@@ -268,7 +278,7 @@ describe('a resolved section', () => {
   })
 
   it('leaves the shipped default reachable for an untouched element', () => {
-    const theme = createTheme('truecolor', toOverrides(parseSettings(TuiSettingsSchema({}))))
+    const theme = createTheme('truecolor', toOverrides(parseSettings(TuiSettingsSchema({})), library))
     // An untouched muted element must still be muted, not blanked to plain.
     expect(theme.style('status.model', 'x')).toContain('38;2;')
   })

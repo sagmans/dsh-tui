@@ -13,60 +13,18 @@ import {
   type ToolOutputDisplay,
   type WrittenToolDisplay,
 } from './tool-display.ts'
-import { THEME_NAMES, THEME_PRESETS, type ThemeName } from './theme-presets.ts'
+import { DEFAULT_THEME, type LoadedTheme, type ThemeLibrary } from './theme-files.ts'
 import {
-  DEFAULT_PALETTE,
-  PALETTE_NAMES,
-  TUI_TOKENS,
-  type PaletteName,
-  type StyleSpec,
-  type TuiToken,
-} from './theme-tokens.ts'
+  asRecord,
+  PALETTE_NAME_SET,
+  PaletteSchema,
+  TOKEN_NAME_SET,
+  TokensSchema,
+} from './theme-schema.ts'
+import { DEFAULT_PALETTE, type PaletteName, type StyleSpec, type ThemedSpecs, type TuiToken } from './theme-tokens.ts'
 
 /** Settings namespace owned by the terminal surface. */
 export const TUI_SETTINGS_NAMESPACE = 'dsh-tui'
-
-/**
- * A colour the reader may write.
- *
- * Enumerated rather than a free string: a misspelled colour must fail at load
- * with the offending token named, not silently paint nothing for the rest of
- * the session.
- */
-const ColourSchema = z.union([
-  z.string().pattern(/^#[0-9a-fA-F]{6}$/u),
-  z.union([...PALETTE_NAMES]),
-  z.number().min(0).max(255),
-])
-
-/** One element's override; every field optional so a reader sets only what they mean. */
-const StyleSpecSchema = z.object({
-  fg: ColourSchema,
-  bg: ColourSchema,
-  bold: z.boolean(),
-  dim: z.boolean(),
-  italic: z.boolean(),
-  underline: z.boolean(),
-  strike: z.boolean(),
-  glyph: z.string(),
-  hidden: z.boolean(),
-  inherit: z.union([...TUI_TOKENS]),
-})
-
-/** The palette half: every entry optional, each defaulting to the shipped shade. */
-const PaletteSchema = z.object(Object.fromEntries(
-  PALETTE_NAMES.map(name => [name, ColourSchema.default(DEFAULT_PALETTE[name])]),
-))
-
-/**
- * The token half: every token optional, but an unknown name rejected.
- *
- * Spelled out rather than `z.dict` because `dict` would accept any key, which
- * is exactly the silent-typo failure this section has to prevent.
- */
-const TokensSchema = z.object(Object.fromEntries(
-  TUI_TOKENS.map(token => [token, StyleSpecSchema]),
-))
 
 /** How nested PTC calls draw: nothing beyond the card, or one indented line per dispatched call. */
 export type SubCallDisplay = 'collapsed' | 'inline'
@@ -104,9 +62,16 @@ const HistorySchema = z.object({
 })
 
 const SECTION = z.object({
-  // No default, for the same reason `prefix` has none: a fill-in would report
-  // the shipped table as a theme the reader chose.
-  theme: z.union([...THEME_NAMES]),
+  // No default even though the surface draws one, for the same reason `prefix`
+  // has none: a registration fills every declared field, and a fill-in here would
+  // hand back a choice the reader never made, which the next save would then write
+  // into their document as if they had. Which theme answers an unnamed section is
+  // the library's question, asked where the name is looked up. A free string
+  // rather than an enumerated union, also for the same reason as `prefix`: the
+  // names are files the reader owns, and one appears the moment they save it —
+  // which no schema compiled into this build can enumerate. A name nothing answers
+  // to is refused where the names that do answer can actually be listed.
+  theme: z.string(),
   palette: PaletteSchema.default({}),
   tokens: TokensSchema.default({}),
   subcalls: z.union([...SUBCALL_DISPLAYS]).default('inline'),
@@ -136,9 +101,6 @@ const SECTION = z.object({
  */
 export const TuiSettingsSchema = SECTION
 
-const TOKEN_NAMES = new Set<string>(TUI_TOKENS)
-const PALETTE_NAME_SET = new Set<string>(PALETTE_NAMES)
-
 /** The section's own keys: schemastery keeps what it does not declare, so a misspelling has to be refused here. */
 const SECTION_KEYS = new Set(['theme', 'palette', 'tokens', 'subcalls', 'mermaid', 'prefix', 'prefixWindow', 'keys', 'history', 'tools'])
 
@@ -160,7 +122,7 @@ function rejectUnknownKeys(raw: unknown): void {
   if (unknownKeys.length > 0) {
     throw new Error(`unknown ${TUI_SETTINGS_NAMESPACE} key${unknownKeys.length === 1 ? '' : 's'}: ${unknownKeys.join(', ')}`)
   }
-  const unknownTokens = Object.keys(asRecord(section.tokens) ?? {}).filter(name => !TOKEN_NAMES.has(name))
+  const unknownTokens = Object.keys(asRecord(section.tokens) ?? {}).filter(name => !TOKEN_NAME_SET.has(name))
   if (unknownTokens.length > 0) {
     throw new Error(`unknown ${TUI_SETTINGS_NAMESPACE} token${unknownTokens.length === 1 ? '' : 's'}: ${unknownTokens.join(', ')}`)
   }
@@ -183,10 +145,6 @@ function rejectUnknownKeys(raw: unknown): void {
   if (unknownToolFields.length > 0) {
     throw new Error('unknown ' + TUI_SETTINGS_NAMESPACE + ' tool field' + (unknownToolFields.length === 1 ? '' : 's') + ': ' + unknownToolFields.join(', '))
   }
-}
-
-function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined
 }
 
 /** One display flag as the reader wrote it. */
@@ -238,7 +196,7 @@ export function parseSettings(raw: unknown): TuiSettings {
   rejectUnknownKeys(raw)
   const section = asRecord(raw) ?? {}
   const parsed = SECTION(section) as unknown as {
-    theme: ThemeName | undefined
+    theme: string | undefined
     palette: Record<PaletteName, string>
     tokens: Record<string, StyleSpec>
     subcalls: SubCallDisplay
@@ -318,8 +276,8 @@ export interface HistorySettings {
 
 /** What the section holds once parsed: only what the reader wrote. */
 export interface TuiSettings {
-  /** The shipped theme the reader named, or nothing for the table as it ships. */
-  readonly theme: ThemeName | undefined
+  /** The theme the reader named, or nothing to draw the package's own. */
+  readonly theme: string | undefined
   readonly palette: Readonly<Partial<Record<PaletteName, string>>>
   readonly tokens: Readonly<Partial<Record<TuiToken, StyleSpec>>>
   readonly subcalls: SubCallDisplay
@@ -359,13 +317,25 @@ export interface ThemeOverrides {
   /** Every element the reader drew themselves; a theme is a layer apart from this. */
   readonly tokens: ReadonlyMap<TuiToken, StyleSpec>
   /**
-   * The shipped theme in force, when the reader named one.
+   * The theme in force, when one answers to the name the reader wrote.
    *
-   * Kept out of {@link tokens} because the layers answer differently: a theme
-   * moves every element it names, while a reader's field wins over it one at a
-   * time — and `/theme` reports which of the two a shade came from.
+   * Carried whole rather than folded into the layers above, because the layers
+   * answer differently: a theme moves every element it names, while a reader's
+   * field wins over it one at a time — and `/theme` reports which of the two a
+   * shade came from, which needs the file it came out of.
    */
-  readonly preset?: ThemeName | undefined
+  readonly theme?: LoadedTheme | undefined
+}
+
+/**
+ * The layer the theme in force contributes, or nothing when no file answered.
+ *
+ * The table every theme is written against is the compiled one, so a theme is
+ * always a layer over it and never a replacement: an element no theme names keeps
+ * the shade the surface ships with.
+ */
+export function themeLayer(overrides: ThemeOverrides): ThemedSpecs | undefined {
+  return overrides.theme?.tokens
 }
 
 /**
@@ -435,9 +405,16 @@ function salvageHistory(raw: unknown): HistorySettings {
  *
  * Shipped defaults fill anything the reader left out, so a partial section is
  * the normal case rather than something the resolver has to guard against.
+ *
+ * The name is looked up rather than trusted: a reader can rename or rewrite the
+ * file behind it between two reads, and a theme that is gone leaves the package's
+ * own in force rather than leaving the surface with nothing to draw.
  */
-export function toOverrides(settings: TuiSettings): ThemeOverrides {
-  const preset = settings.theme === undefined ? undefined : THEME_PRESETS[settings.theme]
+export function toOverrides(settings: TuiSettings, library: ThemeLibrary): ThemeOverrides {
+  // An unnamed section and an unknown name land on the same answer: the theme the
+  // package draws by default. The unknown name is reported beside this read, so
+  // the reader hears which name stopped answering rather than guessing from shades.
+  const theme = library.get(settings.theme) ?? library.get(DEFAULT_THEME)
   const tokens = new Map<TuiToken, StyleSpec>()
   for (const [token, spec] of Object.entries(settings.tokens)) {
     if (spec !== undefined) tokens.set(token as TuiToken, spec)
@@ -445,8 +422,8 @@ export function toOverrides(settings: TuiSettings): ThemeOverrides {
   // The theme travels as its own layer rather than folded in here, so a reader's
   // field merges over it one element at a time instead of replacing it.
   return {
-    palette: { ...DEFAULT_PALETTE, ...preset?.palette, ...settings.palette },
+    palette: { ...DEFAULT_PALETTE, ...theme?.palette, ...settings.palette },
     tokens,
-    preset: settings.theme,
+    theme,
   }
 }

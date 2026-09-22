@@ -46,7 +46,7 @@ export const ARGUMENT_BLUE = '#8db3d9'
  * foreground, so telling the two apart meant reading them; a mint keeps them
  * apart at a glance without the pink cast a rose gave every prompt.
  */
-export const USER_PROMPT_MINT = '#27F5C8'
+export const USER_PROMPT_MINT = '#27f5c8'
 
 /** Palette entries a token may name instead of a literal colour. */
 export const PALETTE_NAMES = ['default', 'muted', 'faint', 'accent', 'arg', 'warn', 'added', 'removed', 'user', 'assistant'] as const

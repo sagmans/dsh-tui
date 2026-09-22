@@ -1,0 +1,167 @@
+# violet-orbit — the pi theme of the same name, brought over shade for shade.
+#
+# The two surfaces do not share a vocabulary: pi names a message background
+# where this one names the transcript row that draws it. The port therefore
+# keeps pi's shades verbatim and re-applies them here by what an element *is*,
+# and every line below that came from pi names the pi key it came from — the
+# only thing that makes a later change to either theme reviewable. One shade
+# has no pi key to name, and says why it is here instead.
+#
+# This file is a reference and a layer, not a workspace: it ships inside the
+# package and a new version replaces it. /theme export violet-orbit writes a
+# full copy into your own themes directory to edit.
+
+palette:
+  # Pi's own roles, moved across unchanged: every element that names the
+  # palette rather than a literal follows the theme without being listed.
+  default: '#e8e9ff'  # text
+  muted: '#9aa0c8'  # muted
+  faint: '#676d95'  # dim
+  accent: '#8080ff'  # accent
+  warn: '#fbbf24'  # warning
+  added: '#22c55e'  # success
+  removed: '#ef4444'  # error
+  user: '#f0f1ff'  # userMessageText
+  assistant: '#e8e9ff'  # text
+  # Pi has no argument colour of its own, and its link blue — the shade that
+  # first came over — shares a family with the label pi gives a tool name, so
+  # the two halves of one row could not be told apart. A sage separates them by
+  # family rather than by shade, at the cost of the family that means something
+  # arrived: on a diff card the argument and an added line read as two shades of
+  # one green.
+  arg: '#aed69a'  # no pi key: see the note below
+
+tokens:
+  # A reader's own turn. Pi fills the row, but this surface already frames it,
+  # and a band inside that frame treats one fact twice: it reads as a selected
+  # row rather than as the reader's own words. The shade carries over alone.
+  transcript.user: { fg: user }  # userMessageText
+  transcript.notice: { fg: muted }  # unchanged from the shipped table
+  transcript.marker: { fg: muted }  # unchanged from the shipped table
+  transcript.reasoning.summary: { fg: faint, italic: true }  # unchanged from the shipped table
+  transcript.reasoning.body: { fg: faint }  # unchanged from the shipped table
+  transcript.reasoning.hint: { fg: faint, italic: true }  # unchanged from the shipped table
+  # A tool's label. Pi draws it periwinkle rather than this surface's amber,
+  # which is the single change that moves the card family into the theme.
+  tool.title: { fg: '#8197f7' }  # toolTitle
+  tool.glyph: { fg: '#8197f7' }  # toolTitle
+  tool.args: { fg: arg }  # unchanged from the shipped table
+  tool.stat.added: { fg: added }  # unchanged from the shipped table
+  tool.stat.changed: { fg: warn }  # unchanged from the shipped table
+  tool.stat.removed: { fg: removed }  # unchanged from the shipped table
+  tool.stat.size: { fg: muted }  # unchanged from the shipped table
+  tool.stat.separator: { fg: muted }  # unchanged from the shipped table
+  tool.detail: { fg: muted }  # unchanged from the shipped table
+  tool.hint: { fg: muted }  # unchanged from the shipped table
+  tool.failed.title: { fg: removed }  # unchanged from the shipped table
+  tool.failed.glyph: { fg: removed }  # unchanged from the shipped table
+  tool.subcall.title: { fg: muted }  # unchanged from the shipped table
+  tool.subcall.args: { fg: arg }  # unchanged from the shipped table
+  tool.diff.header: { fg: muted }  # unchanged from the shipped table
+  # Context lines and numbering recede, as they do in pi.
+  tool.diff.hunk: { fg: '#8b90b8' }  # toolDiffContext
+  tool.diff.added: { fg: added }  # unchanged from the shipped table
+  tool.diff.removed: { fg: removed }  # unchanged from the shipped table
+  tool.read.header: { fg: muted }  # unchanged from the shipped table
+  tool.read.lineNumber: { fg: '#6f759d' }  # syntaxComment
+  # Card bodies. Pi draws a call's output near the body text rather than
+  # muted; keeping that is what makes the theme read as high-contrast.
+  tool.read.line: { fg: '#d6d8f5' }  # toolDiffText
+  tool.search.path: { fg: muted }  # unchanged from the shipped table
+  tool.search.lineNumber: { fg: '#6f759d' }  # syntaxComment
+  # A search hit is the one row the reader is scanning for, and pi gives that
+  # "find me" job to its inline-code amber.
+  tool.search.match: { fg: '#fb9e24' }  # mdCode
+  tool.search.truncated: { fg: muted }  # unchanged from the shipped table
+  # Pi's shell mode is its own shade, and this surface's cwd is the same fact.
+  tool.terminal.cwd: { fg: '#99f6e4' }  # bashMode
+  tool.terminal.status: { fg: muted }  # unchanged from the shipped table
+  tool.terminal.output: { fg: '#d6d8f5' }  # toolOutput
+  tool.web.url: { fg: '#93c5fd' }  # mdLink
+  tool.web.source: { fg: muted }  # unchanged from the shipped table
+  tool.web.truncated: { fg: muted }  # unchanged from the shipped table
+  tool.generic.detail: { fg: '#d6d8f5' }  # toolOutput
+  markdown.heading: { fg: '#b5b5ff', bold: true }  # mdHeading
+  markdown.link: { fg: '#93c5fd', underline: true }  # mdLink
+  markdown.linkUrl: { fg: '#7dd3fc' }  # mdLinkUrl
+  markdown.code: { fg: '#fb9e24' }  # mdCode
+  markdown.codeBlock: { fg: '#e3e5ff' }  # mdCodeBlock
+  markdown.codeBlockBorder: { fg: '#4a4d76' }  # mdCodeBlockBorder
+  markdown.quote: { fg: '#c7c9e8' }  # mdQuote
+  markdown.quoteBorder: { fg: '#777bff' }  # mdQuoteBorder
+  markdown.hr: { fg: '#3c3f61' }  # mdHr
+  markdown.listBullet: { fg: '#a5b4fc' }  # mdListBullet
+  markdown.bold: { bold: true }  # unchanged from the shipped table
+  markdown.italic: { italic: true }  # unchanged from the shipped table
+  markdown.strikethrough: { strike: true }  # unchanged from the shipped table
+  markdown.underline: { underline: true }  # unchanged from the shipped table
+  markdown.diagram.border: { fg: '#343652' }  # border
+  markdown.diagram.text: { fg: '#e3e5ff' }  # mdCodeBlock
+  markdown.diagram.edge: { fg: accent }
+  markdown.diagram.edgeLabel: { fg: muted }  # unchanged from the shipped table
+  markdown.diagram.title: { fg: '#b5b5ff', bold: true }  # mdHeading
+  markdown.diagram.warning: { fg: warn }  # unchanged from the shipped table
+  # The current row of a list is a violet band in pi, not a bold row.
+  picker.title: { fg: accent, bold: true }
+  picker.glyph: { fg: accent, bold: true }
+  picker.note: { fg: '#a7a7ff', bold: true }  # customMessageLabel
+  picker.filter: { fg: muted }  # unchanged from the shipped table
+  picker.row: {}  # unchanged from the shipped table
+  picker.rowCurrent: { fg: '#a7a7ff', bg: '#2e315c', bold: true }  # customMessageLabel, selectedBg
+  picker.scrollNewer: { fg: muted }  # unchanged from the shipped table
+  picker.scrollOlder: { fg: muted }  # unchanged from the shipped table
+  picker.hint: { fg: muted }  # unchanged from the shipped table
+  picker.cursor: { fg: accent }
+  picker.border: { fg: '#343652' }  # border
+  gate.title: { fg: '#b5b5ff', bold: true }  # mdHeading
+  # A gate is the one place the surface stops the reader, so the two glyphs
+  # take pi's warning and accent rather than the shipped default weight.
+  gate.glyphApproval: { fg: warn, bold: true }
+  gate.glyphQuestion: { fg: accent, bold: true }
+  gate.detail: { fg: muted }  # unchanged from the shipped table
+  gate.option: {}  # unchanged from the shipped table
+  gate.optionCurrent: { fg: '#a7a7ff', bg: '#2e315c', bold: true }  # selectedBg
+  gate.cursor: { fg: accent }
+  gate.hint: { fg: muted }  # unchanged from the shipped table
+  dock.goal: { fg: accent, bold: true }
+  dock.planMode: { fg: '#a7a7ff', bold: true }  # customMessageLabel
+  dock.todos.heading: { fg: '#b5b5ff', bold: true }  # mdHeading
+  dock.todos.pending: { fg: muted }  # unchanged from the shipped table
+  dock.todos.inProgress: { fg: accent }
+  dock.todos.overflow: { fg: muted }  # unchanged from the shipped table
+  dock.subagents.heading: { fg: '#b5b5ff', bold: true }  # mdHeading
+  dock.subagents.running: { fg: muted }  # unchanged from the shipped table
+  dock.subagents.overflow: { fg: muted }  # unchanged from the shipped table
+  dock.jobs.heading: { fg: '#b5b5ff', bold: true }  # mdHeading
+  dock.jobs.running: { fg: muted }  # unchanged from the shipped table
+  dock.jobs.overflow: { fg: muted }  # unchanged from the shipped table
+  status.prefix: { fg: accent }  # unchanged from the shipped table
+  status.back: { fg: accent }  # unchanged from the shipped table
+  # Pi has no status bar, so this row is an adaptation: its facts stay muted,
+  # and the two that are not facts — busy, and a draft left behind — take the
+  # amber pi reserves for "look here" and the accent.
+  status.activity.working: { fg: warn }
+  status.activity.ready: { fg: muted }  # unchanged from the shipped table
+  status.elapsed: { fg: muted }  # unchanged from the shipped table
+  status.agentPreset: { fg: muted }  # unchanged from the shipped table
+  status.model: { fg: muted }  # unchanged from the shipped table
+  status.effort: { fg: muted }  # unchanged from the shipped table
+  status.permission: { fg: muted }  # unchanged from the shipped table
+  status.context: { fg: muted }  # unchanged from the shipped table
+  status.cache: { fg: muted }  # unchanged from the shipped table
+  status.stash: { fg: accent }  # unchanged from the shipped table
+  status.cwd: { fg: muted }  # unchanged from the shipped table
+  # Pi draws its borders a shade above its background, which is what a
+  # separator between facts is; the shipped muted grey reads as a fact itself.
+  status.separator: { fg: '#343652' }  # border
+  # The editor is the one element that always holds the reader's attention,
+  # so it takes pi's focused border rather than its resting one.
+  editor.border: { fg: '#8a8aff' }  # borderAccent
+  editor.queued: { fg: faint, italic: true }
+  editor.queued.more: { fg: faint }
+  editor.ghost: { dim: true }  # unchanged from the shipped table
+  editor.selectList.selectedPrefix: { fg: accent }  # unchanged from the shipped table
+  editor.selectList.selectedText: { fg: '#a7a7ff', bg: '#2e315c', bold: true }  # selectedBg
+  editor.selectList.description: { fg: faint }
+  editor.selectList.scrollInfo: { fg: faint }
+  editor.selectList.noMatch: { fg: faint }
