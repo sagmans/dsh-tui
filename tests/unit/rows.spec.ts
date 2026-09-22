@@ -8,7 +8,7 @@ describe('RowCache', () => {
     expect(cache.lookup(key, '80')).toBeUndefined()
     cache.store(key, '80', ['row'])
     expect(cache.lookup(key, '80')).toEqual(['row'])
-    expect(cache.stats()).toEqual({ hits: 1, misses: 1, size: 1 })
+    expect(cache.stats()).toEqual({ hits: 1, misses: 1 })
   })
 
   it('rebuilds when the tag changes, because the rows would differ', () => {
@@ -25,13 +25,15 @@ describe('RowCache', () => {
     expect(cache.lookup({}, '80')).toBeUndefined()
   })
 
-  it('stops growing at its limit and re-renders what it dropped', () => {
-    const cache = new RowCache(2)
-    const keys = [{}, {}, {}]
-    keys.forEach((key, index) => cache.store(key, '80', [`row ${index}`]))
-    expect(cache.stats().size).toBe(2)
-    expect(cache.lookup(keys[0]!, '80')).toBeUndefined()
-    expect(cache.lookup(keys[2]!, '80')).toEqual(['row 2'])
+  it('keeps every settled row for as long as its entry lives', () => {
+    // A repaint measures every entry, so a store bounded below the transcript
+    // would evict the very row the next pass needs; a longer transcript than any
+    // bound the cache could carry must still be free on the second pass.
+    const cache = new RowCache()
+    const entries = Array.from({ length: 5_000 }, () => ({}))
+    for (const entry of entries) cache.store(entry, '80', ['row'])
+    for (const entry of entries) expect(cache.lookup(entry, '80')).toEqual(['row'])
+    expect(cache.stats()).toEqual({ hits: 5_000, misses: 0 })
   })
 
   it('forgets everything when the transcript is cleared', () => {
@@ -39,7 +41,6 @@ describe('RowCache', () => {
     const key = {}
     cache.store(key, '80', ['row'])
     cache.clear()
-    expect(cache.stats().size).toBe(0)
     expect(cache.lookup(key, '80')).toBeUndefined()
   })
 })

@@ -70,9 +70,9 @@ describe('TranscriptView repaints', () => {
     const view = new TranscriptView(model, theme, new MarkdownRenderer(theme.markdown), { rows })
 
     const first = view.render(80)
-    expect(rows.stats()).toEqual({ hits: 0, misses: 2, size: 2 })
+    expect(rows.stats()).toEqual({ hits: 0, misses: 2 })
     expect(view.render(80)).toEqual(first)
-    expect(rows.stats()).toEqual({ hits: 2, misses: 2, size: 2 })
+    expect(rows.stats()).toEqual({ hits: 2, misses: 2 })
   })
 
   it('rebuilds when a resize or an expansion changes what the rows say', () => {
@@ -529,6 +529,23 @@ describe('TranscriptView gate', () => {
     expect(lines).toContain('? which target?  (1/2)')
     expect(lines).toContain('   ❯ [x] 5. staging — safe')
     expect(lines).toContain('     [ ] 6. production')
+  })
+
+  it('keeps a gate answer row inside a surface too narrow for its indent', () => {
+    const gate: GateCard = {
+      kind: 'question',
+      title: 'which target?',
+      detail: [],
+      optionOffset: 0,
+      options: [],
+      custom: undefined,
+      answerInput: answerBar('answer'),
+      hint: '',
+    }
+    const lines = viewOf(new TranscriptModel(), COLLAPSED, gate).render(4)
+    // The indent alone can be as wide as the surface; the answer still has to
+    // arrive as rows the surface can draw rather than as rows it must cut.
+    expect(lines.every(line => visibleWidth(line) <= 4)).toBe(true)
   })
 
   it('wraps an option that runs past the screen instead of cutting it', () => {

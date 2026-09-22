@@ -1,4 +1,5 @@
 import { cardFromLines, carriedFields, contentLines, mergeCards, subCallOf, SUBCALL_MAX, type ToolCard, type ToolPresenter, type ToolSubCallOutput } from './cards.ts'
+import { sliceGraphemes } from './text.ts'
 import { countTokens } from './tokens.ts'
 
 /** One renderable transcript row. */
@@ -282,7 +283,8 @@ export class TranscriptModel {
    */
   private paintReasoning(text: string, ranFor: number | undefined): void {
     const timing = ranFor === undefined ? '' : ` · ${Math.max(1, Math.round(ranFor / 1000))}s`
-    const cut = text.length > REASONING_CHAR_LIMIT ? `\n… truncated at ${REASONING_CHAR_LIMIT} chars` : ''
+    const kept = sliceGraphemes(text, REASONING_CHAR_LIMIT)
+    const cut = kept.length === text.length ? '' : `\n… truncated at ${REASONING_CHAR_LIMIT} chars`
     // The live thought keeps the id the stream gave it; a thought only the
     // recorded message carries takes the next one.
     const id = this.liveReasoningId ?? String(++this.thoughtSeq)
@@ -291,7 +293,7 @@ export class TranscriptModel {
       kind: 'reasoning',
       id,
       summary: `reasoning · ${describeTokens(text)}${timing}`,
-      body: text.slice(0, REASONING_CHAR_LIMIT) + cut,
+      body: kept + cut,
       live: false,
     })
   }

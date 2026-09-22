@@ -70,6 +70,14 @@ breaking change, and a patch carries only fixes.
 
 ### Fixed
 
+- A cached transcript row is kept for the life of the entry it belongs to instead
+  of being evicted at a fixed count, so a session longer than that count no
+  longer re-wraps every row on every repaint.
+- Every row a bar hands out fits the surface that draws it: a bar narrower than
+  its own padding, a wide glyph beside the edge, and a gate answer under an
+  indent as wide as the terminal are cut where the bar can count what it lost,
+  and a cut — including a thought's own character budget — falls between
+  grapheme clusters instead of splitting a joined emoji.
 - A fold no longer keeps sub-call indexing from a session that was dropped, a
   thought the stream never settled no longer stays live into the next turn, and
   every thought a replayed turn recorded is painted instead of every other one.

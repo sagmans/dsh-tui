@@ -13,6 +13,7 @@ import type {
   WebResultView,
 } from '@deepseek-ai/dsh-tools'
 import type { CardRowClass } from './theme-tokens.ts'
+import { sliceGraphemes } from './text.ts'
 import { countTokens, formatTokens } from './tokens.ts'
 
 /** What a tool's result presenter receives, plus the call arguments it was asked with. */
@@ -215,13 +216,17 @@ export const CARD_LINE_LIMIT = 200
 /**
  * Cut text to a character budget, marking the cut.
  *
- * Counted in code points rather than display cells: the budget is the reader's
- * own setting, while the renderer still cuts and wraps what it draws by width.
+ * Counted in grapheme clusters rather than display cells: the budget is the
+ * reader's own setting, while the renderer still cuts and wraps what it draws by
+ * width. A cluster is also the smallest run a cut may drop, so a joined emoji
+ * survives the budget whole instead of being halved by it.
  */
 export function clip(text: string, limit: number): string {
-  const points = [...text]
-  if (points.length <= limit) return text
-  return `${points.slice(0, Math.max(0, limit - 1)).join('')}…`
+  if (limit <= 0) return ''
+  const kept = sliceGraphemes(text, limit)
+  if (kept.length === text.length) return text
+  // The ellipsis is part of the budget, so the row still answers the limit it was given.
+  return `${sliceGraphemes(text, limit - 1)}…`
 }
 
 function clipLine(text: string): string {

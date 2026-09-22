@@ -1,4 +1,4 @@
-import { visibleWidth, wrapTextWithAnsi } from '@earendil-works/pi-tui'
+import { truncateToWidth, visibleWidth, wrapTextWithAnsi } from '@earendil-works/pi-tui'
 import { displayText } from '../text.ts'
 
 /**
@@ -25,8 +25,13 @@ export function textWidth(innerWidth: number): number {
 
 /** One text row of a bar: the air, the text, and the rest of the inside width. */
 export function textRow(text: string, innerWidth: number): string {
-  const room = Math.max(0, textWidth(innerWidth) - visibleWidth(text))
-  return `${' '.repeat(PADDING_X)}${text}${' '.repeat(room)}${' '.repeat(PADDING_X)}`
+  const width = Math.max(0, innerWidth)
+  const room = Math.max(0, textWidth(width) - visibleWidth(text))
+  const row = `${' '.repeat(PADDING_X)}${text}${' '.repeat(room)}${' '.repeat(PADDING_X)}`
+  // A bar can be narrower than its own padding. The frame's columns are the only
+  // thing allowed to own the edge, so a row that would overflow is cut here,
+  // where the bar can still count what it lost, instead of by the terminal.
+  return visibleWidth(row) <= width ? row : truncateToWidth(row, width, '')
 }
 
 /**
