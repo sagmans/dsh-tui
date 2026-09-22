@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   ARGUMENT_BLUE,
   DEFAULT_PALETTE,
+  DIFF_ADDED_BAND,
+  DIFF_REMOVED_BAND,
   USER_PROMPT_MINT,
   DEFAULT_TOKENS,
   PALETTE_NAMES,
@@ -140,6 +142,15 @@ describe('resolveToken', () => {
     )
     expect(style.prefix).toContain('38;2;0;255;0')
     expect(style.prefix).toContain('48;2;255;0;0')
+  })
+
+  it('bands a changed run in the colour of the row it sits on', () => {
+    // The band is the emphasis; the foreground is inherited from the row, so a
+    // palette move carries both without the reader restating either.
+    const prefix = (token: TuiToken) => resolveToken(token, overrides({}), DEFAULT_PALETTE, 'truecolor').prefix
+    const rgb = (hex: string) => [1, 3, 5].map(at => Number.parseInt(hex.slice(at, at + 2), 16)).join(';')
+    expect(prefix('markdown.diff.addedEmphasis')).toBe(`\u001B[38;2;${rgb(DEFAULT_PALETTE.added)};48;2;${rgb(DIFF_ADDED_BAND)}m`)
+    expect(prefix('markdown.diff.removedEmphasis')).toBe(`\u001B[38;2;${rgb(DEFAULT_PALETTE.removed)};48;2;${rgb(DIFF_REMOVED_BAND)}m`)
   })
 
   it('stops on an inherit cycle instead of hanging', () => {

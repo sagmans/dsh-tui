@@ -3,7 +3,7 @@ import { stripTerminalSequences, type TUI, type TuiMouseEvent, visibleWidth } fr
 import { cardOfCall, cardOfResult, contentLines, CARD_DETAIL_MAX, CARD_SHELL_PREVIEW, SUBCALL_MAX, type ToolPresenter } from '@/cards.ts'
 import type { GateCard } from '@/gates.ts'
 import { createTheme, forwardEditorTheme, forwardMarkdownTheme, type TuiTheme } from '@/theme.ts'
-import { DEFAULT_PALETTE } from '@/theme-tokens.ts'
+import { DEFAULT_PALETTE, DIFF_ADDED_BAND } from '@/theme-tokens.ts'
 import { TranscriptModel, type TranscriptEntry } from '@/transcript.ts'
 import { MarkdownRenderer } from '@/ui/markdown.ts'
 import type { PickerCard } from '@/ui/picker.ts'
@@ -737,6 +737,30 @@ describe('TranscriptView theming', () => {
     }).render(60)
     expect(lines.join('\n')).not.toContain('secret thought')
     expect(lines.join('\n')).toContain('reasoning ·')
+  })
+
+  it('draws a diff inside a thought in the diff elements', () => {
+    // A thought refuses the answer's drawings and shades, but a diff is the change
+    // itself rather than decoration: a reader following a thought has to see which
+    // side of it moved, while everything else the thought says stays recessive.
+    const model = new TranscriptModel()
+    model.apply({ type: 'assistant/message', data: {
+      message: {
+        content: [
+          { type: 'reasoning', text: ['thinking about the change', '', '```diff', '-const a = 1', '+const a = 2', '```'].join('\n') },
+          { type: 'text', text: 'the answer' },
+        ],
+      },
+    } })
+    const colour = createTheme('truecolor')
+    const lines = new TranscriptView(model, colour, new MarkdownRenderer(colour.markdown), {
+      state: () => ({ expandCards: false, expandReasoning: true, expandSubCalls: false }),
+    }).render(60)
+    const shown = lines.join('\n')
+    const rgb = (hex: string) => [1, 3, 5].map(at => Number.parseInt(hex.slice(at, at + 2), 16)).join(';')
+    expect(shown).toContain(`38;2;${rgb(DEFAULT_PALETTE.added)}`)
+    expect(shown).toContain(`48;2;${rgb(DIFF_ADDED_BAND)}`)
+    expect(shown).toContain(`38;2;${rgb(DEFAULT_PALETTE.faint)}`)
   })
 
   it('rebuilds cached rows when the theme revision moves', () => {

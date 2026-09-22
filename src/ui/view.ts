@@ -13,6 +13,7 @@ import type { TranscriptEntry, TranscriptModel } from '../transcript.ts'
 import { DEFAULT_TOOL_DISPLAY, type ToolDisplaySpec } from '../tool-display.ts'
 import { CARD_ROW_TOKEN, type TuiToken } from '../theme-tokens.ts'
 import type { TuiTheme } from '../theme.ts'
+import { codeBlockLines } from './diff.ts'
 import { canFrame, frameLines, FRAME_COLUMNS, textWidth } from './frame.ts'
 import { ANSWER_FACE, type MarkdownFace, type MarkdownRenderer } from './markdown.ts'
 import { pickerCardLines } from './picker-card.ts'
@@ -71,9 +72,12 @@ const STAT_TOKEN: Readonly<Record<CardStatKind, TuiToken>> = {
  * A thought is deliberately recessive, and the answer's theme would let a
  * heading or a link inside it outshine the answer it produced. The structure
  * still shows because markdown draws it around the text — bullets, fences,
- * indents, table rules — rather than in the text's own colour.
+ * indents, table rules — rather than in the text's own colour. A fenced diff is
+ * the one block that does not recede: red and green are what the fence means
+ * rather than how loudly it is drawn, and a thought showing a change is the
+ * place the reader most needs to see which side of it moved.
  */
-function recessiveMarkdownTheme(style: (text: string) => string): MarkdownTheme {
+function recessiveMarkdownTheme(style: (text: string) => string, theme: TuiTheme): MarkdownTheme {
   return {
     heading: style,
     link: style,
@@ -89,6 +93,11 @@ function recessiveMarkdownTheme(style: (text: string) => string): MarkdownTheme 
     italic: style,
     strikethrough: style,
     underline: style,
+    highlightCode: (code, lang) => codeBlockLines(code, lang, {
+      style: (token, text) => theme.style(token, text),
+      visible: token => theme.visible(token),
+      plain: style,
+    }),
   }
 }
 
@@ -353,7 +362,7 @@ export class TranscriptView implements Component {
    */
   private reasoningFace(): MarkdownFace {
     const body = (text: string): string => this.theme.style('transcript.reasoning.body', text)
-    return { name: 'reasoning', base: { color: body }, theme: recessiveMarkdownTheme(body), transform: false }
+    return { name: 'reasoning', base: { color: body }, theme: recessiveMarkdownTheme(body, this.theme), transform: false }
   }
 
   /** The face a submitted prompt is drawn in: its structure is markdown's, its shade stays the prompt's. */

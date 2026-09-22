@@ -48,6 +48,20 @@ export const ARGUMENT_BLUE = '#8db3d9'
  */
 export const USER_PROMPT_MINT = '#27f5c8'
 
+/**
+ * The band a changed run sits on inside an added line.
+ *
+ * The characters that changed are why a paired line is on screen at all, and
+ * they must stand out without leaving the row's own hue: a reader scanning a
+ * green row should not have to compare it against a second, unrelated colour to
+ * find what moved. An explicit dark shade rather than a palette slot, for the
+ * same reason the muted grey is one.
+ */
+export const DIFF_ADDED_BAND = '#1e3d24'
+
+/** The band a changed run sits on inside a removed line; the pair of {@link DIFF_ADDED_BAND}. */
+export const DIFF_REMOVED_BAND = '#472424'
+
 /** Palette entries a token may name instead of a literal colour. */
 export const PALETTE_NAMES = ['default', 'muted', 'faint', 'accent', 'arg', 'warn', 'added', 'removed', 'user', 'assistant'] as const
 
@@ -155,6 +169,17 @@ export const TUI_TOKENS = [
   'markdown.italic',
   'markdown.strikethrough',
   'markdown.underline',
+  // A fenced diff is drawn by the surface rather than by the library's plain
+  // code path, so each row class is addressable on its own; the two emphasis
+  // entries are the characters that changed inside an otherwise matching pair,
+  // which is what tells an edit from a wholesale replacement.
+  'markdown.diff.header',
+  'markdown.diff.hunk',
+  'markdown.diff.context',
+  'markdown.diff.added',
+  'markdown.diff.removed',
+  'markdown.diff.addedEmphasis',
+  'markdown.diff.removedEmphasis',
   // A drawn mermaid diagram: the renderer reports what each run *is*, so every
   // role a drawing can be made of is addressable on its own.
   'markdown.diagram.border',
@@ -357,6 +382,18 @@ export const DEFAULT_TOKENS: Readonly<Record<TuiToken, StyleSpec>> = {
   'markdown.italic': { italic: true },
   'markdown.strikethrough': { strike: true },
   'markdown.underline': { underline: true },
+  // A diff's scaffolding recedes the way a card's does, and its unchanged code
+  // keeps the plain shade a fence already had, so a reply without a diff fence
+  // draws exactly as it did.
+  'markdown.diff.header': muted,
+  'markdown.diff.hunk': muted,
+  'markdown.diff.context': plain,
+  'markdown.diff.added': { fg: 'added' },
+  'markdown.diff.removed': { fg: 'removed' },
+  // The band is the emphasis and the foreground is inherited from the row, so a
+  // palette move carries both without the reader restating either.
+  'markdown.diff.addedEmphasis': { inherit: 'markdown.diff.added', bg: DIFF_ADDED_BAND },
+  'markdown.diff.removedEmphasis': { inherit: 'markdown.diff.removed', bg: DIFF_REMOVED_BAND },
   'markdown.diagram.border': muted,
   'markdown.diagram.text': plain,
   'markdown.diagram.edge': { fg: 'accent' },

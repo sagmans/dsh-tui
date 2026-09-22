@@ -83,6 +83,13 @@ breaking change, and a patch carries only fixes.
   product keeps for the brand as text. It names only palette entries, so the brand
   moves in one line, and it marks a reader's own turn with the product's bubble
   fill rather than a hue of its own.
+
+- A fenced block that names `diff` or `patch` draws as the change it describes
+  instead of one plain code block: file and hunk headers recede, added rows draw
+  green, removed rows draw red, and the characters that changed inside a paired
+  row sit on a darker band of that row's colour. Unchanged rows keep the shade a
+  code block always had, every other language draws exactly as before, and the
+  seven diff elements are overridden through `tokens:` like any other.
 - `Ctrl+X` then `?` opens the key map as a searchable list: one row per action
   with the keys in force, one row for every key the map took from the library,
   and a filter reaching the action id, the layer, a key, or what the row does.
