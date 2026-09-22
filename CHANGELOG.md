@@ -15,7 +15,7 @@ breaking change, and a patch carries only fixes.
 - An assistant reply is drawn inside a frame of its own, in the
   `transcript.assistant.border` element, so one exchange reads as two objects
   rather than as a box followed by a stream of rows. Hiding that element draws the
-  reply bare, exactly as hiding `editor.border` does for a prompt.
+  reply bare, exactly as hiding `editor.border` does for a prompt ([#65](https://github.com/sagmans/dsh-tui/pull/65)).
 
 - Themes are files. The package ships each one in full — `deepseek-blue`, the
   table written out element by element in the colours the project answers to, and
@@ -34,45 +34,45 @@ breaking change, and a patch carries only fixes.
   surface can be re-derived rather than guessed at; the accent is the step the
   product keeps for the brand as text. It names only palette entries, so the brand
   moves in one line, and it marks a reader's own turn with the product's bubble
-  fill rather than a hue of its own.
+  fill rather than a hue of its own ([#61](https://github.com/sagmans/dsh-tui/pull/61)).
 
 - A fenced block that names `diff` or `patch` draws as the change it describes
   instead of one plain code block: file and hunk headers recede, added rows draw
   green, removed rows draw red, and the characters that changed inside a paired
   row sit on a darker band of that row's colour. Unchanged rows keep the shade a
   code block always had, every other language draws exactly as before, and the
-  seven diff elements are overridden through `tokens:` like any other.
+  seven diff elements are overridden through `tokens:` like any other ([#62](https://github.com/sagmans/dsh-tui/pull/62)).
 - `Ctrl+X` then `?` opens the key map as a searchable list: one row per action
   with the keys in force, one row for every key the map took from the library,
   and a filter reaching the action id, the layer, a key, or what the row does.
   The list is drawn in a box over the transcript, so looking a key up no longer
-  costs the reader their place in it.
+  costs the reader their place in it ([#53](https://github.com/sagmans/dsh-tui/pull/53)).
 - A PTC program's dispatched calls stay visible as one row each under the
   `run_code` header without opening the card, and a click opens one call's
   argument in full while its neighbours stay as they were; opening a shell call
   also shows the rows it printed, which the program's return value alone often
   drops. A thought opens and folds on a click too, instead of only through the
-  key that moves every one.
+  key that moves every one ([#49](https://github.com/sagmans/dsh-tui/pull/49)).
 - Tool cards fold one message at a time: a click on a card opens or folds that
   row alone, and a `dsh-tui: tools:` block decides how each tool starts —
   whether its cards start folded and whether a fold hides its rows or keeps a
   `tail` of them. Ctrl+O still opens or folds every card at once, and a
-  message the reader clicked keeps the state the click gave it.
+  message the reader clicked keeps the state the click gave it ([#49](https://github.com/sagmans/dsh-tui/pull/49)).
 - The bar's draft opens in the reader's own editor: `ctrl+x` then `e` hands the
   terminal to `$VISUAL` (or `$EDITOR`) with the draft in an owner-only scratch
   file, waits for the child, repaints, and takes back what was saved through one
   no-follow handle that refuses anything past 1 MiB, with control and bidi
   characters stripped. A non-zero exit still keeps the saved text, no
   editor configured is a notice rather than a failure, and a draft past 1 MiB is
-  left on disk with its path instead of loaded into the bar.
+  left on disk with its path instead of loaded into the bar ([#44](https://github.com/sagmans/dsh-tui/pull/44)).
 - A related-plugins section closes the README: the two companion bundles that
   stack onto a profile — an absolute compaction budget and extra provider
   routes — with the commands that mount them and how each meets this bundle's
-  own composition.
+  own composition ([#47](https://github.com/sagmans/dsh-tui/pull/47)).
 - Ctrl+P and Ctrl+N move through every list the way the arrows do: a picker's
   rows, a question's options and the free-text row that leaves them, and the
   editor's completion menu. They are ordinary bindings, so `/keys` prints them
-  and the `keys:` section moves them.
+  and the `keys:` section moves them ([#52](https://github.com/sagmans/dsh-tui/pull/52)).
 - Themes are chosen by name. `dsh-tui: theme: violet-orbit` applies a port of
   the pi theme of the same name: its palette, plus the elements it draws its own
   way. A theme is a layer rather than a replacement, so anything it says nothing
@@ -85,14 +85,14 @@ breaking change, and a patch carries only fixes.
   prompt's frame but not the fill pi puts behind it, because a band inside a
   frame treats one fact twice and reads as a selected row; and it lifts a tool's
   argument out of pi's link blue, which sat too close to the periwinkle pi gives
-  a tool's name for one row to read as the two facts it carries.
+  a tool's name for one row to read as the two facts it carries ([#56](https://github.com/sagmans/dsh-tui/pull/56), [#57](https://github.com/sagmans/dsh-tui/pull/57), [#61](https://github.com/sagmans/dsh-tui/pull/61)).
 - Every tool's dispatched call opens on a click to what that tool declared and
   what it produced, not only a shell's output: an edit's diff in the diff
   colours, a read's lines, a search's hits. What the call declared is kept from
   the moment it starts, so the row opens while the call still runs and keeps the
-  state the reader gave it when the outcome lands.
+  state the reader gave it when the outcome lands ([#60](https://github.com/sagmans/dsh-tui/pull/60)).
 - `Ctrl+X` then `n` starts a fresh session, the session `/new` starts, without
-  the typed line that would have replaced the draft in the bar.
+  the typed line that would have replaced the draft in the bar ([#63](https://github.com/sagmans/dsh-tui/pull/63)).
 
 ### Changed
 
@@ -102,16 +102,16 @@ breaking change, and a patch carries only fixes.
   theme therefore loads even if the file is renamed or deleted later. `/theme`
   reports a themed element's origin as `theme` rather than `preset`, and its
   footer names the themes actually on disk, marking the ones in your directory,
-  with the export hint.
+  with the export hint ([#61](https://github.com/sagmans/dsh-tui/pull/61)).
 - `/theme` opens a list of the themes on disk instead of printing the table. The
   list narrows as you type and the screen paints the row under the cursor, so two
   themes are compared on the reader's own transcript; nothing is written until one
   is taken, and leaving the list puts back the theme that was in force. The table
-  is still there, as `/theme tokens`.
+  is still there, as `/theme tokens` ([#61](https://github.com/sagmans/dsh-tui/pull/61)).
 - `/keys` opens the key map as a list you filter as you type instead of
   printing every row into the transcript. `/keys <layer>` opens the same list
   already narrowed to one layer, and a layer name the surface does not have is
-  still refused with the names it does.
+  still refused with the names it does ([#53](https://github.com/sagmans/dsh-tui/pull/53)).
 - Ctrl+C no longer leaves. It takes back one thing per press — the draft in the
   bar, the prompts waiting in the agent's inbox (put back into the bar before the
   turn is stopped, because an interrupt drops them), the running turn, or a
@@ -120,25 +120,25 @@ breaking change, and a patch carries only fixes.
   cancel does nothing rather than ending the session. Ctrl+D is the only key
   that leaves, and only while the bar holds no text: a running turn is cancelled
   on the way out, the resume command prints, and the terminal is restored as
-  before. `/quit` and `/exit` still leave.
+  before. `/quit` and `/exit` still leave ([#48](https://github.com/sagmans/dsh-tui/pull/48)).
 - A question gate gained an abandon key: Ctrl+C settles the batch with no
   answers, the shape an aborted call already produces, while Esc keeps skipping
-  one question. An approval now cancels on Ctrl+C as well as Esc.
+  one question. An approval now cancels on Ctrl+C as well as Esc ([#48](https://github.com/sagmans/dsh-tui/pull/48)).
 - A folded tool card is one row for every tool, bash included: the row carries
   the tool, its command clipped at the screen edge, the exit status, and the
   count of output rows waiting behind the fold, instead of spending twenty
   rows on shell output by default. `output: tail` restores a preview window per
-  tool, and a PTC card's dispatched calls stay one row each under the header.
+  tool, and a PTC card's dispatched calls stay one row each under the header ([#49](https://github.com/sagmans/dsh-tui/pull/49)).
 - A thought and the row naming it both recede to a shade below the muted
   family, and only the row is italic, so the signpost no longer competes with
-  the text it introduces.
+  the text it introduces ([#49](https://github.com/sagmans/dsh-tui/pull/49)).
 - Injected context rows name what arrived instead of only the producer: the
   workspace-instructions row lists the instruction files it loaded
   (`~/.dsh/AGENTS.md`, `AGENTS.md`, or the nested file a later delta touched),
   the skill catalog reports how many entries it published, a runtime snapshot
   names its sections, and notices, relays, goals, and cross-session recalls get
   labels of their own. A source that declares no form keeps the previous
-  `producer · N lines — preview` row.
+  `producer · N lines — preview` row ([#51](https://github.com/sagmans/dsh-tui/pull/51)).
 - Tool output, model text, and file content are drawn the way a terminal would
   draw them instead of being escaped into visible bytes: a colour the terminal
   can show is shown at the session's colour budget, a tab lands on the column
@@ -147,65 +147,65 @@ breaking change, and a patch carries only fixes.
   consumed, so a hostile result cannot reach the terminal, and a stray control
   byte is spelled out rather than dropped. Text the surface paints itself — a
   ghost suggestion, a completion row, a queued prompt, an export — carries no
-  colour, because the surface is already styling it.
+  colour, because the surface is already styling it ([#54](https://github.com/sagmans/dsh-tui/pull/54)).
 
 - A prompt stash belongs to the session that parked it rather than to the
   working directory: a second terminal in the same checkout no longer sees or
   clears the first one's drafts, and resuming a session finds its own. The bank
   key moved to `v2`, so directory-scoped banks written by 0.4.0 are left where
-  they are and are not read.
+  they are and are not read ([#43](https://github.com/sagmans/dsh-tui/pull/43)).
 - Markdown renders for every message rather than only a reply: a submitted
   prompt lays its markdown out inside its own frame, and an opened thought
   parses lists, fences, and emphasis in the thought's own shade. A thought's
-  mermaid fence stays source instead of carrying the answer's weight.
+  mermaid fence stays source instead of carrying the answer's weight ([#46](https://github.com/sagmans/dsh-tui/pull/46)).
 
 ### Fixed
 
 - A frame a component cannot draw no longer ends the session: the last good
   screen stays up and the failure reaches the transcript, and a terminating
   signal (Ctrl+C at the terminal, SIGTERM, SIGHUP, SIGQUIT) restores the screen
-  and leaves with the status a shell reports for it.
+  and leaves with the status a shell reports for it ([#50](https://github.com/sagmans/dsh-tui/pull/50)).
 - Text the host writes straight to stdout or stderr — a library's log line, an
   unhandled-rejection report, a stack trace — waits until the surface gives the
   screen back instead of landing inside a frame, where it would be painted over
-  and then skipped as unchanged.
+  and then skipped as unchanged ([#50](https://github.com/sagmans/dsh-tui/pull/50)).
 - A thought still streaming is bounded like the row it settles into, so a long
-  one cannot make every frame it draws slower than the last.
+  one cannot make every frame it draws slower than the last ([#50](https://github.com/sagmans/dsh-tui/pull/50)).
 - A cached transcript row is kept for the life of the entry it belongs to instead
   of being evicted at a fixed count, so a session longer than that count no
-  longer re-wraps every row on every repaint.
+  longer re-wraps every row on every repaint ([#50](https://github.com/sagmans/dsh-tui/pull/50)).
 - Every row a bar hands out fits the surface that draws it: a bar narrower than
   its own padding, a wide glyph beside the edge, and a gate answer under an
   indent as wide as the terminal are cut where the bar can count what it lost,
   and a cut — including a thought's own character budget — falls between
-  grapheme clusters instead of splitting a joined emoji.
+  grapheme clusters instead of splitting a joined emoji ([#50](https://github.com/sagmans/dsh-tui/pull/50)).
 - A fold no longer keeps sub-call indexing from a session that was dropped, a
   thought the stream never settled no longer stays live into the next turn, and
-  every thought a replayed turn recorded is painted instead of every other one.
+  every thought a replayed turn recorded is painted instead of every other one ([#49](https://github.com/sagmans/dsh-tui/pull/49)).
 - A click in the prompt bar reaches the editor that drew it, the work board
   gives up rows before the input bar does — which keeps a frame's worth of rows
   no shrink can take — and live text and failures fold into the session the
-  reader is looking at rather than the one this terminal drives.
+  reader is looking at rather than the one this terminal drives ([#49](https://github.com/sagmans/dsh-tui/pull/49)).
 - A click lands on the row it was made on while a thought is still streaming,
   and a folded thought fits a terminal too narrow to hold both its signpost and
-  its fold key.
+  its fold key ([#49](https://github.com/sagmans/dsh-tui/pull/49)).
 - A row that carried a line break — a background job's label, a command a PTC
   program wrote across lines, a path, or any other fact a component draws on one
   row — no longer writes the rest of itself over the row below it, which is how
   a tool row could reach the editor's frame. The one line a cut promises is now
   one line, and the status row flattens what a fact brought even when it never
-  needed a cut.
+  needed a cut ([#49](https://github.com/sagmans/dsh-tui/pull/49)).
 - A picker's hint folds under its indent instead of being cut, so a narrow
-  screen still names the keys that leave the list (`esc/ctrl+c`).
+  screen still names the keys that leave the list (`esc/ctrl+c`) ([#59](https://github.com/sagmans/dsh-tui/pull/59)).
 - A failed call's own details are reachable. A program's dispatched call kept
   rows only when its tool drew a shell view, so the red row a reader clicked for
   an edit, a read, or a search opened to nothing; the outcome the model was shown
   is now kept for every kind, and a failure takes back the change it declared
-  rather than drawing rows for work that never happened.
+  rather than drawing rows for work that never happened ([#60](https://github.com/sagmans/dsh-tui/pull/60)).
 - `/new` no longer leaves the conversation it starts blank: the transcript was
   still measuring the fresh session's rows against the numbering of the one it
   replaced, so the submitted prompt, every settled row, and the calls a PTC
-  program dispatched under its card were dropped from the new session.
+  program dispatched under its card were dropped from the new session ([#64](https://github.com/sagmans/dsh-tui/pull/64)).
 
 ## [0.4.0] - 2026-09-21
 
