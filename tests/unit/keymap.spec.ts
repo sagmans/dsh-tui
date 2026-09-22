@@ -63,7 +63,9 @@ describe('the key tables', () => {
     const line = surfaceKeysLine(defaultKeymap())
     expect(line).toContain('ctrl+o tool detail')
     expect(line).toContain('ctrl+r search prompt history')
-    expect(line.split(' · ')).toHaveLength(7)
+    expect(line).toContain('ctrl+c cancel')
+    expect(line).toContain('ctrl+d quit')
+    expect(line.split(' · ')).toHaveLength(8)
   })
 
   it('reads the keys the reader wrote wherever help is asked for', () => {
@@ -119,6 +121,13 @@ describe('installKeybindings', () => {
   it('leaves a library action the reader did not write on the library own keys', () => {
     installKeybindings(resolveKeymap({ 'tui.editor.yank': 'ctrl+g' }))
     expect(getKeybindings().matches('\u001b[1;3D', 'tui.editor.cursorWordLeft')).toBe(true)
+  })
+
+  it('installs the search close key the surface added to that library row', () => {
+    installKeybindings(resolveKeymap({}))
+    const keys = getKeybindings()
+    expect(keys.matches('\u001b', 'tui.altScreen.searchClose')).toBe(true)
+    expect(keys.matches('\u0003', 'tui.altScreen.searchClose')).toBe(true)
   })
 
   it('unbinds the library newline keys when the reader leaves the line to Enter alone', () => {

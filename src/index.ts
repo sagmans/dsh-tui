@@ -35,6 +35,7 @@ import { describeMissingOptional, describeMissingRequired, probeComposition } fr
 import type { ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
 import type { AskUserQuestionAnswer } from '@deepseek-ai/dsh-user-questions'
 import { ApprovalGate, QuestionGate, toGateQuestions, type GateAnswer } from './gates.ts'
+import { cancelStep, quitStep } from './input/cancel.ts'
 import { createCompletionProvider } from './input/completion.ts'
 import { ghostSuffix } from './input/ghost.ts'
 import { LOCAL_COMMANDS, classifySubmission, type Submission } from './input/submission.ts'
@@ -480,7 +481,8 @@ export function apply(ctx: Context, config: unknown): void {
   const dock = new WorkDock(() => work.state(), theme, () => jobs, () => roster.list())
   // The queue is read from the agent this terminal drives rather than from the
   // session on screen, because it sits on the editor that submits to that agent.
-  const queue = new QueueBar(() => pendingPrompts(ctx, liveSession(activeSession)), theme)
+  const queuedPrompts = (): readonly string[] => pendingPrompts(ctx, liveSession(activeSession))
+  const queue = new QueueBar(queuedPrompts, theme)
   // Only a running turn has anything to say over time, so the clock stops with it.
   const statusTicker: ReturnType<typeof setInterval> = setInterval(() => {
     if (turnOpen) tui.requestRender()
@@ -598,6 +600,15 @@ export function apply(ctx: Context, config: unknown): void {
   }
 
   /**
+   * Whether the bar holds anything the reader wrote.
+   *
+   * Whitespace counts: it is a character the editor holds, and a press that
+   * clears it is the press the reader asked for. A paste counts expanded,
+   * because a marker is content rather than an absence of it.
+   */
+  const barHasText = (): boolean => editor.getExpandedText() !== ''
+
+  /**
    * What each key the surface answers itself does; false hands the press back.
    *
    * Keyed by the table's own ids, so a key added to {@link SURFACE_ACTIONS}
@@ -633,15 +644,57 @@ export function apply(ctx: Context, config: unknown): void {
     },
     interrupt: () => {
       // In raw mode Ctrl+C never reaches the process as SIGINT, so the surface
-      // decides: stop the work in flight, or leave when there is none.
-      if (!turnOpen) {
-        requestExit(0)
-        return true
+      // decides what one press takes back — and a press with nothing left to
+      // cancel is handed back rather than spent on leaving.
+      const queued = queuedPrompts()
+      const step = cancelStep({
+        barHasText: barHasText(),
+        queuedPrompts: queued.length,
+        turnRunning: turnOpen,
+        viewingChild: viewedSession !== activeSession,
+      })
+      switch (step) {
+        case 'clear-editor':
+          editor.setText('')
+          tui.requestRender()
+          return true
+        case 'reclaim-queued':
+          // The interrupt drops whatever the agent had not started, so the words
+          // are read before it is stopped and handed back to the bar: a key that
+          // means "stop" must not be the key that loses the reader's own prompts.
+          agent?.interrupt()
+          editor.setText(queued.join('\n'))
+          model.notice(`interrupt requested · ${queued.length} queued ${queued.length === 1 ? 'prompt' : 'prompts'} back in the bar`)
+          tui.requestRender()
+          return true
+        case 'interrupt-turn':
+          agent?.interrupt()
+          model.notice('interrupt requested')
+          tui.requestRender()
+          return true
+        case 'leave-child-view':
+          void showAgentSession()
+          return true
+        case 'hand-back':
+          return false
       }
-      agent?.interrupt()
-      model.notice('interrupt requested')
-      tui.requestRender()
-      return true
+    },
+    quit: () => {
+      // The only key that leaves. Text in the bar keeps it for the editor, so
+      // the library's delete forward is never taken from a reader who is editing.
+      switch (quitStep({ barHasText: barHasText(), overlayOpen: tui.hasOverlay(), turnRunning: turnOpen })) {
+        case 'cancel-then-quit':
+          // An exit that waits on a tool call is not an exit, so the turn is
+          // asked to stop and the leave does not wait for the answer.
+          agent?.interrupt()
+          requestExit(0)
+          return true
+        case 'quit':
+          requestExit(0)
+          return true
+        case 'hand-back':
+          return false
+      }
     },
   }
 

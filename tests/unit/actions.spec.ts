@@ -22,6 +22,7 @@ const SHIPPED: Readonly<Record<string, readonly string[]>> = {
   'surface.effort': ['ctrl+t'],
   'surface.back': ['ctrl+b'],
   'surface.interrupt': ['ctrl+c'],
+  'surface.quit': ['ctrl+d'],
   'chord.prefix': ['ctrl+x'],
   'chord.model': ['m'],
   'chord.plan': ['p'],
@@ -29,12 +30,13 @@ const SHIPPED: Readonly<Record<string, readonly string[]>> = {
   'chord.editor': ['e'],
   'gate.allow': ['y'],
   'gate.reject': ['n'],
-  'gate.cancel': ['escape'],
+  'gate.cancel': ['escape', 'ctrl+c'],
   'question.up': ['up'],
   'question.down': ['down'],
   'question.toggle': ['space'],
   'question.confirm': ['enter'],
   'question.skip': ['escape'],
+  'question.cancel': ['ctrl+c'],
   'picker.up': ['up'],
   'picker.down': ['down'],
   'picker.confirm': ['enter'],
@@ -140,6 +142,18 @@ describe('resolveKeymap', () => {
     expect(keysFor(map, 'prompt.submit')).toEqual(['ctrl+enter', 'alt+enter', 'ctrl+s'])
     expect(map.written.size).toBe(0)
     expect(Object.keys(map.effective).length).toBe(ACTION_CATALOG.length)
+  })
+
+  it('adds the surface cancel key to the library row that closes the search', () => {
+    // The search owns the keyboard while it is open, so the key has to be
+    // installed where the library reads it rather than intercepted here.
+    expect(keysFor(defaultKeymap(), 'tui.altScreen.searchClose')).toEqual(['escape', 'ctrl+c'])
+  })
+
+  it('lets the reader take the added key back off that row', () => {
+    const map = resolveKeymap({ 'tui.altScreen.searchClose': ['escape'] })
+    expect(keysFor(map, 'tui.altScreen.searchClose')).toEqual(['escape'])
+    expect(keysFor(map, 'surface.interrupt')).toEqual(['ctrl+c'])
   })
 
   it('merges the actions the reader did write and leaves the rest alone', () => {
@@ -347,6 +361,14 @@ describe('shadows', () => {
     const fresh = newShadows(resolveKeymap({ 'surface.effort': 'ctrl+e' }))
     expect(fresh).toContainEqual({ key: 'ctrl+e', winner: 'surface.effort', loser: 'tui.editor.cursorLineEnd' })
     expect(newShadows(defaultKeymap())).toEqual([])
+  })
+
+  it('shadows the library delete forward with the quit key the surface ships', () => {
+    // The bar keeps its own key while it holds text, so the shadow is the
+    // design rather than a loss, and /keys does not report it as one.
+    const quit = shadowsOf(defaultKeymap()).find(entry => entry.winner === 'surface.quit')
+    expect(quit?.loser).toBe('tui.editor.deleteCharForward')
+    expect(quit?.key).toBe('ctrl+d')
   })
 
   it('says nothing about keys two library actions share by design', () => {

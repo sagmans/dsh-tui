@@ -29,6 +29,8 @@ const UP = '\x1b[A'
 const LEFT = '\x1b[D'
 const DOWN = '\x1b[B'
 const BACKSPACE = '\x7f'
+/** The control byte a terminal sends for Ctrl+C, which is the surface cancel key. */
+const CTRL_C = '\u0003'
 
 describe('ApprovalGate', () => {
   it('allows once on y and rejects on n', () => {
@@ -38,6 +40,10 @@ describe('ApprovalGate', () => {
 
   it('treats escape as a cancellation rather than a silent allow', () => {
     expect(new ApprovalGate('bash', undefined, defaultKeymap).handleKey(ESC)).toBe('cancelled')
+  })
+
+  it('cancels on the interrupt key as well, which the surface answers with', () => {
+    expect(new ApprovalGate('bash', undefined, defaultKeymap).handleKey(CTRL_C)).toBe('cancelled')
   })
 
   it('ignores keys that are not decisions', () => {
@@ -189,6 +195,38 @@ describe('QuestionGate', () => {
       { id: 'b', selected: ['x'] },
     ])
     expect(gate.resolved).toBe(true)
+  })
+
+  it('abandons the whole batch on the interrupt key, answering nothing', () => {
+    // Escape skips one question; this says the reader is done with all of them,
+    // so the caller gets the same empty batch an aborted call produces.
+    const gate = gateOver(toGateQuestions({
+      questions: [{ id: 'a', question: 'first', options: [{ label: 'x' }] }, { id: 'b', question: 'second' }],
+    }))
+    gate.handleKey('1')
+    expect(gate.handleKey(CTRL_C)).toEqual([])
+    expect(gate.resolved).toBe(true)
+  })
+
+  it('abandons from the free-text row too, where the other keys belong to the bar', () => {
+    const gate = gateOver(single)
+    gate.handleKey('0')
+    expect(gate.card().answerInput).toBeDefined()
+    expect(gate.handleKey(CTRL_C)).toEqual([])
+  })
+
+  it('abandons on the key the reader moved the cancel onto', () => {
+    const map = resolveKeymap({ 'question.cancel': 'alt+c' })
+    const gate = gateOver(single, () => map)
+    expect(gate.handleKey(CTRL_C)).toBeUndefined()
+    expect(gate.handleKey('\u001bc')).toEqual([])
+  })
+
+  it('names the abandon key wherever it is answered', () => {
+    expect(gateOver(single).card().hint).toContain('ctrl+c abandon')
+    const custom = gateOver(single)
+    custom.handleKey('0')
+    expect(custom.card().hint).toContain('ctrl+c abandon')
   })
 
   it('lets an abort cancel a question nobody answered', () => {
