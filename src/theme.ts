@@ -1,4 +1,5 @@
 import { truncateToWidth, type EditorTheme, type MarkdownTheme, type SelectListTheme } from '@earendil-works/pi-tui'
+import { codeBlockLines, plainCodeLines } from './ui/diff.ts'
 import { oneRow } from './text.ts'
 import { renderTerminalText } from './terminal-text.ts'
 import { detectColourMode, type ColourMode } from './theme-capability.ts'
@@ -54,9 +55,18 @@ export interface TuiTheme {
   readonly markdown: MarkdownTheme
 }
 
-/** Style markdown through the same table as the rest of the surface. */
-function markdownTheme(style: (token: TuiToken, text: string) => string): MarkdownTheme {
+/**
+ * Style markdown through the same table as the rest of the surface.
+ *
+ * A fence the surface draws itself reaches the library through its code
+ * highlighter, which is the one hook a markdown theme has for a block of code:
+ * without it a fenced diff would be drawn as one plain block, and the hook has
+ * to answer for every language, so the ones it does not draw come back through
+ * the same plain shade the library would have used.
+ */
+function markdownTheme(style: (token: TuiToken, text: string) => string, visible: (token: TuiToken) => boolean): MarkdownTheme {
   return {
+    highlightCode: (code, lang) => codeBlockLines(code, lang, { style, visible, plain: line => style('markdown.codeBlock', line) }),
     heading: text => style('markdown.heading', text),
     link: text => style('markdown.link', text),
     linkUrl: text => style('markdown.linkUrl', text),
@@ -158,7 +168,7 @@ export function createTheme(mode: ColourMode = detectColourMode(process.env), ov
     glyph: token => resolve(token).glyph,
     visible,
     editor: editorTheme(style, visible),
-    markdown: markdownTheme(style),
+    markdown: markdownTheme(style, visible),
   }
 }
 
@@ -182,9 +192,16 @@ export function forwardEditorTheme(source: () => EditorTheme): EditorTheme {
   }
 }
 
-/** The markdown counterpart of {@link forwardEditorTheme}. */
+/**
+ * The markdown counterpart of {@link forwardEditorTheme}.
+ *
+ * The code highlighter is forwarded like every other element, so a theme swap
+ * reaches a fence already on screen; a source table that answers for no language
+ * of its own keeps the library's plain rows rather than losing its code blocks.
+ */
 export function forwardMarkdownTheme(source: () => MarkdownTheme): MarkdownTheme {
   return {
+    highlightCode: (code, lang) => source().highlightCode?.(code, lang) ?? plainCodeLines(code, line => source().codeBlock(line)),
     heading: text => source().heading(text),
     link: text => source().link(text),
     linkUrl: text => source().linkUrl(text),

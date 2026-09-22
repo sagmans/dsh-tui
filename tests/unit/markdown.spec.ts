@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { createTheme, forwardMarkdownTheme } from '@/theme.ts'
-import { DEFAULT_PALETTE } from '@/theme-tokens.ts'
+import { DEFAULT_PALETTE, DIFF_ADDED_BAND, DIFF_REMOVED_BAND } from '@/theme-tokens.ts'
 import { MARKDOWN_CACHE_LIMIT, MarkdownRenderer } from '@/ui/markdown.ts'
+import { createMermaidTransform } from '@/ui/mermaid.ts'
 
 const theme = createTheme('none')
 const renderer = (): MarkdownRenderer => new MarkdownRenderer(theme.markdown)
@@ -90,6 +91,62 @@ describe('MarkdownRenderer', () => {
     active = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['markdown.heading', { fg: '#00ff00' }]]) })
     markdown.invalidate()
     expect(markdown.render('# hi', 40).join('\n')).toContain('38;2;0;255;0')
+  })
+})
+
+describe('a fenced diff', () => {
+  /** A colour as an escape carries it, so an assertion names the palette entry it came from. */
+  const rgb = (hex: string): string => [1, 3, 5].map(at => Number.parseInt(hex.slice(at, at + 2), 16)).join(';')
+
+  const render = (active: ReturnType<typeof createTheme>, text: string): string =>
+    new MarkdownRenderer(active.markdown).render(text, 60).join('\n')
+
+  it('draws its rows in the diff elements', () => {
+    const rows = render(createTheme('truecolor'), ['```diff', '@@ -1 +1 @@', '-const a = 1', '+const a = 2', '```'].join('\n'))
+    expect(rows).toContain(`38;2;${rgb(DEFAULT_PALETTE.removed)}`)
+    expect(rows).toContain(`38;2;${rgb(DEFAULT_PALETTE.added)}`)
+    // The characters that changed sit on a band, which is what tells an edit from a replacement.
+    expect(rows).toContain(`48;2;${rgb(DIFF_REMOVED_BAND)}`)
+    expect(rows).toContain(`48;2;${rgb(DIFF_ADDED_BAND)}`)
+  })
+
+  it('leaves a fence of another language exactly as the library drew it', () => {
+    // The highlighter answers for every fence the library draws, so this equality
+    // is the regression the plain path exists for.
+    const active = createTheme('truecolor')
+    const code = 'const dock = new WorkDock(state, theme)'
+    const rows = new MarkdownRenderer(active.markdown).render(['```ts', code, '```'].join('\n'), 60).map(row => row.trimEnd())
+    expect(rows).toEqual([
+      active.markdown.codeBlockBorder('```ts'),
+      `  ${active.markdown.codeBlock(code)}`,
+      active.markdown.codeBlockBorder('```'),
+    ])
+  })
+
+  it('recolours a diff when the table moves', () => {
+    // A Markdown caches the rows it drew, so a settings change has to reach the
+    // fence through the forwarded highlighter as well as the invalidate.
+    const fence = ['```diff', '+const a = 1', '```'].join('\n')
+    let active = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['markdown.diff.added', { fg: '#ff0000' }]]) })
+    const markdown = new MarkdownRenderer(forwardMarkdownTheme(() => active.markdown))
+    expect(markdown.render(fence, 60).join('\n')).toContain('38;2;255;0;0')
+    active = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['markdown.diff.added', { fg: '#00ff00' }]]) })
+    markdown.invalidate()
+    expect(markdown.render(fence, 60).join('\n')).toContain('38;2;0;255;0')
+  })
+
+  it('draws a diff beside a diagram in the same message', () => {
+    // Two seams on one message: the transform rewrites the fence it owns and the
+    // highlighter draws the one it owns, neither consuming the other's block.
+    const active = createTheme('truecolor')
+    const text = [
+      '```mermaid', 'flowchart LR', '  A --> B', '```', '',
+      '```diff', '-const a = 1', '+const a = 2', '```',
+    ].join('\n')
+    const markdown = new MarkdownRenderer(active.markdown, createMermaidTransform({ theme: active, mode: () => 'streaming' }))
+    const rows = markdown.render(text, 80).join('\n')
+    expect(rows).toContain('┌───┐')
+    expect(rows).toContain(`48;2;${rgb(DIFF_ADDED_BAND)}`)
   })
 })
 

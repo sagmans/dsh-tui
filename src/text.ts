@@ -86,6 +86,20 @@ export function tailGraphemes(text: string, limit: number): string {
 }
 
 /**
+ * Text as the clusters a reader would count.
+ *
+ * The two cutters above bail out before scanning when the text is shorter than
+ * the budget; a caller comparing two pieces of text cluster by cluster — the
+ * two sides of an edit, for one — has to see every one of them, and comparing
+ * clusters is what keeps a drawn run from ending inside a character.
+ */
+export function splitGraphemes(text: string): string[] {
+  const clusters: string[] = []
+  for (const { segment } of GRAPHEMES.segment(text)) clusters.push(segment)
+  return clusters
+}
+
+/**
  * Control characters text kept for a terminal can never legitimately need:
  * everything below the printable range except the tab and line feed that lay
  * text out, plus DEL, the C1 block, and the bidi overrides.
