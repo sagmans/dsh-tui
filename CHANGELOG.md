@@ -84,7 +84,11 @@ breaking change, and a patch carries only fixes.
   default table, and a name the surface does not ship is refused with the names
   it does. A bare `/theme` names the theme in force in its heading and reports
   each element as `override`, `preset`, `palette`, or `default`, so a screen
-  that looks wrong can be traced to the layer that drew it.
+  that looks wrong can be traced to the layer that drew it. The port keeps a
+  prompt's frame but not the fill pi puts behind it, because a band inside a
+  frame treats one fact twice and reads as a selected row; and it lifts a tool's
+  argument out of pi's link blue, which sat too close to the periwinkle pi gives
+  a tool's name for one row to read as the two facts it carries.
 
 ### Changed
 
