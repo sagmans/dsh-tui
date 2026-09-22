@@ -20,6 +20,7 @@ describe('the dsh-tui settings section', () => {
       prefixWindow: 2,
       keymap: defaultKeymap(),
       history: { enabled: true, ghost: true, maxEntries: 2000 },
+      tools: defaultSettings().tools,
     })
   })
 
@@ -108,6 +109,7 @@ describe('the dsh-tui settings section', () => {
       prefixWindow: 2,
       keymap: defaultKeymap(),
       history: { enabled: true, ghost: true, maxEntries: 2000 },
+      tools: defaultSettings().tools,
     })
     expect(problems[0]).toContain('transcript.reasoning.bdy')
   })

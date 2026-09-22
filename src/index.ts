@@ -64,6 +64,7 @@ import { defaultExportFile, transcriptToText } from './export.ts'
 import { createTheme, forwardEditorTheme, forwardMarkdownTheme, type TuiTheme } from './theme.ts'
 import { detectColourMode, type ColourMode } from './theme-capability.ts'
 import { defaultSettings, readScope, settingsProblemMessage, toOverrides, TUI_SETTINGS_NAMESPACE, TuiSettingsSchema, type MermaidMode, type TuiSettings } from './theme-settings.ts'
+import { toolDisplayFor, type ToolDisplayTable } from './tool-display.ts'
 import { pendingPrompts } from './queue.ts'
 import { renderThemeTable } from './theme-command.ts'
 import { KEYMAP_LAYERS, keymapLayer, renderKeymap } from './keys-command.ts'
@@ -225,12 +226,13 @@ export function apply(ctx: Context, config: unknown): void {
     markdown: forwardMarkdownTheme(() => current.markdown),
   }
   /**
-   * Rows the reader has opened. The model stays untouched; only the view reads
-   * this. A thought starts folded: it is the longest, least scannable row in the
-   * transcript, so leaving it open pushes the answer a reader came for off the
-   * screen, and a folded row still names itself and its key. A PTC card's calls
-   * start open for the opposite reason: each is one clipped line under a header
-   * that already names the program.
+   * Rows the reader has opened by key. The model stays untouched; only the view
+   * reads this, and a click on one message overrides it there. A thought starts
+   * folded: it is the longest, least scannable row in the transcript, so leaving
+   * it open pushes the answer a reader came for off the screen, and a folded row
+   * still names itself and its key. Cards start from the reader's own `tools:`
+   * settings, and a PTC card's calls start open for the opposite reason: each is
+   * one clipped line under a header that already names the program.
    */
   const viewState = { ...DEFAULT_VIEW_STATE }
   /**
@@ -241,6 +243,8 @@ export function apply(ctx: Context, config: unknown): void {
    * follow the edit.
    */
   let mermaidMode: MermaidMode = defaultSettings().mermaid
+  /** How each tool's cards draw; the settings document owns it and the view reads it live. */
+  let toolDisplay: ToolDisplayTable = defaultSettings().tools
   /** The keys that start a chord, and how long one waits; the settings document owns all of it. */
   let prefixKeys: readonly KeyId[] = DEFAULT_PREFIX_KEYS
   let prefixWindowMs = DEFAULT_PREFIX_WINDOW_S * MS_PER_SECOND
@@ -264,11 +268,13 @@ export function apply(ctx: Context, config: unknown): void {
    *
    * The key toggles nested calls for one session, but a settings edit is a
    * deliberate act, so it re-seeds and becomes the new starting point; the
-   * mermaid mode has no key of its own and only ever comes from the document.
+   * mermaid mode and the per-tool card fold have no key of their own and only
+   * ever come from the document.
    */
   const applyDisplay = (section: TuiSettings): void => {
     viewState.expandSubCalls = section.subcalls === 'inline'
     mermaidMode = section.mermaid
+    toolDisplay = section.tools
     prefixKeys = section.prefixes
     prefixWindowMs = section.prefixWindow * MS_PER_SECOND
     keymap = section.keymap
@@ -434,6 +440,7 @@ export function apply(ctx: Context, config: unknown): void {
     gate: () => pending?.gate.card(),
     picker: () => pendingPicker?.picker.card(),
     keys: () => keymap,
+    toolDisplay: tool => toolDisplayFor(toolDisplay, tool),
   })
   // The key map goes in before the bar exists, so no press can be read as the
   // send the library submits on by default. A settings document read after this

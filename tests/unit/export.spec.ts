@@ -94,11 +94,11 @@ describe('transcriptToText', () => {
     const presenter: ToolPresenter = {
       call: (name, argumentsJson) => {
         const args = JSON.parse(argumentsJson) as { file_path?: string; command?: string }
-        if (name === 'run_code') return { kind: 'generic', title: 'search the tree', detail: [], failed: false, totalLines: 0 }
+        if (name === 'run_code') return { kind: 'generic', tool: 'run_code', title: 'search the tree', detail: [], failed: false, totalLines: 0 }
         if (name === 'bash') {
-          return { kind: 'terminal', title: 'bash', ...(args.command === undefined ? {} : { argument: args.command }), detail: [], failed: false, totalLines: 0 }
+          return { kind: 'terminal', tool: 'bash', title: 'bash', ...(args.command === undefined ? {} : { argument: args.command }), detail: [], failed: false, totalLines: 0 }
         }
-        return { kind: 'generic', title: name, ...(args.file_path === undefined ? {} : { argument: args.file_path }), detail: [], failed: false, totalLines: 0 }
+        return { kind: 'generic', tool: name, title: name, ...(args.file_path === undefined ? {} : { argument: args.file_path }), detail: [], failed: false, totalLines: 0 }
       },
       result: () => undefined,
     }
@@ -117,7 +117,7 @@ describe('transcriptToText', () => {
 
   it('counts the calls the dump left out', () => {
     const presenter: ToolPresenter = {
-      call: name => ({ kind: 'generic', title: name, detail: [], failed: false, totalLines: 0 }),
+      call: name => ({ kind: 'generic', tool: name, title: name, detail: [], failed: false, totalLines: 0 }),
       result: () => undefined,
     }
     const model = new TranscriptModel(presenter)

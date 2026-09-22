@@ -51,7 +51,7 @@ const STATUS_FACTS: StatusFacts = {
 /** The terminal the gate's bar renders against; a golden frame reads its rows only. */
 const STUB_TUI = { requestRender: () => {}, terminal: { rows: 24, cols: 80 } } as unknown as TUI
 
-/** The rows this frame pins: a shell command whose output is kept, and a file read. */
+/** The rows this frame pins: a shell command whose output waits behind its fold, and a file read. */
 const FIXTURE_COMMAND = 'pnpm test'
 const FIXTURE_OUTPUT = 'Tests  154 passed (154)'
 const FIXTURE_FILE = 'src/ui/view.ts'
@@ -65,10 +65,10 @@ const FIXTURE_FILE_LINES = ['const expanded = this.viewState.expandCards', 'cons
  */
 function fixturePresenter(): ReturnType<typeof createToolPresenter> {
   const tools = {
-    // The real thing: bash declares a terminal card, which is why its output
-    // stays in the frame while every other card folds to its header. Its title
-    // IS the command, so the frame pins the command a reader would run rather
-    // than a decorated phrase around it.
+    // The real thing: bash declares a terminal card, and the shipped fold draws
+    // it as one row carrying the command, the exit status, and the count of rows
+    // waiting behind it. Its title IS the command, so the frame pins the command
+    // a reader would run rather than a decorated phrase around it.
     bash: {
       presentCall: (args: { command?: string }) => ({ card: 'terminal', title: args.command ?? '' }),
       presentResult: () => ({ card: 'terminal', title: FIXTURE_COMMAND, output: FIXTURE_OUTPUT, exitCode: 0 }),
@@ -117,7 +117,7 @@ function fixture(frameTheme = theme): { view: TranscriptView; dock: WorkDock; st
     data: { message: { content: [{ type: 'tool-result', toolCallId: 'c1', text: FIXTURE_OUTPUT }], isError: false } },
   })
   // A card whose rows the reader has not asked for: folded, only its header
-  // survives, which is what keeps a long file out of the conversation.
+  // survives, and the same fold keeps a shell run's output out of the flow.
   model.apply({ type: 'tool/call', data: { name: 'read', arguments: `{"path":"${FIXTURE_FILE}"}`, callId: 'c2' } })
   model.apply({
     type: 'tool/result',

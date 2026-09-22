@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { stripTerminalSequences, type TUI, visibleWidth } from '@earendil-works/pi-tui'
+import { stripTerminalSequences, type TUI, type TuiMouseEvent, visibleWidth } from '@earendil-works/pi-tui'
 import { cardOfCall, cardOfResult, contentLines, CARD_DETAIL_MAX, CARD_SHELL_PREVIEW, SUBCALL_MAX, type ToolPresenter } from '@/cards.ts'
 import type { GateCard } from '@/gates.ts'
 import { createTheme, forwardEditorTheme, forwardMarkdownTheme, type TuiTheme } from '@/theme.ts'
@@ -10,6 +10,7 @@ import type { PickerCard } from '@/ui/picker.ts'
 import { RowCache } from '@/ui/rows.ts'
 import { BoxedEditor } from '@/ui/editor.ts'
 import { TranscriptView, type ViewState } from '@/ui/view.ts'
+import { DEFAULT_TOOL_DISPLAY, toolDisplayFor, toolDisplayTable, type ToolDisplayTable } from '@/tool-display.ts'
 
 const theme = createTheme('none')
 
@@ -23,9 +24,20 @@ const answerBar = (text: string): BoxedEditor => {
   return bar
 }
 const COLLAPSED: ViewState = { expandCards: false, expandReasoning: false, expandSubCalls: false }
+/** Every card opened, which is the shape a wrapping assertion needs to see. */
+const OPEN: ViewState = { expandCards: true, expandReasoning: false, expandSubCalls: false }
 
-function viewOf(model: TranscriptModel, state: ViewState = COLLAPSED, gate?: GateCard): TranscriptView {
-  return new TranscriptView(model, theme, new MarkdownRenderer(theme.markdown), { state: () => state, gate: () => gate })
+function viewOf(
+  model: TranscriptModel,
+  state: ViewState = COLLAPSED,
+  gate?: GateCard,
+  tools?: ToolDisplayTable,
+): TranscriptView {
+  return new TranscriptView(model, theme, new MarkdownRenderer(theme.markdown), {
+    state: () => state,
+    gate: () => gate,
+    ...(tools === undefined ? {} : { toolDisplay: tool => toolDisplayFor(tools, tool) }),
+  })
 }
 
 const toolCall = (argumentsJson = '{}') => ({ type: 'tool/call', data: { name: 'bash', arguments: argumentsJson, callId: 'c1' } })
@@ -117,7 +129,7 @@ describe('TranscriptView text', () => {
     // Any control sequence the presenter hands over has to be neutralized; the
     // row it lands on can be the header, which is what a folded card shows.
     const model = new TranscriptModel({
-      call: () => ({ kind: 'generic', title: '\u001b[31mred\u0007', detail: [], failed: false, totalLines: 0 }),
+      call: () => ({ kind: 'generic', tool: 'bash', title: '\u001b[31mred\u0007', detail: [], failed: false, totalLines: 0 }),
       result: () => undefined,
     })
     model.apply(toolCall())
@@ -248,7 +260,7 @@ describe('TranscriptView expansion', () => {
         toolName === 'bash'
           ? { card: 'terminal', title: 'Run echo rows', output: contentLines(input.content).join('\n'), exitCode: 0 }
           : { card: 'generic', title: `Read ${name}` },
-        { fallbackTitle: toolName, failed: input.isError, contentLines: contentLines(input.content) },
+        { name: toolName, failed: input.isError, contentLines: contentLines(input.content) },
       ),
     }
     const model = new TranscriptModel(presenter)
@@ -272,59 +284,58 @@ describe('TranscriptView expansion', () => {
     expect(lines.some(line => line.includes('ctrl+o'))).toBe(false)
   })
 
-  it("keeps a shell card's command and output tail and names the rows it dropped", () => {
+  it('folds a shell run to one row that keeps its command, outcome, and hidden rows', () => {
     const lines = viewOf(withRows(25, 'bash')).render(60)
-    // The tool label and the command sit outside the fold, so the preview is
-    // free to spend its whole window on output and still report how it ended.
-    expect(lines[0]).toBe('bash')
-    expect(lines[1]).toBe('    Run echo rows')
-    expect(lines.filter(line => line.startsWith('    row '))).toHaveLength(CARD_SHELL_PREVIEW)
-    expect(lines.some(line => line.startsWith('    row 4'))).toBe(false)
-    expect(lines).toContain('    exit 0')
-    expect(lines.at(-1)).toContain('… 5 earlier lines · ctrl+o')
+    // One row is the whole contract of the fold; the facts a reader needs without
+    // opening it — what ran, how it ended, how much sits behind it — ride that row.
+    expect(lines).toEqual(['bash Run echo rows · exit 0 · 25 lines'])
   })
 
   it('shows a shell card whole once it is opened, and a short one without a hint', () => {
-    const opened = viewOf(withRows(25, 'bash'), { expandCards: true, expandReasoning: false, expandSubCalls: false }).render(60)
+    const opened = viewOf(withRows(25, 'bash'), OPEN).render(60)
     expect(opened[0]).toBe('bash')
     expect(opened[1]).toBe('    Run echo rows')
     expect(opened.filter(line => line.startsWith('    row '))).toHaveLength(25)
     expect(opened.some(line => line.includes('earlier lines'))).toBe(false)
-    const short = viewOf(withRows(3, 'bash')).render(60)
+    const short = viewOf(withRows(3, 'bash'), OPEN).render(60)
     expect(short.filter(line => line.startsWith('    row '))).toHaveLength(3)
     // The label, the command, three output rows, and the exit status.
     expect(short).toHaveLength(6)
     expect(short.at(-1)).toBe('    exit 0')
+    // Folded, the output is behind the fold whatever its size, so the row says
+    // how many lines are waiting there.
+    expect(viewOf(withRows(3, 'bash')).render(60)).toEqual(['bash Run echo rows · exit 0 · 3 lines'])
   })
 
   it("names an opened shell card's dropped rows as the earlier ones", () => {
     // Retention keeps the tail, so opening a run past the cap reveals its end
     // and hides its beginning; a neutral count would point the reader past the
     // last row on screen for rows that are above it.
-    const opened = viewOf(withRows(250, 'bash'), { expandCards: true, expandReasoning: false, expandSubCalls: false }).render(60)
+    const opened = viewOf(withRows(250, 'bash'), OPEN).render(60)
     expect(opened.filter(line => line.startsWith('    row '))).toHaveLength(CARD_DETAIL_MAX)
     expect(opened).toContain('    exit 0')
     expect(opened.at(-1)).toBe('    … 50 earlier lines not shown')
   })
 
-  it("keeps a failed shell card's command, tail, and failed title", () => {
+  it("keeps a failed shell card's command, outcome, and title folded, and its output when opened", () => {
     // Built through the real card mappers so the assertion covers the shell
     // shape a failing command actually produces, not a hand-made card.
     const failing: ToolPresenter = {
       call: name => cardOfCall({ card: 'terminal', title: 'rm -rf /tmp/x' }, name),
       result: (name, input) => cardOfResult(
         { card: 'terminal', output: 'boom', exitCode: 1 },
-        { fallbackTitle: name, failed: input.isError, contentLines: contentLines(input.content) },
+        { name: name, failed: input.isError, contentLines: contentLines(input.content) },
       ),
     }
     const model = new TranscriptModel(failing)
     model.apply({ type: 'tool/call', data: { name: 'bash', arguments: '{}', callId: 'c1' } })
     model.apply({ type: 'tool/result', data: { message: { content: [{ type: 'tool-result', toolCallId: 'c1', text: 'boom' }], isError: true } } })
-    const lines = viewOf(model).render(60)
-    expect(lines[0]).toBe('bash')
-    expect(lines[1]).toBe('    rm -rf /tmp/x')
-    expect(lines).toContain('    boom')
-    expect(lines).toContain('    exit 1')
+    // Folded, the failure is still legible: the command, the exit code, and the
+    // one row behind it; opening it shows what actually came back.
+    expect(viewOf(model).render(60)).toEqual(['bash rm -rf /tmp/x · exit 1 · 1 line'])
+    const opened = viewOf(model, OPEN).render(60)
+    expect(opened).toContain('    boom')
+    expect(opened).toContain('    exit 1')
   })
 
   it('names where the thought is when the row is folded', () => {
@@ -622,11 +633,11 @@ describe('TranscriptView theming', () => {
 
 describe('TranscriptView tool args and stats', () => {
   /** Fold one call and result through a presenter, so the merge is what renders. */
-  const folded = (name: string, presenter: ToolPresenter, width = 80): string[] => {
+  const folded = (name: string, presenter: ToolPresenter, width = 80, state: ViewState = COLLAPSED): string[] => {
     const model = new TranscriptModel(presenter)
     model.apply({ type: 'tool/call', data: { name, arguments: '{}', callId: 'c1' } })
     model.apply({ type: 'tool/result', data: { message: { content: [{ type: 'tool-result', toolCallId: 'c1', text: 'body' }], isError: false } } })
-    return viewOf(model).render(width)
+    return viewOf(model, state).render(width)
   }
 
   it('shows a read path with its range, size, and tokens on the folded line', () => {
@@ -634,7 +645,7 @@ describe('TranscriptView tool args and stats', () => {
       call: name => cardOfCall({ card: 'generic', title: 'Read a.ts (from line 5)', kind: 'read', locations: [{ path: 'a.ts', line: 5 }] }, name),
       result: (name, input) => cardOfResult(
         { card: 'read', path: 'a.ts', offset: 5, lines: [{ number: 5, text: 'x' }, { number: 6, text: 'y' }], totalLines: 20 },
-        { fallbackTitle: name, failed: input.isError, contentLines: contentLines(input.content) },
+        { name: name, failed: input.isError, contentLines: contentLines(input.content) },
       ),
     }
     expect(folded('read', presenter)).toEqual(['read a.ts  L5–6 · 2 lines · 1 tok'])
@@ -645,7 +656,7 @@ describe('TranscriptView tool args and stats', () => {
       call: name => cardOfCall({ card: 'diff', title: 'Write a.txt', diffs: [{ path: 'a.txt', oldText: null, newText: 'one\ntwo\nthree' }] }, name),
       result: (name, input) => cardOfResult(
         { card: 'diff', diffs: [{ path: 'a.txt', oldText: null, newText: 'one\ntwo\nthree' }] },
-        { fallbackTitle: name, failed: input.isError, contentLines: contentLines(input.content) },
+        { name: name, failed: input.isError, contentLines: contentLines(input.content) },
       ),
     }
     expect(folded('write', presenter)).toEqual(['write a.txt  3 lines · 4 tok'])
@@ -657,7 +668,7 @@ describe('TranscriptView tool args and stats', () => {
       call: name => cardOfCall({ card: 'diff', title: 'Edit a.ts', diffs }, name),
       result: (name, input) => cardOfResult(
         { card: 'diff', diffs },
-        { fallbackTitle: name, failed: input.isError, contentLines: contentLines(input.content) },
+        { name: name, failed: input.isError, contentLines: contentLines(input.content) },
       ),
     }
     expect(folded('edit', presenter)).toEqual(['edit a.ts  +1 · ~1'])
@@ -669,7 +680,7 @@ describe('TranscriptView tool args and stats', () => {
       call: name => cardOfCall({ card: 'diff', title: 'Edit a.ts', diffs }, name),
       result: (name, input) => cardOfResult(
         { card: 'diff', diffs },
-        { fallbackTitle: name, failed: input.isError, contentLines: contentLines(input.content) },
+        { name: name, failed: input.isError, contentLines: contentLines(input.content) },
       ),
     }
     const model = new TranscriptModel(presenter)
@@ -686,10 +697,10 @@ describe('TranscriptView tool args and stats', () => {
       call: name => cardOfCall({ card: 'terminal', title: command }, name),
       result: (name, input) => cardOfResult(
         { card: 'terminal', output: 'ok', exitCode: 0 },
-        { fallbackTitle: name, failed: input.isError, contentLines: contentLines(input.content) },
+        { name: name, failed: input.isError, contentLines: contentLines(input.content) },
       ),
     }
-    const lines = folded('bash', presenter, 40)
+    const lines = folded('bash', presenter, 40, OPEN)
     for (const line of lines) expect(line.length).toBeLessThanOrEqual(40)
     // Word wrapping drops the whitespace it broke on, so compare without it.
     expect(lines.join('').replace(/\s+/gu, '')).toContain(command.replace(/\s+/gu, ''))
@@ -701,10 +712,10 @@ describe('TranscriptView tool args and stats', () => {
       call: name => cardOfCall({ card: 'generic', title: 'Read', kind: 'read', locations: [{ path }] }, name),
       result: (name, input) => cardOfResult(
         { card: 'read', path, offset: 1, lines: [{ number: 1, text: 'x' }], totalLines: 1 },
-        { fallbackTitle: name, failed: input.isError, contentLines: contentLines(input.content) },
+        { name: name, failed: input.isError, contentLines: contentLines(input.content) },
       ),
     }
-    const lines = folded('read', presenter, 40)
+    const lines = folded('read', presenter, 40, OPEN)
     for (const line of lines) expect(line.length).toBeLessThanOrEqual(40)
     // The stats are as much the fold's answer as the path is, so neither may be
     // dropped at the edge the way a plain cut dropped them.
@@ -729,16 +740,141 @@ describe('TranscriptView tool args and stats', () => {
       call: name => cardOfCall({ card: 'terminal', title: command }, name),
       result: (name, input) => cardOfResult(
         { card: 'terminal', output: 'ok', exitCode: 0 },
-        { fallbackTitle: name, failed: input.isError, contentLines: contentLines(input.content) },
+        { name: name, failed: input.isError, contentLines: contentLines(input.content) },
       ),
     }
     const colour = createTheme('truecolor')
     const model = new TranscriptModel(presenter)
     model.apply({ type: 'tool/call', data: { name: 'bash', arguments: '{}', callId: 'c1' } })
     model.apply({ type: 'tool/result', data: { message: { content: [{ type: 'tool-result', toolCallId: 'c1', text: 'ok' }], isError: false } } })
-    const lines = new TranscriptView(model, colour, new MarkdownRenderer(colour.markdown), { state: () => COLLAPSED }).render(40)
+    const lines = new TranscriptView(model, colour, new MarkdownRenderer(colour.markdown), { state: () => OPEN }).render(40)
     for (const line of lines) expect(visibleWidth(line)).toBeLessThanOrEqual(40)
     expect(stripTerminalSequences(lines.join('')).replace(/\s+/gu, '')).toContain(command.replace(/\s+/gu, ''))
+  })
+
+  it('folds a long command onto one row, cut at the screen rather than wrapped', () => {
+    const command = `/bin/echo ${'x'.repeat(60)}`
+    const presenter: ToolPresenter = {
+      call: name => cardOfCall({ card: 'terminal', title: command }, name),
+      result: (name, input) => cardOfResult(
+        { card: 'terminal', output: 'ok', exitCode: 0 },
+        { name, failed: input.isError, contentLines: contentLines(input.content) },
+      ),
+    }
+    const lines = folded('bash', presenter, 30)
+    // The fold's whole promise is one row, so the argument is clipped and the row
+    // is cut at the edge; the reader sees it was cut and can open it whole.
+    expect(lines).toHaveLength(1)
+    expect(visibleWidth(lines[0] ?? '')).toBeLessThanOrEqual(30)
+    expect(stripTerminalSequences(lines[0] ?? '')).toContain('…')
+  })
+})
+
+describe('TranscriptView tool display policy', () => {
+  /** A shell run of `rows` output lines, through the real card mappers. */
+  const shell = (rows: number): TranscriptModel => {
+    const output = Array.from({ length: rows }, (_, index) => `row ${index}`)
+    const presenter: ToolPresenter = {
+      call: name => cardOfCall({ card: 'terminal', title: 'Run echo rows' }, name),
+      result: (name, input) => cardOfResult(
+        { card: 'terminal', title: 'Run echo rows', output: contentLines(input.content).join('\n'), exitCode: 0 },
+        { name, failed: input.isError, contentLines: contentLines(input.content) },
+      ),
+    }
+    const model = new TranscriptModel(presenter)
+    model.apply({ type: 'tool/call', data: { name: 'bash', arguments: '{}', callId: 'c1' } })
+    model.apply({
+      type: 'tool/result',
+      data: { message: { content: [{ type: 'tool-result', toolCallId: 'c1', text: output.join('\n') }], isError: false } },
+    })
+    return model
+  }
+
+  /** Two folded shell cards, so a click on one can be shown not to touch the other. */
+  const pair = (): TranscriptModel => {
+    const presenter: ToolPresenter = {
+      call: name => cardOfCall({ card: 'terminal', title: 'echo' }, name),
+      result: (name, input) => cardOfResult(
+        { card: 'terminal', output: contentLines(input.content).join('\n'), exitCode: 0 },
+        { name, failed: input.isError, contentLines: contentLines(input.content) },
+      ),
+    }
+    const model = new TranscriptModel(presenter)
+    for (const [callId, text] of [['c1', 'one'], ['c2', 'two']] as const) {
+      model.apply({ type: 'tool/call', data: { name: 'bash', arguments: '{}', callId } })
+      model.apply({ type: 'tool/result', data: { message: { content: [{ type: 'tool-result', toolCallId: callId, text }], isError: false } } })
+    }
+    return model
+  }
+
+  /** One mouse event on the row at `y`, with the fields the surface fills in. */
+  const mouse = (type: TuiMouseEvent['type'], button: TuiMouseEvent['button'], y: number): TuiMouseEvent => ({
+    type,
+    button,
+    x: 0,
+    y,
+    screenX: 0,
+    screenY: y,
+    width: 60,
+    height: 24,
+    shift: false,
+    alt: false,
+    ctrl: false,
+  })
+
+  it('starts a tool open when the reader configured it that way', () => {
+    const view = viewOf(shell(3), COLLAPSED, undefined, toolDisplayTable({ bash: { collapsed: false } }))
+    expect(view.render(60).filter(line => line.startsWith('    row '))).toHaveLength(3)
+  })
+
+  it('clips the argument to the configured budget on the folded row', () => {
+    const view = viewOf(shell(3), COLLAPSED, undefined, toolDisplayTable({ default: { maxArgument: 6 } }))
+    expect(view.render(60)).toEqual(['bash Run e… · exit 0 · 3 lines'])
+  })
+
+  it('keeps the configured tail behind a folded card and counts the rest', () => {
+    const view = viewOf(shell(25), COLLAPSED, undefined, toolDisplayTable({ bash: { output: 'tail', tail: 2 } }))
+    const lines = view.render(60)
+    expect(lines.filter(line => line.startsWith('    row '))).toEqual(['    row 23', '    row 24'])
+    expect(lines.at(-1)).toBe('    … 23 earlier lines · ctrl+o shows more')
+  })
+
+  it('ships the fold the settings document names, not a hard-coded one', () => {
+    // The shipped default has to be the one the settings types describe, or a
+    // reader who writes nothing gets a different screen than the docs promise.
+    const view = viewOf(shell(3), COLLAPSED, undefined, toolDisplayTable())
+    expect(view.render(60)).toEqual(['bash Run echo rows · exit 0 · 3 lines'])
+    expect(DEFAULT_TOOL_DISPLAY).toEqual({ collapsed: true, maxArgument: 100, output: 'hidden', tail: CARD_SHELL_PREVIEW })
+  })
+
+  it('toggles one clicked message and leaves its neighbour alone', () => {
+    const view = viewOf(pair())
+    const folded = ['bash echo · exit 0 · 1 line', 'bash echo · exit 0 · 1 line']
+    expect(view.render(60)).toEqual(folded)
+    // A click opens the message under it and nothing else.
+    expect(view.handleMouse(mouse('click', 'left', 0))).toEqual({ handled: true, render: true })
+    const opened = view.render(60)
+    expect(opened).toContain('    one')
+    expect(opened.at(-1)).toBe(folded[1])
+    // The choice survives the repaints around it, and a second click reverses it.
+    expect(view.render(60)).toEqual(opened)
+    view.handleMouse(mouse('click', 'left', 0))
+    expect(view.render(60)).toEqual(folded)
+  })
+
+  it('leaves presses, drags, wheels, and other buttons to the surface', () => {
+    const view = viewOf(pair())
+    view.render(60)
+    for (const event of [mouse('press', 'left', 0), mouse('drag', 'left', 0), mouse('wheel', 'none', 0), mouse('click', 'right', 0)]) {
+      expect(view.handleMouse(event)).toBeUndefined()
+    }
+    expect(view.render(60)).toEqual(['bash echo · exit 0 · 1 line', 'bash echo · exit 0 · 1 line'])
+  })
+
+  it('leaves a click outside every card to the transcript itself', () => {
+    const view = viewOf(pair())
+    view.render(60)
+    expect(view.handleMouse(mouse('click', 'left', 9))).toBeUndefined()
   })
 })
 
@@ -767,7 +903,9 @@ describe('TranscriptView nested PTC calls', () => {
     return model
   }
 
-  const INLINE: ViewState = { expandCards: false, expandReasoning: false, expandSubCalls: true }
+  // A folded card is only its header, so the calls draw once the card is open;
+  // the nested-call toggle still decides whether an opened card shows them.
+  const INLINE: ViewState = { expandCards: true, expandReasoning: false, expandSubCalls: true }
 
   it('keeps the calls out of the folded card until the reader asks', () => {
     const lines = viewOf(foldedProgram([{ name: 'read', args: { file_path: 'src/x.ts' } }])).render(60)
@@ -780,7 +918,7 @@ describe('TranscriptView nested PTC calls', () => {
       { name: 'read', args: { file_path: 'src/x.ts' } },
       { name: 'bash', args: { command: 'git status' } },
     ])
-    expect(viewOf(model, INLINE).render(60)).toEqual(['search the tree', '  read src/x.ts', '  bash git status'])
+    expect(viewOf(model, INLINE).render(60)).toEqual(['search the tree', '  read src/x.ts', '  bash git status', '    done'])
   })
 
   it('marks a failed call in the failed colour without hiding it', () => {
@@ -796,7 +934,7 @@ describe('TranscriptView nested PTC calls', () => {
   it('reports the calls retention dropped', () => {
     const calls = Array.from({ length: SUBCALL_MAX + 1 }, (_, at) => ({ name: 'read', args: { file_path: `src/${at}.ts` } }))
     const lines = viewOf(foldedProgram(calls), INLINE).render(60)
-    expect(lines.at(-1)).toBe('  … 1 more calls')
+    expect(lines).toContain('  … 1 more calls')
   })
 
   it('wraps a long call under its own indent on a narrow terminal', () => {

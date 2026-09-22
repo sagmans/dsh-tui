@@ -7,7 +7,7 @@ export type TranscriptEntry =
   | { readonly kind: 'assistant'; readonly text: string }
   | { readonly kind: 'notice'; readonly text: string }
   | { readonly kind: 'marker'; readonly text: string }
-  | { readonly kind: 'tool'; readonly card: ToolCard }
+  | { readonly kind: 'tool'; readonly card: ToolCard; readonly id: string }
   | { readonly kind: 'reasoning'; readonly summary: string; readonly body: string; readonly live: boolean }
 
 /** Reasoning kept per settled block, so one runaway thought cannot grow the transcript without bound. */
@@ -349,13 +349,16 @@ export class TranscriptModel {
       case 'tool/call': {
         const name = typeof data.name === 'string' ? data.name : 'tool'
         const argumentsJson = typeof data.arguments === 'string' ? data.arguments : ''
+        const callId = typeof data.callId === 'string' ? data.callId : ''
         const card = this.presenter?.call(name, argumentsJson)
         this.settled.push({
           kind: 'tool',
+          // The id is what keeps a reader's click on this message after the
+          // result replaces the card: the entry object does not survive, the id does.
+          id: callId,
           // Without a presenter the row still has to say what ran and with what.
-          card: card ?? cardFromLines('generic', name, argumentsJson === '' ? [] : argumentsJson.split('\n'), false),
+          card: card ?? cardFromLines('generic', name, name, argumentsJson === '' ? [] : argumentsJson.split('\n'), false),
         })
-        const callId = typeof data.callId === 'string' ? data.callId : ''
         if (callId !== '') this.pending.set(callId, { name, argumentsJson, index: this.settled.length - 1, subs: [] })
         return
       }
@@ -398,7 +401,7 @@ export class TranscriptModel {
       // call failed; nothing else about the row can change.
       if (!settled || known.childIndex < 0 || data.isError !== true) return
       const subCalls = (card.subCalls ?? []).map((call, at) => (at === known.childIndex ? { ...call, failed: true } : call))
-      this.settled[root.index] = { kind: 'tool', card: { ...card, subCalls } }
+      this.settled[root.index] = { kind: 'tool', id: rootCallId, card: { ...card, subCalls } }
       return
     }
     const name = typeof data.name === 'string' ? data.name : 'tool'
@@ -410,12 +413,12 @@ export class TranscriptModel {
       // Retention keeps the head, where the calls that shaped the program are;
       // the count still reports everything it dispatched.
       this.pendingSub.set(subCallId, { rootIndex: root.index, childIndex: -1 })
-      this.settled[root.index] = { kind: 'tool', card: { ...card, subCallsTotal: total } }
+      this.settled[root.index] = { kind: 'tool', id: rootCallId, card: { ...card, subCallsTotal: total } }
       return
     }
     root.subs.push(subCallId)
     this.pendingSub.set(subCallId, { rootIndex: root.index, childIndex: kept.length })
-    this.settled[root.index] = { kind: 'tool', card: { ...card, subCalls: [...kept, call], subCallsTotal: total } }
+    this.settled[root.index] = { kind: 'tool', id: rootCallId, card: { ...card, subCalls: [...kept, call], subCallsTotal: total } }
   }
 
   private settleToolResult(data: Record<string, unknown>): void {
@@ -439,7 +442,8 @@ export class TranscriptModel {
       // No matching call in this fold: a resumed transcript may start mid-call.
       this.settled.push({
         kind: 'tool',
-        card: result ?? cardFromLines('generic', name, contentLinesOf(message?.content), isError),
+        id: callId,
+        card: result ?? cardFromLines('generic', name, name, contentLinesOf(message?.content), isError),
       })
       return
     }
@@ -449,13 +453,13 @@ export class TranscriptModel {
       // No presenter answered: the model-facing content is still what happened,
       // and a reader without it would see a tool row that never reported back.
       const reported = contentLinesOf(message?.content)
-      const base = call ?? cardFromLines('generic', name, [], false)
+      const base = call ?? cardFromLines('generic', name, name, [], false)
       const rebuilt = reported.length === 0
         ? { ...base, failed: isError }
-        : { ...cardFromLines(base.kind, base.title, reported, isError), ...carriedFields(base) }
-      this.settled[pending.index] = { kind: 'tool', card: rebuilt }
+        : { ...cardFromLines(base.kind, base.tool, base.title, reported, isError), ...carriedFields(base) }
+      this.settled[pending.index] = { kind: 'tool', id: callId, card: rebuilt }
       return
     }
-    this.settled[pending.index] = { kind: 'tool', card: mergeCards(call, { ...result, failed: isError }) }
+    this.settled[pending.index] = { kind: 'tool', id: callId, card: mergeCards(call, { ...result, failed: isError }) }
   }
 }

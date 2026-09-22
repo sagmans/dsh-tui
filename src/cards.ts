@@ -90,6 +90,14 @@ export interface ToolSubCall {
 export interface ToolCard {
   readonly kind: ToolCardKind
   /**
+   * The tool this card belongs to, as the registry names it.
+   *
+   * Display policy is configured per tool, and the title cannot stand in for
+   * the name: a presenter may replace its title with anything, while the name
+   * is what the reader writes in settings.
+   */
+  readonly tool: string
+  /**
    * The card's label: the tool's own name when it has an argument, else the
    * title its presenter declared.
    */
@@ -139,12 +147,12 @@ export interface ToolCard {
 export const CARD_DETAIL_MAX = 200
 
 /**
- * Output rows a folded shell card keeps on screen, counted from the end.
+ * Output rows a folded card keeps on screen when a tool configures a tail.
  *
- * A shell command is the one card whose output is the result the reader asked
- * for, so folding it to its header would hide the answer. The tail is the part
- * that carries the outcome of a long run, and the retention cap still bounds
- * what ctrl+o can reveal.
+ * Shipped as the `tail` default for every tool, but drawn only when that tool
+ * asks for `output: tail`: the shipped `output: hidden` is what makes a folded
+ * card one line. The tail is the part that carries the outcome of a long run,
+ * and the retention cap still bounds what ctrl+o can reveal.
  */
 export const CARD_SHELL_PREVIEW = 20
 
@@ -179,8 +187,30 @@ const CARD_HINT_UNRETAINED_EARLIER = 'earlier lines not shown'
 /** Character budget for one detail row, so a minified file cannot flood the viewport. */
 export const CARD_LINE_LIMIT = 200
 
+/**
+ * Cut text to a character budget, marking the cut.
+ *
+ * Counted in code points rather than display cells: the budget is the reader's
+ * own setting, while the renderer still cuts and wraps what it draws by width.
+ */
+export function clip(text: string, limit: number): string {
+  const points = [...text]
+  if (points.length <= limit) return text
+  return `${points.slice(0, Math.max(0, limit - 1)).join('')}…`
+}
+
 function clipLine(text: string): string {
-  return text.length <= CARD_LINE_LIMIT ? text : `${text.slice(0, CARD_LINE_LIMIT - 1)}…`
+  return clip(text, CARD_LINE_LIMIT)
+}
+
+/**
+ * Text on one row, with every run of whitespace collapsed.
+ *
+ * A command may carry newlines, and a folded card promises exactly one row: a
+ * wrapped continuation would make one card read as two.
+ */
+export function oneLine(text: string): string {
+  return text.replace(/\s+/gu, ' ').trim()
 }
 
 /**
@@ -317,13 +347,14 @@ function diffStats(diffs: readonly FileDiff[]): readonly CardStat[] {
 /**
  * How much of a card the reader has asked for.
  *
- * The folded state names its own treatment because the two kinds of card are
- * not equally readable folded: a shell card's output is the answer, while every
- * other card's rows restate what its title already says.
+ * The folded state names its own treatment because the reader's settings decide
+ * whether a folded card shows a tail of its rows or nothing beyond its header;
+ * the count travels with the choice so the view never re-reads the policy.
  */
 export type CardPreview =
   | { readonly expanded: true }
-  | { readonly expanded: false; readonly preview: 'title' | 'shellTail' }
+  | { readonly expanded: false; readonly preview: 'title' }
+  | { readonly expanded: false; readonly preview: 'tail'; readonly rows: number }
 
 /**
  * The rows a card shows right now, and how many the reader is not seeing.
@@ -334,8 +365,8 @@ export type CardPreview =
 export function cardDetailRows(card: ToolCard, preview: CardPreview): { lines: readonly CardRow[]; hidden: number } {
   const lines = preview.expanded
     ? card.detail.slice(0, CARD_DETAIL_MAX)
-    : preview.preview === 'shellTail'
-      ? card.detail.slice(-CARD_SHELL_PREVIEW)
+    : preview.preview === 'tail'
+      ? card.detail.slice(Math.max(0, card.detail.length - Math.max(0, preview.rows)))
       : []
   return { lines, hidden: Math.max(0, card.totalLines - lines.length) }
 }
@@ -359,12 +390,13 @@ export function shellRetentionHint(hidden: number): string | undefined {
  */
 export function cardFromLines(
   kind: ToolCardKind,
+  tool: string,
   title: string,
   lines: readonly string[],
   failed: boolean,
 ): ToolCard {
   const bounded = bound(lines.map(line => cardRow('detail', line)))
-  return { kind, title, detail: bounded.detail, failed, totalLines: bounded.totalLines }
+  return { kind, tool, title, detail: bounded.detail, failed, totalLines: bounded.totalLines }
 }
 
 /** Text lines carried by model-facing content blocks. */
@@ -424,6 +456,9 @@ export function mergeCards(call: ToolCard | undefined, result: ToolCard | undefi
   const subCallsTotal = result.subCallsTotal ?? call.subCallsTotal
   return {
     kind,
+    // The tool that ran is the call's identity: a result card describes the same
+    // call, so it cannot rename the message a reader's clicks are remembered by.
+    tool: call.tool,
     title: call.title,
     ...(argument === undefined ? {} : { argument }),
     ...(stats === undefined ? {} : { stats }),
@@ -503,9 +538,9 @@ function searchHit(path: string, lineNumber: number, line: string): CardRow {
 }
 
 /** Map a tool's pending-call intent to a card, falling back to the raw call name. */
-export function cardOfCall(view: ToolCallView | undefined, fallbackName: string): ToolCard {
+export function cardOfCall(view: ToolCallView | undefined, name: string): ToolCard {
   if (view === undefined) {
-    return { kind: 'generic', title: fallbackName, detail: [], failed: false, totalLines: 0 }
+    return { kind: 'generic', tool: name, title: name, detail: [], failed: false, totalLines: 0 }
   }
   switch (view.card) {
     case 'terminal': {
@@ -518,7 +553,8 @@ export function cardOfCall(view: ToolCallView | undefined, fallbackName: string)
       const command = terminal.title?.trim() ?? ''
       return {
         kind: 'terminal',
-        title: fallbackName,
+        tool: name,
+        title: name,
         ...(command === '' ? {} : { argument: command }),
         detail: bound(rows).detail,
         failed: false,
@@ -530,11 +566,12 @@ export function cardOfCall(view: ToolCallView | undefined, fallbackName: string)
       const bounded = bound(diff.diffs.flatMap(renderFileDiff))
       const path = diff.diffs[0]?.path
       if (path === undefined || path === '') {
-        return { kind: 'diff', title: title(diff, fallbackName), detail: bounded.detail, failed: false, totalLines: bounded.totalLines }
+        return { kind: 'diff', tool: name, title: title(diff, name), detail: bounded.detail, failed: false, totalLines: bounded.totalLines }
       }
       return {
         kind: 'diff',
-        title: fallbackName,
+        tool: name,
+        title: name,
         argument: path,
         detail: bounded.detail,
         failed: false,
@@ -552,11 +589,12 @@ export function cardOfCall(view: ToolCallView | undefined, fallbackName: string)
       // does not keeps its declared title, which is already the label.
       const location = generic.locations?.[0]?.path
       if (location === undefined || location === '') {
-        return { kind: 'generic', title: title(generic, fallbackName), detail: bounded.detail, failed: false, totalLines: bounded.totalLines }
+        return { kind: 'generic', tool: name, title: title(generic, name), detail: bounded.detail, failed: false, totalLines: bounded.totalLines }
       }
       return {
         kind: 'generic',
-        title: fallbackName,
+        tool: name,
+        title: name,
         argument: location,
         detail: bounded.detail,
         failed: false,
@@ -569,12 +607,12 @@ export function cardOfCall(view: ToolCallView | undefined, fallbackName: string)
 /** Map a tool's result intent to a card, falling back to the model-facing text. */
 export function cardOfResult(
   view: ToolResultView | undefined,
-  input: { readonly fallbackTitle: string; readonly failed: boolean; readonly contentLines: readonly string[] },
+  input: { readonly name: string; readonly failed: boolean; readonly contentLines: readonly string[] },
 ): ToolCard {
   const failed = input.failed
   if (view === undefined) {
     const bounded = bound(input.contentLines.map(line => cardRow('detail', line)))
-    return { kind: 'generic', title: input.fallbackTitle, detail: bounded.detail, failed, totalLines: bounded.totalLines }
+    return { kind: 'generic', tool: input.name, title: input.name, detail: bounded.detail, failed, totalLines: bounded.totalLines }
   }
   switch (view.card) {
     case 'terminal': {
@@ -596,7 +634,8 @@ export function cardOfResult(
       const command = terminal.title?.trim() ?? ''
       return {
         kind: 'terminal',
-        title: input.fallbackTitle,
+        tool: input.name,
+        title: input.name,
         ...(command === '' ? {} : { argument: command }),
         ...(status === undefined ? {} : { status }),
         detail: bounded.detail,
@@ -612,7 +651,8 @@ export function cardOfResult(
       if (path === undefined || path === '') {
         return {
           kind: 'diff',
-          title: title(diff, input.fallbackTitle),
+          tool: input.name,
+          title: title(diff, input.name),
           ...(stats.length === 0 ? {} : { stats }),
           detail: bounded.detail,
           failed,
@@ -621,7 +661,8 @@ export function cardOfResult(
       }
       return {
         kind: 'diff',
-        title: input.fallbackTitle,
+        tool: input.name,
+        title: input.name,
         argument: path,
         ...(stats.length === 0 ? {} : { stats }),
         detail: bounded.detail,
@@ -636,7 +677,14 @@ export function cardOfResult(
         : search.files.flatMap(file => file.matches.map(match => searchHit(file.path, match.lineNumber, match.line)))
       if (search.truncated) rows.push(cardRow('truncated', `… ${search.total} total`))
       const bounded = bound(rows)
-      return { kind: 'search', title: title(search, input.fallbackTitle), detail: bounded.detail, failed, totalLines: bounded.totalLines }
+      return {
+        kind: 'search',
+        tool: input.name,
+        title: title(search, input.name),
+        detail: bounded.detail,
+        failed,
+        totalLines: bounded.totalLines,
+      }
     }
     case 'read': {
       const read = view as ReadResultView
@@ -652,7 +700,8 @@ export function cardOfResult(
       const stats = readStats(read)
       return {
         kind: 'read',
-        title: input.fallbackTitle,
+        tool: input.name,
+        title: input.name,
         ...(read.path === '' ? {} : { argument: read.path }),
         ...(stats.length === 0 ? {} : { stats }),
         detail: bounded.detail,
@@ -676,14 +725,28 @@ export function cardOfResult(
         if (web.truncated) rows.push(cardRow('truncated', '… body truncated'))
       }
       const bounded = bound(rows)
-      return { kind: 'web', title: title(web, input.fallbackTitle), detail: bounded.detail, failed, totalLines: bounded.totalLines }
+      return {
+        kind: 'web',
+        tool: input.name,
+        title: title(web, input.name),
+        detail: bounded.detail,
+        failed,
+        totalLines: bounded.totalLines,
+      }
     }
     default: {
       const generic = view as GenericResultView
       const lines = contentLines(generic.content)
       const chosen = lines.length > 0 ? lines : input.contentLines
       const bounded = bound(chosen.map(line => cardRow('detail', line)))
-      return { kind: 'generic', title: title(generic, input.fallbackTitle), detail: bounded.detail, failed, totalLines: bounded.totalLines }
+      return {
+        kind: 'generic',
+        tool: input.name,
+        title: title(generic, input.name),
+        detail: bounded.detail,
+        failed,
+        totalLines: bounded.totalLines,
+      }
     }
   }
 }

@@ -4,8 +4,8 @@ import { REASONING_CHAR_LIMIT, TranscriptModel } from '@/transcript.ts'
 
 const text = (value: string) => [{ type: 'text', text: value }]
 
-const card = (title: string, detail: string[] = []): ToolCard =>
-  ({ kind: 'generic', title, detail: detail.map(text => ({ parts: [{ class: 'detail' as const, text }] })), failed: false, totalLines: detail.length })
+const card = (title: string, detail: string[] = [], tool = title): ToolCard =>
+  ({ kind: 'generic', tool, title, detail: detail.map(text => ({ parts: [{ class: 'detail' as const, text }] })), failed: false, totalLines: detail.length })
 
 /** Presenter that records what it was asked, so pairing can be asserted. */
 function recordingPresenter(): ToolPresenter & { readonly calls: string[]; readonly results: string[] } {
@@ -16,11 +16,11 @@ function recordingPresenter(): ToolPresenter & { readonly calls: string[]; reado
     results,
     call(name, argumentsJson) {
       calls.push(`${name}:${argumentsJson}`)
-      return card(`${name} pending`, ['from presenter'])
+      return card(`${name} pending`, ['from presenter'], name)
     },
     result(name, input) {
       results.push(`${name}:${input.argumentsJson}:${input.isError ? 'error' : 'ok'}`)
-      return card(`${name} settled`, ['result line'])
+      return card(`${name} settled`, ['result line'], name)
     },
   }
 }
@@ -198,14 +198,14 @@ describe('TranscriptModel tool cards', () => {
     const presenter = recordingPresenter()
     const model = new TranscriptModel(presenter)
     model.apply({ type: 'tool/call', data: { name: 'bash', arguments: '{"command":"ls"}', callId: 'c1' } })
-    expect(model.entries()).toEqual([{ kind: 'tool', card: card('bash pending', ['from presenter']) }])
+    expect(model.entries()).toEqual([{ kind: 'tool', id: 'c1', card: card('bash pending', ['from presenter'], 'bash') }])
     model.apply({
       type: 'tool/result',
       data: { message: { content: [{ type: 'tool-result', toolCallId: 'c1', text: 'out' }], isError: false }, meta: { any: 1 } },
     })
     const entries = model.entries()
     expect(entries).toHaveLength(1)
-    expect(entries[0]).toEqual({ kind: 'tool', card: card('bash pending', ['result line']) })
+    expect(entries[0]).toEqual({ kind: 'tool', id: 'c1', card: card('bash pending', ['result line'], 'bash') })
     expect(presenter.calls).toEqual(['bash:{"command":"ls"}'])
     expect(presenter.results).toEqual(['bash:{"command":"ls"}:ok'])
   })
@@ -226,7 +226,7 @@ describe('TranscriptModel tool cards', () => {
       data: { message: { content: [{ type: 'tool-result', toolCallId: 'missing', text: 'orphan' }], isError: false } },
     })
     expect(model.entries()).toEqual([
-      { kind: 'tool', card: card('tool', ['orphan']) },
+      { kind: 'tool', id: 'missing', card: card('tool', ['orphan']) },
     ])
   })
 
@@ -234,7 +234,7 @@ describe('TranscriptModel tool cards', () => {
     const model = new TranscriptModel()
     model.apply({ type: 'tool/call', data: { name: 'grep', arguments: '{"q":"x"}', callId: 'c1' } })
     expect(model.entries()).toEqual([
-      { kind: 'tool', card: card('grep', ['{"q":"x"}']) },
+      { kind: 'tool', id: 'c1', card: card('grep', ['{"q":"x"}']) },
     ])
   })
 
@@ -242,7 +242,7 @@ describe('TranscriptModel tool cards', () => {
     // The command belongs to the call, so a declined result must not drop the
     // one thing a folded shell card always shows.
     const presenter: ToolPresenter = {
-      call: () => ({ kind: 'terminal', title: 'bash', argument: 'echo hi', detail: [], failed: false, totalLines: 0 }),
+      call: () => ({ kind: 'terminal', tool: 'bash', title: 'bash', argument: 'echo hi', detail: [], failed: false, totalLines: 0 }),
       result: () => undefined,
     }
     const model = new TranscriptModel(presenter)
@@ -398,7 +398,7 @@ describe('TranscriptModel nested PTC calls', () => {
 
   it('keeps the nested calls when the result presenter declines', () => {
     const presenter: ToolPresenter = {
-      call: name => ({ kind: 'generic', title: name, detail: [], failed: false, totalLines: 0 }),
+      call: name => ({ kind: 'generic', tool: name, title: name, detail: [], failed: false, totalLines: 0 }),
       result: () => undefined,
     }
     const model = new TranscriptModel(presenter)

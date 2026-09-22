@@ -75,7 +75,7 @@ export function createToolPresenter(ctx: Context, scope?: () => Agent | undefine
           { content: toolResultContent(input.content), isError: input.isError, meta: input.meta } as never,
         )
         return cardOfResult(view, {
-          fallbackTitle: name,
+          name,
           failed: input.isError,
           contentLines: contentLines(input.content),
         })
