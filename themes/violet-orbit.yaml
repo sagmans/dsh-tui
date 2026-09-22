@@ -25,9 +25,11 @@ palette:
   assistant: '#e8e9ff'  # text
   # Pi has no argument colour of its own, and its link blue — the shade that
   # first came over — shares a family with the label pi gives a tool name, so
-  # the two halves of one row could not be told apart. Lifting the argument
-  # towards the theme's own violet separates them without leaving the hue.
-  arg: '#d2c9f0'  # no pi key: see the note below
+  # the two halves of one row could not be told apart. A sage separates them by
+  # family rather than by shade, at the cost of the family that means something
+  # arrived: on a diff card the argument and an added line read as two shades of
+  # one green.
+  arg: '#aed69a'  # no pi key: see the note below
 
 tokens:
   # A reader's own turn. Pi fills the row, but this surface already frames it,

@@ -160,8 +160,8 @@ describe('violet-orbit', () => {
     // row readable as two facts.
     const theme = themed(VIOLET)
     expect(theme.style('tool.title', 'x')).toContain('38;2;129;151;247')
-    expect(theme.style('tool.args', 'x')).toContain('38;2;210;201;240')
-    expect(theme.style('tool.subcall.args', 'x')).toContain('38;2;210;201;240')
+    expect(theme.style('tool.args', 'x')).toContain('38;2;174;214;154')
+    expect(theme.style('tool.subcall.args', 'x')).toContain('38;2;174;214;154')
   })
 
   it('merges a reader field over a themed element field by field', () => {
