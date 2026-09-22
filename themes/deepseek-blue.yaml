@@ -99,6 +99,17 @@ tokens:
   markdown.italic: { italic: true }
   markdown.strikethrough: { strike: true }
   markdown.underline: { underline: true }
+  # A fenced diff: the scaffolding recedes, the rows carry the semantic shades,
+  # and the characters that changed sit on a band of the row's own colour. The
+  # band is a shade derived from that colour rather than a product token, so it
+  # stays a literal, and the foreground inherits so a palette move carries both.
+  markdown.diff.header: { fg: muted }
+  markdown.diff.hunk: { fg: muted }
+  markdown.diff.context: {}
+  markdown.diff.added: { fg: added }
+  markdown.diff.removed: { fg: removed }
+  markdown.diff.addedEmphasis: { inherit: markdown.diff.added, bg: '#1e3d24' }
+  markdown.diff.removedEmphasis: { inherit: markdown.diff.removed, bg: '#472424' }
   markdown.diagram.border: { fg: muted }
   markdown.diagram.text: {}
   markdown.diagram.edge: { fg: accent }

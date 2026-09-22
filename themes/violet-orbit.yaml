@@ -95,6 +95,13 @@ tokens:
   markdown.italic: { italic: true }  # unchanged from the shipped table
   markdown.strikethrough: { strike: true }  # unchanged from the shipped table
   markdown.underline: { underline: true }  # unchanged from the shipped table
+  markdown.diff.header: { fg: muted }  # unchanged from the shipped table
+  markdown.diff.hunk: { fg: muted }  # unchanged from the shipped table
+  markdown.diff.context: {}  # unchanged from the shipped table
+  markdown.diff.added: { fg: added }  # unchanged from the shipped table
+  markdown.diff.removed: { fg: removed }  # unchanged from the shipped table
+  markdown.diff.addedEmphasis: { inherit: markdown.diff.added, bg: '#1e3d24' }  # unchanged from the shipped table
+  markdown.diff.removedEmphasis: { inherit: markdown.diff.removed, bg: '#472424' }  # unchanged from the shipped table
   markdown.diagram.border: { fg: '#343652' }  # border
   markdown.diagram.text: { fg: '#e3e5ff' }  # mdCodeBlock
   markdown.diagram.edge: { fg: accent }
