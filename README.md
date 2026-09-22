@@ -170,6 +170,7 @@ force, and the `keys:` section moves any of them — see [Keys](#keys).
 | `/history` | show how many prompts are recorded and where the file is |
 | `/history clear` | forget every recorded prompt, reporting how many went |
 | `/theme` | list every styled element and the value in force |
+| `/theme <name>` | apply a shipped theme and write the choice to the settings document |
 | `/keys` | open the key map as a list you filter as you type; `/keys <layer>` opens it already narrowed to one layer (see [Keys](#keys)) |
 | `/stash <draft>` | park the text given after the command (`ctrl+x` then `s` parks the editor) |
 | `/stash-pop [index\|id]` | put a stashed draft into the editor and remove it (newest by default) |
@@ -318,6 +319,7 @@ code. Preferences live in the same user-settings document as every other
 
 ```yaml
 dsh-tui:
+  theme: violet-orbit         # restyle the whole surface by name (default: the shipped table)
   subcalls: collapsed         # fold the calls a PTC program dispatched (default inline)
   mermaid: streaming          # draw a reply's mermaid fences: off, final, or streaming (default streaming)
   tools:
@@ -390,6 +392,18 @@ restyleable like anything else through `markdown.diagram.border`,
 `.text`, `.edge`, `.edgeLabel`, `.title`, and `.warning`, so `/theme`
 lists it with the rest. Nothing is lost by drawing: `/export` and the session
 file keep the reply exactly as the model wrote it.
+
+A theme restyles the whole surface by name. `theme: violet-orbit` applies a port
+of the pi theme of the same name: its palette, plus the elements it draws its own
+way, down to the violet band a submitted prompt sits on. A theme is a layer and not a replacement — everything
+it says nothing about keeps its shipped appearance, and a `tokens:` entry of the
+reader's own still wins over it one field at a time, so naming a single attribute
+does not discard the shade the theme gave that same element. `/theme <name>`
+applies one to the running session and writes the choice to the document,
+`shipped` returns to the default table, and a name the surface does not ship is
+refused with the names it does. A bare `/theme` names the theme in force in its
+heading and reports each element as `override`, `preset`, `palette`, or
+`default`, so a screen that looks wrong can be traced to the layer that drew it.
 
 `fg` and `bg` accept `#rrggbb`, a palette name (`default`, `muted`, `faint`,
 `accent`, `arg`, `warn`, `added`, `removed`, `user`, `assistant`), or an index. A colour is

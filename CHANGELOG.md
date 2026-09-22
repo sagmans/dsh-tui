@@ -75,6 +75,16 @@ breaking change, and a patch carries only fixes.
   rows, a question's options and the free-text row that leaves them, and the
   editor's completion menu. They are ordinary bindings, so `/keys` prints them
   and the `keys:` section moves them.
+- Themes are chosen by name. `dsh-tui: theme: violet-orbit` applies a port of
+  the pi theme of the same name: its palette, plus the elements it draws its own
+  way. A theme is a layer rather than a replacement, so anything it says nothing
+  about keeps its shipped appearance and a reader's own `tokens:` entry still
+  wins over it one field at a time. `/theme <name>` applies one to the running
+  session and writes the choice to the document, `shipped` returns to the
+  default table, and a name the surface does not ship is refused with the names
+  it does. A bare `/theme` names the theme in force in its heading and reports
+  each element as `override`, `preset`, `palette`, or `default`, so a screen
+  that looks wrong can be traced to the layer that drew it.
 
 ### Changed
 
