@@ -9,7 +9,7 @@ import { builtinLibrary } from '../support/themes.ts'
 const MODES = ['truecolor', '256', '16', 'none'] as const
 
 /** The theme the reader asked to be brought over, by the name it answers to. */
-const DEEPSEEK_BLUE = 'deepseek-blue'
+const VIOLET = 'violet-orbit'
 
 const library = builtinLibrary()
 
@@ -19,9 +19,7 @@ const themed = (name: string, mode: (typeof MODES)[number] = 'truecolor') =>
 
 describe('the shipped themes', () => {
   it('ships a file for every name it offers', () => {
-    // Sorted on both sides: which files exist is the claim, and the order a
-    // library offers names in is the loader's business rather than this one's.
-    expect([...builtinNames(library)].sort()).toEqual([SHIPPED_THEME, DEEPSEEK_BLUE].sort())
+    expect(builtinNames(library)).toEqual([SHIPPED_THEME, VIOLET])
   })
 
   it('names only elements and palette entries the surface has', () => {
@@ -76,14 +74,14 @@ describe('the shipped themes', () => {
   it('draws an element a theme moves no shade for from the palette it did move', () => {
     // The palette half is what makes a full table maintainable: an element the
     // theme writes no literal for still follows the theme's own shades.
-    const theme = themed(DEEPSEEK_BLUE)
+    const theme = themed(VIOLET)
     expect(theme.style('transcript.reasoning.body', 'x')).toContain('38;2;103;109;149')
   })
 })
 
-describe('deepseek-blue', () => {
+describe('violet-orbit', () => {
   it('replaces the shipped accent family with its own violet', () => {
-    const theme = themed(DEEPSEEK_BLUE)
+    const theme = themed(VIOLET)
     // status.prefix names the palette rather than a literal, so it proves the
     // palette half of the theme landed, not just the per-element half.
     expect(theme.style('status.prefix', 'x')).toContain('38;2;128;128;255')
@@ -94,17 +92,17 @@ describe('deepseek-blue', () => {
     // The box is what separates a prompt from the prose around it, and a filled
     // row inside that box is a second treatment of the same fact: it reads as a
     // selected row rather than as the reader's own words.
-    const style = themed(DEEPSEEK_BLUE).style('transcript.user', 'x')
+    const style = themed(VIOLET).style('transcript.user', 'x')
     expect(style).toContain('38;2;240;241;255')
     expect(style).not.toContain('48;2;')
   })
 
   it('draws a tool label periwinkle rather than the shipped amber', () => {
-    expect(themed(DEEPSEEK_BLUE).style('tool.title', 'x')).toContain('38;2;129;151;247')
+    expect(themed(VIOLET).style('tool.title', 'x')).toContain('38;2;129;151;247')
   })
 
   it('keeps the shades it borrowed for code, terminal, and links', () => {
-    const theme = themed(DEEPSEEK_BLUE)
+    const theme = themed(VIOLET)
     expect(theme.style('markdown.code', 'x')).toContain('38;2;251;158;36')
     expect(theme.style('tool.terminal.cwd', 'x')).toContain('38;2;153;246;228')
     expect(theme.style('markdown.link', 'x')).toContain('38;2;147;197;253')
@@ -115,7 +113,7 @@ describe('deepseek-blue', () => {
     // blue from the same family; a reader scanning for the call cannot tell where
     // the name stops. Lifting the argument out of that family is what makes one
     // row readable as two facts.
-    const theme = themed(DEEPSEEK_BLUE)
+    const theme = themed(VIOLET)
     expect(theme.style('tool.title', 'x')).toContain('38;2;129;151;247')
     expect(theme.style('tool.args', 'x')).toContain('38;2;210;201;240')
     expect(theme.style('tool.subcall.args', 'x')).toContain('38;2;210;201;240')
@@ -124,14 +122,14 @@ describe('deepseek-blue', () => {
   it('merges a reader field over a themed element field by field', () => {
     // The two layers meet on one element: the reader naming one attribute must
     // not discard the shade the theme gave that same element.
-    const overrides = toOverrides(parseSettings({ theme: DEEPSEEK_BLUE, tokens: { 'tool.title': { bold: true } } }), library)
+    const overrides = toOverrides(parseSettings({ theme: VIOLET, tokens: { 'tool.title': { bold: true } } }), library)
     expect(mergeTokenSpec('tool.title', overrides.tokens, themeLayer(overrides)))
       .toEqual({ fg: '#8197f7', bold: true })
   })
 
   it('still lets the reader win on any element it set', () => {
     const theme = createTheme('truecolor', toOverrides(parseSettings({
-      theme: DEEPSEEK_BLUE,
+      theme: VIOLET,
       tokens: { 'tool.title': { fg: '#ff0000' } },
     }), library))
     expect(theme.style('tool.title', 'x')).toContain('38;2;255;0;0')

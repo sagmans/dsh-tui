@@ -1,4 +1,4 @@
-# deepseek-blue — a port of pi's violet-orbit, brought over shade for shade.
+# violet-orbit — the pi theme of the same name, brought over shade for shade.
 #
 # The two surfaces do not share a vocabulary: pi names a message background
 # where this one names the transcript row that draws it. The port therefore
@@ -8,7 +8,7 @@
 # has no pi key to name, and says why it is here instead.
 #
 # This file is a reference and a layer, not a workspace: it ships inside the
-# package and a new version replaces it. /theme export deepseek-blue writes a
+# package and a new version replaces it. /theme export violet-orbit writes a
 # full copy into your own themes directory to edit.
 
 palette:

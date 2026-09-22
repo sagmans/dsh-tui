@@ -158,7 +158,7 @@ describe('the dsh-tui settings section', () => {
 
   it('applies no shipped theme until the reader names one', () => {
     expect(parseSettings({}).theme).toBeUndefined()
-    expect(parseSettings({ theme: 'deepseek-blue' }).theme).toBe('deepseek-blue')
+    expect(parseSettings({ theme: 'violet-orbit' }).theme).toBe('violet-orbit')
   })
 
   it('carries a name nothing answers to as written, for the surface to report', () => {
@@ -170,8 +170,8 @@ describe('the dsh-tui settings section', () => {
   })
 
   it('names the theme and the palette it moves', () => {
-    const overrides = toOverrides(parseSettings({ theme: 'deepseek-blue' }), library)
-    expect(overrides.theme?.name).toBe('deepseek-blue')
+    const overrides = toOverrides(parseSettings({ theme: 'violet-orbit' }), library)
+    expect(overrides.theme?.name).toBe('violet-orbit')
     expect(overrides.palette.accent).toBe('#8080ff')
   })
 
@@ -179,7 +179,7 @@ describe('the dsh-tui settings section', () => {
     // /theme answers "where did this come from?", and the answer for a themed
     // element has to name the theme: calling it the reader's own row sends them
     // into their own file to look for a line that is not there.
-    const overrides = toOverrides(parseSettings({ theme: 'deepseek-blue' }), library)
+    const overrides = toOverrides(parseSettings({ theme: 'violet-orbit' }), library)
     expect([...overrides.tokens.keys()]).toEqual([])
   })
 
@@ -190,7 +190,7 @@ describe('the dsh-tui settings section', () => {
   })
 
   it('lets the reader palette win over the theme palette', () => {
-    const overrides = toOverrides(parseSettings({ theme: 'deepseek-blue', palette: { accent: '#123456' } }), library)
+    const overrides = toOverrides(parseSettings({ theme: 'violet-orbit', palette: { accent: '#123456' } }), library)
     expect(overrides.palette.accent).toBe('#123456')
   })
 })

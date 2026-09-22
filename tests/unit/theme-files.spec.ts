@@ -120,11 +120,11 @@ describe('the built-ins the package ships', () => {
   /** Every built-in, as the surface reads it, so a drift fails here and not on a screen. */
   const builtins = loadThemes(dirOf(), builtinThemesDir())
 
-  it('draws deepseek-blue with the shades the port brought over', () => {
-    const ported = builtins.get('deepseek-blue')
-    expect(ported?.builtin).toBe(true)
-    expect(ported?.tokens['tool.title']).toEqual({ fg: '#8197f7' })
-    expect(ported?.palette.default).toBe('#e8e9ff')
+  it('draws violet-orbit with the shades the port brought over', () => {
+    const violet = builtins.get('violet-orbit')
+    expect(violet?.builtin).toBe(true)
+    expect(violet?.tokens['tool.title']).toEqual({ fg: '#8197f7' })
+    expect(violet?.palette.default).toBe('#e8e9ff')
   })
 
   it('names every element and every palette entry, so a copy is a full reference', () => {
