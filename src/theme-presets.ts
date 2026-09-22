@@ -57,15 +57,17 @@ const VIOLET_ORBIT: ThemePreset = {
     removed: '#ef4444', // error
     user: '#f0f1ff', // userMessageText
     assistant: '#e8e9ff', // text
-    // Pi has no argument colour of its own, and this surface needs one that
-    // reads as neither the tool's label nor its output. Pi gives a link the
-    // same "something other than the prose" job, so its link blue comes over.
-    arg: '#93c5fd', // mdLink
+    // Pi has no argument colour of its own, and its link blue — the shade that
+    // first came over — shares a family with the label pi gives a tool name, so
+    // the two halves of one row could not be told apart. Lifting the argument
+    // towards the theme's own violet separates them without leaving the hue.
+    arg: '#d2c9f0',
   },
   tokens: {
-    // A reader's own turn. Pi marks it with a violet-tinted band, which this
-    // surface can only reproduce now that a token carries a background.
-    'transcript.user': { fg: 'user', bg: '#20234a' }, // userMessageBg
+    // A reader's own turn. Pi fills the row, but this surface already frames it,
+    // and a band inside that frame treats one fact twice: it reads as a selected
+    // row rather than as the reader's own words. The shade carries over alone.
+    'transcript.user': { fg: 'user' }, // userMessageText
 
     // A tool's label. Pi draws it periwinkle rather than this surface's amber,
     // which is the single change that moves the card family into the theme.

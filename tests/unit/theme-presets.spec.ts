@@ -76,10 +76,13 @@ describe('violet-orbit', () => {
     expect(theme.style('picker.border', 'x')).toContain('38;2;52;54;82')
   })
 
-  it('gives a reader turn the violet band it wore in Pi', () => {
+  it('leaves a reader turn on the prompt shade alone, with no band behind it', () => {
+    // The box is what separates a prompt from the prose around it, and a filled
+    // row inside that box is a second treatment of the same fact: it reads as a
+    // selected row rather than as the reader's own words.
     const style = themed(VIOLET).style('transcript.user', 'x')
     expect(style).toContain('38;2;240;241;255')
-    expect(style).toContain('48;2;32;35;74')
+    expect(style).not.toContain('48;2;')
   })
 
   it('draws a tool label periwinkle rather than the shipped amber', () => {
@@ -91,6 +94,17 @@ describe('violet-orbit', () => {
     expect(theme.style('markdown.code', 'x')).toContain('38;2;251;158;36')
     expect(theme.style('tool.terminal.cwd', 'x')).toContain('38;2;153;246;228')
     expect(theme.style('markdown.link', 'x')).toContain('38;2;147;197;253')
+  })
+
+  it('draws a tool argument lighter than the label beside it', () => {
+    // The label and the argument share a row, and pi hands both jobs a mid-tone
+    // blue from the same family; a reader scanning for the call cannot tell
+    // where the name stops. Lifting the argument out of that family is what
+    // makes one row readable as two facts.
+    const theme = themed(VIOLET)
+    expect(theme.style('tool.title', 'x')).toContain('38;2;129;151;247')
+    expect(theme.style('tool.args', 'x')).toContain('38;2;210;201;240')
+    expect(theme.style('tool.subcall.args', 'x')).toContain('38;2;210;201;240')
   })
 
   it('merges a reader field over a themed element field by field', () => {
