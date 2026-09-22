@@ -399,6 +399,22 @@ restyleable like anything else through `markdown.diagram.border`,
 lists it with the rest. Nothing is lost by drawing: `/export` and the session
 file keep the reply exactly as the model wrote it.
 
+A fenced block whose language is `diff` or `patch` is drawn as the change it
+describes rather than as one plain code block: file headers and hunk headers
+recede, added rows draw green, removed rows draw red, and a row that replaced
+another puts the characters that actually changed on a darker band of its own
+colour, so a one-word edit reads at a glance instead of as two unrelated lines.
+A pair that shares too little to be an edit draws whole-row, unchanged rows keep
+the shade a code block always had, and any other language draws exactly as
+before. The change is drawn in replies, submitted prompts, and thoughts alike,
+because red and green say what the fence means rather than how loudly it is
+drawn. The seven elements — `markdown.diff.header`, `.hunk`, `.context`,
+`.added`, `.removed`, and the `.addedEmphasis` and `.removedEmphasis` bands
+— are named by every shipped theme and overridden like any other, `hidden`
+included; hiding an emphasis element keeps the row's own colour instead of
+leaving a gap, and `NO_COLOR` draws the fence as plain text. `/export` and the
+session file still keep the fence exactly as the model wrote it.
+
 A theme restyles the whole surface by name, and a theme is a file. The package
 ships two: `deepseek-blue`, the table written out in full in the colours the
 project answers to, and `violet-orbit`, a port of pi's theme of that name — its
@@ -431,6 +447,22 @@ gave that same element. `/theme tokens` names the theme in force in its heading 
 reports each element as `override`, `theme`, `palette`, or `default`, marking the
 themes in your own directory and printing the export hint, so a screen that looks
 wrong can be traced to the layer that drew it.
+
+A fenced block whose language is `diff` or `patch` is drawn as the change it
+describes rather than as one plain code block: file headers and hunk headers
+recede, added rows draw green, removed rows draw red, and a row that replaced
+another puts the characters that actually changed on a darker band of its own
+colour, so a one-word edit reads at a glance instead of as two unrelated lines.
+A pair that shares too little to be an edit draws whole-row, unchanged rows keep
+the shade a code block always had, and any other language draws exactly as
+before. The change is drawn in replies, submitted prompts, and thoughts alike,
+because red and green say what the fence means rather than how loudly it is
+drawn. The seven elements — `markdown.diff.header`, `.hunk`, `.context`,
+`.added`, `.removed`, and the `.addedEmphasis` and `.removedEmphasis` bands
+— are overridden like any other, `hidden` included; hiding an emphasis element
+keeps the row's own colour instead of leaving a gap, and `NO_COLOR` draws the
+fence as plain text. `/export` and the session file still keep the fence exactly
+as the model wrote it.
 
 `fg` and `bg` accept `#rrggbb`, a palette name (`default`, `muted`, `faint`,
 `accent`, `arg`, `warn`, `added`, `removed`, `user`, `assistant`), or an index. A colour is
@@ -681,6 +713,9 @@ The automated checks drive a real PTY, but they run on this machine's terminal. 
 | a reply carrying a mermaid fence | it draws as box art at the transcript width, with the prose around it untouched |
 | that reply in a terminal narrower than the drawing | the fence stays source, and widening the window draws it without a new turn |
 | `dsh-tui: { mermaid: off }` in `$DSH_HOME/settings.yaml`, then a mermaid reply | the fence stays source; editing the value to `streaming` draws a settled reply without a restart |
+| a reply carrying a `` ```diff `` fence | the file and hunk headers recede, `+` rows draw green and `-` rows red, and the characters that changed in a paired row sit on a darker band |
+| `dsh-tui: { tokens: { markdown.diff.addedEmphasis: { hidden: true } } }` in `$DSH_HOME/settings.yaml`, then that reply | the changed run keeps its row's colour instead of the band, and the row's text is unchanged |
+| `NO_COLOR=1 dsh --profile tui`, then that reply | the fence draws as plain text with no escape sequences, and a re-run without it colours the fence again |
 | type the start of a prompt already recorded | the rest of the newest match follows the cursor in a faint shade; `ctrl+e` takes it whole, the word-right key takes one word, and both keys do their old job when nothing is offered |
 | `ctrl+r`, then a fragment | reverse search opens seeded with the bar's draft; `enter` puts a prompt back, `esc` keeps the draft |
 | `dsh-tui: { history: { ghost: false } }`, then type a known prefix | no suggestion is drawn, and `ctrl+r` still searches |
@@ -732,7 +767,7 @@ The workflow stores no npm token: the registry trusts `release.yml` on the `npm-
 - Inside Herdr the pane reports its own state, and that report is the only thing that makes it an agent there: Herdr cannot start, resume, or prompt this surface, so launching and resuming stay with `dsh` itself (or a Herdr plugin that runs it).
 - Styling is per element and overridable; see [Settings](#settings). Shipped defaults are emitted as 24-bit colour where the terminal advertises it and degraded to 256 or 16 colours otherwise, so a light or dark terminal still follows its own palette where it has one.
 - Tool text, model text, and file content are drawn the way the terminal that produced them would have drawn them — see [Terminal text](#terminal-text) — so a tab lands where its writer saw it and a colour is a colour. A hostile result still cannot reach the terminal: everything a terminal would act on is consumed before the row is measured. A stashed draft and a stored prompt are stripped of control and bidi characters instead, because they are restored into a live editor rather than drawn as text.
-- Mermaid fences draw in assistant replies and submitted prompts, and only at the top level of one: a fence nested in a list, quoted inside another fence, or carried by a thought or a tool card stays source. A thought never draws one, because a diagram there would carry the answer's weight. Author `:::class` styling and diagram links are ignored — the renderer reports what each run is, and the theme decides how it looks.
+- Mermaid fences draw in assistant replies and submitted prompts, and only at the top level of one: a fence nested in a list, quoted inside another fence, or carried by a thought or a tool card stays source. A thought never draws one, because a diagram there would carry the answer's weight. A fenced diff is the exception: it is the change itself rather than a drawing of it, so replies, prompts, and thoughts all draw it in the diff elements. Author `:::class` styling and diagram links are ignored — the renderer reports what each run is, and the theme decides how it looks.
 - Prompt history is global to this machine, not per project: `$DSH_HOME/prompt-history.json` holds every submitted line, deduplicated exactly, and a file this build cannot parse is left untouched with writes refused so a newer format is never overwritten. Every write re-reads the file under a lock shared by sessions, so a second session's prompts are folded in rather than overwritten, and a lock whose holder stopped is reclaimed or reported instead of guessed at; control characters are spelled out before a prompt is stored. A multiline suggestion draws its first line with `↵` marking the fold. `history.ghost: false` keeps reverse search without the suggestion, `history.enabled: false` stops recording and offering it, and `NO_COLOR`/`--no-color` suppresses the ghost because text the reader cannot see but could still accept is worse than none.
 - The editor handoff gives the whole terminal to `$VISUAL` (or `$EDITOR`) and waits for it: while the child owns the screen this surface draws nothing: a title from a turn in flight is written again when the screen comes back, a bell that falls in the gap is dropped rather than rung late, and a second `ctrl+x` then `e` is ignored until the first editor leaves. A host that unloads the surface during the handoff gives the terminal back while the child is still running, because only the child's own exit can end the wait. What the editor saved is read back only up to 1 MiB; a larger draft is left on disk with its path in the notice rather than loaded into the bar.
 
