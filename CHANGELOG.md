@@ -41,6 +41,15 @@ breaking change, and a patch carries only fixes.
   names its sections, and notices, relays, goals, and cross-session recalls get
   labels of their own. A source that declares no form keeps the previous
   `producer · N lines — preview` row.
+- Tool output, model text, and file content are drawn the way a terminal would
+  draw them instead of being escaped into visible bytes: a colour the terminal
+  can show is shown at the session's colour budget, a tab lands on the column
+  its writer saw, and a carriage return collapses to the state its row settled
+  on. Cursor moves, screen clears, window titles, and clipboard writes are still
+  consumed, so a hostile result cannot reach the terminal, and a stray control
+  byte is spelled out rather than dropped. Text the surface paints itself — a
+  ghost suggestion, a completion row, a queued prompt, an export — carries no
+  colour, because the surface is already styling it.
 
 ### Added
 

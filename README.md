@@ -424,6 +424,30 @@ outrank everything in this section. A token or palette name the surface does not
 have is refused with the offending name, and the surface prints the refusal as a
 notice when the document loads, so a typo cannot quietly paint nothing.
 
+### Terminal text
+
+A tool result, a file's contents, and a model's answer are text a terminal may
+read as commands, so the surface reads them first. A whitelisted subset of the
+SGR family (`1`, `2`, `3`, `4`, `7`, `9`, `21`/`22`, `23`, `24`, `27`, `29`, the
+30–37/90–97 and 40–47/100–107 slots, `38`/`48` indexed and RGB, `39`/`49`, and
+`0`) is re-emitted at the session's own colour budget: 24-bit where the terminal
+advertises it, 256 or 16 colours otherwise, and nothing at all with `--no-color`
+or `NO_COLOR`. A tab advances to the next eight-column stop measured from the
+column the text starts at, and a carriage return repaints its row in place, so
+the last state of a progress bar is the only one drawn.
+
+Everything else a terminal would act on — cursor movement, screen clearing,
+private modes, window titles, clipboard writes, hyperlinks — is consumed rather
+than shown, and a control byte that is not a sequence is spelled out (`\x07`)
+rather than silently dropped. A full reset inside tool output restores the colour
+of the element holding the text, not the terminal default, and the surface never
+writes a reset of its own inside a row; a carriage return cannot repaint past the
+column the text started at, so indented output cannot reach the frame around it.
+
+Text the surface draws itself — a ghost suggestion, a completion row, a queued
+prompt, an export — is drawn without colour, because the surface is already
+painting it and a second style would fight the first.
+
 ### Keys
 
 Every press the surface answers is an action with an id and a shipped key.
@@ -678,7 +702,7 @@ The workflow stores no npm token: the registry trusts `release.yml` on the `npm-
 - Approvals and questions render inline and take the keyboard; a question batch is answered in order, and a question that lists options can always be answered with free text on row `0`.
 - Inside Herdr the pane reports its own state, and that report is the only thing that makes it an agent there: Herdr cannot start, resume, or prompt this surface, so launching and resuming stay with `dsh` itself (or a Herdr plugin that runs it).
 - Styling is per element and overridable; see [Settings](#settings). Shipped defaults are emitted as 24-bit colour where the terminal advertises it and degraded to 256 or 16 colours otherwise, so a light or dark terminal still follows its own palette where it has one.
-- Tool text, model text, and file content are escaped before rendering, so a hostile result cannot inject terminal control sequences; the cost is that a literal tab shows as \x09. A stashed draft is stripped of control and bidi characters instead, because it is restored into a live editor rather than drawn as text.
+- Tool text, model text, and file content are drawn the way the terminal that produced them would have drawn them — see [Terminal text](#terminal-text) — so a tab lands where its writer saw it and a colour is a colour. A hostile result still cannot reach the terminal: everything a terminal would act on is consumed before the row is measured. A stashed draft and a stored prompt are stripped of control and bidi characters instead, because they are restored into a live editor rather than drawn as text.
 - Mermaid fences draw in assistant replies and submitted prompts, and only at the top level of one: a fence nested in a list, quoted inside another fence, or carried by a thought or a tool card stays source. A thought never draws one, because a diagram there would carry the answer's weight. Author `:::class` styling and diagram links are ignored — the renderer reports what each run is, and the theme decides how it looks.
 - Prompt history is global to this machine, not per project: `$DSH_HOME/prompt-history.json` holds every submitted line, deduplicated exactly, and a file this build cannot parse is left untouched with writes refused so a newer format is never overwritten. Every write re-reads the file under a lock shared by sessions, so a second session's prompts are folded in rather than overwritten, and a lock whose holder stopped is reclaimed or reported instead of guessed at; control characters are spelled out before a prompt is stored. A multiline suggestion draws its first line with `↵` marking the fold. `history.ghost: false` keeps reverse search without the suggestion, `history.enabled: false` stops recording and offering it, and `NO_COLOR`/`--no-color` suppresses the ghost because text the reader cannot see but could still accept is worse than none.
 - The editor handoff gives the whole terminal to `$VISUAL` (or `$EDITOR`) and waits for it: while the child owns the screen this surface draws nothing: a title from a turn in flight is written again when the screen comes back, a bell that falls in the gap is dropped rather than rung late, and a second `ctrl+x` then `e` is ignored until the first editor leaves. A host that unloads the surface during the handoff gives the terminal back while the child is still running, because only the child's own exit can end the wait. What the editor saved is read back only up to 1 MiB; a larger draft is left on disk with its path in the notice rather than loaded into the bar.
