@@ -1,6 +1,7 @@
 import { truncateToWidth, type EditorTheme, type MarkdownTheme, type SelectListTheme } from '@earendil-works/pi-tui'
 import { oneRow } from './text.ts'
 import { detectColourMode, type ColourMode } from './theme-capability.ts'
+import { presetTokens } from './theme-presets.ts'
 import { DEFAULT_PALETTE, DEFAULT_TOKENS, resetSequence, resolveToken, type ResolvedStyle, type TuiToken } from './theme-tokens.ts'
 import type { ThemeOverrides } from './theme-settings.ts'
 
@@ -87,10 +88,13 @@ function editorTheme(
  */
 export function createTheme(mode: ColourMode = detectColourMode(process.env), overrides: ThemeOverrides = NO_OVERRIDES): TuiTheme {
   const resolved = new Map<TuiToken, ResolvedStyle>()
+  // Looked up once: a theme is one layer of every token's answer, not a
+  // per-token decision, and a repaint asks for all of them.
+  const themed = presetTokens(overrides.preset)
   const resolve = (token: TuiToken): ResolvedStyle => {
     const cached = resolved.get(token)
     if (cached !== undefined) return cached
-    const style = resolveToken(token, overrides.tokens, overrides.palette, mode)
+    const style = resolveToken(token, overrides.tokens, overrides.palette, mode, themed)
     resolved.set(token, style)
     return style
   }

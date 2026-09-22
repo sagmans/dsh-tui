@@ -15,7 +15,7 @@ export type Submission =
   | { readonly kind: 'fork'; readonly title: string }
   | { readonly kind: 'new'; readonly title: string }
   | { readonly kind: 'todo' }
-  | { readonly kind: 'theme' }
+  | { readonly kind: 'theme'; readonly argument: string }
   | { readonly kind: 'keys'; readonly argument: string }
   | { readonly kind: 'copy' }
   | { readonly kind: 'plan' }
@@ -53,7 +53,7 @@ export const LOCAL_COMMAND_DESCRIPTIONS: Readonly<Record<string, string>> = {
   '/jobs': 'list background jobs, read one, or kill one',
   '/subagents': 'list delegations; /subagents open <id|last> reads one, /subagents kill <id> stops one',
   '/todo': 'show the list of tasks the agent is keeping',
-  '/theme': 'list every styled element and the value in force',
+  '/theme': 'list every styled element and the value in force; /theme <name> applies a shipped theme',
   '/keys': 'open the key map and filter it by typing; /keys <layer> narrows it',
   '/fork': 'branch this conversation and continue in the branch',
   '/new': 'start a fresh session without leaving the terminal',
@@ -110,7 +110,9 @@ export function classifySubmission(text: string): Submission {
     return { kind: 'fork', title: trimmed.slice('/fork'.length).trim() }
   }
   if (trimmed === '/todo') return { kind: 'todo' }
-  if (trimmed === '/theme') return { kind: 'theme' }
+  if (trimmed === '/theme' || trimmed.startsWith('/theme ')) {
+    return { kind: 'theme', argument: trimmed.slice('/theme'.length).trim() }
+  }
   if (trimmed === '/keys' || trimmed.startsWith('/keys ')) {
     return { kind: 'keys', argument: trimmed.slice('/keys'.length).trim() }
   }

@@ -25,6 +25,8 @@ describe('classifySubmission', () => {
     expect(classifySubmission('/subagents kill abc')).toEqual({ kind: 'subagents', argument: 'kill abc' })
     expect(classifySubmission('/fork  parser branch ')).toEqual({ kind: 'fork', title: 'parser branch' })
     expect(classifySubmission('/todo')).toEqual({ kind: 'todo' })
+    expect(classifySubmission('/theme')).toEqual({ kind: 'theme', argument: '' })
+    expect(classifySubmission('/theme  violet-orbit ')).toEqual({ kind: 'theme', argument: 'violet-orbit' })
     expect(classifySubmission('/copy')).toEqual({ kind: 'copy' })
     expect(classifySubmission('/history')).toEqual({ kind: 'history', argument: '' })
     expect(classifySubmission('/history  clear ')).toEqual({ kind: 'history', argument: 'clear' })
