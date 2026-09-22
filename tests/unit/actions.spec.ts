@@ -28,6 +28,7 @@ const SHIPPED: Readonly<Record<string, readonly string[]>> = {
   'chord.plan': ['p'],
   'chord.copy': ['y'],
   'chord.editor': ['e'],
+  'chord.new': ['n'],
   'gate.allow': ['y'],
   'gate.reject': ['n'],
   'gate.cancel': ['escape', 'ctrl+c'],
@@ -222,7 +223,7 @@ describe('resolveKeymap', () => {
 
   it('takes a bare character for the approval gate and the chord, which are theirs while armed', () => {
     expect(keysFor(resolveKeymap({ 'gate.allow': 'a' }), 'gate.allow')).toEqual(['a'])
-    expect(keysFor(resolveKeymap({ 'chord.model': 'n' }), 'chord.model')).toEqual(['n'])
+    expect(keysFor(resolveKeymap({ 'chord.model': 'o' }), 'chord.model')).toEqual(['o'])
   })
 
   it('refuses a combination the library never matches, however it is named', () => {

@@ -28,6 +28,9 @@ const CHORD_SUBMISSIONS: Readonly<Record<string, Submission>> = {
   // already consumed the line it would otherwise have carried.
   'chord.editor': { kind: 'editor' },
   'chord.keys': { kind: 'keys', argument: '' },
+  // The chord starts the session a typed `/new` starts, without the line that
+  // would have replaced the draft in the bar.
+  'chord.new': { kind: 'new', title: '' },
 }
 
 /** One chord: the key that follows the prefix, and the line that key asks for. */

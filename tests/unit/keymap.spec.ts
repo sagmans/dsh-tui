@@ -86,7 +86,8 @@ describe('the key tables', () => {
     expect(bindings.find(entry => entry.key === 'e')?.submission).toEqual({ kind: 'editor' })
     // The map is a viewer, so its chord carries the very line `/keys` produces.
     expect(bindings.find(entry => entry.key === '?')?.submission).toEqual({ kind: 'keys', argument: '' })
-    expect(chordKeysLine(defaultKeymap())).toBe('ctrl+x then m model · p plan mode · y copy · s stash the draft · l stashed drafts · e external editor · ? key map')
+    expect(bindings.find(entry => entry.key === 'n')?.submission).toEqual({ kind: 'new', title: '' })
+    expect(chordKeysLine(defaultKeymap())).toBe('ctrl+x then m model · p plan mode · y copy · s stash the draft · l stashed drafts · e external editor · ? key map · n new session')
   })
 
   it('opens the key map on the question mark that follows the prefix', () => {
@@ -96,9 +97,9 @@ describe('the key tables', () => {
   })
 
   it('reads a chord the reader moved, and a prefix they changed', () => {
-    const map = resolveKeymap({ 'chord.prefix': 'alt+z', 'chord.model': 'n' })
-    expect(chordKeysLine(map)).toBe('alt+z then n model · p plan mode · y copy · s stash the draft · l stashed drafts · e external editor · ? key map')
-    expect(chordBindings(map).find(entry => entry.label === 'model')?.key).toBe('n')
+    const map = resolveKeymap({ 'chord.prefix': 'alt+z', 'chord.model': 'o' })
+    expect(chordKeysLine(map)).toBe('alt+z then o model · p plan mode · y copy · s stash the draft · l stashed drafts · e external editor · ? key map · n new session')
+    expect(chordBindings(map).find(entry => entry.label === 'model')?.key).toBe('o')
   })
 })
 
@@ -224,13 +225,19 @@ describe('ChordReader', () => {
     expect(chord.handle('p')).toBeUndefined()
   })
 
+  it('dispatches the new-session chord', () => {
+    const { chord } = reader()
+    chord.handle('\u0018')
+    expect(chord.handle('n')).toEqual({ kind: 'action', binding: chordBindings(defaultKeymap()).find(entry => entry.label === 'new session') })
+  })
+
   it('takes a second key the reader moved, and no longer the shipped one', () => {
-    const map = resolveKeymap({ 'chord.model': 'n' })
+    const map = resolveKeymap({ 'chord.model': 'o' })
     const { chord } = reader([DEFAULT_PREFIX_KEY], DEFAULT_PREFIX_WINDOW_S * 1000, map)
     chord.handle('\u0018')
     expect(chord.handle('m')).toBeUndefined()
     chord.handle('\u0018')
-    expect(chord.handle('n')).toEqual({ kind: 'action', binding: chordBindings(map)[0] })
+    expect(chord.handle('o')).toEqual({ kind: 'action', binding: chordBindings(map)[0] })
   })
 
   it('takes a second key that is itself a chord', () => {
@@ -316,13 +323,13 @@ describe('ChordReader', () => {
     const chord = new ChordReader(() => prefixes, () => bindings, () => 0, () => {})
     expect(chord.handle('\u0018')).toEqual({ kind: 'armed' })
     prefixes = ['alt+x']
-    bindings = chordBindings(resolveKeymap({ 'chord.model': 'n' }))
+    bindings = chordBindings(resolveKeymap({ 'chord.model': 'o' }))
     chord.disarm()
     expect(chord.pending).toBe(false)
     expect(chord.hint()).toBeUndefined()
     expect(chord.handle('m')).toBeUndefined()
     expect(chord.handle('\u001bx')).toEqual({ kind: 'armed' })
-    expect(chord.handle('n')).toEqual({ kind: 'action', binding: bindings[0] })
+    expect(chord.handle('o')).toEqual({ kind: 'action', binding: bindings[0] })
   })
 
   it('follows a prefix the reader changed without being rebuilt', () => {
@@ -332,9 +339,9 @@ describe('ChordReader', () => {
     expect(chord.handle('\u0018')).toEqual({ kind: 'armed' })
     chord.disarm()
     prefixes = ['alt+x']
-    bindings = chordBindings(resolveKeymap({ 'chord.model': 'n' }))
+    bindings = chordBindings(resolveKeymap({ 'chord.model': 'o' }))
     expect(chord.handle('\u0018')).toBeUndefined()
     expect(chord.handle('\u001bx')).toEqual({ kind: 'armed' })
-    expect(chord.handle('n')).toEqual({ kind: 'action', binding: bindings[0] })
+    expect(chord.handle('o')).toEqual({ kind: 'action', binding: bindings[0] })
   })
 })
