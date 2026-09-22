@@ -94,31 +94,75 @@ function holdStream(target: HostWritable, held: HeldWrites, isSurfaceWrite: () =
   }
 }
 
+/** How deep the surface currently is inside a call on the terminal object. */
+interface SurfaceCall {
+  depth: number
+}
+
+/**
+ * Mark every call on the terminal object as the surface's own, whatever method it is.
+ *
+ * A real terminal writes part of its protocol straight to the stream: the
+ * keyboard-protocol query, the bracketed-paste toggle, and the cursor moves all
+ * bypass the terminal's own `write`, so watching only `write` defers them to
+ * release — after the screen is gone, where the shell answers a query the
+ * surface no longer reads. A method that can suspend is left unmarked, because
+ * the mark would outlive its synchronous call and let host output through while
+ * it waits.
+ */
+function markTerminalCalls(terminal: HostWritable, call: SurfaceCall): () => void {
+  const keys = new Set<string | symbol>()
+  for (let holder: object | null = terminal; holder !== null && holder !== Object.prototype; holder = Object.getPrototypeOf(holder) as object | null) {
+    for (const key of Reflect.ownKeys(holder)) {
+      if (key === 'constructor') continue
+      const descriptor = Object.getOwnPropertyDescriptor(holder, key)
+      if (descriptor !== undefined && typeof descriptor.value === 'function') keys.add(key)
+    }
+  }
+  const own = new Map<string | symbol, PropertyDescriptor | undefined>()
+  for (const key of keys) {
+    const method = (terminal as unknown as Record<string | symbol, unknown>)[key]
+    if (typeof method !== 'function' || Object.getPrototypeOf(method)?.constructor?.name !== 'Function') continue
+    const before = Object.getOwnPropertyDescriptor(terminal, key)
+    if (before !== undefined && !before.configurable && !before.writable) continue
+    own.set(key, before)
+    const wrapped = function (this: unknown, ...args: unknown[]): unknown {
+      call.depth += 1
+      try {
+        return Reflect.apply(method, this, args)
+      } finally {
+        call.depth -= 1
+      }
+    }
+    Object.defineProperty(terminal, key, {
+      configurable: before?.configurable ?? true,
+      enumerable: before?.enumerable ?? false,
+      writable: before?.writable ?? true,
+      value: wrapped,
+    })
+  }
+  return () => {
+    for (const [key, before] of own) {
+      if (before === undefined) delete (terminal as unknown as Record<string | symbol, unknown>)[key]
+      else Object.defineProperty(terminal, key, before)
+    }
+    own.clear()
+  }
+}
+
 export function holdHostWrites(options: HostWriteOptions): HostWriteGuard {
   const limit = options.limit ?? HOST_WRITE_LIMIT
   const held = new Map<HostWritable, HeldWrites>()
   for (const target of options.targets) held.set(target, { chunks: [], length: 0, dropped: 0 })
-  let surfaceWriting = false
-  const terminalOwn = Object.getOwnPropertyDescriptor(options.terminal, 'write')
-  const terminalWrite = options.terminal.write
-  options.terminal.write = function (this: unknown, ...args: unknown[]): unknown {
-    // The flag is synchronous by construction: a frame is composed and written
-    // without yielding, so no host write can observe it set.
-    surfaceWriting = true
-    try {
-      return Reflect.apply(terminalWrite, this, args)
-    } finally {
-      surfaceWriting = false
-    }
-  }
-  const streams = options.targets.map(target => holdStream(target, held.get(target)!, () => surfaceWriting, limit))
+  const surface: SurfaceCall = { depth: 0 }
+  const restoreTerminal = markTerminalCalls(options.terminal, surface)
+  const streams = options.targets.map(target => holdStream(target, held.get(target)!, () => surface.depth > 0, limit))
   let active = true
   return {
     release() {
       if (!active) return
       active = false
-      if (terminalOwn === undefined) delete (options.terminal as { write?: unknown }).write
-      else Object.defineProperty(options.terminal, 'write', terminalOwn)
+      restoreTerminal()
       for (const stream of streams) stream.restore()
       for (const [index, target] of options.targets.entries()) {
         const writes = held.get(target)
