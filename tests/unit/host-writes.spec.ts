@@ -32,6 +32,40 @@ describe('holdHostWrites', () => {
     expect(screen.written.at(-1)).toBe('after\n')
   })
 
+  it('passes a sequence the terminal writes without going through its own write', () => {
+    const screen = stream()
+    const terminal = {
+      write: (chunk: unknown) => screen.write(chunk),
+      hideCursor: () => screen.write('\x1b[?25l'),
+    }
+    const guard = holdHostWrites({ terminal, targets: [screen] })
+    // A terminal's start-up and frame control reach the stream directly, and a
+    // reader watches for them while the screen is up.
+    terminal.write('frame\n')
+    terminal.hideCursor()
+    screen.write('a log line\n')
+    expect(screen.written).toEqual(['frame\n', '\x1b[?25l'])
+    guard.release()
+    expect(screen.written).toEqual(['frame\n', '\x1b[?25l', 'a log line\n'])
+  })
+
+  it('does not leave the surface mark up across an awaiting terminal call', async () => {
+    const screen = stream()
+    const terminal = {
+      write: (chunk: unknown) => screen.write(chunk),
+      async drain(): Promise<void> {
+        await new Promise(resolve => setTimeout(resolve, 0))
+      },
+    }
+    const guard = holdHostWrites({ terminal, targets: [screen] })
+    const drained = terminal.drain()
+    screen.write('a log line during the drain\n')
+    expect(screen.written).toEqual([])
+    await drained
+    guard.release()
+    expect(screen.written).toEqual(['a log line during the drain\n'])
+  })
+
   it('bounds what it holds and says what it had to drop', () => {
     const screen = stream()
     const terminal = stream()
