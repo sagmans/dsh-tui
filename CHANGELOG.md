@@ -70,6 +70,14 @@ breaking change, and a patch carries only fixes.
 
 ### Fixed
 
+- A frame a component cannot draw no longer ends the session: the last good
+  screen stays up and the failure reaches the transcript, and a terminating
+  signal (Ctrl+C at the terminal, SIGTERM, SIGHUP, SIGQUIT) restores the screen
+  and leaves with the status a shell reports for it.
+- Text the host writes straight to stdout or stderr — a library's log line, an
+  unhandled-rejection report, a stack trace — waits until the surface gives the
+  screen back instead of landing inside a frame, where it would be painted over
+  and then skipped as unchanged.
 - A cached transcript row is kept for the life of the entry it belongs to instead
   of being evicted at a fixed count, so a session longer than that count no
   longer re-wraps every row on every repaint.
