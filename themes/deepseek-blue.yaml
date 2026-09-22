@@ -1,15 +1,20 @@
 # deepseek-blue — the table the surface ships, in the colours DeepSeek draws.
 #
-# Every shade here is a step of the product's own design system rather than a
-# colour picked for this file, and each palette line names the token it came
-# from, so the surface can be re-derived from the product instead of guessed at.
-# The steps are the product's dark-theme ones, because a terminal is dark:
+# Every shade here but one is a step of the product's own design system rather
+# than a colour picked for this file, and each palette line names the token it
+# came from, so the surface can be re-derived from the product instead of guessed
+# at. The exception is `arg`: a tool's argument is the one place the surface wants
+# a quiet colour of its own, and sage is what the reader asked for there. It shares
+# the family of the green that means something arrived, so a card carrying both
+# reads them as two shades of one hue; a reader who wants them apart can name
+# deepseek-300 #b7c8fe for arg in their own file. The steps are the product's
+# dark-theme ones, because a terminal is dark:
 #
 #   default, assistant   label-primary     neutral-bluish-50   #f9fafb
 #   muted                label-secondary   neutral-bluish-300  #cfd3d6
 #   faint                label-tertiary    neutral-bluish-400  #adb2b8
 #   accent               brand-text        deepseek-400        #679efe
-#   arg                  —                 deepseek-300        #b7c8fe
+#   arg                  —                 #aed69a             chosen here
 #   warn                 state-warn        amber-500           #f59e0b
 #   added                state-success     green-500           #22c55e
 #   removed              state-error       red-400             #f25a5a
@@ -34,7 +39,7 @@ palette:
   muted: '#cfd3d6'  # label-secondary, neutral-bluish-300
   faint: '#adb2b8'  # label-tertiary, neutral-bluish-400
   accent: '#679efe'  # brand-text, deepseek-400
-  arg: '#b7c8fe'  # deepseek-300
+  arg: '#aed69a'  # not a product token: the soft shade a tool's argument takes
   warn: '#f59e0b'  # state-warn, amber-500
   added: '#22c55e'  # state-success, green-500
   removed: '#f25a5a'  # state-error on a dark surface, red-400
