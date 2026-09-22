@@ -14,6 +14,7 @@ import {
   shellFoldHint,
   shellRetentionHint,
   subCallOf,
+  subCallRows,
   type CardRow,
   type ToolCard,
 } from '@/cards.ts'
@@ -447,5 +448,26 @@ describe('subCallOf', () => {
   it('clips a raw call so an oversized argument cannot fill the row', () => {
     const call = subCallOf('s4', 'mystery', `{"a":"${'x'.repeat(500)}"}`, undefined)
     expect(call.argument?.length).toBeLessThanOrEqual(CARD_LINE_LIMIT)
+  })
+})
+
+describe('subCallRows', () => {
+  it('keeps the rows a card drew, with its kind, for the row a click opens', () => {
+    const view = cardOfCall({ card: 'diff', title: 'Edit', diffs: [{ path: 'a.txt', oldText: 'b', newText: 'B' }] }, 'edit')
+    expect(subCallRows(view)).toEqual({ kind: 'diff', rows: view.detail, totalLines: view.detail.length })
+    expect(texts(subCallRows(view)?.rows ?? [])).toEqual(['a.txt  -1 +1', '-b', '+B'])
+  })
+
+  it('clamps a total below the rows kept, so no hint counts rows already shown', () => {
+    // A call view keeps its rows without reporting a total of its own: the
+    // terminal branch is the shipped case that reports zero.
+    const terminal = cardOfCall({ card: 'terminal', title: 'ls', cwd: '/tmp' }, 'bash')
+    expect(terminal.totalLines).toBe(0)
+    expect(subCallRows(terminal)?.totalLines).toBe(terminal.detail.length)
+  })
+
+  it('has no section for a card that kept no rows', () => {
+    expect(subCallRows(undefined)).toBeUndefined()
+    expect(subCallRows(cardOfCall(undefined, 'mystery'))).toBeUndefined()
   })
 })

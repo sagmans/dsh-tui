@@ -432,22 +432,29 @@ describe('TranscriptModel nested PTC calls', () => {
     data: { rootCallId: 'root', parentCallId: 'root', subCallId, name, arguments: args, isError, content },
   })
 
+  /** The calls the one card in the fold kept, which is what a click opens. */
+  const subCallsOf = (model: TranscriptModel) => {
+    const entry = model.entries()[0]
+    return entry?.kind === 'tool' ? entry.card.subCalls ?? [] : []
+  }
+
+  /** What a row says about the call it stands for, apart from the rows it opens to. */
+  const rowShape = (model: TranscriptModel) =>
+    subCallsOf(model).map(call => `${call.id} ${call.title} ${call.failed}`)
+
   it('draws a nested call on the card that dispatched it, and restates it with its outcome', () => {
     const presenter = recordingPresenter()
     const model = new TranscriptModel(presenter)
     model.apply(runCall)
     model.apply(start('root:ptc:1', 'read', { file_path: 'src/x.ts' }))
-    const opened = model.entries()[0]
-    expect(opened?.kind === 'tool' && opened.card.subCalls).toEqual([{ id: 'root:ptc:1', title: 'read pending', failed: false }])
+    expect(rowShape(model)).toEqual(['root:ptc:1 read pending false'])
     expect(presenter.calls).toEqual(['run_code:{"code":"x","description":"search"}', 'read:{"file_path":"src/x.ts"}'])
 
     model.apply(settle('root:ptc:1', 'read', { file_path: 'src/x.ts' }, true))
-    const failed = model.entries()[0]
-    expect(failed?.kind === 'tool' && failed.card.subCalls).toEqual([{ id: 'root:ptc:1', title: 'read pending', failed: true }])
+    expect(rowShape(model)).toEqual(['root:ptc:1 read pending true'])
 
     model.apply(runResult)
-    const settled = model.entries()[0]
-    expect(settled?.kind === 'tool' && settled.card.subCalls).toEqual([{ id: 'root:ptc:1', title: 'read pending', failed: true }])
+    expect(rowShape(model)).toEqual(['root:ptc:1 read pending true'])
   })
 
   it('accepts a replayed dispatch after the fold was reset', () => {
@@ -479,8 +486,8 @@ describe('TranscriptModel nested PTC calls', () => {
 
   it("keeps a dispatched shell call's output for the row a click opens", () => {
     // The program answers with its own return value, so a call's own stdout has
-    // nowhere else to live; only a shell view carries it, because that output is
-    // what a reader opens the row to see.
+    // nowhere else to live; a shell view re-presents it from the logged content,
+    // which is what a reader opens the row to see.
     const presenter: ToolPresenter = {
       call: name => (name === 'bash' ? cardOfCall({ card: 'terminal', title: 'echo hi' }, name) : undefined),
       result: (name, input) => (name === 'bash'
@@ -502,8 +509,66 @@ describe('TranscriptModel nested PTC calls', () => {
 
     model.apply(start('root:ptc:2', 'read', { file_path: 'src/x.ts' }))
     model.apply(settle('root:ptc:2', 'read', { file_path: 'src/x.ts' }, false, text('file body')))
-    const withRead = model.entries()[0]
-    expect(withRead?.kind === 'tool' && withRead.card.subCalls?.[1]?.output).toBeUndefined()
+    // A tool whose own view needs metadata a dispatch does not carry still keeps
+    // the content the program was shown, so its row opens to an outcome too.
+    const fallback = subCallsOf(model)[1]?.output
+    expect(fallback?.kind).toBe('generic')
+    expect(fallback?.rows.map(rowText)).toEqual(['file body'])
+  })
+
+  it('keeps the change a dispatched edit declared, so the row opens to its diff', () => {
+    // The call view is the only place an edit's diff exists: the dispatch carries
+    // no diff metadata, and a reader clicking the row is asking for the change.
+    const presenter: ToolPresenter = {
+      call: (name, argumentsJson) => {
+        const args = JSON.parse(argumentsJson) as { file_path?: string; old_string?: string; new_string?: string }
+        return name === 'edit'
+          ? cardOfCall({ card: 'diff', title: 'Edit', diffs: [{ path: args.file_path ?? '', oldText: args.old_string ?? '', newText: args.new_string ?? '' }] }, name)
+          : undefined
+      },
+      result: () => undefined,
+    }
+    const model = new TranscriptModel(presenter)
+    const args = { file_path: 'src/x.ts', old_string: 'b', new_string: 'B' }
+    model.apply(runCall)
+    model.apply(start('root:ptc:1', 'edit', args))
+    // The diff is known the moment the call starts, so the row opens while in flight.
+    expect(subCallsOf(model)[0]?.presented?.rows.map(rowText)).toEqual(['src/x.ts  -1 +1', '-b', '+B'])
+    expect(subCallsOf(model)[0]?.output).toBeUndefined()
+
+    model.apply(settle('root:ptc:1', 'edit', args, false, text('The file src/x.ts has been updated successfully.')))
+    const call = subCallsOf(model)[0]
+    expect(call?.presented?.kind).toBe('diff')
+    expect(call?.presented?.rows.map(rowText)).toEqual(['src/x.ts  -1 +1', '-b', '+B'])
+    expect(call?.output?.rows.map(rowText)).toEqual(['The file src/x.ts has been updated successfully.'])
+  })
+
+  it('takes back the change a failed call declared and keeps the reason it failed', () => {
+    const presenter: ToolPresenter = {
+      call: () => cardOfCall({ card: 'diff', title: 'Edit', diffs: [{ path: 'src/x.ts', oldText: 'b', newText: 'B' }] }, 'edit'),
+      result: () => undefined,
+    }
+    const model = new TranscriptModel(presenter)
+    const reason = 'Error: cannot modify "src/x.ts": file has not been read — read the file, then retry'
+    model.apply(runCall)
+    model.apply(start('root:ptc:1', 'edit', { file_path: 'src/x.ts' }))
+    model.apply(settle('root:ptc:1', 'edit', { file_path: 'src/x.ts' }, true, text(reason)))
+    const call = subCallsOf(model)[0]
+    expect(call?.failed).toBe(true)
+    // Rows that still drew as applied would claim a change that never happened.
+    expect(call?.presented).toBeUndefined()
+    expect(call?.output?.rows.map(rowText)).toEqual([reason])
+  })
+
+  it('opens a row for a tool the surface has no presenter for', () => {
+    const model = new TranscriptModel()
+    model.apply(runCall)
+    model.apply(start('root:ptc:1', 'mystery', { a: 1 }))
+    model.apply(settle('root:ptc:1', 'mystery', { a: 1 }, false, text('mystery said no')))
+    const call = subCallsOf(model)[0]
+    expect(call?.title).toBe('mystery')
+    expect(call?.presented).toBeUndefined()
+    expect(call?.output?.rows.map(rowText)).toEqual(['mystery said no'])
   })
 
   it('keeps the calls in dispatch order and counts every one', () => {
