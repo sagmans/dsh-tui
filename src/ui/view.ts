@@ -354,6 +354,26 @@ export class TranscriptView implements Component {
   }
 
   /**
+   * One message closed into a frame, with its markdown laid out to what is left inside.
+   *
+   * A prompt and a reply are the two objects of an exchange, so both are drawn as
+   * bars rather than as one more stretch of rows; the face, the border's element,
+   * and whether the text is still arriving are the only differences. Markdown lays
+   * itself out to the frame's text width, so the frame may only place the rows:
+   * wrapping them again would break what it drew.
+   */
+  private pushFramed(lines: string[], text: string, width: number, live: boolean, face: MarkdownFace, borderToken: TuiToken): void {
+    const framed = canFrame(width, this.theme.visible(borderToken))
+    const inside = framed ? width - FRAME_COLUMNS : width
+    const body = this.markdownLines(text, textWidth(inside), live, face)
+    lines.push(...frameLines(body, width, {
+      text: line => line,
+      border: rule => this.theme.style(borderToken, rule),
+      framed,
+    }))
+  }
+
+  /**
    * The face a thought is drawn in.
    *
    * Its shade stays the thought body's and it asks for no drawing: a diagram in
@@ -739,22 +759,15 @@ export class TranscriptView implements Component {
         this.pushReasoning(lines, entry, width, spans)
         return
       case 'assistant':
-        this.pushMarkdown(lines, entry.text, width, live)
+        // The reply is boxed the way the prompt that asked for it is, so one
+        // exchange reads as two objects rather than as a box and then a stream.
+        this.pushFramed(lines, entry.text, width, live, ANSWER_FACE, 'transcript.assistant.border')
         return
       case 'user': {
         if (!this.theme.visible('transcript.user')) return
         // A prompt is boxed wherever it is read, so the row it left in the queue
         // and the row it becomes here are recognisably the same object.
-        const framed = canFrame(width, this.theme.visible('editor.border'))
-        const inside = framed ? width - FRAME_COLUMNS : width
-        // Markdown lays itself out to the frame's text width, so the frame may
-        // only place the rows: wrapping them again would break what it drew.
-        const body = this.markdownLines(entry.text, textWidth(inside), false, this.userFace())
-        lines.push(...frameLines(body, width, {
-          text: line => line,
-          border: rule => this.theme.editor.borderColor(rule),
-          framed,
-        }))
+        this.pushFramed(lines, entry.text, width, false, this.userFace(), 'editor.border')
         return
       }
       case 'notice':

@@ -8,6 +8,13 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+### Added
+
+- An assistant reply is drawn inside a frame of its own, in the
+  `transcript.assistant.border` element, so one exchange reads as two objects
+  rather than as a box followed by a stream of rows. Hiding that element draws the
+  reply bare, exactly as hiding `editor.border` does for a prompt.
+
 ### Changed
 
 - A theme name the surface does not have is no longer a settings error. The names

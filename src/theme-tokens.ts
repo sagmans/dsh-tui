@@ -62,6 +62,16 @@ export const DIFF_ADDED_BAND = '#1e3d24'
 /** The band a changed run sits on inside a removed line; the pair of {@link DIFF_ADDED_BAND}. */
 export const DIFF_REMOVED_BAND = '#472424'
 
+/**
+ * The shade the frame around an assistant reply is drawn in.
+ *
+ * A reply is boxed so one exchange reads as two objects rather than as a box and
+ * then a stream, and its frame must not be mistaken for the bar the reader types
+ * into: a warm gold sits apart from the prompt's mint and the brand-blue editor,
+ * without borrowing the warning amber that means a state.
+ */
+export const ASSISTANT_FRAME_GOLD = '#d6c29a'
+
 /** Palette entries a token may name instead of a literal colour. */
 export const PALETTE_NAMES = ['default', 'muted', 'faint', 'accent', 'arg', 'warn', 'added', 'removed', 'user', 'assistant'] as const
 
@@ -114,12 +124,14 @@ export type CardRowClass = (typeof CARD_ROW_CLASSES)[number]
 export const TUI_TOKENS = [
   // Transcript rows
   'transcript.user',
+  'transcript.assistant.border',
   'transcript.notice',
   'transcript.marker',
   'transcript.reasoning.summary',
   'transcript.reasoning.body',
   'transcript.reasoning.hint',
-  // A reply is markdown, so the markdown tokens are what address it.
+  // A reply's text is markdown, so the markdown tokens are what address it; only
+  // the frame drawn around the reply has an element of its own.
   // Tool cards: the generic layer
   'tool.title',
   'tool.glyph',
@@ -328,6 +340,7 @@ const plain: StyleSpec = {}
  */
 export const DEFAULT_TOKENS: Readonly<Record<TuiToken, StyleSpec>> = {
   'transcript.user': { fg: 'user' },
+  'transcript.assistant.border': { fg: ASSISTANT_FRAME_GOLD },
   'transcript.notice': muted,
   'transcript.marker': muted,
   'transcript.reasoning.summary': signpost,

@@ -36,6 +36,10 @@ tokens:
   # and a band inside that frame treats one fact twice: it reads as a selected
   # row rather than as the reader's own words. The shade carries over alone.
   transcript.user: { fg: user }  # userMessageText
+  # The reply's own frame. Pi has no box around a reply, so there is no pi key to
+  # carry over; the violet family it would otherwise borrow disappears against the
+  # answer it holds, and a neutral gold is what keeps the frame a container.
+  transcript.assistant.border: { fg: '#d6c29a' }
   transcript.notice: { fg: muted }  # unchanged from the shipped table
   transcript.marker: { fg: muted }  # unchanged from the shipped table
   transcript.reasoning.summary: { fg: faint, italic: true }  # unchanged from the shipped table
