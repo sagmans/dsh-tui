@@ -136,7 +136,10 @@ const NAMED_KEYS = {
   // surface with a settings document: the chord has to arrive as the byte the
   // terminal sends for it, not as the name the map spells.
   'ctrl+g': '\u0007',
+  // The navigation aliases, which arrive as the control bytes a terminal sends
+  // for the letters rather than as the names the map spells.
   'ctrl+n': '\u000e',
+  'ctrl+p': '\u0010',
   'alt+d': '\u001bd',
   // A terminal that speaks the keyboard protocol reports alt+letter as a
   // codepoint with a modifier rather than as an escape followed by the letter.

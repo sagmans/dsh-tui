@@ -315,7 +315,7 @@ function gateCard(typed = ''): TranscriptView {
     custom: { label: 'other', description: 'type your own answer', current: typing, selected: typing },
     answerInput: typing ? bar : undefined,
     hint: typing
-      ? 'type or paste an answer · enter confirm · ↑↓ or esc back to options'
+      ? 'type or paste an answer · enter confirm · ↑↓/ctrl+p/ctrl+n or esc back to options'
       : 'space select · digits pick · 0 answer freely · type to filter · enter confirm · esc skip',
   }
   return new TranscriptView(new TranscriptModel(), theme, new MarkdownRenderer(theme.markdown), {

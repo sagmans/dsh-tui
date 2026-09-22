@@ -31,14 +31,14 @@ const SHIPPED: Readonly<Record<string, readonly string[]>> = {
   'gate.allow': ['y'],
   'gate.reject': ['n'],
   'gate.cancel': ['escape', 'ctrl+c'],
-  'question.up': ['up'],
-  'question.down': ['down'],
+  'question.up': ['up', 'ctrl+p'],
+  'question.down': ['down', 'ctrl+n'],
   'question.toggle': ['space'],
   'question.confirm': ['enter'],
   'question.skip': ['escape'],
   'question.cancel': ['ctrl+c'],
-  'picker.up': ['up'],
-  'picker.down': ['down'],
+  'picker.up': ['up', 'ctrl+p'],
+  'picker.down': ['down', 'ctrl+n'],
   'picker.confirm': ['enter'],
   'picker.cancel': ['escape', 'ctrl+c'],
 }
@@ -154,6 +154,30 @@ describe('resolveKeymap', () => {
     const map = resolveKeymap({ 'tui.altScreen.searchClose': ['escape'] })
     expect(keysFor(map, 'tui.altScreen.searchClose')).toEqual(['escape'])
     expect(keysFor(map, 'surface.interrupt')).toEqual(['ctrl+c'])
+  })
+
+  it('adds the navigation aliases to the library list the completion menu uses', () => {
+    // The menu belongs to the library's editor, so the aliases have to be
+    // installed there rather than on an action this surface answers.
+    expect(keysFor(defaultKeymap(), 'tui.select.up')).toEqual(['up', 'ctrl+p'])
+    expect(keysFor(defaultKeymap(), 'tui.select.down')).toEqual(['down', 'ctrl+n'])
+  })
+
+  it('lets the reader take a navigation alias back off a library row', () => {
+    const map = resolveKeymap({ 'tui.select.up': ['up'] })
+    expect(keysFor(map, 'tui.select.up')).toEqual(['up'])
+    // The surface's own lists keep their aliases: the rows are separate.
+    expect(keysFor(map, 'picker.up')).toEqual(['up', 'ctrl+p'])
+  })
+
+  it('keeps the navigation aliases out of the listener that runs before the editor', () => {
+    // The surface answers a surface or chord key before the focused editor, so a
+    // row there would take Ctrl+P/Ctrl+N away from the completion menu.
+    const claimed = ACTION_CATALOG
+      .filter(entry => entry.layer === 'surface' || entry.layer === 'chord')
+      .flatMap(entry => keysFor(defaultKeymap(), entry.id))
+    expect(claimed).not.toContain('ctrl+p')
+    expect(claimed).not.toContain('ctrl+n')
   })
 
   it('merges the actions the reader did write and leaves the rest alone', () => {

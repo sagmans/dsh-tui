@@ -139,6 +139,7 @@ moves any of them — see [Keys](#keys).
 | Ctrl+X then E | edit the draft in `$VISUAL` (or `$EDITOR`) and take back what it saves |
 | `y` / `n` / Esc / Ctrl+C | allow once, reject, or cancel a pending approval |
 | digits / space / ↑↓ / Enter / Esc / Ctrl+C | answer a question: pick or toggle, confirm, or skip one with Esc; Ctrl+C abandons the whole batch with no answers, like an aborted call; `0` answers with your own text in the input bar |
+| ↑↓ / Ctrl+P / Ctrl+N | move through the open list: a picker's rows, a question's options, or the completion menu above the bar |
 | typing in any picker or question | narrow the rows by fragment (`glm53` finds `GLM-5.3`); backspace widens, `esc` or Ctrl+C leaves |
 | `/` then Tab | complete commands, including every command this session registered |
 | `@` | open the workspace file menu, narrowed as you type; a path then Tab still completes a file reference |
@@ -423,6 +424,12 @@ layer reads one: `y` and `n` for an approval, or a chord's second key. Ids
 beginning `tui.` are pi-tui's own actions, so the editor, the search, and the
 transcript move where you tell them to.
 
+Ctrl+P and Ctrl+N ship as alternatives to ↑ and ↓ wherever a list moves — a
+picker, a question's options, and the editor's completion menu. They are
+ordinary rows: `picker.up`, `picker.down`, `question.up`, `question.down`,
+and the library's `tui.select.up`/`tui.select.down` take other keys, or more
+of them, like any other row.
+
 Refused, with the reason in a notice and the shipped map left in force: an
 action the surface does not have, a key no terminal reports, `ctrl+q` (the
 terminal keeps it), a bare character outside the chord and gate layers, two
@@ -608,6 +615,7 @@ The automated checks drive a real PTY, but they run on this machine's terminal. 
 | `--resume --preset <mode>` and then picking a session that runs another mode | the list stays open and says why that row cannot be taken; `esc` leaves the picker |
 | `dsh --profile tui --preset nope` | exits non-zero naming the modes that do exist, before the alternate screen appears |
 | arrow keys in a picker, or on a question's options, in a terminal that reports key events (Kitty, WezTerm, Ghostty, iTerm2) | one press moves one row, and holding a key still repeats; a terminal that sends only the legacy sequence behaves the same |
+| Ctrl+N / Ctrl+P in a picker, on a question's options, on its `0. other` row, or in the completion menu | the cursor moves down and up exactly as the arrows do |
 | resize the window mid-turn | the transcript rewraps; the dock, editor, and status row stay put |
 | a 40-column terminal | transcript and card rows end in `…` instead of wrapping into the next line |
 | a question with a long option at 40 columns | the option wraps onto rows indented under its label, and `0. other — type your own answer` sits under the list |

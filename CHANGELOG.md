@@ -62,6 +62,10 @@ breaking change, and a patch carries only fixes.
   stack onto a profile — an absolute compaction budget and extra provider
   routes — with the commands that mount them and how each meets this bundle's
   own composition.
+- Ctrl+P and Ctrl+N move through every list the way the arrows do: a picker's
+  rows, a question's options and the free-text row that leaves them, and the
+  editor's completion menu. They are ordinary bindings, so `/keys` prints them
+  and the `keys:` section moves them.
 
 ### Changed
 
