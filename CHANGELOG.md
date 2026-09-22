@@ -138,6 +138,8 @@ breaking change, and a patch carries only fixes.
   a tool row could reach the editor's frame. The one line a cut promises is now
   one line, and the status row flattens what a fact brought even when it never
   needed a cut.
+- A picker's hint folds under its indent instead of being cut, so a narrow
+  screen still names the keys that leave the list (`esc/ctrl+c`).
 
 ## [0.4.0] - 2026-09-21
 

@@ -83,3 +83,6 @@ non-obvious constraint exists is the part that prevents future drift.
 - **Commits are Conventional Commits with a scope** (`feat(tui): …`,
   `fix(gates): …`, `docs(readme): …`), signed and DCO-signed. Work on a branch and
   land through a PR.
+- **Every PR carries its `CHANGELOG.md` entry** under `## [Unreleased]`, in the
+  section that fits (`Added`, `Changed`, `Fixed`, …). The entry is part of the
+  change, not a follow-up, and its absence makes the PR incomplete.
