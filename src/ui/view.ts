@@ -501,23 +501,29 @@ export class TranscriptView implements Component {
   }
 
   /**
-   * The rows a dispatched shell call printed, under the argument a click opened.
+   * What a dispatched call declared and what it produced, under its argument.
    *
-   * The parent card keeps only the program's return value, so a call's own
-   * output is otherwise gone; a reader who opens the row is asking for it. The
-   * retention is the card's, so a long run still says what it dropped.
+   * The parent card keeps only the program's return value, so both are otherwise
+   * gone; a reader who opens the row is asking for them, which is why the call's
+   * own rows come first and its outcome under them. Each section keeps the
+   * retention its card used, so a long run still says what it dropped.
    */
   private pushSubCallOutput(lines: string[], call: ToolSubCall, width: number): void {
-    const output = call.output
-    if (output === undefined) return
-    for (const row of output.rows) {
-      const drawn = this.detailRow(row, output.kind)
-      if (drawn === '') continue
-      lines.push(this.theme.cut(`${DETAIL_INDENT}${drawn}`, width, ''))
-    }
-    const hidden = output.totalLines - output.rows.length
-    if (hidden > 0 && this.theme.visible('tool.hint')) {
-      lines.push(this.theme.style('tool.hint', this.theme.cut(`${DETAIL_INDENT}${shellRetentionHint(hidden)}`, width, '')))
+    for (const section of [call.presented, call.output]) {
+      if (section === undefined) continue
+      for (const row of section.rows) {
+        const drawn = this.detailRow(row, section.kind)
+        if (drawn === '') continue
+        lines.push(this.theme.cut(`${DETAIL_INDENT}${drawn}`, width, ''))
+      }
+      const hidden = section.totalLines - section.rows.length
+      if (hidden > 0 && this.theme.visible('tool.hint')) {
+        // A shell's rows are kept from the end, so its hidden count names the
+        // earlier lines; every other kind keeps its head, where the count is of
+        // what follows and a neutral wording is what the card uses too.
+        const hint = section.kind === 'terminal' ? shellRetentionHint(hidden) : `${hidden} ${CARD_HINT_RETAINED}`
+        lines.push(this.theme.style('tool.hint', this.theme.cut(`${DETAIL_INDENT}${hint}`, width, '')))
+      }
     }
   }
 

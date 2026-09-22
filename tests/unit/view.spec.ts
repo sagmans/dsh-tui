@@ -1009,6 +1009,11 @@ describe('TranscriptView nested PTC calls', () => {
       if (name === 'run_code') return cardOfCall({ card: 'generic', title: 'search the tree' }, name)
       const args = JSON.parse(argumentsJson) as Record<string, unknown>
       if (typeof args.command === 'string') return cardOfCall({ card: 'terminal', title: args.command }, name)
+      // An edit declares the change it is about to make, which is the only place
+      // its diff exists: the dispatch carries no result metadata to re-present.
+      if (typeof args.old_string === 'string') {
+        return cardOfCall({ card: 'diff', title: 'Edit', diffs: [{ path: String(args.file_path ?? ''), oldText: args.old_string, newText: String(args.new_string ?? '') }] }, name)
+      }
       return cardOfCall({ card: 'generic', title: 'Read', kind: 'read', locations: [{ path: String(args.file_path ?? '') }] }, name)
     },
     result: (name, input) => name === 'bash'
@@ -1126,5 +1131,83 @@ describe('TranscriptView nested PTC calls', () => {
     // Clicking the opened call folds it back to the one line it started as.
     view.handleMouse(mouse('click', 'left', 1))
     expect(view.render(40)).toEqual(folded)
+  })
+
+  it('opens a dispatched edit to its diff and its outcome, in that order', () => {
+    const colour = createTheme('truecolor')
+    const model = foldedProgram([{ name: 'edit', args: { file_path: 'src/x.ts', old_string: 'b', new_string: 'B' }, content: 'The file src/x.ts has been updated successfully.' }])
+    const view = new TranscriptView(model, colour, new MarkdownRenderer(colour.markdown), { state: () => FOLDED })
+    const folded = view.render(60).map(stripTerminalSequences)
+    expect(folded).toEqual(['search the tree', '  edit src/x.ts'])
+    // A click only lands on a row the surface has already drawn its hit target on.
+    view.handleMouse(mouse('click', 'left', 1))
+    const opened = view.render(60)
+    expect(opened.map(stripTerminalSequences)).toEqual([
+      'search the tree',
+      '  edit src/x.ts',
+      '    src/x.ts  -1 +1',
+      '    -b',
+      '    +B',
+      '    The file src/x.ts has been updated successfully.',
+    ])
+    // The change draws in the diff colours, which is what the row is opened for.
+    const removed = [1, 3, 5].map(at => Number.parseInt(DEFAULT_PALETTE.removed.slice(at, at + 2), 16))
+    const added = [1, 3, 5].map(at => Number.parseInt(DEFAULT_PALETTE.added.slice(at, at + 2), 16))
+    expect(opened[3]).toContain(`38;2;${removed.join(';')}`)
+    expect(opened[4]).toContain(`38;2;${added.join(';')}`)
+    // A click on the drawn diff folds the call back to the one line it started as.
+    view.handleMouse(mouse('click', 'left', 4))
+    expect(view.render(60).map(stripTerminalSequences)).toEqual(folded)
+  })
+
+  it('names the rows retention dropped from what a call opened to', () => {
+    const body = Array.from({ length: CARD_DETAIL_MAX + 3 }, (_, at) => `line ${at + 1}`).join('\n')
+    const view = viewOf(foldedProgram([{ name: 'read', args: { file_path: 'src/big.ts' }, content: body }]), FOLDED)
+    view.render(60)
+    view.handleMouse(mouse('click', 'left', 1))
+    // The row keeps what the program was shown, and says how much retention refused.
+    expect(view.render(60).map(stripTerminalSequences).at(-1)).toBe('    3 more lines not shown')
+  })
+})
+
+describe('TranscriptView tool card clicks', () => {
+  /** The shipped fold: one row per card, so a click has something to open. */
+  const FOLDED: ViewState = { expandCards: false, expandReasoning: false, expandSubCalls: false }
+  const EDIT_ARGS = '{"file_path":"/tmp/x","old_string":"b","new_string":"B"}'
+  /** A presenter whose edit declares a diff, which is the card the reader clicks. */
+  const editPresenter: ToolPresenter = {
+    call: name => cardOfCall({ card: 'diff', title: 'Edit', diffs: [{ path: '/tmp/x', oldText: 'b', newText: 'B' }] }, name),
+    result: (name, input) => (input.isError
+      ? undefined
+      : cardOfResult({ card: 'diff', diffs: [{ path: '/tmp/x', oldText: 'b', newText: 'B' }] }, { name, failed: false, contentLines: contentLines(input.content) })),
+  }
+
+  it('opens a clicked edit card to the diff it declared', () => {
+    const model = new TranscriptModel(editPresenter)
+    model.apply({ type: 'tool/call', data: { name: 'edit', arguments: EDIT_ARGS, callId: 'c1' } })
+    model.apply(toolResult('updated'))
+    const view = viewOf(model, FOLDED)
+    expect(view.render(60)).toEqual(['edit /tmp/x  ~1'])
+    view.handleMouse(mouse('click', 'left', 0))
+    const opened = view.render(60).map(stripTerminalSequences)
+    expect(opened).toContain('    /tmp/x  -1 +1')
+    expect(opened).toContain('    -b')
+    expect(opened).toContain('    +B')
+    // Clicking the drawn diff folds the card back to its one row.
+    view.handleMouse(mouse('click', 'left', 2))
+    expect(view.render(60)).toEqual(['edit /tmp/x  ~1'])
+  })
+
+  it('opens a clicked failed card to the reason it failed', () => {
+    const reason = 'Error: cannot modify "/tmp/x": file has not been read — read the file, then retry'
+    const model = new TranscriptModel(editPresenter)
+    model.apply({ type: 'tool/call', data: { name: 'edit', arguments: EDIT_ARGS, callId: 'c1' } })
+    model.apply({ type: 'tool/result', data: { message: { content: [{ type: 'tool-result', toolCallId: 'c1', text: reason }], isError: true } } })
+    const view = viewOf(model, FOLDED)
+    // Wide enough for the whole reason, because that is what a reader opens the
+    // row to read: a narrow screen clips it like any other row.
+    view.render(100)
+    view.handleMouse(mouse('click', 'left', 0))
+    expect(view.render(100).map(stripTerminalSequences)).toContain(`    ${reason}`)
   })
 })
