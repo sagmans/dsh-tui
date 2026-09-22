@@ -70,6 +70,9 @@ breaking change, and a patch carries only fixes.
 
 ### Fixed
 
+- A click lands on the row it was made on while a thought is still streaming,
+  and a folded thought fits a terminal too narrow to hold both its signpost and
+  its fold key.
 - A row that carried a line break — a background job's label, a command a PTC
   program wrote across lines, a path, or any other fact a component draws on one
   row — no longer writes the rest of itself over the row below it, which is how

@@ -374,7 +374,11 @@ export class TranscriptView implements Component {
     // The key is kept whole: the summary is the part that gives up room.
     const room = Math.max(1, width - visibleWidth(suffix))
     const summary = this.theme.style('transcript.reasoning.summary', this.theme.cut(`${lead}${displayText(entry.summary)}`, room, ''))
-    lines.push(suffix === '' ? summary : `${summary}${this.theme.style('transcript.reasoning.hint', suffix)}`)
+    const lined = suffix === '' ? summary : `${summary}${this.theme.style('transcript.reasoning.hint', suffix)}`
+    // The key is kept whole only while the row has room for it: a row wider than
+    // the surface loses its tail to the terminal, and the terminal's clamp is not
+    // one this component can count on.
+    lines.push(this.theme.cut(lined, width, '…'))
     if (open && this.theme.visible('transcript.reasoning.body')) {
       this.pushMarkdown(lines, entry.body, width, entry.live, this.reasoningFace(), DETAIL_INDENT)
     }
@@ -786,6 +790,10 @@ export class TranscriptView implements Component {
       // fill the cache with objects nobody will ask for again.
       if (index >= settled) {
         this.renderEntry(entry, lines, width, true, local)
+        // An in-flight entry draws straight into the transcript, so the spans it
+        // recorded already name transcript rows; offsetting them again would move
+        // every hit target as many rows down as the entry's own start.
+        spans.push(...local)
       } else {
         const cached = this.rows.lookup(entry, tag)
         const saved = this.entrySpans.get(entry)
@@ -799,11 +807,11 @@ export class TranscriptView implements Component {
           this.entrySpans.set(entry, local)
           lines.push(...rendered)
         }
-      }
-      // Spans are kept relative to their entry so a cached entry can hand them
-      // back; a click needs them in transcript rows.
-      for (const span of local) {
-        spans.push({ key: span.key, start: span.start + start, end: span.end + start, expanded: span.expanded })
+        // A cached span is kept relative to its entry so the entry can hand it
+        // back; a click needs it in transcript rows.
+        for (const span of local) {
+          spans.push({ key: span.key, start: span.start + start, end: span.end + start, expanded: span.expanded })
+        }
       }
     }
     this.spans = spans

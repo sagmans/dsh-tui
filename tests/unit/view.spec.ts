@@ -385,6 +385,20 @@ describe('TranscriptView expansion', () => {
     expect(view.render(60)).toEqual(folded)
   })
 
+  it('opens a clicked thought while it is still streaming', () => {
+    const model = new TranscriptModel()
+    model.notice('before')
+    model.applyStreamChunk({ type: 'reasoning-delta', text: 'live thought' })
+    const view = viewOf(model)
+    const rows = view.render(60)
+    expect(rows[0]).toBe('before')
+    expect(rows[1]).toMatch(/^reasoning · 3 tokens/)
+    // The thought's rows begin after the notice, and the hit target has to move
+    // with them: a span counted twice would sit past the thought's own row.
+    expect(view.handleMouse(mouse('click', 'left', 1))).toEqual({ handled: true, render: true })
+    expect(view.render(60)).toContain('    live thought')
+  })
+
   it('shows the output a clicked shell card kept', () => {
     const view = viewOf(withRows(3, 'bash'))
     expect(view.render(60)).toEqual(['bash Run echo rows · exit 0 · 3 lines'])
@@ -393,6 +407,15 @@ describe('TranscriptView expansion', () => {
     const opened = view.render(60)
     expect(opened.filter(line => line.startsWith('    row '))).toHaveLength(3)
     expect(opened).toContain('    exit 0')
+  })
+
+  it('keeps a folded reasoning row inside a terminal too narrow for its key', () => {
+    const model = new TranscriptModel()
+    model.apply({ type: 'assistant/message', data: { message: { content: [{ type: 'reasoning', text: 'thought' }, { type: 'text', text: 'answer' }] } } })
+    const rows = viewOf(model).render(5)
+    // The key cannot fit beside the signpost, so the row gives up its tail rather
+    // than the surface losing it past the edge where nothing can count it.
+    expect(rows.every(row => visibleWidth(row) <= 5)).toBe(true)
   })
 
   it('names where the thought is when the row is folded', () => {
