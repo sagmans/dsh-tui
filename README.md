@@ -169,8 +169,9 @@ force, and the `keys:` section moves any of them — see [Keys](#keys).
 | `/clear` | clear the visible transcript |
 | `/history` | show how many prompts are recorded and where the file is |
 | `/history clear` | forget every recorded prompt, reporting how many went |
-| `/theme` | list every styled element and the value in force |
+| `/theme` | open the theme picker: type to filter, the screen paints the row under the cursor |
 | `/theme <name>` | apply a theme by name and write the choice to the settings document |
+| `/theme tokens` | list every styled element and the value in force |
 | `/theme export <built-in>` | copy a built-in into your own themes directory to edit |
 | `/keys` | open the key map as a list you filter as you type; `/keys <layer>` opens it already narrowed to one layer (see [Keys](#keys)) |
 | `/stash <draft>` | park the text given after the command (`ctrl+x` then `s` parks the editor) |
@@ -403,10 +404,13 @@ ships two: `shipped`, the default table written out in full, and `violet-orbit`,
 a port of the pi theme of the same name — its palette, plus the elements it draws
 its own way, down to the violet band a submitted prompt sits on. Your own themes
 live in `$DSH_HOME/themes/`, which the surface creates at start-up and watches, so
-saving a file there is how you change the surface you are looking at. `theme:
-violet-orbit` applies one, `shipped` returns to the default table, and a name
-nothing answers to is reported with the names that do, drawing the shipped table
-instead.
+saving a file there is how you change the surface you are looking at. A bare
+`/theme` opens the list of them, narrowing as you type, and the screen paints the
+row under the cursor as it moves: two themes are compared on your own transcript,
+and nothing is written until one is taken, so leaving the list puts back the theme
+that was in force. `theme: violet-orbit` applies one from the document, `shipped`
+returns to the default table, and a name nothing answers to is reported with the
+names that do, drawing the shipped table instead.
 
 Both shipped files name every element and every palette entry, so a copy of one is
 a complete theme rather than a diff against something you cannot see. `/theme
@@ -419,7 +423,7 @@ at start-up with the rename that fixes it.
 A theme is a layer and not a replacement: everything it says nothing about keeps
 its shipped appearance, and a `tokens:` entry of your own still wins over it one
 field at a time, so naming a single attribute does not discard the shade the theme
-gave that same element. A bare `/theme` names the theme in force in its heading and
+gave that same element. `/theme tokens` names the theme in force in its heading and
 reports each element as `override`, `theme`, `palette`, or `default`, marking the
 themes in your own directory and printing the export hint, so a screen that looks
 wrong can be traced to the layer that drew it.
