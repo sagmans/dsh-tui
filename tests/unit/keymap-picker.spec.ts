@@ -48,7 +48,7 @@ describe('KeymapPicker', () => {
 
   it('says the keys close it, because there is no row to take', () => {
     const picker = new KeymapPicker(defaultKeymap, undefined)
-    expect(picker.card().hint).toBe('↑↓ move · enter close · esc/ctrl+c close · type to filter')
+    expect(picker.card().hint).toBe('↑/ctrl+p or ↓/ctrl+n move · enter close · esc/ctrl+c close · type to filter')
     expect(picker.handleKey('\u001b')).toEqual({ kind: 'cancel' })
   })
 })
