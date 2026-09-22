@@ -13,7 +13,7 @@ import type {
   WebResultView,
 } from '@deepseek-ai/dsh-tools'
 import type { CardRowClass } from './theme-tokens.ts'
-import { sliceGraphemes } from './text.ts'
+import { clipVisibleGraphemes } from './terminal-text.ts'
 import { countTokens, formatTokens } from './tokens.ts'
 
 /** What a tool's result presenter receives, plus the call arguments it was asked with. */
@@ -219,14 +219,13 @@ export const CARD_LINE_LIMIT = 200
  * Counted in grapheme clusters rather than display cells: the budget is the
  * reader's own setting, while the renderer still cuts and wraps what it draws by
  * width. A cluster is also the smallest run a cut may drop, so a joined emoji
- * survives the budget whole instead of being halved by it.
+ * survives the budget whole instead of being halved by it. Terminal sequences
+ * are not content, so they are not counted and never cut through: a coloured
+ * row keeps as many words as a plain one.
  */
 export function clip(text: string, limit: number): string {
   if (limit <= 0) return ''
-  const kept = sliceGraphemes(text, limit)
-  if (kept.length === text.length) return text
-  // The ellipsis is part of the budget, so the row still answers the limit it was given.
-  return `${sliceGraphemes(text, limit - 1)}…`
+  return clipVisibleGraphemes(text, limit)
 }
 
 function clipLine(text: string): string {

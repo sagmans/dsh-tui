@@ -68,7 +68,7 @@ export function transcriptToText(entries: readonly TranscriptEntry[]): string {
       case 'reasoning': {
         // The thought is on screen now, so it belongs in the dump; only the
         // count is metadata, and the body is the part a reader came for.
-        const body = entry.body.split('\n').map(displayText)
+        const body = entry.body.split('\n').map(line => displayText(line))
         const fence = fenceFor(body.join('\n'))
         lines.push('', `<!-- ${commentBody(entry.summary)} -->`, `${fence}reasoning`)
         lines.push(...body)
