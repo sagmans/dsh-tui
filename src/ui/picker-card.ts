@@ -58,7 +58,9 @@ export function pickerCardLines(picker: PickerCard, width: number, theme: TuiThe
     lines.push(theme.style('picker.scrollOlder', theme.cut(`${ROW_INDENT}… ${picker.below} older`, width, '')))
   }
   if (theme.visible('picker.hint')) {
-    lines.push(theme.style('picker.hint', theme.cut(`${ROW_INDENT}${displayText(picker.hint)}`, width, '')))
+    // The hint names the keys that leave the list, so it folds rather than
+    // being cut: a narrow screen must still be told the way out.
+    pushWrapped(lines, picker.hint, width, ROW_INDENT, text => theme.style('picker.hint', text), theme)
   }
   return lines
 }
