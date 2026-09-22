@@ -30,6 +30,13 @@ breaking change, and a patch carries only fixes.
 - A thought and the row naming it both recede to a shade below the muted
   family, and only the row is italic, so the signpost no longer competes with
   the text it introduces.
+- Injected context rows name what arrived instead of only the producer: the
+  workspace-instructions row lists the instruction files it loaded
+  (`~/.dsh/AGENTS.md`, `AGENTS.md`, or the nested file a later delta touched),
+  the skill catalog reports how many entries it published, a runtime snapshot
+  names its sections, and notices, relays, goals, and cross-session recalls get
+  labels of their own. A source that declares no form keeps the previous
+  `producer · N lines — preview` row.
 
 ### Added
 
