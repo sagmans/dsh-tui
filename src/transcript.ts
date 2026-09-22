@@ -1,4 +1,4 @@
-import { cardFromLines, carriedFields, contentLines, mergeCards, subCallOf, SUBCALL_MAX, type ToolCard, type ToolPresenter, type ToolSubCallOutput } from './cards.ts'
+import { cardFromLines, carriedFields, contentLines, mergeCards, subCallOf, subCallRows, SUBCALL_MAX, type ToolCard, type ToolPresenter, type ToolSubCall, type ToolSubCallRows } from './cards.ts'
 import { injectionSummary } from './injection.ts'
 import { sliceGraphemes, tailGraphemes } from './text.ts'
 import { countTokens } from './tokens.ts'
@@ -429,23 +429,29 @@ export class TranscriptModel {
     if (card === undefined) return
     const name = typeof data.name === 'string' ? data.name : 'tool'
     const argumentsJson = argumentsJsonOf(data.arguments)
-    const output = settled ? this.subCallOutput(name, argumentsJson, data) : undefined
+    // The call's own view is asked for once: it names the row and it is what the
+    // row shows of the call itself, so two asks could disagree about one call.
+    const view = this.presenter?.call(name, argumentsJson)
+    const isError = data.isError === true
+    const output = settled ? this.subCallOutcome(name, argumentsJson, data, view) : undefined
     const known = this.pendingSub.get(subCallId)
     if (known !== undefined) {
-      // A settle restates the row its start drew: it can add a failure and the
-      // output a reader opens the row for, and nothing else about the row moves.
+      // A settle restates the row its start drew: it adds the outcome a reader
+      // opens the row for, and a failure takes back what the call only declared.
       if (!settled || known.childIndex < 0) return
-      const failed = data.isError === true
-      if (!failed && output === undefined) return
+      if (!isError && output === undefined) return
       const subCalls = (card.subCalls ?? []).map((call, at) => at === known.childIndex
-        ? { ...call, ...(failed ? { failed: true } : {}), ...(output === undefined ? {} : { output }) }
+        ? this.settledSubCall(call, isError, output)
         : call)
       this.settled[root.index] = { kind: 'tool', id: rootCallId, card: { ...card, subCalls } }
       return
     }
+    const presented = subCallRows(view)
+    const failed = settled && isError
     const call = {
-      ...subCallOf(subCallId, name, argumentsJson, this.presenter?.call(name, argumentsJson)),
-      failed: settled && data.isError === true,
+      ...subCallOf(subCallId, name, argumentsJson, view),
+      failed,
+      ...(presented === undefined || failed ? {} : { presented }),
       ...(output === undefined ? {} : { output }),
     }
     const kept = card.subCalls ?? []
@@ -466,21 +472,43 @@ export class TranscriptModel {
   }
 
   /**
-   * The output a dispatched shell call printed, for the row a click opens.
+   * The row a settle leaves behind, once the outcome the call produced is known.
    *
-   * Only a terminal view carries it: other tools present their outcome through
-   * the program's own return value, while a shell's output is what a program
-   * usually reduces to an exit status, and the row is opened to read it. A
-   * presenter that declines the result still gets its content lines, so a
-   * shell call never opens to an empty row.
+   * A row that failed keeps only what still holds: its declared change never
+   * happened, so those rows go with the outcome that never came, while the
+   * outcome stays because the reason it failed is what a reader opens it to read.
    */
-  private subCallOutput(name: string, argumentsJson: string, data: Record<string, unknown>): ToolSubCallOutput | undefined {
-    if (this.presenter?.call(name, argumentsJson)?.kind !== 'terminal') return undefined
+  private settledSubCall(call: ToolSubCall, isError: boolean, output: ToolSubCallRows | undefined): ToolSubCall {
+    const outcome = output === undefined ? {} : { output }
+    if (!isError) return { ...call, ...outcome }
+    return {
+      id: call.id,
+      title: call.title,
+      ...(call.argument === undefined ? {} : { argument: call.argument }),
+      failed: true,
+      ...outcome,
+    }
+  }
+
+  /**
+   * The outcome a dispatched call opens to, from the view its result presented.
+   *
+   * A presenter can only rebuild the view it declared when the logged content is
+   * enough for it: a shell's output is, while a read's numbered window and a
+   * search's hits live in the metadata a dispatch does not carry. The fallback is
+   * the content the program was actually shown, so a row whose tool cannot be
+   * re-presented still opens to its outcome rather than to nothing.
+   */
+  private subCallOutcome(
+    name: string,
+    argumentsJson: string,
+    data: Record<string, unknown>,
+    view: ToolCard | undefined,
+  ): ToolSubCallRows | undefined {
     const failed = data.isError === true
     const card = this.presenter?.result(name, { argumentsJson, content: data.content, isError: failed, meta: data.meta })
-      ?? cardFromLines('terminal', name, name, contentLines(data.content), failed)
-    if (card.detail.length === 0) return undefined
-    return { kind: card.kind, rows: card.detail, totalLines: card.totalLines }
+      ?? cardFromLines(view?.kind ?? 'generic', name, view?.title ?? name, contentLines(data.content), failed)
+    return subCallRows(card)
   }
 
   private settleToolResult(data: Record<string, unknown>): void {

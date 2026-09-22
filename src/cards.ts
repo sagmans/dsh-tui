@@ -92,23 +92,31 @@ export interface ToolSubCall {
   readonly title: string
   readonly argument?: string
   readonly failed: boolean
-  /** What a shell call printed, kept only for the reader who opens the row. */
-  readonly output?: ToolSubCallOutput
+  /**
+   * What the tool's own presenter drew for the call — a diff derived from the
+   * arguments, a raw input — kept only for the reader who opens the row.
+   *
+   * A call that failed carries none: the change it declared never happened, and
+   * rows that still drew as applied would say otherwise.
+   */
+  readonly presented?: ToolSubCallRows
+  /** What the call's outcome presented, of whatever kind, kept for the same reader. */
+  readonly output?: ToolSubCallRows
 }
 
 /**
- * The outcome a nested shell call printed.
+ * One section of rows a dispatched call opens to.
  *
- * A program answers with its own return value, so the output of the calls it
- * dispatched is otherwise gone; a reader opening one of those rows is asking
- * for exactly this, and the row it belongs to is where it must live.
+ * A program answers with its own return value, so both what a call declared and
+ * what it produced are otherwise gone; a reader opening one of those rows is
+ * asking for exactly this, and the row it belongs to is where it must live.
  */
-export interface ToolSubCallOutput {
-  /** The view kind that drew the call, so its rows use that tool's colours. */
+export interface ToolSubCallRows {
+  /** The view kind that drew the rows, so they use that tool's colours. */
   readonly kind: ToolCardKind
   /** Rows retained for rendering, already capped at CARD_DETAIL_MAX. */
   readonly rows: readonly CardRow[]
-  /** Rows the call actually printed, which retention may have cut short. */
+  /** Rows the card was presented with, which retention may have cut short. */
   readonly totalLines: number
 }
 
@@ -255,6 +263,18 @@ export function subCallOf(id: string, name: string, argumentsJson: string, view:
   }
   const raw = argumentsJson === '' ? '' : clipLine(argumentsJson)
   return { id, title: name, ...(raw === '' ? {} : { argument: raw }), failed: false }
+}
+
+/**
+ * The rows one dispatched call keeps, from the card that drew them.
+ *
+ * The total is clamped to what was kept: a card built from a call or result
+ * view reports no total of its own, because it is not a stream retention had to
+ * cut, and a count below the rows on screen would hint at rows already shown.
+ */
+export function subCallRows(card: ToolCard | undefined): ToolSubCallRows | undefined {
+  if (card === undefined || card.detail.length === 0) return undefined
+  return { kind: card.kind, rows: card.detail, totalLines: Math.max(card.totalLines, card.detail.length) }
 }
 
 function clipRow(row: CardRow): CardRow {
