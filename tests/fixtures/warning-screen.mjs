@@ -44,10 +44,21 @@ if (MODE === 'start-failure') {
   stripTypeScriptTypes('const value: number = 1')
   process.emitWarning(DURING, { code: WARNING_CODE, detail: DETAILS })
   await setImmediate()
+  if (MODE === 'frame-failure') {
+    // A component that cannot draw must not take the process with it: the frame
+    // is reported through the surface and the screen it left stays up.
+    tui.addChild({ render: () => { throw new Error('frame-failed') }, invalidate() {} })
+    tui.onFrameError = error => { process.stderr.write(`frame-error-reported:${error.message}\n`) }
+    assert.doesNotThrow(() => tui.renderNow())
+  }
   process.stderr.write(DIRECT_ERROR + '\n')
   if (MODE === 'stop-failure') {
     tui.render = () => { throw new Error('render-failed-at-exit') }
     assert.throws(() => tui.stop(), /render-failed-at-exit/)
+  } else if (MODE === 'frame-failure') {
+    // The failing child cannot draw the exit transcript either, so the screen is
+    // handed back without one.
+    tui.stop({ preserveScreen: true })
   } else {
     tui.stop()
     tui.stop()

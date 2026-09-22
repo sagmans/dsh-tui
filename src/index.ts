@@ -54,6 +54,7 @@ import { resolveConfig } from './config.ts'
 import { FoldCursor } from './fold-cursor.ts'
 import { createRestoreRegistry } from './terminal/restore.ts'
 import { ExternalEditor } from './terminal/external-editor.ts'
+import { installSignalRestore } from './terminal/signals.ts'
 import { WarningSafeTui } from './terminal/warning-screen.ts'
 import { BELL, shouldRingBell } from './terminal/bell.ts'
 import { clipboardSequence } from './terminal/clipboard.ts'
@@ -394,6 +395,10 @@ export function apply(ctx: Context, config: unknown): void {
   const restore = createRestoreRegistry()
   const terminal = new ProcessTerminal()
   const tui = new WarningSafeTui(terminal)
+  // A frame that cannot be drawn leaves the last good screen up, so the failure
+  // has to reach the transcript: otherwise the surface looks frozen and nothing
+  // on screen can say why.
+  tui.onFrameError = error => model.reportError(error)
   /** Whether a child process owns the terminal, which is when nothing here may write to it. */
   let handedOver = false
   /** Whether the host has unloaded this surface, after which nothing may start it again. */
@@ -570,6 +575,11 @@ export function apply(ctx: Context, config: unknown): void {
         appExit(code)
       })
   }
+
+  // A signal ends the process from outside the surface, and the default action
+  // would leave the reader on a screen no shell prompt is drawn in: the same
+  // shutdown a quit key runs goes to the signals a supervisor sends.
+  disposers.push(installSignalRestore({ shutdown: code => requestExit(code, 'interrupted') }))
 
   const openGate = (next: PendingGate): void => {
     pending = next

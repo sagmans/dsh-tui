@@ -6,10 +6,14 @@
  * all of them on every keystroke. Entries are stable objects, so their rows can
  * be keyed by identity and only rebuilt when the width or the reader's
  * expansion state changes.
+ *
+ * The store is weak because the transcript itself is the working set: a repaint
+ * measures every entry, so a fixed bound smaller than the entry count would
+ * evict exactly the row the next pass is about to need and turn every repaint
+ * into a full re-wrap. Tying cached rows to the entry's own lifetime keeps a
+ * settled row exactly as long as the entry exists, and releases it with the
+ * entry when a session is dropped or the model is reset.
  */
-
-/** Entries kept before the oldest are re-rendered on demand. */
-export const ROW_CACHE_LIMIT = 4_000
 
 interface CachedRows {
   readonly tag: string
@@ -20,15 +24,12 @@ interface CachedRows {
 export interface RowCacheStats {
   readonly hits: number
   readonly misses: number
-  readonly size: number
 }
 
 export class RowCache<K extends object = object> {
-  private readonly rows = new Map<K, CachedRows>()
+  private rows = new WeakMap<K, CachedRows>()
   private hits = 0
   private misses = 0
-
-  constructor(private readonly limit: number = ROW_CACHE_LIMIT) {}
 
   /** The rows for a key and tag, or nothing when they have to be rebuilt. */
   lookup(key: K, tag: string): readonly string[] | undefined {
@@ -38,26 +39,18 @@ export class RowCache<K extends object = object> {
       return undefined
     }
     this.hits += 1
-    // Reinserting keeps a row that is still on screen from ageing out.
-    this.rows.delete(key)
-    this.rows.set(key, cached)
     return cached.lines
   }
 
   store(key: K, tag: string, lines: readonly string[]): void {
     this.rows.set(key, { tag, lines })
-    while (this.rows.size > this.limit) {
-      const oldest = this.rows.keys().next()
-      if (oldest.done === true) return
-      this.rows.delete(oldest.value)
-    }
   }
 
   clear(): void {
-    this.rows.clear()
+    this.rows = new WeakMap()
   }
 
   stats(): RowCacheStats {
-    return { hits: this.hits, misses: this.misses, size: this.rows.size }
+    return { hits: this.hits, misses: this.misses }
   }
 }

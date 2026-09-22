@@ -7,6 +7,7 @@ import {
   cardOfCall,
   cardOfResult,
   carriedFields,
+  clip,
   mergeCards,
   renderFileDiff,
   rowText,
@@ -433,6 +434,14 @@ describe('subCallOf', () => {
   it('falls back to the registry name and the raw call when no view answers', () => {
     expect(subCallOf('s2', 'mystery', '{"a":1}', undefined)).toEqual({ id: 's2', title: 'mystery', argument: '{"a":1}', failed: false })
     expect(subCallOf('s3', 'mystery', '', undefined)).toEqual({ id: 's3', title: 'mystery', failed: false })
+  })
+
+  it('drops a whole grapheme rather than half of a joined emoji', () => {
+    // The budget counts graphemes, so the cut can only fall between clusters.
+    expect(clip('ab👨‍👩‍👧cd', 4)).toBe('ab👨‍👩‍👧…')
+    expect(clip('ab👨‍👩‍👧cd', 3)).toBe('ab…')
+    expect(clip('abc', 3)).toBe('abc')
+    expect(clip('abc', 0)).toBe('')
   })
 
   it('clips a raw call so an oversized argument cannot fill the row', () => {

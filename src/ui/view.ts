@@ -17,7 +17,7 @@ import type { TuiTheme } from '../theme.ts'
 import { canFrame, frameLines, FRAME_COLUMNS, textWidth } from './frame.ts'
 import { ANSWER_FACE, type MarkdownFace, type MarkdownRenderer } from './markdown.ts'
 import type { PickerCard } from './picker.ts'
-import { RowCache } from './rows.ts'
+import { RowCache, type RowCacheStats } from './rows.ts'
 
 const DETAIL_INDENT = '    '
 const OPTION_INDENT = '   '
@@ -256,7 +256,7 @@ export class TranscriptView implements Component {
   }
 
   /** The cache's own account of the work it avoided; a test reads this. */
-  rowStats(): { readonly hits: number; readonly misses: number; readonly size: number } {
+  rowStats(): RowCacheStats {
     return this.rows.stats()
   }
 
@@ -691,7 +691,14 @@ export class TranscriptView implements Component {
     // its frame, its padding, and its cursor for the width it is given.
     if (gate.answerInput !== undefined) {
       const room = Math.max(1, width - visibleWidth(OPTION_INDENT))
-      for (const row of gate.answerInput.render(room)) lines.push(`${OPTION_INDENT}${row}`)
+      // A surface narrower than the indent cannot place the answer: that row is cut
+      // here so what is handed out already fits, rather than being trimmed at the
+      // terminal past the point where the view could count it. A row that fits is
+      // left exactly as the editor drew it, cursor styling included.
+      for (const row of gate.answerInput.render(room)) {
+        const placed = `${OPTION_INDENT}${row}`
+        lines.push(visibleWidth(placed) <= width ? placed : this.theme.cut(placed, width, ''))
+      }
     }
     // The keys are how the gate is answered at all, so they wrap rather than
     // lose their tail at a narrow edge.

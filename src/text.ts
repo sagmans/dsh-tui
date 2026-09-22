@@ -84,6 +84,45 @@ export function oneRow(text: string): string {
   return text.replace(ROW_BREAKS, ' ')
 }
 
+/** Grapheme clusters, the smallest run of text a reader would recognize as one thing. */
+const GRAPHEMES = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
+
+/**
+ * The first `limit` grapheme clusters of text.
+ *
+ * A budget counted in code points can cut a combining mark, a skin-tone modifier,
+ * or a joined emoji away from the cluster it belongs to, leaving half a character
+ * on the row. A cluster is the smallest run a cut may keep or drop; counting is
+ * still not measuring, so the renderer wraps and cuts by display width after.
+ */
+export function sliceGraphemes(text: string, limit: number): string {
+  if (limit <= 0) return ''
+  // Code units are never fewer than clusters, so a short string needs no scan.
+  if (text.length <= limit) return text
+  const kept: string[] = []
+  for (const { segment } of GRAPHEMES.segment(text)) {
+    if (kept.length >= limit) break
+    kept.push(segment)
+  }
+  return kept.join('')
+}
+
+/**
+ * The last `limit` grapheme clusters of text.
+ *
+ * A live thought grows from the end, so the head is what can be given up; the cut
+ * still falls between clusters, because half a character at the top of the row is
+ * the same glitch as half a character at the end of it.
+ */
+export function tailGraphemes(text: string, limit: number): string {
+  if (limit <= 0) return ''
+  // Code units are never fewer than clusters, so a short string needs no scan.
+  if (text.length <= limit) return text
+  const clusters: string[] = []
+  for (const { segment } of GRAPHEMES.segment(text)) clusters.push(segment)
+  return clusters.length <= limit ? text : clusters.slice(-limit).join('')
+}
+
 /**
  * Control characters text kept for a terminal can never legitimately need:
  * everything below the printable range except the tab and line feed that lay

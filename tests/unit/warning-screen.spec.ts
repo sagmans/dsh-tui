@@ -43,8 +43,10 @@ describe('WarningSafeTui', () => {
     expect(output).toContain('[DSH_TEST_WARNING]')
     expect(output).toContain('warning-detail-preserved')
     expect(output.indexOf(AFTER)).toBeGreaterThan(output.indexOf(DURING))
-    expect(output.indexOf(DIRECT_ERROR)).toBeGreaterThan(output.indexOf(ENTER))
-    expect(output.indexOf(DIRECT_ERROR)).toBeLessThan(output.indexOf(EXIT))
+    // Host writing waits for the shell now: a stray log line that landed inside
+    // a frame would be painted over and then skipped as unchanged.
+    expect(output.indexOf(DIRECT_ERROR)).toBeGreaterThan(output.indexOf(EXIT))
+    expect(output.split(DIRECT_ERROR)).toHaveLength(2)
   })
 
   it('preserves Node trace formatting and the original warning location', () => {
@@ -90,6 +92,13 @@ describe('WarningSafeTui', () => {
 
   it('releases warnings and process hooks after a partial startup failure', () => {
     expectAfterScreen(run([], 'start-failure'), DURING)
+  })
+
+  it('keeps the screen and reports a component that cannot draw', () => {
+    const output = run([], 'frame-failure')
+    expectAfterScreen(output, 'frame-error-reported:frame-failed')
+    // The held host line still reaches the reader, behind the exit sequence.
+    expect(output).toContain(DIRECT_ERROR)
   })
 
   it('hands the shell back even when rendering the exit transcript fails', () => {

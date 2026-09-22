@@ -1,4 +1,5 @@
 import { cardFromLines, carriedFields, contentLines, mergeCards, subCallOf, SUBCALL_MAX, type ToolCard, type ToolPresenter, type ToolSubCallOutput } from './cards.ts'
+import { sliceGraphemes, tailGraphemes } from './text.ts'
 import { countTokens } from './tokens.ts'
 
 /** One renderable transcript row. */
@@ -12,6 +13,14 @@ export type TranscriptEntry =
 
 /** Reasoning kept per settled block, so one runaway thought cannot grow the transcript without bound. */
 export const REASONING_CHAR_LIMIT = 20_000
+
+/**
+ * How far a live thought may grow past that budget before its head is dropped.
+ *
+ * The slice itself is linear, so a burst of slack makes it happen once per
+ * thought rather than on every delta that crosses the limit.
+ */
+const LIVE_THOUGHT_SLACK = 2
 
 /** The token count with its noun, because "1 tokens" reads as a bug. */
 function describeTokens(text: string): string {
@@ -236,6 +245,13 @@ export class TranscriptModel {
         this.reasoningStartedAt ??= this.now()
         this.liveReasoningId ??= String(++this.thoughtSeq)
         this.liveReasoning += record.text
+        // A live thought is not bounded until the block it belongs to ends, and
+        // every frame re-wraps what this holds: past a burst of slack the head is
+        // dropped in one step, so a runaway thought costs a bounded wrap per frame
+        // instead of a growing one. The recorded text, not this, is what settles.
+        if (this.liveReasoning.length > REASONING_CHAR_LIMIT * LIVE_THOUGHT_SLACK) {
+          this.liveReasoning = tailGraphemes(this.liveReasoning, REASONING_CHAR_LIMIT)
+        }
         return
       case 'block-end': {
         const block = asRecord(record.block)
@@ -282,7 +298,8 @@ export class TranscriptModel {
    */
   private paintReasoning(text: string, ranFor: number | undefined): void {
     const timing = ranFor === undefined ? '' : ` · ${Math.max(1, Math.round(ranFor / 1000))}s`
-    const cut = text.length > REASONING_CHAR_LIMIT ? `\n… truncated at ${REASONING_CHAR_LIMIT} chars` : ''
+    const kept = sliceGraphemes(text, REASONING_CHAR_LIMIT)
+    const cut = kept.length === text.length ? '' : `\n… truncated at ${REASONING_CHAR_LIMIT} chars`
     // The live thought keeps the id the stream gave it; a thought only the
     // recorded message carries takes the next one.
     const id = this.liveReasoningId ?? String(++this.thoughtSeq)
@@ -291,7 +308,7 @@ export class TranscriptModel {
       kind: 'reasoning',
       id,
       summary: `reasoning · ${describeTokens(text)}${timing}`,
-      body: text.slice(0, REASONING_CHAR_LIMIT) + cut,
+      body: kept + cut,
       live: false,
     })
   }
