@@ -169,6 +169,29 @@ try {
     }
   }
 
+  // npm resolves a required peer by installing a private copy. Against the
+  // harness's floating prerelease peers that copy is what made npm refuse the
+  // install, and a duplicate singleton is wrong even when it resolves: the host
+  // profile supplies these modules, so the manifest names the range it accepts
+  // without ever owning the package.
+  const compatibility = manifest.dsh?.compatibility?.dsh
+  if (typeof compatibility !== 'string') {
+    problems.push('the manifest does not declare dsh.compatibility.dsh for its peers to follow')
+  }
+  const harnessPeers = Object.entries(manifest.peerDependencies ?? {})
+    .filter(([name]) => name.startsWith('@deepseek-ai/dsh-'))
+  if (harnessPeers.length === 0) {
+    problems.push('the manifest no longer declares the harness packages this bundle consumes')
+  }
+  for (const [name, range] of harnessPeers) {
+    if (range !== compatibility) {
+      problems.push(`peer ${name} accepts ${String(range)}, not the harness compatibility range ${String(compatibility)}`)
+    }
+    if (manifest.peerDependenciesMeta?.[name]?.optional !== true) {
+      problems.push(`peer ${name} is required, which makes npm install a private harness copy`)
+    }
+  }
+
   // Every entry point a consumer or a type checker resolves must be inside the
   // artefact: a missing lib/types file breaks TypeScript consumers only after
   // they have installed the package.

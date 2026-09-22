@@ -8,6 +8,16 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+### Fixed
+
+- The manifest pinned every harness peer at one exact prerelease. npm answered
+  with `ERESOLVE` as soon as the harness's own floating peers resolved past
+  that pin, so the package could not be installed with npm at all; the pins also
+  let npm place a private copy of a singleton the host already provides. The
+  peers now declare the harness range the manifest already promises and are
+  marked optional, so an npm tree keeps the host's copy and the install
+  resolves.
+
 ## [0.5.0] - 2026-09-22
 
 ### Added
