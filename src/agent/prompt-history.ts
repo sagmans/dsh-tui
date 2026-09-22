@@ -302,8 +302,10 @@ function normalizeEntry(raw: unknown): PromptEntry | undefined {
   if (!isPositiveInteger(raw.useCount)) return undefined
   // A prompt reaches the ghost, the picker, and the bar again, and the terminal
   // executes what it is given: the stored text is the one boundary every later
-  // consumer crosses, so a control sequence is spelled out before it is kept.
-  return { text: displayText(raw.text), updatedAt: raw.updatedAt, useCount: raw.useCount }
+  // consumer crosses, so a control sequence is spelled out before it is kept. A
+  // tab is kept as a tab, because the bar it is restored into has stops of its
+  // own and expanding it here would change what the reader typed.
+  return { text: displayText(raw.text, { tab: 'keep' }), updatedAt: raw.updatedAt, useCount: raw.useCount }
 }
 
 /**
@@ -397,7 +399,7 @@ export function createPromptHistory(options: PromptHistoryOptions): PromptHistor
     blockedReason: () => blocked,
     record(text: string): void {
       if (text.trim() === '') return
-      const prompt = displayText(text)
+      const prompt = displayText(text, { tab: 'keep' })
       void enqueue(() => withLock(lockPath, options.lockWaitMs ?? LOCK_WAIT_MS, async () => {
         await load()
         if (blocked !== undefined) return

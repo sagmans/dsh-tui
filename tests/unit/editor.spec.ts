@@ -418,17 +418,23 @@ describe('prompt-history ghost completion', () => {
     expect(instance.getCursor().col).toBe(5)
   })
 
-  it('spells out a suggestion carrying control sequences instead of drawing them', () => {
+  it('draws a suggestion a terminal would have drawn instead of its sequence', () => {
+    // The bar paints the ghost itself, so a sequence in one is consumed: it must
+    // neither reach the terminal nor be shown to the reader as its own bytes.
     const instance = ghosted(brush({ suggestion: () => 'x\u001b[2Jy' }))
     const rows = instance.render(WIDTH)
-    expect(rows.some(row => row.includes('\u001b[2J'))).toBe(false)
-    expect(rows.some(row => row.includes('\\x1B[2Jy'))).toBe(true)
+    // The bar marks the cell the cursor took with its own sequence, so it is
+    // removed before the row is read as text.
+    const drawn = rows.join('\n').replaceAll(CURSOR_MARKER, '')
+    expect(drawn).toContain('fix xy')
+    expect(drawn).not.toContain('\u001b')
+    expect(drawn).not.toContain('\\x1B')
   })
 
-  it('accepts the spelled-out suggestion rather than the sequence', () => {
+  it('accepts the drawn suggestion rather than the sequence that produced it', () => {
     const instance = ghosted(brush({ suggestion: () => 'x\u001b[2Jy' }))
     instance.handleInput('\u0005')
-    expect(instance.getText()).toBe('fix x\\x1B[2Jy')
+    expect(instance.getText()).toBe('fix xy')
   })
 
   it('matches a suggestion against the expanded text of a large paste', () => {

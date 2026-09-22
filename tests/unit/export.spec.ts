@@ -47,8 +47,11 @@ describe('transcriptToText', () => {
     model.apply({ type: 'tool/call', data: { name: 'bash', arguments: '{}', callId: 'c1' } })
     model.apply({ type: 'tool/result', data: { message: { content: [{ type: 'tool-result', toolCallId: 'c1', text: '\u001b[31mred' }], isError: false } } })
     const text = transcriptToText(model.entries())
-    expect(text).toContain('\\x1B[31mred')
+    // A file has no terminal to obey a colour and no reader who wants its bytes,
+    // so the words are kept and the sequence that carried them is not.
+    expect(text).toContain('red')
     expect(text.includes('\u001b')).toBe(false)
+    expect(text.includes('\\x1B')).toBe(false)
   })
 
   it('says how much of a long card the dump left out', () => {

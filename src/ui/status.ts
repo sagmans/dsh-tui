@@ -1,5 +1,6 @@
 import { type Component, visibleWidth } from '@earendil-works/pi-tui'
-import { displayText, oneRow } from '../text.ts'
+import { oneRow } from '../text.ts'
+import { renderTerminalText } from '../terminal-text.ts'
 import { formatTokens } from '../tokens.ts'
 import type { TuiToken } from '../theme-tokens.ts'
 import type { TuiTheme } from '../theme.ts'
@@ -90,14 +91,13 @@ function elapsed(ms: number): string {
 export function formatStatus(facts: StatusFacts, width: number, theme: TuiTheme): string {
   const segments: Segment[] = []
   /**
-   * Content is escaped as it is collected, and styling is applied only after the
-   * row has been cut to width. Styling earlier would put generated control
-   * characters in reach of `displayText`, which exists to make control
-   * characters visible, so a segment would print its own colour as text.
+   * A segment is collected as its source wrote it and drawn when the row is
+   * assembled: a sequence has to be read before its width is measured, and the
+   * column it starts at is only known while the row is being built.
    */
   const push = (token: TuiToken, text: string, join = false): void => {
     if (!theme.visible(token)) return
-    segments.push({ token, text: displayText(text), join })
+    segments.push({ token, text, join })
   }
   // An armed chord is transient and needs the reader's eye now, so it leads the
   // row: a row cut to width loses its tail, never what is about to happen.
@@ -140,12 +140,12 @@ export function formatStatus(facts: StatusFacts, width: number, theme: TuiTheme)
 }
 
 /**
- * Join styled segments into one row, cutting it to width first.
+ * Join drawn segments into one row, giving each the room the row has left.
  *
- * The cut runs on unstyled text so it can never land inside a style and leave
- * one open, and each segment is trimmed to the room left rather than dropped:
- * a reader loses the tail of the last fact, not the fact, and the ellipsis
- * still says that something was left out.
+ * Each segment is drawn first and measured after, because a sequence is not a
+ * column and a tab lands on the stop its own starting column reaches. A segment
+ * is trimmed to the room left rather than dropped: a reader loses the tail of
+ * the last fact, not the fact, and the ellipsis still says something was left out.
  */
 function renderSegments(segments: readonly Segment[], width: number, theme: TuiTheme): string {
   // Hiding the separator means drawing no separator, not drawing a plain one:
@@ -162,14 +162,14 @@ function renderSegments(segments: readonly Segment[], width: number, theme: TuiT
     // separator and at least the mark that something was cut.
     if (budget - lead < ellipsisWidth) break
     const room = budget - lead
-    const textWidth = visibleWidth(segment.text)
+    const drawn = theme.rich(segment.text, { token: segment.token, column: width - budget })
+    const textWidth = visibleWidth(drawn)
     if (textWidth > room) {
       // Not the last segment: the rest is omitted, so the row must show it.
-      const cut = theme.cut(segment.text, room, ELLIPSIS)
-      out += `${lead > 0 ? separator : ''}${theme.style(segment.token, cut)}`
+      out += `${lead > 0 ? separator : ''}${theme.cut(drawn, room, ELLIPSIS)}`
       return out
     }
-    out += `${lead > 0 ? separator : ''}${theme.style(segment.token, segment.text)}`
+    out += `${lead > 0 ? separator : ''}${drawn}`
     budget -= lead + textWidth
   }
   return out === '' ? theme.cut('', Math.max(0, width), ELLIPSIS) : out

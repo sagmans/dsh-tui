@@ -311,9 +311,15 @@ function visibleLength(piece: Piece): number {
   }
 }
 
-/** The next tab stop at or after a column. */
+/**
+ * The tab stop a tab at `column` reaches.
+ *
+ * Strictly after the cursor, the way a terminal steps: a tab that is already on
+ * a stop still advances a full stop rather than standing still, which is what
+ * makes a column of tabs line up.
+ */
 function nextStop(column: number): number {
-  return column + TAB_STOP - (column % TAB_STOP)
+  return (Math.floor(column / TAB_STOP) + 1) * TAB_STOP
 }
 
 /**

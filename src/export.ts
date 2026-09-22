@@ -1,6 +1,17 @@
 import { rowText } from './cards.ts'
-import { displayText } from './text.ts'
+import { renderTerminalText } from './terminal-text.ts'
 import type { TranscriptEntry } from './transcript.ts'
+
+/**
+ * A fragment as a document holds it.
+ *
+ * A file has no terminal to style it, so nothing is coloured; and a sequence is
+ * consumed rather than printed as the bytes that produced it, because the dump
+ * is meant to be read. A line feed survives, since markdown is made of lines.
+ */
+function documentText(raw: string): string {
+  return renderTerminalText(raw, { color: 'none' })
+}
 
 /** Directory-relative default the reader can find without being told. */
 export const DEFAULT_EXPORT_PREFIX = 'dsh-session'
@@ -37,7 +48,7 @@ function fenceFor(text: string): string {
 
 /** Comment text with any closing marker defused, so the comment stays one. */
 function commentBody(text: string): string {
-  return displayText(text).replaceAll(COMMENT_CLOSE, COMMENT_CLOSE_DEFUSED)
+  return documentText(text).replaceAll(COMMENT_CLOSE, COMMENT_CLOSE_DEFUSED)
 }
 
 /**
@@ -45,30 +56,30 @@ function commentBody(text: string): string {
  *
  * The dump outlives the screen it came from, so each row is given the markdown
  * construct that carries its meaning rather than whichever mark the surface
- * happened to draw, and every fragment is escaped for display for the same
- * reason a rendered row is: the file may be opened in a terminal, and it is
- * full of model and tool output.
+ * happened to draw, and every fragment is drawn the way the screen drew it only
+ * without colour: the file may be opened in a terminal, so it must not carry a
+ * sequence that terminal would obey.
  */
 export function transcriptToText(entries: readonly TranscriptEntry[]): string {
   const lines: string[] = []
   for (const entry of entries) {
     switch (entry.kind) {
       case 'user':
-        lines.push('', `> ${displayText(entry.text).replace(/\n/gu, '\n> ')}`)
+        lines.push('', `> ${documentText(entry.text).replace(/\n/gu, '\n> ')}`)
         break
       case 'assistant':
-        lines.push('', displayText(entry.text))
+        lines.push('', documentText(entry.text))
         break
       case 'notice':
         lines.push('', `<!-- ${commentBody(entry.text)} -->`)
         break
       case 'marker':
-        lines.push('', `--- ${displayText(entry.text)} ---`)
+        lines.push('', `--- ${documentText(entry.text)} ---`)
         break
       case 'reasoning': {
         // The thought is on screen now, so it belongs in the dump; only the
         // count is metadata, and the body is the part a reader came for.
-        const body = entry.body.split('\n').map(line => displayText(line))
+        const body = entry.body.split('\n').map(line => documentText(line))
         const fence = fenceFor(body.join('\n'))
         lines.push('', `<!-- ${commentBody(entry.summary)} -->`, `${fence}reasoning`)
         lines.push(...body)
@@ -79,18 +90,18 @@ export function transcriptToText(entries: readonly TranscriptEntry[]): string {
         const mark = entry.card.failed ? 'ERROR' : 'tool'
         // The dump is the words, not the screen: row classes exist so the
         // surface can style a line, and a file has no use for them.
-        const rows = entry.card.detail.map(row => displayText(rowText(row)))
+        const rows = entry.card.detail.map(row => documentText(rowText(row)))
         const more = entry.card.totalLines > entry.card.detail.length
           ? `… ${entry.card.totalLines - entry.card.detail.length} more lines`
           : undefined
-        const fence = fenceFor([displayText(entry.card.title), ...rows, more ?? ''].join('\n'))
-        lines.push('', `### ${mark}: ${displayText(entry.card.title)}`)
+        const fence = fenceFor([documentText(entry.card.title), ...rows, more ?? ''].join('\n'))
+        lines.push('', `### ${mark}: ${documentText(entry.card.title)}`)
         // The calls are what the reader saw under the card, so a dump that
         // dropped them would lose the only record of what the program reached.
         const subCalls = entry.card.subCalls ?? []
         for (const call of subCalls) {
           const text = call.argument === undefined ? call.title : `${call.title} ${call.argument}`
-          lines.push(`- ${displayText(text)}${call.failed ? SUBCALL_FAILED_SUFFIX : ''}`)
+          lines.push(`- ${documentText(text)}${call.failed ? SUBCALL_FAILED_SUFFIX : ''}`)
         }
         const dropped = (entry.card.subCallsTotal ?? subCalls.length) - subCalls.length
         if (dropped > 0) lines.push(`- … ${dropped} more calls`)

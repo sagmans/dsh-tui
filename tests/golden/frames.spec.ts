@@ -2,6 +2,7 @@ import { type TUI } from '@earendil-works/pi-tui'
 import { describe, expect, it } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
 import { createToolPresenter } from '@/agent/present.ts'
+import { cardOfCall, cardOfResult, contentLines } from '@/cards.ts'
 import type { GateCard } from '@/gates.ts'
 import { defaultKeymap } from '@/input/actions.ts'
 import { createTheme } from '@/theme.ts'
@@ -418,6 +419,57 @@ describe('markdown messages', () => {
  * colour off, every escape is dropped. These pin the emitted sequences, which is
  * the only place a wrong slot or a dropped reset would show up in CI.
  */
+/**
+ * A tool row a terminal would have acted on: a tab on its stop, a colour run,
+ * and a carriage return that rewrites the row it sits on.
+ *
+ * These are the three things a reader must not be shown raw — a tab is a jump,
+ * not eight spaces; a colour is not a word; and only the last state of a
+ * progress bar was ever meant to be read.
+ */
+const TERMINAL_TEXT_OUTPUT = ['name\trole', '\u001b[31mred\u001b[0m plain', 'progress 10%\rprogress 100%'].join('\n')
+
+function terminalTextFrame(frameTheme = theme): TranscriptView {
+  const model = new TranscriptModel({
+    call: name => cardOfCall({ card: 'terminal', title: 'run report' }, name),
+    result: (name, input) => cardOfResult(
+      { card: 'terminal', output: TERMINAL_TEXT_OUTPUT, exitCode: 0 },
+      { name, failed: input.isError, contentLines: contentLines(input.content) },
+    ),
+  })
+  model.apply({ type: 'tool/call', data: { name: 'run', arguments: '{}', callId: 'c1' } })
+  model.apply({
+    type: 'tool/result',
+    data: { message: { content: [{ type: 'tool-result', toolCallId: 'c1', text: TERMINAL_TEXT_OUTPUT }], isError: false } },
+  })
+  return new TranscriptView(model, frameTheme, new MarkdownRenderer(frameTheme.markdown), {
+    state: () => ({ expandCards: true, expandReasoning: false, expandSubCalls: false }),
+    gate: () => undefined,
+    picker: () => undefined,
+  })
+}
+
+describe('terminal text', () => {
+  for (const width of WIDTHS) {
+    it(`draws a tab, a colour, and a carriage return at ${width} columns`, () => {
+      expect(terminalTextFrame().render(width)).toMatchSnapshot()
+    })
+  }
+
+  it('draws the colour when the terminal has one, and no escape when it does not', () => {
+    expect(terminalTextFrame(createTheme('truecolor')).render(80).join('\n')).toMatchSnapshot()
+    // The reader turned styling off, so the same rows must carry no escape at
+    // all — not a dropped colour, not a reset the surface opened for itself.
+    const plain = terminalTextFrame().render(80).join('\n')
+    expect(plain).not.toContain('\u001b')
+    // The row starts four columns in, so the tab after "name" reaches the stop
+    // at sixteen: eight columns, not four.
+    expect(plain).toContain(`name${' '.repeat(8)}role`)
+    expect(plain).toContain('red plain')
+    expect(plain).toContain('progress 100%')
+  })
+})
+
 describe('styled golden frames', () => {
   const styled = createTheme('truecolor')
 

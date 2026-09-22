@@ -49,9 +49,12 @@ describe('QueueBar', () => {
     expect(visibleWidth(lines[1]!)).toBe(WIDTH)
   })
 
-  it('escapes what a prompt carries, so a payload cannot repaint the frame', () => {
+  it('consumes what a prompt carries, so a payload cannot repaint the frame', () => {
+    // A queued prompt is drawn by the bar rather than obeyed, and a colour it
+    // pasted would fight the queued face, so only its words reach the frame.
     const lines = bar(['a\u001B[31mb']).render(WIDTH)
-    expect(lines[1]).toContain('a\\x1B[31mb')
+    expect(lines[1]).toContain('ab')
+    expect(lines[1]).not.toContain('\u001B')
     expect(visibleWidth(lines[1]!)).toBe(WIDTH)
   })
 
