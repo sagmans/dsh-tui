@@ -170,7 +170,8 @@ force, and the `keys:` section moves any of them — see [Keys](#keys).
 | `/history` | show how many prompts are recorded and where the file is |
 | `/history clear` | forget every recorded prompt, reporting how many went |
 | `/theme` | list every styled element and the value in force |
-| `/theme <name>` | apply a shipped theme and write the choice to the settings document |
+| `/theme <name>` | apply a theme by name and write the choice to the settings document |
+| `/theme export <built-in>` | copy a built-in into your own themes directory to edit |
 | `/keys` | open the key map as a list you filter as you type; `/keys <layer>` opens it already narrowed to one layer (see [Keys](#keys)) |
 | `/stash <draft>` | park the text given after the command (`ctrl+x` then `s` parks the editor) |
 | `/stash-pop [index\|id]` | put a stashed draft into the editor and remove it (newest by default) |
@@ -397,17 +398,31 @@ restyleable like anything else through `markdown.diagram.border`,
 lists it with the rest. Nothing is lost by drawing: `/export` and the session
 file keep the reply exactly as the model wrote it.
 
-A theme restyles the whole surface by name. `theme: violet-orbit` applies a port
-of the pi theme of the same name: its palette, plus the elements it draws its own
-way, down to the violet band a submitted prompt sits on. A theme is a layer and not a replacement — everything
-it says nothing about keeps its shipped appearance, and a `tokens:` entry of the
-reader's own still wins over it one field at a time, so naming a single attribute
-does not discard the shade the theme gave that same element. `/theme <name>`
-applies one to the running session and writes the choice to the document,
-`shipped` returns to the default table, and a name the surface does not ship is
-refused with the names it does. A bare `/theme` names the theme in force in its
-heading and reports each element as `override`, `preset`, `palette`, or
-`default`, so a screen that looks wrong can be traced to the layer that drew it.
+A theme restyles the whole surface by name, and a theme is a file. The package
+ships two: `shipped`, the default table written out in full, and `violet-orbit`,
+a port of the pi theme of the same name — its palette, plus the elements it draws
+its own way, down to the violet band a submitted prompt sits on. Your own themes
+live in `$DSH_HOME/themes/`, which the surface creates at start-up and watches, so
+saving a file there is how you change the surface you are looking at. `theme:
+violet-orbit` applies one, `shipped` returns to the default table, and a name
+nothing answers to is reported with the names that do, drawing the shipped table
+instead.
+
+Both shipped files name every element and every palette entry, so a copy of one is
+a complete theme rather than a diff against something you cannot see. `/theme
+export <built-in>` writes that copy into your own directory as
+`<built-in>_export_<n>.yaml`, adding one comment naming the release it came from:
+the package's own file is replaced whenever the package updates, so the copy is the
+only one worth editing. A file whose name is a built-in's is ignored, and reported
+at start-up with the rename that fixes it.
+
+A theme is a layer and not a replacement: everything it says nothing about keeps
+its shipped appearance, and a `tokens:` entry of your own still wins over it one
+field at a time, so naming a single attribute does not discard the shade the theme
+gave that same element. A bare `/theme` names the theme in force in its heading and
+reports each element as `override`, `theme`, `palette`, or `default`, marking the
+themes in your own directory and printing the export hint, so a screen that looks
+wrong can be traced to the layer that drew it.
 
 `fg` and `bg` accept `#rrggbb`, a palette name (`default`, `muted`, `faint`,
 `accent`, `arg`, `warn`, `added`, `removed`, `user`, `assistant`), or an index. A colour is

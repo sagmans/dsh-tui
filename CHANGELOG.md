@@ -10,6 +10,13 @@ breaking change, and a patch carries only fixes.
 
 ### Changed
 
+- A theme name the surface does not have is no longer a settings error. The names
+  are files, so a name nothing answers to is reported as a notice listing the ones
+  that do, and the shipped table is drawn meanwhile; a settings document naming a
+  theme therefore loads even if the file is renamed or deleted later. `/theme`
+  reports a themed element's origin as `theme` rather than `preset`, and its
+  footer names the themes actually on disk, marking the ones in your directory,
+  with the export hint.
 - `/keys` opens the key map as a list you filter as you type instead of
   printing every row into the transcript. `/keys <layer>` opens the same list
   already narrowed to one layer, and a layer name the surface does not have is
@@ -53,6 +60,16 @@ breaking change, and a patch carries only fixes.
 
 ### Added
 
+- Themes are files. The package ships each one in full — `shipped`, the default
+  table written out element by element, and `violet-orbit` — and your own live in
+  `$DSH_HOME/themes/`, which the surface creates at start-up and watches, so
+  saving a file there restyles the running session without a restart. `/theme
+  export <built-in>` copies a built-in into that directory as
+  `<built-in>_export_<n>.yaml`, with one comment naming the release it came from,
+  because the package's own file is replaced whenever the package updates. Both
+  shipped files name every element and palette entry, so a copy is a complete
+  theme rather than a diff against something invisible. A file whose name is a
+  built-in's is ignored, and reported at start-up with the rename that fixes it.
 - `Ctrl+X` then `?` opens the key map as a searchable list: one row per action
   with the keys in force, one row for every key the map took from the library,
   and a filter reaching the action id, the layer, a key, or what the row does.
