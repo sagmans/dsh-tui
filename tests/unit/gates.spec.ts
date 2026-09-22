@@ -31,6 +31,9 @@ const DOWN = '\x1b[B'
 const BACKSPACE = '\x7f'
 /** The control byte a terminal sends for Ctrl+C, which is the surface cancel key. */
 const CTRL_C = '\u0003'
+/** The control bytes a terminal sends for the navigation aliases of ↑ and ↓. */
+const CTRL_P = '\u0010'
+const CTRL_N = '\u000e'
 
 describe('ApprovalGate', () => {
   it('allows once on y and rejects on n', () => {
@@ -130,6 +133,19 @@ describe('QuestionGate', () => {
     gate.handleKey(DOWN)
     gate.handleKey(' ')
     expect(gate.handleKey(ENTER)).toEqual([{ id: 'q1', selected: ['no'] }])
+  })
+
+  it('moves on the Ctrl+P and Ctrl+N aliases as well as the arrows', () => {
+    const down = gateOver(single)
+    down.handleKey(CTRL_N)
+    down.handleKey(' ')
+    expect(down.handleKey(ENTER)).toEqual([{ id: 'q1', selected: ['no'] }])
+
+    const up = gateOver(single)
+    up.handleKey(DOWN)
+    up.handleKey(CTRL_P)
+    up.handleKey(' ')
+    expect(up.handleKey(ENTER)).toEqual([{ id: 'q1', selected: ['yes'] }])
   })
 
   it('replaces the selection for a single-select question and accumulates for multi-select', () => {
@@ -420,9 +436,11 @@ describe('QuestionGate paste', () => {
 describe('QuestionGate free-text row', () => {
   const paste = (text: string): string => `\x1b[200~${text}\x1b[201~`
 
-  const withOptions = (): QuestionGate => gateOver(toGateQuestions({
+  const withOptionsQuestion = (): readonly GateQuestion[] => toGateQuestions({
     questions: [{ id: 'q1', question: 'deploy?', options: [{ label: 'yes' }, { label: 'no' }] }],
-  }))
+  })
+
+  const withOptions = (): QuestionGate => gateOver(withOptionsQuestion())
 
   it('offers row 0 on every question that has options', () => {
     expect(withOptions().card().custom).toEqual({
@@ -439,8 +457,37 @@ describe('QuestionGate free-text row', () => {
     const card = gate.card()
     expect(card.custom?.current).toBe(true)
     expect(card.options.every(option => !option.current)).toBe(true)
-    // The hint names the field's own exits, which are not the question's keys.
-    expect(card.hint).toContain('↑↓ or esc to options')
+    // The hint names the field's own exits and the question's movement keys.
+    expect(card.hint).toContain('↑↓/ctrl+p/ctrl+n or esc to options')
+  })
+
+  it('leaves row 0 on a navigation alias and keeps what was typed', () => {
+    const gate = withOptions()
+    gate.handleKey('0')
+    for (const character of 'later') gate.handleKey(character)
+    expect(gate.handleKey(CTRL_P)).toBeUndefined()
+    const card = gate.card()
+    expect(card.custom).toMatchObject({ current: false, selected: true })
+    expect(gate.handleKey(ENTER)).toEqual([{ id: 'q1', selected: [], custom: 'later' }])
+  })
+
+  it('keeps the field arrows leaving row 0 after the question keys move', () => {
+    const map = resolveKeymap({ 'question.up': 'alt+u', 'question.down': 'alt+d' })
+    const gate = gateOver(withOptionsQuestion(), () => map)
+    gate.handleKey('0')
+    expect(gate.card().hint).toContain('↑↓/alt+u/alt+d')
+    expect(gate.handleKey(DOWN)).toBeUndefined()
+    const card = gate.card()
+    expect(card.custom?.current).toBe(false)
+    expect(card.options[0]?.current).toBe(true)
+  })
+
+  it('leaves row 0 on the question keys the reader chose', () => {
+    const map = resolveKeymap({ 'question.up': 'alt+u', 'question.down': 'alt+d' })
+    const gate = gateOver(withOptionsQuestion(), () => map)
+    gate.handleKey('0')
+    expect(gate.handleKey('\u001bd')).toBeUndefined()
+    expect(gate.card().custom?.current).toBe(false)
   })
 
   it('answers with what was typed on row 0 instead of filtering by it', () => {

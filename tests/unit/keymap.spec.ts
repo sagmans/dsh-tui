@@ -130,6 +130,20 @@ describe('installKeybindings', () => {
     expect(keys.matches('\u0003', 'tui.altScreen.searchClose')).toBe(true)
   })
 
+  it('installs the navigation aliases where the completion menu reads them', () => {
+    installKeybindings(resolveKeymap({}))
+    const keys = getKeybindings()
+    // The control bytes a terminal sends for Ctrl+P and Ctrl+N, and the arrows
+    // the rows already answered.
+    expect(keys.matches('\u0010', 'tui.select.up')).toBe(true)
+    expect(keys.matches('\u000e', 'tui.select.down')).toBe(true)
+    expect(keys.matches('\u001b[A', 'tui.select.up')).toBe(true)
+    // The editor's own cursor rows keep the arrows: the aliases move choices,
+    // not the text cursor, so writing in the bar is unchanged.
+    expect(keys.matches('\u0010', 'tui.editor.cursorUp')).toBe(false)
+    expect(keys.matches('\u000e', 'tui.editor.cursorDown')).toBe(false)
+  })
+
   it('unbinds the library newline keys when the reader leaves the line to Enter alone', () => {
     installKeybindings(resolveKeymap({ 'prompt.newLine': ['enter'], 'prompt.submit': 'ctrl+g' }))
     const keys = getKeybindings()

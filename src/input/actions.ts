@@ -169,8 +169,8 @@ const GATE_ACTIONS: readonly Action[] = [
 ]
 
 const QUESTION_ACTIONS: readonly Action[] = [
-  { id: 'question.up', layer: 'question', defaultKeys: ['up'], label: 'previous option', mayUseBare: false, mayUnbind: false },
-  { id: 'question.down', layer: 'question', defaultKeys: ['down'], label: 'next option', mayUseBare: false, mayUnbind: false },
+  { id: 'question.up', layer: 'question', defaultKeys: ['up', 'ctrl+p'], label: 'previous option', mayUseBare: false, mayUnbind: false },
+  { id: 'question.down', layer: 'question', defaultKeys: ['down', 'ctrl+n'], label: 'next option', mayUseBare: false, mayUnbind: false },
   { id: 'question.toggle', layer: 'question', defaultKeys: ['space'], label: 'toggle an option', mayUseBare: false, mayUnbind: false },
   { id: 'question.confirm', layer: 'question', defaultKeys: [ENTER_KEY], label: 'answer the question', mayUseBare: false, mayUnbind: false },
   { id: 'question.skip', layer: 'question', defaultKeys: ['escape'], label: 'skip this question', mayUseBare: false, mayUnbind: false },
@@ -178,8 +178,8 @@ const QUESTION_ACTIONS: readonly Action[] = [
 ]
 
 const PICKER_ACTIONS: readonly Action[] = [
-  { id: 'picker.up', layer: 'picker', defaultKeys: ['up'], label: 'previous row', mayUseBare: false, mayUnbind: false },
-  { id: 'picker.down', layer: 'picker', defaultKeys: ['down'], label: 'next row', mayUseBare: false, mayUnbind: false },
+  { id: 'picker.up', layer: 'picker', defaultKeys: ['up', 'ctrl+p'], label: 'previous row', mayUseBare: false, mayUnbind: false },
+  { id: 'picker.down', layer: 'picker', defaultKeys: ['down', 'ctrl+n'], label: 'next row', mayUseBare: false, mayUnbind: false },
   { id: 'picker.confirm', layer: 'picker', defaultKeys: [ENTER_KEY], label: 'take the row', mayUseBare: false, mayUnbind: false },
   { id: 'picker.cancel', layer: 'picker', defaultKeys: ['escape', 'ctrl+c'], label: 'leave the list', mayUseBare: false, mayUnbind: false },
 ]
@@ -192,9 +192,16 @@ const PICKER_ACTIONS: readonly Action[] = [
  * open, so its close row is the one seam through which the cancel key gets
  * there. The added row travels with the map, so /keys and the clash guards read
  * the key that is really installed rather than the one the library shipped.
+ *
+ * The select rows are the same seam for a different list: the completion menu a
+ * reader navigates belongs to the library's editor, so the navigation aliases
+ * have to be installed where that menu reads them rather than on a row this
+ * surface answers.
  */
 export const LIBRARY_KEY_ADDITIONS: Readonly<Record<string, readonly KeyId[]>> = {
   'tui.altScreen.searchClose': ['escape', 'ctrl+c'],
+  'tui.select.up': ['up', 'ctrl+p'],
+  'tui.select.down': ['down', 'ctrl+n'],
 }
 
 /**
@@ -326,18 +333,28 @@ export function keyName(key: KeyId): string {
   return SHORT_KEY_NAMES[key] ?? key
 }
 
+/** One movement key as a hint prints it: the keycap glyph where the terminal has one. */
+const MOVE_GLYPHS: Readonly<Record<string, string>> = { up: '↑', down: '↓' }
+
+/** The glyph for one key of a movement pair, or the key's own name where it has none. */
+function moveName(key: string): string {
+  return MOVE_GLYPHS[key] ?? key
+}
+
 /**
  * The keys that move a cursor, as a hint prints them.
  *
  * A terminal draws arrows on its keycaps, which is shorter than the names the
  * library uses; a map that moved them falls back to naming whatever it moved
- * them to, because a glyph for a key nobody has would be a lie.
+ * them to, because a glyph for a key nobody has would be a lie. Each direction
+ * keeps its own list: the aliases a reader adds are alternatives to one arrow
+ * each, so pooling them would not say which way a key goes.
  */
 export function moveHint(map: Keymap, upId: string, downId: string): string {
   const up = keysFor(map, upId).map(keyName)
   const down = keysFor(map, downId).map(keyName)
   if (up.length === 1 && up[0] === 'up' && down.length === 1 && down[0] === 'down') return '↑↓'
-  return `${up.join('/')} or ${down.join('/')}`
+  return `${up.map(moveName).join('/')} or ${down.map(moveName).join('/')}`
 }
 
 /** How an action names itself in a hint. */

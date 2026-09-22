@@ -1,5 +1,5 @@
 import { matchesKey } from '@earendil-works/pi-tui'
-import { actionLabel, keyName, keysFor, matchesAction, moveHint, type Keymap } from './input/actions.ts'
+import { actionLabel, keyName, keysFor, matchesAction, type Keymap } from './input/actions.ts'
 import { pastedText } from './input.ts'
 import { matchScore } from './input/match.ts'
 
@@ -222,14 +222,37 @@ function namedKeys(map: Keymap, id: string, verb: string): string {
  *
  * A text field keeps its own exits: the arrows and escape are the field's, not
  * the question's, so a reader who moved question.up or question.skip somewhere
- * else still leaves with these. The hint therefore names them as the terminal
- * spells them instead of promising a key the row does not answer.
+ * else still leaves with these. The question's own movement keys leave it as
+ * well, which is how the navigation aliases reach a reader who is typing rather
+ * than filtering. The arrows stay one token because they are pinned together
+ * rather than listed one direction at a time.
  */
-const CUSTOM_ROW_EXITS = '↑↓ or esc'
+function customRowExits(map: Keymap): string {
+  const names = ['↑↓']
+  for (const id of ['question.up', 'question.down']) {
+    for (const key of keysFor(map, id)) {
+      const name = keyName(key)
+      if (name !== 'up' && name !== 'down' && !names.includes(name)) names.push(name)
+    }
+  }
+  return names.join('/')
+}
+
+/**
+ * Whether a press leaves the free-text row for the option list.
+ *
+ * The arrows are the field's own, so they leave whatever the map says, which
+ * keeps a reader who moved the question keys from being stranded in the field;
+ * the question's own keys follow the map so a rebound alias still works here.
+ */
+function leavesCustomRow(map: Keymap, data: string): boolean {
+  return matchesKey(data, 'up') || matchesKey(data, 'down')
+    || matchesAction(map, 'question.up', data) || matchesAction(map, 'question.down', data)
+}
 
 /** The keys that answer the free-text row, where typing is the answer rather than a filter. */
 function customHint(map: Keymap): string {
-  return `type or paste an answer · ${namedKeys(map, 'question.confirm', 'confirm')} · ${namedKeys(map, 'question.cancel', 'abandon')} · ${CUSTOM_ROW_EXITS} to options`
+  return `type or paste an answer · ${namedKeys(map, 'question.confirm', 'confirm')} · ${namedKeys(map, 'question.cancel', 'abandon')} · ${customRowExits(map)} or esc to options`
 }
 
 /**
@@ -508,8 +531,9 @@ export class QuestionGate {
     }
     // The keys that leave a text field are the field's own, not the question's:
     // a skip the reader moved elsewhere must not quietly mean "walk back". The
-    // hint spells these literally for the same reason (CUSTOM_ROW_EXITS).
-    if (matchesKey(data, 'up') || matchesKey(data, 'down')) {
+    // rows the question does own still work here, and the hint names both
+    // (customRowExits).
+    if (leavesCustomRow(this.keys(), data)) {
       this.atCustom = false
       return undefined
     }

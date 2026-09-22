@@ -58,6 +58,17 @@ describe('SessionPicker', () => {
     expect(picker.handleKey('\r')).toEqual({ kind: 'pick', id: 'b' })
   })
 
+  it('moves on the Ctrl+P and Ctrl+N aliases, and names them with the arrows', () => {
+    const picker = pickerOf([session('a'), session('b'), session('c')])
+    expect(picker.card().hint).toBe('↑/ctrl+p or ↓/ctrl+n move · enter open · esc/ctrl+c cancel · type to filter')
+    // The control bytes a terminal sends for Ctrl+N and Ctrl+P.
+    picker.handleKey('\u000e')
+    picker.handleKey('\u000e')
+    expect(picker.card().rows.find(row => row.current)?.label).toBe('c')
+    picker.handleKey('\u0010')
+    expect(picker.card().rows.find(row => row.current)?.label).toBe('b')
+  })
+
   it('cancels on escape', () => {
     expect(pickerOf([session('a')]).handleKey('\u001b')).toEqual({ kind: 'cancel' })
   })

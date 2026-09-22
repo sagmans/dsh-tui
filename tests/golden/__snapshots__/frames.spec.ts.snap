@@ -140,7 +140,8 @@ exports[`golden frames > renders a question gate collecting a typed answer at 40
   "   │ the eu-central cluster[7m [0m           │",
   "   ╰───────────────────────────────────╯",
   "   type or paste an answer · enter",
-  "   confirm · ↑↓ or esc back to options",
+  "   confirm · ↑↓/ctrl+p/ctrl+n or esc",
+  "   back to options",
 ]
 `;
 
@@ -155,7 +156,8 @@ exports[`golden frames > renders a question gate collecting a typed answer at 80
   "   ╭───────────────────────────────────────────────────────────────────────────╮",
   "   │ the eu-central cluster[7m [0m                                                   │",
   "   ╰───────────────────────────────────────────────────────────────────────────╯",
-  "   type or paste an answer · enter confirm · ↑↓ or esc back to options",
+  "   type or paste an answer · enter confirm · ↑↓/ctrl+p/ctrl+n or esc back to",
+  "   options",
 ]
 `;
 
@@ -182,7 +184,7 @@ exports[`golden frames > renders the model picker at 40 columns 1`] = `
   "above": 0,
   "below": 0,
   "filter": "",
-  "hint": "↑↓ move · enter switch · esc/ctrl+c cancel · type to filter",
+  "hint": "↑/ctrl+p or ↓/ctrl+n move · enter switch · esc/ctrl+c cancel · type to filter",
   "note": undefined,
   "rows": [
     {
@@ -210,7 +212,7 @@ exports[`golden frames > renders the model picker at 80 columns 1`] = `
   "above": 0,
   "below": 0,
   "filter": "",
-  "hint": "↑↓ move · enter switch · esc/ctrl+c cancel · type to filter",
+  "hint": "↑/ctrl+p or ↓/ctrl+n move · enter switch · esc/ctrl+c cancel · type to filter",
   "note": undefined,
   "rows": [
     {
@@ -264,7 +266,7 @@ exports[`golden frames > renders the session picker at 40 columns 1`] = `
   "above": 0,
   "below": 0,
   "filter": "",
-  "hint": "↑↓ move · enter open · esc/ctrl+c cancel · type to filter",
+  "hint": "↑/ctrl+p or ↓/ctrl+n move · enter open · esc/ctrl+c cancel · type to filter",
   "note": undefined,
   "rows": [
     {
@@ -287,7 +289,7 @@ exports[`golden frames > renders the session picker at 80 columns 1`] = `
   "above": 0,
   "below": 0,
   "filter": "",
-  "hint": "↑↓ move · enter open · esc/ctrl+c cancel · type to filter",
+  "hint": "↑/ctrl+p or ↓/ctrl+n move · enter open · esc/ctrl+c cancel · type to filter",
   "note": undefined,
   "rows": [
     {
@@ -310,7 +312,7 @@ exports[`golden frames > renders the stash picker at 40 columns 1`] = `
   "above": 0,
   "below": 0,
   "filter": "",
-  "hint": "↑↓ move · enter pop · esc/ctrl+c cancel · type to filter",
+  "hint": "↑/ctrl+p or ↓/ctrl+n move · enter pop · esc/ctrl+c cancel · type to filter",
   "note": undefined,
   "rows": [
     {
@@ -333,7 +335,7 @@ exports[`golden frames > renders the stash picker at 80 columns 1`] = `
   "above": 0,
   "below": 0,
   "filter": "",
-  "hint": "↑↓ move · enter pop · esc/ctrl+c cancel · type to filter",
+  "hint": "↑/ctrl+p or ↓/ctrl+n move · enter pop · esc/ctrl+c cancel · type to filter",
   "note": undefined,
   "rows": [
     {

@@ -450,7 +450,7 @@ describe('TranscriptView picker', () => {
         { label: 'tui-session-b', description: '/tmp · 1d ago', current: false },
       ],
       filter: 'fix',
-      hint: '↑↓ move · enter open · esc cancel · type to filter',
+      hint: '↑/ctrl+p or ↓/ctrl+n move · enter open · esc cancel · type to filter',
       above: 2,
       below: 3,
     }
@@ -475,7 +475,7 @@ describe('TranscriptView picker', () => {
       note: 'session tui-session-a runs mode "cordis", so --preset standard does not apply; /preset standard switches it before its first turn',
       rows: [{ label: 'tui-session-a', description: '/work · 3m ago', current: true }],
       filter: '',
-      hint: '↑↓ move · enter open · esc cancel · type to filter',
+      hint: '↑/ctrl+p or ↓/ctrl+n move · enter open · esc cancel · type to filter',
       above: 0,
       below: 0,
     }
@@ -601,7 +601,7 @@ describe('TranscriptView gate', () => {
       options: [{ label: 'staging', description: undefined, current: false, selected: false }],
       custom: { label: 'other', description: 'type your own answer', current: true, selected: true },
       answerInput: answerBar('the eu-central cluster'),
-      hint: 'type or paste an answer · enter confirm · ↑↓ or esc back to options',
+      hint: 'type or paste an answer · enter confirm · ↑↓/ctrl+p/ctrl+n or esc back to options',
     }
     const lines = viewOf(new TranscriptModel(), COLLAPSED, gate).render(60)
     const row = lines.findIndex(line => line.includes('0. other'))
