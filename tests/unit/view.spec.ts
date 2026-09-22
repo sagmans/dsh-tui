@@ -46,6 +46,21 @@ const toolResult = (text: string) => ({
   data: { message: { content: [{ type: 'tool-result', toolCallId: 'c1', text }], isError: false } },
 })
 
+/** One mouse event on the row at `y`, with the fields the surface fills in. */
+const mouse = (type: TuiMouseEvent['type'], button: TuiMouseEvent['button'], y: number): TuiMouseEvent => ({
+  type,
+  button,
+  x: 0,
+  y,
+  screenX: 0,
+  screenY: y,
+  width: 60,
+  height: 24,
+  shift: false,
+  alt: false,
+  ctrl: false,
+})
+
 describe('TranscriptView repaints', () => {
   it('reuses the rows it already built instead of re-wrapping the transcript', () => {
     const rows = new RowCache<TranscriptEntry>()
@@ -336,6 +351,32 @@ describe('TranscriptView expansion', () => {
     const opened = viewOf(model, OPEN).render(60)
     expect(opened).toContain('    boom')
     expect(opened).toContain('    exit 1')
+  })
+
+  it('opens one clicked thought and leaves the other folded', () => {
+    const model = new TranscriptModel()
+    model.apply({
+      type: 'assistant/message',
+      data: { message: { content: [
+        { type: 'reasoning', text: 'first thought' },
+        { type: 'reasoning', text: 'second thought' },
+        { type: 'text', text: 'answer' },
+      ] } },
+    })
+    const view = viewOf(model)
+    const folded = view.render(60)
+    expect(folded[0]).toMatch(/^reasoning · \d+ tokens \(shift\+tab\)$/)
+    expect(folded[1]).toMatch(/^reasoning · \d+ tokens \(shift\+tab\)$/)
+    // A click opens the thought it landed on; the one below stays folded.
+    expect(view.handleMouse(mouse('click', 'left', 0))).toEqual({ handled: true, render: true })
+    const opened = view.render(60)
+    expect(opened[1]).toBe('    first thought')
+    expect(opened.join('\n')).not.toContain('    second thought')
+    expect(opened[2]).toMatch(/\(shift\+tab\)$/)
+    // The choice survives the repaint, and a second click folds it back.
+    expect(view.render(60)).toEqual(opened)
+    view.handleMouse(mouse('click', 'left', 0))
+    expect(view.render(60)).toEqual(folded)
   })
 
   it('names where the thought is when the row is folded', () => {
@@ -807,29 +848,18 @@ describe('TranscriptView tool display policy', () => {
     return model
   }
 
-  /** One mouse event on the row at `y`, with the fields the surface fills in. */
-  const mouse = (type: TuiMouseEvent['type'], button: TuiMouseEvent['button'], y: number): TuiMouseEvent => ({
-    type,
-    button,
-    x: 0,
-    y,
-    screenX: 0,
-    screenY: y,
-    width: 60,
-    height: 24,
-    shift: false,
-    alt: false,
-    ctrl: false,
-  })
-
   it('starts a tool open when the reader configured it that way', () => {
     const view = viewOf(shell(3), COLLAPSED, undefined, toolDisplayTable({ bash: { collapsed: false } }))
     expect(view.render(60).filter(line => line.startsWith('    row '))).toHaveLength(3)
   })
 
-  it('clips the argument to the configured budget on the folded row', () => {
-    const view = viewOf(shell(3), COLLAPSED, undefined, toolDisplayTable({ default: { maxArgument: 6 } }))
-    expect(view.render(60)).toEqual(['bash Run e… · exit 0 · 3 lines'])
+  it('clips the argument to the screen edge, leaving the right edge blank', () => {
+    // The facts and the outcome keep their columns: a narrow screen costs the
+    // argument, not the answer to "what ran, and how did it end".
+    const [line = ''] = viewOf(shell(3), COLLAPSED).render(30)
+    expect(visibleWidth(line)).toBe(25)
+    expect(line).toContain('…')
+    expect(line.endsWith('· exit 0 · 3 lines')).toBe(true)
   })
 
   it('keeps the configured tail behind a folded card and counts the rest', () => {
@@ -844,7 +874,7 @@ describe('TranscriptView tool display policy', () => {
     // reader who writes nothing gets a different screen than the docs promise.
     const view = viewOf(shell(3), COLLAPSED, undefined, toolDisplayTable())
     expect(view.render(60)).toEqual(['bash Run echo rows · exit 0 · 3 lines'])
-    expect(DEFAULT_TOOL_DISPLAY).toEqual({ collapsed: true, maxArgument: 100, output: 'hidden', tail: CARD_SHELL_PREVIEW })
+    expect(DEFAULT_TOOL_DISPLAY).toEqual({ collapsed: true, output: 'hidden', tail: CARD_SHELL_PREVIEW })
   })
 
   it('toggles one clicked message and leaves its neighbour alone', () => {
@@ -903,14 +933,24 @@ describe('TranscriptView nested PTC calls', () => {
     return model
   }
 
-  // A folded card is only its header, so the calls draw once the card is open;
-  // the nested-call toggle still decides whether an opened card shows them.
   const INLINE: ViewState = { expandCards: true, expandReasoning: false, expandSubCalls: true }
+  /** The shipped shape: the card folded, the calls it dispatched still legible. */
+  const FOLDED: ViewState = { expandCards: false, expandReasoning: false, expandSubCalls: true }
 
-  it('keeps the calls out of the folded card until the reader asks', () => {
+  it('hides a program’s calls when the nested-call toggle is off', () => {
     const lines = viewOf(foldedProgram([{ name: 'read', args: { file_path: 'src/x.ts' } }])).render(60)
     expect(lines[0]).toBe('search the tree')
     expect(lines.some(line => line.includes('src/x.ts'))).toBe(false)
+  })
+
+  it('keeps each dispatch on one line under a card that stays folded', () => {
+    const model = foldedProgram([
+      { name: 'read', args: { file_path: 'src/x.ts' } },
+      { name: 'bash', args: { command: 'git status' } },
+    ])
+    const lines = viewOf(model, FOLDED).render(60)
+    expect(lines[0]).toBe('search the tree')
+    expect(lines.slice(1)).toEqual(['  read src/x.ts', '  bash git status'])
   })
 
   it('draws each call on one two-space-indented line under the header', () => {
@@ -937,16 +977,34 @@ describe('TranscriptView nested PTC calls', () => {
     expect(lines).toContain('  … 1 more calls')
   })
 
-  it('wraps a long call under its own indent on a narrow terminal', () => {
-    const model = foldedProgram([{ name: 'bash', args: { command: `echo ${'x'.repeat(80)}` } }])
-    const lines = viewOf(model, INLINE).render(40)
-    // One call still costs one entry; the argument is folded rather than cut,
-    // so nothing the reader was scanning for disappears.
-    expect(lines.length).toBeGreaterThan(2)
-    expect(lines[1]).toMatch(/^ {2}bash echo/)
-    for (const line of lines.slice(1)) expect(line.startsWith('  ')).toBe(true)
-    for (const line of lines) expect(visibleWidth(line)).toBeLessThanOrEqual(40)
-    expect(lines.slice(1).join('').split('x')).toHaveLength(81)
-    expect(lines.join('')).not.toContain('…')
+  it('clips a call to one row and opens that call when it is clicked', () => {
+    const model = foldedProgram([
+      { name: 'bash', args: { command: `echo ${'x'.repeat(80)}` } },
+      { name: 'read', args: { file_path: 'src/y.ts' } },
+    ])
+    const view = viewOf(model, FOLDED)
+    const folded = view.render(40)
+    expect(folded[0]).toBe('search the tree')
+    expect(folded[1]?.startsWith('  bash echo ')).toBe(true)
+    expect(folded[1] ?? '').toContain('…')
+    // The clipped call stops five columns short of the edge, like every other
+    // one-line tool row.
+    expect(visibleWidth(folded[1] ?? '')).toBe(35)
+    expect(folded[2]).toBe('  read src/y.ts')
+    for (const line of folded) expect(visibleWidth(line)).toBeLessThanOrEqual(40)
+    // The click takes the tightest row it lands on: the call opens in full while
+    // the card around it and the call below stay as they were.
+    expect(view.handleMouse(mouse('click', 'left', 1))).toEqual({ handled: true, render: true })
+    const opened = view.render(40)
+    expect(opened[0]).toBe('search the tree')
+    expect(opened.at(-1)).toBe('  read src/y.ts')
+    // The full argument survives across the wrapped rows, which is the point of
+    // opening one call without opening the card around it.
+    expect(opened.slice(1, -1).join('').split('x')).toHaveLength(81)
+    expect(opened.join('')).not.toContain('done')
+    for (const line of opened) expect(visibleWidth(line)).toBeLessThanOrEqual(40)
+    // Clicking the opened call folds it back to the one line it started as.
+    view.handleMouse(mouse('click', 'left', 1))
+    expect(view.render(40)).toEqual(folded)
   })
 })

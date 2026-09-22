@@ -23,18 +23,22 @@ breaking change, and a patch carries only fixes.
   answers, the shape an aborted call already produces, while Esc keeps skipping
   one question. An approval now cancels on Ctrl+C as well as Esc.
 - A folded tool card is one row for every tool, bash included: the row carries
-  the tool, its command clipped to the configured budget, the exit status, and
-  the count of output rows waiting behind the fold, instead of spending twenty
+  the tool, its command clipped at the screen edge, the exit status, and the
+  count of output rows waiting behind the fold, instead of spending twenty
   rows on shell output by default. `output: tail` restores a preview window per
-  tool, and a PTC card's dispatched calls now wait for the card to be opened.
+  tool, and a PTC card's dispatched calls stay one row each under the header.
 
 ### Added
 
+- A PTC program's dispatched calls stay visible as one row each under the
+  `run_code` header without opening the card, and a click opens one call's
+  argument in full while its neighbours stay as they were. A thought opens and
+  folds on a click too, instead of only through the key that moves every one.
 - Tool cards fold one message at a time: a click on a card opens or folds that
-  row alone, and a `dsh-tui: tools:` block decides how each tool starts — how
-  many argument characters a folded header keeps, and whether a fold hides its
-  rows or keeps a `tail` of them. Ctrl+O still opens or folds every card at
-  once, and a message the reader clicked keeps the state the click gave it.
+  row alone, and a `dsh-tui: tools:` block decides how each tool starts —
+  whether its cards start folded and whether a fold hides its rows or keeps a
+  `tail` of them. Ctrl+O still opens or folds every card at once, and a
+  message the reader clicked keeps the state the click gave it.
 - The bar's draft opens in the reader's own editor: `ctrl+x` then `e` hands the
   terminal to `$VISUAL` (or `$EDITOR`) with the draft in an owner-only scratch
   file, waits for the child, repaints, and takes back what was saved through one

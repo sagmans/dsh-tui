@@ -8,7 +8,7 @@ export type TranscriptEntry =
   | { readonly kind: 'notice'; readonly text: string }
   | { readonly kind: 'marker'; readonly text: string }
   | { readonly kind: 'tool'; readonly card: ToolCard; readonly id: string }
-  | { readonly kind: 'reasoning'; readonly summary: string; readonly body: string; readonly live: boolean }
+  | { readonly kind: 'reasoning'; readonly id: string; readonly summary: string; readonly body: string; readonly live: boolean }
 
 /** Reasoning kept per settled block, so one runaway thought cannot grow the transcript without bound. */
 export const REASONING_CHAR_LIMIT = 20_000
@@ -149,6 +149,14 @@ export class TranscriptModel {
    * message, so the recorded copy is a repeat rather than a second thought.
    */
   private reasoningPaintedThisStep = false
+  /**
+   * Ids for thought rows, and the id the live thought will settle under.
+   *
+   * The counter never restarts: a click outlives the entry it was made on, and
+   * a reused id would hand that choice to a later session's thought.
+   */
+  private thoughtSeq = 0
+  private liveReasoningId: string | undefined
 
   constructor(
     private readonly presenter?: ToolPresenter,
@@ -163,6 +171,9 @@ export class TranscriptModel {
       const ranFor = this.reasoningStartedAt === undefined ? undefined : this.now() - this.reasoningStartedAt
       entries.push({
         kind: 'reasoning',
+        // The live row and the row it settles into share an id, so a click made
+        // while the model is still thinking survives the thought landing.
+        id: this.liveReasoningId ?? '',
         summary: `reasoning · ${describeTokens(this.liveReasoning)}${ranFor === undefined ? '' : ` · ${Math.max(1, Math.round(ranFor / 1000))}s`} · streaming`,
         body: this.liveReasoning,
         live: true,
@@ -193,6 +204,7 @@ export class TranscriptModel {
     this.pending.clear()
     this.live = ''
     this.liveReasoning = ''
+    this.liveReasoningId = undefined
     this.reasoningStartedAt = undefined
     this.reasoningPaintedThisStep = false
   }
@@ -218,6 +230,7 @@ export class TranscriptModel {
       case 'reasoning-delta':
         if (typeof record.text !== 'string') return
         this.reasoningStartedAt ??= this.now()
+        this.liveReasoningId ??= String(++this.thoughtSeq)
         this.liveReasoning += record.text
         return
       case 'block-end': {
@@ -266,8 +279,13 @@ export class TranscriptModel {
   private paintReasoning(text: string, ranFor: number | undefined): void {
     const timing = ranFor === undefined ? '' : ` · ${Math.max(1, Math.round(ranFor / 1000))}s`
     const cut = text.length > REASONING_CHAR_LIMIT ? `\n… truncated at ${REASONING_CHAR_LIMIT} chars` : ''
+    // The live thought keeps the id the stream gave it; a thought only the
+    // recorded message carries takes the next one.
+    const id = this.liveReasoningId ?? String(++this.thoughtSeq)
+    this.liveReasoningId = undefined
     this.settled.push({
       kind: 'reasoning',
+      id,
       summary: `reasoning · ${describeTokens(text)}${timing}`,
       body: text.slice(0, REASONING_CHAR_LIMIT) + cut,
       live: false,
@@ -406,7 +424,7 @@ export class TranscriptModel {
     }
     const name = typeof data.name === 'string' ? data.name : 'tool'
     const argumentsJson = argumentsJsonOf(data.arguments)
-    const call = { ...subCallOf(name, argumentsJson, this.presenter?.call(name, argumentsJson)), failed: settled && data.isError === true }
+    const call = { ...subCallOf(subCallId, name, argumentsJson, this.presenter?.call(name, argumentsJson)), failed: settled && data.isError === true }
     const kept = card.subCalls ?? []
     const total = (card.subCallsTotal ?? 0) + 1
     if (kept.length >= SUBCALL_MAX) {

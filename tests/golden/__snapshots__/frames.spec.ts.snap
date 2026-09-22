@@ -387,7 +387,7 @@ exports[`golden frames > renders the transcript at 40 columns 1`] = `
   "theme)",
   "\`\`\`",
   "bash pnpm test · exit 0 · 1 line",
-  "read src/ui/view.ts  L1–3 · 3 lines · 2…",
+  "read src/…  L1–3 · 3 lines · 23 tok",
   "compacted 3 events (≈4200 tokens)",
 ]
 `;

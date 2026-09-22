@@ -139,7 +139,7 @@ const PALETTE_NAME_SET = new Set<string>(PALETTE_NAMES)
 const SECTION_KEYS = new Set(['palette', 'tokens', 'subcalls', 'mermaid', 'prefix', 'prefixWindow', 'keys', 'history', 'tools'])
 
 /** The fields one tool's row may carry, for the same reason the section's own keys are spelled out. */
-const TOOL_FIELDS = new Set(['collapsed', 'maxArgument', 'output', 'tail'])
+const TOOL_FIELDS = new Set(['collapsed', 'output', 'tail'])
 
 /**
  * Validate the raw section, refusing a name the surface does not have.
@@ -222,9 +222,6 @@ function parseTools(raw: unknown): Record<string, WrittenToolDisplay> {
     if (spec === undefined) throw new Error(`tools.${tool} must be a mapping of display fields`)
     const written: WrittenToolDisplay = {}
     if (spec.collapsed !== undefined) written.collapsed = toolFlag(spec.collapsed, `tools.${tool}.collapsed`)
-    if (spec.maxArgument !== undefined) {
-      written.maxArgument = toolInteger(spec.maxArgument, `tools.${tool}.maxArgument`, TOOL_DISPLAY_LIMITS.maxArgument)
-    }
     if (spec.output !== undefined) written.output = toolOutput(spec.output, `tools.${tool}.output`)
     if (spec.tail !== undefined) written.tail = toolInteger(spec.tail, `tools.${tool}.tail`, TOOL_DISPLAY_LIMITS.tail)
     specs[tool] = written

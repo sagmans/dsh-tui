@@ -89,11 +89,13 @@ describe('TranscriptModel reasoning', () => {
     model.applyStreamChunk({ type: 'reasoning-delta', text: 'ing' })
     clock = 4_000
     expect(model.entries()).toEqual([
-      { kind: 'reasoning', summary: 'reasoning · 2 tokens · 3s · streaming', body: 'thinking', live: true },
+      { kind: 'reasoning', id: '1', summary: 'reasoning · 2 tokens · 3s · streaming', body: 'thinking', live: true },
     ])
     model.apply({ type: 'assistant/message', data: { message: { content: text('answer') } } })
+    // The settled row keeps the live row's id, so a click made while the model
+    // was still thinking stays on the thought it was made on.
     expect(model.entries()).toEqual([
-      { kind: 'reasoning', summary: 'reasoning · 2 tokens · 3s', body: 'thinking', live: false },
+      { kind: 'reasoning', id: '1', summary: 'reasoning · 2 tokens · 3s', body: 'thinking', live: false },
       { kind: 'assistant', text: 'answer' },
     ])
   })
@@ -105,7 +107,7 @@ describe('TranscriptModel reasoning', () => {
     clock = 2_000
     model.applyStreamChunk({ type: 'block-end', block: { type: 'reasoning' } })
     expect(model.entries()).toEqual([
-      { kind: 'reasoning', summary: 'reasoning · 1 token · 2s', body: 'a\nb', live: false },
+      { kind: 'reasoning', id: '1', summary: 'reasoning · 1 token · 2s', body: 'a\nb', live: false },
     ])
   })
 
@@ -134,7 +136,7 @@ describe('TranscriptModel reasoning', () => {
       },
     })
     expect(model.entries()).toEqual([
-      { kind: 'reasoning', summary: 'reasoning · 5 tokens', body: 'weigh the options', live: false },
+      { kind: 'reasoning', id: '1', summary: 'reasoning · 5 tokens', body: 'weigh the options', live: false },
       { kind: 'assistant', text: 'the answer' },
     ])
   })
@@ -166,9 +168,25 @@ describe('TranscriptModel reasoning', () => {
       },
     })
     expect(model.entries()).toEqual([
-      { kind: 'reasoning', summary: 'reasoning · 1 token · 2s', body: 'a\nb', live: false },
+      { kind: 'reasoning', id: '1', summary: 'reasoning · 1 token · 2s', body: 'a\nb', live: false },
       { kind: 'assistant', text: 'the answer' },
     ])
+  })
+
+  it('gives each thought its own id and never reuses one after a reset', () => {
+    const model = new TranscriptModel()
+    const message = (...thoughts: string[]) => ({
+      type: 'assistant/message',
+      data: { message: { content: [...thoughts.map(text => ({ type: 'reasoning', text })), { type: 'text', text: 'answer' }] } },
+    })
+    model.apply(message('one', 'two'))
+    const ids = model.entries().flatMap(entry => (entry.kind === 'reasoning' ? [entry.id] : []))
+    expect(ids).toEqual(['1', '2'])
+    // A session switch clears the rows, not the id space: reusing an id would
+    // hand a click the reader made in the old session to the new session's row.
+    model.reset()
+    model.apply(message('three'))
+    expect(model.entries()[0]).toMatchObject({ kind: 'reasoning', id: '3' })
   })
 })
 
@@ -355,16 +373,16 @@ describe('TranscriptModel nested PTC calls', () => {
     model.apply(runCall)
     model.apply(start('root:ptc:1', 'read', { file_path: 'src/x.ts' }))
     const opened = model.entries()[0]
-    expect(opened?.kind === 'tool' && opened.card.subCalls).toEqual([{ title: 'read pending', failed: false }])
+    expect(opened?.kind === 'tool' && opened.card.subCalls).toEqual([{ id: 'root:ptc:1', title: 'read pending', failed: false }])
     expect(presenter.calls).toEqual(['run_code:{"code":"x","description":"search"}', 'read:{"file_path":"src/x.ts"}'])
 
     model.apply(settle('root:ptc:1', 'read', { file_path: 'src/x.ts' }, true))
     const failed = model.entries()[0]
-    expect(failed?.kind === 'tool' && failed.card.subCalls).toEqual([{ title: 'read pending', failed: true }])
+    expect(failed?.kind === 'tool' && failed.card.subCalls).toEqual([{ id: 'root:ptc:1', title: 'read pending', failed: true }])
 
     model.apply(runResult)
     const settled = model.entries()[0]
-    expect(settled?.kind === 'tool' && settled.card.subCalls).toEqual([{ title: 'read pending', failed: true }])
+    expect(settled?.kind === 'tool' && settled.card.subCalls).toEqual([{ id: 'root:ptc:1', title: 'read pending', failed: true }])
   })
 
   it('keeps the calls in dispatch order and counts every one', () => {

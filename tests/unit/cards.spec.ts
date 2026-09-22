@@ -414,11 +414,11 @@ describe('carriedFields', () => {
       detail: [],
       failed: false,
       totalLines: 0,
-      subCalls: [{ title: 'read', argument: 'a.ts', failed: false }],
+      subCalls: [{ id: 's1', title: 'read', argument: 'a.ts', failed: false }],
       subCallsTotal: 1,
     }
     expect(carriedFields(card)).toEqual({
-      subCalls: [{ title: 'read', argument: 'a.ts', failed: false }],
+      subCalls: [{ id: 's1', title: 'read', argument: 'a.ts', failed: false }],
       subCallsTotal: 1,
     })
   })
@@ -427,16 +427,16 @@ describe('carriedFields', () => {
 describe('subCallOf', () => {
   it('draws the tool view the presenter declared', () => {
     const view: ToolCard = { kind: 'terminal', tool: 'bash', title: 'bash', argument: 'git status', detail: [], failed: false, totalLines: 0 }
-    expect(subCallOf('bash', '{"command":"git status"}', view)).toEqual({ title: 'bash', argument: 'git status', failed: false })
+    expect(subCallOf('s1', 'bash', '{"command":"git status"}', view)).toEqual({ id: 's1', title: 'bash', argument: 'git status', failed: false })
   })
 
   it('falls back to the registry name and the raw call when no view answers', () => {
-    expect(subCallOf('mystery', '{"a":1}', undefined)).toEqual({ title: 'mystery', argument: '{"a":1}', failed: false })
-    expect(subCallOf('mystery', '', undefined)).toEqual({ title: 'mystery', failed: false })
+    expect(subCallOf('s2', 'mystery', '{"a":1}', undefined)).toEqual({ id: 's2', title: 'mystery', argument: '{"a":1}', failed: false })
+    expect(subCallOf('s3', 'mystery', '', undefined)).toEqual({ id: 's3', title: 'mystery', failed: false })
   })
 
   it('clips a raw call so an oversized argument cannot fill the row', () => {
-    const call = subCallOf('mystery', `{"a":"${'x'.repeat(500)}"}`, undefined)
+    const call = subCallOf('s4', 'mystery', `{"a":"${'x'.repeat(500)}"}`, undefined)
     expect(call.argument?.length).toBeLessThanOrEqual(CARD_LINE_LIMIT)
   })
 })

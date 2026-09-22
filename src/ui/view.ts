@@ -23,6 +23,14 @@ const DETAIL_INDENT = '    '
 const OPTION_INDENT = '   '
 /** A nested call is a signpost under its card, so it sits one step shallower than that card's detail. */
 const SUBCALL_INDENT = '  '
+/**
+ * Blank columns a one-line tool row keeps at the right edge.
+ *
+ * The cut mark would otherwise sit under the terminal's own last column, where
+ * a border or the cursor lives; the padding is part of the look, not a
+ * preference, so it is not a settings key.
+ */
+const COLLAPSED_EDGE_PADDING = 5
 
 /** The mark a cursor falls back to when the reader has not set one, so no literal lives in a template. */
 const CURSOR_MARK = '❯'
@@ -111,15 +119,29 @@ export interface ViewState {
  */
 export const DEFAULT_VIEW_STATE: ViewState = { expandCards: false, expandReasoning: false, expandSubCalls: true }
 
-/** Where one tool card drew, so a click can find the message it landed on. */
-interface CardSpan {
-  readonly id: string
+/**
+ * Where one clickable message drew, so a click can find what it landed on.
+ *
+ * A card's rows cover the calls it dispatched, so the card and each of those
+ * calls have a span; the click takes the tightest one it falls in.
+ */
+interface ClickSpan {
+  /** Stable across redraws, so a click outlives the entry it was made on. */
+  readonly key: string
   readonly start: number
-  /** Exclusive: the row after the card's last. */
+  /** Exclusive: the row after the message's last. */
   readonly end: number
-  /** Whether the card was open when those rows were drawn. */
+  /** Whether the message was open when those rows were drawn. */
   readonly expanded: boolean
 }
+
+/** Keys are prefixed because cards, thoughts, and dispatches all share one map. */
+const toolClickKey = (id: string): string | undefined => (id === '' ? undefined : `tool:${id}`)
+const reasoningClickKey = (id: string): string | undefined => (id === '' ? undefined : `reason:${id}`)
+const subCallClickKey = (parentId: string, id: string): string => `sub:${parentId}/${id}`
+
+/** The column a one-line tool row must not pass, so a cut never reaches the edge. */
+const collapsedEdge = (width: number): number => Math.max(1, width - COLLAPSED_EDGE_PADDING)
 
 /**
  * Renders the transcript rows and any pending gate as terminal lines.
@@ -156,15 +178,18 @@ export interface TranscriptViewOptions {
 export class TranscriptView implements Component {
   private readonly rows: RowCache<TranscriptEntry>
   /**
-   * Fold choices the reader made by clicking, per tool call.
+   * Fold choices the reader made by clicking, per message.
    *
-   * Absent means the policy decides, so the key and a settings edit stay in
-   * charge of messages nobody clicked. Keyed by the call id rather than by the
-   * entry, because the result replaces the entry the click was made on.
+   * Absent means the key or the tool's own policy decides, so a settings edit
+   * stays in charge of messages nobody clicked. Keyed by the call or thought id
+   * rather than by the entry, because a result replaces the entry a click was
+   * made on and a thought outlives the live row that streamed it.
    */
   private readonly clicked = new Map<string, boolean>()
-  /** The rows each tool card drew last render, for mapping a click back to its call. */
-  private spans: readonly CardSpan[] = []
+  /** The rows each clickable message drew last render, for mapping a click back to it. */
+  private spans: readonly ClickSpan[] = []
+  /** The same spans relative to their entry, so a cached entry still answers clicks. */
+  private readonly entrySpans = new WeakMap<TranscriptEntry, readonly ClickSpan[]>()
 
   constructor(
     private readonly model: TranscriptModel,
@@ -185,29 +210,48 @@ export class TranscriptView implements Component {
   }
 
   /**
-   * Whether one message draws open.
+   * Whether one tool message draws open.
    *
    * A click outranks the key, which outranks the tool's start state: Ctrl+O
    * stays "show me everything", while one clicked message keeps the state the
    * reader gave it.
    */
   private expansionOf(entry: Extract<TranscriptEntry, { kind: 'tool' }>): boolean {
-    const clicked = entry.id === '' ? undefined : this.clicked.get(entry.id)
+    const key = toolClickKey(entry.id)
+    const clicked = key === undefined ? undefined : this.clicked.get(key)
     return clicked ?? (this.viewState.expandCards || !this.toolDisplay(entry.card.tool).collapsed)
   }
 
+  /** Whether one thought draws its body; a click decides for that thought alone. */
+  private reasoningOpen(entry: Extract<TranscriptEntry, { kind: 'reasoning' }>): boolean {
+    const key = reasoningClickKey(entry.id)
+    const clicked = key === undefined ? undefined : this.clicked.get(key)
+    return clicked ?? this.viewState.expandReasoning
+  }
+
+  /** Whether one dispatched call draws its argument in full; a click decides for that call. */
+  private subCallOpen(parentId: string, id: string): boolean {
+    return this.clicked.get(subCallClickKey(parentId, id)) ?? false
+  }
+
   /**
-   * Answer a click on a tool card by folding or unfolding that one message.
+   * Answer a click on a message by folding or unfolding that one row.
    *
-   * Only a left click is consumed: a press, a drag, and a wheel belong to the
-   * surface's own selection and scrolling, and a card that swallowed them would
-   * cost the reader the ability to copy the command it just drew.
+   * The tightest span under the point wins, so a click on a dispatched call
+   * opens that call rather than the card around it. Only a left click is
+   * consumed: a press, a drag, and a wheel belong to the surface's own
+   * selection and scrolling, and a row that swallowed them would cost the
+   * reader the ability to copy the command it just drew.
    */
   handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
     if (event.type !== 'click' || event.button !== 'left') return undefined
-    const span = this.spans.find(candidate => event.y >= candidate.start && event.y < candidate.end)
+    let span: ClickSpan | undefined
+    for (const candidate of this.spans) {
+      if (event.y < candidate.start || event.y >= candidate.end) continue
+      if (span === undefined || candidate.end - candidate.start < span.end - span.start) span = candidate
+    }
     if (span === undefined) return undefined
-    this.clicked.set(span.id, !span.expanded)
+    this.clicked.set(span.key, !span.expanded)
     return { handled: true, render: true }
   }
 
@@ -314,30 +358,35 @@ export class TranscriptView implements Component {
     return hintKeys(this.keymap(), 'surface.reasoning') || REASONING_FOLD_FALLBACK
   }
 
-  private pushReasoning(lines: string[], entry: Extract<TranscriptEntry, { kind: 'reasoning' }>, width: number): void {
+  private pushReasoning(lines: string[], entry: Extract<TranscriptEntry, { kind: 'reasoning' }>, width: number, spans: ClickSpan[]): void {
     if (!this.theme.visible('transcript.reasoning.summary')) return
+    const start = lines.length
+    const open = this.reasoningOpen(entry)
     const glyph = this.theme.glyph('transcript.reasoning.summary')
     const lead = glyph === '' ? '' : `${glyph} `
     // A folded row carries the key that opens it, because a count with no way to
     // reach the text reads the same as the text never having arrived. The key
     // rides the row rather than a line of its own, so naming the hidden body
     // costs no vertical space.
-    const suffix = !this.viewState.expandReasoning && entry.body !== '' && this.theme.visible('transcript.reasoning.hint')
+    const suffix = !open && entry.body !== '' && this.theme.visible('transcript.reasoning.hint')
       ? ` (${this.reasoningFoldHint()})`
       : ''
     // The key is kept whole: the summary is the part that gives up room.
     const room = Math.max(1, width - visibleWidth(suffix))
     const summary = this.theme.style('transcript.reasoning.summary', this.theme.cut(`${lead}${displayText(entry.summary)}`, room, ''))
     lines.push(suffix === '' ? summary : `${summary}${this.theme.style('transcript.reasoning.hint', suffix)}`)
-    if (!this.viewState.expandReasoning) return
-    if (!this.theme.visible('transcript.reasoning.body')) return
-    this.pushMarkdown(lines, entry.body, width, entry.live, this.reasoningFace(), DETAIL_INDENT)
+    if (open && this.theme.visible('transcript.reasoning.body')) {
+      this.pushMarkdown(lines, entry.body, width, entry.live, this.reasoningFace(), DETAIL_INDENT)
+    }
+    const key = reasoningClickKey(entry.id)
+    if (key !== undefined) spans.push({ key, start, end: lines.length, expanded: open })
   }
 
-  private pushCard(lines: string[], entry: Extract<TranscriptEntry, { kind: 'tool' }>, width: number): void {
+  private pushCard(lines: string[], entry: Extract<TranscriptEntry, { kind: 'tool' }>, width: number, spans: ClickSpan[]): void {
     const card = entry.card
     const spec = this.toolDisplay(card.tool)
     const expanded = this.expansionOf(entry)
+    const start = lines.length
     // What a folded card shows of its rows is the reader's choice, so a shell
     // run no longer spends twenty rows on screen just because its output is the
     // answer: the answer is one click away, and the row it costs is one.
@@ -354,13 +403,16 @@ export class TranscriptView implements Component {
       // A header that folds keeps the argument and its stats; a terminal command
       // can be longer than the screen, so it wraps under its own indent.
       if (body !== '') this.pushStyledWrapped(lines, body, width, lead)
-      if (this.viewState.expandSubCalls) this.pushSubCalls(lines, card, width)
-      if (card.kind === 'terminal' && card.argument !== undefined && card.argument !== '' && this.theme.visible('tool.args')) {
-        this.pushStyledWrapped(lines, this.theme.style('tool.args', displayText(card.argument)), width, DETAIL_INDENT)
-      }
     } else {
-      const head = this.renderCollapsedHead(card, spec, hidden, titleToken, glyphToken)
-      if (head !== '') lines.push(this.theme.cut(head, width, '…'))
+      const head = this.renderCollapsedHead(card, hidden, titleToken, glyphToken, width)
+      if (head !== '') lines.push(this.theme.cut(head, collapsedEdge(width), '…'))
+    }
+    // The calls a program dispatched sit under the header whether the card is
+    // open or folded: one line per call is what the card stands for, and hiding
+    // them behind the card's own fold made a program's work invisible.
+    if (this.viewState.expandSubCalls) this.pushSubCalls(lines, entry, width, spans)
+    if (expanded && card.kind === 'terminal' && card.argument !== undefined && card.argument !== '' && this.theme.visible('tool.args')) {
+      this.pushStyledWrapped(lines, this.theme.style('tool.args', displayText(card.argument)), width, DETAIL_INDENT)
     }
     for (const row of detail) {
       // The row says what it is, so the renderer never guesses from the text:
@@ -383,32 +435,39 @@ export class TranscriptView implements Component {
     if (expanded && card.kind === 'terminal' && card.status !== undefined && this.theme.visible('tool.terminal.status')) {
       lines.push(this.theme.cut(`${DETAIL_INDENT}${this.theme.style('tool.terminal.status', displayText(card.status))}`, width, ''))
     }
-    if (hidden <= 0 || !this.theme.visible('tool.hint')) return
     // A shell card's rows are kept from the end, so a hidden count always names
     // the rows *before* what is on screen and the hint has to say so; every
     // other card keeps its head, where a neutral count is enough. A folded card
     // that shows a tail is bounded by that window, an opened one by retention,
     // so the opened hint promises no more than memory kept.
-    const hint = preview.expanded
-      ? card.kind === 'terminal' ? shellRetentionHint(hidden) : `${hidden} ${CARD_HINT_RETAINED}`
-      : preview.preview === 'tail'
-        ? shellFoldHint(hidden, hintKeys(this.keymap(), 'surface.toolDetail') || CARD_OPEN_FALLBACK)
-        : undefined
-    if (hint === undefined) return
-    lines.push(this.theme.style('tool.hint', this.theme.cut(`${DETAIL_INDENT}${hint}`, width, '')))
+    if (hidden > 0 && this.theme.visible('tool.hint')) {
+      const hint = preview.expanded
+        ? card.kind === 'terminal' ? shellRetentionHint(hidden) : `${hidden} ${CARD_HINT_RETAINED}`
+        : preview.preview === 'tail'
+          ? shellFoldHint(hidden, hintKeys(this.keymap(), 'surface.toolDetail') || CARD_OPEN_FALLBACK)
+          : undefined
+      if (hint !== undefined) {
+        lines.push(this.theme.style('tool.hint', this.theme.cut(`${DETAIL_INDENT}${hint}`, width, '')))
+      }
+    }
+    const key = toolClickKey(entry.id)
+    if (key !== undefined) spans.push({ key, start, end: lines.length, expanded })
   }
 
   /**
    * The calls one card dispatched, one entry each.
    *
    * A nested call is a signpost rather than a card of its own, so it keeps one
-   * entry per call; a long argument still wraps under that entry rather than
-   * being cut, because the argument is the part a reader scans for and a
-   * silently shortened path reads as the one that ran.
+   * entry per call, clipped to that entry until the reader clicks it: the
+   * argument is the part a reader scans for, and one that always wrapped pushed
+   * the rest of the program off the screen.
    */
-  private pushSubCalls(lines: string[], card: ToolCard, width: number): void {
+  private pushSubCalls(lines: string[], entry: Extract<TranscriptEntry, { kind: 'tool' }>, width: number, spans: ClickSpan[]): void {
+    const card = entry.card
     const subCalls = card.subCalls ?? []
     for (const call of subCalls) {
+      const start = lines.length
+      const open = this.subCallOpen(entry.id, call.id)
       const titleToken = call.failed ? 'tool.failed.title' : 'tool.subcall.title'
       const title = this.theme.visible(titleToken) ? this.theme.style(titleToken, displayText(call.title)) : ''
       const argument = call.argument === undefined || !this.theme.visible('tool.subcall.args')
@@ -418,7 +477,9 @@ export class TranscriptView implements Component {
       // A row whose every part is hidden draws nothing, and nothing must not
       // cost a line the card does not have.
       if (drawn === '') continue
-      this.pushStyledWrapped(lines, drawn, width, SUBCALL_INDENT)
+      if (open) this.pushStyledWrapped(lines, drawn, width, SUBCALL_INDENT)
+      else lines.push(this.theme.cut(`${SUBCALL_INDENT}${drawn}`, collapsedEdge(width), '…'))
+      spans.push({ key: subCallClickKey(entry.id, call.id), start, end: lines.length, expanded: open })
     }
     const hidden = (card.subCallsTotal ?? subCalls.length) - subCalls.length
     if (hidden > 0 && this.theme.visible('tool.hint')) {
@@ -433,26 +494,53 @@ export class TranscriptView implements Component {
    * per call is what folding promises. A shell card's hidden rows are counted
    * here too: its output is the answer the reader asked for, and a fold that
    * left no trace of it would read as a call that produced nothing.
+   *
+   * The argument is the part that gives up room: it is clipped to whatever the
+   * label, the facts, and the outcome leave before the edge, so a wide terminal
+   * shows more of the call while a narrow one still shows how it ended.
    */
-  private renderCollapsedHead(
-    card: ToolCard,
-    spec: ToolDisplaySpec,
-    hidden: number,
-    titleToken: TuiToken,
-    glyphToken: TuiToken,
-  ): string {
-    const { lead, body } = this.renderHead(card, titleToken, glyphToken, spec.maxArgument)
-    let drawn = body
-    if (card.kind === 'terminal' && card.status !== undefined && this.theme.visible('tool.terminal.status')) {
-      const status = this.theme.style('tool.terminal.status', displayText(card.status))
-      drawn += drawn === '' ? status : `${this.statSeparator()}${status}`
-    }
+  private renderCollapsedHead(card: ToolCard, hidden: number, titleToken: TuiToken, glyphToken: TuiToken, width: number): string {
+    const edge = collapsedEdge(width)
+    const lead = this.cardLead(titleToken, glyphToken)
+    const title = this.cardTitle(card, titleToken)
+    const separator = this.statSeparator()
+    // The facts carry their own lead; the outcome and the count join whatever
+    // precedes them, so the folded line reads as one sentence about the run.
+    let tail = this.renderStats(card.stats)
+    const status = card.kind === 'terminal' && card.status !== undefined && this.theme.visible('tool.terminal.status')
+      ? this.theme.style('tool.terminal.status', displayText(card.status))
+      : ''
+    if (status !== '') tail += `${separator}${status}`
     if (card.kind === 'terminal' && hidden > 0) {
-      // The count joins the row's own facts rather than opening a second lead of
-      // its own, so the folded line reads as one sentence about the run.
-      drawn += this.renderStats([{ kind: 'size', text: `${hidden} line${hidden === 1 ? '' : 's'}` }], this.statSeparator())
+      const count = this.renderStats([{ kind: 'size', text: `${hidden} line${hidden === 1 ? '' : 's'}` }], '')
+      if (count !== '') tail += `${separator}${count}`
     }
-    return `${lead}${drawn}`
+    const fixed = visibleWidth(lead) + visibleWidth(title) + visibleWidth(tail)
+    const room = Math.max(0, edge - fixed - (title === '' ? 0 : 1))
+    const argument = room > 0 ? this.cardArgument(card, room) : ''
+    const head = [title, argument].filter(part => part !== '').join(' ')
+    // A row with no visible label or argument opens with the tail, and a line
+    // that begins with a separator reads as a row that lost its first word.
+    if (head === '' && tail.startsWith(separator)) tail = tail.slice(separator.length)
+    return `${lead}${head}${tail}`
+  }
+
+  /** The mark that introduces a card, empty when the theme hides its label. */
+  private cardLead(titleToken: TuiToken, glyphToken: TuiToken): string {
+    const glyph = this.theme.visible(titleToken) ? this.theme.glyph(glyphToken) : ''
+    return glyph === '' ? '' : `${glyph} `
+  }
+
+  /** A card's label, styled, or nothing when the theme hides it. */
+  private cardTitle(card: ToolCard, titleToken: TuiToken): string {
+    return this.theme.visible(titleToken) ? this.theme.style(titleToken, displayText(card.title)) : ''
+  }
+
+  /** A card's argument, styled and flattened, clipped to `limit` when one is given. */
+  private cardArgument(card: ToolCard, limit?: number): string {
+    if (card.argument === undefined || card.argument === '' || !this.theme.visible('tool.args')) return ''
+    const shown = limit === undefined ? card.argument : clip(oneLine(card.argument), limit)
+    return this.theme.style('tool.args', displayText(shown))
   }
 
   /**
@@ -461,20 +549,14 @@ export class TranscriptView implements Component {
    * The glyph is returned apart from the body so a wrapped continuation can
    * align under the label rather than under the mark. An opened terminal's
    * argument is left out because it needs a row of its own — it is the one
-   * argument that can be a whole command rather than a word — while a folded
-   * header carries it clipped, because the fold gives it one row.
+   * argument that can be a whole command rather than a word.
    */
-  private renderHead(card: ToolCard, titleToken: TuiToken, glyphToken: TuiToken, argumentLimit?: number): { lead: string; body: string } {
-    const glyph = this.theme.visible(titleToken) ? this.theme.glyph(glyphToken) : ''
-    const lead = glyph === '' ? '' : `${glyph} `
-    let body = this.theme.visible(titleToken) ? this.theme.style(titleToken, displayText(card.title)) : ''
-    const argument = card.argument === undefined || card.argument === ''
-      ? undefined
-      : argumentLimit === undefined ? card.argument : clip(oneLine(card.argument), argumentLimit)
-    if (argument !== undefined && this.theme.visible('tool.args') && (card.kind !== 'terminal' || argumentLimit !== undefined)) {
-      body += `${body === '' ? '' : ' '}${this.theme.style('tool.args', displayText(argument))}`
-    }
-    return { lead, body: body + this.renderStats(card.stats) }
+  private renderHead(card: ToolCard, titleToken: TuiToken, glyphToken: TuiToken): { lead: string; body: string } {
+    const lead = this.cardLead(titleToken, glyphToken)
+    const title = this.cardTitle(card, titleToken)
+    const argument = card.kind === 'terminal' ? '' : this.cardArgument(card)
+    const head = [title, argument].filter(part => part !== '').join(' ')
+    return { lead, body: head + this.renderStats(card.stats) }
   }
 
   /** The separator a header uses between its label, its facts, and its outcome. */
@@ -601,13 +683,13 @@ export class TranscriptView implements Component {
   }
 
   /** The rows one transcript entry becomes; `live` marks the entry the turn is still writing. */
-  private renderEntry(entry: TranscriptEntry, lines: string[], width: number, live: boolean): void {
+  private renderEntry(entry: TranscriptEntry, lines: string[], width: number, live: boolean, spans: ClickSpan[]): void {
     switch (entry.kind) {
       case 'tool':
-        this.pushCard(lines, entry, width)
+        this.pushCard(lines, entry, width, spans)
         return
       case 'reasoning':
-        this.pushReasoning(lines, entry, width)
+        this.pushReasoning(lines, entry, width, spans)
         return
       case 'assistant':
         this.pushMarkdown(lines, entry.text, width, live)
@@ -653,34 +735,42 @@ export class TranscriptView implements Component {
     // to be redrawn for another reason.
     const baseTag = `${width}|${state.expandCards ? 'c' : '-'}${state.expandReasoning ? 'r' : '-'}${state.expandSubCalls ? 'p' : '-'}|${this.theme.revision}`
     const lines: string[] = []
-    const spans: CardSpan[] = []
+    const spans: ClickSpan[] = []
     const settled = this.model.settledCount()
     const entries = this.model.entries()
     for (const [index, entry] of entries.entries()) {
       const start = lines.length
-      // A card's own fold is part of the tag, so clicking one message rebuilds
-      // that message alone while the rows around it stay cached.
-      const open = entry.kind === 'tool' ? this.expansionOf(entry) : undefined
-      const tag = open === undefined ? baseTag : `${baseTag}|${open ? '+' : '-'}`
+      // Every fold this entry can answer to is part of the tag, so clicking one
+      // message — or one call inside it — rebuilds that message alone while the
+      // rows around it stay cached.
+      const open = entry.kind === 'tool' ? this.expansionOf(entry) : entry.kind === 'reasoning' ? this.reasoningOpen(entry) : undefined
+      const marks = entry.kind === 'tool'
+        ? `${open === true ? '+' : '-'}${(entry.card.subCalls ?? []).map(call => (this.subCallOpen(entry.id, call.id) ? '1' : '0')).join('')}`
+        : open === true ? '+' : '-'
+      const tag = `${baseTag}|${marks}`
+      const local: ClickSpan[] = []
       // The in-flight rows change on every frame, so caching them would only
       // fill the cache with objects nobody will ask for again.
       if (index >= settled) {
-        this.renderEntry(entry, lines, width, true)
+        this.renderEntry(entry, lines, width, true, local)
       } else {
         const cached = this.rows.lookup(entry, tag)
-        if (cached !== undefined) {
+        const saved = this.entrySpans.get(entry)
+        if (cached !== undefined && saved !== undefined) {
           lines.push(...cached)
+          local.push(...saved)
         } else {
           const rendered: string[] = []
-          this.renderEntry(entry, rendered, width, false)
+          this.renderEntry(entry, rendered, width, false, local)
           this.rows.store(entry, tag, rendered)
+          this.entrySpans.set(entry, local)
           lines.push(...rendered)
         }
       }
-      // Only a call the log named can be remembered: without an id there is
-      // nothing a later merge could keep the reader's choice attached to.
-      if (entry.kind === 'tool' && entry.id !== '' && open !== undefined) {
-        spans.push({ id: entry.id, start, end: lines.length, expanded: open })
+      // Spans are kept relative to their entry so a cached entry can hand them
+      // back; a click needs them in transcript rows.
+      for (const span of local) {
+        spans.push({ key: span.key, start: span.start + start, end: span.end + start, expanded: span.expanded })
       }
     }
     this.spans = spans

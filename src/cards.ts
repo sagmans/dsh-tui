@@ -81,6 +81,13 @@ export interface CardStat {
  * its presenter declared — so the surface still learns no tool name.
  */
 export interface ToolSubCall {
+  /**
+   * The dispatch's own id.
+   *
+   * The row is redrawn from the parent card on every fold, so the id is what
+   * keeps a reader's click on this call instead of on whatever lands next.
+   */
+  readonly id: string
   readonly title: string
   readonly argument?: string
   readonly failed: boolean
@@ -220,12 +227,12 @@ export function oneLine(text: string): string {
  * only a tool with no view at all falls back to its registry name and raw call,
  * because the surface cannot name a salient argument for a schema it never saw.
  */
-export function subCallOf(name: string, argumentsJson: string, view: ToolCard | undefined): ToolSubCall {
+export function subCallOf(id: string, name: string, argumentsJson: string, view: ToolCard | undefined): ToolSubCall {
   if (view !== undefined) {
-    return { title: view.title, ...(view.argument === undefined ? {} : { argument: view.argument }), failed: false }
+    return { id, title: view.title, ...(view.argument === undefined ? {} : { argument: view.argument }), failed: false }
   }
   const raw = argumentsJson === '' ? '' : clipLine(argumentsJson)
-  return { title: name, ...(raw === '' ? {} : { argument: raw }), failed: false }
+  return { id, title: name, ...(raw === '' ? {} : { argument: raw }), failed: false }
 }
 
 function clipRow(row: CardRow): CardRow {
