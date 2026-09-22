@@ -1,4 +1,4 @@
-import type { Component } from '@earendil-works/pi-tui'
+import type { Component, TuiMouseEvent, TuiMouseEventResult } from '@earendil-works/pi-tui'
 import type { BoxedEditor } from './editor.ts'
 
 /**
@@ -56,6 +56,18 @@ export class PromptBar implements Component {
   /** The rows the bar occupies, which a borrowing question leaves empty. */
   render(width: number): string[] {
     return this.borrowed ? [] : this.editor.render(width)
+  }
+
+  /**
+   * Hand a pointer event to the editor that drew the bar.
+   *
+   * The layout sees the bar as an opaque leaf, so it delivers a click in the
+   * bar's own rows; the editor drew those rows and is the one that knows what
+   * the reader pointed at. Without the hand-off the whole prompt would be inert
+   * to the mouse while the editor inside it handles clicks on its own.
+   */
+  handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
+    return this.borrowed ? undefined : this.editor.handleMouse(event)
   }
 
   invalidate(): void {

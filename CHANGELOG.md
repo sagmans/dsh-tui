@@ -70,6 +70,10 @@ breaking change, and a patch carries only fixes.
 
 ### Fixed
 
+- A click in the prompt bar reaches the editor that drew it, the work board
+  gives up rows before the input bar does — which keeps a frame's worth of rows
+  no shrink can take — and live text and failures fold into the session the
+  reader is looking at rather than the one this terminal drives.
 - A click lands on the row it was made on while a thought is still streaming,
   and a folded thought fits a terminal too narrow to hold both its signpost and
   its fold key.

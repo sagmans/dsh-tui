@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { type Component, type KeyId, ProcessTerminal, ScrollView, VStack, isKeyRelease, matchesKey } from '@earendil-works/pi-tui'
+import { type Component, type KeyId, ProcessTerminal, ScrollView, isKeyRelease, matchesKey } from '@earendil-works/pi-tui'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 // Type-only: the command registry publishes the change event this surface
@@ -77,6 +77,7 @@ import { WorkDock } from './ui/dock.ts'
 import { GateInputBar } from './ui/gate-input.ts'
 import type { GhostBrush } from './ui/editor.ts'
 import { HistoryPicker } from './ui/history-picker.ts'
+import { surfaceLayout } from './ui/layout.ts'
 import { PromptBar } from './ui/prompt.ts'
 import { MarkdownRenderer } from './ui/markdown.ts'
 import { createMermaidTransform } from './ui/mermaid.ts'
@@ -525,23 +526,13 @@ export function apply(ctx: Context, config: unknown): void {
     return released.finally(unregisterExit)
   })
 
-  tui.setLayoutRoot(new VStack([
-    {
-      component: new ScrollView(view, { follow: 'end', primary: true, overscroll: 'chain' }),
-      basis: 0,
-      grow: 1,
-      minSize: 1,
-    },
-    // Work state earns rows only when there is some: a dock that always
-    // occupied a row would cost every conversation one line of transcript.
-    { component: dock, basis: 'auto', shrink: 0, minSize: 0 },
-    // Queued input earns rows only while something is waiting, and it gives
-    // them up before the editor does: the bar being typed in outranks what is
-    // waiting behind it.
-    { component: queue, basis: 'auto', shrink: 2, minSize: 0 },
-    { component: new VStack([{ component: promptBar, basis: 'auto', shrink: 1, minSize: 1 }]), basis: 'auto', shrink: 1, minSize: 0 },
-    { component: statusBar, basis: 'auto', shrink: 0, minSize: 1 },
-  ]))
+  tui.setLayoutRoot(surfaceLayout({
+    transcript: new ScrollView(view, { follow: 'end', primary: true, overscroll: 'chain' }),
+    dock,
+    queue,
+    prompt: promptBar,
+    status: statusBar,
+  }))
   tui.setFocus(editor)
 
   const requestExit = (code: number, reason?: string): void => {
@@ -2148,14 +2139,18 @@ export function apply(ctx: Context, config: unknown): void {
     refreshJobs()
   }) ?? (() => {}))
 
+  // The transcript belongs to the session on screen, while status, the bell,
+  // and the queue stay with the agent this terminal drives. A live delta or a
+  // failure folded into the wrong model would print one session's words as
+  // another's, and the durable copy that follows would never correct it.
   disposers.push(ctx.on('agent/error', payload => {
-    if (payload.agent.id !== activeSession) return
+    if (payload.agent.id !== viewedSession) return
     model.reportError(payload.error)
     tui.requestRender()
   }))
 
   disposers.push(ctx.on('agent/assistant-stream', payload => {
-    if (payload.agent.id !== activeSession) return
+    if (payload.agent.id !== viewedSession) return
     if (payload.frame.type !== 'chunk') return
     model.applyStreamChunk(payload.frame.chunk)
     tui.requestRender()

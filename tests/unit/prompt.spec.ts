@@ -83,4 +83,27 @@ describe('the prompt bar a question borrows', () => {
     bar.replaceHeld('edited outside')
     expect(editor.getText()).toBe('the draft so far')
   })
+
+  it('hands a click in the bar down to the editor it draws', () => {
+    const { bar, editor } = barOf('abcdef')
+    const rows = bar.render(60)
+    const textRow = rows.findIndex(row => row.includes('abcdef'))
+    // The layout knows only the bar, so it delivers the click in the bar's own
+    // rows; the editor drew them and has to answer for them.
+    const result = bar.handleMouse({
+      type: 'click',
+      button: 'left',
+      x: 1,
+      y: textRow,
+      screenX: 1,
+      screenY: textRow,
+      width: 60,
+      height: rows.length,
+      shift: false,
+      alt: false,
+      ctrl: false,
+    })
+    expect(result).toEqual({ handled: true, focus: true })
+    expect(editor.getCursor().col).toBe(0)
+  })
 })
