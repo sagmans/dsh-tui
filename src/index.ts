@@ -20,6 +20,7 @@ import { createPromptHistory } from './agent/prompt-history.ts'
 import { createPresetRoster, parsePresetArgument, type PresetRoster, type PresetSummary } from './agent/presets.ts'
 import { createToolPresenter } from './agent/present.ts'
 import { forkPoint, type ForkEvent } from './agent/fork.ts'
+import { hiddenTail, NO_UNDO, redoStep, resetUndo, turnsOf, UNDO_TURN_SETTLE_MS, undoStep, type TurnPoint, type UndoState } from './agent/undo.ts'
 import { PROFILE_NAME, resumeHint } from './identity.ts'
 import { createStatusFacts } from './agent/status.ts'
 import { ModelSwitch, createModelCatalog, parseModelArgument, readModelRouteKey, type ModelChoice, type ModelRoute } from './agent/model.ts'
@@ -583,6 +584,17 @@ export function apply(ctx: Context, config: unknown): void {
   })
   let agent: TuiAgent | undefined
   let turnOpen = false
+  /**
+   * The staged undo cursor for the session this terminal drives.
+   *
+   * Prompts are never deleted: the cursor chooses how much of the live log the
+   * transcript shows. A cursor counts the turns of one log, so openAgent resets it.
+   */
+  let undoState: UndoState = NO_UNDO
+  /** Event index the transcript must not fold past while turns are hidden. */
+  let stagedCut: number | undefined
+  /** Whether an undo is settling an interrupt, so a second press cannot race it. */
+  let undoPending = false
   let turnStartedAt: number | undefined
   let exited = false
   /** Whether a session was really opened, which is what an exit hint can name. */
@@ -1238,12 +1250,18 @@ export function apply(ctx: Context, config: unknown): void {
    */
   const foldCursor = new FoldCursor()
 
-  /** Feed one durable event to the model, unless a fold has already folded it. */
+  /**
+   * Fold one durable event into the view, unless a staged cursor hides it.
+   *
+   * Undo never deletes, so the log keeps the hidden suffix; this filter is the
+   * one place the transcript and the log disagree about where the session ends.
+   */
   const applyDurable = (session: SessionId, event: ForkEvent): void => {
+    if (stagedCut !== undefined && session === activeSession && typeof event.seq === 'number' && event.seq >= stagedCut) return
     if (foldCursor.accept(session, event)) applyEvent(event)
   }
 
-  const foldHistory = async (id: SessionId): Promise<number> => {
+  const foldHistory = async (id: SessionId, through?: number): Promise<number> => {
     // Resolved before the fold so every card reads its tool through the scope
     // that actually registered it; a stored session nobody runs has none.
     presentScope = ctx.agents?.get(id)
@@ -1252,9 +1270,12 @@ export function apply(ctx: Context, config: unknown): void {
     foldCursor.reset()
     const inMemory = liveSession(id)?.snapshotEvents?.()
     if (inMemory !== undefined) {
-      for (const event of inMemory) applyDurable(id, event)
-      return inMemory.length
+      const events = through === undefined ? inMemory : inMemory.slice(0, through)
+      for (const event of events) applyDurable(id, event)
+      return events.length
     }
+    // Only a live session can be staged: undo acts on the agent this terminal
+    // drives, and a stored log has no cursor to hide a suffix from.
     const history = createSessionHistory(ctx)
     if (history === undefined) return 0
     const events = await history.read(id)
@@ -1311,6 +1332,195 @@ export function apply(ctx: Context, config: unknown): void {
     return history === undefined ? [] : history.read(id)
   }
 
+  /** The closed turns of the session this terminal drives, newest last. */
+  const currentTurns = async (): Promise<readonly TurnPoint[]> => turnsOf(await sessionEvents(activeSession))
+
+  /** Fold the transcript through the staged cut, or the whole log at the tip. */
+  const redrawStaged = async (): Promise<void> => {
+    model.reset()
+    work.reset()
+    await foldHistory(activeSession, stagedCut)
+  }
+
+  /** Park queued prompts one per stash entry, newest first so popping replays queue order. */
+  const parkQueued = async (queued: readonly string[]): Promise<void> => {
+    for (const text of [...queued].reverse()) await stash?.stashEditor(text)
+  }
+
+  /** Resolver for the turn/end an undo is waiting on, set only while waiting. */
+  let turnSettled: (() => void) | undefined
+
+  /** Wait for the interrupted turn to close, bounded so undo can give up honestly. */
+  const waitForTurnEnd = (timeoutMs: number): Promise<boolean> =>
+    new Promise(resolve => {
+      const timer = setTimeout(() => {
+        turnSettled = undefined
+        resolve(false)
+      }, timeoutMs)
+      turnSettled = () => {
+        clearTimeout(timer)
+        turnSettled = undefined
+        resolve(true)
+      }
+    })
+
+  /**
+   * Stop the running turn and empty the inbox so the cut lands on a closed
+   * turn/end; queued prompts are parked first because cancelling drops them.
+   *
+   * Returns undefined when the reader's words cannot be kept: a queue with no
+   * stash to park it in, or a turn that will not close. Both leave the cursor
+   * untouched, so the transcript keeps showing what the model actually saw; a
+   * number is how many queued prompts were parked before the turn was stopped.
+   */
+  const settleForUndo = async (): Promise<number | undefined> => {
+    const queued = queuedPrompts()
+    if (!turnOpen && queued.length === 0) return 0
+    if (queued.length > 0 && stash === undefined) {
+      model.notice('queued prompts have no stash to park in; undo cancelled')
+      tui.requestRender()
+      return undefined
+    }
+    agent?.interrupt()
+    if (queued.length > 0) await parkQueued(queued)
+    if (turnOpen && !(await waitForTurnEnd(UNDO_TURN_SETTLE_MS))) {
+      model.notice('could not stop the turn; undo cancelled')
+      tui.requestRender()
+      return undefined
+    }
+    return queued.length
+  }
+
+  const runUndoCommand = (): void => {
+    if (undoPending) return
+    undoPending = true
+    void (async () => {
+      if (viewedSession !== activeSession) {
+        model.notice('undo works on the session this terminal drives · ctrl+b comes back')
+        tui.requestRender()
+        return
+      }
+      const turns = await currentTurns()
+      if (undoState.hidden >= turns.length && !turnOpen) {
+        model.notice('nothing to undo')
+        tui.requestRender()
+        return
+      }
+      const draft = editor.getExpandedText()
+      // Text this state itself restored is not the reader's draft, so undoing
+      // again must not park it and end up with two copies.
+      const holdsDraft = draft !== '' && draft !== undoState.lastRestored
+      if (holdsDraft && stash === undefined) {
+        model.notice('the bar holds a draft and there is no stash to park it in; undo cancelled')
+        tui.requestRender()
+        return
+      }
+      const parked = await settleForUndo()
+      if (parked === undefined) return
+      const settled = await currentTurns()
+      const next = undoStep(undoState, settled)
+      if (next === undefined) {
+        model.notice('nothing to undo')
+        tui.requestRender()
+        return
+      }
+      if (holdsDraft) {
+        await stash?.stashEditor(draft)
+        model.notice('the draft in the bar was parked in the stash')
+      }
+      undoState = next
+      stagedCut = hiddenTail(next, settled)?.seedCount
+      await redrawStaged()
+      editor.setText(next.lastRestored)
+      // The parking count rides the undo notice: a notice of its own would be
+      // replaced before the frame could show it.
+      const parkedNote = parked === 0 ? '' : ` · ${parked} queued prompt${parked === 1 ? '' : 's'} parked in the stash`
+      model.notice(`undo · ${next.hidden} prompt${next.hidden === 1 ? '' : 's'} hidden${parkedNote} · prefix r redo`)
+      tui.requestRender()
+    })()
+      .catch((error: unknown) => {
+        model.notice(`undo failed: ${error instanceof Error ? error.message : String(error)}`)
+        tui.requestRender()
+      })
+      .finally(() => {
+        undoPending = false
+      })
+  }
+
+  const runRedoCommand = (): void => {
+    void (async () => {
+      if (viewedSession !== activeSession) {
+        model.notice('redo works on the session this terminal drives · ctrl+b comes back')
+        tui.requestRender()
+        return
+      }
+      const turns = await currentTurns()
+      const before = editor.getExpandedText()
+      const restored = undoState.lastRestored
+      const next = redoStep(undoState, turns)
+      if (next === undefined) {
+        model.notice('nothing to redo')
+        tui.requestRender()
+        return
+      }
+      undoState = next
+      stagedCut = hiddenTail(next, turns)?.seedCount
+      await redrawStaged()
+      // A composer the reader edited is theirs; only text this state wrote is replaced.
+      if (before === restored) editor.setText(next.lastRestored)
+      model.notice(next.hidden === 0
+        ? 'redo · back at the newest prompt'
+        : `redo · ${next.hidden} prompt${next.hidden === 1 ? '' : 's'} hidden`)
+      tui.requestRender()
+    })().catch((error: unknown) => {
+      model.notice(`redo failed: ${error instanceof Error ? error.message : String(error)}`)
+      tui.requestRender()
+    })
+  }
+
+  /**
+   * Send the reader's prompt, branching first when the transcript is staged.
+   *
+   * Context is derived from the log, so a send while turns are hidden has to
+   * continue in a child seeded with the visible prefix; submitting in place would
+   * show the model the prompts the reader undid. Every send passes through here so
+   * the branch has one commit point, not one per caller.
+   */
+  const commitStagedSend = async (text: string): Promise<void> => {
+    try {
+      const previous = agent
+      if (previous === undefined) {
+        model.notice('the agent is still starting; try again in a moment')
+        tui.requestRender()
+        return
+      }
+      if (undoState.hidden === 0) {
+        previous.submit(text)
+        return
+      }
+      const source = activeSession
+      const events = await sessionEvents(source)
+      const turns = turnsOf(events)
+      const tail = hiddenTail(undoState, turns)
+      const seed = tail === undefined ? [] : events.slice(0, tail.seedCount)
+      const childId = SessionId(`tui-session-${randomUUID()}`)
+      agent = undefined
+      turnOpen = false
+      turnStartedAt = undefined
+      presentScope = undefined
+      model.reset()
+      work.reset()
+      roster.reset()
+      await previous.dispose()
+      const opened = await openAgent(childId, false, seed.length === 0 ? undefined : { from: source, events: seed })
+      model.notice(`continuing in a new branch · ${source} keeps the undone turns`)
+      opened.submit(text)
+    } catch (error) {
+      model.notice(`could not send: ${error instanceof Error ? error.message : String(error)}`)
+      tui.requestRender()
+    }
+  }
+
   /**
    * The mode one agent joins.
    *
@@ -1354,7 +1564,7 @@ export function apply(ctx: Context, config: unknown): void {
     }
   }
 
-  const openAgent = async (id: SessionId, resume: boolean, fork?: ForkInheritance): Promise<void> => {
+  const openAgent = async (id: SessionId, resume: boolean, fork?: ForkInheritance): Promise<TuiAgent> => {
     // Settled before the transcript is touched, so a refusal leaves neither a
     // half-replayed session nor a half-composed agent behind.
     const preset = await presetFor(id, resume, fork)
@@ -1375,6 +1585,9 @@ export function apply(ctx: Context, config: unknown): void {
     activeSession = id
     viewedSession = id
     agent = handle
+    // A cursor counts the turns of one log; the session just opened has its own.
+    undoState = resetUndo(id)
+    stagedCut = undefined
     // The bank follows the session, so the footer stops counting the drafts of
     // the session just left and the next command reads this session's file.
     void stash?.open()
@@ -1410,6 +1623,9 @@ export function apply(ctx: Context, config: unknown): void {
     installCompletion()
     model.notice(`session ${handle.sessionId}${resume ? ' (resumed)' : ''}`)
     tui.requestRender()
+    // Returned so a caller that replaced the handle can send through the new
+    // one without a fresh read of state TypeScript can no longer widen.
+    return handle
   }
 
   /** Move the surface to another stored session without leaving the terminal. */
@@ -2233,6 +2449,12 @@ export function apply(ctx: Context, config: unknown): void {
         work.reset()
         tui.requestRender()
         return
+      case 'undo':
+        runUndoCommand()
+        return
+      case 'redo':
+        runRedoCommand()
+        return
       case 'help':
         model.notice(helpText())
         tui.requestRender()
@@ -2261,7 +2483,7 @@ export function apply(ctx: Context, config: unknown): void {
         if (turnOpen) agent.steer(submission.text)
         else {
           adoptDefaultRoute()
-          agent.submit(submission.text)
+          void commitStagedSend(submission.text)
         }
     }
   }
@@ -2289,6 +2511,8 @@ export function apply(ctx: Context, config: unknown): void {
         const ranFor = turnStartedAt === undefined ? 0 : Date.now() - turnStartedAt
         turnOpen = false
         turnStartedAt = undefined
+        // An undo may be parked waiting for exactly this boundary.
+        turnSettled?.()
         writeTerminal(windowTitle(process.cwd(), 'ready'))
         if (shouldRingBell({ bell: resolved.bell, ranForMs: ranFor, exiting: exited })) writeTerminal(BELL)
         // A job the turn started may have settled while the reader was watching

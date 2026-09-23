@@ -166,6 +166,10 @@ const CHORD_ACTIONS: readonly Action[] = [
   // Starting over is asked for while the bar still holds a draft, and a typed
   // `/new` would have taken that draft's place rather than kept it.
   { id: 'chord.new', layer: 'chord', defaultKeys: ['n'], label: 'new session', mayUseBare: true, mayUnbind: false },
+  // Stepping back through prompts is a composer verb like stash and model, and
+  // a reader asking for it is already at the bar with their hands on the keys.
+  { id: 'chord.undo', layer: 'chord', defaultKeys: ['u'], label: 'undo the last prompt', mayUseBare: true, mayUnbind: false },
+  { id: 'chord.redo', layer: 'chord', defaultKeys: ['r'], label: 'redo the undone prompt', mayUseBare: true, mayUnbind: false },
 ]
 
 const GATE_ACTIONS: readonly Action[] = [

@@ -31,6 +31,8 @@ describe('classifySubmission', () => {
     expect(classifySubmission('/history')).toEqual({ kind: 'history', argument: '' })
     expect(classifySubmission('/history  clear ')).toEqual({ kind: 'history', argument: 'clear' })
     expect(classifySubmission('/new  fresh start')).toEqual({ kind: 'new', title: 'fresh start' })
+    expect(classifySubmission('/undo')).toEqual({ kind: 'undo' })
+    expect(classifySubmission('/redo')).toEqual({ kind: 'redo' })
   })
 
   it('recognizes the stash commands and their selectors', () => {

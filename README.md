@@ -140,6 +140,8 @@ force, and the `keys:` section moves any of them — see [Keys](#keys).
 | Ctrl+X then Y | copy the last answer to the clipboard |
 | Ctrl+X then E | edit the draft in `$VISUAL` (or `$EDITOR`) and take back what it saves |
 | Ctrl+X then ? | search the key map: every action and the keys in force, in a box over the transcript |
+| Ctrl+X then U | undo the last prompt: hide its turn, land on the previous answer, and put the prompt back in the bar |
+| Ctrl+X then R | redo the undone prompt |
 | `y` / `n` / Esc / Ctrl+C | allow once, reject, or cancel a pending approval |
 | digits / space / ↑↓ / Enter / Esc / Ctrl+C | answer a question: pick or toggle, confirm, or skip one with Esc; Ctrl+C abandons the whole batch with no answers, like an aborted call; `0` answers with your own text in the input bar |
 | ↑↓ / Ctrl+P / Ctrl+N | move through the open list: a picker's rows, a question's options, or the completion menu above the bar |
@@ -166,6 +168,8 @@ force, and the `keys:` section moves any of them — see [Keys](#keys).
 | `/subagents open <id\|last>` | read a child's own conversation in place; `ctrl+b` comes back |
 | `/subagents kill <id>` | stop a live child agent |
 | `/fork [title]` | branch this conversation after its last completed turn and continue in the branch |
+| `/undo` | hide the newest prompt's turn and put that prompt back in the bar (`ctrl+x` then `u`) |
+| `/redo` | step forward again after an undo (`ctrl+x` then `r`) |
 | `/rename <title>` | title this session; the picker shows it instead of the session id |
 | `/export [path]` | write the visible transcript as markdown (default `dsh-session-<id>.md`) |
 | `/resume` | open another stored session without leaving the terminal |
@@ -192,18 +196,20 @@ prefix alone — enough to say that a key is waiting, without reciting the map �
 and a key that finishes nothing is typed as usual rather than swallowed, so a
 prefix pressed by accident costs nothing; `/help` lists the chords, `m` for the
 model picker, `p` for plan mode, `n` for a fresh session, `y` for the last
-answer, `s` to stash the draft, `l` for the stashes, `e` for the draft in the
-reader's own editor, and `?` for the key map.
+answer, `u` to undo the last prompt, `r` to redo it, `s` to stash the draft,
+`l` for the stashes, `e` for the draft in the reader's own editor, and `?` for
+the key map.
 `keys.chord.prefix: alt+x` starts the chord with another key — or with a list of
 them, as so many ways in — and `prefixWindow: 0` waits for the next key instead
 of lapsing; every second key is a row of its own (`chord.model`, `chord.plan`,
 `chord.new`, `chord.copy`, `chord.stash`, `chord.stashes`, `chord.editor`,
-`chord.keys`), so a chord can be respelled whole. A prefix that is not a modifier
+`chord.keys`, `chord.undo`, `chord.redo`), so a chord can be respelled whole. A prefix that is not a modifier
 chord, that the surface or the prompt bar already answers (`ctrl+c`, `ctrl+s`),
 or that the terminal keeps (`ctrl+q`) is refused with the reason, and the
 shipped keymap stays in force. The chords themselves are the commands they stand
-for: `m`, `p`, `n`, `y`, `s`, `l`, and `?` ask the same dispatcher `/model`,
-`/plan`, `/new`, `/copy`, `/stash`, `/stash-list`, and `/keys` do; `e` is the
+for: `m`, `p`, `n`, `y`, `s`, `l`, `u`, `r`, and `?` ask the same dispatcher
+`/model`, `/plan`, `/new`, `/copy`, `/stash`, `/stash-list`, `/undo`, `/redo`,
+and `/keys` do; `e` is the
 one chord with no command behind it, because it opens a program rather than
 running a line. Plan mode is the one pair that cannot share a name: `/plan` only
 enters, so the chord names `/plan off` instead when the agent is in plan mode —

@@ -31,6 +31,8 @@ const CHORD_SUBMISSIONS: Readonly<Record<string, Submission>> = {
   // The chord starts the session a typed `/new` starts, without the line that
   // would have replaced the draft in the bar.
   'chord.new': { kind: 'new', title: '' },
+  'chord.undo': { kind: 'undo' },
+  'chord.redo': { kind: 'redo' },
 }
 
 /** One chord: the key that follows the prefix, and the line that key asks for. */
