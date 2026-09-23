@@ -6,7 +6,7 @@ import { renderTerminalText } from '../terminal-text.ts'
  *
  * A bar the reader types in is a box: its sides and its padding are what say
  * "type here", and nothing is ever read back out of it. A block already written
- * is a band, which draws a marked rule above and below it, air inside each,
+ * is a band, which draws a marked rule above and below it, air outside each,
  * and nothing beside it, so a copy of one row is the row itself rather than the
  * frame that held it and a diagram keeps every column the terminal gave it. Both
  * shapes take the same
@@ -68,28 +68,31 @@ export function frameRule(innerWidth: number, hiddenRows: number): string {
  *
  * A band draws no sides, so these two columns are the whole of what tells a block
  * that has ended from one that has begun: two blocks drawn back to back would
- * otherwise read as a single fence around whatever sat between them. Quotation
- * ornaments rather than the arcs a box closes with, because an arc is read as a
- * corner, and a corner promises the sides and the padding only a box has. A
- * quotation is the other reading a rule's end can carry, and the truer one here: a
- * message in a transcript is something said, so the rule that opens it wears the
- * marks the way a line of text wears its opening quotes, and the rule that closes
- * it wears them turned around. An ended block therefore cannot be read as a begun
- * one. One column each, by the count the rows themselves are measured with.
+ * otherwise read as a single fence around whatever sat between them. Quadrant arcs
+ * rather than the arcs a box closes with, and detached from the rule instead of
+ * joined to it: an arc that meets the rule is read as a corner, and a corner
+ * promises the sides and the padding only a box has. Detached, the arc sits over
+ * the rule that opens a block and under the rule that closes it, out where the air
+ * is, so the rule runs unbroken to its own end and nothing is left inside the shape
+ * but the words. The pair on the opening rule lifts and the pair on the closing
+ * rule drops, so an ended block cannot be read as a begun one. One column each, by
+ * the count the rows themselves are measured with.
  */
 const BAND_MARKS = {
-  open: { left: '❝', right: '❞' },
-  close: { left: '❞', right: '❝' },
+  open: { left: '◜', right: '◝' },
+  close: { left: '◟', right: '◞' },
 } as const
 
 /**
- * The row of air a band leaves between each rule and the message it closes.
+ * The row of air a band leaves outside each of its rules.
  *
- * Without it the first row of a message sits against the rule that opened it,
- * and the block reads as something still being typed into rather than something
- * already said. It is a row of its own rather than a margin on the text, because
- * every row of the text has to stay exactly as the block drew it: a reader who
- * takes one back out gets the words, never the space that framed them.
+ * Inside the rules there is nothing but the message: the first row of it sits
+ * against the rule that opened the block, so no part of the shape asks for padding
+ * the text does not have. The air belongs outside instead, where its work is to
+ * separate one block from the next rather than to hold a message off its own rule,
+ * and it is a row of its own rather than a margin on the text, because every row of
+ * the text has to stay exactly as the block drew it: a reader who takes one back
+ * out gets the words, never the space that framed them.
  */
 const BAND_AIR = ''
 
@@ -154,13 +157,14 @@ export function frameLines(lines: readonly string[], width: number, faces: Frame
 }
 
 /**
- * One block of already-rendered rows as a band draws it: a marked rule above,
- * the rows themselves between a row of air each, and a marked rule below.
+ * One block of already-rendered rows as a band draws it: a row of air, a marked
+ * rule, the rows themselves, a marked rule, and the air that closes the block off
+ * from the next one.
  *
  * The rows are placed, never padded and never cut: the block laid itself out to
  * the width it was given, and every column a band does not spend is one a reader
  * gets to select. The end marks are what a band says instead of sides — the block
- * is closed, and the rows inside it are whole. A dropped tail is counted on the
+ * is closed, and the rows between the rules are whole. A dropped tail is counted on the
  * closing rule exactly as a box counts one, so a fold reads the same in either
  * shape.
  */
@@ -169,15 +173,15 @@ export function bandLines(lines: readonly string[], width: number, faces: BandFa
   const body = lines.slice(0, Math.max(0, limit))
   const rows = body.map(faces.text)
   if (!faces.drawn) return rows
-  // Air only where there is a message to hold away from the rules: a block with
-  // no rows at all would otherwise open and close on two rows of nothing.
+  // Air only where there is a message to set apart from the next block: a block
+  // with no rows at all would otherwise spend two rules and two rows of nothing.
   const air = rows.length === 0 ? [] : [BAND_AIR]
   return [
+    ...air,
     bandRule(room, 0, BAND_MARKS.open, faces),
-    ...air,
     ...rows,
-    ...air,
     bandRule(room, lines.length - body.length, BAND_MARKS.close, faces),
+    ...air,
   ]
 }
 

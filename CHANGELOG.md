@@ -34,7 +34,7 @@ breaking change, and a patch carries only fixes.
 
 - A transcript band now lets two marks carry the whole shape: each rule is its own
   speaker's hue dimmed almost to the background, so the two of them per message
-  stop reading as furniture around the words and the colour sits on four ornaments
+  stop reading as furniture around the words and the colour sits on four arcs
   instead of two full-width rows. The prompt's rule is a dim mint and the
   reply's a dim gold, so a rule read at the screen's own edge still names whose
   turn it closes; both sit above the floor the degraded palette keeps as a hue, so
@@ -51,14 +51,15 @@ breaking change, and a patch carries only fixes.
 
 - A message already written into the transcript now closes into a band — a marked
   rule above it, a marked rule below it, and nothing beside it — instead of a full
-  box. The two marks are what a band has in place of sides: a quotation ornament at
-  either end of each rule, facing inward where the band opens and turned around
-  where it closes, so the block is closed and one that ended cannot read as one that
-  began. An ornament rather than an arc, because an arc is read as a corner and a
-  corner promises the padding a band has none of, while a message is something said
-  and a rule's end can carry its quotation. They take the first and last column of
-  a rule the block was already spending. A row of
-  air inside each rule holds the message off the shape that carried it. The two
+  box. The two marks are what a band has in place of sides: a quadrant arc at either
+  end of each rule, lifting over the rule that opens the block and dropping under
+  the one that closes it, so the block is closed and one that ended cannot read as
+  one that began. Detached from the rule rather than joined to it, because an arc
+  joined to the rule is read as a corner and a corner promises the padding a band
+  has none of. They take the first and last column of a rule the block was already
+  spending, and the row of air moves outside them: a message now sits against its
+  own rules, and the room a reader needs goes between two blocks rather than inside
+  one. The two
   sides and the two columns of padding cost four columns of every row, and
   all four came back with any text copied out of the row; a reply is the widest
   thing the surface draws and the thing a reader most often takes back out. What
