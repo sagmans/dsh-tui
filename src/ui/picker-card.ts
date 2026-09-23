@@ -128,12 +128,12 @@ export class PickerPopup implements Component {
   /** The card closed into a frame, or nothing when the list is already gone. */
   private box(picker: PickerCard | undefined, width: number): string[] {
     if (picker === undefined) return []
-    const framed = canFrame(width, this.theme.visible('picker.border'))
-    const inside = framed ? width - FRAME_COLUMNS : width
+    const drawn = canFrame(width, this.theme.visible('picker.border'))
+    const inside = drawn ? width - FRAME_COLUMNS : width
     return frameLines(pickerCardLines(picker, inside, this.theme), width, {
       text: line => line,
       border: rule => this.theme.style('picker.border', rule),
-      framed,
+      drawn,
     })
   }
 

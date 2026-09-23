@@ -142,27 +142,28 @@ describe('TranscriptView repaints', () => {
 })
 
 describe('TranscriptView text', () => {
-  it('renders assistant text as markdown inside its frame', () => {
+  it('renders assistant text as markdown inside its band', () => {
     const model = new TranscriptModel()
     model.apply({ type: 'assistant/message', data: { message: { content: [{ type: 'text', text: '# Title\n\nplain **strong**' }] } } })
     const lines = viewOf(model).render(60)
-    expect(lines[0]?.startsWith('╭')).toBe(true)
-    expect(lines.at(-1)?.startsWith('╰')).toBe(true)
+    // A band is two rules and the rows between them, and spends nothing on a side.
+    expect(lines[0]).toBe('─'.repeat(60))
+    expect(lines.at(-1)).toBe('─'.repeat(60))
     const body = stripTerminalSequences(lines.join('\n'))
     expect(body).toContain('Title')
     expect(body).toContain('strong')
     expect(body).not.toContain('**')
   })
 
-  it("renders a submitted prompt's markdown inside its frame", () => {
+  it("renders a submitted prompt's markdown inside its band", () => {
     const model = new TranscriptModel()
     model.apply({
       type: 'user/message',
       data: { content: [{ type: 'text', text: '**bold** steps:\n\n- one\n- two' }], source: { kind: 'user' } },
     })
     const lines = viewOf(model).render(40)
-    expect(lines[0]?.startsWith('╭')).toBe(true)
-    expect(lines.at(-1)?.startsWith('╰')).toBe(true)
+    expect(lines[0]).toBe('─'.repeat(40))
+    expect(lines.at(-1)).toBe('─'.repeat(40))
     const body = stripTerminalSequences(lines.join('\n'))
     expect(body).toContain('bold steps:')
     expect(body).not.toContain('**')
@@ -170,27 +171,27 @@ describe('TranscriptView text', () => {
     expect(body).toContain('- two')
   })
 
-  it("closes a human prompt into the editor's own frame", () => {
+  it('closes a human prompt into a band of its own', () => {
     const model = new TranscriptModel()
     model.apply({ type: 'user/message', data: { content: [{ type: 'text', text: 'hello there' }], source: { kind: 'user' } } })
-    // The box the editor and the queued prompts draw, so a submitted prompt reads
-    // as the object it was typed into rather than as one more paragraph.
+    // A prompt is a box only while it is being typed into. Once it is said the
+    // frame goes with it, so the row reads as the text and copies as the text.
     expect(viewOf(model).render(40)).toEqual([
-      `╭${'─'.repeat(38)}╮`,
-      `│ hello there${' '.repeat(25)} │`,
-      `╰${'─'.repeat(38)}╯`,
+      '─'.repeat(40),
+      'hello there',
+      '─'.repeat(40),
     ])
   })
 
-  it('closes a reply into a frame of its own', () => {
+  it('closes a reply into a band of its own', () => {
     const model = new TranscriptModel()
     model.apply({ type: 'assistant/message', data: { message: { content: [{ type: 'text', text: 'hello there' }] } } })
-    // A reply is the other object of an exchange, so it is framed like the prompt
+    // A reply is the other object of an exchange, so it is banded like the prompt
     // that asked for it rather than left as one more paragraph of the transcript.
     expect(viewOf(model).render(40)).toEqual([
-      `╭${'─'.repeat(38)}╮`,
-      `│ hello there${' '.repeat(25)} │`,
-      `╰${'─'.repeat(38)}╯`,
+      '─'.repeat(40),
+      'hello there',
+      '─'.repeat(40),
     ])
   })
 
@@ -254,17 +255,18 @@ describe('TranscriptView text', () => {
     expect(folded.some(line => line.includes('second thought'))).toBe(false)
 
     const opened = new TranscriptView(model, colour, markdown, { state: () => ({ expandCards: false, expandReasoning: true, expandSubCalls: false }) }).render(60)
-    // The signpost, the two thought rows, and the framed answer: a reply is an
+    // The signpost, the two thought rows, and the banded answer: a reply is an
     // object of its own rather than one more row under the thought.
     expect(opened).toHaveLength(6)
     expect(opened[0]).toContain('\u001b[3;38;2;102;102;102m')
     // The thought shares the signpost's faint shade, not the muted family's.
     for (const line of opened.slice(1, 3)) expect(line).toContain('\u001b[38;2;102;102;102m')
-    // The frame's own rows carry the border's shade, so the corners are found in
-    // the row rather than at its start.
-    expect(opened[3]).toContain('╭')
+    // The band's rules carry the border's shade and run the whole width: a frame
+    // with no sides has no corner to sit in, so the row is the rule alone.
+    expect(opened[3]).toContain('\u001b[38;2;214;194;154m')
+    expect(stripTerminalSequences(opened[3] ?? '')).toBe('─'.repeat(60))
     expect(stripTerminalSequences(opened[4] ?? '')).toContain('the answer')
-    expect(opened[5]).toContain('╰')
+    expect(stripTerminalSequences(opened[5] ?? '')).toBe('─'.repeat(60))
   })
 
   it('renders an opened thought as markdown in the thought shade', () => {
@@ -286,15 +288,15 @@ describe('TranscriptView text', () => {
     // row holds no text and so has no shade to check, and the signpost row above
     // the body carries its own fainter one.
     expect(opened[0]).toContain('\u001b[3;38;2;102;102;102m')
-    // The thought body ends where the answer's frame begins, and that frame is
-    // gold rather than faint: the loop stops at the box so the reply's own border
-    // is not read as a thought row that lost its shade.
-    const framed = opened.findIndex(line => line.includes('╭'))
-    expect(framed).toBeGreaterThan(0)
-    for (const line of opened.slice(1, framed).filter(line => line !== '')) {
+    // The thought body ends where the answer's band begins, and that band is gold
+    // rather than faint: the loop stops at the band's opening rule so the reply's
+    // own border is not read as a thought row that lost its shade.
+    const band = opened.findIndex(line => stripTerminalSequences(line) === '─'.repeat(60))
+    expect(band).toBeGreaterThan(0)
+    for (const line of opened.slice(1, band).filter(line => line !== '')) {
       expect(line).toContain('\u001b[38;2;102;102;102m')
     }
-    expect(stripTerminalSequences(opened.slice(framed).join('\n'))).toContain('the answer')
+    expect(stripTerminalSequences(opened.slice(band).join('\n'))).toContain('the answer')
   })
 
   it('keeps a thought fence as source while the answer still draws it', () => {
@@ -329,17 +331,17 @@ describe('TranscriptView text', () => {
     for (const line of lines) expect(line.length).toBeLessThanOrEqual(20)
   })
 
-  it('wraps a long prompt inside its frame instead of cutting it', () => {
+  it('wraps a long prompt inside its band instead of cutting it', () => {
     const model = new TranscriptModel()
     model.apply({ type: 'user/message', data: { content: [{ type: 'text', text: 'x'.repeat(50) }], source: { kind: 'user' } } })
     const lines = viewOf(model).render(40)
     expect(lines).toHaveLength(4)
-    for (const line of lines) expect(visibleWidth(line)).toBe(40)
-    expect(lines[0]?.startsWith('╭')).toBe(true)
-    expect(lines[3]?.startsWith('╰')).toBe(true)
-    // Every column of the prompt survives the fold: the frame costs the text
-    // width, it never costs the reader a line.
-    const body = lines.slice(1, 3).map(line => line.slice(2, -2).trimEnd()).join('')
+    for (const line of lines) expect(visibleWidth(line)).toBeLessThanOrEqual(40)
+    expect(lines[0]).toBe('─'.repeat(40))
+    expect(lines[3]).toBe('─'.repeat(40))
+    // Every column of the prompt survives the fold: a band costs the text
+    // nothing, so a row is as wide as its own line and no wider.
+    const body = lines.slice(1, 3).join('')
     expect(body).toBe('x'.repeat(50))
   })
 })
@@ -773,16 +775,16 @@ describe('TranscriptView theming', () => {
     expect(lines.join('\n')).not.toContain('\u001b[1;')
   })
 
-  it('draws a prompt bare when the frame is hidden', () => {
+  it('draws a prompt bare when the band is hidden', () => {
     const bare = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['editor.border', { hidden: true }]]) })
     const lines = new TranscriptView(userModel(), bare, new MarkdownRenderer(bare.markdown), { state: () => COLLAPSED }).render(40)
     expect(lines).toHaveLength(1)
-    // No frame, but the text keeps the column the frame's own air gave it, so a
-    // theme that hides the border does not move the prompt.
-    expect(lines[0]?.trimEnd()).toBe(' \u001b[38;2;39;245;200mhello there\u001b[0m')
+    // No rules, and the row starts at the very edge: a band keeps no air inside
+    // it, so hiding the border takes the border and nothing else.
+    expect(lines[0]?.trimEnd()).toBe('\u001b[38;2;39;245;200mhello there\u001b[0m')
   })
 
-  it("draws a reply's frame in the assistant border shade", () => {
+  it("draws a reply's band in the assistant border shade", () => {
     const model = new TranscriptModel()
     model.apply({ type: 'assistant/message', data: { message: { content: [{ type: 'text', text: 'the answer' }] } } })
     const colour = createTheme('truecolor')
@@ -792,15 +794,15 @@ describe('TranscriptView theming', () => {
     expect(lines.at(-1)).toContain('38;2;214;194;154')
   })
 
-  it('draws a reply bare when its frame element is hidden', () => {
+  it('draws a reply bare when its band element is hidden', () => {
     const model = new TranscriptModel()
     model.apply({ type: 'assistant/message', data: { message: { content: [{ type: 'text', text: 'the answer' }] } } })
     const bare = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['transcript.assistant.border', { hidden: true }]]) })
     const lines = new TranscriptView(model, bare, new MarkdownRenderer(bare.markdown), { state: () => COLLAPSED }).render(40)
     expect(lines).toHaveLength(1)
-    // No frame, but the text keeps the column the frame's own air gave it, so a
-    // theme that hides the border does not move the reply.
-    expect(lines[0]?.trimEnd()).toBe(' the answer')
+    // No rules, and the row starts at the very edge: a band keeps no air inside
+    // it, so hiding the border takes the border and nothing else.
+    expect(lines[0]?.trimEnd()).toBe('the answer')
   })
 
   it('draws nothing for a hidden element', () => {

@@ -14,7 +14,7 @@ import { DEFAULT_TOOL_DISPLAY, type ToolDisplaySpec } from '../tool-display.ts'
 import { CARD_ROW_TOKEN, type TuiToken } from '../theme-tokens.ts'
 import type { TuiTheme } from '../theme.ts'
 import { codeBlockLines } from './diff.ts'
-import { canFrame, frameLines, FRAME_COLUMNS, textWidth } from './frame.ts'
+import { bandLines } from './frame.ts'
 import { ANSWER_FACE, type MarkdownFace, type MarkdownRenderer } from './markdown.ts'
 import { pickerCardLines } from './picker-card.ts'
 import type { PickerCard } from './picker.ts'
@@ -363,22 +363,22 @@ export class TranscriptView implements Component {
   }
 
   /**
-   * One message closed into a frame, with its markdown laid out to what is left inside.
+   * One message closed into a band, with its markdown laid out across the whole width.
    *
    * A prompt and a reply are the two objects of an exchange, so both are drawn as
-   * bars rather than as one more stretch of rows; the face, the border's element,
-   * and whether the text is still arriving are the only differences. Markdown lays
-   * itself out to the frame's text width, so the frame may only place the rows:
-   * wrapping them again would break what it drew.
+   * bands rather than as one more stretch of rows; the face, the border's element,
+   * and whether the text is still arriving are the only differences. A message is
+   * the widest thing the surface draws and the thing a reader most often selects,
+   * so it spends no column on furniture: markdown lays itself out to the full
+   * width, and the band may only place the rows, because wrapping them again
+   * would break what markdown drew.
    */
-  private pushFramed(lines: string[], text: string, width: number, live: boolean, face: MarkdownFace, borderToken: TuiToken): void {
-    const framed = canFrame(width, this.theme.visible(borderToken))
-    const inside = framed ? width - FRAME_COLUMNS : width
-    const body = this.markdownLines(text, textWidth(inside), live, face)
-    lines.push(...frameLines(body, width, {
+  private pushBand(lines: string[], text: string, width: number, live: boolean, face: MarkdownFace, borderToken: TuiToken): void {
+    const body = this.markdownLines(text, width, live, face)
+    lines.push(...bandLines(body, width, {
       text: line => line,
       border: rule => this.theme.style(borderToken, rule),
-      framed,
+      drawn: this.theme.visible(borderToken),
     }))
   }
 
@@ -869,15 +869,17 @@ export class TranscriptView implements Component {
         this.pushReasoning(lines, entry, width, spans)
         return
       case 'assistant':
-        // The reply is boxed the way the prompt that asked for it is, so one
-        // exchange reads as two objects rather than as a box and then a stream.
-        this.pushFramed(lines, entry.text, width, live, ANSWER_FACE, 'transcript.assistant.border')
+        // The reply is banded the way the prompt that asked for it is, so one
+        // exchange reads as two objects rather than as a band and then a stream.
+        this.pushBand(lines, entry.text, width, live, ANSWER_FACE, 'transcript.assistant.border')
         return
       case 'user': {
         if (!this.theme.visible('transcript.user')) return
-        // A prompt is boxed wherever it is read, so the row it left in the queue
-        // and the row it becomes here are recognisably the same object.
-        this.pushFramed(lines, entry.text, width, false, this.userFace(), 'editor.border')
+        // A prompt is banded once said and boxed while it is being typed, so the
+        // shape is what tells a row still open for editing from one that is
+        // history — and what lets a reader take the text back out without the
+        // frame it was drawn in coming with it.
+        this.pushBand(lines, entry.text, width, false, this.userFace(), 'editor.border')
         return
       }
       case 'notice':

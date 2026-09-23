@@ -32,6 +32,14 @@ breaking change, and a patch carries only fixes.
   the warning shade, which is now what a call that has not answered wears: a name
   painted in the colour of a state would leave that state nothing to say.
 
+- A message already written into the transcript now closes into a band — the rule
+  above it, the rule below it, and nothing beside it — instead of a full box. The
+  two sides and the two columns of padding cost four columns of every row, and
+  all four came back with any text copied out of the row; a reply is the widest
+  thing the surface draws and the thing a reader most often takes back out. What
+  is still being typed into stays a box, so the shape now says which of the two a
+  row is, and a mermaid diagram in a reply is no longer boxed inside a box.
+
 ## [0.5.2] - 2026-09-23
 
 ### Added
