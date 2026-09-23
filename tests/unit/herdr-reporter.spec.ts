@@ -78,26 +78,39 @@ describe('createHerdrReporter', () => {
 
     reporter.publish()
     reporter.publish()
-    reporter.idle()
+    reporter.driver('idle')
 
     expect(states(calls).length).toBe(1)
   })
 
-  it('is working while a turn runs and idle when it ends', () => {
+  it('is working while the driver runs and idle when it stops', () => {
     const { calls, client } = recordingClient()
     const reporter = createHerdrReporter({ client, now: () => 1 })
 
-    reporter.working()
-    reporter.idle()
+    reporter.driver('running')
+    reporter.driver('idle')
 
     expect(states(calls).map(state => (state as StateReport).state)).toEqual(['working', 'idle'])
   })
 
-  it('outranks a running turn with a wait, and returns to it', () => {
+  it('keeps one working report across the turns a driver chains', () => {
     const { calls, client } = recordingClient()
     const reporter = createHerdrReporter({ client, now: () => 1 })
 
-    reporter.working()
+    reporter.driver('running')
+    reporter.driver('running')
+
+    // A chained turn is not a driver transition — nothing at all arrives here
+    // between two turns of one run — and a repeated running status is no
+    // change, so the pane never reads as done mid-run.
+    expect(states(calls).map(state => (state as StateReport).state)).toEqual(['working'])
+  })
+
+  it('outranks a running driver with a wait, and returns to it', () => {
+    const { calls, client } = recordingClient()
+    const reporter = createHerdrReporter({ client, now: () => 1 })
+
+    reporter.driver('running')
     reporter.block('approval needed · Bash')
     reporter.unblock()
 
@@ -121,6 +134,17 @@ describe('createHerdrReporter', () => {
     expect(last.message).toBe('question · continue?')
 
     reporter.unblock()
+    expect((states(calls).at(-1) as StateReport).state).toBe('idle')
+  })
+
+  it('returns to idle after a wait settles only when the driver has stopped', () => {
+    const { calls, client } = recordingClient()
+    const reporter = createHerdrReporter({ client, now: () => 1 })
+
+    reporter.driver('idle')
+    reporter.block('approval needed · Bash')
+    reporter.unblock()
+
     expect((states(calls).at(-1) as StateReport).state).toBe('idle')
   })
 
@@ -186,7 +210,7 @@ describe('createHerdrReporter', () => {
     }
     const reporter = createHerdrReporter({ client, now: () => 1, retryBaseMs: 1 })
 
-    reporter.idle()
+    reporter.driver('idle')
     await Promise.resolve()
     expect(states(calls).length).toBe(1)
 
@@ -210,7 +234,7 @@ describe('createHerdrReporter', () => {
     }
     const reporter = createHerdrReporter({ client, now: () => 1, retryBaseMs: 1, releaseSync: () => {} })
 
-    reporter.working()
+    reporter.driver('running')
     await Promise.resolve()
     await reporter.release()
     const seen = states(calls).length
@@ -247,7 +271,7 @@ describe('createHerdrReporter', () => {
       released += 1
     } })
 
-    reporter.working()
+    reporter.driver('running')
     const handingBack = reporter.release()
     await Promise.resolve()
 
@@ -296,9 +320,9 @@ describe('createHerdrReporter', () => {
       released += 1
     } })
 
-    reporter.working()
+    reporter.driver('running')
     reporter.releaseSync()
-    reporter.idle()
+    reporter.driver('idle')
     reporter.block('approval needed · Bash')
     reporter.session({ id: 'tui-session-9', cwd: '/tmp/project', reason: SESSION_START_REASONS.resume })
     reporter.publish(true)
@@ -347,7 +371,7 @@ describe('releaseAgentSync', () => {
     const { calls, client } = recordingClient()
     const reporter = createHerdrReporter({ client, env: paneEnv(fake), now: () => 1 })
 
-    reporter.working()
+    reporter.driver('running')
     reporter.block('approval needed · Bash')
     reporter.releaseSync()
 

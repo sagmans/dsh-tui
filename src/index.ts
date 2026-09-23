@@ -59,7 +59,7 @@ import { WarningSafeTui } from './terminal/warning-screen.ts'
 import { BELL, shouldRingBell } from './terminal/bell.ts'
 import { clipboardSequence } from './terminal/clipboard.ts'
 import { CLEAR_TITLE, windowTitle } from './terminal/title.ts'
-import { sessionStartReason } from './herdr/state.ts'
+import { asDriverStatus, sessionStartReason } from './herdr/state.ts'
 import { createHerdrReporter } from './herdr/reporter.ts'
 import { defaultExportFile, transcriptToText } from './export.ts'
 import { createTheme, forwardEditorTheme, forwardMarkdownTheme, type TuiTheme } from './theme.ts'
@@ -1378,6 +1378,13 @@ export function apply(ctx: Context, config: unknown): void {
     // The bank follows the session, so the footer stops counting the drafts of
     // the session just left and the next command reads this session's file.
     void stash?.open()
+    // agent/status is emitted on transitions only, so a driver that was
+    // already running when this surface attached — a resume that wakes
+    // straight away — would otherwise stay unreported until it stops. The
+    // status is read once here and settled before the session identity, so the
+    // report that carries the new session id states the driver's real phase
+    // rather than the one the previous session left behind.
+    herdr.driver(handle.agent.status)
     // The agent's own id is reported rather than the requested one: a resume can
     // be answered by the session the log actually holds.
     herdr.session({
@@ -2277,14 +2284,12 @@ export function apply(ctx: Context, config: unknown): void {
         turnOpen = true
         turnStartedAt = Date.now()
         writeTerminal(windowTitle(process.cwd(), 'working'))
-        herdr.working()
       }
       if (event.type === 'turn/end') {
         const ranFor = turnStartedAt === undefined ? 0 : Date.now() - turnStartedAt
         turnOpen = false
         turnStartedAt = undefined
         writeTerminal(windowTitle(process.cwd(), 'ready'))
-        herdr.idle()
         if (shouldRingBell({ bell: resolved.bell, ranForMs: ranFor, exiting: exited })) writeTerminal(BELL)
         // A job the turn started may have settled while the reader was watching
         // something else, and nothing else refreshes a live board.
@@ -2308,6 +2313,20 @@ export function apply(ctx: Context, config: unknown): void {
    */
   const listenFor = (name: string, handler: (...args: readonly unknown[]) => void): (() => void) =>
     (ctx.on as unknown as (event: string, listener: (...args: readonly unknown[]) => void) => () => void)(name, handler)
+
+  // Herdr hears the driver rather than each turn: a run that chains turns
+  // through a pending inbox is one stretch of work, and a turn boundary inside
+  // it would read as done between two turns of an agent that is still working.
+  // The turn listeners above keep the title and the bell, which are about the
+  // reader's own conversation.
+  disposers.push(listenFor('agent/status', payload => {
+    const record = asRecord(payload)
+    const agentId = asRecord(record?.agent)?.id
+    const status = asDriverStatus(record?.status)
+    // Subagents share this process, and their runs are not this pane's work.
+    if (typeof agentId !== 'string' || agentId !== activeSession || status === undefined) return
+    herdr.driver(status)
+  }))
 
   disposers.push(listenFor('subagent/start', info => {
     roster.start(info)

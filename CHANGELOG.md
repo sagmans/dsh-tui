@@ -62,6 +62,16 @@ breaking change, and a patch carries only fixes.
   caught no words at all, only the frame, comes back as the reader made it,
   because a copy is never emptied.
 
+### Fixed
+
+- A Herdr row no longer flips through idle between two turns of one
+  still-working agent. The harness chains turns through a pending inbox inside
+  a single driver run, and the pane reported each turn's end, so a completion
+  alert fired mid-run and the row restored working milliseconds later. The
+  pane now reports the driver-level status instead, read once when a session
+  opens (it is emitted on transitions only) and followed on every flip; waits
+  still outrank it, and releases, retries, and session reports are unchanged.
+
 ## [0.5.2] - 2026-09-23
 
 ### Added

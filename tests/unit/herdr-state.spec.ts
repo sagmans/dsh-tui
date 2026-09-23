@@ -9,24 +9,30 @@ import {
   type LifecycleFacts,
 } from '@/herdr/state.ts'
 
-const NOTHING_PENDING: LifecycleFacts = { blockedCount: 0, blockedMessage: undefined, turnOpen: false }
+const NOTHING_PENDING: LifecycleFacts = { blockedCount: 0, blockedMessage: undefined, driverRunning: false }
 
 describe('lifecycleReport', () => {
   it('is idle when nothing is running and nothing is waiting', () => {
     expect(lifecycleReport(NOTHING_PENDING)).toEqual({ state: HERDR_STATES.idle, message: undefined })
   })
 
-  it('is working while a turn is open', () => {
-    expect(lifecycleReport({ ...NOTHING_PENDING, turnOpen: true })).toEqual({ state: HERDR_STATES.working, message: undefined })
+  it('is working while the driver runs', () => {
+    expect(lifecycleReport({ ...NOTHING_PENDING, driverRunning: true })).toEqual({ state: HERDR_STATES.working, message: undefined })
   })
 
-  it('outranks a running turn with a wait, and names it', () => {
-    const report = lifecycleReport({ blockedCount: 1, blockedMessage: 'approval needed · Bash', turnOpen: true })
+  it('has no turn-shaped input that could read as idle between chained turns', () => {
+    // One driver run spans every turn it chains through the inbox; a fact with
+    // no turn boundary in it cannot flap to idle between two of them.
+    expect(lifecycleReport({ ...NOTHING_PENDING, driverRunning: true }).state).toBe(HERDR_STATES.working)
+  })
+
+  it('outranks a running driver with a wait, and names it', () => {
+    const report = lifecycleReport({ blockedCount: 1, blockedMessage: 'approval needed · Bash', driverRunning: true })
     expect(report).toEqual({ state: HERDR_STATES.blocked, message: 'approval needed · Bash' })
   })
 
   it('keeps the newest wait while waits stack', () => {
-    const report = lifecycleReport({ blockedCount: 2, blockedMessage: 'question · continue?', turnOpen: false })
+    const report = lifecycleReport({ blockedCount: 2, blockedMessage: 'question · continue?', driverRunning: false })
     expect(report.state).toBe(HERDR_STATES.blocked)
     expect(report.message).toBe('question · continue?')
   })

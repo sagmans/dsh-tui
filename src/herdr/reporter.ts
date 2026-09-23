@@ -24,7 +24,14 @@ import {
   RETRY_MAX_MS,
   type SessionStartReason,
 } from './constants.ts'
-import { boundedMessage, createReportSequence, isReportChange, lifecycleReport, type LifecycleReport } from './state.ts'
+import {
+  boundedMessage,
+  createReportSequence,
+  isReportChange,
+  lifecycleReport,
+  type DriverStatus,
+  type LifecycleReport,
+} from './state.ts'
 
 export interface HerdrSessionInput {
   readonly id: string
@@ -43,10 +50,14 @@ export interface HerdrReporterOptions {
 
 export interface HerdrReporter {
   readonly enabled: boolean
-  /** A turn started. */
-  working(): void
-  /** A turn ended. */
-  idle(): void
+  /**
+   * The agent's driver started or stopped running.
+   *
+   * Deliberately not a turn boundary: the harness chains turns through a
+   * pending inbox inside one driver run, and reporting each turn's end would
+   * read as done between two turns of an agent that is still working.
+   */
+  driver(status: DriverStatus): void
   /** A decision is waiting on the reader; waits stack, so they are counted. */
   block(message: string): void
   /** One waiting decision was settled, answered, or abandoned. */
@@ -73,7 +84,7 @@ export function createHerdrReporter(options: HerdrReporterOptions = {}): HerdrRe
   const retryBaseMs = Math.max(1, options.retryBaseMs ?? RETRY_BASE_MS)
   let blockedCount = 0
   let blockedMessage: string | undefined
-  let turnOpen = false
+  let driverRunning = false
   let sessionId: string | undefined
   let wantedState: LifecycleReport | undefined
   let wantedSession: { readonly sessionId: string; readonly reason: SessionStartReason } | undefined
@@ -165,12 +176,8 @@ export function createHerdrReporter(options: HerdrReporterOptions = {}): HerdrRe
 
   const reporter: HerdrReporter = {
     enabled: client.enabled,
-    working() {
-      turnOpen = true
-      reporter.publish()
-    },
-    idle() {
-      turnOpen = false
+    driver(status) {
+      driverRunning = status === 'running'
       reporter.publish()
     },
     block(message) {
@@ -196,7 +203,7 @@ export function createHerdrReporter(options: HerdrReporterOptions = {}): HerdrRe
       reporter.publish(true)
     },
     publish(force = false) {
-      const next = lifecycleReport({ blockedCount, blockedMessage, turnOpen })
+      const next = lifecycleReport({ blockedCount, blockedMessage, driverRunning })
       if (force || isReportChange(wantedState, next)) {
         wantedState = next
         stateSent = false
