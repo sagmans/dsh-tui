@@ -15,6 +15,28 @@ const TODOS_MARK = '☰'
 const SUBAGENTS_MARK = '⚇'
 const JOBS_MARK = '⛭'
 
+/**
+ * The dashed rule that opens a section, and the two dashes that lead its name.
+ *
+ * Dashed, because a section is live state that changes under the reader's eye
+ * and a solid edge would claim the permanence of a border. The name rides the
+ * rule the heading used to spend a row on, so the edge costs neither a row nor
+ * a column of the rows a reader selects. Two dashes lead it: one would be read
+ * as part of the mark the name already carries.
+ */
+const SECTION_RULE_DASH = '┄'
+const SECTION_RULE_LEAD = `${SECTION_RULE_DASH}${SECTION_RULE_DASH} `
+
+/** How one section is named, and the elements it is drawn in. */
+interface DockSection {
+  /** The name the section reports, spelled as its heading spelled it. */
+  readonly heading: string
+  /** The element the name is read in, and the row the section falls back to. */
+  readonly headingToken: TuiToken
+  /** The element the rule is drawn in; hiding it leaves the section as it was. */
+  readonly borderToken: TuiToken
+}
+
 /** A todo state the dock draws: a settled item is not work left, so it is not one. */
 type OpenTodoStatus = Exclude<TodoEntry['status'], 'completed'>
 
@@ -48,7 +70,9 @@ function orderTodos(todos: readonly OpenTodo[]): readonly OpenTodo[] {
  * The dock above the editor: what the agent is working on right now.
  *
  * It renders nothing when there is nothing to say, so a plain conversation
- * keeps its rows for the conversation.
+ * keeps its rows for the conversation. Each list it draws opens on a rule that
+ * names it, in that section's own hue: the dock is several boards stacked, and
+ * which board a row belongs to has to be readable without reading the row.
  */
 export class WorkDock implements Component {
   constructor(
@@ -66,25 +90,68 @@ export class WorkDock implements Component {
     // The fold is the only state; nothing is cached.
   }
 
+  /**
+   * The dashed rule that opens a section, with the section's name on it.
+   *
+   * A name with no room left for a dash after it is drawn as the heading it
+   * would otherwise have been: a rule earns its row by being the edge of a
+   * list, and an edge a reader cannot tell from a name is not one.
+   */
+  private sectionRule(width: number, section: DockSection, named: boolean): string {
+    if (!named) return this.theme.style(section.borderToken, SECTION_RULE_DASH.repeat(Math.max(0, width)))
+    const head = `${SECTION_RULE_LEAD}${section.heading} `
+    if (visibleWidth(head) + 1 > width) {
+      return this.theme.style(section.headingToken, this.theme.cut(section.heading, width, '…'))
+    }
+    // Each run is painted on its own: a style wrapped around the finished row
+    // would end where the name's own style ended, taking the dashes after it
+    // with it, and the rule would lose the hue it is there to carry.
+    const lead = this.theme.style(section.borderToken, SECTION_RULE_LEAD)
+    const name = this.theme.style(section.headingToken, section.heading)
+    const tail = this.theme.style(section.borderToken, ` ${SECTION_RULE_DASH.repeat(width - visibleWidth(head))}`)
+    return `${lead}${name}${tail}`
+  }
+
+  /**
+   * One section as the dock draws it: the rule that names it, then its rows.
+   *
+   * The rows arrive already built and are pushed as they are, so a section costs
+   * the rows it always cost and no column of them. A hidden rule leaves the
+   * heading row in its place, which is the dock exactly as it stood before the
+   * sections were edged.
+   */
+  private pushSection(lines: string[], width: number, section: DockSection, rows: readonly string[]): void {
+    const named = this.theme.visible(section.headingToken)
+    if (this.theme.visible(section.borderToken)) {
+      lines.push(this.sectionRule(width, section, named))
+    } else if (named) {
+      lines.push(this.theme.style(section.headingToken, this.theme.cut(section.heading, width, '…')))
+    }
+    lines.push(...rows)
+  }
+
   private pushTodos(lines: string[], todos: readonly TodoEntry[], width: number): void {
     // Settled items leave the dock: it reports what is still to do, and a row
     // that stayed after its item finished would only grow the list as the turn
     // went on.
     const open = todos.filter(isOpenTodo)
     if (open.length === 0) return
-    if (this.theme.visible('dock.todos.heading')) {
-      lines.push(this.theme.style('dock.todos.heading', this.theme.cut(`${TODOS_MARK} todos · ${open.length} left`, width, '…')))
-    }
     const ordered = orderTodos(open)
+    const rows: string[] = []
     for (const todo of ordered.slice(0, DOCK_TODO_LIMIT)) {
       const token = TODO_TOKENS[todo.status]
       if (!this.theme.visible(token)) continue
       const lead = `  ${TODO_GLYPHS[todo.status]} `
-      lines.push(this.theme.cut(this.theme.rich(`${lead}${todo.content}`, { token, column: visibleWidth(lead) }), width, '…'))
+      rows.push(this.theme.cut(this.theme.rich(`${lead}${todo.content}`, { token, column: visibleWidth(lead) }), width, '…'))
     }
     if (ordered.length > DOCK_TODO_LIMIT && this.theme.visible('dock.todos.overflow')) {
-      lines.push(this.theme.style('dock.todos.overflow', this.theme.cut(`  … ${ordered.length - DOCK_TODO_LIMIT} more`, width, '…')))
+      rows.push(this.theme.style('dock.todos.overflow', this.theme.cut(`  … ${ordered.length - DOCK_TODO_LIMIT} more`, width, '…')))
     }
+    this.pushSection(lines, width, {
+      heading: `${TODOS_MARK} todos · ${open.length} left`,
+      headingToken: 'dock.todos.heading',
+      borderToken: 'dock.todos.border',
+    }, rows)
   }
 
   private pushSubagents(lines: string[], runs: readonly SubagentRun[], width: number): void {
@@ -92,18 +159,21 @@ export class WorkDock implements Component {
     // the same reason a settled job leaves: the dock holds work in flight.
     const running = runs.filter(run => run.status === 'running')
     if (running.length === 0) return
-    if (this.theme.visible('dock.subagents.heading')) {
-      lines.push(this.theme.style('dock.subagents.heading', this.theme.cut(`${SUBAGENTS_MARK} subagents · ${running.length} running`, width, '…')))
-    }
     const now = this.now()
+    const rows: string[] = []
     for (const run of running.slice(0, DOCK_SUBAGENT_LIMIT)) {
       if (!this.theme.visible('dock.subagents.running')) continue
       const lead = `  ${RUNNING_MARK} `
-      lines.push(this.theme.cut(this.theme.rich(`${lead}${describeSubagent(run, now)}`, { token: 'dock.subagents.running', column: visibleWidth(lead) }), width, '…'))
+      rows.push(this.theme.cut(this.theme.rich(`${lead}${describeSubagent(run, now)}`, { token: 'dock.subagents.running', column: visibleWidth(lead) }), width, '…'))
     }
     if (running.length > DOCK_SUBAGENT_LIMIT && this.theme.visible('dock.subagents.overflow')) {
-      lines.push(this.theme.style('dock.subagents.overflow', this.theme.cut(`  … ${running.length - DOCK_SUBAGENT_LIMIT} more`, width, '…')))
+      rows.push(this.theme.style('dock.subagents.overflow', this.theme.cut(`  … ${running.length - DOCK_SUBAGENT_LIMIT} more`, width, '…')))
     }
+    this.pushSection(lines, width, {
+      heading: `${SUBAGENTS_MARK} subagents · ${running.length} running`,
+      headingToken: 'dock.subagents.heading',
+      borderToken: 'dock.subagents.border',
+    }, rows)
   }
 
   private pushJobs(lines: string[], jobs: readonly JobSummary[], width: number): void {
@@ -112,19 +182,22 @@ export class WorkDock implements Component {
     // the outcome it reported had been read.
     const live = jobs.filter(job => isLive(job.status))
     if (live.length === 0) return
-    if (this.theme.visible('dock.jobs.heading')) {
-      lines.push(this.theme.style('dock.jobs.heading', this.theme.cut(`${JOBS_MARK} jobs · ${live.length} running`, width, '…')))
-    }
     const ordered = [...live].sort((left, right) => right.startedAt - left.startedAt)
     const now = this.now()
+    const rows: string[] = []
     for (const job of ordered.slice(0, DOCK_JOB_LIMIT)) {
       if (!this.theme.visible('dock.jobs.running')) continue
       const lead = `  ${RUNNING_MARK} `
-      lines.push(this.theme.cut(this.theme.rich(`${lead}${describeJob(job, now)}`, { token: 'dock.jobs.running', column: visibleWidth(lead) }), width, '…'))
+      rows.push(this.theme.cut(this.theme.rich(`${lead}${describeJob(job, now)}`, { token: 'dock.jobs.running', column: visibleWidth(lead) }), width, '…'))
     }
     if (ordered.length > DOCK_JOB_LIMIT && this.theme.visible('dock.jobs.overflow')) {
-      lines.push(this.theme.style('dock.jobs.overflow', this.theme.cut(`  … ${ordered.length - DOCK_JOB_LIMIT} more`, width, '…')))
+      rows.push(this.theme.style('dock.jobs.overflow', this.theme.cut(`  … ${ordered.length - DOCK_JOB_LIMIT} more`, width, '…')))
     }
+    this.pushSection(lines, width, {
+      heading: `${JOBS_MARK} jobs · ${live.length} running`,
+      headingToken: 'dock.jobs.heading',
+      borderToken: 'dock.jobs.border',
+    }, rows)
   }
 
   render(width: number): string[] {

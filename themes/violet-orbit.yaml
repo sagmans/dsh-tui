@@ -140,13 +140,20 @@ tokens:
   gate.hint: { fg: muted }  # unchanged from the shipped table
   dock.goal: { fg: accent, bold: true }
   dock.planMode: { fg: '#a7a7ff', bold: true }  # customMessageLabel
+  # A board's edge takes a hue of its own so the three are told apart at a
+  # glance. Subagents cannot take the shipped table's user role, which is
+  # near-white here because pi spends it on message text: a rule in it would
+  # read as a heading rather than as the top of a list, so dim carries it.
+  dock.todos.border: { fg: accent }  # accent
   dock.todos.heading: { fg: '#b5b5ff', bold: true }  # mdHeading
   dock.todos.pending: { fg: muted }  # unchanged from the shipped table
   dock.todos.inProgress: { fg: accent }
   dock.todos.overflow: { fg: muted }  # unchanged from the shipped table
+  dock.subagents.border: { fg: faint }  # dim
   dock.subagents.heading: { fg: '#b5b5ff', bold: true }  # mdHeading
   dock.subagents.running: { fg: muted }  # unchanged from the shipped table
   dock.subagents.overflow: { fg: muted }  # unchanged from the shipped table
+  dock.jobs.border: { fg: warn }  # warning
   dock.jobs.heading: { fg: '#b5b5ff', bold: true }  # mdHeading
   dock.jobs.running: { fg: muted }  # unchanged from the shipped table
   dock.jobs.overflow: { fg: muted }  # unchanged from the shipped table

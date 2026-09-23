@@ -32,6 +32,14 @@ breaking change, and a patch carries only fixes.
   the warning shade, which is now what a call that has not answered wears: a name
   painted in the colour of a state would leave that state nothing to say.
 
+- A dock section — todos, subagents, jobs — now opens on a dashed rule that
+  carries the section's own name, in a hue of its own. The heading row it
+  replaces is the row the rule spends, so a section is no taller and no narrower
+  than it was, and which board a row belongs to is read off the edge above it
+  instead of off the row itself. Hiding a section's border element restores the
+  plain heading, and a section too narrow for a name and a dash falls back to
+  one.
+
 - A message already written into the transcript now closes into a band — the rule
   above it, the rule below it, and nothing beside it — instead of a full box. The
   two sides and the two columns of padding cost four columns of every row, and
