@@ -54,6 +54,9 @@ const STUB_TUI = { requestRender: () => {}, terminal: { rows: 24, cols: 80 } } a
 
 /** The rows this frame pins: a shell command whose output waits behind its fold, and a file read. */
 const FIXTURE_COMMAND = 'pnpm test'
+/** A fixed request time and a fixed wait, so a running row's duration is a constant. */
+const FIXTURE_STARTED_AT = 1_000_000
+const FIXTURE_RUNNING_MS = 12_000
 const FIXTURE_OUTPUT = 'Tests  154 passed (154)'
 const FIXTURE_FILE = 'src/ui/view.ts'
 const FIXTURE_FILE_LINES = ['const expanded = this.viewState.expandCards', 'const preview = cardDetailRows(card, expanded)', '…']
@@ -382,7 +385,33 @@ describe('golden frames', () => {
     const resumed = fixture().view.render(80)
     expect(resumed).toEqual(live)
   })
+
+  for (const width of WIDTHS) {
+    it(`renders a call that has not answered yet at ${width} columns`, () => {
+      expect(runningFrame().render(width)).toMatchSnapshot()
+    })
+  }
 })
+
+/**
+ * A frame with one call still in flight.
+ *
+ * The clock is pinned rather than read: a snapshot of a running row carries the
+ * elapsed time it was drawn with, so a real clock would make the frame differ on
+ * every run and pin nothing.
+ */
+function runningFrame(frameTheme = theme): TranscriptView {
+  let clock = FIXTURE_STARTED_AT
+  const model = new TranscriptModel(fixturePresenter(), () => clock)
+  model.apply({ type: 'user/message', data: { content: [{ type: 'text', text: 'run the suite' }], source: { kind: 'user' } } })
+  model.apply({ type: 'tool/call', data: { name: 'bash', arguments: `{"command":"${FIXTURE_COMMAND}"}`, callId: 'c1' } })
+  clock = FIXTURE_STARTED_AT + FIXTURE_RUNNING_MS
+  return new TranscriptView(model, frameTheme, new MarkdownRenderer(frameTheme.markdown), {
+    state: () => DEFAULT_VIEW_STATE,
+    gate: () => undefined,
+    picker: () => undefined,
+  })
+}
 
 /**
  * A drawn diagram is layout, not only text: these frames pin the box art and the

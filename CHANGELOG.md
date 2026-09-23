@@ -8,6 +8,17 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+### Added
+
+- A tool call that has not answered yet now says so on its own card: the header
+  ends with a `▸` mark in the new `tool.running.title` style, followed by the
+  whole seconds it has been waiting once that is a second or more, and a dispatch
+  a `run_code` program is still waiting on carries the same mark in
+  `tool.subcall.running`. The mark gives way to the measured facts when the
+  result lands, so a reader can tell which of several calls is still running
+  without opening anything. Both elements can be recoloured or hidden like every
+  other token.
+
 ## [0.5.2] - 2026-09-23
 
 ### Added

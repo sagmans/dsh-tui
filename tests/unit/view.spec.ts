@@ -4,7 +4,7 @@ import { cardOfCall, cardOfResult, contentLines, CARD_DETAIL_MAX, CARD_SHELL_PRE
 import type { GateCard } from '@/gates.ts'
 import { createTheme, forwardEditorTheme, forwardMarkdownTheme, type TuiTheme } from '@/theme.ts'
 import { DEFAULT_PALETTE, DIFF_ADDED_BAND } from '@/theme-tokens.ts'
-import { TranscriptModel, type TranscriptEntry } from '@/transcript.ts'
+import { SECOND_MS, TranscriptModel, type TranscriptEntry } from '@/transcript.ts'
 import { MarkdownRenderer } from '@/ui/markdown.ts'
 import type { PickerCard } from '@/ui/picker.ts'
 import { RowCache } from '@/ui/rows.ts'
@@ -16,6 +16,18 @@ const theme = createTheme('none')
 
 /** The terminal the bar under test renders against; these tests read its rows only. */
 const STUB_TUI = { requestRender: () => {}, terminal: { rows: 24, cols: 80 } } as unknown as TUI
+
+/** How the real bash tool declares itself: a terminal card whose title is the command. */
+const bashPresenter: ToolPresenter = {
+  call: (name, argumentsJson) => cardOfCall(
+    { card: 'terminal', title: (JSON.parse(argumentsJson) as { command?: string }).command ?? '' },
+    name,
+  ),
+  result: (name, input) => cardOfResult(
+    { card: 'terminal', output: contentLines(input.content).join('\n'), exitCode: input.isError ? 1 : 0 },
+    { name, failed: input.isError, contentLines: contentLines(input.content) },
+  ),
+}
 
 /** The editor a gate answers in, which is the surface's own prompt bar. */
 const answerBar = (text: string): BoxedEditor => {
@@ -94,6 +106,34 @@ describe('TranscriptView repaints', () => {
     state.expandSubCalls = true
     view.render(40)
     expect(rows.stats().misses).toBe(4)
+  })
+
+  it('rebuilds a running row as its duration moves and never a settled one', () => {
+    const rows = new RowCache<TranscriptEntry>()
+    const clockState = { now: 1_000 }
+    const model = new TranscriptModel(bashPresenter, () => clockState.now)
+    model.apply({ type: 'tool/call', data: { name: 'bash', arguments: '{"command":"pnpm test"}', callId: 'c1' } })
+    const view = new TranscriptView(model, theme, new MarkdownRenderer(theme.markdown), { rows })
+
+    expect(view.render(60)).toEqual(['bash pnpm test · ▸'])
+    // Within the same second the row cannot have changed, so the frame reuses it.
+    expect(view.render(60)).toEqual(['bash pnpm test · ▸'])
+    expect(rows.stats()).toEqual({ hits: 1, misses: 1 })
+
+    clockState.now += SECOND_MS
+    expect(view.render(60)).toEqual(['bash pnpm test · ▸ ~1s'])
+    expect(rows.stats()).toEqual({ hits: 1, misses: 2 })
+
+    model.apply({
+      type: 'tool/result',
+      data: { message: { content: [{ type: 'tool-result', toolCallId: 'c1', text: 'all green' }], isError: false } },
+    })
+    expect(view.render(60)).toEqual(['bash pnpm test · exit 0 · 1 line'])
+    clockState.now += 30 * SECOND_MS
+    // A call that came back stops being redrawn: the row it settled into is the
+    // one the cache keeps, and nothing on it is measured by the clock any more.
+    expect(view.render(60)).toEqual(['bash pnpm test · exit 0 · 1 line'])
+    expect(rows.stats()).toEqual({ hits: 2, misses: 3 })
   })
 })
 
@@ -1239,6 +1279,105 @@ describe('TranscriptView nested PTC calls', () => {
     view.handleMouse(mouse('click', 'left', 1))
     // The row keeps what the program was shown, and says how much retention refused.
     expect(view.render(60).map(stripTerminalSequences).at(-1)).toBe('    3 more lines not shown')
+  })
+})
+
+describe('TranscriptView running cards', () => {
+  /** A clock the test moves, so a duration on a row is an assertion, not a race. */
+  const clockAt = (start: number) => {
+    const state = { now: start }
+    return { state, clock: () => state.now }
+  }
+
+  const CALL = { type: 'tool/call', data: { name: 'bash', arguments: '{"command":"pnpm test"}', callId: 'c1' } }
+  const RESULT = {
+    type: 'tool/result',
+    data: { message: { content: [{ type: 'tool-result', toolCallId: 'c1', text: 'all green' }], isError: false } },
+  }
+
+  /** A view over one call, folded like the shipped default. */
+  const runningView = (start = 1_000, state: ViewState = COLLAPSED) => {
+    const { state: clockState, clock } = clockAt(start)
+    const model = new TranscriptModel(bashPresenter, clock)
+    model.apply(CALL)
+    return { clockState, model, view: viewOf(model, state) }
+  }
+
+  it('marks a call that has not answered, with the time it has been waiting', () => {
+    const { clockState, view } = runningView()
+    clockState.now += 12 * SECOND_MS
+    // The command stays on the row it was drawn on: the state is added beside it
+    // rather than replacing what the reader was already reading.
+    expect(view.render(60)).toEqual(['bash pnpm test · ▸ ~12s'])
+  })
+
+  it('shows the mark alone while the wait is still under a second', () => {
+    const { clockState, view } = runningView()
+    clockState.now += 400
+    // A duration that has to be rounded up from nothing is noise, not a measurement.
+    expect(view.render(60)).toEqual(['bash pnpm test · ▸'])
+  })
+
+  it('drops the mark and reports the outcome when the result lands', () => {
+    const { clockState, model, view } = runningView()
+    clockState.now += 12 * SECOND_MS
+    expect(view.render(60)).toEqual(['bash pnpm test · ▸ ~12s'])
+    model.apply(RESULT)
+    // The settled row reports what the call produced, which supersedes the wait.
+    expect(view.render(60)).toEqual(['bash pnpm test · exit 0 · 1 line'])
+  })
+
+  it('keeps the running mark on an opened card', () => {
+    const { clockState, view } = runningView(1_000, OPEN)
+    clockState.now += 3 * SECOND_MS
+    expect(view.render(60)).toEqual(['bash · ▸ ~3s', '    pnpm test'])
+  })
+
+  it("leaves a settled card's elapsed time out of the row it keeps", () => {
+    const { clockState, model, view } = runningView()
+    clockState.now += 9 * SECOND_MS
+    expect(view.render(60).join('')).toContain('▸ ~9s')
+    model.apply(RESULT)
+    // A settled row must not keep a duration that keeps growing after the call
+    // came back; the number it reports from here is the outcome's own.
+    expect(view.render(60).join('')).not.toContain('~')
+  })
+
+  it('marks the dispatch the program is waiting on inside a PTC card', () => {
+    const { state: clockState, clock } = clockAt(1_000)
+    // The shell answers for bash alone, so the root keeps the fallback row a
+    // presenter-less run_code would draw.
+    const shell: ToolPresenter = {
+      call: (name, argumentsJson) => (name === 'bash'
+        ? cardOfCall({ card: 'terminal', title: (JSON.parse(argumentsJson) as { command?: string }).command ?? '' }, name)
+        : undefined),
+      result: () => undefined,
+    }
+    const model = new TranscriptModel(shell, clock)
+    model.apply({ type: 'tool/call', data: { name: 'run_code', arguments: '{"code":"x"}', callId: 'root' } })
+    model.apply({
+      type: 'tool/ptc-dispatch-start',
+      data: { rootCallId: 'root', parentCallId: 'root', subCallId: 'root:ptc:1', name: 'bash', arguments: { command: 'echo hi' } },
+    })
+    const inline: ViewState = { expandCards: false, expandReasoning: false, expandSubCalls: true }
+    clockState.now += 12 * SECOND_MS
+    expect(viewOf(model, inline).render(60)).toEqual(['run_code · ▸ ~12s', '  bash echo hi ▸'])
+
+    model.apply({
+      type: 'tool/ptc-dispatch',
+      data: { rootCallId: 'root', parentCallId: 'root', subCallId: 'root:ptc:1', name: 'bash', arguments: { command: 'echo hi' }, isError: false, content: [] },
+    })
+    expect(viewOf(model, inline).render(60).at(-1)).toBe('  bash echo hi')
+  })
+
+  it('draws no mark at all when the reader has turned the element off', () => {
+    const { clockState, model } = runningView()
+    clockState.now += 5 * SECOND_MS
+    const blind = createTheme('none', { palette: DEFAULT_PALETTE, tokens: new Map([['tool.running.title', { hidden: true }]]) })
+    const view = new TranscriptView(model, blind, new MarkdownRenderer(blind.markdown), { state: () => COLLAPSED })
+    // The mark is the signal and the duration is styled as a changed stat, so
+    // hiding the mark takes the claim with it rather than leaving a bare number.
+    expect(view.render(60)).toEqual(['bash pnpm test'])
   })
 })
 

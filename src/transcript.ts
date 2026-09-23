@@ -1,4 +1,4 @@
-import { cardFromLines, carriedFields, contentLines, mergeCards, subCallOf, subCallRows, SUBCALL_MAX, type ToolCard, type ToolPresenter, type ToolSubCall, type ToolSubCallRows } from './cards.ts'
+import { cardFromLines, carriedFields, contentLines, mergeCards, subCallRow, subCallRows, SUBCALL_MAX, type ToolCard, type ToolPresenter, type ToolSubCallRows } from './cards.ts'
 import { injectionSummary } from './injection.ts'
 import { sliceGraphemes, tailGraphemes } from './text.ts'
 import { countTokens } from './tokens.ts'
@@ -23,6 +23,9 @@ export const REASONING_CHAR_LIMIT = 20_000
  */
 const LIVE_THOUGHT_SLACK = 2
 
+/** One second in milliseconds, which is the unit a duration is reported in. */
+export const SECOND_MS = 1000
+
 /** The token count with its noun, because "1 tokens" reads as a bug. */
 function describeTokens(text: string): string {
   const tokens = countTokens(text)
@@ -45,8 +48,28 @@ interface PendingCall {
   readonly name: string
   readonly argumentsJson: string
   readonly index: number
+  /**
+   * When the call was requested, which is the only clock a running card has.
+   *
+   * The log carries no execution-start event for a tool, so the request is the
+   * earliest moment the surface can call the call in flight — and the elapsed
+   * time it shows a reader has to be measured from there.
+   */
+  readonly startedAt: number
   /** Sub-calls this call dispatched, so its settle can drop their bookkeeping. */
   readonly subs: string[]
+}
+
+/**
+ * What is known about one call the fold has seen requested and not answered.
+ *
+ * A settled call reads as nothing rather than as a zero elapsed time: "started
+ * now" and "waiting an unknown time" are different things to say, and only the
+ * fold can tell which one is true.
+ */
+export interface LiveCallState {
+  readonly running: boolean
+  readonly elapsed: number
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -154,15 +177,30 @@ export class TranscriptModel {
 
   constructor(
     private readonly presenter?: ToolPresenter,
-    /** Clock for "how long has this been thinking"; injected so a test can pin it. */
-    private readonly now: () => number = () => Date.now(),
+    /**
+     * Clock for "how long has this been thinking or running"; injected so a test
+     * can pin it and reachable through {@link now} so a renderer keys its rows
+     * to the same one.
+     */
+    private readonly clock: () => number = () => Date.now(),
   ) {}
+
+  /**
+   * The clock every duration on a row is measured with.
+   *
+   * A renderer that caches rows has to know when a running row's duration would
+   * have changed, and reading the same clock the fold timed the call with is the
+   * only way for the number on screen and the cache key to agree.
+   */
+  now(): number {
+    return this.clock()
+  }
 
   /** Rows to render: settled rows, the in-flight reasoning, then the in-flight text. */
   entries(): readonly TranscriptEntry[] {
     const entries = [...this.settled]
     if (this.liveReasoning !== '') {
-      const ranFor = this.reasoningStartedAt === undefined ? undefined : this.now() - this.reasoningStartedAt
+      const ranFor = this.reasoningStartedAt === undefined ? undefined : this.clock() - this.reasoningStartedAt
       entries.push({
         kind: 'reasoning',
         // The live row and the row it settles into share an id, so a click made
@@ -186,6 +224,21 @@ export class TranscriptModel {
    */
   settledCount(): number {
     return this.settled.length
+  }
+
+  /**
+   * How long one call has been in flight, or that it is not.
+   *
+   * The fold owns the request-to-result window, so a renderer asks here rather
+   * than timing the row itself: a row read twice in one frame would otherwise
+   * report two durations for one call.
+   */
+  liveCall(callId: string): LiveCallState {
+    const call = callId === '' ? undefined : this.pending.get(callId)
+    if (call === undefined) return { running: false, elapsed: 0 }
+    // Floored, not rounded: a duration that claims a second it has not waited
+    // yet would tick up before the call has been waiting that long.
+    return { running: true, elapsed: Math.max(0, Math.floor((this.clock() - call.startedAt) / SECOND_MS)) }
   }
 
   /** Whether any row exists, so a caller can decide to clear or redraw. */
@@ -227,7 +280,7 @@ export class TranscriptModel {
         return
       case 'reasoning-delta':
         if (typeof record.text !== 'string') return
-        this.reasoningStartedAt ??= this.now()
+        this.reasoningStartedAt ??= this.clock()
         this.liveReasoningId ??= String(++this.thoughtSeq)
         this.liveReasoning += record.text
         // A live thought is not bounded until the block it belongs to ends, and
@@ -302,7 +355,7 @@ export class TranscriptModel {
   private settleReasoning(): void {
     if (this.liveReasoning === '') return
     const text = this.liveReasoning
-    const ranFor = this.reasoningStartedAt === undefined ? undefined : this.now() - this.reasoningStartedAt
+    const ranFor = this.reasoningStartedAt === undefined ? undefined : this.clock() - this.reasoningStartedAt
     this.liveReasoning = ''
     this.reasoningStartedAt = undefined
     this.paintReasoning(text, ranFor)
@@ -391,7 +444,7 @@ export class TranscriptModel {
           // Without a presenter the row still has to say what ran and with what.
           card: card ?? cardFromLines('generic', name, name, argumentsJson === '' ? [] : argumentsJson.split('\n'), false),
         })
-        if (callId !== '') this.pending.set(callId, { name, argumentsJson, index: this.settled.length - 1, subs: [] })
+        if (callId !== '') this.pending.set(callId, { name, argumentsJson, index: this.settled.length - 1, startedAt: this.clock(), subs: [] })
         return
       }
       case 'tool/ptc-dispatch-start': {
@@ -436,24 +489,28 @@ export class TranscriptModel {
     const output = settled ? this.subCallOutcome(name, argumentsJson, data, view) : undefined
     const known = this.pendingSub.get(subCallId)
     if (known !== undefined) {
-      // A settle restates the row its start drew: it adds the outcome a reader
-      // opens the row for, and a failure takes back what the call only declared.
+      // A settle restates the row its start drew: it ends the claim that the
+      // call is still in flight, adds the outcome a reader opens the row for, and
+      // a failure takes back what the call only declared. A call that produced
+      // nothing to open still has to be restated, or its row would keep saying it
+      // is running for as long as the card lives.
       if (!settled || known.childIndex < 0) return
-      if (!isError && output === undefined) return
+      const drawn = (card.subCalls ?? [])[known.childIndex]
+      if (!isError && output === undefined && drawn?.running !== true) return
+      // A settle that reports nothing to open leaves the row's own outcome in
+      // place; only a failure takes it back, because the rows it drew as applied
+      // never happened.
+      const settledOutput = isError ? output : output ?? drawn?.output
       const subCalls = (card.subCalls ?? []).map((call, at) => at === known.childIndex
-        ? this.settledSubCall(call, isError, output)
+        ? subCallRow(subCallId, name, argumentsJson, view, call, settledOutput, false, isError)
         : call)
       this.settled[root.index] = { kind: 'tool', id: rootCallId, card: { ...card, subCalls } }
       return
     }
-    const presented = subCallRows(view)
     const failed = settled && isError
-    const call = {
-      ...subCallOf(subCallId, name, argumentsJson, view),
-      failed,
-      ...(presented === undefined || failed ? {} : { presented }),
-      ...(output === undefined ? {} : { output }),
-    }
+    // A dispatch log arrives only once the call has settled, so a row that no
+    // settle has restated yet is the one still running.
+    const call = subCallRow(subCallId, name, argumentsJson, view, undefined, output, !settled, failed)
     const kept = card.subCalls ?? []
     const total = (card.subCallsTotal ?? 0) + 1
     if (kept.length >= SUBCALL_MAX) {
@@ -469,25 +526,6 @@ export class TranscriptModel {
     root.subs.push(subCallId)
     this.pendingSub.set(subCallId, { rootIndex: root.index, childIndex: kept.length })
     this.settled[root.index] = { kind: 'tool', id: rootCallId, card: { ...card, subCalls: [...kept, call], subCallsTotal: total } }
-  }
-
-  /**
-   * The row a settle leaves behind, once the outcome the call produced is known.
-   *
-   * A row that failed keeps only what still holds: its declared change never
-   * happened, so those rows go with the outcome that never came, while the
-   * outcome stays because the reason it failed is what a reader opens it to read.
-   */
-  private settledSubCall(call: ToolSubCall, isError: boolean, output: ToolSubCallRows | undefined): ToolSubCall {
-    const outcome = output === undefined ? {} : { output }
-    if (!isError) return { ...call, ...outcome }
-    return {
-      id: call.id,
-      title: call.title,
-      ...(call.argument === undefined ? {} : { argument: call.argument }),
-      failed: true,
-      ...outcome,
-    }
   }
 
   /**

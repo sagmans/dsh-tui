@@ -145,7 +145,11 @@ export const TUI_TOKENS = [
   'tool.hint',
   'tool.failed.title',
   'tool.failed.glyph',
+  // A call still in flight is its own element: a reader who quiets the failed
+  // row's colour must not also lose the one mark that says work is happening.
+  'tool.running.title',
   'tool.subcall.title',
+  'tool.subcall.running',
   'tool.subcall.args',
   // Tool cards: per kind
   'tool.diff.header',
@@ -359,7 +363,9 @@ export const DEFAULT_TOKENS: Readonly<Record<TuiToken, StyleSpec>> = {
   'tool.hint': muted,
   'tool.failed.title': { fg: 'removed' },
   'tool.failed.glyph': { fg: 'removed' },
+  'tool.running.title': { fg: 'warn', bold: true },
   'tool.subcall.title': muted,
+  'tool.subcall.running': { fg: 'warn' },
   'tool.subcall.args': { fg: 'arg' },
 
   'tool.diff.header': muted,

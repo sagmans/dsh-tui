@@ -93,6 +93,15 @@ export interface ToolSubCall {
   readonly argument?: string
   readonly failed: boolean
   /**
+   * Whether the call is dispatched and still running.
+   *
+   * A program's calls are the only work a reader sees between the moment the
+   * program starts and its return value, so a call that has settled already and
+   * one still in flight have to be told apart: the card they sit under is one
+   * row either way until the program comes back.
+   */
+  readonly running: boolean
+  /**
    * What the tool's own presenter drew for the call — a diff derived from the
    * arguments, a raw input — kept only for the reader who opens the row.
    *
@@ -157,6 +166,18 @@ export interface ToolCard {
   /** Rows retained for rendering, already capped at CARD_DETAIL_MAX. */
   readonly detail: readonly CardRow[]
   readonly failed: boolean
+  /**
+   * Whether the call is logged and still unanswered, filled in at draw time.
+   *
+   * The surface is told when a call is requested and when its result lands, and
+   * nothing in between: between those two events the call is what the model is
+   * waiting on, which is the one thing a reader watching a long run needs to see.
+   * Only a frame sets these, and it sets them on a copy of the folded card, so a
+   * stored card never claims a call that has since answered is still running.
+   */
+  readonly running?: boolean
+  /** Whole seconds the call has been in flight, drawn only while it is. */
+  readonly elapsed?: number
   /** Rows the tool actually presented, which retention may have cut short. */
   readonly totalLines: number
   /**
@@ -251,18 +272,43 @@ export function oneLine(text: string): string {
 }
 
 /**
- * The one-line row for one nested call.
+ * The one-line row for one nested call, as its start or its settle leaves it.
  *
  * A tool that declares a call view is drawn exactly as its own header would be;
  * only a tool with no view at all falls back to its registry name and raw call,
  * because the surface cannot name a salient argument for a schema it never saw.
+ * A settle logs the same call again, and the presenter that answered the first
+ * time is asked again for the view it would draw — so the row's identity comes
+ * from the row already on screen wherever there is one, and only a call that was
+ * dropped earlier is named from the log.
  */
-export function subCallOf(id: string, name: string, argumentsJson: string, view: ToolCard | undefined): ToolSubCall {
-  if (view !== undefined) {
-    return { id, title: view.title, ...(view.argument === undefined ? {} : { argument: view.argument }), failed: false }
+export function subCallRow(
+  id: string,
+  name: string,
+  argumentsJson: string,
+  view: ToolCard | undefined,
+  existing: ToolSubCall | undefined,
+  output: ToolSubCallRows | undefined,
+  running: boolean,
+  failed: boolean,
+): ToolSubCall {
+  const title = view?.title ?? existing?.title ?? name
+  const raw = view !== undefined || existing !== undefined ? undefined : clipLine(argumentsJson)
+  const argument = view?.argument ?? existing?.argument ?? raw
+  // A failed call keeps only what still holds: the change it declared never
+  // happened, so the rows that drew as applied go with the outcome that never
+  // came. Its outcome stays, because the reason it failed is what a reader opens
+  // the row to read.
+  const presented = failed ? undefined : subCallRows(view) ?? existing?.presented
+  return {
+    id,
+    title,
+    ...(argument === undefined || argument === '' ? {} : { argument }),
+    failed,
+    running,
+    ...(presented === undefined ? {} : { presented }),
+    ...(output === undefined ? {} : { output }),
   }
-  const raw = argumentsJson === '' ? '' : clipLine(argumentsJson)
-  return { id, title: name, ...(raw === '' ? {} : { argument: raw }), failed: false }
 }
 
 /**

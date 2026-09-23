@@ -104,6 +104,24 @@ exports[`golden frames > renders a busy dock at 80 columns 1`] = `
 ]
 `;
 
+exports[`golden frames > renders a call that has not answered yet at 40 columns 1`] = `
+[
+  "╭──────────────────────────────────────╮",
+  "│ run the suite                        │",
+  "╰──────────────────────────────────────╯",
+  "bash pnpm test · ▸ ~12s",
+]
+`;
+
+exports[`golden frames > renders a call that has not answered yet at 80 columns 1`] = `
+[
+  "╭──────────────────────────────────────────────────────────────────────────────╮",
+  "│ run the suite                                                                │",
+  "╰──────────────────────────────────────────────────────────────────────────────╯",
+  "bash pnpm test · ▸ ~12s",
+]
+`;
+
 exports[`golden frames > renders a question gate at 40 columns 1`] = `
 [
   "",

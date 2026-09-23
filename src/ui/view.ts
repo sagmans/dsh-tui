@@ -9,7 +9,7 @@ import {
 import { cardDetailRows, clip, oneLine, shellFoldHint, shellRetentionHint, type CardPreview, type CardRow, type CardStat, type CardStatKind, type ToolCard, type ToolCardKind, type ToolSubCall } from '../cards.ts'
 import { defaultKeymap, hintKeys, type Keymap } from '../input/actions.ts'
 import { CUSTOM_ROW_NUMBER, type GateCard } from '../gates.ts'
-import type { TranscriptEntry, TranscriptModel } from '../transcript.ts'
+import { SECOND_MS, type LiveCallState, type TranscriptEntry, type TranscriptModel } from '../transcript.ts'
 import { DEFAULT_TOOL_DISPLAY, type ToolDisplaySpec } from '../tool-display.ts'
 import { CARD_ROW_TOKEN, type TuiToken } from '../theme-tokens.ts'
 import type { TuiTheme } from '../theme.ts'
@@ -37,6 +37,14 @@ const COLLAPSED_EDGE_PADDING = 5
 const CURSOR_MARK = '❯'
 const APPROVAL_MARK = '⚠'
 const QUESTION_MARK = '?'
+/**
+ * The mark that says a call is in flight.
+ *
+ * The same arrow the dock uses for what is still to do, because it answers the
+ * same question — is this work still moving — and a second symbol for it would
+ * read as a second state.
+ */
+const RUNNING_MARK = '▸'
 const CHECKBOX_ON = '[x]'
 const CHECKBOX_OFF = '[ ]'
 /** A row that a card's kind does not map draws as generic detail. */
@@ -428,7 +436,11 @@ export class TranscriptView implements Component {
   }
 
   private pushCard(lines: string[], entry: Extract<TranscriptEntry, { kind: 'tool' }>, width: number, spans: ClickSpan[]): void {
-    const card = entry.card
+    const live = this.model.liveCall(entry.id)
+    // The card was drawn when the call was requested, so a duration measured at
+    // render time is the only clock it can be shown with: the fold holds the one
+    // timestamp this window has.
+    const card = this.cardOf(entry.card, live)
     const spec = this.toolDisplay(card.tool)
     const expanded = this.expansionOf(entry)
     const start = lines.length
@@ -508,10 +520,13 @@ export class TranscriptView implements Component {
       const titleToken = call.failed ? 'tool.failed.title' : 'tool.subcall.title'
       const column = visibleWidth(SUBCALL_INDENT)
       const title = this.theme.visible(titleToken) ? this.theme.rich(call.title, { token: titleToken, column }) : ''
+      // A program's calls are the work between its start and its return value, so
+      // the one still in flight is marked where the rest of them are read.
+      const running = call.running ? ` ${this.theme.style('tool.subcall.running', RUNNING_MARK)}` : ''
       const argument = call.argument === undefined || !this.theme.visible('tool.subcall.args')
         ? ''
         : ` ${this.theme.rich(call.argument, { token: 'tool.subcall.args', column })}`
-      const drawn = `${title}${argument}`
+      const drawn = `${title}${argument}${running}`
       // A row whose every part is hidden draws nothing, and nothing must not
       // cost a line the card does not have.
       if (drawn === '') continue
@@ -573,6 +588,9 @@ export class TranscriptView implements Component {
     const lead = this.cardLead(titleToken, glyphToken)
     const title = this.cardTitle(card, titleToken)
     const separator = this.statSeparator()
+    // One row is what folding promises, so a running call reports its duration
+    // on the same line rather than costing a row of its own.
+    const running = this.runningStat(card)
     // The facts carry their own lead; the outcome and the count join whatever
     // precedes them, so the folded line reads as one sentence about the run.
     let tail = this.renderStats(card.stats)
@@ -584,6 +602,7 @@ export class TranscriptView implements Component {
       const count = this.renderStats([{ kind: 'size', text: `${hidden} line${hidden === 1 ? '' : 's'}` }], '')
       if (count !== '') tail += `${separator}${count}`
     }
+    if (running !== '') tail += `${separator}${running}`
     const fixed = visibleWidth(lead) + visibleWidth(title) + visibleWidth(tail)
     const room = Math.max(0, edge - fixed - (title === '' ? 0 : 1))
     const argument = room > 0 ? this.cardArgument(card, room) : ''
@@ -641,7 +660,56 @@ export class TranscriptView implements Component {
     const title = this.cardTitle(card, titleToken)
     const argument = card.kind === 'terminal' ? '' : this.cardArgument(card)
     const head = [title, argument].filter(part => part !== '').join(' ')
-    return { lead, body: head + this.renderStats(card.stats) }
+    const stats = this.renderStats(card.stats)
+    const running = this.runningStat(card)
+    return { lead, body: `${head}${stats}${running === '' ? '' : `${this.statSeparator()}${running}`}` }
+  }
+
+  /**
+   * The running card: a claim that a call has not come back, and for how long.
+   *
+   * The mark is hard-coded and the text is styled as a changed stat, which is
+   * what separates a call still working from the measured facts a finished one
+   * reports — a reader scanning a card must not have to read the number to know
+   * whether it is still moving.
+   */
+  private runningStat(card: ToolCard): string {
+    if (card.running !== true || !this.theme.visible('tool.running.title')) return ''
+    const seconds = card.elapsed ?? 0
+    const mark = this.theme.style('tool.running.title', RUNNING_MARK)
+    // Below a whole second there is nothing measured to report, so the mark
+    // stands alone rather than reading as a duration rounded up from nothing.
+    if (seconds < 1) return mark
+    const elapsed = this.renderStats([{ kind: 'changed', text: `${seconds}s` }], '')
+    return elapsed === '' ? mark : `${mark} ${elapsed}`
+  }
+
+  /**
+   * The card as this frame reads it, with its elapsed time filled in.
+   *
+   * The entry itself is left alone: the rows are cached by entry identity, so
+   * rewriting one every second to carry a number that changes every second would
+   * discard the rows of a call that has been waiting all along.
+   */
+  private cardOf(card: ToolCard, live: LiveCallState): ToolCard {
+    if (!live.running || card.running === true) return card
+    return { ...card, running: true, elapsed: live.elapsed }
+  }
+
+  /**
+   * Whether any part of one card is still in flight.
+   *
+   * Only a card with work outstanding has a clock attached to its cache, so the
+   * moment the last call settles the row stops being rebuilt: a program that
+   * came back must not keep spending the cache its result is now stored in.
+   */
+  private isLive(entry: TranscriptEntry): boolean {
+    if (entry.kind !== 'tool') return false
+    // The card's own call is live only while the fold still has it pending: the
+    // flag is put on a copy at draw time, so the entry alone cannot answer this.
+    // A dispatched call carries its flag on the fold itself, where a settle
+    // clears it.
+    return this.model.liveCall(entry.id).running || (entry.card.subCalls ?? []).some(call => call.running)
   }
 
   /** The separator a header uses between its label, its facts, and its outcome. */
@@ -807,7 +875,11 @@ export class TranscriptView implements Component {
       const marks = entry.kind === 'tool'
         ? `${open === true ? '+' : '-'}${(entry.card.subCalls ?? []).map(call => (this.subCallOpen(entry.id, call.id) ? '1' : '0')).join('')}`
         : open === true ? '+' : '-'
-      const tag = `${baseTag}|${marks}`
+      // A running row is drawn from a clock the rest of the row is not, so its
+      // cache is spent every second: the entries after it stay put, and a card
+      // waiting out a two-minute run keeps saying so instead of freezing at the
+      // first second it was drawn.
+      const tag = `${baseTag}|${marks}${this.isLive(entry) ? `|${Math.floor(this.model.now() / SECOND_MS)}` : ''}`
       const local: ClickSpan[] = []
       // The in-flight rows change on every frame, so caching them would only
       // fill the cache with objects nobody will ask for again.

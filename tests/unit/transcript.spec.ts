@@ -612,4 +612,80 @@ describe('TranscriptModel nested PTC calls', () => {
     const card = model.entries()[0]
     expect(card?.kind === 'tool' && card.card.subCalls).toHaveLength(1)
   })
+
+  it('marks a dispatched call in flight only until its dispatch log lands', () => {
+    const model = new TranscriptModel(recordingPresenter())
+    model.apply(runCall)
+    model.apply(start('root:ptc:1', 'read', { file_path: 'src/x.ts' }))
+    // The start is logged before the call runs, so the row drawn from it is the
+    // only sign a reader has that the program is waiting on this call.
+    expect(subCallsOf(model).map(call => call.running)).toEqual([true])
+
+    model.apply(settle('root:ptc:1', 'read', { file_path: 'src/x.ts' }, false))
+    expect(subCallsOf(model).map(call => call.running)).toEqual([false])
+  })
+
+  it('ends a dispatched call that answered with nothing to open', () => {
+    // A call whose content the program discarded still settles: a row left
+    // saying it is running would outlive the program that dispatched it.
+    const presenter: ToolPresenter = { call: () => undefined, result: () => undefined }
+    const model = new TranscriptModel(presenter)
+    model.apply(runCall)
+    model.apply(start('root:ptc:1', 'read', { file_path: 'src/x.ts' }))
+    model.apply(settle('root:ptc:1', 'read', { file_path: 'src/x.ts' }, false))
+    expect(subCallsOf(model).map(call => call.running)).toEqual([false])
+    expect(subCallsOf(model)[0]?.output).toBeUndefined()
+  })
+})
+
+describe('TranscriptModel live calls', () => {
+  /** A clock the test moves by hand, so a duration is an assertion and not a race. */
+  const clockAt = (start: number) => {
+    const state = { now: start }
+    return { state, clock: () => state.now }
+  }
+
+  const call = { type: 'tool/call', data: { name: 'bash', arguments: '{"command":"sleep 5"}', callId: 'c1' } }
+  const result = {
+    type: 'tool/result',
+    data: { message: { content: [{ type: 'tool-result', toolCallId: 'c1', text: 'done' }], isError: false } },
+  }
+
+  it('reports a requested call as in flight, from the moment it was requested', () => {
+    const { state, clock } = clockAt(1_000)
+    const model = new TranscriptModel(undefined, clock)
+    model.apply(call)
+    expect(model.liveCall('c1')).toEqual({ running: true, elapsed: 0 })
+
+    state.now = 13_000
+    expect(model.liveCall('c1')).toEqual({ running: true, elapsed: 12 })
+  })
+
+  it('stops reporting a call once its result lands', () => {
+    const { state, clock } = clockAt(1_000)
+    const model = new TranscriptModel(undefined, clock)
+    model.apply(call)
+    model.apply(result)
+    state.now = 60_000
+    expect(model.liveCall('c1')).toEqual({ running: false, elapsed: 0 })
+  })
+
+  it('reports nothing for an id this fold never saw, as a resumed row must', () => {
+    const model = new TranscriptModel()
+    expect(model.liveCall('missing')).toEqual({ running: false, elapsed: 0 })
+    expect(model.liveCall('')).toEqual({ running: false, elapsed: 0 })
+  })
+
+  it('keeps the card it settled from claiming to be in flight', () => {
+    const { clock } = clockAt(1_000)
+    const model = new TranscriptModel(undefined, clock)
+    model.apply(call)
+    const [entry] = model.entries()
+    // The card drawn from the call is the one a renderer sees before any result;
+    // the fold itself never marks it, so a settled row cannot inherit the claim.
+    expect(entry?.kind === 'tool' && entry.card.running).toBeUndefined()
+    model.apply(result)
+    const [settled] = model.entries()
+    expect(settled?.kind === 'tool' && settled.card.running).toBeUndefined()
+  })
 })
