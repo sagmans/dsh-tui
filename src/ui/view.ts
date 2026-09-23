@@ -45,6 +45,8 @@ const QUESTION_MARK = '?'
  * read as a second state.
  */
 const RUNNING_MARK = '▸'
+/** A duration below a whole second is not a measurement, so it is not drawn. */
+const MIN_ELAPSED_SECONDS = 1
 const CHECKBOX_ON = '[x]'
 const CHECKBOX_OFF = '[ ]'
 /** A row that a card's kind does not map draws as generic detail. */
@@ -518,15 +520,20 @@ export class TranscriptView implements Component {
       const start = lines.length
       const open = this.subCallOpen(entry.id, call.id)
       const titleToken = call.failed ? 'tool.failed.title' : 'tool.subcall.title'
-      const column = visibleWidth(SUBCALL_INDENT)
-      const title = this.theme.visible(titleToken) ? this.theme.rich(call.title, { token: titleToken, column }) : ''
       // A program's calls are the work between its start and its return value, so
-      // the one still in flight is marked where the rest of them are read.
-      const running = call.running ? ` ${this.theme.style('tool.subcall.running', RUNNING_MARK)}` : ''
+      // the one still in flight is marked where the rest of them are read — in
+      // front of the name, which keeps every row's name in one column.
+      const lead = call.running && this.theme.visible('tool.subcall.running')
+        ? `${this.theme.style('tool.subcall.running', RUNNING_MARK)} `
+        : ''
+      const column = visibleWidth(`${SUBCALL_INDENT}${lead}`)
+      const title = this.theme.visible(titleToken) ? this.theme.rich(call.title, { token: titleToken, column }) : ''
       const argument = call.argument === undefined || !this.theme.visible('tool.subcall.args')
         ? ''
-        : ` ${this.theme.rich(call.argument, { token: 'tool.subcall.args', column })}`
-      const drawn = `${title}${argument}${running}`
+        : this.theme.rich(call.argument, { token: 'tool.subcall.args', column })
+      // Joined rather than concatenated: the name and the argument are one space
+      // apart whether or not the mark or either of them is drawn at all.
+      const drawn = [lead.trimEnd(), title, argument.trim()].filter(part => part !== '').join(' ')
       // A row whose every part is hidden draws nothing, and nothing must not
       // cost a line the card does not have.
       if (drawn === '') continue
@@ -585,12 +592,12 @@ export class TranscriptView implements Component {
    */
   private renderCollapsedHead(card: ToolCard, hidden: number, titleToken: TuiToken, glyphToken: TuiToken, width: number): string {
     const edge = collapsedEdge(width)
-    const lead = this.cardLead(titleToken, glyphToken)
+    const lead = this.cardLead(titleToken, glyphToken, this.runningMark(card, titleToken))
     const title = this.cardTitle(card, titleToken)
     const separator = this.statSeparator()
     // One row is what folding promises, so a running call reports its duration
     // on the same line rather than costing a row of its own.
-    const running = this.runningStat(card)
+    const elapsed = this.elapsedStat(card)
     // The facts carry their own lead; the outcome and the count join whatever
     // precedes them, so the folded line reads as one sentence about the run.
     let tail = this.renderStats(card.stats)
@@ -602,7 +609,7 @@ export class TranscriptView implements Component {
       const count = this.renderStats([{ kind: 'size', text: `${hidden} line${hidden === 1 ? '' : 's'}` }], '')
       if (count !== '') tail += `${separator}${count}`
     }
-    if (running !== '') tail += `${separator}${running}`
+    if (elapsed !== '') tail += `${separator}${elapsed}`
     const fixed = visibleWidth(lead) + visibleWidth(title) + visibleWidth(tail)
     const room = Math.max(0, edge - fixed - (title === '' ? 0 : 1))
     const argument = room > 0 ? this.cardArgument(card, room) : ''
@@ -630,9 +637,9 @@ export class TranscriptView implements Component {
   }
 
   /** The mark that introduces a card, empty when the theme hides its label. */
-  private cardLead(titleToken: TuiToken, glyphToken: TuiToken): string {
+  private cardLead(titleToken: TuiToken, glyphToken: TuiToken, running: string): string {
     const glyph = this.theme.visible(titleToken) ? this.theme.glyph(glyphToken) : ''
-    return glyph === '' ? '' : `${glyph} `
+    return glyph === '' ? running : `${glyph} ${running}`
   }
 
   /** A card's label, styled, or nothing when the theme hides it. */
@@ -656,32 +663,57 @@ export class TranscriptView implements Component {
    * argument that can be a whole command rather than a word.
    */
   private renderHead(card: ToolCard, titleToken: TuiToken, glyphToken: TuiToken): { lead: string; body: string } {
-    const lead = this.cardLead(titleToken, glyphToken)
+    const lead = this.cardLead(titleToken, glyphToken, this.runningMark(card, titleToken))
     const title = this.cardTitle(card, titleToken)
     const argument = card.kind === 'terminal' ? '' : this.cardArgument(card)
     const head = [title, argument].filter(part => part !== '').join(' ')
     const stats = this.renderStats(card.stats)
-    const running = this.runningStat(card)
-    return { lead, body: `${head}${stats}${running === '' ? '' : `${this.statSeparator()}${running}`}` }
+    const elapsed = this.elapsedStat(card)
+    return { lead, body: `${head}${stats}${elapsed === '' ? '' : `${this.statSeparator()}${elapsed}`}` }
   }
 
   /**
-   * The running card: a claim that a call has not come back, and for how long.
+   * The claim that a call has not come back, drawn before the tool's name.
    *
-   * The mark is hard-coded and the text is styled as a changed stat, which is
-   * what separates a call still working from the measured facts a finished one
-   * reports — a reader scanning a card must not have to read the number to know
-   * whether it is still moving.
+   * The mark is hard-coded because it is a state rather than a decoration: a
+   * reader scanning a column of cards must not have to read a number to know
+   * which of them is still moving.
    */
-  private runningStat(card: ToolCard): string {
-    if (card.running !== true || !this.theme.visible('tool.running.title')) return ''
+  private runningMark(card: ToolCard, titleToken: TuiToken): string {
+    if (card.running !== true || this.dispatchedCalls(card)) return ''
+    // A mark with no name to introduce is a row that lost its first word.
+    if (!this.theme.visible(titleToken) || !this.theme.visible('tool.running.glyph')) return ''
+    return `${this.theme.style('tool.running.glyph', RUNNING_MARK)} `
+  }
+
+  /**
+   * The seconds a call has taken: counting while it is unanswered, and kept on
+   * the card of a program that dispatched calls.
+   *
+   * A plain tool's duration is not worth the width once its outcome is on the
+   * row, but a program is a thing that took time, and the reader who watched the
+   * timer count wants the total it ended on — quietly, since the work is over.
+   */
+  private elapsedStat(card: ToolCard): string {
     const seconds = card.elapsed ?? 0
-    const mark = this.theme.style('tool.running.title', RUNNING_MARK)
-    // Below a whole second there is nothing measured to report, so the mark
-    // stands alone rather than reading as a duration rounded up from nothing.
-    if (seconds < 1) return mark
-    const elapsed = this.renderStats([{ kind: 'changed', text: `${seconds}s` }], '')
-    return elapsed === '' ? mark : `${mark} ${elapsed}`
+    if (seconds < MIN_ELAPSED_SECONDS) return ''
+    const token: TuiToken | undefined = card.running === true
+      ? 'tool.running.elapsed'
+      : this.dispatchedCalls(card)
+        ? 'tool.elapsed.done'
+        : undefined
+    if (token === undefined || !this.theme.visible(token)) return ''
+    return this.theme.style(token, `${STAT_SYMBOL.changed}${seconds}s`)
+  }
+
+  /**
+   * Whether this card drew calls a program dispatched.
+   *
+   * The child rows are the fold's own statement that the card is a program's, so
+   * the view never has to know the name of the tool that runs one.
+   */
+  private dispatchedCalls(card: ToolCard): boolean {
+    return card.subCalls !== undefined
   }
 
   /**

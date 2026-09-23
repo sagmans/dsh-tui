@@ -59,7 +59,9 @@ tokens:
   tool.hint: { fg: muted }  # unchanged from the shipped table
   tool.failed.title: { fg: removed }  # unchanged from the shipped table
   tool.failed.glyph: { fg: removed }  # unchanged from the shipped table
-  tool.running.title: { fg: warn, bold: true }  # unchanged from the shipped table
+  tool.running.glyph: { fg: warn, bold: true }  # unchanged from the shipped table
+  tool.running.elapsed: { fg: warn }  # unchanged from the shipped table
+  tool.elapsed.done: { fg: muted, italic: true }  # unchanged from the shipped table
   tool.subcall.title: { fg: muted }  # unchanged from the shipped table
   tool.subcall.running: { fg: warn }  # unchanged from the shipped table
   tool.subcall.args: { fg: arg }  # unchanged from the shipped table

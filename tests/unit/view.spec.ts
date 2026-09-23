@@ -115,13 +115,13 @@ describe('TranscriptView repaints', () => {
     model.apply({ type: 'tool/call', data: { name: 'bash', arguments: '{"command":"pnpm test"}', callId: 'c1' } })
     const view = new TranscriptView(model, theme, new MarkdownRenderer(theme.markdown), { rows })
 
-    expect(view.render(60)).toEqual(['bash pnpm test · ▸'])
+    expect(view.render(60)).toEqual(['▸ bash pnpm test'])
     // Within the same second the row cannot have changed, so the frame reuses it.
-    expect(view.render(60)).toEqual(['bash pnpm test · ▸'])
+    expect(view.render(60)).toEqual(['▸ bash pnpm test'])
     expect(rows.stats()).toEqual({ hits: 1, misses: 1 })
 
     clockState.now += SECOND_MS
-    expect(view.render(60)).toEqual(['bash pnpm test · ▸ ~1s'])
+    expect(view.render(60)).toEqual(['▸ bash pnpm test · ~1s'])
     expect(rows.stats()).toEqual({ hits: 1, misses: 2 })
 
     model.apply({
@@ -1306,22 +1306,23 @@ describe('TranscriptView running cards', () => {
   it('marks a call that has not answered, with the time it has been waiting', () => {
     const { clockState, view } = runningView()
     clockState.now += 12 * SECOND_MS
-    // The command stays on the row it was drawn on: the state is added beside it
-    // rather than replacing what the reader was already reading.
-    expect(view.render(60)).toEqual(['bash pnpm test · ▸ ~12s'])
+    // The command stays on the row it was drawn on: the state is added in front
+    // of it and the duration beside it, rather than replacing what the reader was
+    // already reading.
+    expect(view.render(60)).toEqual(['▸ bash pnpm test · ~12s'])
   })
 
   it('shows the mark alone while the wait is still under a second', () => {
     const { clockState, view } = runningView()
     clockState.now += 400
     // A duration that has to be rounded up from nothing is noise, not a measurement.
-    expect(view.render(60)).toEqual(['bash pnpm test · ▸'])
+    expect(view.render(60)).toEqual(['▸ bash pnpm test'])
   })
 
   it('drops the mark and reports the outcome when the result lands', () => {
     const { clockState, model, view } = runningView()
     clockState.now += 12 * SECOND_MS
-    expect(view.render(60)).toEqual(['bash pnpm test · ▸ ~12s'])
+    expect(view.render(60)).toEqual(['▸ bash pnpm test · ~12s'])
     model.apply(RESULT)
     // The settled row reports what the call produced, which supersedes the wait.
     expect(view.render(60)).toEqual(['bash pnpm test · exit 0 · 1 line'])
@@ -1330,13 +1331,13 @@ describe('TranscriptView running cards', () => {
   it('keeps the running mark on an opened card', () => {
     const { clockState, view } = runningView(1_000, OPEN)
     clockState.now += 3 * SECOND_MS
-    expect(view.render(60)).toEqual(['bash · ▸ ~3s', '    pnpm test'])
+    expect(view.render(60)).toEqual(['▸ bash · ~3s', '    pnpm test'])
   })
 
   it("leaves a settled card's elapsed time out of the row it keeps", () => {
     const { clockState, model, view } = runningView()
     clockState.now += 9 * SECOND_MS
-    expect(view.render(60).join('')).toContain('▸ ~9s')
+    expect(view.render(60).join('')).toContain('~9s')
     model.apply(RESULT)
     // A settled row must not keep a duration that keeps growing after the call
     // came back; the number it reports from here is the outcome's own.
@@ -1361,23 +1362,130 @@ describe('TranscriptView running cards', () => {
     })
     const inline: ViewState = { expandCards: false, expandReasoning: false, expandSubCalls: true }
     clockState.now += 12 * SECOND_MS
-    expect(viewOf(model, inline).render(60)).toEqual(['run_code · ▸ ~12s', '  bash echo hi ▸'])
+    // The program's own row carries the timer and nothing else: it is the clock a
+    // reader watches, and the calls underneath it are what it is spending time on.
+    expect(viewOf(model, inline).render(60)).toEqual(['run_code · ~12s', '  ▸ bash echo hi'])
 
     model.apply({
       type: 'tool/ptc-dispatch',
       data: { rootCallId: 'root', parentCallId: 'root', subCallId: 'root:ptc:1', name: 'bash', arguments: { command: 'echo hi' }, isError: false, content: [] },
     })
-    expect(viewOf(model, inline).render(60).at(-1)).toBe('  bash echo hi')
+    expect(viewOf(model, inline).render(60)).toEqual(['run_code · ~12s', '  bash echo hi'])
   })
 
-  it('draws no mark at all when the reader has turned the element off', () => {
+  it('keeps the total a program took after it answers, and stops counting', () => {
+    const rows = new RowCache<TranscriptEntry>()
+    const { state: clockState, clock } = clockAt(1_000)
+    const model = new TranscriptModel(undefined, clock)
+    model.apply({ type: 'tool/call', data: { name: 'run_code', arguments: '{"code":"x"}', callId: 'root' } })
+    model.apply({
+      type: 'tool/ptc-dispatch-start',
+      data: { rootCallId: 'root', parentCallId: 'root', subCallId: 'root:ptc:1', name: 'bash', arguments: { command: 'echo hi' } },
+    })
+    const inline: ViewState = { expandCards: false, expandReasoning: false, expandSubCalls: true }
+    const view = new TranscriptView(model, theme, new MarkdownRenderer(theme.markdown), { rows, state: () => inline })
+    clockState.now += 10 * SECOND_MS
+    expect(view.render(60)[0]).toBe('run_code · ~10s')
+
+    // Nothing may be left in flight, or the row would keep being rebuilt and the
+    // seconds it settled on would never be the row the cache holds.
+    model.apply({
+      type: 'tool/ptc-dispatch',
+      data: { rootCallId: 'root', parentCallId: 'root', subCallId: 'root:ptc:1', name: 'bash', arguments: { command: 'echo hi' }, isError: false, content: [] },
+    })
+    model.apply({ type: 'tool/result', data: { message: { content: [{ type: 'tool-result', toolCallId: 'root', text: 'done' }], isError: false } } })
+    const settled = view.render(60)
+    expect(settled[0]).toContain('~10s')
+    const misses = rows.stats().misses
+    clockState.now += 30 * SECOND_MS
+    // The total belongs to the run, not to the clock: a program that answered
+    // keeps the row it settled into, at the seconds it actually took.
+    expect(view.render(60)).toEqual(settled)
+    expect(rows.stats().misses).toBe(misses)
+  })
+
+  it('draws no mark at all when the reader has turned the mark off', () => {
     const { clockState, model } = runningView()
     clockState.now += 5 * SECOND_MS
-    const blind = createTheme('none', { palette: DEFAULT_PALETTE, tokens: new Map([['tool.running.title', { hidden: true }]]) })
+    const blind = createTheme('none', { palette: DEFAULT_PALETTE, tokens: new Map([['tool.running.glyph', { hidden: true }]]) })
     const view = new TranscriptView(model, blind, new MarkdownRenderer(blind.markdown), { state: () => COLLAPSED })
-    // The mark is the signal and the duration is styled as a changed stat, so
-    // hiding the mark takes the claim with it rather than leaving a bare number.
-    expect(view.render(60)).toEqual(['bash pnpm test'])
+    // Hiding the mark leaves the measurement it introduced: the seconds still say
+    // that the call has not come back.
+    expect(view.render(60)).toEqual(['bash pnpm test · ~5s'])
+  })
+
+  it('draws the total a program kept quieter than the timer it counted with', () => {
+    /** Whether a row carries the italic attribute, whatever else it is painted with. */
+    const italic = (row: string): boolean =>
+      [...row.matchAll(/\u001B\[([0-9;]*)m/g)].some(match => (match[1] ?? '').split(';').includes('3'))
+    const painted = createTheme('256')
+    const { state: clockState, clock } = clockAt(1_000)
+    const model = new TranscriptModel(undefined, clock)
+    model.apply({ type: 'tool/call', data: { name: 'run_code', arguments: '{"code":"x"}', callId: 'root' } })
+    model.apply({
+      type: 'tool/ptc-dispatch-start',
+      data: { rootCallId: 'root', parentCallId: 'root', subCallId: 'root:ptc:1', name: 'bash', arguments: { command: 'echo hi' } },
+    })
+    model.apply({
+      type: 'tool/ptc-dispatch',
+      data: { rootCallId: 'root', parentCallId: 'root', subCallId: 'root:ptc:1', name: 'bash', arguments: { command: 'echo hi' }, isError: false, content: [] },
+    })
+    const inline: ViewState = { expandCards: false, expandReasoning: false, expandSubCalls: true }
+    const view = new TranscriptView(model, painted, new MarkdownRenderer(painted.markdown), { state: () => inline })
+    clockState.now += 10 * SECOND_MS
+    const counting = view.render(60)[0] ?? ''
+    expect(counting).toContain('~10s')
+    // A moving measurement is stated plainly; the total that replaces it is what
+    // the reader is meant to stop reading, so it is the one that slants.
+    expect(italic(counting)).toBe(false)
+
+    model.apply({ type: 'tool/result', data: { message: { content: [{ type: 'tool-result', toolCallId: 'root', text: 'done' }], isError: false } } })
+    const settled = view.render(60)[0] ?? ''
+    expect(settled).toContain('~10s')
+    expect(italic(settled)).toBe(true)
+  })
+
+  it('draws no total on a program that answered when the reader turned the total off', () => {
+    const { state: clockState, clock } = clockAt(1_000)
+    const model = new TranscriptModel(undefined, clock)
+    model.apply({ type: 'tool/call', data: { name: 'run_code', arguments: '{"code":"x"}', callId: 'root' } })
+    model.apply({
+      type: 'tool/ptc-dispatch-start',
+      data: { rootCallId: 'root', parentCallId: 'root', subCallId: 'root:ptc:1', name: 'bash', arguments: { command: 'echo hi' } },
+    })
+    const inline: ViewState = { expandCards: false, expandReasoning: false, expandSubCalls: true }
+    clockState.now += 10 * SECOND_MS
+    model.apply({ type: 'tool/result', data: { message: { content: [{ type: 'tool-result', toolCallId: 'root', text: 'done' }], isError: false } } })
+    const blind = createTheme('none', { palette: DEFAULT_PALETTE, tokens: new Map([['tool.elapsed.done', { hidden: true }]]) })
+    const view = new TranscriptView(model, blind, new MarkdownRenderer(blind.markdown), { state: () => inline })
+    // The counting timer and the kept total are separate elements, so a reader can
+    // keep being told a call is in flight without being told how long it ran.
+    expect(view.render(60)[0]).not.toContain('~')
+  })
+
+  it('draws no mark on a dispatched row when the reader has turned that mark off', () => {
+    const { state: clockState, clock } = clockAt(1_000)
+    const model = new TranscriptModel(bashPresenter, clock)
+    model.apply({ type: 'tool/call', data: { name: 'run_code', arguments: '{"code":"x"}', callId: 'root' } })
+    model.apply({
+      type: 'tool/ptc-dispatch-start',
+      data: { rootCallId: 'root', parentCallId: 'root', subCallId: 'root:ptc:1', name: 'bash', arguments: { command: 'echo hi' } },
+    })
+    const inline: ViewState = { expandCards: false, expandReasoning: false, expandSubCalls: true }
+    const blind = createTheme('none', { palette: DEFAULT_PALETTE, tokens: new Map([['tool.subcall.running', { hidden: true }]]) })
+    const view = new TranscriptView(model, blind, new MarkdownRenderer(blind.markdown), { state: () => inline })
+    clockState.now += 2 * SECOND_MS
+    expect(view.render(60).at(-1)).toBe('  bash echo hi')
+  })
+
+  it('draws no timer at all when the reader has turned the timer off', () => {
+    const { clockState, model } = runningView()
+    clockState.now += 5 * SECOND_MS
+    const blind = createTheme('none', { palette: DEFAULT_PALETTE, tokens: new Map([['tool.running.elapsed', { hidden: true }]]) })
+    const view = new TranscriptView(model, blind, new MarkdownRenderer(blind.markdown), { state: () => COLLAPSED })
+    // Hiding the timer leaves the mark that introduced it, so the row still says
+    // the call is in flight without reporting how long it has been.
+    expect(view.render(60)).toEqual(['▸ bash pnpm test'])
   })
 })
 

@@ -236,9 +236,17 @@ export class TranscriptModel {
   liveCall(callId: string): LiveCallState {
     const call = callId === '' ? undefined : this.pending.get(callId)
     if (call === undefined) return { running: false, elapsed: 0 }
-    // Floored, not rounded: a duration that claims a second it has not waited
-    // yet would tick up before the call has been waiting that long.
-    return { running: true, elapsed: Math.max(0, Math.floor((this.clock() - call.startedAt) / SECOND_MS)) }
+    return { running: true, elapsed: this.secondsSince(call.startedAt) }
+  }
+
+  /**
+   * Whole seconds since a moment the fold read the clock at.
+   *
+   * Floored, not rounded: a duration that claims a second it has not waited yet
+   * would tick up before the call has been waiting that long.
+   */
+  private secondsSince(startedAt: number): number {
+    return Math.max(0, Math.floor((this.clock() - startedAt) / SECOND_MS))
   }
 
   /** Whether any row exists, so a caller can decide to clear or redraw. */
@@ -555,6 +563,12 @@ export class TranscriptModel {
     const callId = typeof firstBlock?.toolCallId === 'string' ? firstBlock.toolCallId : ''
     const pending = callId === '' ? undefined : this.pending.get(callId)
     if (callId !== '') this.pending.delete(callId)
+    // The length of the run is readable here and nowhere else: the surface saw
+    // the call logged and now sees it answered, and this is the only moment the
+    // fold holds both readings of the clock.
+    const ranFor = pending === undefined ? undefined : this.secondsSince(pending.startedAt)
+    /** The card that reports this result, carrying the seconds the call took. */
+    const finished = (card: ToolCard): ToolCard => (ranFor === undefined ? card : { ...card, elapsed: ranFor })
     // The root is done dispatching, so its bookkeeping goes with it; the rows it
     // already drew stay on the card.
     if (pending !== undefined) for (const sub of pending.subs) this.pendingSub.delete(sub)
@@ -585,9 +599,9 @@ export class TranscriptModel {
       const rebuilt = reported.length === 0
         ? { ...base, failed: isError }
         : { ...cardFromLines(base.kind, base.tool, base.title, reported, isError), ...carriedFields(base) }
-      this.settled[pending.index] = { kind: 'tool', id: callId, card: rebuilt }
+      this.settled[pending.index] = { kind: 'tool', id: callId, card: finished(rebuilt) }
       return
     }
-    this.settled[pending.index] = { kind: 'tool', id: callId, card: mergeCards(call, { ...result, failed: isError }) }
+    this.settled[pending.index] = { kind: 'tool', id: callId, card: finished(mergeCards(call, { ...result, failed: isError })) }
   }
 }

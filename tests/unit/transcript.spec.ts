@@ -262,7 +262,9 @@ describe('TranscriptModel markers', () => {
 describe('TranscriptModel tool cards', () => {
   it('asks the presenter for the call and merges the result into the same row', () => {
     const presenter = recordingPresenter()
-    const model = new TranscriptModel(presenter)
+    // A pinned clock keeps the seconds the fold records for the run a fact of the
+    // test rather than a race against the wall clock.
+    const model = new TranscriptModel(presenter, () => 1_000)
     model.apply({ type: 'tool/call', data: { name: 'bash', arguments: '{"command":"ls"}', callId: 'c1' } })
     expect(model.entries()).toEqual([{ kind: 'tool', id: 'c1', card: card('bash pending', ['from presenter'], 'bash') }])
     model.apply({
@@ -271,7 +273,7 @@ describe('TranscriptModel tool cards', () => {
     })
     const entries = model.entries()
     expect(entries).toHaveLength(1)
-    expect(entries[0]).toEqual({ kind: 'tool', id: 'c1', card: card('bash pending', ['result line'], 'bash') })
+    expect(entries[0]).toEqual({ kind: 'tool', id: 'c1', card: { ...card('bash pending', ['result line'], 'bash'), elapsed: 0 } })
     expect(presenter.calls).toEqual(['bash:{"command":"ls"}'])
     expect(presenter.results).toEqual(['bash:{"command":"ls"}:ok'])
   })

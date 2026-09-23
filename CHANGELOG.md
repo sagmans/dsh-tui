@@ -11,13 +11,15 @@ breaking change, and a patch carries only fixes.
 ### Added
 
 - A tool call that has not answered yet now says so on its own card: the header
-  ends with a `▸` mark in the new `tool.running.title` style, followed by the
-  whole seconds it has been waiting once that is a second or more, and a dispatch
-  a `run_code` program is still waiting on carries the same mark in
-  `tool.subcall.running`. The mark gives way to the measured facts when the
-  result lands, so a reader can tell which of several calls is still running
-  without opening anything. Both elements can be recoloured or hidden like every
-  other token.
+  opens with a `▸` mark in the new `tool.running.glyph` style, in front of the
+  tool's name, and reports the whole seconds it has been waiting in
+  `tool.running.elapsed` once that is a second or more. A card that dispatched
+  calls is marked by its timer instead — no mark — and keeps that total, dimmed
+  and italic in `tool.elapsed.done`, when the program answers. A dispatch a
+  program is still waiting on carries the leading mark in `tool.subcall.running`.
+  Every one of these elements can be recoloured or hidden like any other token, so
+  a reader can tell which of several calls is still running without opening
+  anything.
 
 ## [0.5.2] - 2026-09-23
 

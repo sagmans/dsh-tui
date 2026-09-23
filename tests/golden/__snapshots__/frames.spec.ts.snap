@@ -109,7 +109,7 @@ exports[`golden frames > renders a call that has not answered yet at 40 columns 
   "╭──────────────────────────────────────╮",
   "│ run the suite                        │",
   "╰──────────────────────────────────────╯",
-  "bash pnpm test · ▸ ~12s",
+  "▸ bash pnpm test · ~12s",
 ]
 `;
 
@@ -118,7 +118,7 @@ exports[`golden frames > renders a call that has not answered yet at 80 columns 
   "╭──────────────────────────────────────────────────────────────────────────────╮",
   "│ run the suite                                                                │",
   "╰──────────────────────────────────────────────────────────────────────────────╯",
-  "bash pnpm test · ▸ ~12s",
+  "▸ bash pnpm test · ~12s",
 ]
 `;
 
