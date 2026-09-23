@@ -8,6 +8,16 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+### Added
+
+- `tools/harness-matrix.mjs` guards the harness matrix that the manifest only
+  described: every verified release must lie inside the compatible range, the
+  packages this bundle mounts must accept that range, and the sources must
+  compile against a verified release. CI runs it on every change, and a
+  scheduled workflow reads the registry's `latest` so a harness release that
+  moves past the verified list fails on its own rather than during a release
+  ([RELEASE.md](RELEASE.md#harness-matrix)).
+
 ### Changed
 
 - The three harness packages this bundle mounts now follow the compatible range

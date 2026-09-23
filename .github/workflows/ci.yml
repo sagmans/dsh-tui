@@ -41,3 +41,7 @@ jobs:
       # its modules parse, and leaves terminal behaviour to a local run.
       - name: Package smoke
         run: node tools/pack-smoke.mjs
+      # The manifest and the tree it describes must name the same harness
+      # release; the registry half of this check runs on schedule.
+      - name: Harness matrix
+        run: node tools/harness-matrix.mjs
