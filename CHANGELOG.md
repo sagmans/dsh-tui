@@ -10,6 +10,13 @@ breaking change, and a patch carries only fixes.
 
 ### Added
 
+- A consumer install smoke packs the candidate and installs it inside a minimal
+  `node:24-alpine` container, once with npm beside the harness and once as a
+  plugin profile. A manifest that cannot resolve, a wrong mounted version, or a
+  duplicated host package now fails CI instead of a user's install.
+
+- `tools/harness-matrix.mjs` guards the harness matrix that the manifest only
+
 - `tools/harness-matrix.mjs` guards the harness matrix that the manifest only
   described: every verified release must lie inside the compatible range, the
   packages this bundle mounts must accept that range, and the sources must

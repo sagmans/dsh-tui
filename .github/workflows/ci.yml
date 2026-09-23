@@ -45,3 +45,8 @@ jobs:
       # release; the registry half of this check runs on schedule.
       - name: Harness matrix
         run: node tools/harness-matrix.mjs
+      # Resolution failures happen in the consumer's tree, not this one: install
+      # the packed artefact with npm and as a plugin profile inside the image a
+      # consumer is most likely to have.
+      - name: Consumer install smoke
+        run: node tools/install-smoke.mjs
