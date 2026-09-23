@@ -182,7 +182,9 @@ describe('TranscriptView text', () => {
     // frame goes with it, so the row reads as the text and copies as the text.
     expect(viewOf(model).render(40)).toEqual([
       opensBand(40),
+      '',
       'hello there',
+      '',
       closesBand(40),
     ])
   })
@@ -194,7 +196,9 @@ describe('TranscriptView text', () => {
     // that asked for it rather than left as one more paragraph of the transcript.
     expect(viewOf(model).render(40)).toEqual([
       opensBand(40),
+      '',
       'hello there',
+      '',
       closesBand(40),
     ])
   })
@@ -261,7 +265,7 @@ describe('TranscriptView text', () => {
     const opened = new TranscriptView(model, colour, markdown, { state: () => ({ expandCards: false, expandReasoning: true, expandSubCalls: false }) }).render(60)
     // The signpost, the two thought rows, and the banded answer: a reply is an
     // object of its own rather than one more row under the thought.
-    expect(opened).toHaveLength(6)
+    expect(opened).toHaveLength(8)
     expect(opened[0]).toContain('\u001b[3;38;2;102;102;102m')
     // The thought shares the signpost's faint shade, not the muted family's.
     for (const line of opened.slice(1, 3)) expect(line).toContain('\u001b[38;2;102;102;102m')
@@ -269,8 +273,10 @@ describe('TranscriptView text', () => {
     // the dashes between them take the rest of the row.
     expect(opened[3]).toContain('\u001b[38;2;214;194;154m')
     expect(stripTerminalSequences(opened[3] ?? '')).toBe(opensBand(60))
-    expect(stripTerminalSequences(opened[4] ?? '')).toContain('the answer')
-    expect(stripTerminalSequences(opened[5] ?? '')).toBe(closesBand(60))
+    expect(opened[4]).toBe('')
+    expect(stripTerminalSequences(opened[5] ?? '')).toContain('the answer')
+    expect(opened[6]).toBe('')
+    expect(stripTerminalSequences(opened[7] ?? '')).toBe(closesBand(60))
   })
 
   it('renders an opened thought as markdown in the thought shade', () => {
@@ -339,13 +345,13 @@ describe('TranscriptView text', () => {
     const model = new TranscriptModel()
     model.apply({ type: 'user/message', data: { content: [{ type: 'text', text: 'x'.repeat(50) }], source: { kind: 'user' } } })
     const lines = viewOf(model).render(40)
-    expect(lines).toHaveLength(4)
+    expect(lines).toHaveLength(6)
     for (const line of lines) expect(visibleWidth(line)).toBeLessThanOrEqual(40)
     expect(lines[0]).toBe(opensBand(40))
-    expect(lines[3]).toBe(closesBand(40))
+    expect(lines[5]).toBe(closesBand(40))
     // Every column of the prompt survives the fold: a band costs the text
     // nothing, so a row is as wide as its own line and no wider.
-    const body = lines.slice(1, 3).join('')
+    const body = lines.slice(2, 4).join('')
     expect(body).toBe('x'.repeat(50))
   })
 })

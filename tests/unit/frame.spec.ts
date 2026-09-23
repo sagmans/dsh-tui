@@ -38,14 +38,14 @@ describe('band rows', () => {
   it('hands a row back exactly as it was, so a copy of it is the text alone', () => {
     // This is the whole reason a band draws no sides: what a reader selects out
     // of the transcript must not carry the frame that held it.
-    expect(bandLines(['answer'], 40, DRAWN)).toEqual([edge(40, OPEN), 'answer', edge(40, CLOSE)])
+    expect(bandLines(['answer'], 40, DRAWN)).toEqual([edge(40, OPEN), '', 'answer', '', edge(40, CLOSE)])
   })
 
   it('spends no column of its own on a narrow terminal either', () => {
     // A box gives up below its minimum width and stops framing at all; a band
     // has no furniture to run out of room for, and below the two columns a pair
     // of corners needs it closes on the rule alone rather than overrun the row.
-    expect(bandLines(['answer'], 1, DRAWN)).toEqual(['─', 'answer', '─'])
+    expect(bandLines(['answer'], 1, DRAWN)).toEqual(['─', '', 'answer', '', '─'])
   })
 
   it('opens and closes differently, so two blocks in a row are two blocks', () => {
@@ -58,7 +58,17 @@ describe('band rows', () => {
     expect(rows.at(-1)).toBe(edge(20, CLOSE))
   })
 
+  it('holds the message off its own rules with a row of air', () => {
+    // Without the air a message reads as something still being typed into the
+    // shape that carried it, and the air is a row rather than a margin so that a
+    // row of the text stays exactly the text.
+    const rows = bandLines(['one', 'two'], 20, DRAWN)
+    expect(rows).toEqual([edge(20, OPEN), '', 'one', 'two', '', edge(20, CLOSE)])
+  })
+
   it('draws the rows alone when the reader has hidden the border', () => {
+    // The air belongs to the rules: with no rules there is nothing to hold the
+    // rows away from, and a hidden border leaves the plain rows it always did.
     expect(bandLines(['answer'], 40, PLAIN)).toEqual(['answer'])
   })
 

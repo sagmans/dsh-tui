@@ -6,9 +6,10 @@ import { renderTerminalText } from '../terminal-text.ts'
  *
  * A bar the reader types in is a box: its sides and its padding are what say
  * "type here", and nothing is ever read back out of it. A block already written
- * is a band, which draws a cornered rule above and below it and nothing else, so
- * a copy of one row is the row itself rather than the frame that held it and a
- * diagram keeps every column the terminal gave it. Both shapes take the same
+ * is a band, which draws a cornered rule above and below it, air inside each,
+ * and nothing beside it, so a copy of one row is the row itself rather than the
+ * frame that held it and a diagram keeps every column the terminal gave it. Both
+ * shapes take the same
  * faces and close on the same rule; which one a row lands in is how the surface
  * says whether it is still open for editing or is already history.
  */
@@ -76,6 +77,17 @@ const BAND_CORNERS = {
   close: { left: FRAME_GLYPHS.bottomLeft, right: FRAME_GLYPHS.bottomRight },
 } as const
 
+/**
+ * The row of air a band leaves between each rule and the message it closes.
+ *
+ * Without it the first row of a message sits against the rule that opened it,
+ * and the block reads as something still being typed into rather than something
+ * already said. It is a row of its own rather than a margin on the text, because
+ * every row of the text has to stay exactly as the block drew it: a reader who
+ * takes one back out gets the words, never the space that framed them.
+ */
+const BAND_AIR = ''
+
 /** One end of a band: the corners, and the rule that runs between them. */
 function bandRule(width: number, hiddenRows: number, corners: { readonly left: string; readonly right: string }): string {
   // Both corners or neither: narrower than the pair they need, a row that still
@@ -130,7 +142,7 @@ export function frameLines(lines: readonly string[], width: number, faces: Frame
 
 /**
  * One block of already-rendered rows as a band draws it: a cornered rule above,
- * the rows themselves between them, and a cornered rule below.
+ * the rows themselves between a row of air each, and a cornered rule below.
  *
  * The rows are placed, never padded and never cut: the block laid itself out to
  * the width it was given, and every column a band does not spend is one a reader
@@ -144,9 +156,14 @@ export function bandLines(lines: readonly string[], width: number, faces: FrameF
   const body = lines.slice(0, Math.max(0, limit))
   const rows = body.map(faces.text)
   if (!faces.drawn) return rows
+  // Air only where there is a message to hold away from the rules: a block with
+  // no rows at all would otherwise open and close on two rows of nothing.
+  const air = rows.length === 0 ? [] : [BAND_AIR]
   return [
     faces.border(bandRule(room, 0, BAND_CORNERS.open)),
+    ...air,
     ...rows,
+    ...air,
     faces.border(bandRule(room, lines.length - body.length, BAND_CORNERS.close)),
   ]
 }
