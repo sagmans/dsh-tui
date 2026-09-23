@@ -26,6 +26,15 @@ breaking change, and a patch carries only fixes.
   tell which of several calls is still running, which finished, and how each one
   ended without opening anything.
 
+- Trying a build on a real profile is now one command:
+  `scripts/dogfood/run-tui-from-worktree.sh` clones the developer's home into a
+  scratch directory, points the clone's own profile at a worktree, rebuilds it,
+  and starts the surface there — so a change meets the bundles, patch overlay,
+  settings, and themes the daily driver actually runs, while every write lands in
+  the clone. [DEVELOPMENT.md](DEVELOPMENT.md) says when a clone, a fresh home, or
+  the real one is the right call, and `.agents/skills/dogfood-tui/` ships the same
+  practice as a skill an agent working in this repository loads.
+
 ### Changed
 
 - The shipped token table paints a tool's name in the palette accent rather than in

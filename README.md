@@ -690,6 +690,9 @@ node tools/pty-drive.mjs --home "$S" --prompt 'Reply with exactly: pong'
 
 Test specs import plugin sources through the `@/` alias. Under this test runner the spec file is resolved with a root-relative id, so parent-relative imports (`../src/...`) do not resolve; the alias and its matching `tsconfig.test.json` path mapping avoid that.
 
+The development guide — the gate, the dogfood script, and the difference between
+a fresh home, a cloned home, and the real one — is [DEVELOPMENT.md](DEVELOPMENT.md).
+
 ## Manual acceptance
 
 The automated checks drive a real PTY, but they run on this machine's terminal. These are the checks only a terminal on your desk can answer; each line is what to do and what it should look like.
