@@ -63,7 +63,7 @@ export const DIFF_ADDED_BAND = '#1e3d24'
 export const DIFF_REMOVED_BAND = '#472424'
 
 /**
- * Warm corners distinguish a reply from the prompt's mint without borrowing
+ * Warm marks distinguish a reply from the prompt's mint without borrowing
  * warning amber. Keeping that accent off the long rules lets the text lead.
  */
 export const ASSISTANT_FRAME_GOLD = '#d6c29a'
@@ -74,15 +74,15 @@ export const ASSISTANT_FRAME_GOLD = '#d6c29a'
  * Each message spends two full-width rows on its rules, and at the muted family's
  * weight those rows read as furniture around the words rather than as the seam
  * between them. Dimming alone would leave one shade for both speakers, and a rule
- * is read at the screen's own edges — where the corners are two columns wide and
+ * is read at the screen's own edges — where the end marks are two columns wide and
  * easy to miss — so the shade names whose turn the block closes as well. Both sit
- * at about a quarter of their corner's lightness and stay above the floor the
+ * at about a quarter of their mark's lightness and stay above the floor the
  * degraded palette keeps as a hue: below it a 16-colour terminal folds the rule
- * into black, leaving a message with no rule under its corners at all.
+ * into black, leaving a message with no rule under its end marks at all.
  */
 export const USER_BAND_RULE_MINT = '#0b5142'
 
-/** The reply's rule, the prompt's {@link USER_BAND_RULE_MINT} on the gold corner. */
+/** The reply's rule, the prompt's {@link USER_BAND_RULE_MINT} on the gold mark. */
 export const ASSISTANT_BAND_RULE_GOLD = '#463a20'
 
 /** Palette entries a token may name instead of a literal colour. */
@@ -138,9 +138,9 @@ export const TUI_TOKENS = [
   // Transcript rows
   'transcript.user',
   'transcript.user.border',
-  'transcript.user.corner',
+  'transcript.user.mark',
   'transcript.assistant.border',
-  'transcript.assistant.corner',
+  'transcript.assistant.mark',
   'transcript.notice',
   'transcript.marker',
   'transcript.reasoning.summary',
@@ -369,9 +369,9 @@ export const DEFAULT_TOKENS: Readonly<Record<TuiToken, StyleSpec>> = {
   'transcript.user': { fg: 'user' },
   // Accents distinguish speakers; the rules fade to their own speaker's hue.
   'transcript.user.border': { fg: USER_BAND_RULE_MINT },
-  'transcript.user.corner': { fg: 'user' },
+  'transcript.user.mark': { fg: 'user' },
   'transcript.assistant.border': { fg: ASSISTANT_BAND_RULE_GOLD },
-  'transcript.assistant.corner': { fg: ASSISTANT_FRAME_GOLD },
+  'transcript.assistant.mark': { fg: ASSISTANT_FRAME_GOLD },
   'transcript.notice': muted,
   'transcript.marker': muted,
   'transcript.reasoning.summary': signpost,

@@ -14,7 +14,7 @@ const WIDTH = 12
 const TEXT = 'hello'
 const STATE = { expandCards: false, expandReasoning: false, expandSubCalls: false }
 const MODES: readonly ColourMode[] = ['truecolor', '256', '16', 'none']
-const CORNER = { user: '\u001b[38;2;39;245;200m', assistant: '\u001b[38;2;214;194;154m' } as const
+const MARK = { user: '\u001b[38;2;39;245;200m', assistant: '\u001b[38;2;214;194;154m' } as const
 /** A rule is its own speaker's corner hue at about a quarter of the lightness. */
 const RULE = { user: '\u001b[38;2;11;81;66m', assistant: '\u001b[38;2;70;58;32m' } as const
 /** What those two shades degrade to, so a 16-colour terminal keeps both apart. */
@@ -22,7 +22,7 @@ const RULE_SLOT = { user: '\u001b[36m', assistant: '\u001b[33m' } as const
 const BLACK_SLOT = '\u001b[30m'
 const RED = '\u001b[38;2;255;0;0m'
 const RESET = '\u001b[0m'
-const PLAIN_ROWS = ['╭──────────╮', '', TEXT, '', '╰──────────╯']
+const PLAIN_ROWS = ['/──────────\\', '', TEXT, '', '\\──────────/']
 
 /** Real transcript rows catch tint leaking across style resets or into message text. */
 function render(role: 'user' | 'assistant', mode: ColourMode = 'truecolor', tokens = new Map<TuiToken, StyleSpec>(), themeName?: string): string[] {
@@ -40,13 +40,13 @@ function render(role: 'user' | 'assistant', mode: ColourMode = 'truecolor', toke
 
 describe('transcript band accents', () => {
   it.each([
-    ['user', CORNER.user, RULE.user],
-    ['assistant', CORNER.assistant, RULE.assistant],
+    ['user', MARK.user, RULE.user],
+    ['assistant', MARK.assistant, RULE.assistant],
   ] as const)('keeps %s colour on its corners and its own dim hue on the rule', (role, accent, rule) => {
     const rows = render(role)
-    expect(rows[0]).toBe(accent + '╭' + RESET + rule + '──────────' + RESET + accent + '╮' + RESET)
-    expect(rows.at(-1)).toBe(accent + '╰' + RESET + rule + '──────────' + RESET + accent + '╯' + RESET)
-    expect(rows[2]).toBe(role === 'user' ? CORNER.user + TEXT + RESET : TEXT)
+    expect(rows[0]).toBe(accent + '/' + RESET + rule + '──────────' + RESET + accent + '\\' + RESET)
+    expect(rows.at(-1)).toBe(accent + '\\' + RESET + rule + '──────────' + RESET + accent + '/' + RESET)
+    expect(rows[2]).toBe(role === 'user' ? MARK.user + TEXT + RESET : TEXT)
   })
 
   it('tints each rule to its own speaker rather than one shade for both', () => {
@@ -62,8 +62,8 @@ describe('transcript band accents', () => {
   it.each(['deepseek-blue', 'violet-orbit'])('keeps quiet rules and speaker accents under %s', themeName => {
     for (const role of ['user', 'assistant'] as const) {
       const rows = render(role, 'truecolor', new Map(), themeName)
-      expect(rows[0]).toBe(CORNER[role] + '╭' + RESET + RULE[role] + '──────────' + RESET + CORNER[role] + '╮' + RESET)
-      expect(rows.at(-1)).toBe(CORNER[role] + '╰' + RESET + RULE[role] + '──────────' + RESET + CORNER[role] + '╯' + RESET)
+      expect(rows[0]).toBe(MARK[role] + '/' + RESET + RULE[role] + '──────────' + RESET + MARK[role] + '\\' + RESET)
+      expect(rows.at(-1)).toBe(MARK[role] + '\\' + RESET + RULE[role] + '──────────' + RESET + MARK[role] + '/' + RESET)
       for (const mode of MODES) {
         expect(render(role, mode, new Map(), themeName).map(stripTerminalSequences)).toEqual(PLAIN_ROWS)
       }
@@ -92,16 +92,16 @@ describe('transcript band accents', () => {
     const tokens = new Map<TuiToken, StyleSpec>([['editor.border', { fg: '#ff0000' }]])
     const theme = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens })
     expect(theme.editor.borderColor('╭──────────╮')).toBe(RED + '╭──────────╮' + RESET)
-    expect(render('user', 'truecolor', tokens)[0]).toBe(CORNER.user + '╭' + RESET + RULE.user + '──────────' + RESET + CORNER.user + '╮' + RESET)
+    expect(render('user', 'truecolor', tokens)[0]).toBe(MARK.user + '/' + RESET + RULE.user + '──────────' + RESET + MARK.user + '\\' + RESET)
   })
 
-  it.each(['user', 'assistant'] as const)('lets the %s corner override leave the rule and body alone', role => {
+  it.each(['user', 'assistant'] as const)('lets the %s mark override leave the rule and body alone', role => {
     const tokens = new Map<TuiToken, StyleSpec>([[
-      role === 'user' ? 'transcript.user.corner' : 'transcript.assistant.corner', { fg: '#ff0000' },
+      role === 'user' ? 'transcript.user.mark' : 'transcript.assistant.mark', { fg: '#ff0000' },
     ]])
     const rows = render(role, 'truecolor', tokens)
-    expect(rows[0]).toBe(RED + '╭' + RESET + RULE[role] + '──────────' + RESET + RED + '╮' + RESET)
-    expect(rows[2]).toBe(role === 'user' ? CORNER.user + TEXT + RESET : TEXT)
+    expect(rows[0]).toBe(RED + '/' + RESET + RULE[role] + '──────────' + RESET + RED + '\\' + RESET)
+    expect(rows[2]).toBe(role === 'user' ? MARK.user + TEXT + RESET : TEXT)
   })
 
   it.each([
@@ -113,8 +113,8 @@ describe('transcript band accents', () => {
       .map(stripTerminalSequences)).toEqual([TEXT])
   })
 
-  it('reserves corner columns when a corner element is hidden', () => {
-    const rows = render('assistant', 'truecolor', new Map<TuiToken, StyleSpec>([['transcript.assistant.corner', { hidden: true }]]))
+  it('reserves the mark columns when the mark element is hidden', () => {
+    const rows = render('assistant', 'truecolor', new Map<TuiToken, StyleSpec>([['transcript.assistant.mark', { hidden: true }]]))
     expect(rows[0]).toBe(' ' + RULE.assistant + '──────────' + RESET + ' ')
     expect(rows.map(stripTerminalSequences)).toEqual([' ────────── ', '', TEXT, '', ' ────────── '])
   })

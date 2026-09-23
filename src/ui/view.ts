@@ -20,8 +20,8 @@ import { pickerCardLines } from './picker-card.ts'
 import type { PickerCard } from './picker.ts'
 import { RowCache, type RowCacheStats } from './rows.ts'
 
-/** Hidden corners keep their columns so the remaining rule does not shift. */
-const HIDDEN_BAND_CORNER = ' '
+/** A hidden mark keeps its column so the remaining rule does not shift. */
+const HIDDEN_BAND_MARK = ' '
 
 const DETAIL_INDENT = '    '
 const OPTION_INDENT = '   '
@@ -376,12 +376,12 @@ export class TranscriptView implements Component {
    * width, and the band may only place the rows, because wrapping them again
    * would break what markdown drew.
    */
-  private pushBand(lines: string[], text: string, width: number, live: boolean, face: MarkdownFace, borderToken: TuiToken, cornerToken: TuiToken, borderVisible = true): void {
+  private pushBand(lines: string[], text: string, width: number, live: boolean, face: MarkdownFace, borderToken: TuiToken, markToken: TuiToken, borderVisible = true): void {
     const body = this.markdownLines(text, width, live, face)
     lines.push(...bandLines(body, width, {
       text: line => line,
       border: rule => this.theme.style(borderToken, rule),
-      corner: glyph => this.theme.visible(cornerToken) ? this.theme.style(cornerToken, glyph) : HIDDEN_BAND_CORNER,
+      mark: glyph => this.theme.visible(markToken) ? this.theme.style(markToken, glyph) : HIDDEN_BAND_MARK,
       drawn: borderVisible && this.theme.visible(borderToken),
     }))
   }
@@ -875,7 +875,7 @@ export class TranscriptView implements Component {
       case 'assistant':
         // The reply is banded the way the prompt that asked for it is, so one
         // exchange reads as two objects rather than as a band and then a stream.
-        this.pushBand(lines, entry.text, width, live, ANSWER_FACE, 'transcript.assistant.border', 'transcript.assistant.corner')
+        this.pushBand(lines, entry.text, width, live, ANSWER_FACE, 'transcript.assistant.border', 'transcript.assistant.mark')
         return
       case 'user': {
         if (!this.theme.visible('transcript.user')) return
@@ -884,7 +884,7 @@ export class TranscriptView implements Component {
         // history — and what lets a reader take the text back out without the
         // frame it was drawn in coming with it.
         // Keep the legacy hide setting while separating transcript and editor colours.
-        this.pushBand(lines, entry.text, width, false, this.userFace(), 'transcript.user.border', 'transcript.user.corner', this.theme.visible('editor.border'))
+        this.pushBand(lines, entry.text, width, false, this.userFace(), 'transcript.user.border', 'transcript.user.mark', this.theme.visible('editor.border'))
         return
       }
       case 'notice':

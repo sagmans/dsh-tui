@@ -32,8 +32,8 @@ breaking change, and a patch carries only fixes.
   the warning shade, which is now what a call that has not answered wears: a name
   painted in the colour of a state would leave that state nothing to say.
 
-- A transcript band now lets its corners carry the whole shape: each rule is its
-  own speaker's hue dimmed almost to the background, so two of them per message
+- A transcript band now lets two marks carry the whole shape: each rule is its own
+  speaker's hue dimmed almost to the background, so the two of them per message
   stop reading as furniture around the words and the colour sits on four small
   marks instead of two full-width rows. The prompt's rule is a dim mint and the
   reply's a dim gold, so a rule read at the screen's own edge still names whose
@@ -49,11 +49,12 @@ breaking change, and a patch carries only fixes.
   plain heading, and a section too narrow for a name and a dash falls back to
   one.
 
-- A message already written into the transcript now closes into a band — a
-  cornered rule above it, a cornered rule below it, and nothing beside it —
-  instead of a full box. The corners are what a band has in place of sides: they
-  close the block, so one that ended cannot read as one that began, and they take
-  the first and last column of a rule the block was already spending. A row of
+- A message already written into the transcript now closes into a band — a marked
+  rule above it, a marked rule below it, and nothing beside it — instead of a full
+  box. The two marks are what a band has in place of sides: a slash leaning over
+  the message at either end of each rule, so the block is closed without reading as
+  a container, and one that ended cannot read as one that began. They take the
+  first and last column of a rule the block was already spending. A row of
   air inside each rule holds the message off the shape that carried it. The two
   sides and the two columns of padding cost four columns of every row, and
   all four came back with any text copied out of the row; a reply is the widest

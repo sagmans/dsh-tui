@@ -214,11 +214,11 @@ An approval or a question draws inline above the editor and takes the keyboard. 
 
 While a turn runs, a submitted prompt waits in the agent inbox. It appears above the editor in a full box, with faint italic text. When the agent takes the prompt, it moves into the transcript.
 
-Transcript messages have top and bottom rules, rounded corners, and one blank row inside each rule. There are no side borders or horizontal padding, so copied message rows contain only the text. By default, the corners carry the colour — mint for your prompts, warm gold for replies — and each rule between them is that same hue dimmed almost to the background, so a message reads as its words with two small marks around them rather than as a fence, and the rule still says whose turn it closes. The editor and queued prompts keep their full boxes.
+Transcript messages have top and bottom rules, a slash mark at either end of each, and one blank row inside each rule. There are no side borders or horizontal padding, so copied message rows contain only the text. By default the marks carry the colour — mint for your prompts, warm gold for replies — and each rule between them is that same hue dimmed almost to the background, so a message reads as its words with four small slashes around them rather than as a fence, and the rule still says whose turn it closes. The marks lean over the message they close, and a band opens with the opposite lean to the one it closes with, so two messages in a row stay two. Slashes rather than the arcs a box closes with, because an arc reads as a corner and a corner promises the sides and the padding a band deliberately has none of. The editor and queued prompts keep their full boxes.
 
 - `transcript.user` styles the submitted prompt text.
-- `transcript.user.border` and `transcript.assistant.border` style the horizontal rules, dimmed by default and tinted per speaker. A hidden border removes the entire band, including its corners and blank rows.
-- `transcript.user.corner` and `transcript.assistant.corner` style the corners independently. A hidden corner leaves a blank column, so the rule keeps its position.
+- `transcript.user.border` and `transcript.assistant.border` style the horizontal rules, dimmed by default and tinted per speaker. A hidden border removes the entire band, including its marks and blank rows.
+- `transcript.user.mark` and `transcript.assistant.mark` style the four slashes independently. A hidden mark leaves a blank column, so the rule keeps its position.
 - `editor.queued` and `editor.queued.more` style or hide the waiting rows. For compatibility, a hidden `editor.border` also removes submitted-prompt bands.
 
 `ctrl+c` returns waiting prompts to the editor before it interrupts the turn.

@@ -6,7 +6,7 @@ import { renderTerminalText } from '../terminal-text.ts'
  *
  * A bar the reader types in is a box: its sides and its padding are what say
  * "type here", and nothing is ever read back out of it. A block already written
- * is a band, which draws a cornered rule above and below it, air inside each,
+ * is a band, which draws a marked rule above and below it, air inside each,
  * and nothing beside it, so a copy of one row is the row itself rather than the
  * frame that held it and a diagram keeps every column the terminal gave it. Both
  * shapes take the same
@@ -64,17 +64,21 @@ export function frameRule(innerWidth: number, hiddenRows: number): string {
 }
 
 /**
- * The corners a band closes its rules with, by the end of the block they close.
+ * The marks a band closes its rules with, by the end of the block they close.
  *
- * A band draws no sides, so the corners are the whole of what tells a block that
- * has ended from one that has begun: two blocks drawn back to back would
- * otherwise read as a single fence around whatever sat between them. They take
- * the first and last column of a rule the block was already spending, so the
- * rows between them keep every column they had.
+ * A band draws no sides, so these two columns are the whole of what tells a block
+ * that has ended from one that has begun: two blocks drawn back to back would
+ * otherwise read as a single fence around whatever sat between them. Slashes
+ * rather than the arcs a box closes with, because an arc reads as a corner, a
+ * corner promises the sides and the padding only a box has, and a band has
+ * neither: a diagonal is punctuation, and punctuation asks for nothing inside.
+ * They lean over the message they close, the way a quotation leans over the words
+ * it holds, and the opening lean is not the closing one, so a block that ends
+ * cannot be mistaken for one that starts. ASCII, so every terminal draws them.
  */
-const BAND_CORNERS = {
-  open: { left: FRAME_GLYPHS.topLeft, right: FRAME_GLYPHS.topRight },
-  close: { left: FRAME_GLYPHS.bottomLeft, right: FRAME_GLYPHS.bottomRight },
+const BAND_MARKS = {
+  open: { left: '/', right: '\\' },
+  close: { left: '\\', right: '/' },
 } as const
 
 /**
@@ -88,14 +92,14 @@ const BAND_CORNERS = {
  */
 const BAND_AIR = ''
 
-/** One end of a band: the corners, and the rule that runs between them. */
-function bandRule(width: number, hiddenRows: number, corners: { readonly left: string; readonly right: string }, faces: BandFaces): string {
-  // Both corners or neither: a partial pair would overrun a narrow terminal.
+/** One end of a band: the marks, and the rule that runs between them. */
+function bandRule(width: number, hiddenRows: number, marks: { readonly left: string; readonly right: string }, faces: BandFaces): string {
+  // Both marks or neither: a partial pair would overrun a narrow terminal.
   if (width < FRAME_COLUMNS) return faces.border(frameRule(width, hiddenRows))
   const rule = frameRule(width - FRAME_COLUMNS, hiddenRows)
-  if (faces.corner === undefined) return faces.border(`${corners.left}${rule}${corners.right}`)
-  // Separate style runs keep the rule's reset from swallowing the right accent.
-  return `${faces.corner(corners.left)}${faces.border(rule)}${faces.corner(corners.right)}`
+  if (faces.mark === undefined) return faces.border(`${marks.left}${rule}${marks.right}`)
+  // Separate style runs keep the rule's reset from swallowing the right mark.
+  return `${faces.mark(marks.left)}${faces.border(rule)}${faces.mark(marks.right)}`
 }
 
 /** How one block of text paints itself inside the shape that carries it. */
@@ -114,10 +118,10 @@ export interface FrameFaces {
   readonly drawn: boolean
 }
 
-/** A band can accent its corners without changing the editor's box styling. */
+/** A band can accent the marks at its ends without changing the editor's box styling. */
 export interface BandFaces extends FrameFaces {
   /** Optional so callers without accents retain their existing border paint. */
-  readonly corner?: (glyph: string) => string
+  readonly mark?: (glyph: string) => string
 }
 
 /** Whether a bar has the width, and the visible border, to close a box. */
@@ -149,12 +153,12 @@ export function frameLines(lines: readonly string[], width: number, faces: Frame
 }
 
 /**
- * One block of already-rendered rows as a band draws it: a cornered rule above,
- * the rows themselves between a row of air each, and a cornered rule below.
+ * One block of already-rendered rows as a band draws it: a marked rule above,
+ * the rows themselves between a row of air each, and a marked rule below.
  *
  * The rows are placed, never padded and never cut: the block laid itself out to
  * the width it was given, and every column a band does not spend is one a reader
- * gets to select. The corners are what a band says instead of sides — the block
+ * gets to select. The end marks are what a band says instead of sides — the block
  * is closed, and the rows inside it are whole. A dropped tail is counted on the
  * closing rule exactly as a box counts one, so a fold reads the same in either
  * shape.
@@ -168,11 +172,11 @@ export function bandLines(lines: readonly string[], width: number, faces: BandFa
   // no rows at all would otherwise open and close on two rows of nothing.
   const air = rows.length === 0 ? [] : [BAND_AIR]
   return [
-    bandRule(room, 0, BAND_CORNERS.open, faces),
+    bandRule(room, 0, BAND_MARKS.open, faces),
     ...air,
     ...rows,
     ...air,
-    bandRule(room, lines.length - body.length, BAND_CORNERS.close, faces),
+    bandRule(room, lines.length - body.length, BAND_MARKS.close, faces),
   ]
 }
 

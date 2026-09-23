@@ -43,13 +43,13 @@ palette:
 tokens:
   # A row of the conversation.
   transcript.user: { fg: default, bg: user }  # the product marks your own turn with a bubble, not a hue
-  # Speaker accents carry the shape alone: each rule is its own corner's hue at
-  # about a quarter of the lightness, so no message spends two full-width rows on
+  # Speaker accents carry the shape alone: each rule is its own mark's hue at about
+  # a quarter of the lightness, so no message spends two full-width rows on
   # furniture and the shade still names whose turn it closes.
   transcript.user.border: { fg: '#0b5142' }
-  transcript.user.corner: { fg: '#27f5c8' }
+  transcript.user.mark: { fg: '#27f5c8' }
   transcript.assistant.border: { fg: '#463a20' }
-  transcript.assistant.corner: { fg: '#d6c29a' }
+  transcript.assistant.mark: { fg: '#d6c29a' }
   transcript.notice: { fg: muted }
   transcript.marker: { fg: muted }
   transcript.reasoning.summary: { fg: faint, italic: true }
