@@ -56,6 +56,25 @@ export function createCompletionProvider(
 }
 
 /**
+ * Build the provider an answer is written with.
+ *
+ * A question's bar is the prompt bar's own editor, but an answer is not a
+ * prompt: a slash command is a line this surface would run rather than text the
+ * model reads, so the menu that answers one offers the workspace's files and the
+ * paths the base provider completes, and no commands at all. Nothing else may
+ * ride on the bar simply because it was borrowed rather than replaced.
+ */
+export function createAnswerCompletionProvider(
+  cwd: string,
+  index: FileIndex = createFileIndex(cwd),
+): CombinedAutocompleteProvider {
+  // No commands is the whole difference: the base class looks a slash up in the
+  // list it was handed, so an empty one leaves both the menu and the confirm key
+  // free for the text the reader is actually writing.
+  return new WorkspaceFileProvider([], cwd, index)
+}
+
+/**
  * The editor's provider, with workspace files behind the at-sign.
  *
  * The base class gathers file rows only when an `fd` binary was handed to it,
