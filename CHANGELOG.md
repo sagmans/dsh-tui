@@ -8,6 +8,13 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+### Changed
+
+- The three harness packages this bundle mounts now follow the compatible range
+  instead of one exact prerelease, so an npm tree keeps the host's copy rather
+  than resolving a private duplicate beside it. `0.1.5-rc.2` and
+  `0.1.5-rc.3` are verified releases, and the sources compile against rc.3.
+
 ### Fixed
 
 - A goal that was marked complete no longer keeps a row in the work board: the

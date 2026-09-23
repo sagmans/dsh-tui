@@ -83,6 +83,8 @@ Two facts explain most failures.
 
 **`dsh plugin install` removes a bundle it cannot resolve, and says nothing.** The command reconciles `dsh.profile.bundles` against the installed dependencies. A bundle whose path does not resolve leaves the list, and the command still exits 0. The next launch composes `@deepseek-ai/dsh-base` alone. No application plugin mounts, so nothing reads the command line: `dsh --profile tui` then prints nothing and never exits, and `--help` waits with it.
 
+**npm reports `overriding peer dependency` while a harness tree resolves, and the lines are not failures.** The harness floats its own prereleases, so its dependencies hold overlapping ranges over the same packages and npm names each range it overrides; the install still exits 0. A plugin profile does not have that shape — `dsh plugin add` resolves one copy of every package this bundle mounts. The plugin's own peers are optional so that npm keeps the host's copy instead of nesting a private one.
+
 | Symptom | Cause | Fix |
 |---|---|---|
 | `dsh: cannot resolve profile bundle "@sagmans/dsh-tui" ...` | the linked checkout moved or was deleted | `dsh plugin --profile tui add "$PLUGIN_CHECKOUT"` |

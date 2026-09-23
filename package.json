@@ -57,7 +57,9 @@
     "compatibility": {
       "dsh": ">=0.1.5-rc.1 <0.1.6",
       "dshReleases": {
-        "0.1.5-rc.1": "compatible"
+        "0.1.5-rc.1": "compatible",
+        "0.1.5-rc.2": "compatible",
+        "0.1.5-rc.3": "compatible"
       },
       "profiles": [
         "tui"
@@ -75,9 +77,9 @@
     "drive": "node tools/pty-drive.mjs"
   },
   "dependencies": {
-    "@deepseek-ai/dsh-agent-presets": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-code-runtime-worker-thread": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-cordis-host-runner": "0.1.5-rc.1",
+    "@deepseek-ai/dsh-agent-presets": ">=0.1.5-rc.1 <0.1.6",
+    "@deepseek-ai/dsh-code-runtime-worker-thread": ">=0.1.5-rc.1 <0.1.6",
+    "@deepseek-ai/dsh-cordis-host-runner": ">=0.1.5-rc.1 <0.1.6",
     "@deepseek-ai/schemastery": "3.18.2",
     "@earendil-works/pi-tui": "0.85.1",
     "commander": "^15.0.0",
@@ -131,17 +133,17 @@
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
-    "@deepseek-ai/dsh-agent": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-agent-default-model": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-agent-loop": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-cmdline": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-commands": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-llm": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-session": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-settings": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-tools": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-user-approval": "0.1.5-rc.1",
-    "@deepseek-ai/dsh-user-questions": "0.1.5-rc.1",
+    "@deepseek-ai/dsh-agent": "0.1.5-rc.3",
+    "@deepseek-ai/dsh-agent-default-model": "0.1.5-rc.3",
+    "@deepseek-ai/dsh-agent-loop": "0.1.5-rc.3",
+    "@deepseek-ai/dsh-cmdline": "0.1.5-rc.3",
+    "@deepseek-ai/dsh-commands": "0.1.5-rc.3",
+    "@deepseek-ai/dsh-llm": "0.1.5-rc.3",
+    "@deepseek-ai/dsh-session": "0.1.5-rc.3",
+    "@deepseek-ai/dsh-settings": "0.1.5-rc.3",
+    "@deepseek-ai/dsh-tools": "0.1.5-rc.3",
+    "@deepseek-ai/dsh-user-approval": "0.1.5-rc.3",
+    "@deepseek-ai/dsh-user-questions": "0.1.5-rc.3",
     "@types/node": "^24.0.0",
     "node-pty": "1.1.0",
     "typescript": "^5.9.0",
