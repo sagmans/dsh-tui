@@ -162,6 +162,7 @@ force, and the `keys:` section moves any of them — see [Keys](#keys).
 | `/preset` | pick the agent mode for this session from the roster |
 | `/preset <id>` | switch to that mode, while the session is still blank |
 | `/new [title]` | start a fresh session without leaving the terminal (`ctrl+x` then `n` starts one untitled) |
+| `/reload` | compose this session's agent again and replay its transcript, so an edited preset or skill file reaches the session; a running turn or a queued prompt is refused with `ctrl+c` as the way forward |
 | `/jobs` | list background jobs with their state and duration |
 | `/jobs read <id>` / `/jobs kill <id>` | show the tail of a job's output, or stop it |
 | `/subagents` | list the delegations this session started, with their provider and age |

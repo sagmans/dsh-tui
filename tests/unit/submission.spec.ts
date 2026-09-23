@@ -33,6 +33,10 @@ describe('classifySubmission', () => {
     expect(classifySubmission('/new  fresh start')).toEqual({ kind: 'new', title: 'fresh start' })
     expect(classifySubmission('/undo')).toEqual({ kind: 'undo' })
     expect(classifySubmission('/redo')).toEqual({ kind: 'redo' })
+    expect(classifySubmission('/reload')).toEqual({ kind: 'reload' })
+    // A reload takes no argument, so a line that carries one is a command that
+    // happens to be named like it rather than a reload with something to say.
+    expect(classifySubmission('/reload now')).toEqual({ kind: 'command', name: 'reload', line: '/reload now' })
   })
 
   it('recognizes the stash commands and their selectors', () => {
