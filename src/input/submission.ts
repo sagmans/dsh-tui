@@ -14,6 +14,10 @@ export type Submission =
   | { readonly kind: 'subagents'; readonly argument: string }
   | { readonly kind: 'fork'; readonly title: string }
   | { readonly kind: 'new'; readonly title: string }
+  /** Steps the transcript back over the newest prompt without deleting it. */
+  | { readonly kind: 'undo' }
+  /** Steps the transcript forward again after an undo. */
+  | { readonly kind: 'redo' }
   | { readonly kind: 'todo' }
   | { readonly kind: 'theme'; readonly argument: string }
   | { readonly kind: 'keys'; readonly argument: string }
@@ -40,7 +44,7 @@ export type Submission =
 
 /** Commands the surface answers itself, without a model turn. */
 export const LOCAL_COMMANDS = [
-  '/help', '/status', '/model', '/preset', '/todo', '/theme', '/keys', '/jobs', '/subagents', '/fork', '/new', '/rename', '/export', '/copy', '/history', '/clear', '/resume', '/quit', '/exit',
+  '/help', '/status', '/model', '/preset', '/todo', '/theme', '/keys', '/jobs', '/subagents', '/fork', '/new', '/undo', '/redo', '/rename', '/export', '/copy', '/history', '/clear', '/resume', '/quit', '/exit',
   '/stash', '/stash-pop', '/stash-apply', '/stash-list', '/stash-drop', '/stash-clear',
 ] as const
 
@@ -57,6 +61,8 @@ export const LOCAL_COMMAND_DESCRIPTIONS: Readonly<Record<string, string>> = {
   '/keys': 'open the key map and filter it by typing; /keys <layer> narrows it',
   '/fork': 'branch this conversation and continue in the branch',
   '/new': 'start a fresh session without leaving the terminal',
+  '/undo': 'hide the newest prompt and its turn, and put that prompt back in the bar',
+  '/redo': 'step forward again after an undo',
   '/copy': 'copy the last answer to the clipboard through the terminal',
   '/history': 'show where prompt history is kept; /history clear forgets every prompt',
   '/rename': 'give this session a title the picker will show',
@@ -109,6 +115,8 @@ export function classifySubmission(text: string): Submission {
   if (trimmed === '/fork' || trimmed.startsWith('/fork ')) {
     return { kind: 'fork', title: trimmed.slice('/fork'.length).trim() }
   }
+  if (trimmed === '/undo') return { kind: 'undo' }
+  if (trimmed === '/redo') return { kind: 'redo' }
   if (trimmed === '/todo') return { kind: 'todo' }
   if (trimmed === '/theme' || trimmed.startsWith('/theme ')) {
     return { kind: 'theme', argument: trimmed.slice('/theme'.length).trim() }
