@@ -122,6 +122,30 @@ exports[`golden frames > renders a call that has not answered yet at 80 columns 
 ]
 `;
 
+exports[`golden frames > renders a program's calls by state at 40 columns 1`] = `
+[
+  "╭──────────────────────────────────────╮",
+  "│ check the tree                       │",
+  "╰──────────────────────────────────────╯",
+  "run_code · ~12s",
+  "  ✓ bash git status · exit 0",
+  "  ✗ bash exit 3 · exit 1",
+  "  ▸ bash pnpm test",
+]
+`;
+
+exports[`golden frames > renders a program's calls by state at 80 columns 1`] = `
+[
+  "╭──────────────────────────────────────────────────────────────────────────────╮",
+  "│ check the tree                                                               │",
+  "╰──────────────────────────────────────────────────────────────────────────────╯",
+  "run_code · ~12s",
+  "  ✓ bash git status · exit 0",
+  "  ✗ bash exit 3 · exit 1",
+  "  ▸ bash pnpm test",
+]
+`;
+
 exports[`golden frames > renders a question gate at 40 columns 1`] = `
 [
   "",

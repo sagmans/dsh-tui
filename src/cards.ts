@@ -102,6 +102,15 @@ export interface ToolSubCall {
    */
   readonly running: boolean
   /**
+   * How the call finished, in the words the tool that ran it reported.
+   *
+   * A program's calls all look alike once they are back, so the row keeps the
+   * one line the tool itself drew about its outcome — a shell's exit status — and
+   * a reader can tell a command that worked from one that did not without
+   * opening anything.
+   */
+  readonly status?: string
+  /**
    * What the tool's own presenter drew for the call — a diff derived from the
    * arguments, a raw input — kept only for the reader who opens the row.
    *
@@ -272,6 +281,26 @@ export function oneLine(text: string): string {
 }
 
 /**
+ * What the fold learned about one dispatched call, in the order it learned it.
+ *
+ * A call is logged twice — once when the program asks for it, once with what it
+ * answered — and each moment supplies part of the row: the call view names it,
+ * the result view says how it ended and what it produced.
+ */
+export interface SubCallFacts {
+  /** The card the call declared, or nothing when no presenter answered for it. */
+  readonly view: ToolCard | undefined
+  /** The rows the row opens to, once the call reported them. */
+  readonly output: ToolSubCallRows | undefined
+  /** How the call finished, as the tool that ran it reported. */
+  readonly status: string | undefined
+  /** Whether the call is logged and still unanswered. */
+  readonly running: boolean
+  /** Whether the call is one the log marked as an error. */
+  readonly failed: boolean
+}
+
+/**
  * The one-line row for one nested call, as its start or its settle leaves it.
  *
  * A tool that declares a call view is drawn exactly as its own header would be;
@@ -280,18 +309,12 @@ export function oneLine(text: string): string {
  * A settle logs the same call again, and the presenter that answered the first
  * time is asked again for the view it would draw — so the row's identity comes
  * from the row already on screen wherever there is one, and only a call that was
- * dropped earlier is named from the log.
+ * dropped earlier is named from the log. The row also keeps how the call ended,
+ * because a program's calls are told apart by their outcomes rather than by
+ * anything the program itself says about them.
  */
-export function subCallRow(
-  id: string,
-  name: string,
-  argumentsJson: string,
-  view: ToolCard | undefined,
-  existing: ToolSubCall | undefined,
-  output: ToolSubCallRows | undefined,
-  running: boolean,
-  failed: boolean,
-): ToolSubCall {
+export function subCallRow(id: string, name: string, argumentsJson: string, facts: SubCallFacts, existing?: ToolSubCall): ToolSubCall {
+  const { view, output, status, running, failed } = facts
   const title = view?.title ?? existing?.title ?? name
   const raw = view !== undefined || existing !== undefined ? undefined : clipLine(argumentsJson)
   const argument = view?.argument ?? existing?.argument ?? raw
@@ -300,10 +323,14 @@ export function subCallRow(
   // came. Its outcome stays, because the reason it failed is what a reader opens
   // the row to read.
   const presented = failed ? undefined : subCallRows(view) ?? existing?.presented
+  // A settle that reports nothing keeps what the row already said about its own
+  // outcome, because a call does not stop having finished a certain way.
+  const ended = status ?? existing?.status
   return {
     id,
     title,
     ...(argument === undefined || argument === '' ? {} : { argument }),
+    ...(ended === undefined || ended === '' ? {} : { status: ended }),
     failed,
     running,
     ...(presented === undefined ? {} : { presented }),

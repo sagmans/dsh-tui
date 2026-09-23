@@ -1130,7 +1130,9 @@ describe('TranscriptView nested PTC calls', () => {
     },
     result: (name, input) => name === 'bash'
       ? cardOfResult(
-          { card: 'terminal', output: contentLines(input.content).join('\n'), exitCode: 0 },
+          // The real shell reports the exit code it ended on, which is the status a
+          // reader sees on the row; a failed call in these fixtures exits non-zero.
+          { card: 'terminal', output: contentLines(input.content).join('\n'), exitCode: input.isError ? 1 : 0 },
           { name, failed: input.isError, contentLines: contentLines(input.content) },
         )
       : undefined,
@@ -1167,12 +1169,14 @@ describe('TranscriptView nested PTC calls', () => {
     ])
     const lines = viewOf(model, FOLDED).render(60)
     expect(lines[0]).toBe('search the tree')
-    expect(lines.slice(1)).toEqual(['  read src/x.ts', '  bash git status'])
+    // Every row carries what became of its own call, so a reader watching a
+    // program work never has to open the card to tell done from failed.
+    expect(lines.slice(1)).toEqual(['  ✓ read src/x.ts', '  ✓ bash git status · exit 0'])
   })
 
   it('keeps a dispatched command that carries a break on one row', () => {
     const model = foldedProgram([{ name: 'bash', args: { command: 'echo one\necho two' } }])
-    expect(viewOf(model, FOLDED).render(60)).toEqual(['search the tree', '  bash echo one echo two'])
+    expect(viewOf(model, FOLDED).render(60)).toEqual(['search the tree', '  ✓ bash echo one echo two · exit 0'])
   })
 
   it('draws each call on one two-space-indented line under the header', () => {
@@ -1180,14 +1184,14 @@ describe('TranscriptView nested PTC calls', () => {
       { name: 'read', args: { file_path: 'src/x.ts' } },
       { name: 'bash', args: { command: 'git status' } },
     ])
-    expect(viewOf(model, INLINE).render(60)).toEqual(['search the tree', '  read src/x.ts', '  bash git status', '    done'])
+    expect(viewOf(model, INLINE).render(60)).toEqual(['search the tree', '  ✓ read src/x.ts', '  ✓ bash git status · exit 0', '    done'])
   })
 
   it('marks a failed call in the failed colour without hiding it', () => {
     const colour = createTheme('truecolor')
     const model = foldedProgram([{ name: 'bash', args: { command: 'exit 1' }, failed: true }])
     const lines = new TranscriptView(model, colour, new MarkdownRenderer(colour.markdown), { state: () => INLINE }).render(60)
-    expect(stripTerminalSequences(lines[1] ?? '')).toBe('  bash exit 1')
+    expect(stripTerminalSequences(lines[1] ?? '')).toBe('  ✗ bash exit 1 · exit 1')
     // Derived rather than repeated: this is about the failure colour, not a shade.
     const removed = [1, 3, 5].map(at => Number.parseInt(DEFAULT_PALETTE.removed.slice(at, at + 2), 16))
     expect(lines[1]).toContain(`38;2;${removed.join(';')}`)
@@ -1205,13 +1209,13 @@ describe('TranscriptView nested PTC calls', () => {
       { name: 'read', args: { file_path: 'src/y.ts' } },
     ])
     const view = viewOf(model, FOLDED)
-    expect(view.render(60)).toEqual(['search the tree', '  bash echo hi', '  read src/y.ts'])
+    expect(view.render(60)).toEqual(['search the tree', '  ✓ bash echo hi · exit 0', '  ✓ read src/y.ts'])
     // The output is the reason to open the row, and only the clicked call gets it.
     view.handleMouse(mouse('click', 'left', 1))
-    expect(view.render(60)).toEqual(['search the tree', '  bash echo hi', '    hi', '    there', '  read src/y.ts'])
+    expect(view.render(60)).toEqual(['search the tree', '  ✓ bash echo hi · exit 0', '    hi', '    there', '  ✓ read src/y.ts'])
     // A click anywhere on the opened call closes it, output and all.
     view.handleMouse(mouse('click', 'left', 2))
-    expect(view.render(60)).toEqual(['search the tree', '  bash echo hi', '  read src/y.ts'])
+    expect(view.render(60)).toEqual(['search the tree', '  ✓ bash echo hi · exit 0', '  ✓ read src/y.ts'])
   })
 
   it('clips a call to one row and opens that call when it is clicked', () => {
@@ -1222,22 +1226,25 @@ describe('TranscriptView nested PTC calls', () => {
     const view = viewOf(model, FOLDED)
     const folded = view.render(40)
     expect(folded[0]).toBe('search the tree')
-    expect(folded[1]?.startsWith('  bash echo ')).toBe(true)
+    expect(folded[1]?.startsWith('  ✓ bash echo ')).toBe(true)
     expect(folded[1] ?? '').toContain('…')
     // The clipped call stops five columns short of the edge, like every other
     // one-line tool row.
     expect(visibleWidth(folded[1] ?? '')).toBe(35)
-    expect(folded[2]).toBe('  read src/y.ts')
+    expect(folded[2]).toBe('  ✓ read src/y.ts')
     for (const line of folded) expect(visibleWidth(line)).toBeLessThanOrEqual(40)
     // The click takes the tightest row it lands on: the call opens in full while
     // the card around it and the call below stay as they were.
     expect(view.handleMouse(mouse('click', 'left', 1))).toEqual({ handled: true, render: true })
     const opened = view.render(40)
     expect(opened[0]).toBe('search the tree')
-    expect(opened.at(-1)).toBe('  read src/y.ts')
+    expect(opened.at(-1)).toBe('  ✓ read src/y.ts')
     // The full argument survives across the wrapped rows, which is the point of
     // opening one call without opening the card around it.
-    expect(opened.slice(1, -1).join('').split('x')).toHaveLength(81)
+    // The last row ends with the call's own outcome, which is not part of the
+    // argument this asserts survived the wrap.
+    const wrapped = opened.slice(1, -1).map(row => (row.split(' · ')[0] ?? '').trim()).join('')
+    expect(wrapped.split('x')).toHaveLength(81)
     expect(opened.join('')).not.toContain('done')
     for (const line of opened) expect(visibleWidth(line)).toBeLessThanOrEqual(40)
     // Clicking the opened call folds it back to the one line it started as.
@@ -1250,13 +1257,13 @@ describe('TranscriptView nested PTC calls', () => {
     const model = foldedProgram([{ name: 'edit', args: { file_path: 'src/x.ts', old_string: 'b', new_string: 'B' }, content: 'The file src/x.ts has been updated successfully.' }])
     const view = new TranscriptView(model, colour, new MarkdownRenderer(colour.markdown), { state: () => FOLDED })
     const folded = view.render(60).map(stripTerminalSequences)
-    expect(folded).toEqual(['search the tree', '  edit src/x.ts'])
+    expect(folded).toEqual(['search the tree', '  ✓ edit src/x.ts'])
     // A click only lands on a row the surface has already drawn its hit target on.
     view.handleMouse(mouse('click', 'left', 1))
     const opened = view.render(60)
     expect(opened.map(stripTerminalSequences)).toEqual([
       'search the tree',
-      '  edit src/x.ts',
+      '  ✓ edit src/x.ts',
       '    src/x.ts  -1 +1',
       '    -b',
       '    +B',
@@ -1370,7 +1377,36 @@ describe('TranscriptView running cards', () => {
       type: 'tool/ptc-dispatch',
       data: { rootCallId: 'root', parentCallId: 'root', subCallId: 'root:ptc:1', name: 'bash', arguments: { command: 'echo hi' }, isError: false, content: [] },
     })
-    expect(viewOf(model, inline).render(60)).toEqual(['run_code · ~12s', '  bash echo hi'])
+    expect(viewOf(model, inline).render(60)).toEqual(['run_code · ~12s', '  ✓ bash echo hi'])
+  })
+
+  it('says what became of each call a program dispatched', () => {
+    const { state: clockState, clock } = clockAt(1_000)
+    const model = new TranscriptModel(bashPresenter, clock)
+    model.apply({ type: 'tool/call', data: { name: 'run_code', arguments: '{"code":"x"}', callId: 'root' } })
+    const start = (id: string, command: string) => model.apply({
+      type: 'tool/ptc-dispatch-start',
+      data: { rootCallId: 'root', parentCallId: 'root', subCallId: id, name: 'bash', arguments: { command } },
+    })
+    const land = (id: string, command: string, isError: boolean) => model.apply({
+      type: 'tool/ptc-dispatch',
+      data: { rootCallId: 'root', parentCallId: 'root', subCallId: id, name: 'bash', arguments: { command }, isError, content: [] },
+    })
+    start('root:ptc:1', 'echo first')
+    land('root:ptc:1', 'echo first', false)
+    start('root:ptc:2', 'exit 3')
+    land('root:ptc:2', 'exit 3', true)
+    start('root:ptc:3', 'sleep 30')
+    const inline: ViewState = { expandCards: false, expandReasoning: false, expandSubCalls: true }
+    clockState.now += 4 * SECOND_MS
+    // Finished, failed, and still working are three shapes on three rows, so the
+    // state of the program's own work reads at a glance and without colour.
+    expect(viewOf(model, inline).render(60)).toEqual([
+      'run_code · ~4s',
+      '  ✓ bash echo first · exit 0',
+      '  ✗ bash exit 3 · exit 1',
+      '  ▸ bash sleep 30',
+    ])
   })
 
   it('keeps the total a program took after it answers, and stops counting', () => {

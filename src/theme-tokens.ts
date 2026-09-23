@@ -153,7 +153,11 @@ export const TUI_TOKENS = [
   'tool.running.elapsed',
   'tool.elapsed.done',
   'tool.subcall.title',
+  // One element per state a dispatched call can be in, so a reader who wants the
+  // failures loud and the finished work quiet can say so.
   'tool.subcall.running',
+  'tool.subcall.done',
+  'tool.subcall.failed',
   'tool.subcall.args',
   // Tool cards: per kind
   'tool.diff.header',
@@ -374,6 +378,8 @@ export const DEFAULT_TOKENS: Readonly<Record<TuiToken, StyleSpec>> = {
   'tool.elapsed.done': { fg: 'muted', italic: true },
   'tool.subcall.title': muted,
   'tool.subcall.running': { fg: 'warn' },
+  'tool.subcall.done': { fg: 'muted' },
+  'tool.subcall.failed': { fg: 'removed' },
   'tool.subcall.args': { fg: 'arg' },
 
   'tool.diff.header': muted,

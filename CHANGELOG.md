@@ -15,11 +15,15 @@ breaking change, and a patch carries only fixes.
   tool's name, and reports the whole seconds it has been waiting in
   `tool.running.elapsed` once that is a second or more. A card that dispatched
   calls is marked by its timer instead — no mark — and keeps that total, dimmed
-  and italic in `tool.elapsed.done`, when the program answers. A dispatch a
-  program is still waiting on carries the leading mark in `tool.subcall.running`.
-  Every one of these elements can be recoloured or hidden like any other token, so
-  a reader can tell which of several calls is still running without opening
-  anything.
+  and italic in `tool.elapsed.done`, when the program answers. Every call a
+  program dispatched opens its row with what became of it — `▸` in
+  `tool.subcall.running` while the program waits, `✓` in `tool.subcall.done`
+  once its log lands, `✗` in `tool.subcall.failed` if it reported a failure —
+  and a settled row keeps the tool's own line about its outcome, such as a shell's
+  exit status, in `tool.terminal.status` where that tool declares one. Every one
+  of these elements can be recoloured or hidden like any other token, so a reader
+  can tell which of several calls is still running, which finished, and how each
+  one ended without opening anything.
 
 ## [0.5.2] - 2026-09-23
 

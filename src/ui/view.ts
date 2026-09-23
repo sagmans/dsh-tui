@@ -45,6 +45,26 @@ const QUESTION_MARK = '?'
  * read as a second state.
  */
 const RUNNING_MARK = '▸'
+/** What one call a program dispatched became, as far as the surface has been told. */
+type SubCallState = 'running' | 'done' | 'failed'
+/**
+ * The marks a dispatched call is read by.
+ *
+ * A row's name cannot answer the question a reader watching a program asks —
+ * what is it doing now, what already ran, what failed — and colour alone is not
+ * an answer for a reader who cannot see it, so every state gets a shape.
+ */
+const SUBCALL_MARK: Readonly<Record<SubCallState, string>> = {
+  running: RUNNING_MARK,
+  done: '✓',
+  failed: '✗',
+}
+/** Each state is its own element, so one can be toned without the others. */
+const SUBCALL_TOKEN: Readonly<Record<SubCallState, TuiToken>> = {
+  running: 'tool.subcall.running',
+  done: 'tool.subcall.done',
+  failed: 'tool.subcall.failed',
+}
 /** A duration below a whole second is not a measurement, so it is not drawn. */
 const MIN_ELAPSED_SECONDS = 1
 const CHECKBOX_ON = '[x]'
@@ -521,19 +541,27 @@ export class TranscriptView implements Component {
       const open = this.subCallOpen(entry.id, call.id)
       const titleToken = call.failed ? 'tool.failed.title' : 'tool.subcall.title'
       // A program's calls are the work between its start and its return value, so
-      // the one still in flight is marked where the rest of them are read — in
-      // front of the name, which keeps every row's name in one column.
-      const lead = call.running && this.theme.visible('tool.subcall.running')
-        ? `${this.theme.style('tool.subcall.running', RUNNING_MARK)} `
-        : ''
+      // each row says what became of it — in front of the name, which keeps every
+      // row's name in one column.
+      const state: SubCallState = call.running ? 'running' : call.failed ? 'failed' : 'done'
+      const markToken = SUBCALL_TOKEN[state]
+      const lead = this.theme.visible(markToken) ? `${this.theme.style(markToken, SUBCALL_MARK[state])} ` : ''
       const column = visibleWidth(`${SUBCALL_INDENT}${lead}`)
       const title = this.theme.visible(titleToken) ? this.theme.rich(call.title, { token: titleToken, column }) : ''
       const argument = call.argument === undefined || !this.theme.visible('tool.subcall.args')
         ? ''
         : this.theme.rich(call.argument, { token: 'tool.subcall.args', column })
+      // How the call ended is the tool's own line about its outcome — a shell's
+      // exit status — and it is the only part of a dispatch's result that fits on
+      // the one row a reader scans.
+      const status = call.status === undefined || !this.theme.visible('tool.terminal.status')
+        ? ''
+        : this.theme.rich(call.status, { token: 'tool.terminal.status', column })
       // Joined rather than concatenated: the name and the argument are one space
-      // apart whether or not the mark or either of them is drawn at all.
-      const drawn = [lead.trimEnd(), title, argument.trim()].filter(part => part !== '').join(' ')
+      // apart whether or not the mark or either of them is drawn at all, and the
+      // outcome joins the row the way it joins every other one.
+      const label = [lead.trimEnd(), title, argument.trim()].filter(part => part !== '').join(' ')
+      const drawn = [label, status].filter(part => part !== '').join(this.statSeparator())
       // A row whose every part is hidden draws nothing, and nothing must not
       // cost a line the card does not have.
       if (drawn === '') continue

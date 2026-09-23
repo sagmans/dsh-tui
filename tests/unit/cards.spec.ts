@@ -429,12 +429,14 @@ describe('carriedFields', () => {
 describe('subCallRow', () => {
   it('draws the tool view the presenter declared', () => {
     const view: ToolCard = { kind: 'terminal', tool: 'bash', title: 'bash', argument: 'git status', detail: [], failed: false, totalLines: 0 }
-    expect(subCallRow('s1', 'bash', '{"command":"git status"}', view, undefined, undefined, true, false)).toEqual({ id: 's1', title: 'bash', argument: 'git status', failed: false, running: true })
+    expect(subCallRow('s1', 'bash', '{"command":"git status"}', { view, output: undefined, status: undefined, running: true, failed: false }))
+      .toEqual({ id: 's1', title: 'bash', argument: 'git status', failed: false, running: true })
   })
 
   it('falls back to the registry name and the raw call when no view answers', () => {
-    expect(subCallRow('s2', 'mystery', '{"a":1}', undefined, undefined, undefined, false, false)).toEqual({ id: 's2', title: 'mystery', argument: '{"a":1}', failed: false, running: false })
-    expect(subCallRow('s3', 'mystery', '', undefined, undefined, undefined, false, false)).toEqual({ id: 's3', title: 'mystery', failed: false, running: false })
+    const bare = { view: undefined, output: undefined, status: undefined, running: false, failed: false }
+    expect(subCallRow('s2', 'mystery', '{"a":1}', bare)).toEqual({ id: 's2', title: 'mystery', argument: '{"a":1}', failed: false, running: false })
+    expect(subCallRow('s3', 'mystery', '', bare)).toEqual({ id: 's3', title: 'mystery', failed: false, running: false })
   })
 
   it('drops a whole grapheme rather than half of a joined emoji', () => {
@@ -446,7 +448,7 @@ describe('subCallRow', () => {
   })
 
   it('clips a raw call so an oversized argument cannot fill the row', () => {
-    const call = subCallRow('s4', 'mystery', `{"a":"${'x'.repeat(500)}"}`, undefined, undefined, undefined, false, false)
+    const call = subCallRow('s4', 'mystery', `{"a":"${'x'.repeat(500)}"}`, { view: undefined, output: undefined, status: undefined, running: false, failed: false })
     expect(call.argument?.length).toBeLessThanOrEqual(CARD_LINE_LIMIT)
   })
 })

@@ -494,7 +494,11 @@ export class TranscriptModel {
     // row shows of the call itself, so two asks could disagree about one call.
     const view = this.presenter?.call(name, argumentsJson)
     const isError = data.isError === true
-    const output = settled ? this.subCallOutcome(name, argumentsJson, data, view) : undefined
+    const result = settled ? this.subCallResult(name, argumentsJson, data, view) : undefined
+    const output = result === undefined ? undefined : subCallRows(result)
+    // A call that answered has told the surface how it went, and that is what the
+    // row reports from then on — a program's calls are read by their outcomes.
+    const failed = settled && (isError || result?.failed === true)
     const known = this.pendingSub.get(subCallId)
     if (known !== undefined) {
       // A settle restates the row its start drew: it ends the claim that the
@@ -510,15 +514,14 @@ export class TranscriptModel {
       // never happened.
       const settledOutput = isError ? output : output ?? drawn?.output
       const subCalls = (card.subCalls ?? []).map((call, at) => at === known.childIndex
-        ? subCallRow(subCallId, name, argumentsJson, view, call, settledOutput, false, isError)
+        ? subCallRow(subCallId, name, argumentsJson, { view, output: settledOutput, status: result?.status, running: false, failed }, call)
         : call)
       this.settled[root.index] = { kind: 'tool', id: rootCallId, card: { ...card, subCalls } }
       return
     }
-    const failed = settled && isError
     // A dispatch log arrives only once the call has settled, so a row that no
     // settle has restated yet is the one still running.
-    const call = subCallRow(subCallId, name, argumentsJson, view, undefined, output, !settled, failed)
+    const call = subCallRow(subCallId, name, argumentsJson, { view, output, status: result?.status, running: !settled, failed })
     const kept = card.subCalls ?? []
     const total = (card.subCallsTotal ?? 0) + 1
     if (kept.length >= SUBCALL_MAX) {
@@ -537,7 +540,7 @@ export class TranscriptModel {
   }
 
   /**
-   * The outcome a dispatched call opens to, from the view its result presented.
+   * The card a dispatched call's log answers with.
    *
    * A presenter can only rebuild the view it declared when the logged content is
    * enough for it: a shell's output is, while a read's numbered window and a
@@ -545,16 +548,15 @@ export class TranscriptModel {
    * the content the program was actually shown, so a row whose tool cannot be
    * re-presented still opens to its outcome rather than to nothing.
    */
-  private subCallOutcome(
+  private subCallResult(
     name: string,
     argumentsJson: string,
     data: Record<string, unknown>,
     view: ToolCard | undefined,
-  ): ToolSubCallRows | undefined {
+  ): ToolCard {
     const failed = data.isError === true
-    const card = this.presenter?.result(name, { argumentsJson, content: data.content, isError: failed, meta: data.meta })
+    return this.presenter?.result(name, { argumentsJson, content: data.content, isError: failed, meta: data.meta })
       ?? cardFromLines(view?.kind ?? 'generic', name, view?.title ?? name, contentLines(data.content), failed)
-    return subCallRows(card)
   }
 
   private settleToolResult(data: Record<string, unknown>): void {

@@ -75,7 +75,14 @@ function fixturePresenter(): ReturnType<typeof createToolPresenter> {
     // a reader would run rather than a decorated phrase around it.
     bash: {
       presentCall: (args: { command?: string }) => ({ card: 'terminal', title: args.command ?? '' }),
-      presentResult: () => ({ card: 'terminal', title: FIXTURE_COMMAND, output: FIXTURE_OUTPUT, exitCode: 0 }),
+      // The real shell reports the code it ended on, which is the one line of its
+      // outcome a dispatched row keeps; a fixture that failed ended non-zero.
+      presentResult: (_args: unknown, input: { isError?: boolean }) => ({
+        card: 'terminal',
+        title: FIXTURE_COMMAND,
+        output: FIXTURE_OUTPUT,
+        exitCode: input.isError === true ? 1 : 0,
+      }),
     },
     read: {
       // A read declares its file as a location, which is what gives the card an
@@ -391,6 +398,12 @@ describe('golden frames', () => {
       expect(runningFrame().render(width)).toMatchSnapshot()
     })
   }
+
+  for (const width of WIDTHS) {
+    it(`renders a program's calls by state at ${width} columns`, () => {
+      expect(dispatchedFrame().render(width)).toMatchSnapshot()
+    })
+  }
 })
 
 /**
@@ -408,6 +421,46 @@ function runningFrame(frameTheme = theme): TranscriptView {
   clock = FIXTURE_STARTED_AT + FIXTURE_RUNNING_MS
   return new TranscriptView(model, frameTheme, new MarkdownRenderer(frameTheme.markdown), {
     state: () => DEFAULT_VIEW_STATE,
+    gate: () => undefined,
+    picker: () => undefined,
+  })
+}
+
+/**
+ * A frame with one program whose dispatched calls are in three different states.
+ *
+ * The surface draws what the log told it about each call and nothing more, so the
+ * frame is the only place the three marks are seen together on one card.
+ */
+function dispatchedFrame(frameTheme = theme): TranscriptView {
+  let clock = FIXTURE_STARTED_AT
+  const model = new TranscriptModel(fixturePresenter(), () => clock)
+  model.apply({ type: 'user/message', data: { content: [{ type: 'text', text: 'check the tree' }], source: { kind: 'user' } } })
+  model.apply({ type: 'tool/call', data: { name: 'run_code', arguments: '{"description":"check the tree"}', callId: 'root' } })
+  const commands = ['git status', 'exit 3', 'pnpm test']
+  commands.forEach((command, at) => {
+    const subCallId = `root:ptc:${at + 1}`
+    model.apply({
+      type: 'tool/ptc-dispatch-start',
+      data: { rootCallId: 'root', parentCallId: 'root', subCallId, name: 'bash', arguments: { command } },
+    })
+    if (command === 'pnpm test') return
+    model.apply({
+      type: 'tool/ptc-dispatch',
+      data: {
+        rootCallId: 'root',
+        parentCallId: 'root',
+        subCallId,
+        name: 'bash',
+        arguments: { command },
+        isError: command !== 'git status',
+        content: [],
+      },
+    })
+  })
+  clock = FIXTURE_STARTED_AT + FIXTURE_RUNNING_MS
+  return new TranscriptView(model, frameTheme, new MarkdownRenderer(frameTheme.markdown), {
+    state: () => ({ ...DEFAULT_VIEW_STATE, expandSubCalls: true }),
     gate: () => undefined,
     picker: () => undefined,
   })
