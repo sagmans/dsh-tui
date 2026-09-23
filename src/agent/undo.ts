@@ -65,6 +65,21 @@ function isDirectPrompt(event: ForkEvent): boolean {
   return event.type === 'user/message' && asRecord(asRecord(event.data)?.source)?.kind === 'user'
 }
 
+/** Where each delivered prompt first entered the inbox, by message id. */
+function deliveryIndex(events: readonly ForkEvent[]): ReadonlyMap<string, number> {
+  const delivered = new Map<string, number>()
+  for (let index = 0; index < events.length; index += 1) {
+    const event = events[index]
+    if (event?.type !== 'agent/inbox/spliced') continue
+    const inserted = asRecord(event.data)?.inserted
+    for (const message of Array.isArray(inserted) ? inserted : []) {
+      const id = asRecord(message)?.id
+      if (typeof id === 'string' && !delivered.has(id)) delivered.set(id, index)
+    }
+  }
+  return delivered
+}
+
 /**
  * The closed turns a direct prompt can be undone from, in log order.
  *
@@ -72,19 +87,26 @@ function isDirectPrompt(event: ForkEvent): boolean {
  * is a unit. Injected context also arrives as `user/message`, which is why the source kind is checked.
  */
 export function turnsOf(events: readonly ForkEvent[]): readonly TurnPoint[] {
+  const delivered = deliveryIndex(events)
   const turns: TurnPoint[] = []
-  let open: { turn: number; seedCount: number; promptText?: string } | undefined
+  let open: { turn: number; startIndex: number; seedCount: number; promptText?: string } | undefined
   for (let index = 0; index < events.length; index += 1) {
     const event = events[index]
     if (event === undefined) continue
     if (event.type === 'turn/start') {
       const turn = asRecord(event.data)?.turn
-      open = { turn: typeof turn === 'number' ? turn : turns.length + 1, seedCount: index }
+      open = { turn: typeof turn === 'number' ? turn : turns.length + 1, startIndex: index, seedCount: index }
       continue
     }
     if (open === undefined) continue
     if (open.promptText === undefined && isDirectPrompt(event)) {
       open.promptText = promptText(event.data)
+      const id = asRecord(event.data)?.id
+      // A prompt enters the log as an inbox splice just before the turn it
+      // opens; a seed that kept that splice would make the branch deliver the
+      // very prompt the reader undid, so the cut is the splice, not the turn.
+      const splice = typeof id === 'string' ? delivered.get(id) : undefined
+      open.seedCount = Math.min(open.startIndex, splice ?? open.startIndex)
       continue
     }
     if (event.type === 'turn/end') {

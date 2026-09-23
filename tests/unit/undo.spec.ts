@@ -3,9 +3,16 @@ import { SessionId } from '@deepseek-ai/dsh-session'
 import type { ForkEvent } from '@/agent/fork.ts'
 import { hiddenTail, NO_UNDO, redoStep, resetUndo, turnsOf, undoStep } from '@/agent/undo.ts'
 
-const prompt = (text: string, seq: number, kind = 'user'): ForkEvent => ({
+const prompt = (text: string, seq: number, kind = 'user', id?: string): ForkEvent => ({
   type: 'user/message',
-  data: { content: [{ type: 'text', text }], source: { kind } },
+  data: { content: [{ type: 'text', text }], source: { kind }, ...(id === undefined ? {} : { id }) },
+  seq,
+})
+
+/** The inbox splice that delivers a prompt just before the turn it opens. */
+const delivered = (text: string, seq: number, id: string): ForkEvent => ({
+  type: 'agent/inbox/spliced',
+  data: { target: 'next-turn', inserted: [{ id, content: [{ type: 'text', text }], source: { kind: 'user' } }] },
   seq,
 })
 
@@ -28,6 +35,25 @@ describe('turnsOf', () => {
     expect(turnsOf(events)).toEqual([
       { turn: 1, seedCount: 0, promptText: 'ask 1' },
       { turn: 2, seedCount: 4, promptText: 'ask 2' },
+    ])
+  })
+
+  it('cuts before the inbox splice that delivered the prompt', () => {
+    const events: ForkEvent[] = [
+      delivered('first', 0, 'p1'),
+      { type: 'turn/start', data: { turn: 1 }, seq: 1 },
+      prompt('first', 2, 'user', 'p1'),
+      { type: 'assistant/message', data: {}, seq: 3 },
+      { type: 'turn/end', data: { turn: 1 }, seq: 4 },
+      delivered('second', 5, 'p2'),
+      { type: 'turn/start', data: { turn: 2 }, seq: 6 },
+      prompt('second', 7, 'user', 'p2'),
+      { type: 'assistant/message', data: {}, seq: 8 },
+      { type: 'turn/end', data: { turn: 2 }, seq: 9 },
+    ]
+    expect(turnsOf(events)).toEqual([
+      { turn: 1, seedCount: 0, promptText: 'first' },
+      { turn: 2, seedCount: 5, promptText: 'second' },
     ])
   })
 
