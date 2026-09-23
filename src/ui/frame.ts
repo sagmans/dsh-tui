@@ -68,17 +68,19 @@ export function frameRule(innerWidth: number, hiddenRows: number): string {
  *
  * A band draws no sides, so these two columns are the whole of what tells a block
  * that has ended from one that has begun: two blocks drawn back to back would
- * otherwise read as a single fence around whatever sat between them. Slashes
- * rather than the arcs a box closes with, because an arc reads as a corner, a
- * corner promises the sides and the padding only a box has, and a band has
- * neither: a diagonal is punctuation, and punctuation asks for nothing inside.
- * They lean over the message they close, the way a quotation leans over the words
- * it holds, and the opening lean is not the closing one, so a block that ends
- * cannot be mistaken for one that starts. ASCII, so every terminal draws them.
+ * otherwise read as a single fence around whatever sat between them. Braille
+ * cells rather than any of the punctuation that offers itself, because every drawn
+ * mark is read as a shape standing at the end of the rule — an arc is a corner,
+ * a corner promises the sides and the padding only a box has, and a slash reads as
+ * a cut. A braille cell is one dot and no stroke, so the rule runs unbroken to its
+ * own end and the dot's place inside the cell carries the whole meaning: the low
+ * dots 3 and 6 for the rule that opens, the high dots 1 and 4 for the one that
+ * closes, both sitting over the message the way a quotation sits over the words it
+ * holds. Each is one column by the same count the rows themselves are measured by.
  */
 const BAND_MARKS = {
-  open: { left: '/', right: '\\' },
-  close: { left: '\\', right: '/' },
+  open: { left: '⠄', right: '⠠' },
+  close: { left: '⠁', right: '⠈' },
 } as const
 
 /**
