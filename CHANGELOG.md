@@ -37,8 +37,9 @@ breaking change, and a patch carries only fixes.
   replaces is the row the rule spends, so a section is no taller and no narrower
   than it was, and which board a row belongs to is read off the edge above it
   instead of off the row itself. Hiding a section's border element restores the
-  plain heading, and a section too narrow for a name and a dash falls back to
-  one.
+  plain heading, a section too narrow for a name and a dash falls back to one,
+  and a section whose name the reader hid keeps the rows it always had: with no
+  name to carry, the rule is not drawn at all.
 
 - A copied selection now leaves the frame behind. A terminal copies the screen,
   so a drag across a message used to take the box it was drawn in along with it,
@@ -48,7 +49,9 @@ breaking change, and a patch carries only fixes.
   spends on a side and its padding are not part of what that row says, while a
   line it did not draw is handed back exactly as it came. A drag takes part of a
   message as readily as two of them, so what lands on the clipboard is the text
-  the reader selected and nothing the surface added around it.
+  the reader selected and nothing the surface added around it — a drag that
+  caught no words at all, only the frame, comes back as the reader made it,
+  because a copy is never emptied.
 
 ## [0.5.2] - 2026-09-23
 

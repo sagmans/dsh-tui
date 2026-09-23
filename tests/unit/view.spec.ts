@@ -1614,6 +1614,38 @@ describe('TranscriptView copy', () => {
     expect(cleanCopied(handedBack(view.render(40)), view.copyRows())).toBe('ask\ntell')
   })
 
+  it('reads a reply that is still arriving back as its words', () => {
+    const model = new TranscriptModel()
+    model.applyStreamChunk({ type: 'text-delta', text: 'streaming reply' })
+    const view = viewOf(model)
+    const rows = view.render(40)
+    // A live row is rebuilt every frame and has no entry to be kept under, so the
+    // render itself has to answer for it.
+    expect(handedBack(rows)).toContain('│')
+    expect(cleanCopied(handedBack(rows), view.copyRows())).toBe('streaming reply')
+  })
+
+  it('keeps a live reply in the account beside a settled one', () => {
+    const model = new TranscriptModel()
+    model.apply({ type: 'assistant/message', data: { message: { content: [{ type: 'text', text: 'settled answer' }] } } })
+    model.applyStreamChunk({ type: 'text-delta', text: 'streaming reply' })
+    const view = viewOf(model)
+    expect(cleanCopied(handedBack(view.render(40)), view.copyRows())).toBe('settled answer\nstreaming reply')
+  })
+
+  it('takes no word from another message when a drag ends on a box column', () => {
+    const model = new TranscriptModel()
+    model.apply({ type: 'user/message', data: { content: [{ type: 'text', text: 'alpha' }], source: { kind: 'user' } } })
+    model.apply({ type: 'assistant/message', data: { message: { content: [{ type: 'text', text: 'beta' }] } } })
+    const view = viewOf(model)
+    const beta = handedBack(view.render(40)).split('\n').find(row => row.includes('beta')) ?? ''
+    // The drag covered "beta" and then landed on the box's own column: the column is
+    // the frame, so it goes, and nothing of the message above takes its place.
+    expect(cleanCopied([beta, '│'].join('\n'), view.copyRows())).toBe('beta')
+    // A copy of frame alone is handed back, not emptied, and not answered with a word.
+    expect(cleanCopied('│', view.copyRows())).toBe('│')
+  })
+
   it('takes nothing away from a row it never drew', () => {
     const model = new TranscriptModel()
     model.apply({ type: 'assistant/message', data: { message: { content: [{ type: 'text', text: 'the answer' }] } } })

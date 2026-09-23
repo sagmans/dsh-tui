@@ -158,7 +158,11 @@ describe('WorkDock theming', () => {
     // anyway because the dock never asked whether the element was visible.
     const hidden = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['dock.jobs.heading', { hidden: true }]]) })
     const lines = new WorkDock(() => EMPTY, hidden, () => job('running')).render(80)
-    expect(lines.some(line => line.includes('jobs ·'))).toBe(false)
+    // The name is what spends the section's heading row: with the name hidden the
+    // section keeps the rows it had before the sections were edged, and no rule
+    // without a name stands where the heading was.
+    expect(lines).toHaveLength(1)
+    expect(lines[0]).toContain('▸ bash-1')
   })
 
   it("draws each section's rule in that section's own hue", () => {

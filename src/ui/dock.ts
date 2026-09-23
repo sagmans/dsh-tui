@@ -31,7 +31,7 @@ const SECTION_RULE_LEAD = `${SECTION_RULE_DASH}${SECTION_RULE_DASH} `
 interface DockSection {
   /** The name the section reports, spelled as its heading spelled it. */
   readonly heading: string
-  /** The element the name is read in, and the row the section falls back to. */
+  /** The element the name is read in, and the row the section spends: no name, no row. */
   readonly headingToken: TuiToken
   /** The element the rule is drawn in; hiding it leaves the section as it was. */
   readonly borderToken: TuiToken
@@ -97,8 +97,7 @@ export class WorkDock implements Component {
    * would otherwise have been: a rule earns its row by being the edge of a
    * list, and an edge a reader cannot tell from a name is not one.
    */
-  private sectionRule(width: number, section: DockSection, named: boolean): string {
-    if (!named) return this.theme.style(section.borderToken, SECTION_RULE_DASH.repeat(Math.max(0, width)))
+  private sectionRule(width: number, section: DockSection): string {
     const head = `${SECTION_RULE_LEAD}${section.heading} `
     if (visibleWidth(head) + 1 > width) {
       return this.theme.style(section.headingToken, this.theme.cut(section.heading, width, '…'))
@@ -116,16 +115,16 @@ export class WorkDock implements Component {
    * One section as the dock draws it: the rule that names it, then its rows.
    *
    * The rows arrive already built and are pushed as they are, so a section costs
-   * the rows it always cost and no column of them. A hidden rule leaves the
-   * heading row in its place, which is the dock exactly as it stood before the
-   * sections were edged.
+   * the rows it always cost and no column of them. The name's element is what
+   * spends the row: a hidden rule leaves the heading it replaced, and a hidden
+   * name leaves the section exactly as it stood before the sections were edged —
+   * a rule with no name to carry would be an edge that says nothing.
    */
   private pushSection(lines: string[], width: number, section: DockSection, rows: readonly string[]): void {
-    const named = this.theme.visible(section.headingToken)
-    if (this.theme.visible(section.borderToken)) {
-      lines.push(this.sectionRule(width, section, named))
-    } else if (named) {
-      lines.push(this.theme.style(section.headingToken, this.theme.cut(section.heading, width, '…')))
+    if (this.theme.visible(section.headingToken)) {
+      lines.push(this.theme.visible(section.borderToken)
+        ? this.sectionRule(width, section)
+        : this.theme.style(section.headingToken, this.theme.cut(section.heading, width, '…')))
     }
     lines.push(...rows)
   }

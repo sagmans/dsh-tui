@@ -215,6 +215,14 @@ export class TranscriptView implements Component {
    * no rows this frame and still has to answer for what it drew before.
    */
   private readonly entryCopy = new WeakMap<TranscriptEntry, readonly FrameRow[]>()
+  /**
+   * The framed rows the in-flight entries drew this frame.
+   *
+   * They cannot be kept by entry the way the settled ones are: every frame builds
+   * a live entry as a fresh object, so a map keyed by it would never answer. A copy
+   * is read against the last frame, so it is the render that keeps them.
+   */
+  private liveCopy: readonly FrameRow[] = []
 
   constructor(
     private readonly model: TranscriptModel,
@@ -917,6 +925,7 @@ export class TranscriptView implements Component {
     const baseTag = `${width}|${state.expandCards ? 'c' : '-'}${state.expandReasoning ? 'r' : '-'}${state.expandSubCalls ? 'p' : '-'}|${this.theme.revision}`
     const lines: string[] = []
     const spans: ClickSpan[] = []
+    const liveCopy: FrameRow[] = []
     const settled = this.model.settledCount()
     const entries = this.model.entries()
     for (const [index, entry] of entries.entries()) {
@@ -939,6 +948,9 @@ export class TranscriptView implements Component {
       // fill the cache with objects nobody will ask for again.
       if (index >= settled) {
         this.renderEntry(entry, lines, width, true, local, copy)
+        // A row still arriving is drawn every frame, so it is never cached: its
+        // copy account goes to the frame rather than to an entry nobody can name.
+        liveCopy.push(...copy)
         // An in-flight entry draws straight into the transcript, so the spans it
         // recorded already name transcript rows; offsetting them again would move
         // every hit target as many rows down as the entry's own start.
@@ -966,6 +978,7 @@ export class TranscriptView implements Component {
       }
     }
     this.spans = spans
+    this.liveCopy = liveCopy
     const picker = this.options.picker?.()
     if (picker !== undefined) this.pushPicker(lines, picker, width)
     const gate = this.options.gate?.()
@@ -987,6 +1000,8 @@ export class TranscriptView implements Component {
       const saved = this.entryCopy.get(entry)
       if (saved !== undefined) rows.push(...saved)
     }
+    // The rows still arriving are not kept by entry, so they come from the frame.
+    rows.push(...this.liveCopy)
     return rows
   }
 }
