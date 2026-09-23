@@ -32,15 +32,6 @@ breaking change, and a patch carries only fixes.
   the warning shade, which is now what a call that has not answered wears: a name
   painted in the colour of a state would leave that state nothing to say.
 
-- A transcript band now lets two marks carry the whole shape: each rule is its own
-  speaker's hue dimmed almost to the background, so the two of them per message
-  stop reading as furniture around the words and the colour sits on four arcs
-  instead of two full-width rows. The prompt's rule is a dim mint and the
-  reply's a dim gold, so a rule read at the screen's own edge still names whose
-  turn it closes; both sit above the floor the degraded palette keeps as a hue, so
-  a 16-colour terminal keeps a coloured rule rather than folding it into black.
-  Message spacing, full text width, the editor, and the dock are unchanged.
-
 - A dock section — todos, subagents, jobs — now opens on a dashed rule that
   carries the section's own name, in a hue of its own. The heading row it
   replaces is the row the rule spends, so a section is no taller and no narrower
@@ -49,22 +40,15 @@ breaking change, and a patch carries only fixes.
   plain heading, and a section too narrow for a name and a dash falls back to
   one.
 
-- A message already written into the transcript now closes into a band — a marked
-  rule above it, a marked rule below it, and nothing beside it — instead of a full
-  box. The two marks are what a band has in place of sides: a quadrant arc at either
-  end of each rule, lifting over the rule that opens the block and dropping under
-  the one that closes it, so the block is closed and one that ended cannot read as
-  one that began. Detached from the rule rather than joined to it, because an arc
-  joined to the rule is read as a corner and a corner promises the padding a band
-  has none of. They take the first and last column of a rule the block was already
-  spending, and the row of air moves outside them: a message now sits against its
-  own rules, and the room a reader needs goes between two blocks rather than inside
-  one. The two
-  sides and the two columns of padding cost four columns of every row, and
-  all four came back with any text copied out of the row; a reply is the widest
-  thing the surface draws and the thing a reader most often takes back out. What
-  is still being typed into stays a box, so the shape now says which of the two a
-  row is, and a mermaid diagram in a reply is no longer boxed inside a box.
+- A copied selection now leaves the frame behind. A terminal copies the screen,
+  so a drag across a message used to take the box it was drawn in along with it,
+  and a prompt or a reply pasted anywhere carried the sides and the padding
+  between them. The surface reads a copy back through the account it kept of its
+  own drawing: a rule carries no text and is dropped, and the columns a row
+  spends on a side and its padding are not part of what that row says, while a
+  line it did not draw is handed back exactly as it came. A drag takes part of a
+  message as readily as two of them, so what lands on the clipboard is the text
+  the reader selected and nothing the surface added around it.
 
 ## [0.5.2] - 2026-09-23
 

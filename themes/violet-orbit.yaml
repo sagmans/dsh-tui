@@ -4,8 +4,8 @@
 # where this one names the transcript row that draws it. The port therefore
 # keeps pi's shades verbatim and re-applies them here by what an element *is*,
 # and every line below that came from pi names the pi key it came from — the
-# only thing that makes a later change to either theme reviewable. The argument
-# shade and shared transcript-band colours explain their exceptions below.
+# only thing that makes a later change to either theme reviewable. One shade
+# has no pi key to name, and says why it is here instead.
 #
 # This file is a reference and a layer, not a workspace: it ships inside the
 # package and a new version replaces it. /theme export violet-orbit writes a
@@ -36,13 +36,10 @@ tokens:
   # and a band inside that frame treats one fact twice: it reads as a selected
   # row rather than as the reader's own words. The shade carries over alone.
   transcript.user: { fg: user }  # userMessageText
-  # The accents distinguish speakers without borrowing the pale message text, and
-  # each rule recedes past pi's muted shade into its own mark's hue: the shape is
-  # the two marks, and the rule is the colour of whoever it closes.
-  transcript.user.border: { fg: '#0b5142' }
-  transcript.user.mark: { fg: '#27f5c8' }
-  transcript.assistant.border: { fg: '#463a20' }
-  transcript.assistant.mark: { fg: '#d6c29a' }
+  # The reply's own frame. Pi has no box around a reply, so there is no pi key to
+  # carry over; the violet family it would otherwise borrow disappears against the
+  # answer it holds, and a neutral gold is what keeps the frame a container.
+  transcript.assistant.border: { fg: '#d6c29a' }
   transcript.notice: { fg: muted }  # unchanged from the shipped table
   transcript.marker: { fg: muted }  # unchanged from the shipped table
   transcript.reasoning.summary: { fg: faint, italic: true }  # unchanged from the shipped table
@@ -143,10 +140,6 @@ tokens:
   gate.hint: { fg: muted }  # unchanged from the shipped table
   dock.goal: { fg: accent, bold: true }
   dock.planMode: { fg: '#a7a7ff', bold: true }  # customMessageLabel
-  # A board's edge takes a hue of its own so the three are told apart at a
-  # glance. Subagents cannot take the shipped table's user role, which is
-  # near-white here because pi spends it on message text: a rule in it would
-  # read as a heading rather than as the top of a list, so dim carries it.
   dock.todos.border: { fg: accent }  # accent
   dock.todos.heading: { fg: '#b5b5ff', bold: true }  # mdHeading
   dock.todos.pending: { fg: muted }  # unchanged from the shipped table

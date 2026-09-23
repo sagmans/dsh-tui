@@ -75,6 +75,7 @@ import { SessionId } from '@deepseek-ai/dsh-session'
 import { formatTokens } from './tokens.ts'
 import { TranscriptModel } from './transcript.ts'
 import { WorkFold, describeTodos, planSelectedActive, planToggleLine, readPlanState, type PlanModeState } from './work.ts'
+import { cleanCopied } from './ui/copy.ts'
 import { WorkDock } from './ui/dock.ts'
 import { GateInputBar } from './ui/gate-input.ts'
 import type { GhostBrush } from './ui/editor.ts'
@@ -480,7 +481,7 @@ export function apply(ctx: Context, config: unknown): void {
   const markdown = new MarkdownRenderer(theme.markdown, createMermaidTransform({ theme, mode: () => mermaidMode }))
   const restore = createRestoreRegistry()
   const terminal = new ProcessTerminal()
-  const tui = new WarningSafeTui(terminal)
+  const tui = new WarningSafeTui(terminal, { copySelection })
   // A frame that cannot be drawn leaves the last good screen up, so the failure
   // has to reach the transcript: otherwise the surface looks frozen and nothing
   // on screen can say why.
@@ -501,6 +502,20 @@ export function apply(ctx: Context, config: unknown): void {
    */
   const writeTerminal = (text: string): void => {
     if (!handedOver) terminal.write(text)
+  }
+
+  /**
+   * Put a copied selection on the clipboard as the words it selected.
+   *
+   * A terminal copies the screen, so a drag across a message takes the box the
+   * message was drawn in along with it. The rows the last frame drew are the
+   * account of that frame, so the copy is read back through them: the shape the
+   * surface added comes off, and nothing the reader wrote does.
+   */
+  function copySelection(text: string): Promise<boolean> {
+    if (handedOver) return Promise.resolve(false)
+    terminal.write(clipboardSequence(cleanCopied(text, view.copyRows())))
+    return Promise.resolve(true)
   }
   /** The one gate a terminal can present at a time, and how it settles its caller. */
   type PendingGate =

@@ -1,4 +1,4 @@
-import { TuiAltScreen, type TuiStopOptions } from '@earendil-works/pi-tui'
+import { TuiAltScreen, type TuiAltScreenOptions, type Terminal, type TuiStopOptions } from '@earendil-works/pi-tui'
 import { holdHostWrites, HOST_WRITE_TARGETS, type HostWriteGuard } from './host-writes.ts'
 
 const WARNING_EVENT = 'warning'
@@ -46,6 +46,16 @@ export class WarningSafeTui extends TuiAltScreen {
 
   /** Told once when a frame could not be drawn, so the surface can report it. */
   onFrameError: ((error: unknown) => void) | undefined
+
+  /**
+   * The screen as this surface runs it, with the framework's other two parameters
+   * out of the way: the terminal keeps its own hardware cursor and the surface
+   * writes no drawing log of its own, so the options are the only thing a caller
+   * ever has to name.
+   */
+  constructor(terminal: Terminal, options?: TuiAltScreenOptions) {
+    super(terminal, undefined, undefined, options)
+  }
 
   override start(): void {
     this.releaseWarnings ??= deferWarnings()

@@ -20,8 +20,9 @@
 # is text — links, code, headings — and the product keeps its own step for the
 # brand as text. That single line is where a reader moves the brand.
 #
-# The palette carries the product colours. Transcript bands keep shared neutral
-# rules and speaker accents so their shape remains quieter than the words.
+# Ten palette entries carry the whole theme: every element below names one rather
+# than a shade of its own. Three elements name a different entry than the shipped
+# table names, and say why where they do.
 #
 # The semantic shades stay the product's green, red, and amber. Something added
 # is green and something removed is red on every surface a reader already uses,
@@ -43,13 +44,10 @@ palette:
 tokens:
   # A row of the conversation.
   transcript.user: { fg: default, bg: user }  # the product marks your own turn with a bubble, not a hue
-  # Speaker accents carry the shape alone: each rule is its own mark's hue at about
-  # a quarter of the lightness, so no message spends two full-width rows on
-  # furniture and the shade still names whose turn it closes.
-  transcript.user.border: { fg: '#0b5142' }
-  transcript.user.mark: { fg: '#27f5c8' }
-  transcript.assistant.border: { fg: '#463a20' }
-  transcript.assistant.mark: { fg: '#d6c29a' }
+  # The reply's own frame. A border is a container rather than a fact, so it may
+  # not take a signal shade; a warm neutral keeps the answer held without moving
+  # it into the amber the surface reserves for state.
+  transcript.assistant.border: { fg: '#d6c29a' }
   transcript.notice: { fg: muted }
   transcript.marker: { fg: muted }
   transcript.reasoning.summary: { fg: faint, italic: true }
@@ -152,9 +150,6 @@ tokens:
   # The work panel above the editor.
   dock.goal: { bold: true }
   dock.planMode: { bold: true }
-  # One hue per board, so a row says which list it belongs to from the edge of
-  # it: the rows themselves stay muted, which is what lets a long command on one
-  # of them stay readable.
   dock.todos.border: { fg: accent }
   dock.todos.heading: { bold: true }
   dock.todos.pending: { fg: muted }
