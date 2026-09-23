@@ -287,6 +287,22 @@ describe('TranscriptModel tool cards', () => {
     expect(entry?.kind === 'tool' && entry.card.failed).toBe(true)
   })
 
+  it('keeps the verdict the result drew, not only the one the log flagged', () => {
+    // A shell reports a command that exited non-zero as an ordinary result, so the
+    // card the presenter built is the only thing that knows the call failed.
+    const presenter = {
+      calls: [] as string[],
+      results: [] as string[],
+      call: () => ({ kind: 'terminal' as const, tool: 'bash', title: 'bash', argument: 'exit 1', detail: [], failed: false, totalLines: 0 }),
+      result: () => ({ kind: 'terminal' as const, tool: 'bash', title: 'bash', argument: 'exit 1', status: 'exit 1', detail: [], failed: true, totalLines: 0 }),
+    }
+    const model = new TranscriptModel(presenter)
+    model.apply({ type: 'tool/call', data: { name: 'bash', arguments: '{"command":"exit 1"}', callId: 'c1' } })
+    model.apply({ type: 'tool/result', data: { message: { content: [{ type: 'tool-result', toolCallId: 'c1', text: 'boom' }], isError: false } } })
+    const entry = model.entries()[0]
+    expect(entry?.kind === 'tool' && entry.card.failed).toBe(true)
+  })
+
   it('appends a standalone row for a result whose call is not in this fold', () => {
     const model = new TranscriptModel()
     model.apply({

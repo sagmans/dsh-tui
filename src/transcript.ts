@@ -604,6 +604,10 @@ export class TranscriptModel {
       this.settled[pending.index] = { kind: 'tool', id: callId, card: finished(rebuilt) }
       return
     }
-    this.settled[pending.index] = { kind: 'tool', id: callId, card: finished(mergeCards(call, { ...result, failed: isError })) }
+    // Two readings decide this, and either is enough: the log says whether the tool
+    // raised, and the card the presenter built says how the call itself ended — a
+    // shell's non-zero exit is a failure the log's flag never carries.
+    const settledCard = mergeCards(call, { ...result, failed: result.failed || isError })
+    this.settled[pending.index] = { kind: 'tool', id: callId, card: finished(settledCard) }
   }
 }

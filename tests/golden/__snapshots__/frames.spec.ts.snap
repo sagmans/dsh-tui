@@ -109,7 +109,7 @@ exports[`golden frames > renders a call that has not answered yet at 40 columns 
   "╭──────────────────────────────────────╮",
   "│ run the suite                        │",
   "╰──────────────────────────────────────╯",
-  "▸ bash pnpm test · ~12s",
+  "bash pnpm test · ~12s",
 ]
 `;
 
@@ -118,7 +118,7 @@ exports[`golden frames > renders a call that has not answered yet at 80 columns 
   "╭──────────────────────────────────────────────────────────────────────────────╮",
   "│ run the suite                                                                │",
   "╰──────────────────────────────────────────────────────────────────────────────╯",
-  "▸ bash pnpm test · ~12s",
+  "bash pnpm test · ~12s",
 ]
 `;
 
@@ -128,9 +128,9 @@ exports[`golden frames > renders a program's calls by state at 40 columns 1`] = 
   "│ check the tree                       │",
   "╰──────────────────────────────────────╯",
   "run_code · ~12s",
-  "  ✓ bash git status · exit 0",
-  "  ✗ bash exit 3 · exit 1",
-  "  ▸ bash pnpm test",
+  "  bash git status · exit 0",
+  "  bash exit 3 · exit 1",
+  "  bash pnpm test",
 ]
 `;
 
@@ -140,9 +140,9 @@ exports[`golden frames > renders a program's calls by state at 80 columns 1`] = 
   "│ check the tree                                                               │",
   "╰──────────────────────────────────────────────────────────────────────────────╯",
   "run_code · ~12s",
-  "  ✓ bash git status · exit 0",
-  "  ✗ bash exit 3 · exit 1",
-  "  ▸ bash pnpm test",
+  "  bash git status · exit 0",
+  "  bash exit 3 · exit 1",
+  "  bash pnpm test",
 ]
 `;
 
@@ -592,8 +592,8 @@ exports[`styled golden frames > renders the transcript with its escapes 1`] = `
   "[38;2;214;194;154m│[0m   const dock = new WorkDock(state, theme)                                    [38;2;214;194;154m│[0m",
   "[38;2;214;194;154m│[0m [38;2;138;138;138m\`\`\`[0m                                                                          [38;2;214;194;154m│[0m",
   "[38;2;214;194;154m╰──────────────────────────────────────────────────────────────────────────────╯[0m",
-  "[38;2;215;175;95mbash[0m [38;2;141;179;217mpnpm test[0m[38;2;138;138;138m · [0m[38;2;138;138;138mexit 0[0m[38;2;138;138;138m · [0m[38;2;138;138;138m1 line[0m",
-  "[38;2;215;175;95mread[0m [38;2;141;179;217msrc/ui/view.ts[0m  [38;2;138;138;138mL1–3[0m[38;2;138;138;138m · [0m[38;2;138;138;138m3 lines[0m[38;2;138;138;138m · [0m[38;2;138;138;138m23 tok[0m",
+  "[38;2;95;175;215mbash[0m [38;2;141;179;217mpnpm test[0m[38;2;138;138;138m · [0m[38;2;138;138;138mexit 0[0m[38;2;138;138;138m · [0m[38;2;138;138;138m1 line[0m",
+  "[38;2;95;175;215mread[0m [38;2;141;179;217msrc/ui/view.ts[0m  [38;2;138;138;138mL1–3[0m[38;2;138;138;138m · [0m[38;2;138;138;138m3 lines[0m[38;2;138;138;138m · [0m[38;2;138;138;138m23 tok[0m",
   "[38;2;138;138;138mcompacted 3 events (≈4200 tokens)[0m",
 ]
 `;
@@ -621,7 +621,7 @@ exports[`terminal text > draws a tab, a colour, and a carriage return at 80 colu
 `;
 
 exports[`terminal text > draws the colour when the terminal has one, and no escape when it does not 1`] = `
-"[38;2;215;175;95mrun[0m
+"[38;2;95;175;215mrun[0m
     [38;2;141;179;217mrun report[0m
     [38;2;138;138;138mname        role[0m
     [38;2;138;138;138m[38;5;1mred[39m[38;2;138;138;138m plain[0m

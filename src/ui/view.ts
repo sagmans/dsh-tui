@@ -44,27 +44,6 @@ const QUESTION_MARK = '?'
  * same question — is this work still moving — and a second symbol for it would
  * read as a second state.
  */
-const RUNNING_MARK = '▸'
-/** What one call a program dispatched became, as far as the surface has been told. */
-type SubCallState = 'running' | 'done' | 'failed'
-/**
- * The marks a dispatched call is read by.
- *
- * A row's name cannot answer the question a reader watching a program asks —
- * what is it doing now, what already ran, what failed — and colour alone is not
- * an answer for a reader who cannot see it, so every state gets a shape.
- */
-const SUBCALL_MARK: Readonly<Record<SubCallState, string>> = {
-  running: RUNNING_MARK,
-  done: '✓',
-  failed: '✗',
-}
-/** Each state is its own element, so one can be toned without the others. */
-const SUBCALL_TOKEN: Readonly<Record<SubCallState, TuiToken>> = {
-  running: 'tool.subcall.running',
-  done: 'tool.subcall.done',
-  failed: 'tool.subcall.failed',
-}
 /** A duration below a whole second is not a measurement, so it is not drawn. */
 const MIN_ELAPSED_SECONDS = 1
 const CHECKBOX_ON = '[x]'
@@ -475,7 +454,7 @@ export class TranscriptView implements Component {
         ? { expanded: false, preview: 'tail', rows: spec.tail }
         : { expanded: false, preview: 'title' }
     const { lines: detail, hidden } = cardDetailRows(card, preview)
-    const titleToken = card.failed ? 'tool.failed.title' : 'tool.title'
+    const titleToken = this.titleToken(card, { running: 'tool.running.title', failed: 'tool.failed.title' })
     const glyphToken = card.failed ? 'tool.failed.glyph' : 'tool.glyph'
     if (expanded) {
       const { lead, body } = this.renderHead(card, titleToken, glyphToken)
@@ -539,14 +518,12 @@ export class TranscriptView implements Component {
     for (const call of subCalls) {
       const start = lines.length
       const open = this.subCallOpen(entry.id, call.id)
-      const titleToken = call.failed ? 'tool.failed.title' : 'tool.subcall.title'
       // A program's calls are the work between its start and its return value, so
-      // each row says what became of it — in front of the name, which keeps every
-      // row's name in one column.
-      const state: SubCallState = call.running ? 'running' : call.failed ? 'failed' : 'done'
-      const markToken = SUBCALL_TOKEN[state]
-      const lead = this.theme.visible(markToken) ? `${this.theme.style(markToken, SUBCALL_MARK[state])} ` : ''
-      const column = visibleWidth(`${SUBCALL_INDENT}${lead}`)
+      // each row's own name says what became of it — the call still in flight in
+      // the running colour, one that failed in the failed colour, and one that is
+      // back in the colour every settled name is read in.
+      const titleToken = this.titleToken(call, { running: 'tool.subcall.running', failed: 'tool.failed.title' })
+      const column = visibleWidth(SUBCALL_INDENT)
       const title = this.theme.visible(titleToken) ? this.theme.rich(call.title, { token: titleToken, column }) : ''
       const argument = call.argument === undefined || !this.theme.visible('tool.subcall.args')
         ? ''
@@ -558,9 +535,9 @@ export class TranscriptView implements Component {
         ? ''
         : this.theme.rich(call.status, { token: 'tool.terminal.status', column })
       // Joined rather than concatenated: the name and the argument are one space
-      // apart whether or not the mark or either of them is drawn at all, and the
-      // outcome joins the row the way it joins every other one.
-      const label = [lead.trimEnd(), title, argument.trim()].filter(part => part !== '').join(' ')
+      // apart whether or not either of them is drawn at all, and the outcome joins
+      // the row the way it joins every other one.
+      const label = [title, argument.trim()].filter(part => part !== '').join(' ')
       const drawn = [label, status].filter(part => part !== '').join(this.statSeparator())
       // A row whose every part is hidden draws nothing, and nothing must not
       // cost a line the card does not have.
@@ -620,7 +597,7 @@ export class TranscriptView implements Component {
    */
   private renderCollapsedHead(card: ToolCard, hidden: number, titleToken: TuiToken, glyphToken: TuiToken, width: number): string {
     const edge = collapsedEdge(width)
-    const lead = this.cardLead(titleToken, glyphToken, this.runningMark(card, titleToken))
+    const lead = this.cardLead(titleToken, glyphToken)
     const title = this.cardTitle(card, titleToken)
     const separator = this.statSeparator()
     // One row is what folding promises, so a running call reports its duration
@@ -665,9 +642,8 @@ export class TranscriptView implements Component {
   }
 
   /** The mark that introduces a card, empty when the theme hides its label. */
-  private cardLead(titleToken: TuiToken, glyphToken: TuiToken, running: string): string {
-    const glyph = this.theme.visible(titleToken) ? this.theme.glyph(glyphToken) : ''
-    return glyph === '' ? running : `${glyph} ${running}`
+  private cardLead(titleToken: TuiToken, glyphToken: TuiToken): string {
+    return this.theme.visible(titleToken) ? this.theme.glyph(glyphToken) : ''
   }
 
   /** A card's label, styled, or nothing when the theme hides it. */
@@ -691,7 +667,7 @@ export class TranscriptView implements Component {
    * argument that can be a whole command rather than a word.
    */
   private renderHead(card: ToolCard, titleToken: TuiToken, glyphToken: TuiToken): { lead: string; body: string } {
-    const lead = this.cardLead(titleToken, glyphToken, this.runningMark(card, titleToken))
+    const lead = this.cardLead(titleToken, glyphToken)
     const title = this.cardTitle(card, titleToken)
     const argument = card.kind === 'terminal' ? '' : this.cardArgument(card)
     const head = [title, argument].filter(part => part !== '').join(' ')
@@ -701,17 +677,23 @@ export class TranscriptView implements Component {
   }
 
   /**
-   * The claim that a call has not come back, drawn before the tool's name.
+   * The colour a call's name is drawn in, which is the whole of its state.
    *
-   * The mark is hard-coded because it is a state rather than a decoration: a
-   * reader scanning a column of cards must not have to read a number to know
-   * which of them is still moving.
+   * The name is where a reader looking for a call looks first, so what that call
+   * is doing belongs in the name rather than in a glyph beside it: one name, in
+   * the colour of its state, and nothing a reader has to learn to read first.
+   *
+   * A state is only how a name is painted, though, so a reader who turns one of
+   * these colours off still gets the name: hiding a state token takes the colour
+   * away, not the word it was painted on.
    */
-  private runningMark(card: ToolCard, titleToken: TuiToken): string {
-    if (card.running !== true || this.dispatchedCalls(card)) return ''
-    // A mark with no name to introduce is a row that lost its first word.
-    if (!this.theme.visible(titleToken) || !this.theme.visible('tool.running.glyph')) return ''
-    return `${this.theme.style('tool.running.glyph', RUNNING_MARK)} `
+  private titleToken(
+    state: { readonly running?: boolean; readonly failed: boolean },
+    tokens: { readonly running: TuiToken; readonly failed: TuiToken },
+  ): TuiToken {
+    if (state.failed) return this.theme.visible(tokens.failed) ? tokens.failed : 'tool.title'
+    if (state.running === true) return this.theme.visible(tokens.running) ? tokens.running : 'tool.title'
+    return 'tool.title'
   }
 
   /**

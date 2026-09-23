@@ -746,6 +746,13 @@ export function cardOfResult(
       const status = terminal.signal !== undefined && terminal.signal !== ''
         ? `signal ${terminal.signal}`
         : terminal.exitCode === undefined ? undefined : `exit ${terminal.exitCode}`
+      // A command that exited non-zero, or died on a signal, is a call that
+      // failed, whatever the log's own flag said: the harness reports a shell's
+      // exit code as its result rather than as an error, so that flag is silent
+      // about how the command actually ended.
+      const endedBadly = terminal.exitCode === undefined
+        ? terminal.signal !== undefined && terminal.signal !== ''
+        : terminal.exitCode !== 0
       // The output is bounded from its END: a command that printed far more
       // than retention keeps must still show how it finished, and the folded
       // preview tails what is retained again.
@@ -761,7 +768,7 @@ export function cardOfResult(
         ...(command === '' ? {} : { argument: command }),
         ...(status === undefined ? {} : { status }),
         detail: bounded.detail,
-        failed,
+        failed: failed || endedBadly,
         totalLines: bounded.totalLines,
       }
     }
