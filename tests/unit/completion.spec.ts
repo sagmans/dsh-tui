@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { commandMenu, createCompletionProvider } from '@/input/completion.ts'
+import { commandMenu, createAnswerCompletionProvider, createCompletionProvider } from '@/input/completion.ts'
 import { createFileIndex, type FileIndex } from '@/input/file-search.ts'
 import { LOCAL_COMMANDS, LOCAL_COMMAND_DESCRIPTIONS } from '@/input/submission.ts'
 
@@ -99,6 +99,31 @@ describe('file completion on the at-sign', () => {
     writeFileSync(join(root, 'alpha.txt'), '')
     const paths = createCompletionProvider([], root, createFileIndex(root, { list: async () => [] }))
     const file = await paths.getSuggestions(['alpha'], 0, 5, { signal, force: true })
+    expect(file?.items.map(item => item.value)).toEqual(['alpha.txt'])
+  })
+})
+
+describe("the menu a question's answer is written with", () => {
+  it("offers the workspace's files to an answer", async () => {
+    const provider = createAnswerCompletionProvider('/workspace', indexFor(['src/ui/editor.ts', 'docs/readme.md']))
+    const found = await provider.getSuggestions(['@edi'], 0, 4, { signal })
+    expect(found?.items.map(item => item.value)).toEqual(['@src/ui/editor.ts'])
+  })
+
+  it('offers an answer no command at all', async () => {
+    // An answer is text the model reads, so a line the surface would run has no
+    // place in its menu: the bar is borrowed, not turned into a prompt bar.
+    const provider = createAnswerCompletionProvider('/workspace', indexFor(['src/ui/editor.ts']))
+    await expect(provider.getSuggestions(['/com'], 0, 4, { signal })).resolves.toBeNull()
+    await expect(provider.getSuggestions(['/'], 0, 1, { signal })).resolves.toBeNull()
+  })
+
+  it('still completes a path the base provider knows', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-answer-tab-'))
+    scratch.push(root)
+    writeFileSync(join(root, 'alpha.txt'), '')
+    const provider = createAnswerCompletionProvider(root, createFileIndex(root, { list: async () => [] }))
+    const file = await provider.getSuggestions(['alpha'], 0, 5, { signal, force: true })
     expect(file?.items.map(item => item.value)).toEqual(['alpha.txt'])
   })
 })

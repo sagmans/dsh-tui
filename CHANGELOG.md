@@ -80,6 +80,15 @@ breaking change, and a patch carries only fixes.
 
 ### Fixed
 
+- A question's answer no longer offers the prompt bar's slash commands. The
+  question borrows the prompt bar's own editor, so it borrowed its completion
+  menu with it: typing `/` in a free-text answer listed the commands this
+  session can run, which are lines the surface would execute rather than text
+  the model reads. The bar now carries the menu its role calls for — the
+  workspace's files behind `@`, path completion, and no commands while a
+  question holds it — and gets the full menu back the moment the answer is
+  settled.
+
 - A Herdr row no longer flips through idle between two turns of one
   still-working agent. The harness chains turns through a pending inbox inside
   a single driver run, and the pane reported each turn's end, so a completion

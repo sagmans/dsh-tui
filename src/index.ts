@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { type Component, type KeyId, ProcessTerminal, ScrollView, isKeyRelease, matchesKey } from '@earendil-works/pi-tui'
+import { type Component, type KeyId, ProcessTerminal, ScrollView, isKeyRelease, matchesKey, type CombinedAutocompleteProvider } from '@earendil-works/pi-tui'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 // Type-only: the command registry publishes the change event this surface
@@ -37,7 +37,8 @@ import type { ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
 import type { AskUserQuestionAnswer } from '@deepseek-ai/dsh-user-questions'
 import { ApprovalGate, QuestionGate, toGateQuestions, type GateAnswer } from './gates.ts'
 import { cancelStep, quitStep } from './input/cancel.ts'
-import { createCompletionProvider } from './input/completion.ts'
+import { createAnswerCompletionProvider, createCompletionProvider } from './input/completion.ts'
+import { createFileIndex } from './input/file-search.ts'
 import { ghostSuffix } from './input/ghost.ts'
 import { LOCAL_COMMANDS, classifySubmission, type Submission } from './input/submission.ts'
 import { createDeferredNotice } from './settings-notice.ts'
@@ -732,8 +733,9 @@ export function apply(ctx: Context, config: unknown): void {
     herdr.unblock()
     editor.disableSubmit = false
     // The question is answered or skipped, so the reader gets their prompt back
-    // in the bar they left it in.
+    // in the bar they left it in, with the menu the prompt bar offered.
     promptBar.giveBack()
+    applyCompletion()
     tui.setFocus(editor)
     tui.requestRender()
   }
@@ -923,18 +925,42 @@ export function apply(ctx: Context, config: unknown): void {
 
   const registry = (): CommandRegistry | undefined => ctx.get('commands') as CommandRegistry | undefined
 
+  /** One scan of the workspace, shared by both menus: the listing is read-only and cached. */
+  const fileIndex = createFileIndex(process.cwd())
+  /** The menu the prompt bar offers: the commands this session can run, and the workspace's files. */
+  let promptCompletion: CombinedAutocompleteProvider | undefined
+  /** The menu an answer offers, which is the same menu without the commands. */
+  let answerCompletion: CombinedAutocompleteProvider | undefined
+
+  /**
+   * Give the bar the menu its current role calls for.
+   *
+   * A question borrows the prompt bar's editor rather than drawing its own, so
+   * the provider has to follow the borrow: a slash command is a line this
+   * surface would run, and an answer is text the model reads, so the two roles
+   * must not share one menu.
+   */
+  const applyCompletion = (): void => {
+    const chosen = promptBar.isBorrowed() ? answerCompletion : promptCompletion
+    if (chosen !== undefined) editor.setAutocompleteProvider(chosen)
+  }
+
   /**
    * Offer completion for whatever this session can run right now.
    *
    * The registry is agent-scoped and still empty while the agent starts, so the
    * menu is rebuilt when the agent arrives and whenever a package registers
-   * another command.
+   * another command. Both providers are built here because the answer's is the
+   * prompt bar's own minus the commands, and a rebuild while a question is open
+   * must not leave the answer menu unreachable.
    */
   const installCompletion = (): void => {
     const current = agent?.agent
     const commands = registry()
     if (current === undefined || commands === undefined) return
-    editor.setAutocompleteProvider(createCompletionProvider(commands.list(current), process.cwd()))
+    answerCompletion = createAnswerCompletionProvider(process.cwd(), fileIndex)
+    promptCompletion = createCompletionProvider(commands.list(current), process.cwd(), fileIndex)
+    applyCompletion()
   }
 
   /**
@@ -2643,7 +2669,13 @@ export function apply(ctx: Context, config: unknown): void {
     const questions = toGateQuestions(request)
     if (questions.length === 0) return next()
     return new Promise<AskUserQuestionAnswer>(resolve => {
-      const gate = promptBar.borrow(() => new QuestionGate(questions, editor, () => keymap))
+      const gate = promptBar.borrow(() => {
+        // The bar is an answer's for as long as the gate holds it, so the menu
+        // it once offered commands through is replaced before a key can reach it.
+        const built = new QuestionGate(questions, editor, () => keymap)
+        applyCompletion()
+        return built
+      })
       // The seam takes mutable selection arrays and an optional custom field, so
       // the read-only gate answer is copied into that exact shape here.
       const settle = (answers: GateAnswer[]): void => {

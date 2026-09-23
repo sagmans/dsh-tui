@@ -2,6 +2,7 @@ import { type TUI } from '@earendil-works/pi-tui'
 import { describe, expect, it } from 'vitest'
 import { ApprovalGate, type GateQuestion, QuestionGate, toGateQuestions } from '@/gates.ts'
 import { defaultKeymap, resolveKeymap, type Keymap } from '@/input/actions.ts'
+import { createAnswerCompletionProvider } from '@/input/completion.ts'
 import { createTheme } from '@/theme.ts'
 import { GateInputBar } from '@/ui/gate-input.ts'
 
@@ -712,5 +713,37 @@ describe('QuestionGate free-text row', () => {
     expect(gate.card().custom).toBeUndefined()
     for (const character of 'because') gate.handleKey(character)
     expect(gate.handleKey(ENTER)).toEqual([{ id: 'q1', selected: [], custom: 'because' }])
+  })
+
+  it('leaves a line the reader starts with a slash as plain answer text', () => {
+    // An answer is text the model reads, so the menu the bar shows here carries
+    // no commands: a slash neither narrows to a command nor completes into one,
+    // and the text reaches the answer exactly as typed.
+    const bar = answerBar()
+    bar.setAutocompleteProvider(createAnswerCompletionProvider('/workspace', {
+      candidates: async () => [{ path: 'src/ui/editor.ts', isDirectory: false }],
+      reachable: async () => true,
+    }))
+    const gate = new QuestionGate(toGateQuestions({ questions: [{ id: 'q1', question: 'why?' }] }), bar, defaultKeymap)
+    for (const character of '/compact') gate.handleKey(character)
+    expect(bar.isShowingAutocomplete()).toBe(false)
+    expect(answerText(gate)).toBe('/compact')
+  })
+
+  it('still answers the file menu an at-sign opens', async () => {
+    // The menu is the base editor's own, so the gate never intercepts a press it
+    // is drawing for: proof that borrowing the bar kept completion rather than
+    // replacing it.
+    const bar = answerBar()
+    bar.setAutocompleteProvider(createAnswerCompletionProvider('/workspace', {
+      candidates: async () => [{ path: 'src/ui/editor.ts', isDirectory: false }],
+      reachable: async () => true,
+    }))
+    const gate = new QuestionGate(toGateQuestions({ questions: [{ id: 'q1', question: 'why?' }] }), bar, defaultKeymap)
+    for (const character of '@edi') gate.handleKey(character)
+    for (let attempt = 0; attempt < 200 && !bar.isShowingAutocomplete(); attempt++) {
+      await new Promise(resolve => setTimeout(resolve, 5))
+    }
+    expect(bar.isShowingAutocomplete()).toBe(true)
   })
 })

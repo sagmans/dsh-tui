@@ -752,6 +752,8 @@ The automated checks drive a real PTY, but they run on this machine's terminal. 
 | a 40-column terminal | transcript and card rows end in `…` instead of wrapping into the next line |
 | a question with a long option at 40 columns | the option wraps onto rows indented under its label, and `0. other — type your own answer` sits under the list |
 | press `0` on a question, type an answer, press Enter | the editor under row `0` shows the text as it is edited, and the model receives it as that question's answer |
+| a question with no options, then type `/` | no menu opens and the slash stays part of the answer: answers are text the model reads, so the commands this session can run are offered only in the prompt bar |
+| the same question, then type `@` and a fragment | the workspace's files are offered under the answer, and the menu's own keys pick a row instead of answering the question |
 | type a prompt without sending it, then answer a question | the prompt bar steps aside while the question is open and holds the same prompt again afterwards |
 | `echo hi \| dsh --profile tui` | refuses with a non-zero exit and a message naming the TTY requirement |
 | `/stash`, `/stash-pop` in one terminal | the footer shows `stash 1` after the stash and the draft returns to the editor after the pop |
