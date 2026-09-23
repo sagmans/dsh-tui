@@ -40,8 +40,11 @@ breaking change, and a patch carries only fixes.
   plain heading, and a section too narrow for a name and a dash falls back to
   one.
 
-- A message already written into the transcript now closes into a band — the rule
-  above it, the rule below it, and nothing beside it — instead of a full box. The
+- A message already written into the transcript now closes into a band — a
+  cornered rule above it, a cornered rule below it, and nothing beside it —
+  instead of a full box. The corners are what a band has in place of sides: they
+  close the block, so one that ended cannot read as one that began, and they take
+  the first and last column of a rule the block was already spending. The
   two sides and the two columns of padding cost four columns of every row, and
   all four came back with any text copied out of the row; a reply is the widest
   thing the surface draws and the thing a reader most often takes back out. What

@@ -6,8 +6,8 @@ import { renderTerminalText } from '../terminal-text.ts'
  *
  * A bar the reader types in is a box: its sides and its padding are what say
  * "type here", and nothing is ever read back out of it. A block already written
- * is a band, which draws the rules above and below it and nothing else, so a
- * copy of one row is the row itself rather than the frame that held it and a
+ * is a band, which draws a cornered rule above and below it and nothing else, so
+ * a copy of one row is the row itself rather than the frame that held it and a
  * diagram keeps every column the terminal gave it. Both shapes take the same
  * faces and close on the same rule; which one a row lands in is how the surface
  * says whether it is still open for editing or is already history.
@@ -62,6 +62,28 @@ export function frameRule(innerWidth: number, hiddenRows: number): string {
   return indicator.slice(0, Math.max(0, width - ellipsis.length)) + ellipsis
 }
 
+/**
+ * The corners a band closes its rules with, by the end of the block they close.
+ *
+ * A band draws no sides, so the corners are the whole of what tells a block that
+ * has ended from one that has begun: two blocks drawn back to back would
+ * otherwise read as a single fence around whatever sat between them. They take
+ * the first and last column of a rule the block was already spending, so the
+ * rows between them keep every column they had.
+ */
+const BAND_CORNERS = {
+  open: { left: FRAME_GLYPHS.topLeft, right: FRAME_GLYPHS.topRight },
+  close: { left: FRAME_GLYPHS.bottomLeft, right: FRAME_GLYPHS.bottomRight },
+} as const
+
+/** One end of a band: the corners, and the rule that runs between them. */
+function bandRule(width: number, hiddenRows: number, corners: { readonly left: string; readonly right: string }): string {
+  // Both corners or neither: narrower than the pair they need, a row that still
+  // carried them would be wider than the block it is there to close.
+  if (width < FRAME_COLUMNS) return frameRule(width, hiddenRows)
+  return `${corners.left}${frameRule(width - FRAME_COLUMNS, hiddenRows)}${corners.right}`
+}
+
 /** How one block of text paints itself inside the shape that carries it. */
 export interface FrameFaces {
   /** Paints one row of the block's own text. */
@@ -107,13 +129,15 @@ export function frameLines(lines: readonly string[], width: number, faces: Frame
 }
 
 /**
- * One block of already-rendered rows as a band draws it: a rule above, the rows
- * themselves between them, and a rule below.
+ * One block of already-rendered rows as a band draws it: a cornered rule above,
+ * the rows themselves between them, and a cornered rule below.
  *
  * The rows are placed, never padded and never cut: the block laid itself out to
  * the width it was given, and every column a band does not spend is one a reader
- * gets to select. A dropped tail is counted on the closing rule exactly as a box
- * counts one, so a fold reads the same in either shape.
+ * gets to select. The corners are what a band says instead of sides — the block
+ * is closed, and the rows inside it are whole. A dropped tail is counted on the
+ * closing rule exactly as a box counts one, so a fold reads the same in either
+ * shape.
  */
 export function bandLines(lines: readonly string[], width: number, faces: FrameFaces, limit = Number.POSITIVE_INFINITY): string[] {
   const room = Math.max(0, width)
@@ -121,9 +145,9 @@ export function bandLines(lines: readonly string[], width: number, faces: FrameF
   const rows = body.map(faces.text)
   if (!faces.drawn) return rows
   return [
-    faces.border(frameRule(room, 0)),
+    faces.border(bandRule(room, 0, BAND_CORNERS.open)),
     ...rows,
-    faces.border(frameRule(room, lines.length - body.length)),
+    faces.border(bandRule(room, lines.length - body.length, BAND_CORNERS.close)),
   ]
 }
 

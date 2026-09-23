@@ -141,14 +141,18 @@ describe('TranscriptView repaints', () => {
   })
 })
 
+/** The rule a band opens on, and the one it closes on: corners, dashes, corners. */
+const opensBand = (width: number): string => `${'╭'}${'─'.repeat(width - 2)}╮`
+const closesBand = (width: number): string => `╰${'─'.repeat(width - 2)}╯`
+
 describe('TranscriptView text', () => {
   it('renders assistant text as markdown inside its band', () => {
     const model = new TranscriptModel()
     model.apply({ type: 'assistant/message', data: { message: { content: [{ type: 'text', text: '# Title\n\nplain **strong**' }] } } })
     const lines = viewOf(model).render(60)
     // A band is two rules and the rows between them, and spends nothing on a side.
-    expect(lines[0]).toBe('─'.repeat(60))
-    expect(lines.at(-1)).toBe('─'.repeat(60))
+    expect(lines[0]).toBe(opensBand(60))
+    expect(lines.at(-1)).toBe(closesBand(60))
     const body = stripTerminalSequences(lines.join('\n'))
     expect(body).toContain('Title')
     expect(body).toContain('strong')
@@ -162,8 +166,8 @@ describe('TranscriptView text', () => {
       data: { content: [{ type: 'text', text: '**bold** steps:\n\n- one\n- two' }], source: { kind: 'user' } },
     })
     const lines = viewOf(model).render(40)
-    expect(lines[0]).toBe('─'.repeat(40))
-    expect(lines.at(-1)).toBe('─'.repeat(40))
+    expect(lines[0]).toBe(opensBand(40))
+    expect(lines.at(-1)).toBe(closesBand(40))
     const body = stripTerminalSequences(lines.join('\n'))
     expect(body).toContain('bold steps:')
     expect(body).not.toContain('**')
@@ -177,9 +181,9 @@ describe('TranscriptView text', () => {
     // A prompt is a box only while it is being typed into. Once it is said the
     // frame goes with it, so the row reads as the text and copies as the text.
     expect(viewOf(model).render(40)).toEqual([
-      '─'.repeat(40),
+      opensBand(40),
       'hello there',
-      '─'.repeat(40),
+      closesBand(40),
     ])
   })
 
@@ -189,9 +193,9 @@ describe('TranscriptView text', () => {
     // A reply is the other object of an exchange, so it is banded like the prompt
     // that asked for it rather than left as one more paragraph of the transcript.
     expect(viewOf(model).render(40)).toEqual([
-      '─'.repeat(40),
+      opensBand(40),
       'hello there',
-      '─'.repeat(40),
+      closesBand(40),
     ])
   })
 
@@ -261,12 +265,12 @@ describe('TranscriptView text', () => {
     expect(opened[0]).toContain('\u001b[3;38;2;102;102;102m')
     // The thought shares the signpost's faint shade, not the muted family's.
     for (const line of opened.slice(1, 3)) expect(line).toContain('\u001b[38;2;102;102;102m')
-    // The band's rules carry the border's shade and run the whole width: a frame
-    // with no sides has no corner to sit in, so the row is the rule alone.
+    // The band's rules carry the border's shade: the corners close the block, and
+    // the dashes between them take the rest of the row.
     expect(opened[3]).toContain('\u001b[38;2;214;194;154m')
-    expect(stripTerminalSequences(opened[3] ?? '')).toBe('─'.repeat(60))
+    expect(stripTerminalSequences(opened[3] ?? '')).toBe(opensBand(60))
     expect(stripTerminalSequences(opened[4] ?? '')).toContain('the answer')
-    expect(stripTerminalSequences(opened[5] ?? '')).toBe('─'.repeat(60))
+    expect(stripTerminalSequences(opened[5] ?? '')).toBe(closesBand(60))
   })
 
   it('renders an opened thought as markdown in the thought shade', () => {
@@ -291,7 +295,7 @@ describe('TranscriptView text', () => {
     // The thought body ends where the answer's band begins, and that band is gold
     // rather than faint: the loop stops at the band's opening rule so the reply's
     // own border is not read as a thought row that lost its shade.
-    const band = opened.findIndex(line => stripTerminalSequences(line) === '─'.repeat(60))
+    const band = opened.findIndex(line => stripTerminalSequences(line) === opensBand(60))
     expect(band).toBeGreaterThan(0)
     for (const line of opened.slice(1, band).filter(line => line !== '')) {
       expect(line).toContain('\u001b[38;2;102;102;102m')
@@ -337,8 +341,8 @@ describe('TranscriptView text', () => {
     const lines = viewOf(model).render(40)
     expect(lines).toHaveLength(4)
     for (const line of lines) expect(visibleWidth(line)).toBeLessThanOrEqual(40)
-    expect(lines[0]).toBe('─'.repeat(40))
-    expect(lines[3]).toBe('─'.repeat(40))
+    expect(lines[0]).toBe(opensBand(40))
+    expect(lines[3]).toBe(closesBand(40))
     // Every column of the prompt survives the fold: a band costs the text
     // nothing, so a row is as wide as its own line and no wider.
     const body = lines.slice(1, 3).join('')
