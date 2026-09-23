@@ -8,6 +8,30 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+### Added
+
+- A tool call now says what it is doing in the colour of its own name rather
+  than in a mark beside it: `tool.running.title` paints the name of a call that
+  has not answered, which also counts the whole seconds it has waited, once that
+  is a second or more, in `tool.running.elapsed`. A call that failed is painted
+  in `tool.failed.title` — including a shell command that exited non-zero or died
+  on a signal, which the surface now reads as the failure it is rather than as a
+  result that happens to carry a number. A card that dispatched calls keeps that
+  total, dimmed and italic in `tool.elapsed.done`, when the program answers, and
+  every call the program dispatched names itself the same way in its own indented
+  row — `tool.subcall.running` while the program waits on it, `tool.subcall.title`
+  once it is back — beside the tool's own line about its outcome, such as a shell's
+  exit status, in `tool.terminal.status` where that tool declares one. Every one of
+  these elements can be recoloured or hidden like any other token, so a reader can
+  tell which of several calls is still running, which finished, and how each one
+  ended without opening anything.
+
+### Changed
+
+- The shipped token table paints a tool's name in the palette accent rather than in
+  the warning shade, which is now what a call that has not answered wears: a name
+  painted in the colour of a state would leave that state nothing to say.
+
 ## [0.5.2] - 2026-09-23
 
 ### Added

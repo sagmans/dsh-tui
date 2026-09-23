@@ -4,7 +4,7 @@ import { cardOfCall, cardOfResult, contentLines, CARD_DETAIL_MAX, CARD_SHELL_PRE
 import type { GateCard } from '@/gates.ts'
 import { createTheme, forwardEditorTheme, forwardMarkdownTheme, type TuiTheme } from '@/theme.ts'
 import { DEFAULT_PALETTE, DIFF_ADDED_BAND } from '@/theme-tokens.ts'
-import { TranscriptModel, type TranscriptEntry } from '@/transcript.ts'
+import { SECOND_MS, TranscriptModel, type TranscriptEntry } from '@/transcript.ts'
 import { MarkdownRenderer } from '@/ui/markdown.ts'
 import type { PickerCard } from '@/ui/picker.ts'
 import { RowCache } from '@/ui/rows.ts'
@@ -17,12 +17,28 @@ const theme = createTheme('none')
 /** The terminal the bar under test renders against; these tests read its rows only. */
 const STUB_TUI = { requestRender: () => {}, terminal: { rows: 24, cols: 80 } } as unknown as TUI
 
+/** How the real bash tool declares itself: a terminal card whose title is the command. */
+const bashPresenter: ToolPresenter = {
+  call: (name, argumentsJson) => cardOfCall(
+    { card: 'terminal', title: (JSON.parse(argumentsJson) as { command?: string }).command ?? '' },
+    name,
+  ),
+  result: (name, input) => cardOfResult(
+    { card: 'terminal', output: contentLines(input.content).join('\n'), exitCode: input.isError ? 1 : 0 },
+    { name, failed: input.isError, contentLines: contentLines(input.content) },
+  ),
+}
+
 /** The editor a gate answers in, which is the surface's own prompt bar. */
 const answerBar = (text: string): BoxedEditor => {
   const bar = new BoxedEditor(STUB_TUI, theme.editor)
   bar.setText(text)
   return bar
 }
+/** The 24-bit foreground a palette entry is painted with, as a rendered row carries it. */
+const painted = (hex: string): string =>
+  `38;2;${[1, 3, 5].map(at => Number.parseInt(hex.slice(at, at + 2), 16)).join(';')}`
+
 const COLLAPSED: ViewState = { expandCards: false, expandReasoning: false, expandSubCalls: false }
 /** Every card opened, which is the shape a wrapping assertion needs to see. */
 const OPEN: ViewState = { expandCards: true, expandReasoning: false, expandSubCalls: false }
@@ -94,6 +110,34 @@ describe('TranscriptView repaints', () => {
     state.expandSubCalls = true
     view.render(40)
     expect(rows.stats().misses).toBe(4)
+  })
+
+  it('rebuilds a running row as its duration moves and never a settled one', () => {
+    const rows = new RowCache<TranscriptEntry>()
+    const clockState = { now: 1_000 }
+    const model = new TranscriptModel(bashPresenter, () => clockState.now)
+    model.apply({ type: 'tool/call', data: { name: 'bash', arguments: '{"command":"pnpm test"}', callId: 'c1' } })
+    const view = new TranscriptView(model, theme, new MarkdownRenderer(theme.markdown), { rows })
+
+    expect(view.render(60)).toEqual(['bash pnpm test'])
+    // Within the same second the row cannot have changed, so the frame reuses it.
+    expect(view.render(60)).toEqual(['bash pnpm test'])
+    expect(rows.stats()).toEqual({ hits: 1, misses: 1 })
+
+    clockState.now += SECOND_MS
+    expect(view.render(60)).toEqual(['bash pnpm test · ~1s'])
+    expect(rows.stats()).toEqual({ hits: 1, misses: 2 })
+
+    model.apply({
+      type: 'tool/result',
+      data: { message: { content: [{ type: 'tool-result', toolCallId: 'c1', text: 'all green' }], isError: false } },
+    })
+    expect(view.render(60)).toEqual(['bash pnpm test · exit 0 · 1 line'])
+    clockState.now += 30 * SECOND_MS
+    // A call that came back stops being redrawn: the row it settled into is the
+    // one the cache keeps, and nothing on it is measured by the clock any more.
+    expect(view.render(60)).toEqual(['bash pnpm test · exit 0 · 1 line'])
+    expect(rows.stats()).toEqual({ hits: 2, misses: 3 })
   })
 })
 
@@ -1090,7 +1134,9 @@ describe('TranscriptView nested PTC calls', () => {
     },
     result: (name, input) => name === 'bash'
       ? cardOfResult(
-          { card: 'terminal', output: contentLines(input.content).join('\n'), exitCode: 0 },
+          // The real shell reports the exit code it ended on, which is the status a
+          // reader sees on the row; a failed call in these fixtures exits non-zero.
+          { card: 'terminal', output: contentLines(input.content).join('\n'), exitCode: input.isError ? 1 : 0 },
           { name, failed: input.isError, contentLines: contentLines(input.content) },
         )
       : undefined,
@@ -1127,12 +1173,14 @@ describe('TranscriptView nested PTC calls', () => {
     ])
     const lines = viewOf(model, FOLDED).render(60)
     expect(lines[0]).toBe('search the tree')
-    expect(lines.slice(1)).toEqual(['  read src/x.ts', '  bash git status'])
+    // Only the call still in flight is marked, so a settled row takes the mark's
+    // place and the names read down one column.
+    expect(lines.slice(1)).toEqual(['  read src/x.ts', '  bash git status · exit 0'])
   })
 
   it('keeps a dispatched command that carries a break on one row', () => {
     const model = foldedProgram([{ name: 'bash', args: { command: 'echo one\necho two' } }])
-    expect(viewOf(model, FOLDED).render(60)).toEqual(['search the tree', '  bash echo one echo two'])
+    expect(viewOf(model, FOLDED).render(60)).toEqual(['search the tree', '  bash echo one echo two · exit 0'])
   })
 
   it('draws each call on one two-space-indented line under the header', () => {
@@ -1140,17 +1188,18 @@ describe('TranscriptView nested PTC calls', () => {
       { name: 'read', args: { file_path: 'src/x.ts' } },
       { name: 'bash', args: { command: 'git status' } },
     ])
-    expect(viewOf(model, INLINE).render(60)).toEqual(['search the tree', '  read src/x.ts', '  bash git status', '    done'])
+    expect(viewOf(model, INLINE).render(60)).toEqual(['search the tree', '  read src/x.ts', '  bash git status · exit 0', '    done'])
   })
 
   it('marks a failed call in the failed colour without hiding it', () => {
     const colour = createTheme('truecolor')
     const model = foldedProgram([{ name: 'bash', args: { command: 'exit 1' }, failed: true }])
     const lines = new TranscriptView(model, colour, new MarkdownRenderer(colour.markdown), { state: () => INLINE }).render(60)
-    expect(stripTerminalSequences(lines[1] ?? '')).toBe('  bash exit 1')
-    // Derived rather than repeated: this is about the failure colour, not a shade.
-    const removed = [1, 3, 5].map(at => Number.parseInt(DEFAULT_PALETTE.removed.slice(at, at + 2), 16))
-    expect(lines[1]).toContain(`38;2;${removed.join(';')}`)
+    // A failed call is not marked: its own name is drawn in the failed colour, so
+    // the row a reader scans says which call went wrong and nothing beside it is
+    // claimed to have failed.
+    expect(stripTerminalSequences(lines[1] ?? '')).toBe('  bash exit 1 · exit 1')
+    expect(lines[1]).toContain(painted(DEFAULT_PALETTE.removed))
   })
 
   it('reports the calls retention dropped', () => {
@@ -1165,13 +1214,13 @@ describe('TranscriptView nested PTC calls', () => {
       { name: 'read', args: { file_path: 'src/y.ts' } },
     ])
     const view = viewOf(model, FOLDED)
-    expect(view.render(60)).toEqual(['search the tree', '  bash echo hi', '  read src/y.ts'])
+    expect(view.render(60)).toEqual(['search the tree', '  bash echo hi · exit 0', '  read src/y.ts'])
     // The output is the reason to open the row, and only the clicked call gets it.
     view.handleMouse(mouse('click', 'left', 1))
-    expect(view.render(60)).toEqual(['search the tree', '  bash echo hi', '    hi', '    there', '  read src/y.ts'])
+    expect(view.render(60)).toEqual(['search the tree', '  bash echo hi · exit 0', '    hi', '    there', '  read src/y.ts'])
     // A click anywhere on the opened call closes it, output and all.
     view.handleMouse(mouse('click', 'left', 2))
-    expect(view.render(60)).toEqual(['search the tree', '  bash echo hi', '  read src/y.ts'])
+    expect(view.render(60)).toEqual(['search the tree', '  bash echo hi · exit 0', '  read src/y.ts'])
   })
 
   it('clips a call to one row and opens that call when it is clicked', () => {
@@ -1197,7 +1246,10 @@ describe('TranscriptView nested PTC calls', () => {
     expect(opened.at(-1)).toBe('  read src/y.ts')
     // The full argument survives across the wrapped rows, which is the point of
     // opening one call without opening the card around it.
-    expect(opened.slice(1, -1).join('').split('x')).toHaveLength(81)
+    // The last row ends with the call's own outcome, which is not part of the
+    // argument this asserts survived the wrap.
+    const wrapped = opened.slice(1, -1).map(row => (row.split(' · ')[0] ?? '').trim()).join('')
+    expect(wrapped.split('x')).toHaveLength(81)
     expect(opened.join('')).not.toContain('done')
     for (const line of opened) expect(visibleWidth(line)).toBeLessThanOrEqual(40)
     // Clicking the opened call folds it back to the one line it started as.
@@ -1239,6 +1291,261 @@ describe('TranscriptView nested PTC calls', () => {
     view.handleMouse(mouse('click', 'left', 1))
     // The row keeps what the program was shown, and says how much retention refused.
     expect(view.render(60).map(stripTerminalSequences).at(-1)).toBe('    3 more lines not shown')
+  })
+})
+
+describe('TranscriptView running cards', () => {
+  /** A clock the test moves, so a duration on a row is an assertion, not a race. */
+  const clockAt = (start: number) => {
+    const state = { now: start }
+    return { state, clock: () => state.now }
+  }
+
+  const CALL = { type: 'tool/call', data: { name: 'bash', arguments: '{"command":"pnpm test"}', callId: 'c1' } }
+  const RESULT = {
+    type: 'tool/result',
+    data: { message: { content: [{ type: 'tool-result', toolCallId: 'c1', text: 'all green' }], isError: false } },
+  }
+
+  /** A view over one call, folded like the shipped default. */
+  const runningView = (start = 1_000, state: ViewState = COLLAPSED) => {
+    const { state: clockState, clock } = clockAt(start)
+    const model = new TranscriptModel(bashPresenter, clock)
+    model.apply(CALL)
+    return { clockState, model, view: viewOf(model, state) }
+  }
+
+  it('marks a call that has not answered, with the time it has been waiting', () => {
+    const { clockState, view } = runningView()
+    clockState.now += 12 * SECOND_MS
+    // The command stays on the row it was drawn on: the state is added in front
+    // of it and the duration beside it, rather than replacing what the reader was
+    // already reading.
+    expect(view.render(60)).toEqual(['bash pnpm test · ~12s'])
+  })
+
+  it('shows the running colour alone while the wait is still under a second', () => {
+    const { clockState, view } = runningView()
+    clockState.now += 400
+    // A duration that has to be rounded up from nothing is noise, not a measurement.
+    expect(view.render(60)).toEqual(['bash pnpm test'])
+  })
+
+  it('drops the running colour and reports the outcome when the result lands', () => {
+    const { clockState, model, view } = runningView()
+    clockState.now += 12 * SECOND_MS
+    expect(view.render(60)).toEqual(['bash pnpm test · ~12s'])
+    model.apply(RESULT)
+    // The settled row reports what the call produced, which supersedes the wait.
+    expect(view.render(60)).toEqual(['bash pnpm test · exit 0 · 1 line'])
+  })
+
+  it('keeps the running colour on an opened card', () => {
+    const { clockState, view } = runningView(1_000, OPEN)
+    clockState.now += 3 * SECOND_MS
+    expect(view.render(60)).toEqual(['bash · ~3s', '    pnpm test'])
+  })
+
+  it("leaves a settled card's elapsed time out of the row it keeps", () => {
+    const { clockState, model, view } = runningView()
+    clockState.now += 9 * SECOND_MS
+    expect(view.render(60).join('')).toContain('~9s')
+    model.apply(RESULT)
+    // A settled row must not keep a duration that keeps growing after the call
+    // came back; the number it reports from here is the outcome's own.
+    expect(view.render(60).join('')).not.toContain('~')
+  })
+
+  it('marks the dispatch the program is waiting on inside a PTC card', () => {
+    const { state: clockState, clock } = clockAt(1_000)
+    // The shell answers for bash alone, so the root keeps the fallback row a
+    // presenter-less run_code would draw.
+    const shell: ToolPresenter = {
+      call: (name, argumentsJson) => (name === 'bash'
+        ? cardOfCall({ card: 'terminal', title: (JSON.parse(argumentsJson) as { command?: string }).command ?? '' }, name)
+        : undefined),
+      result: () => undefined,
+    }
+    const model = new TranscriptModel(shell, clock)
+    model.apply({ type: 'tool/call', data: { name: 'run_code', arguments: '{"code":"x"}', callId: 'root' } })
+    model.apply({
+      type: 'tool/ptc-dispatch-start',
+      data: { rootCallId: 'root', parentCallId: 'root', subCallId: 'root:ptc:1', name: 'bash', arguments: { command: 'echo hi' } },
+    })
+    const inline: ViewState = { expandCards: false, expandReasoning: false, expandSubCalls: true }
+    clockState.now += 12 * SECOND_MS
+    // The program's own row carries the timer and nothing else: it is the clock a
+    // reader watches, and the calls underneath it are what it is spending time on.
+    expect(viewOf(model, inline).render(60)).toEqual(['run_code · ~12s', '  bash echo hi'])
+
+    model.apply({
+      type: 'tool/ptc-dispatch',
+      data: { rootCallId: 'root', parentCallId: 'root', subCallId: 'root:ptc:1', name: 'bash', arguments: { command: 'echo hi' }, isError: false, content: [] },
+    })
+    expect(viewOf(model, inline).render(60)).toEqual(['run_code · ~12s', '  bash echo hi'])
+  })
+
+  it('marks only the call a program is still waiting on', () => {
+    const { state: clockState, clock } = clockAt(1_000)
+    const model = new TranscriptModel(bashPresenter, clock)
+    model.apply({ type: 'tool/call', data: { name: 'run_code', arguments: '{"code":"x"}', callId: 'root' } })
+    const start = (id: string, command: string) => model.apply({
+      type: 'tool/ptc-dispatch-start',
+      data: { rootCallId: 'root', parentCallId: 'root', subCallId: id, name: 'bash', arguments: { command } },
+    })
+    const land = (id: string, command: string, isError: boolean) => model.apply({
+      type: 'tool/ptc-dispatch',
+      data: { rootCallId: 'root', parentCallId: 'root', subCallId: id, name: 'bash', arguments: { command }, isError, content: [] },
+    })
+    start('root:ptc:1', 'echo first')
+    land('root:ptc:1', 'echo first', false)
+    start('root:ptc:2', 'exit 3')
+    land('root:ptc:2', 'exit 3', true)
+    start('root:ptc:3', 'sleep 30')
+    const inline: ViewState = { expandCards: false, expandReasoning: false, expandSubCalls: true }
+    clockState.now += 4 * SECOND_MS
+    // The call still in flight is the only row that sits further in: the two that
+    // are back say how they ended, and the one that failed says it in its own
+    // name, so the mark means one thing on every row of the card.
+    expect(viewOf(model, inline).render(60)).toEqual([
+      'run_code · ~4s',
+      '  bash echo first · exit 0',
+      '  bash exit 3 · exit 1',
+      '  bash sleep 30',
+    ])
+  })
+
+  it('keeps the total a program took after it answers, and stops counting', () => {
+    const rows = new RowCache<TranscriptEntry>()
+    const { state: clockState, clock } = clockAt(1_000)
+    const model = new TranscriptModel(undefined, clock)
+    model.apply({ type: 'tool/call', data: { name: 'run_code', arguments: '{"code":"x"}', callId: 'root' } })
+    model.apply({
+      type: 'tool/ptc-dispatch-start',
+      data: { rootCallId: 'root', parentCallId: 'root', subCallId: 'root:ptc:1', name: 'bash', arguments: { command: 'echo hi' } },
+    })
+    const inline: ViewState = { expandCards: false, expandReasoning: false, expandSubCalls: true }
+    const view = new TranscriptView(model, theme, new MarkdownRenderer(theme.markdown), { rows, state: () => inline })
+    clockState.now += 10 * SECOND_MS
+    expect(view.render(60)[0]).toBe('run_code · ~10s')
+
+    // Nothing may be left in flight, or the row would keep being rebuilt and the
+    // seconds it settled on would never be the row the cache holds.
+    model.apply({
+      type: 'tool/ptc-dispatch',
+      data: { rootCallId: 'root', parentCallId: 'root', subCallId: 'root:ptc:1', name: 'bash', arguments: { command: 'echo hi' }, isError: false, content: [] },
+    })
+    model.apply({ type: 'tool/result', data: { message: { content: [{ type: 'tool-result', toolCallId: 'root', text: 'done' }], isError: false } } })
+    const settled = view.render(60)
+    expect(settled[0]).toContain('~10s')
+    const misses = rows.stats().misses
+    clockState.now += 30 * SECOND_MS
+    // The total belongs to the run, not to the clock: a program that answered
+    // keeps the row it settled into, at the seconds it actually took.
+    expect(view.render(60)).toEqual(settled)
+    expect(rows.stats().misses).toBe(misses)
+  })
+
+  it('paints the name rather than marking it, in the colour of the state it is in', () => {
+    const colour = createTheme('truecolor')
+    const { state: clockState, clock } = clockAt(1_000)
+    const model = new TranscriptModel(bashPresenter, clock)
+    model.apply(CALL)
+    clockState.now += 5 * SECOND_MS
+    const row = (): string => new TranscriptView(model, colour, new MarkdownRenderer(colour.markdown), { state: () => COLLAPSED }).render(60)[0] ?? ''
+    // The name is what a state repaints, and a settled row's stats are free to
+    // keep colours of their own, so the paint before the name is what is read.
+    const paintBeforeName = (text: string): string => text.slice(0, text.indexOf('bash'))
+    // A state is a colour on a word the reader needs either way, so there is no
+    // glyph to learn and none to lose: one name, painted two ways.
+    expect(paintBeforeName(row())).toContain(painted(DEFAULT_PALETTE.warn))
+    model.apply(RESULT)
+    expect(paintBeforeName(row())).not.toContain(painted(DEFAULT_PALETTE.warn))
+  })
+
+  it('draws the name plainly when the reader has turned the running colour off', () => {
+    const { clockState, model } = runningView()
+    clockState.now += 5 * SECOND_MS
+    const blind = createTheme('none', { palette: DEFAULT_PALETTE, tokens: new Map([['tool.running.title', { hidden: true }]]) })
+    const view = new TranscriptView(model, blind, new MarkdownRenderer(blind.markdown), { state: () => COLLAPSED })
+    // The colour is what a state token takes away: a reader who turned the running
+    // colour off still has to be able to see which tool is running, and the
+    // measurement is what still says it has not come back.
+    expect(view.render(60)).toEqual(['bash pnpm test · ~5s'])
+  })
+
+  it('draws the total a program kept quieter than the timer it counted with', () => {
+    /** Whether a row carries the italic attribute, whatever else it is painted with. */
+    const italic = (row: string): boolean =>
+      [...row.matchAll(/\u001B\[([0-9;]*)m/g)].some(match => (match[1] ?? '').split(';').includes('3'))
+    const painted = createTheme('256')
+    const { state: clockState, clock } = clockAt(1_000)
+    const model = new TranscriptModel(undefined, clock)
+    model.apply({ type: 'tool/call', data: { name: 'run_code', arguments: '{"code":"x"}', callId: 'root' } })
+    model.apply({
+      type: 'tool/ptc-dispatch-start',
+      data: { rootCallId: 'root', parentCallId: 'root', subCallId: 'root:ptc:1', name: 'bash', arguments: { command: 'echo hi' } },
+    })
+    model.apply({
+      type: 'tool/ptc-dispatch',
+      data: { rootCallId: 'root', parentCallId: 'root', subCallId: 'root:ptc:1', name: 'bash', arguments: { command: 'echo hi' }, isError: false, content: [] },
+    })
+    const inline: ViewState = { expandCards: false, expandReasoning: false, expandSubCalls: true }
+    const view = new TranscriptView(model, painted, new MarkdownRenderer(painted.markdown), { state: () => inline })
+    clockState.now += 10 * SECOND_MS
+    const counting = view.render(60)[0] ?? ''
+    expect(counting).toContain('~10s')
+    // A moving measurement is stated plainly; the total that replaces it is what
+    // the reader is meant to stop reading, so it is the one that slants.
+    expect(italic(counting)).toBe(false)
+
+    model.apply({ type: 'tool/result', data: { message: { content: [{ type: 'tool-result', toolCallId: 'root', text: 'done' }], isError: false } } })
+    const settled = view.render(60)[0] ?? ''
+    expect(settled).toContain('~10s')
+    expect(italic(settled)).toBe(true)
+  })
+
+  it('draws no total on a program that answered when the reader turned the total off', () => {
+    const { state: clockState, clock } = clockAt(1_000)
+    const model = new TranscriptModel(undefined, clock)
+    model.apply({ type: 'tool/call', data: { name: 'run_code', arguments: '{"code":"x"}', callId: 'root' } })
+    model.apply({
+      type: 'tool/ptc-dispatch-start',
+      data: { rootCallId: 'root', parentCallId: 'root', subCallId: 'root:ptc:1', name: 'bash', arguments: { command: 'echo hi' } },
+    })
+    const inline: ViewState = { expandCards: false, expandReasoning: false, expandSubCalls: true }
+    clockState.now += 10 * SECOND_MS
+    model.apply({ type: 'tool/result', data: { message: { content: [{ type: 'tool-result', toolCallId: 'root', text: 'done' }], isError: false } } })
+    const blind = createTheme('none', { palette: DEFAULT_PALETTE, tokens: new Map([['tool.elapsed.done', { hidden: true }]]) })
+    const view = new TranscriptView(model, blind, new MarkdownRenderer(blind.markdown), { state: () => inline })
+    // The counting timer and the kept total are separate elements, so a reader can
+    // keep being told a call is in flight without being told how long it ran.
+    expect(view.render(60)[0]).not.toContain('~')
+  })
+
+  it('draws no mark on a dispatched row when the reader has turned that mark off', () => {
+    const { state: clockState, clock } = clockAt(1_000)
+    const model = new TranscriptModel(bashPresenter, clock)
+    model.apply({ type: 'tool/call', data: { name: 'run_code', arguments: '{"code":"x"}', callId: 'root' } })
+    model.apply({
+      type: 'tool/ptc-dispatch-start',
+      data: { rootCallId: 'root', parentCallId: 'root', subCallId: 'root:ptc:1', name: 'bash', arguments: { command: 'echo hi' } },
+    })
+    const inline: ViewState = { expandCards: false, expandReasoning: false, expandSubCalls: true }
+    const blind = createTheme('none', { palette: DEFAULT_PALETTE, tokens: new Map([['tool.subcall.running', { hidden: true }]]) })
+    const view = new TranscriptView(model, blind, new MarkdownRenderer(blind.markdown), { state: () => inline })
+    clockState.now += 2 * SECOND_MS
+    expect(view.render(60).at(-1)).toBe('  bash echo hi')
+  })
+
+  it('draws no timer at all when the reader has turned the timer off', () => {
+    const { clockState, model } = runningView()
+    clockState.now += 5 * SECOND_MS
+    const blind = createTheme('none', { palette: DEFAULT_PALETTE, tokens: new Map([['tool.running.elapsed', { hidden: true }]]) })
+    const view = new TranscriptView(model, blind, new MarkdownRenderer(blind.markdown), { state: () => COLLAPSED })
+    // Hiding the timer leaves the mark that introduced it, so the row still says
+    // the call is in flight without reporting how long it has been.
+    expect(view.render(60)).toEqual(['bash pnpm test'])
   })
 })
 

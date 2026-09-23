@@ -106,10 +106,12 @@ describe('deepseek-blue', () => {
     expect(themed(BLUE).style('markdown.diagram.warning', 'x')).toContain('38;2;245;158;11')
   })
 
-  it('gives a tool card the brand blue, where the shipped table gives it a warning shade', () => {
-    // The label is the loudest thing on the row, and nothing about a call is wrong.
+  it("gives a tool card the brand blue, over the table's own accent", () => {
+    // The label is the loudest thing on the row, and it is loud in a colour of its
+    // own: the warning shade belongs to the call that has not answered, so a table
+    // that painted every label with it would have nothing left to say with it.
     expect(themed(BLUE).style('tool.title', 'x')).toContain('38;2;103;158;254')
-    expect(untinted().style('tool.title', 'x')).toContain('38;2;215;175;95')
+    expect(untinted().style('tool.title', 'x')).toContain('38;2;95;175;215')
   })
 
   it('holds the bar a reader types into in the brand, where the product puts its send button', () => {

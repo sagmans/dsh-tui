@@ -145,7 +145,15 @@ export const TUI_TOKENS = [
   'tool.hint',
   'tool.failed.title',
   'tool.failed.glyph',
+  // A call still in flight is its own element: a reader who quiets the failed
+  // row's colour must not also lose the one mark that says work is happening.
+  // The seconds are two elements because they are two states — counting while
+  // the call is unanswered, and the total a program's card keeps once it is not.
+  'tool.running.title',
+  'tool.running.elapsed',
+  'tool.elapsed.done',
   'tool.subcall.title',
+  'tool.subcall.running',
   'tool.subcall.args',
   // Tool cards: per kind
   'tool.diff.header',
@@ -347,7 +355,10 @@ export const DEFAULT_TOKENS: Readonly<Record<TuiToken, StyleSpec>> = {
   'transcript.reasoning.body': thought,
   'transcript.reasoning.hint': signpost,
 
-  'tool.title': { fg: 'warn' },
+  // The tool's own name is not a state: a running call is the one painted in the
+  // running colour, so the name it wears when nothing is happening has to be a
+  // colour of its own.
+  'tool.title': { fg: 'accent' },
   'tool.glyph': { fg: 'warn' },
   'tool.args': { fg: 'arg' },
   'tool.stat.added': { fg: 'added' },
@@ -359,7 +370,13 @@ export const DEFAULT_TOKENS: Readonly<Record<TuiToken, StyleSpec>> = {
   'tool.hint': muted,
   'tool.failed.title': { fg: 'removed' },
   'tool.failed.glyph': { fg: 'removed' },
+  'tool.running.title': { fg: 'warn' },
+  'tool.running.elapsed': { fg: 'warn' },
+  // Quiet and slanted: a measurement of something already over must not read as
+  // loudly as the facts the result reported.
+  'tool.elapsed.done': { fg: 'muted', italic: true },
   'tool.subcall.title': muted,
+  'tool.subcall.running': { fg: 'warn' },
   'tool.subcall.args': { fg: 'arg' },
 
   'tool.diff.header': muted,

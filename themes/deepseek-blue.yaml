@@ -68,7 +68,13 @@ tokens:
   tool.hint: { fg: muted }
   tool.failed.title: { fg: removed }
   tool.failed.glyph: { fg: removed }
+  # A call still in flight is state, which is what amber is for here; the failed
+  # row stays red so the two can never be read as each other.
+  tool.running.title: { fg: warn }
+  tool.running.elapsed: { fg: warn }
+  tool.elapsed.done: { fg: muted, italic: true }
   tool.subcall.title: { fg: muted }
+  tool.subcall.running: { fg: warn }
   tool.subcall.args: { fg: arg }
   tool.diff.header: { fg: muted }
   tool.diff.hunk: { fg: muted }
