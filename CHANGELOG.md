@@ -8,6 +8,30 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+### Added
+
+- A consumer install smoke packs the candidate and installs it inside a minimal
+  `node:24-alpine` container, once with npm beside the harness and once as a
+  plugin profile. A manifest that cannot resolve, a wrong mounted version, or a
+  duplicated host package now fails CI instead of a user's install.
+
+- `tools/harness-matrix.mjs` guards the harness matrix that the manifest only
+
+- `tools/harness-matrix.mjs` guards the harness matrix that the manifest only
+  described: every verified release must lie inside the compatible range, the
+  packages this bundle mounts must accept that range, and the sources must
+  compile against a verified release. CI runs it on every change, and a
+  scheduled workflow reads the registry's `latest` so a harness release that
+  moves past the verified list fails on its own rather than during a release
+  ([RELEASE.md](RELEASE.md#harness-matrix)).
+
+### Changed
+
+- The three harness packages this bundle mounts now follow the compatible range
+  instead of one exact prerelease, so an npm tree keeps the host's copy rather
+  than resolving a private duplicate beside it. `0.1.5-rc.2` and
+  `0.1.5-rc.3` are verified releases, and the sources compile against rc.3.
+
 ### Fixed
 
 - A goal that was marked complete no longer keeps a row in the work board: the

@@ -18,6 +18,18 @@ Applies to maintainers. Current release owner: repository owner ([`LICENSE`](LIC
 6. `CHANGELOG.md` carries the version being tagged: `Unreleased` holds only what landed after it, the `## [X.Y.Z] - <date>` section names the tag, and the compare links point at that tag.
 7. A published npm version is immutable. A broken release is forward-fixed, never unpublished (see [Rollback](#rollback)).
 
+## Harness matrix
+
+The plugin mounts harness packages and peers on harness modules, so one release line is verified at a time: `dsh.compatibility.dsh` is the range the peers and the mounted packages accept, and `dsh.compatibility.dshReleases` lists the releases that passed the gates. `verify` runs `node tools/harness-matrix.mjs` on every change, which checks that matrix offline — every verified release lies inside the range, the mounted packages accept the range, and the sources compile against a verified release. [`.github/workflows/harness-matrix.yml`](.github/workflows/harness-matrix.yml) runs the same tool with `--check-registry` daily and fails when `@deepseek-ai/dsh@latest` is not a verified release.
+
+That failure is the matrix bump, and it is a release-sized change:
+
+1. Run `node tools/harness-matrix.mjs --check-registry` to read the release the harness now serves as `latest`.
+2. Add it to `dsh.compatibility.dshReleases` and raise the `@deepseek-ai/dsh-*` `devDependencies` to it; the mounted packages stay on `dsh.compatibility.dsh`.
+3. `pnpm install`, then run every gate in [Gates](#gates--all-required-before-tagging).
+4. Dogfood a real session against the new release before it ships: install the candidate into a scratch profile and drive the terminal per [README](README.md#install).
+5. Land the bump through a reviewed PR and ship it with the next patch release.
+
 ## Release identity and authority
 
 Static identity lives in [`scripts/npm/target.env`](scripts/npm/target.env). Load it before every helper action:
