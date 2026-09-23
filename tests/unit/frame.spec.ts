@@ -13,8 +13,8 @@ const ACCENTED = { ...DRAWN, border: (rule: string) => '[' + rule + ']', mark: (
  */
 const edge = (width: number, ends: { readonly left: string; readonly right: string }): string =>
   `${ends.left}${'─'.repeat(width - FRAME_COLUMNS)}${ends.right}`
-const OPEN = { left: '⠄', right: '⠠' } as const
-const CLOSE = { left: '⠁', right: '⠈' } as const
+const OPEN = { left: '❝', right: '❞' } as const
+const CLOSE = { left: '❞', right: '❝' } as const
 
 describe('frame rows', () => {
   it('pads a row to the bar width and never past it', () => {
@@ -38,13 +38,13 @@ describe('frame rows', () => {
 
 describe('band rows', () => {
   it('paints the rule and its marks independently', () => {
-    expect(bandLines(['answer'], 6, ACCENTED)).toEqual(['<⠄>[────]<⠠>', '', 'answer', '', '<⠁>[────]<⠈>'])
+    expect(bandLines(['answer'], 6, ACCENTED)).toEqual(['<❝>[────]<❞>', '', 'answer', '', '<❞>[────]<❝>'])
   })
 
   it.each([
     [0, '[]', '[]'],
     [1, '[─]', '[─]'],
-    [2, '<⠄>[]<⠠>', '<⠁>[]<⠈>'],
+    [2, '<❝>[]<❞>', '<❞>[]<❝>'],
   ] as const)('keeps narrow rules within %s columns before colouring', (width, open, close) => {
     const rows = bandLines(['answer'], width, ACCENTED)
     expect(rows[0]).toBe(open)
@@ -53,7 +53,7 @@ describe('band rows', () => {
 
   it('keeps a folded count in the rule colour, not the mark accent', () => {
     const rows = bandLines(['one', 'two', 'three'], 20, ACCENTED, 1)
-    expect(rows.at(-1)).toBe('<⠁>[──── ↓ 2 more ────]<⠈>')
+    expect(rows.at(-1)).toBe('<❞>[──── ↓ 2 more ────]<❝>')
   })
 
   it('hands a row back exactly as it was, so a copy of it is the text alone', () => {

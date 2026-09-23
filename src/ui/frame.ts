@@ -68,19 +68,18 @@ export function frameRule(innerWidth: number, hiddenRows: number): string {
  *
  * A band draws no sides, so these two columns are the whole of what tells a block
  * that has ended from one that has begun: two blocks drawn back to back would
- * otherwise read as a single fence around whatever sat between them. Braille
- * cells rather than any of the punctuation that offers itself, because every drawn
- * mark is read as a shape standing at the end of the rule — an arc is a corner,
- * a corner promises the sides and the padding only a box has, and a slash reads as
- * a cut. A braille cell is one dot and no stroke, so the rule runs unbroken to its
- * own end and the dot's place inside the cell carries the whole meaning: the low
- * dots 3 and 6 for the rule that opens, the high dots 1 and 4 for the one that
- * closes, both sitting over the message the way a quotation sits over the words it
- * holds. Each is one column by the same count the rows themselves are measured by.
+ * otherwise read as a single fence around whatever sat between them. Quotation
+ * ornaments rather than the arcs a box closes with, because an arc is read as a
+ * corner, and a corner promises the sides and the padding only a box has. A
+ * quotation is the other reading a rule's end can carry, and the truer one here: a
+ * message in a transcript is something said, so the rule that opens it wears the
+ * marks the way a line of text wears its opening quotes, and the rule that closes
+ * it wears them turned around. An ended block therefore cannot be read as a begun
+ * one. One column each, by the count the rows themselves are measured with.
  */
 const BAND_MARKS = {
-  open: { left: '⠄', right: '⠠' },
-  close: { left: '⠁', right: '⠈' },
+  open: { left: '❝', right: '❞' },
+  close: { left: '❞', right: '❝' },
 } as const
 
 /**

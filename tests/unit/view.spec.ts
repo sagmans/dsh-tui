@@ -142,8 +142,8 @@ describe('TranscriptView repaints', () => {
 })
 
 /** The rule a band opens on, and the one it closes on: corners, dashes, corners. */
-const opensBand = (width: number): string => `⠄${'─'.repeat(width - 2)}⠠`
-const closesBand = (width: number): string => `⠁${'─'.repeat(width - 2)}⠈`
+const opensBand = (width: number): string => `❝${'─'.repeat(width - 2)}❞`
+const closesBand = (width: number): string => `❞${'─'.repeat(width - 2)}❝`
 
 describe('TranscriptView text', () => {
   it('renders assistant text as markdown inside its band', () => {

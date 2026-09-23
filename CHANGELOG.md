@@ -34,7 +34,7 @@ breaking change, and a patch carries only fixes.
 
 - A transcript band now lets two marks carry the whole shape: each rule is its own
   speaker's hue dimmed almost to the background, so the two of them per message
-  stop reading as furniture around the words and the colour sits on four dots
+  stop reading as furniture around the words and the colour sits on four ornaments
   instead of two full-width rows. The prompt's rule is a dim mint and the
   reply's a dim gold, so a rule read at the screen's own edge still names whose
   turn it closes; both sit above the floor the degraded palette keeps as a hue, so
@@ -51,12 +51,13 @@ breaking change, and a patch carries only fixes.
 
 - A message already written into the transcript now closes into a band — a marked
   rule above it, a marked rule below it, and nothing beside it — instead of a full
-  box. The two marks are what a band has in place of sides: a braille dot at either
-  end of each rule, sitting low where the band opens and high where it closes, so
-  the block is closed and one that ended cannot read as one that began. A dot
-  rather than a drawn mark, because a shape at the end of the rule is read as a
-  corner and a corner promises the padding a band has none of. They take the first
-  and last column of a rule the block was already spending. A row of
+  box. The two marks are what a band has in place of sides: a quotation ornament at
+  either end of each rule, facing inward where the band opens and turned around
+  where it closes, so the block is closed and one that ended cannot read as one that
+  began. An ornament rather than an arc, because an arc is read as a corner and a
+  corner promises the padding a band has none of, while a message is something said
+  and a rule's end can carry its quotation. They take the first and last column of
+  a rule the block was already spending. A row of
   air inside each rule holds the message off the shape that carried it. The two
   sides and the two columns of padding cost four columns of every row, and
   all four came back with any text copied out of the row; a reply is the widest
