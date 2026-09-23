@@ -1368,28 +1368,27 @@ export function apply(ctx: Context, config: unknown): void {
    * Stop the running turn and empty the inbox so the cut lands on a closed
    * turn/end; queued prompts are parked first because cancelling drops them.
    *
-   * Returns false only when the reader's words cannot be kept: a queue with no
+   * Returns undefined when the reader's words cannot be kept: a queue with no
    * stash to park it in, or a turn that will not close. Both leave the cursor
-   * untouched, so the transcript keeps showing what the model actually saw.
+   * untouched, so the transcript keeps showing what the model actually saw; a
+   * number is how many queued prompts were parked before the turn was stopped.
    */
-  const settleForUndo = async (): Promise<boolean> => {
+  const settleForUndo = async (): Promise<number | undefined> => {
     const queued = queuedPrompts()
-    if (!turnOpen && queued.length === 0) return true
+    if (!turnOpen && queued.length === 0) return 0
     if (queued.length > 0 && stash === undefined) {
       model.notice('queued prompts have no stash to park in; undo cancelled')
       tui.requestRender()
-      return false
+      return undefined
     }
     agent?.interrupt()
-    if (queued.length > 0) {
-      await parkQueued(queued)
-      model.notice(`${queued.length} queued prompt${queued.length === 1 ? '' : 's'} parked in the stash`)
+    if (queued.length > 0) await parkQueued(queued)
+    if (turnOpen && !(await waitForTurnEnd(UNDO_TURN_SETTLE_MS))) {
+      model.notice('could not stop the turn; undo cancelled')
+      tui.requestRender()
+      return undefined
     }
-    if (!turnOpen) return true
-    if (await waitForTurnEnd(UNDO_TURN_SETTLE_MS)) return true
-    model.notice('could not stop the turn; undo cancelled')
-    tui.requestRender()
-    return false
+    return queued.length
   }
 
   const runUndoCommand = (): void => {
@@ -1416,7 +1415,8 @@ export function apply(ctx: Context, config: unknown): void {
         tui.requestRender()
         return
       }
-      if (!(await settleForUndo())) return
+      const parked = await settleForUndo()
+      if (parked === undefined) return
       const settled = await currentTurns()
       const next = undoStep(undoState, settled)
       if (next === undefined) {
@@ -1432,7 +1432,10 @@ export function apply(ctx: Context, config: unknown): void {
       stagedCut = hiddenTail(next, settled)?.seedCount
       await redrawStaged()
       editor.setText(next.lastRestored)
-      model.notice(`undo · ${next.hidden} prompt${next.hidden === 1 ? '' : 's'} hidden · prefix r redo`)
+      // The parking count rides the undo notice: a notice of its own would be
+      // replaced before the frame could show it.
+      const parkedNote = parked === 0 ? '' : ` · ${parked} queued prompt${parked === 1 ? '' : 's'} parked in the stash`
+      model.notice(`undo · ${next.hidden} prompt${next.hidden === 1 ? '' : 's'} hidden${parkedNote} · prefix r redo`)
       tui.requestRender()
     })()
       .catch((error: unknown) => {
