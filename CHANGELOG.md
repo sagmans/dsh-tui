@@ -35,6 +35,13 @@ breaking change, and a patch carries only fixes.
   the real one is the right call, and `.agents/skills/dogfood-tui/` ships the same
   practice as a skill an agent working in this repository loads.
 
+- `ctrl+x` then `u` (or `/undo`) hides the newest prompt with its whole turn and
+  puts that prompt back in the bar, and `ctrl+x` then `r` (or `/redo`) steps forward
+  again — unlimited while nothing new is sent. The log is untouched until the
+  next send, which continues the visible prefix as a real branch, so the model
+  never sees a prompt the reader undid; a running turn is stopped first, and
+  queued prompts are parked in the stash one entry each rather than dropped.
+
 ### Changed
 
 - The shipped token table paints a tool's name in the palette accent rather than in

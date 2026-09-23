@@ -156,6 +156,10 @@ const NAMED_KEYS = {
   // and a second key with no row would read as one the harness cannot reach.
   '?': '?',
   n: 'n',
+  // The undo pair's second keys, printable bytes like n, named here because this
+  // table is the account of what a run can press.
+  u: 'u',
+  r: 'r',
   // Shift+Tab is CBT (CSI Z), distinct from the plain Tab an editor completes on.
   'shift+tab': '\u001b[Z',
   // The transcript search opens on shift+ctrl+f, a chord no single byte carries,
