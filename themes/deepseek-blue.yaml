@@ -43,10 +43,12 @@ palette:
 tokens:
   # A row of the conversation.
   transcript.user: { fg: default, bg: user }  # the product marks your own turn with a bubble, not a hue
-  # Shared speaker accents stay legible beside the bubble without bright full-width rules.
-  transcript.user.border: { fg: '#8a8a8a' }
+  # Speaker accents carry the shape alone: the rules between them are dimmed to the
+  # darkest grey the degraded palette still draws as grey, so no message spends two
+  # full-width rows on furniture.
+  transcript.user.border: { fg: '#404040' }
   transcript.user.corner: { fg: '#27f5c8' }
-  transcript.assistant.border: { fg: '#8a8a8a' }
+  transcript.assistant.border: { fg: '#404040' }
   transcript.assistant.corner: { fg: '#d6c29a' }
   transcript.notice: { fg: muted }
   transcript.marker: { fg: muted }

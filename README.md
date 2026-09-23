@@ -214,10 +214,10 @@ An approval or a question draws inline above the editor and takes the keyboard. 
 
 While a turn runs, a submitted prompt waits in the agent inbox. It appears above the editor in a full box, with faint italic text. When the agent takes the prompt, it moves into the transcript.
 
-Transcript messages have top and bottom rules, rounded corners, and one blank row inside each rule. There are no side borders or horizontal padding, so copied message rows contain only the text. By default, the rules are neutral grey, with mint corners for your prompts and warm gold corners for replies. The editor and queued prompts keep their full boxes.
+Transcript messages have top and bottom rules, rounded corners, and one blank row inside each rule. There are no side borders or horizontal padding, so copied message rows contain only the text. By default, the corners carry the colour — mint for your prompts, warm gold for replies — and the rules between them are dimmed to a very dark grey, so a message reads as its words with two small marks around them rather than as a fence. The editor and queued prompts keep their full boxes.
 
 - `transcript.user` styles the submitted prompt text.
-- `transcript.user.border` and `transcript.assistant.border` style the horizontal rules. A hidden border removes the entire band, including its corners and blank rows.
+- `transcript.user.border` and `transcript.assistant.border` style the horizontal rules, dimmed by default. A hidden border removes the entire band, including its corners and blank rows.
 - `transcript.user.corner` and `transcript.assistant.corner` style the corners independently. A hidden corner leaves a blank column, so the rule keeps its position.
 - `editor.queued` and `editor.queued.more` style or hide the waiting rows. For compatibility, a hidden `editor.border` also removes submitted-prompt bands.
 

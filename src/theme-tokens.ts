@@ -68,6 +68,17 @@ export const DIFF_REMOVED_BAND = '#472424'
  */
 export const ASSISTANT_FRAME_GOLD = '#d6c29a'
 
+/**
+ * The shade a band's rules take: dim enough that the corners carry the shape.
+ *
+ * Each message spends two full-width rows on its rules, and at the muted family's
+ * weight those rows read as furniture around the words rather than as the seam
+ * between them. This is the darkest grey the degraded palette still draws as grey
+ * — one step further and a 16-colour terminal folds the rule into black, leaving
+ * a message with no rule under its corners at all.
+ */
+export const BAND_RULE_GREY = '#404040'
+
 /** Palette entries a token may name instead of a literal colour. */
 export const PALETTE_NAMES = ['default', 'muted', 'faint', 'accent', 'arg', 'warn', 'added', 'removed', 'user', 'assistant'] as const
 
@@ -350,10 +361,10 @@ const plain: StyleSpec = {}
  */
 export const DEFAULT_TOKENS: Readonly<Record<TuiToken, StyleSpec>> = {
   'transcript.user': { fg: 'user' },
-  // Small accents distinguish speakers without colouring whole rows of chrome.
-  'transcript.user.border': muted,
+  // Accents distinguish speakers; the rules fade so colour sits on the corners alone.
+  'transcript.user.border': { fg: BAND_RULE_GREY },
   'transcript.user.corner': { fg: 'user' },
-  'transcript.assistant.border': muted,
+  'transcript.assistant.border': { fg: BAND_RULE_GREY },
   'transcript.assistant.corner': { fg: ASSISTANT_FRAME_GOLD },
   'transcript.notice': muted,
   'transcript.marker': muted,

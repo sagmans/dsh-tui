@@ -32,10 +32,14 @@ breaking change, and a patch carries only fixes.
   the warning shade, which is now what a call that has not answered wears: a name
   painted in the colour of a state would leave that state nothing to say.
 
-- Transcript bands now use neutral-grey rules with separate corner accents:
-  mint for submitted prompts and warm gold for replies. Each role has independent
-  border and corner theme tokens. The message spacing, full text width, editor,
-  and dock remain unchanged.
+- A transcript band now lets its corners carry the whole shape: the rules are
+  dimmed almost to the background, so two of them per message stop reading as
+  furniture around the words, and the colour sits on four small marks instead of
+  two full-width rows. The accent is mint for a submitted prompt and warm gold for
+  a reply, on a dimming the corners' own theme tokens can move independently; the
+  same grey is the darkest the degraded palette still draws as grey, so a
+  16-colour terminal keeps the rule. Message spacing, full text width, the editor,
+  and the dock are unchanged.
 
 - A dock section — todos, subagents, jobs — now opens on a dashed rule that
   carries the section's own name, in a hue of its own. The heading row it
