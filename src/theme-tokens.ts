@@ -69,15 +69,21 @@ export const DIFF_REMOVED_BAND = '#472424'
 export const ASSISTANT_FRAME_GOLD = '#d6c29a'
 
 /**
- * The shade a band's rules take: dim enough that the corners carry the shape.
+ * The shades a band's rules take: each speaker's own hue, dim enough to recede.
  *
  * Each message spends two full-width rows on its rules, and at the muted family's
  * weight those rows read as furniture around the words rather than as the seam
- * between them. This is the darkest grey the degraded palette still draws as grey
- * — one step further and a 16-colour terminal folds the rule into black, leaving
- * a message with no rule under its corners at all.
+ * between them. Dimming alone would leave one shade for both speakers, and a rule
+ * is read at the screen's own edges — where the corners are two columns wide and
+ * easy to miss — so the shade names whose turn the block closes as well. Both sit
+ * at about a quarter of their corner's lightness and stay above the floor the
+ * degraded palette keeps as a hue: below it a 16-colour terminal folds the rule
+ * into black, leaving a message with no rule under its corners at all.
  */
-export const BAND_RULE_GREY = '#404040'
+export const USER_BAND_RULE_MINT = '#0b5142'
+
+/** The reply's rule, the prompt's {@link USER_BAND_RULE_MINT} on the gold corner. */
+export const ASSISTANT_BAND_RULE_GOLD = '#463a20'
 
 /** Palette entries a token may name instead of a literal colour. */
 export const PALETTE_NAMES = ['default', 'muted', 'faint', 'accent', 'arg', 'warn', 'added', 'removed', 'user', 'assistant'] as const
@@ -361,10 +367,10 @@ const plain: StyleSpec = {}
  */
 export const DEFAULT_TOKENS: Readonly<Record<TuiToken, StyleSpec>> = {
   'transcript.user': { fg: 'user' },
-  // Accents distinguish speakers; the rules fade so colour sits on the corners alone.
-  'transcript.user.border': { fg: BAND_RULE_GREY },
+  // Accents distinguish speakers; the rules fade to their own speaker's hue.
+  'transcript.user.border': { fg: USER_BAND_RULE_MINT },
   'transcript.user.corner': { fg: 'user' },
-  'transcript.assistant.border': { fg: BAND_RULE_GREY },
+  'transcript.assistant.border': { fg: ASSISTANT_BAND_RULE_GOLD },
   'transcript.assistant.corner': { fg: ASSISTANT_FRAME_GOLD },
   'transcript.notice': muted,
   'transcript.marker': muted,

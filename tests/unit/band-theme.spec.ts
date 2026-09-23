@@ -14,12 +14,12 @@ const WIDTH = 12
 const TEXT = 'hello'
 const STATE = { expandCards: false, expandReasoning: false, expandSubCalls: false }
 const MODES: readonly ColourMode[] = ['truecolor', '256', '16', 'none']
-const GREY = '\u001b[38;2;64;64;64m'
-// Bright black is the only dim grey a 16-colour terminal can address.
-const DIM_SLOT = '\u001b[90m'
+const CORNER = { user: '\u001b[38;2;39;245;200m', assistant: '\u001b[38;2;214;194;154m' } as const
+/** A rule is its own speaker's corner hue at about a quarter of the lightness. */
+const RULE = { user: '\u001b[38;2;11;81;66m', assistant: '\u001b[38;2;70;58;32m' } as const
+/** What those two shades degrade to, so a 16-colour terminal keeps both apart. */
+const RULE_SLOT = { user: '\u001b[36m', assistant: '\u001b[33m' } as const
 const BLACK_SLOT = '\u001b[30m'
-const GOLD = '\u001b[38;2;214;194;154m'
-const MINT = '\u001b[38;2;39;245;200m'
 const RED = '\u001b[38;2;255;0;0m'
 const RESET = '\u001b[0m'
 const PLAIN_ROWS = ['╭──────────╮', '', TEXT, '', '╰──────────╯']
@@ -40,20 +40,30 @@ function render(role: 'user' | 'assistant', mode: ColourMode = 'truecolor', toke
 
 describe('transcript band accents', () => {
   it.each([
-    ['user', MINT],
-    ['assistant', GOLD],
-  ] as const)('keeps %s colour on both corners rather than across the rule', (role, accent) => {
+    ['user', CORNER.user, RULE.user],
+    ['assistant', CORNER.assistant, RULE.assistant],
+  ] as const)('keeps %s colour on its corners and its own dim hue on the rule', (role, accent, rule) => {
     const rows = render(role)
-    expect(rows[0]).toBe(accent + '╭' + RESET + GREY + '──────────' + RESET + accent + '╮' + RESET)
-    expect(rows.at(-1)).toBe(accent + '╰' + RESET + GREY + '──────────' + RESET + accent + '╯' + RESET)
-    expect(rows[2]).toBe(role === 'user' ? MINT + TEXT + RESET : TEXT)
+    expect(rows[0]).toBe(accent + '╭' + RESET + rule + '──────────' + RESET + accent + '╮' + RESET)
+    expect(rows.at(-1)).toBe(accent + '╰' + RESET + rule + '──────────' + RESET + accent + '╯' + RESET)
+    expect(rows[2]).toBe(role === 'user' ? CORNER.user + TEXT + RESET : TEXT)
+  })
+
+  it('tints each rule to its own speaker rather than one shade for both', () => {
+    // A block is read at a glance, and its corners are two columns at the far
+    // edges: the rule has to say whose turn it closes on its own.
+    const [user] = render('user')
+    const [assistant] = render('assistant')
+    expect(user).not.toBe(assistant)
+    expect(user).toContain(RULE.user + '─')
+    expect(assistant).toContain(RULE.assistant + '─')
   })
 
   it.each(['deepseek-blue', 'violet-orbit'])('keeps quiet rules and speaker accents under %s', themeName => {
-    for (const [role, accent] of [['user', MINT], ['assistant', GOLD]] as const) {
+    for (const role of ['user', 'assistant'] as const) {
       const rows = render(role, 'truecolor', new Map(), themeName)
-      expect(rows[0]).toBe(accent + '╭' + RESET + GREY + '──────────' + RESET + accent + '╮' + RESET)
-      expect(rows.at(-1)).toBe(accent + '╰' + RESET + GREY + '──────────' + RESET + accent + '╯' + RESET)
+      expect(rows[0]).toBe(CORNER[role] + '╭' + RESET + RULE[role] + '──────────' + RESET + CORNER[role] + '╮' + RESET)
+      expect(rows.at(-1)).toBe(CORNER[role] + '╰' + RESET + RULE[role] + '──────────' + RESET + CORNER[role] + '╯' + RESET)
       for (const mode of MODES) {
         expect(render(role, mode, new Map(), themeName).map(stripTerminalSequences)).toEqual(PLAIN_ROWS)
       }
@@ -69,21 +79,20 @@ describe('transcript band accents', () => {
     }
   })
 
-  it('keeps the rule out of the black slot on a 16-colour terminal', () => {
-    // The rule must stay dim rather than vanish: a grey darker than the floor
-    // degrades to black, which on a dark terminal leaves the message with no
-    // rule at all and the corners floating on nothing.
-    const rows = render('assistant', '16')
-    expect(rows[0]).toContain(DIM_SLOT + '─')
-    expect(rows[0]).not.toContain(BLACK_SLOT + '─')
-    expect(rows.map(stripTerminalSequences)).toEqual(PLAIN_ROWS)
+  it.each(['user', 'assistant'] as const)('keeps the %s rule out of the black slot on a 16-colour terminal', role => {
+    // The rule must stay dim rather than vanish: a shade below the degraded
+    // palette's floor folds into black, which on a dark terminal leaves the
+    // message with no rule under its corners at all.
+    const [top] = render(role, '16')
+    expect(top).toContain(RULE_SLOT[role] + '─')
+    expect(top).not.toContain(BLACK_SLOT + '─')
   })
 
   it('keeps submitted-prompt rules independent of the boxed editor colour', () => {
     const tokens = new Map<TuiToken, StyleSpec>([['editor.border', { fg: '#ff0000' }]])
     const theme = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens })
     expect(theme.editor.borderColor('╭──────────╮')).toBe(RED + '╭──────────╮' + RESET)
-    expect(render('user', 'truecolor', tokens)[0]).toBe(MINT + '╭' + RESET + GREY + '──────────' + RESET + MINT + '╮' + RESET)
+    expect(render('user', 'truecolor', tokens)[0]).toBe(CORNER.user + '╭' + RESET + RULE.user + '──────────' + RESET + CORNER.user + '╮' + RESET)
   })
 
   it.each(['user', 'assistant'] as const)('lets the %s corner override leave the rule and body alone', role => {
@@ -91,8 +100,8 @@ describe('transcript band accents', () => {
       role === 'user' ? 'transcript.user.corner' : 'transcript.assistant.corner', { fg: '#ff0000' },
     ]])
     const rows = render(role, 'truecolor', tokens)
-    expect(rows[0]).toBe(RED + '╭' + RESET + GREY + '──────────' + RESET + RED + '╮' + RESET)
-    expect(rows[2]).toBe(role === 'user' ? MINT + TEXT + RESET : TEXT)
+    expect(rows[0]).toBe(RED + '╭' + RESET + RULE[role] + '──────────' + RESET + RED + '╮' + RESET)
+    expect(rows[2]).toBe(role === 'user' ? CORNER.user + TEXT + RESET : TEXT)
   })
 
   it.each([
@@ -106,7 +115,7 @@ describe('transcript band accents', () => {
 
   it('reserves corner columns when a corner element is hidden', () => {
     const rows = render('assistant', 'truecolor', new Map<TuiToken, StyleSpec>([['transcript.assistant.corner', { hidden: true }]]))
-    expect(rows[0]).toBe(' ' + GREY + '──────────' + RESET + ' ')
+    expect(rows[0]).toBe(' ' + RULE.assistant + '──────────' + RESET + ' ')
     expect(rows.map(stripTerminalSequences)).toEqual([' ────────── ', '', TEXT, '', ' ────────── '])
   })
 })

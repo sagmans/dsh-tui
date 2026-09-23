@@ -36,11 +36,12 @@ tokens:
   # and a band inside that frame treats one fact twice: it reads as a selected
   # row rather than as the reader's own words. The shade carries over alone.
   transcript.user: { fg: user }  # userMessageText
-  # Shared accents distinguish speakers without borrowing the pale message text, and
-  # the rules recede past pi's muted shade: the shape is the corners, not the fence.
-  transcript.user.border: { fg: '#404040' }
+  # The accents distinguish speakers without borrowing the pale message text, and
+  # each rule recedes past pi's muted shade into its own corner's hue: the shape is
+  # the corners, and the rule is the colour of whoever it closes.
+  transcript.user.border: { fg: '#0b5142' }
   transcript.user.corner: { fg: '#27f5c8' }
-  transcript.assistant.border: { fg: '#404040' }
+  transcript.assistant.border: { fg: '#463a20' }
   transcript.assistant.corner: { fg: '#d6c29a' }
   transcript.notice: { fg: muted }  # unchanged from the shipped table
   transcript.marker: { fg: muted }  # unchanged from the shipped table

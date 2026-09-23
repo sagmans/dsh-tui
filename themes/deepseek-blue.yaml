@@ -43,12 +43,12 @@ palette:
 tokens:
   # A row of the conversation.
   transcript.user: { fg: default, bg: user }  # the product marks your own turn with a bubble, not a hue
-  # Speaker accents carry the shape alone: the rules between them are dimmed to the
-  # darkest grey the degraded palette still draws as grey, so no message spends two
-  # full-width rows on furniture.
-  transcript.user.border: { fg: '#404040' }
+  # Speaker accents carry the shape alone: each rule is its own corner's hue at
+  # about a quarter of the lightness, so no message spends two full-width rows on
+  # furniture and the shade still names whose turn it closes.
+  transcript.user.border: { fg: '#0b5142' }
   transcript.user.corner: { fg: '#27f5c8' }
-  transcript.assistant.border: { fg: '#404040' }
+  transcript.assistant.border: { fg: '#463a20' }
   transcript.assistant.corner: { fg: '#d6c29a' }
   transcript.notice: { fg: muted }
   transcript.marker: { fg: muted }
