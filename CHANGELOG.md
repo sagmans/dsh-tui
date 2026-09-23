@@ -8,14 +8,14 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-09-23
+
 ### Added
 
 - A consumer install smoke packs the candidate and installs it inside a minimal
   `node:24-alpine` container, once with npm beside the harness and once as a
   plugin profile. A manifest that cannot resolve, a wrong mounted version, or a
   duplicated host package now fails CI instead of a user's install.
-
-- `tools/harness-matrix.mjs` guards the harness matrix that the manifest only
 
 - `tools/harness-matrix.mjs` guards the harness matrix that the manifest only
   described: every verified release must lie inside the compatible range, the
@@ -412,7 +412,8 @@ breaking change, and a patch carries only fixes.
 - Publication through npm OIDC trusted publishing, with the first version
   bootstrapped by hand ([#5](https://github.com/sagmans/dsh-tui/pull/5)).
 
-[Unreleased]: https://github.com/sagmans/dsh-tui/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/sagmans/dsh-tui/compare/v0.5.2...HEAD
+[0.5.2]: https://github.com/sagmans/dsh-tui/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/sagmans/dsh-tui/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/sagmans/dsh-tui/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/sagmans/dsh-tui/compare/v0.3.0...v0.4.0
