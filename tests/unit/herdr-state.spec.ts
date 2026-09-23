@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { HERDR_STATES, MAX_BLOCKED_MESSAGE_CHARS, SEQ_TIME_SCALE, SESSION_START_REASONS } from '@/herdr/constants.ts'
 import {
+  asDriverStatus,
   boundedMessage,
   createReportSequence,
+  driverReportFor,
   isReportChange,
   lifecycleReport,
   sessionStartReason,
@@ -35,6 +37,51 @@ describe('lifecycleReport', () => {
     const report = lifecycleReport({ blockedCount: 2, blockedMessage: 'question · continue?', driverRunning: false })
     expect(report.state).toBe(HERDR_STATES.blocked)
     expect(report.message).toBe('question · continue?')
+  })
+})
+
+describe('driverReportFor', () => {
+  const DRIVEN = 'session-a'
+  /** The shape the harness dispatches: the payload is fused with its own agent. */
+  const payload = (agentId: string, status: unknown): unknown => ({ agent: { id: agentId }, status })
+
+  it('reports the transition of the agent this pane drives', () => {
+    expect(driverReportFor(payload(DRIVEN, 'running'), DRIVEN)).toBe('running')
+    expect(driverReportFor(payload(DRIVEN, 'idle'), DRIVEN)).toBe('idle')
+  })
+
+  it('drops a subagent that shares this process', () => {
+    // A subagent's run is not this pane's work, so its status must not move
+    // the row the pane claimed.
+    expect(driverReportFor(payload('subagent-b', 'running'), DRIVEN)).toBeUndefined()
+  })
+
+  it('drops an unknown status rather than guessing at it', () => {
+    expect(driverReportFor(payload(DRIVEN, 'paused'), DRIVEN)).toBeUndefined()
+  })
+
+  it('reads a turn boundary as nothing to report', () => {
+    // The regression this guards: a chained turn inside one driver run emits
+    // no agent/status at all, so a payload with no status must never be read
+    // as the run having stopped.
+    expect(driverReportFor({ agent: { id: DRIVEN }, type: 'turn/end' }, DRIVEN)).toBeUndefined()
+  })
+
+  it('survives a payload that is not an object', () => {
+    expect(driverReportFor(undefined, DRIVEN)).toBeUndefined()
+    expect(driverReportFor('running', DRIVEN)).toBeUndefined()
+  })
+})
+
+describe('asDriverStatus', () => {
+  it('keeps the two phases the harness defines', () => {
+    expect(asDriverStatus('idle')).toBe('idle')
+    expect(asDriverStatus('running')).toBe('running')
+  })
+
+  it('drops anything outside that vocabulary', () => {
+    expect(asDriverStatus('blocked')).toBeUndefined()
+    expect(asDriverStatus(undefined)).toBeUndefined()
   })
 })
 

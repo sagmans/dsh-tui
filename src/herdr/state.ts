@@ -43,6 +43,27 @@ export function asDriverStatus(value: unknown): DriverStatus | undefined {
   return value === 'idle' || value === 'running' ? value : undefined
 }
 
+/**
+ * The driver status a live agent/status payload reports for one session.
+ *
+ * The whole listener decision lives here rather than in the wiring so the
+ * guard that matters can be pinned by a test. Two filters apply, and both
+ * are load-bearing: subagents share this process and dispatch their own
+ * status, so a payload for another agent must not move this pane's row, and
+ * an unknown status must be dropped rather than guessed at. Returning
+ * undefined is also how a turn boundary reads — it carries no agent/status
+ * at all, which is why a chained turn inside one run cannot flap the row.
+ */
+export function driverReportFor(payload: unknown, sessionId: string): DriverStatus | undefined {
+  const record = typeof payload === 'object' && payload !== null ? (payload as Record<string, unknown>) : undefined
+  const agent = record?.agent
+  const agentId = typeof agent === 'object' && agent !== null ? (agent as Record<string, unknown>).id : undefined
+  // Identity first: a subagent's status is not this pane's work, and only the
+  // driven session's own transitions may be reported.
+  if (typeof agentId !== 'string' || agentId !== sessionId) return undefined
+  return asDriverStatus(record?.status)
+}
+
 /** What the surface knows about itself. */
 export interface LifecycleFacts {
   /** How many decisions are waiting on the reader; they can stack. */

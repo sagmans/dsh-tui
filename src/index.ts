@@ -59,7 +59,7 @@ import { WarningSafeTui } from './terminal/warning-screen.ts'
 import { BELL, shouldRingBell } from './terminal/bell.ts'
 import { clipboardSequence } from './terminal/clipboard.ts'
 import { CLEAR_TITLE, windowTitle } from './terminal/title.ts'
-import { asDriverStatus, sessionStartReason } from './herdr/state.ts'
+import { driverReportFor, sessionStartReason } from './herdr/state.ts'
 import { createHerdrReporter } from './herdr/reporter.ts'
 import { defaultExportFile, transcriptToText } from './export.ts'
 import { createTheme, forwardEditorTheme, forwardMarkdownTheme, type TuiTheme } from './theme.ts'
@@ -2320,11 +2320,11 @@ export function apply(ctx: Context, config: unknown): void {
   // The turn listeners above keep the title and the bell, which are about the
   // reader's own conversation.
   disposers.push(listenFor('agent/status', payload => {
-    const record = asRecord(payload)
-    const agentId = asRecord(record?.agent)?.id
-    const status = asDriverStatus(record?.status)
-    // Subagents share this process, and their runs are not this pane's work.
-    if (typeof agentId !== 'string' || agentId !== activeSession || status === undefined) return
+    // Read against the driven session at delivery time: the reader can switch
+    // sessions between two transitions, and the row must follow the one this
+    // terminal now drives.
+    const status = driverReportFor(payload, activeSession)
+    if (status === undefined) return
     herdr.driver(status)
   }))
 
