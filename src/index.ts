@@ -1636,6 +1636,9 @@ export function apply(ctx: Context, config: unknown): void {
     // during the transition can read a torn-down world.
     presentScope = undefined
     turnOpen = false
+    // The outgoing turn's clock dies with its agent; leaving it set would time
+    // the session being joined by work it never ran.
+    turnStartedAt = undefined
     model.reset()
     work.reset()
     roster.reset()
@@ -1793,6 +1796,51 @@ export function apply(ctx: Context, config: unknown): void {
       tui.requestRender()
     })().catch((error: unknown) => {
       model.notice(`could not start a session: ${error instanceof Error ? error.message : String(error)}`)
+      tui.requestRender()
+    })
+  }
+
+  /**
+   * Compose this session's agent again without leaving the conversation.
+   *
+   * A preset's standing mount only re-reads its composition file for an agent
+   * that joins after the file changed, so an edited preset, skill, or prompt
+   * file reaches a running session only by joining anew. The durable log is
+   * replayed afterwards, so the reader keeps the conversation they were reading.
+   */
+  const runReloadCommand = (): void => {
+    // A failed reload leaves no agent behind, so the command has to be usable
+    // again: the retry is what makes a broken composition file recoverable,
+    // while a surface that has opened no session yet is still starting.
+    if (agent === undefined && !sessionOpened) {
+      model.notice('the agent is still starting; try again in a moment')
+      tui.requestRender()
+      return
+    }
+    const queued = queuedPrompts()
+    // Work the reader would lose is a decision, and the interrupt key already
+    // owns that decision: it stops the turn and hands queued words back to the
+    // bar. Reopening the session drops the inbox, so a reload that would take
+    // those words asks for the key instead of asking a question of its own.
+    if (turnOpen || queued.length > 0) {
+      model.notice(
+        queued.length > 0
+          ? `${queued.length} queued ${queued.length === 1 ? 'prompt' : 'prompts'} would be dropped — ctrl+c hands them back to the bar, then /reload`
+          : 'a turn is running — ctrl+c interrupts it first (delivered text is kept), then /reload',
+      )
+      tui.requestRender()
+      return
+    }
+    const id = activeSession
+    void (async () => {
+      // The same transition a session switch takes, aimed at the session
+      // already open: dispose, then join its preset generation anew.
+      await switchSession(id)
+      model.notice("reloaded this session's composition; the transcript was replayed")
+      tui.requestRender()
+    })().catch((error: unknown) => {
+      const reason = error instanceof Error ? error.message : String(error)
+      model.notice(`could not reload: ${reason} — fix the composition and /reload again`)
       tui.requestRender()
     })
   }
@@ -2312,6 +2360,9 @@ export function apply(ctx: Context, config: unknown): void {
         return
       case 'new':
         runNewCommand(submission.title)
+        return
+      case 'reload':
+        runReloadCommand()
         return
       case 'todo':
         runTodoCommand()

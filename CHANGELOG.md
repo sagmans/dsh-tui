@@ -42,6 +42,15 @@ breaking change, and a patch carries only fixes.
   never sees a prompt the reader undid; a running turn is stopped first, and
   queued prompts are parked in the stash one entry each rather than dropped.
 
+- `/reload` composes this session's agent again without leaving the
+  conversation. A preset's standing mount only re-reads its composition file for
+  an agent that joins after the file changed, so an edited preset, skill, or
+  prompt file reaches a running session only by joining anew; the durable log is
+  replayed afterwards, so the reader keeps the conversation they were reading. A
+  reload while a turn is in flight is refused with the way forward rather than
+  forced: `ctrl+c` already owns that decision, and it hands any queued prompts
+  back to the bar before the agent is disposed.
+
 ### Changed
 
 - The shipped token table paints a tool's name in the palette accent rather than in
@@ -78,6 +87,11 @@ breaking change, and a patch carries only fixes.
   pane now reports the driver-level status instead, read once when a session
   opens (it is emitted on transitions only) and followed on every flip; waits
   still outrank it, and releases, retries, and session reports are unchanged.
+
+- A resumed session whose composition will not mount now reports that refusal
+  instead of falling back to a create, which dressed the real fault as the
+  identity collision of a session that exists — the message a reload showed when
+  the preset file it re-read had been broken.
 
 ## [0.5.2] - 2026-09-23
 

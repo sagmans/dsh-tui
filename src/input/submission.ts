@@ -18,6 +18,7 @@ export type Submission =
   | { readonly kind: 'undo' }
   /** Steps the transcript forward again after an undo. */
   | { readonly kind: 'redo' }
+  | { readonly kind: 'reload' }
   | { readonly kind: 'todo' }
   | { readonly kind: 'theme'; readonly argument: string }
   | { readonly kind: 'keys'; readonly argument: string }
@@ -44,7 +45,7 @@ export type Submission =
 
 /** Commands the surface answers itself, without a model turn. */
 export const LOCAL_COMMANDS = [
-  '/help', '/status', '/model', '/preset', '/todo', '/theme', '/keys', '/jobs', '/subagents', '/fork', '/new', '/undo', '/redo', '/rename', '/export', '/copy', '/history', '/clear', '/resume', '/quit', '/exit',
+  '/help', '/status', '/model', '/preset', '/todo', '/theme', '/keys', '/jobs', '/subagents', '/fork', '/new', '/reload', '/undo', '/redo', '/rename', '/export', '/copy', '/history', '/clear', '/resume', '/quit', '/exit',
   '/stash', '/stash-pop', '/stash-apply', '/stash-list', '/stash-drop', '/stash-clear',
 ] as const
 
@@ -61,6 +62,7 @@ export const LOCAL_COMMAND_DESCRIPTIONS: Readonly<Record<string, string>> = {
   '/keys': 'open the key map and filter it by typing; /keys <layer> narrows it',
   '/fork': 'branch this conversation and continue in the branch',
   '/new': 'start a fresh session without leaving the terminal',
+  '/reload': 'recompose this session from its preset and replay the transcript',
   '/undo': 'hide the newest prompt and its turn, and put that prompt back in the bar',
   '/redo': 'step forward again after an undo',
   '/copy': 'copy the last answer to the clipboard through the terminal',
@@ -131,6 +133,7 @@ export function classifySubmission(text: string): Submission {
   if (trimmed === '/new' || trimmed.startsWith('/new ')) {
     return { kind: 'new', title: trimmed.slice('/new'.length).trim() }
   }
+  if (trimmed === '/reload') return { kind: 'reload' }
   if (trimmed === '/stash-pop' || trimmed.startsWith('/stash-pop ')) {
     return { kind: 'stash-pop', selector: trimmed.slice('/stash-pop'.length).trim() }
   }
