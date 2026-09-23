@@ -32,6 +32,11 @@ breaking change, and a patch carries only fixes.
   the warning shade, which is now what a call that has not answered wears: a name
   painted in the colour of a state would leave that state nothing to say.
 
+- Transcript bands now use neutral-grey rules with separate corner accents:
+  mint for submitted prompts and warm gold for replies. Each role has independent
+  border and corner theme tokens. The message spacing, full text width, editor,
+  and dock remain unchanged.
+
 - A dock section — todos, subagents, jobs — now opens on a dashed rule that
   carries the section's own name, in a hue of its own. The heading row it
   replaces is the row the rule spends, so a section is no taller and no narrower

@@ -20,9 +20,8 @@
 # is text — links, code, headings — and the product keeps its own step for the
 # brand as text. That single line is where a reader moves the brand.
 #
-# Ten palette entries carry the whole theme: every element below names one rather
-# than a shade of its own. Three elements name a different entry than the shipped
-# table names, and say why where they do.
+# The palette carries the product colours. Transcript bands keep shared neutral
+# rules and speaker accents so their shape remains quieter than the words.
 #
 # The semantic shades stay the product's green, red, and amber. Something added
 # is green and something removed is red on every surface a reader already uses,
@@ -44,10 +43,11 @@ palette:
 tokens:
   # A row of the conversation.
   transcript.user: { fg: default, bg: user }  # the product marks your own turn with a bubble, not a hue
-  # The reply's own frame. A border is a container rather than a fact, so it may
-  # not take a signal shade; a warm neutral keeps the answer held without moving
-  # it into the amber the surface reserves for state.
-  transcript.assistant.border: { fg: '#d6c29a' }
+  # Shared speaker accents stay legible beside the bubble without bright full-width rules.
+  transcript.user.border: { fg: '#8a8a8a' }
+  transcript.user.corner: { fg: '#27f5c8' }
+  transcript.assistant.border: { fg: '#8a8a8a' }
+  transcript.assistant.corner: { fg: '#d6c29a' }
   transcript.notice: { fg: muted }
   transcript.marker: { fg: muted }
   transcript.reasoning.summary: { fg: faint, italic: true }

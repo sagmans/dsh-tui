@@ -212,7 +212,16 @@ plan package rather than from the dock.
 
 An approval or a question draws inline above the editor and takes the keyboard. A question that lists options always adds row `0. other — type your own answer`: type or paste an answer the model did not offer, and the seam receives it as that question's free text — replacing a single-select choice, or supplementing a multi-select one. `0`, or `↓` past the last option, reaches the row; `↑` walks back to the list with the text kept, and `esc` does the same from that row, because a question skipped by accident is a question answered twice — an escape from the list skips it. Free text is written in the prompt bar's own editor, drawn under that row: movement, word and line deletion, undo, completion, and multi-line paste are all the editor the reader already uses, and the prompt bar steps aside while a question is open, so a prompt written but not sent comes back untouched once the question is answered. No question hides its answer — the reader is the one who has to check what they are about to send. Every gate row wraps at the screen edge under its own label, so a long option or question is readable rather than cut.
 
-While a turn runs, a prompt submitted into the editor waits in the agent's own inbox instead of disappearing: it is drawn above the editor in the input bar's own frame, faint and italic, and moves into the transcript when the agent takes it — where it keeps that frame in the prompt's own mint shade, so what the reader typed is never mistaken for what the agent said. Its markdown lays out inside that frame, so a list or a fence reads in the same box it was typed into. `editor.queued` and `editor.queued.more` restyle or hide the waiting rows; `transcript.user` restyles the submitted prompt. A reply is drawn in a frame of its own, so one exchange reads as two objects rather than as a box followed by a stream of rows: `transcript.assistant.border` restyles that frame, and hiding it draws the reply bare. `ctrl+c` takes them back: an interrupt drops whatever the agent has not started, so the waiting prompts are read first and put into the bar before the turn is stopped.
+While a turn runs, a submitted prompt waits in the agent inbox. It appears above the editor in a full box, with faint italic text. When the agent takes the prompt, it moves into the transcript.
+
+Transcript messages have top and bottom rules, rounded corners, and one blank row inside each rule. There are no side borders or horizontal padding, so copied message rows contain only the text. By default, the rules are neutral grey, with mint corners for your prompts and warm gold corners for replies. The editor and queued prompts keep their full boxes.
+
+- `transcript.user` styles the submitted prompt text.
+- `transcript.user.border` and `transcript.assistant.border` style the horizontal rules. A hidden border removes the entire band, including its corners and blank rows.
+- `transcript.user.corner` and `transcript.assistant.corner` style the corners independently. A hidden corner leaves a blank column, so the rule keeps its position.
+- `editor.queued` and `editor.queued.more` style or hide the waiting rows. For compatibility, a hidden `editor.border` also removes submitted-prompt bands.
+
+`ctrl+c` returns waiting prompts to the editor before it interrupts the turn.
 
 Every submitted line is also kept in a global prompt history at
 `$DSH_HOME/prompt-history.json`. Typing the start of a prompt that was sent

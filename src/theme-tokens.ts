@@ -63,12 +63,8 @@ export const DIFF_ADDED_BAND = '#1e3d24'
 export const DIFF_REMOVED_BAND = '#472424'
 
 /**
- * The shade the frame around an assistant reply is drawn in.
- *
- * A reply is boxed so one exchange reads as two objects rather than as a box and
- * then a stream, and its frame must not be mistaken for the bar the reader types
- * into: a warm gold sits apart from the prompt's mint and the brand-blue editor,
- * without borrowing the warning amber that means a state.
+ * Warm corners distinguish a reply from the prompt's mint without borrowing
+ * warning amber. Keeping that accent off the long rules lets the text lead.
  */
 export const ASSISTANT_FRAME_GOLD = '#d6c29a'
 
@@ -124,7 +120,10 @@ export type CardRowClass = (typeof CARD_ROW_CLASSES)[number]
 export const TUI_TOKENS = [
   // Transcript rows
   'transcript.user',
+  'transcript.user.border',
+  'transcript.user.corner',
   'transcript.assistant.border',
+  'transcript.assistant.corner',
   'transcript.notice',
   'transcript.marker',
   'transcript.reasoning.summary',
@@ -351,7 +350,11 @@ const plain: StyleSpec = {}
  */
 export const DEFAULT_TOKENS: Readonly<Record<TuiToken, StyleSpec>> = {
   'transcript.user': { fg: 'user' },
-  'transcript.assistant.border': { fg: ASSISTANT_FRAME_GOLD },
+  // Small accents distinguish speakers without colouring whole rows of chrome.
+  'transcript.user.border': muted,
+  'transcript.user.corner': { fg: 'user' },
+  'transcript.assistant.border': muted,
+  'transcript.assistant.corner': { fg: ASSISTANT_FRAME_GOLD },
   'transcript.notice': muted,
   'transcript.marker': muted,
   'transcript.reasoning.summary': signpost,

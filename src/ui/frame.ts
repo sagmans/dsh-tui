@@ -89,11 +89,13 @@ const BAND_CORNERS = {
 const BAND_AIR = ''
 
 /** One end of a band: the corners, and the rule that runs between them. */
-function bandRule(width: number, hiddenRows: number, corners: { readonly left: string; readonly right: string }): string {
-  // Both corners or neither: narrower than the pair they need, a row that still
-  // carried them would be wider than the block it is there to close.
-  if (width < FRAME_COLUMNS) return frameRule(width, hiddenRows)
-  return `${corners.left}${frameRule(width - FRAME_COLUMNS, hiddenRows)}${corners.right}`
+function bandRule(width: number, hiddenRows: number, corners: { readonly left: string; readonly right: string }, faces: BandFaces): string {
+  // Both corners or neither: a partial pair would overrun a narrow terminal.
+  if (width < FRAME_COLUMNS) return faces.border(frameRule(width, hiddenRows))
+  const rule = frameRule(width - FRAME_COLUMNS, hiddenRows)
+  if (faces.corner === undefined) return faces.border(`${corners.left}${rule}${corners.right}`)
+  // Separate style runs keep the rule's reset from swallowing the right accent.
+  return `${faces.corner(corners.left)}${faces.border(rule)}${faces.corner(corners.right)}`
 }
 
 /** How one block of text paints itself inside the shape that carries it. */
@@ -110,6 +112,12 @@ export interface FrameFaces {
    * them does not.
    */
   readonly drawn: boolean
+}
+
+/** A band can accent its corners without changing the editor's box styling. */
+export interface BandFaces extends FrameFaces {
+  /** Optional so callers without accents retain their existing border paint. */
+  readonly corner?: (glyph: string) => string
 }
 
 /** Whether a bar has the width, and the visible border, to close a box. */
@@ -151,7 +159,7 @@ export function frameLines(lines: readonly string[], width: number, faces: Frame
  * closing rule exactly as a box counts one, so a fold reads the same in either
  * shape.
  */
-export function bandLines(lines: readonly string[], width: number, faces: FrameFaces, limit = Number.POSITIVE_INFINITY): string[] {
+export function bandLines(lines: readonly string[], width: number, faces: BandFaces, limit = Number.POSITIVE_INFINITY): string[] {
   const room = Math.max(0, width)
   const body = lines.slice(0, Math.max(0, limit))
   const rows = body.map(faces.text)
@@ -160,11 +168,11 @@ export function bandLines(lines: readonly string[], width: number, faces: FrameF
   // no rows at all would otherwise open and close on two rows of nothing.
   const air = rows.length === 0 ? [] : [BAND_AIR]
   return [
-    faces.border(bandRule(room, 0, BAND_CORNERS.open)),
+    bandRule(room, 0, BAND_CORNERS.open, faces),
     ...air,
     ...rows,
     ...air,
-    faces.border(bandRule(room, lines.length - body.length, BAND_CORNERS.close)),
+    bandRule(room, lines.length - body.length, BAND_CORNERS.close, faces),
   ]
 }
 

@@ -794,12 +794,12 @@ describe('TranscriptView theming', () => {
     expect(lines[0]?.trimEnd()).toBe('\u001b[38;2;39;245;200mhello there\u001b[0m')
   })
 
-  it("draws a reply's band in the assistant border shade", () => {
+  it("draws a reply's corners in the assistant accent shade", () => {
     const model = new TranscriptModel()
     model.apply({ type: 'assistant/message', data: { message: { content: [{ type: 'text', text: 'the answer' }] } } })
     const colour = createTheme('truecolor')
     const lines = new TranscriptView(model, colour, new MarkdownRenderer(colour.markdown), { state: () => COLLAPSED }).render(40)
-    // #d6c29a, the shade the shipped table gives the reply's own frame.
+    // The small gold accents distinguish the reply without colouring its whole rule.
     expect(lines[0]).toContain('38;2;214;194;154')
     expect(lines.at(-1)).toContain('38;2;214;194;154')
   })

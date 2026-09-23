@@ -20,6 +20,9 @@ import { pickerCardLines } from './picker-card.ts'
 import type { PickerCard } from './picker.ts'
 import { RowCache, type RowCacheStats } from './rows.ts'
 
+/** Hidden corners keep their columns so the remaining rule does not shift. */
+const HIDDEN_BAND_CORNER = ' '
+
 const DETAIL_INDENT = '    '
 const OPTION_INDENT = '   '
 /** A nested call is a signpost under its card, so it sits one step shallower than that card's detail. */
@@ -373,12 +376,13 @@ export class TranscriptView implements Component {
    * width, and the band may only place the rows, because wrapping them again
    * would break what markdown drew.
    */
-  private pushBand(lines: string[], text: string, width: number, live: boolean, face: MarkdownFace, borderToken: TuiToken): void {
+  private pushBand(lines: string[], text: string, width: number, live: boolean, face: MarkdownFace, borderToken: TuiToken, cornerToken: TuiToken, borderVisible = true): void {
     const body = this.markdownLines(text, width, live, face)
     lines.push(...bandLines(body, width, {
       text: line => line,
       border: rule => this.theme.style(borderToken, rule),
-      drawn: this.theme.visible(borderToken),
+      corner: glyph => this.theme.visible(cornerToken) ? this.theme.style(cornerToken, glyph) : HIDDEN_BAND_CORNER,
+      drawn: borderVisible && this.theme.visible(borderToken),
     }))
   }
 
@@ -871,7 +875,7 @@ export class TranscriptView implements Component {
       case 'assistant':
         // The reply is banded the way the prompt that asked for it is, so one
         // exchange reads as two objects rather than as a band and then a stream.
-        this.pushBand(lines, entry.text, width, live, ANSWER_FACE, 'transcript.assistant.border')
+        this.pushBand(lines, entry.text, width, live, ANSWER_FACE, 'transcript.assistant.border', 'transcript.assistant.corner')
         return
       case 'user': {
         if (!this.theme.visible('transcript.user')) return
@@ -879,7 +883,8 @@ export class TranscriptView implements Component {
         // shape is what tells a row still open for editing from one that is
         // history — and what lets a reader take the text back out without the
         // frame it was drawn in coming with it.
-        this.pushBand(lines, entry.text, width, false, this.userFace(), 'editor.border')
+        // Keep the legacy hide setting while separating transcript and editor colours.
+        this.pushBand(lines, entry.text, width, false, this.userFace(), 'transcript.user.border', 'transcript.user.corner', this.theme.visible('editor.border'))
         return
       }
       case 'notice':

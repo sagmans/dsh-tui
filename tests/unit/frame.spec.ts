@@ -4,6 +4,8 @@ import { bandLines, FRAME_COLUMNS, FRAME_GLYPHS, frameText, MIN_BOX_WIDTH, textR
 
 const PLAIN: FrameFaces = { text: line => line, border: rule => rule, drawn: false }
 const DRAWN: FrameFaces = { text: line => line, border: rule => rule, drawn: true }
+// Distinct paints expose missing style boundaries without relying on terminal escapes.
+const ACCENTED = { ...DRAWN, border: (rule: string) => '[' + rule + ']', corner: (glyph: string) => '<' + glyph + '>' }
 
 /**
  * One end of a band, so a spec pins the shape of an edge rather than a run of
@@ -35,6 +37,25 @@ describe('frame rows', () => {
 })
 
 describe('band rows', () => {
+  it('paints the rule and its corners independently', () => {
+    expect(bandLines(['answer'], 6, ACCENTED)).toEqual(['<╭>[────]<╮>', '', 'answer', '', '<╰>[────]<╯>'])
+  })
+
+  it.each([
+    [0, '[]', '[]'],
+    [1, '[─]', '[─]'],
+    [2, '<╭>[]<╮>', '<╰>[]<╯>'],
+  ] as const)('keeps narrow rules within %s columns before colouring', (width, open, close) => {
+    const rows = bandLines(['answer'], width, ACCENTED)
+    expect(rows[0]).toBe(open)
+    expect(rows.at(-1)).toBe(close)
+  })
+
+  it('keeps a folded count in the rule colour, not the corner accent', () => {
+    const rows = bandLines(['one', 'two', 'three'], 20, ACCENTED, 1)
+    expect(rows.at(-1)).toBe('<╰>[──── ↓ 2 more ────]<╯>')
+  })
+
   it('hands a row back exactly as it was, so a copy of it is the text alone', () => {
     // This is the whole reason a band draws no sides: what a reader selects out
     // of the transcript must not carry the frame that held it.
