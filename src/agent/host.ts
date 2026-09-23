@@ -82,6 +82,20 @@ export function agentRoute(
       }
 }
 
+/**
+ * Whether a refused resume means the session simply has no durable log yet.
+ *
+ * Matched by the harness's stable error name rather than a class import: the
+ * surface mounts a compatible release RANGE, so the persistence package it
+ * would import is not necessarily the one behind the refusal. Any other
+ * failure — a composition that will not mount, an unreadable log — has to
+ * surface as itself, because falling back to a create hides it behind the
+ * identity collision of a session that does exist.
+ */
+export function absentSession(error: unknown): boolean {
+  return error instanceof Error && error.name === 'SessionPersistenceNotFoundError'
+}
+
 function userMessage(text: string) {
   return createUserMessage({ content: [{ type: 'text', text }], source: { kind: 'user' } })
 }
@@ -109,11 +123,13 @@ export async function startAgent(ctx: Context, options: StartAgentOptions): Prom
   const identity = options.fork === undefined
     ? { ...meta, ...preset }
     : { ...meta, parentSession: options.fork.from, isSeeded: true, ...preset }
+  const create = () =>
+    ctx.agents.create({ sessionId: options.sessionId, meta: identity, agentOptions, ...branch, ...setup })
   const handle = options.resume
     ? await ctx.agents
         .resume({ resumeSessionId: options.sessionId, agentOptions, ...setup })
-        .catch(() => ctx.agents.create({ sessionId: options.sessionId, meta: identity, agentOptions, ...branch, ...setup }))
-    : await ctx.agents.create({ sessionId: options.sessionId, meta: identity, agentOptions, ...branch, ...setup })
+        .catch((error: unknown) => (absentSession(error) ? create() : Promise.reject(error)))
+    : await create()
   let disposed = false
   return {
     sessionId: options.sessionId,
