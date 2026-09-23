@@ -1,34 +1,87 @@
 import { describe, expect, it } from 'vitest'
 import { HERDR_STATES, MAX_BLOCKED_MESSAGE_CHARS, SEQ_TIME_SCALE, SESSION_START_REASONS } from '@/herdr/constants.ts'
 import {
+  asDriverStatus,
   boundedMessage,
   createReportSequence,
+  driverReportFor,
   isReportChange,
   lifecycleReport,
   sessionStartReason,
   type LifecycleFacts,
 } from '@/herdr/state.ts'
 
-const NOTHING_PENDING: LifecycleFacts = { blockedCount: 0, blockedMessage: undefined, turnOpen: false }
+const NOTHING_PENDING: LifecycleFacts = { blockedCount: 0, blockedMessage: undefined, driverRunning: false }
 
 describe('lifecycleReport', () => {
   it('is idle when nothing is running and nothing is waiting', () => {
     expect(lifecycleReport(NOTHING_PENDING)).toEqual({ state: HERDR_STATES.idle, message: undefined })
   })
 
-  it('is working while a turn is open', () => {
-    expect(lifecycleReport({ ...NOTHING_PENDING, turnOpen: true })).toEqual({ state: HERDR_STATES.working, message: undefined })
+  it('is working while the driver runs', () => {
+    expect(lifecycleReport({ ...NOTHING_PENDING, driverRunning: true })).toEqual({ state: HERDR_STATES.working, message: undefined })
   })
 
-  it('outranks a running turn with a wait, and names it', () => {
-    const report = lifecycleReport({ blockedCount: 1, blockedMessage: 'approval needed · Bash', turnOpen: true })
+  it('has no turn-shaped input that could read as idle between chained turns', () => {
+    // One driver run spans every turn it chains through the inbox; a fact with
+    // no turn boundary in it cannot flap to idle between two of them.
+    expect(lifecycleReport({ ...NOTHING_PENDING, driverRunning: true }).state).toBe(HERDR_STATES.working)
+  })
+
+  it('outranks a running driver with a wait, and names it', () => {
+    const report = lifecycleReport({ blockedCount: 1, blockedMessage: 'approval needed · Bash', driverRunning: true })
     expect(report).toEqual({ state: HERDR_STATES.blocked, message: 'approval needed · Bash' })
   })
 
   it('keeps the newest wait while waits stack', () => {
-    const report = lifecycleReport({ blockedCount: 2, blockedMessage: 'question · continue?', turnOpen: false })
+    const report = lifecycleReport({ blockedCount: 2, blockedMessage: 'question · continue?', driverRunning: false })
     expect(report.state).toBe(HERDR_STATES.blocked)
     expect(report.message).toBe('question · continue?')
+  })
+})
+
+describe('driverReportFor', () => {
+  const DRIVEN = 'session-a'
+  /** The shape the harness dispatches: the payload is fused with its own agent. */
+  const payload = (agentId: string, status: unknown): unknown => ({ agent: { id: agentId }, status })
+
+  it('reports the transition of the agent this pane drives', () => {
+    expect(driverReportFor(payload(DRIVEN, 'running'), DRIVEN)).toBe('running')
+    expect(driverReportFor(payload(DRIVEN, 'idle'), DRIVEN)).toBe('idle')
+  })
+
+  it('drops a subagent that shares this process', () => {
+    // A subagent's run is not this pane's work, so its status must not move
+    // the row the pane claimed.
+    expect(driverReportFor(payload('subagent-b', 'running'), DRIVEN)).toBeUndefined()
+  })
+
+  it('drops an unknown status rather than guessing at it', () => {
+    expect(driverReportFor(payload(DRIVEN, 'paused'), DRIVEN)).toBeUndefined()
+  })
+
+  it('reads a turn boundary as nothing to report', () => {
+    // The regression this guards: a chained turn inside one driver run emits
+    // no agent/status at all, so a payload with no status must never be read
+    // as the run having stopped.
+    expect(driverReportFor({ agent: { id: DRIVEN }, type: 'turn/end' }, DRIVEN)).toBeUndefined()
+  })
+
+  it('survives a payload that is not an object', () => {
+    expect(driverReportFor(undefined, DRIVEN)).toBeUndefined()
+    expect(driverReportFor('running', DRIVEN)).toBeUndefined()
+  })
+})
+
+describe('asDriverStatus', () => {
+  it('keeps the two phases the harness defines', () => {
+    expect(asDriverStatus('idle')).toBe('idle')
+    expect(asDriverStatus('running')).toBe('running')
+  })
+
+  it('drops anything outside that vocabulary', () => {
+    expect(asDriverStatus('blocked')).toBeUndefined()
+    expect(asDriverStatus(undefined)).toBeUndefined()
   })
 })
 
