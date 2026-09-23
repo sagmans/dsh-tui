@@ -237,13 +237,16 @@ export const TUI_TOKENS = [
   // Dock
   'dock.goal',
   'dock.planMode',
+  'dock.todos.border',
   'dock.todos.heading',
   'dock.todos.pending',
   'dock.todos.inProgress',
   'dock.todos.overflow',
+  'dock.subagents.border',
   'dock.subagents.heading',
   'dock.subagents.running',
   'dock.subagents.overflow',
+  'dock.jobs.border',
   'dock.jobs.heading',
   'dock.jobs.running',
   'dock.jobs.overflow',
@@ -454,13 +457,19 @@ export const DEFAULT_TOKENS: Readonly<Record<TuiToken, StyleSpec>> = {
 
   'dock.goal': { bold: true },
   'dock.planMode': { bold: true },
+  // Each section's rule carries that section's own hue, so which list a row
+  // belongs to is read off the edge of it rather than off the row itself: the
+  // rows keep the muted family that lets a long command stay legible.
+  'dock.todos.border': { fg: 'accent' },
   'dock.todos.heading': { bold: true },
   'dock.todos.pending': muted,
   'dock.todos.inProgress': muted,
   'dock.todos.overflow': muted,
+  'dock.subagents.border': { fg: 'user' },
   'dock.subagents.heading': { bold: true },
   'dock.subagents.running': muted,
   'dock.subagents.overflow': muted,
+  'dock.jobs.border': { fg: 'warn' },
   'dock.jobs.heading': { bold: true },
   'dock.jobs.running': muted,
   'dock.jobs.overflow': muted,

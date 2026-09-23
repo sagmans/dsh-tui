@@ -1,4 +1,4 @@
-import { visibleWidth } from '@earendil-works/pi-tui'
+import { stripTerminalSequences, visibleWidth } from '@earendil-works/pi-tui'
 import { describe, expect, it } from 'vitest'
 import { createTheme } from '@/theme.ts'
 import { DEFAULT_PALETTE } from '@/theme-tokens.ts'
@@ -9,6 +9,17 @@ const theme = createTheme('none')
 const dockOf = (state: WorkState): WorkDock => new WorkDock(() => state, theme)
 
 const EMPTY: WorkState = { planMode: false, todos: undefined, goal: undefined }
+
+/**
+ * The rule a section opens on, so a spec pins the shape rather than a dash count.
+ *
+ * The name rides the rule, two dashes lead it, and the dashes run to the edge:
+ * that is the whole contract, and every section is held to it here.
+ */
+const rule = (heading: string, width: number): string => {
+  const head = `┄┄ ${heading} `
+  return `${head}${'┄'.repeat(width - visibleWidth(head))}`
+}
 
 describe('WorkDock', () => {
   it('takes no rows when there is nothing to say', () => {
@@ -45,7 +56,7 @@ describe('WorkDock', () => {
     ]
     const lines = dockOf({ ...EMPTY, todos }).render(80)
     expect(lines).toEqual([
-      '☰ todos · 2 left',
+      rule('☰ todos · 2 left', 80),
       '  ▸ now thing',
       '  ☐ next thing',
     ])
@@ -70,7 +81,7 @@ describe('WorkDock', () => {
     ]
     const lines = new WorkDock(() => EMPTY, theme, () => jobs).render(80)
     expect(lines).toHaveLength(2)
-    expect(lines[0]).toBe('⛭ jobs · 1 running')
+    expect(lines[0]).toBe(rule('⛭ jobs · 1 running', 80))
     expect(lines[1]).toContain('▸ bash-2 · running')
   })
 
@@ -89,7 +100,7 @@ describe('WorkDock', () => {
     ]
     const lines = new WorkDock(() => EMPTY, theme, () => [], () => runs).render(80)
     expect(lines).toHaveLength(2)
-    expect(lines[0]).toBe('⚇ subagents · 1 running')
+    expect(lines[0]).toBe(rule('⚇ subagents · 1 running', 80))
     expect(lines[1]).toContain('▸ child-ab · spawn · running')
   })
 
@@ -102,6 +113,23 @@ describe('WorkDock', () => {
 
   it('takes no rows when no job is running', () => {
     expect(new WorkDock(() => EMPTY, theme, () => []).render(80)).toEqual([])
+  })
+
+  it('names a section on the edge of its list instead of on a row above it', () => {
+    // The rule replaces the heading rather than joining it, which is what keeps
+    // the dock as tall and as wide as it was before the sections were edged.
+    const todos = [{ content: 'write the dock', status: 'pending' as const }]
+    const lines = dockOf({ ...EMPTY, todos }).render(40)
+    expect(lines).toHaveLength(2)
+    expect(lines[0]).toBe(rule('☰ todos · 1 left', 40))
+    expect(lines.every(line => visibleWidth(line) <= 40)).toBe(true)
+  })
+
+  it('draws the heading where a name and a dash no longer both fit', () => {
+    // An edge a reader cannot tell from a name is not an edge, so a row with no
+    // room left for a dash after the name is the heading it would have been.
+    const todos = [{ content: 'write the dock', status: 'pending' as const }]
+    expect(dockOf({ ...EMPTY, todos }).render(8)[0]).toBe('☰ todo…')
   })
 
   it('never overflows its row', () => {
@@ -130,7 +158,31 @@ describe('WorkDock theming', () => {
     // anyway because the dock never asked whether the element was visible.
     const hidden = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['dock.jobs.heading', { hidden: true }]]) })
     const lines = new WorkDock(() => EMPTY, hidden, () => job('running')).render(80)
-    expect(lines.some(line => line.includes('jobs ·'))).toBe(false)
+    // The name is what spends the section's heading row: with the name hidden the
+    // section keeps the rows it had before the sections were edged, and no rule
+    // without a name stands where the heading was.
+    expect(lines).toHaveLength(1)
+    expect(lines[0]).toContain('▸ bash-1')
+  })
+
+  it("draws each section's rule in that section's own hue", () => {
+    const styled = createTheme('truecolor')
+    const runs = [{ runId: 'r1', provider: 'spawn', id: 'child-abcdef', startedAt: Date.now() - 4_000, status: 'running' as const }]
+    const lines = new WorkDock(() => ({ ...EMPTY, todos: [{ content: 'x', status: 'pending' }] }), styled, () => job('running'), () => runs).render(80)
+    // accent, user and warn: the three shades the shipped table gives the rules,
+    // so a reader tells the boards apart without reading a row of either.
+    expect(lines[0]).toContain('38;2;39;245;200m')
+    expect(lines[2]).toContain('38;2;215;175;95m')
+    expect(lines[4]).toContain('38;2;95;175;215m')
+  })
+
+  it('falls back to the heading row when the rule is hidden', () => {
+    // The dock a reader had before the sections were edged is still reachable,
+    // by hiding the one element that draws the edge.
+    const bare = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['dock.jobs.border', { hidden: true }]]) })
+    const lines = new WorkDock(() => EMPTY, bare, () => job('running')).render(80)
+    expect(stripTerminalSequences(lines[0] ?? '')).toBe('⛭ jobs · 1 running')
+    expect(lines[1]).toContain('▸ bash-1 · running')
   })
 
   it('keeps a settled job off screen however the live job element is styled', () => {

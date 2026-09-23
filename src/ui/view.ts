@@ -14,7 +14,7 @@ import { DEFAULT_TOOL_DISPLAY, type ToolDisplaySpec } from '../tool-display.ts'
 import { CARD_ROW_TOKEN, type TuiToken } from '../theme-tokens.ts'
 import type { TuiTheme } from '../theme.ts'
 import { codeBlockLines } from './diff.ts'
-import { canFrame, frameLines, FRAME_COLUMNS, textWidth } from './frame.ts'
+import { canFrame, frameBlock, FRAME_COLUMNS, textWidth, type FrameRow } from './frame.ts'
 import { ANSWER_FACE, type MarkdownFace, type MarkdownRenderer } from './markdown.ts'
 import { pickerCardLines } from './picker-card.ts'
 import type { PickerCard } from './picker.ts'
@@ -208,6 +208,21 @@ export class TranscriptView implements Component {
   private spans: readonly ClickSpan[] = []
   /** The same spans relative to their entry, so a cached entry still answers clicks. */
   private readonly entrySpans = new WeakMap<TranscriptEntry, readonly ClickSpan[]>()
+  /**
+   * The framed rows each entry drew last render, for reading a copy back out.
+   *
+   * Relative to the entry for the same reason the spans are: a cached entry draws
+   * no rows this frame and still has to answer for what it drew before.
+   */
+  private readonly entryCopy = new WeakMap<TranscriptEntry, readonly FrameRow[]>()
+  /**
+   * The framed rows the in-flight entries drew this frame.
+   *
+   * They cannot be kept by entry the way the settled ones are: every frame builds
+   * a live entry as a fresh object, so a map keyed by it would never answer. A copy
+   * is read against the last frame, so it is the render that keeps them.
+   */
+  private liveCopy: readonly FrameRow[] = []
 
   constructor(
     private readonly model: TranscriptModel,
@@ -369,17 +384,21 @@ export class TranscriptView implements Component {
    * bars rather than as one more stretch of rows; the face, the border's element,
    * and whether the text is still arriving are the only differences. Markdown lays
    * itself out to the frame's text width, so the frame may only place the rows:
-   * wrapping them again would break what it drew.
+   * wrapping them again would break what it drew. The rows are recorded as they
+   * are drawn, because a copy of this message will carry the frame with it and
+   * only the drawing knows which columns of a row are the frame's.
    */
-  private pushFramed(lines: string[], text: string, width: number, live: boolean, face: MarkdownFace, borderToken: TuiToken): void {
+  private pushFramed(lines: string[], copy: FrameRow[], text: string, width: number, live: boolean, face: MarkdownFace, borderToken: TuiToken): void {
     const framed = canFrame(width, this.theme.visible(borderToken))
     const inside = framed ? width - FRAME_COLUMNS : width
     const body = this.markdownLines(text, textWidth(inside), live, face)
-    lines.push(...frameLines(body, width, {
+    const block = frameBlock(body, width, {
       text: line => line,
       border: rule => this.theme.style(borderToken, rule),
       framed,
-    }))
+    })
+    lines.push(...block.drawn)
+    copy.push(...block.copy)
   }
 
   /**
@@ -860,7 +879,7 @@ export class TranscriptView implements Component {
   }
 
   /** The rows one transcript entry becomes; `live` marks the entry the turn is still writing. */
-  private renderEntry(entry: TranscriptEntry, lines: string[], width: number, live: boolean, spans: ClickSpan[]): void {
+  private renderEntry(entry: TranscriptEntry, lines: string[], width: number, live: boolean, spans: ClickSpan[], copy: FrameRow[]): void {
     switch (entry.kind) {
       case 'tool':
         this.pushCard(lines, entry, width, spans)
@@ -871,13 +890,13 @@ export class TranscriptView implements Component {
       case 'assistant':
         // The reply is boxed the way the prompt that asked for it is, so one
         // exchange reads as two objects rather than as a box and then a stream.
-        this.pushFramed(lines, entry.text, width, live, ANSWER_FACE, 'transcript.assistant.border')
+        this.pushFramed(lines, copy, entry.text, width, live, ANSWER_FACE, 'transcript.assistant.border')
         return
       case 'user': {
         if (!this.theme.visible('transcript.user')) return
         // A prompt is boxed wherever it is read, so the row it left in the queue
         // and the row it becomes here are recognisably the same object.
-        this.pushFramed(lines, entry.text, width, false, this.userFace(), 'editor.border')
+        this.pushFramed(lines, copy, entry.text, width, false, this.userFace(), 'editor.border')
         return
       }
       case 'notice':
@@ -906,6 +925,7 @@ export class TranscriptView implements Component {
     const baseTag = `${width}|${state.expandCards ? 'c' : '-'}${state.expandReasoning ? 'r' : '-'}${state.expandSubCalls ? 'p' : '-'}|${this.theme.revision}`
     const lines: string[] = []
     const spans: ClickSpan[] = []
+    const liveCopy: FrameRow[] = []
     const settled = this.model.settledCount()
     const entries = this.model.entries()
     for (const [index, entry] of entries.entries()) {
@@ -923,10 +943,14 @@ export class TranscriptView implements Component {
       // first second it was drawn.
       const tag = `${baseTag}|${marks}${this.isLive(entry) ? `|${Math.floor(this.model.now() / SECOND_MS)}` : ''}`
       const local: ClickSpan[] = []
+      const copy: FrameRow[] = []
       // The in-flight rows change on every frame, so caching them would only
       // fill the cache with objects nobody will ask for again.
       if (index >= settled) {
-        this.renderEntry(entry, lines, width, true, local)
+        this.renderEntry(entry, lines, width, true, local, copy)
+        // A row still arriving is drawn every frame, so it is never cached: its
+        // copy account goes to the frame rather than to an entry nobody can name.
+        liveCopy.push(...copy)
         // An in-flight entry draws straight into the transcript, so the spans it
         // recorded already name transcript rows; offsetting them again would move
         // every hit target as many rows down as the entry's own start.
@@ -934,14 +958,16 @@ export class TranscriptView implements Component {
       } else {
         const cached = this.rows.lookup(entry, tag)
         const saved = this.entrySpans.get(entry)
-        if (cached !== undefined && saved !== undefined) {
+        const savedCopy = this.entryCopy.get(entry)
+        if (cached !== undefined && saved !== undefined && savedCopy !== undefined) {
           lines.push(...cached)
           local.push(...saved)
         } else {
           const rendered: string[] = []
-          this.renderEntry(entry, rendered, width, false, local)
+          this.renderEntry(entry, rendered, width, false, local, copy)
           this.rows.store(entry, tag, rendered)
           this.entrySpans.set(entry, local)
+          this.entryCopy.set(entry, copy)
           lines.push(...rendered)
         }
         // A cached span is kept relative to its entry so the entry can hand it
@@ -952,10 +978,30 @@ export class TranscriptView implements Component {
       }
     }
     this.spans = spans
+    this.liveCopy = liveCopy
     const picker = this.options.picker?.()
     if (picker !== undefined) this.pushPicker(lines, picker, width)
     const gate = this.options.gate?.()
     if (gate !== undefined) this.pushGate(lines, gate, width)
     return lines
+  }
+
+  /**
+   * The framed rows the last render drew, in the order the transcript reads.
+   *
+   * A copy of a selection is read off the screen, so it carries the frame the
+   * surface drew around a message — the sides, the padding beside them, and the
+   * rules above and below. This is the account that lets the surface take its own
+   * frame back out of a copy without ever touching a character the reader wrote.
+   */
+  copyRows(): readonly FrameRow[] {
+    const rows: FrameRow[] = []
+    for (const entry of this.model.entries()) {
+      const saved = this.entryCopy.get(entry)
+      if (saved !== undefined) rows.push(...saved)
+    }
+    // The rows still arriving are not kept by entry, so they come from the frame.
+    rows.push(...this.liveCopy)
+    return rows
   }
 }

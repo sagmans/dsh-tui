@@ -150,13 +150,16 @@ tokens:
   # The work panel above the editor.
   dock.goal: { bold: true }
   dock.planMode: { bold: true }
+  dock.todos.border: { fg: accent }
   dock.todos.heading: { bold: true }
   dock.todos.pending: { fg: muted }
   dock.todos.inProgress: { fg: muted }
   dock.todos.overflow: { fg: muted }
+  dock.subagents.border: { fg: user }
   dock.subagents.heading: { bold: true }
   dock.subagents.running: { fg: muted }
   dock.subagents.overflow: { fg: muted }
+  dock.jobs.border: { fg: warn }
   dock.jobs.heading: { bold: true }
   dock.jobs.running: { fg: muted }
   dock.jobs.overflow: { fg: muted }

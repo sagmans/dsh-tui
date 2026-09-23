@@ -140,13 +140,16 @@ tokens:
   gate.hint: { fg: muted }  # unchanged from the shipped table
   dock.goal: { fg: accent, bold: true }
   dock.planMode: { fg: '#a7a7ff', bold: true }  # customMessageLabel
+  dock.todos.border: { fg: accent }  # accent
   dock.todos.heading: { fg: '#b5b5ff', bold: true }  # mdHeading
   dock.todos.pending: { fg: muted }  # unchanged from the shipped table
   dock.todos.inProgress: { fg: accent }
   dock.todos.overflow: { fg: muted }  # unchanged from the shipped table
+  dock.subagents.border: { fg: faint }  # dim
   dock.subagents.heading: { fg: '#b5b5ff', bold: true }  # mdHeading
   dock.subagents.running: { fg: muted }  # unchanged from the shipped table
   dock.subagents.overflow: { fg: muted }  # unchanged from the shipped table
+  dock.jobs.border: { fg: warn }  # warning
   dock.jobs.heading: { fg: '#b5b5ff', bold: true }  # mdHeading
   dock.jobs.running: { fg: muted }  # unchanged from the shipped table
   dock.jobs.overflow: { fg: muted }  # unchanged from the shipped table

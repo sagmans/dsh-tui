@@ -1,4 +1,4 @@
-import { truncateToWidth, visibleWidth, wrapTextWithAnsi } from '@earendil-works/pi-tui'
+import { stripTerminalSequences, truncateToWidth, visibleWidth, wrapTextWithAnsi } from '@earendil-works/pi-tui'
 import { renderTerminalText } from '../terminal-text.ts'
 
 /**
@@ -15,6 +15,8 @@ export const FRAME_GLYPHS = { topLeft: '╭', topRight: '╮', bottomLeft: '╰'
 export const FRAME_COLUMNS = 2
 /** One column of air inside the frame, so a full line never touches the border. */
 export const PADDING_X = 1
+/** The frame's own column, the one `FRAME_GLYPHS.side` is drawn in. */
+const SIDE_COLUMNS = 1
 /** A box needs both edges, both paddings, and one column left to type in. */
 export const MIN_BOX_WIDTH = FRAME_COLUMNS + PADDING_X * 2 + 1
 
@@ -69,6 +71,29 @@ export interface FrameFaces {
   readonly framed: boolean
 }
 
+/**
+ * One row a frame drew, as a copy of it comes back from the terminal.
+ *
+ * A copy is read off the screen, so it carries whatever the surface drew —
+ * including the frame — and something has to be able to tell the reader's text
+ * from the shape around it. This is that account of one row: the row exactly as
+ * it read, and the columns of frame standing at each end of its text.
+ */
+export interface FrameRow {
+  /** The row as a copy returns it: styling gone, trailing blanks gone. */
+  readonly drawn: string
+  /** The frame's columns at each end of the row's own text; absent when the row is frame alone. */
+  readonly frame?: { readonly lead: number; readonly trail: number }
+}
+
+/** One block of rows as it is drawn, and as a copy of it reads back. */
+export interface FrameBlock {
+  /** The rows to draw, in the surface's own styling. */
+  readonly drawn: readonly string[]
+  /** The same rows as a copy of them reads back. */
+  readonly copy: readonly FrameRow[]
+}
+
 /** Whether a bar has the width, and the visible border, to close a frame. */
 export function canFrame(width: number, borderVisible: boolean): boolean {
   return borderVisible && width >= MIN_BOX_WIDTH
@@ -83,18 +108,40 @@ export function canFrame(width: number, borderVisible: boolean): boolean {
  * just drew. A block with a limit is a preview, and the rows it drops are
  * counted on the closing rule: a reader who cannot see the whole text still has
  * to see that it continues.
+ *
+ * The copy of a block reads the same rows back as text: the frame's own rows
+ * carry no text at all, and a row the frame holds names the columns of it that
+ * are the frame's, so a copy taken off the screen can be read as the words alone
+ * rather than as the shape that held them.
  */
-export function frameLines(lines: readonly string[], width: number, faces: FrameFaces, limit = Number.POSITIVE_INFINITY): string[] {
+export function frameBlock(lines: readonly string[], width: number, faces: FrameFaces, limit = Number.POSITIVE_INFINITY): FrameBlock {
   const inside = faces.framed ? width - FRAME_COLUMNS : width
   const body = lines.slice(0, Math.max(0, limit))
   const rows = body.map(line => textRow(faces.text(line), inside))
-  if (!faces.framed) return rows
+  // The row is kept as the frame laid it out rather than as a copy trims it: the
+  // trailing blanks a copy drops are columns the frame's own count is measured in.
+  const read = (row: string): FrameRow => ({ drawn: stripTerminalSequences(row) })
+  // A hidden frame still pads its rows for the frame it would have drawn, and
+  // that padding is the frame's, so a copy of these rows drops it too.
+  if (!faces.framed) return { drawn: rows, copy: rows.map(row => ({ ...read(row), frame: { lead: PADDING_X, trail: PADDING_X } })) }
   const side = faces.border(FRAME_GLYPHS.side)
-  return [
+  const drawn = [
     faces.border(`${FRAME_GLYPHS.topLeft}${frameRule(inside, 0)}${FRAME_GLYPHS.topRight}`),
     ...rows.map(row => `${side}${row}${side}`),
     faces.border(`${FRAME_GLYPHS.bottomLeft}${frameRule(inside, lines.length - body.length)}${FRAME_GLYPHS.bottomRight}`),
   ]
+  // The side and the padding beside it are the frame's; the rest of the row is
+  // the text, which is the part a copy of this row is entitled to keep.
+  const held: FrameRow = { drawn: '', frame: { lead: SIDE_COLUMNS + PADDING_X, trail: PADDING_X + SIDE_COLUMNS } }
+  return {
+    drawn,
+    copy: [read(drawn[0]!), ...drawn.slice(1, -1).map(row => ({ ...held, drawn: read(row).drawn })), read(drawn[drawn.length - 1]!)],
+  }
+}
+
+/** The rows of a block to draw, without the account of them a copy needs. */
+export function frameLines(lines: readonly string[], width: number, faces: FrameFaces, limit = Number.POSITIVE_INFINITY): string[] {
+  return [...frameBlock(lines, width, faces, limit).drawn]
 }
 
 /**

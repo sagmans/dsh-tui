@@ -3,8 +3,9 @@
 `@sagmans/dsh-tui` is a Cordis plugin bundle that gives DeepSeek Harness an
 interactive terminal surface: `dsh --profile tui` runs one agent in the
 alternate screen instead of a browser. ESM TypeScript (strict), Node >= 22.19,
-pnpm. Behaviour and install: [README.md](README.md). Publication:
-[RELEASE.md](RELEASE.md). History: [CHANGELOG.md](CHANGELOG.md).
+pnpm. Behaviour and install: [README.md](README.md). Development on a real
+profile: [DEVELOPMENT.md](DEVELOPMENT.md). Publication: [RELEASE.md](RELEASE.md).
+History: [CHANGELOG.md](CHANGELOG.md).
 
 ## Commands
 
@@ -17,6 +18,7 @@ pnpm. Behaviour and install: [README.md](README.md). Publication:
 | Build `src` into `lib` | `pnpm run build` |
 | Tarball inventory check | `node tools/pack-smoke.mjs` |
 | Drive the real surface in a PTY | `node tools/pty-drive.mjs --prompt 'Reply with exactly: pong'` |
+| Dogfood a worktree in a cloned home | `./scripts/dogfood/run-tui-from-worktree.sh <worktree name or path>` |
 
 `.github/workflows/ci.yml` is the completion gate, in this order: `pnpm install
 --frozen-lockfile`, `npm audit signatures`, `pnpm typecheck`, `pnpm test`,
@@ -40,6 +42,10 @@ proven by that gate — run `tools/pty-drive.mjs` and read the screen it prints.
 - `tests/unit/*.spec.ts` are the focused specs, `tests/golden/frames.spec.ts`
   snapshots rendered frames, `tests/release/test_release.py` guards
   `scripts/npm/release.py`.
+- `scripts/dogfood/run-tui-from-worktree.sh` clones the developer's home, points
+  the clone's own profile at a worktree, and runs the surface there;
+  `.agents/skills/dogfood-tui/` is the same practice as a skill an agent loads,
+  and [DEVELOPMENT.md](DEVELOPMENT.md) is the long form.
 - `lib/` is build output and `.plans/` is local planning scratch; both are
   gitignored and neither is edited by hand.
 
@@ -55,6 +61,10 @@ do not resolve under this runner.
 **Point `DSH_HOME` at a scratch directory for every surface run**, and copy in
 only the credentials that run needs. The real home holds
 `~/.dsh/.credentials.yaml`; no credential or session log belongs in the tree.
+Applies to the human too: a run against the real home writes real sessions,
+history, storages, the stash, and themes. When a run needs the developer's own
+bundles and patch overlay, clone the home with
+`./scripts/dogfood/run-tui-from-worktree.sh` rather than pointing at it.
 
 **A rendered-frame change usually changes the golden snapshot.** Read
 `tests/golden/__snapshots__/frames.spec.ts.snap` in the diff before accepting it

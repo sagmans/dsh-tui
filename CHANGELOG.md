@@ -26,11 +26,41 @@ breaking change, and a patch carries only fixes.
   tell which of several calls is still running, which finished, and how each one
   ended without opening anything.
 
+- Trying a build on a real profile is now one command:
+  `scripts/dogfood/run-tui-from-worktree.sh` clones the developer's home into a
+  scratch directory, points the clone's own profile at a worktree, rebuilds it,
+  and starts the surface there — so a change meets the bundles, patch overlay,
+  settings, and themes the daily driver actually runs, while every write lands in
+  the clone. [DEVELOPMENT.md](DEVELOPMENT.md) says when a clone, a fresh home, or
+  the real one is the right call, and `.agents/skills/dogfood-tui/` ships the same
+  practice as a skill an agent working in this repository loads.
+
 ### Changed
 
 - The shipped token table paints a tool's name in the palette accent rather than in
   the warning shade, which is now what a call that has not answered wears: a name
   painted in the colour of a state would leave that state nothing to say.
+
+- A dock section — todos, subagents, jobs — now opens on a dashed rule that
+  carries the section's own name, in a hue of its own. The heading row it
+  replaces is the row the rule spends, so a section is no taller and no narrower
+  than it was, and which board a row belongs to is read off the edge above it
+  instead of off the row itself. Hiding a section's border element restores the
+  plain heading, a section too narrow for a name and a dash falls back to one,
+  and a section whose name the reader hid keeps the rows it always had: with no
+  name to carry, the rule is not drawn at all.
+
+- A copied selection now leaves the frame behind. A terminal copies the screen,
+  so a drag across a message used to take the box it was drawn in along with it,
+  and a prompt or a reply pasted anywhere carried the sides and the padding
+  between them. The surface reads a copy back through the account it kept of its
+  own drawing: a rule carries no text and is dropped, and the columns a row
+  spends on a side and its padding are not part of what that row says, while a
+  line it did not draw is handed back exactly as it came. A drag takes part of a
+  message as readily as two of them, so what lands on the clipboard is the text
+  the reader selected and nothing the surface added around it — a drag that
+  caught no words at all, only the frame, comes back as the reader made it,
+  because a copy is never emptied.
 
 ## [0.5.2] - 2026-09-23
 
