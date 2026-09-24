@@ -8,6 +8,14 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+### Added
+
+- Running subagents in the dock now show the parent agent’s task label,
+  limited to ten words, beside their ID and status.
+- The subagent dock now previews three running children. Click the heading,
+  overflow row, or blank space in the section to expand or collapse it. Click a
+  child’s text to view that session’s transcript.
+
 ### Fixed
 
 - The one-command dogfood run now works on the first try. A profile installs its

@@ -1,11 +1,13 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { describeDuration } from './jobs.ts'
+import { stripControlCharacters } from './text.ts'
 
 /** One delegation this session started, as the surface shows it. */
 export interface SubagentRun {
   readonly runId: string
   readonly provider: string
   readonly id: string
+  readonly label?: string
   readonly startedAt: number
   readonly status: 'running' | 'completed' | 'failed'
   readonly stopReason?: string
@@ -13,10 +15,13 @@ export interface SubagentRun {
 }
 
 /** Child rows the dock lists before the count takes over. */
-export const DOCK_SUBAGENT_LIMIT = 2
+export const DOCK_SUBAGENT_LIMIT = 3
 
 /** Id characters kept in a row, so an id cannot smuggle in a control sequence. */
 const SHORT_ID_LENGTH = 8
+
+/** Maximum task words the dock can show without hiding child status. */
+const MAX_TASK_WORDS = 10
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined
@@ -31,13 +36,28 @@ export function shortId(id: string): string {
  * Track the delegations of one session.
  *
  * Subagent lifecycle arrives as service events rather than durable session
- * events, so this is live state: the durable record of a delegation is the tool
- * call that asked for it, and a resumed run starts with an empty roster.
+ * events, while the parent's catalog supplies the task. This roster remains
+ * live state, so a resumed run starts empty even when its catalog is durable.
  */
 export class SubagentRoster {
   private readonly runs = new Map<string, SubagentRun>()
+  private readonly labels = new Map<string, string>()
 
   constructor(private readonly now: () => number = () => Date.now()) {}
+
+  /** Catalog entries precede starts normally; keep them for either event order. */
+  catalog(info: unknown): void {
+    const record = asRecord(info)
+    const id = record?.childId
+    const raw = record?.label
+    if (typeof id !== 'string' || typeof raw !== 'string') return
+    const label = stripControlCharacters(raw).trim().replace(/\s+/gu, ' ').split(' ').slice(0, MAX_TASK_WORDS).join(' ')
+    if (label === '') return
+    this.labels.set(id, label)
+    for (const [runId, run] of this.runs) {
+      if (run.id === id) this.runs.set(runId, { ...run, label })
+    }
+  }
 
   /** Record a started run; an unknown shape is ignored rather than guessed at. */
   start(info: unknown): void {
@@ -45,9 +65,11 @@ export class SubagentRoster {
     const runId = record?.runId
     const id = record?.id
     if (typeof runId !== 'string' || typeof id !== 'string') return
+    const label = this.labels.get(id)
     this.runs.set(runId, {
       runId,
       id,
+      ...(label === undefined ? {} : { label }),
       provider: typeof record?.provider === 'string' ? record.provider : 'subagent',
       startedAt: this.now(),
       status: 'running',
@@ -64,6 +86,7 @@ export class SubagentRoster {
     this.runs.set(runId, {
       runId,
       id: typeof record?.id === 'string' ? record.id : existing?.id ?? runId,
+      ...(existing?.label === undefined ? {} : { label: existing.label }),
       provider: typeof record?.provider === 'string' ? record.provider : existing?.provider ?? 'subagent',
       startedAt: existing?.startedAt ?? this.now(),
       status: stopReason === undefined || stopReason === 'completed' ? 'completed' : 'failed',
@@ -82,6 +105,7 @@ export class SubagentRoster {
 
   reset(): void {
     this.runs.clear()
+    this.labels.clear()
   }
 }
 
@@ -90,7 +114,7 @@ export function describeSubagent(run: SubagentRun, now: number): string {
   const age = run.status === 'running'
     ? `running ${describeDuration(now - run.startedAt)}`
     : `${run.status}${run.stopReason === undefined || run.stopReason === 'completed' ? '' : ` (${run.stopReason})`} ${describeDuration((run.finishedAt ?? run.startedAt) - run.startedAt)}`
-  return `${shortId(run.id)} · ${run.provider} · ${age}`
+  return `${shortId(run.id)}${run.label === undefined ? '' : ` · ${run.label}`} · ${run.provider} · ${age}`
 }
 
 /** The whole roster as lines. */
