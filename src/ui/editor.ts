@@ -10,7 +10,8 @@ import {
   type TuiMouseEvent,
   type TuiMouseEventResult,
 } from '@earendil-works/pi-tui'
-import { ENTER_KEY, defaultKeymap, type Keymap } from '../input/actions.ts'
+import { defaultKeymap, type Keymap } from '../input/actions.ts'
+import { ENTER_KEY } from '../input/key-press.ts'
 import { ghostDisplayLine, ghostGraphemes, isCursorAtTextEnd, nextGhostWord, type EditorCursor } from '../input/ghost.ts'
 import { promptKeys } from '../input/keymap.ts'
 import { renderTerminalText } from '../terminal-text.ts'

@@ -10,6 +10,9 @@ breaking change, and a patch carries only fixes.
 
 ### Changed
 
+- The action table, the spelling equivalences a key press is matched by, and
+  the collision policy a layered keymap is judged with now sit in three modules,
+  leaving the effective-map resolution and its display queries above them.
 - The transcript view keeps row order, clicks, and caches, while tool-card,
   gate-card, and message drawing each live in their own renderer, so a card or a
   thought can change without touching the row cache around it.

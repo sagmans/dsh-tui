@@ -52,7 +52,8 @@ import {
   installKeybindings,
   surfaceKeysLine,
 } from './input/keymap.ts'
-import { defaultKeymap, hintKeys, surfaceBindings, type ActionLayer, type Keymap, type SurfaceActionId } from './input/actions.ts'
+import { defaultKeymap, hintKeys, surfaceBindings, type Keymap } from './input/actions.ts'
+import { type ActionLayer, type SurfaceActionId } from './input/action-catalog.ts'
 import { resolveConfig } from './config.ts'
 import { FoldCursor, ViewGeneration, replayIfCurrent } from './fold-cursor.ts'
 import { createRestoreRegistry } from './terminal/restore.ts'

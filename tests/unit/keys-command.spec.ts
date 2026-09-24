@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { ACTION_CATALOG, defaultKeymap, resolveKeymap } from '@/input/actions.ts'
+import { defaultKeymap, resolveKeymap } from '@/input/actions.ts'
+import { ACTION_CATALOG } from '@/input/action-catalog.ts'
 import { KEYMAP_LAYERS, keymapLayer, keymapRows, layerNote } from '@/keys-command.ts'
 
 const row = (map: ReturnType<typeof defaultKeymap>, id: string, only?: (typeof KEYMAP_LAYERS)[number]) =>

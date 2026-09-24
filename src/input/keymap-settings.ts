@@ -1,5 +1,5 @@
 import z from '@deepseek-ai/schemastery'
-import { ACTION_CATALOG } from './actions.ts'
+import { ACTION_CATALOG } from './action-catalog.ts'
 
 /**
  * One action's keys as the document writes them: one key, or a list of them.

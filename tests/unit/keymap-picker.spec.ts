@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { ACTION_CATALOG, defaultKeymap, resolveKeymap } from '@/input/actions.ts'
+import { defaultKeymap, resolveKeymap } from '@/input/actions.ts'
+import { ACTION_CATALOG } from '@/input/action-catalog.ts'
 import { KeymapPicker } from '@/ui/keymap-picker.ts'
 
 /** A reader typing into the filter, one key press at a time. */
