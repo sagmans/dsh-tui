@@ -35,6 +35,8 @@ The generic helper adds it once if absent, repoints only its dependency, and
 rebuilds cloned local symlinks. It uses `dsh plugin add` only if the profile is
 missing after `dsh --help`, and does not modify the lockfile of an existing
 profile. Other bundles and the profile patch remain copied from the source home.
+One module, `scripts/clone-links.mjs`, holds the clone's link policy, so the
+seeding step and the validator read the same rules.
 
 `sessions/` is the only entry left out by default: it is the bulk of a home
 (190M of 200M in a busy one) and a test drive rarely needs it. `--with-sessions`
@@ -50,8 +52,10 @@ copies it when present, which makes `--resume` reach the developer's history.
   settings, storages, or sessions and multiply linked mutable files stop the run.
   Package links in `profiles/node_modules`, `profiles/*/node_modules`, and
   `profiles/*/.dsh-module-fallback/node_modules` can point to global installs or
-  external checkouts, but not into the source home. Writes through permitted
-  package links are not isolated. Re-seed with `--reseed` when the source changes.
+  external checkouts, but not into the source home. Any other link that escapes
+  the clone is copied in as a regular file while seeding, which is what a dotfile
+  linked into a shared prompt tree needs. Writes through permitted package links
+  are not isolated. Re-seed with `--reseed` when the source changes.
 - **The clone keeps a copy of the credentials.** Create it in a scratch
   directory, keep it `700`, and `--clean` it when done.
 - **The launcher decides the harness, not the profile.** `pnpm dsh` runs the

@@ -65,6 +65,13 @@ breaking change, and a patch carries only fixes.
   carried, and does so without `dsh plugin add`, which re-materialised the same
   relative links and dropped the other bundles the profile had, failing the run
   on its own bundle guard. `pnpm test` pins both halves on a synthetic home.
+- A developer home that links a dotfile outside it — an `AGENTS.md` into a shared
+  prompt tree is the common one — no longer stops the dogfood clone. The clone
+  tolerates an external link only for a package entry, and a link out of the
+  clone is a path the run could write through, so seeding now copies such a link
+  in as a regular file; links that stay inside the clone are left alone. The link
+  policy lives in one module, so the seeding step and the validator read the same
+  rules.
 
 ## [0.6.0] - 2026-09-24
 

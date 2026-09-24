@@ -49,8 +49,11 @@ source-home overlap, and home-root paths.
 External links are allowed only under `profiles/node_modules`,
 `profiles/*/node_modules`, and `profiles/*/.dsh-module-fallback/node_modules`.
 These package links can point to global packages or external checkouts, but
-never into the source home. Mutable cloned files with multiple hardlinks are
-rejected. Never write test state through a package link.
+never into the source home. Every other cloned link must stay inside the clone;
+one that escapes — a dotfile linked into a shared prompt tree — is copied in as
+a regular file while seeding, so the clone stays self-contained. Mutable cloned
+files with multiple hardlinks are rejected. Never write test state through a
+package link.
 
 The old dsh-tui entry point still requires a prelisted bundle. Do not use
 `dsh plugin add` on a cloned profile with other bundles; it can drop them.

@@ -3,6 +3,8 @@
 set -euo pipefail
 
 name="$(basename "${BASH_SOURCE[0]}")"
+# The link policy is shared with the validator, so both read one rule set.
+helper_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 default_repo="${DSH_DOGFOOD_DEFAULT_REPO:-$PWD}"
 default_repo="$(cd "$default_repo" && pwd -P)"
 
@@ -211,47 +213,11 @@ check_credentials() {
 }
 
 check_clone_links() {
-  node -e '
-const fs = require("node:fs")
-const path = require("node:path")
-const [home, source] = process.argv.slice(1)
-const inside = (root, file) => file === root || file.startsWith(root + path.sep)
-const packageEntry = (parts) => parts[0] === "profiles" && (
-  parts[1] === "node_modules" && parts.length > 2 ||
-  parts[2] === "node_modules" && parts.length > 3 ||
-  parts[2] === ".dsh-module-fallback" && parts[3] === "node_modules" && parts.length > 4
-)
-function destination(file) {
-  let ancestor = file
-  while (!fs.existsSync(ancestor)) {
-    const parent = path.dirname(ancestor)
-    if (parent === ancestor) throw Error("cannot resolve cloned link: " + file)
-    ancestor = parent
-  }
-  // Missing leaves can still cross an existing symlink on the way to their future destination.
-  return path.resolve(fs.realpathSync(ancestor), path.relative(ancestor, file))
+  node "$helper_dir/clone-links.mjs" check "$home" "$source_home" || die "cloned home contains unsafe symlink or hardlink"
 }
-function visit(dir) {
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const file = path.join(dir, entry.name)
-    const parts = path.relative(home, file).split(path.sep)
-    if (entry.isSymbolicLink()) {
-      const target = destination(path.resolve(dir, fs.readlinkSync(file)))
-      const allowed = packageEntry(parts) ? !inside(source, target) : inside(home, target)
-      if (!allowed) {
-        console.error("unsafe cloned symlink escaping scratch or entering source home: " + file)
-        process.exitCode = 1
-      }
-    } else if (entry.isDirectory()) {
-      visit(file)
-    } else if (entry.isFile() && !packageEntry(parts) && fs.lstatSync(file).nlink > 1) {
-      console.error("unsafe cloned hardlink outside package modules: " + file)
-      process.exitCode = 1
-    }
-  }
-}
-visit(home)
-' "$home" "$source_home" || die "cloned home contains unsafe symlink or hardlink"
+
+materialize_cloned_links() {
+  node "$helper_dir/clone-links.mjs" materialize "$home" "$source_home" || die "cloned home links could not be made self-contained"
 }
 
 validate_marker() {
@@ -352,6 +318,7 @@ fi
 
 printf 'home=%s\nsource=%s\ntarget=%s\nprofile=%s\n' "$home" "$source_home" "$target_path" "$profile" > "$marker"
 chmod 600 "$marker"
+materialize_cloned_links
 check_clone_links
 
 # --- build, link, run --------------------------------------------------------
