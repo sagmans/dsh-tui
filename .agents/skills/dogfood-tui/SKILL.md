@@ -79,8 +79,11 @@ Details, including what a run writes where and the failure modes worth knowing:
 ## Troubleshooting
 
 - The surface waits with no output and `--help` waits with it: the bundle left
-  `dsh.profile.bundles` (a moved link is enough). Re-run
-  `DSH_HOME=<clone> dsh plugin --profile tui add <checkout>`.
+  `dsh.profile.bundles` (a moved link is enough), or a local bundle's link does
+  not resolve at the clone's depth. Do not reach for `dsh plugin --profile tui
+  add` — it re-materialises relative links and drops the other bundles. Re-run
+  the script (it rebuilds every `link:` as an absolute symlink), or relink by
+  hand.
 - A source edit has no effect: the profile loads `lib/`. Re-run without
   `--no-build`.
 - `error: Insufficient Balance`: the provider account behind the copied
