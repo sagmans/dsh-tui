@@ -72,6 +72,13 @@ breaking change, and a patch carries only fixes.
   stops the run, and links that stay inside the clone are left alone. The link
   policy lives in one module, so the seeding step and the validator read the same
   rules.
+- The terminal surface no longer refuses a reader's settings on a harness whose
+  ownership API is spelled differently. It registers its `dsh-tui:` section
+  through whichever shape the mounted settings service offers, so a stored
+  section parses and the prompt-history switch it carries is honoured instead of
+  recording being forced off. A harness that keeps configuration per plugin row
+  has no section at all, and that composition is read quietly rather than
+  reported as a missing section.
 
 ## [0.6.0] - 2026-09-24
 

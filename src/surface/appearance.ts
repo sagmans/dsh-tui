@@ -1,5 +1,6 @@
 import type { KeyId } from '@earendil-works/pi-tui'
 import type { Context } from '@deepseek-ai/cordis'
+import { openSection, type SectionScope } from '../compat/section.ts'
 import { defaultKeymap, type Keymap } from '../input/actions.ts'
 import { DEFAULT_PREFIX_KEYS, DEFAULT_PREFIX_WINDOW_S } from '../input/keymap.ts'
 import { createDeferredNotice, type NoticeSink } from '../settings-notice.ts'
@@ -346,13 +347,24 @@ export function createAppearance(ctx: Context, ports: AppearancePorts): Appearan
    */
   const registerSection = (): void => {
     ctx.inject(['settings'], settingsCtx => {
-      // Registration parses the document against the schema, so a section the
-      // schema itself refuses throws here — inside a fiber whose failure the
-      // screen never shows. Reporting it through the same holder keeps a typo
-      // from costing the reader every setting they wrote, silently.
-      let scope: { get(): unknown; update(patch: object): Promise<void> }
+      let opened: SectionScope | undefined
       try {
-        scope = settingsCtx.settings.register(TUI_SETTINGS_NAMESPACE, TuiSettingsSchema)
+        // Registration parses the document against the schema, so a section the
+        // schema itself refuses throws here — inside a fiber whose failure the
+        // screen never shows. Reporting it through the same holder keeps a typo
+        // from costing the reader every setting they wrote, silently.
+        opened = openSection(settingsCtx.settings, {
+          owner: settingsCtx,
+          ns: TUI_SETTINGS_NAMESPACE,
+          schema: TuiSettingsSchema,
+          // Nothing to layer under the section: the read below takes whatever
+          // the section resolves to and nothing above it.
+          entry: {},
+          onChange: () => {
+            applySettings()
+            restyle()
+          },
+        })
       } catch (error) {
         // Nothing registered means nothing to read, so the reader's switch cannot
         // be confirmed: recording stays off rather than falling back to on.
@@ -360,6 +372,11 @@ export function createAppearance(ctx: Context, ports: AppearancePorts): Appearan
         settingsNotice.post(settingsProblemMessage(error) + ' · prompt history stays off until the section parses')
         return
       }
+      // No section API: this harness keeps configuration per plugin row, so
+      // there is nothing here to read and nothing to refuse either. Staying
+      // quiet is a read of that composition, not a failure to report.
+      if (opened === undefined) return
+      const scope = opened
       readSection = () => readScope(scope, message => settingsNotice.post(message))
       chooseTheme = name => {
         void scope.update({ theme: name }).then(
