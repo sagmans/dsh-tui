@@ -1,6 +1,7 @@
 import { type TUI } from '@earendil-works/pi-tui'
 import { describe, expect, it } from 'vitest'
-import { ApprovalGate, type GateQuestion, QuestionGate, toGateQuestions } from '@/gates.ts'
+import { ApprovalGate, type GateQuestion } from '@/gates.ts'
+import { QuestionGate, toGateQuestions } from '@/gates/questions.ts'
 import { defaultKeymap, resolveKeymap, type Keymap } from '@/input/actions.ts'
 import { createAnswerCompletionProvider } from '@/input/completion.ts'
 import { createTheme } from '@/theme.ts'

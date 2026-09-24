@@ -10,6 +10,9 @@ breaking change, and a patch carries only fixes.
 
 ### Changed
 
+- Decision gates keep their question state machine, their question-card
+  projection, and the shared gate contract in three modules, so a rendering
+  change no longer sits beside the cursor and selection rules it draws.
 - Tool cards now take their shape from one module, sub-call folding from
   another, the preview window from a third, and per-tool rendering from the
   presenter, so a new tool family touches the presenter alone.
