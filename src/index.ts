@@ -8,14 +8,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 // listens to, and the event map is declaration-merged by that package.
 import type {} from '@deepseek-ai/dsh-commands'
 import { startAgent, type ForkInheritance, type TuiAgent } from './agent/host.ts'
-import {
-  PICKER_LIMIT,
-  createSessionHistory,
-  presetOfStoredSession,
-  readSessionTitle,
-  type SessionHistory,
-  type StoredSession,
-} from './agent/history.ts'
+import { createSessionHistory, presetOfStoredSession } from './agent/history.ts'
 import { createPromptHistory } from './agent/prompt-history.ts'
 import { createPresetRoster, parsePresetArgument, type PresetRoster, type PresetSummary } from './agent/presets.ts'
 import { createToolPresenter } from './agent/present.ts'
@@ -69,6 +62,7 @@ import { KEYMAP_LAYERS, keymapLayer } from './keys-command.ts'
 import { resetSequence } from './theme-resolver.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { createBackgroundWork } from './surface/background-work.ts'
+import { createSessionPicker } from './surface/session-picker.ts'
 import { formatTokens } from './tokens.ts'
 import { TranscriptModel } from './transcript.ts'
 import { WorkFold, describeTodos, planSelectedActive, planToggleLine, readPlanState, type PlanModeState } from './work.ts'
@@ -88,7 +82,6 @@ import {
   ModelPicker,
   PROVIDER_DEFAULT_EFFORT_ID,
   PresetPicker,
-  SessionPicker,
   effortChoices,
   type PickerAction,
   type PickerCard,
@@ -119,9 +112,6 @@ const BACK_HINT_FALLBACK = 'ctrl+b'
 
 /** What the reader presses to leave a view they did not open. */
 const backHint = (map: Keymap): string => `${hintKeys(map, 'surface.back') || BACK_HINT_FALLBACK} returns to this session`
-
-/** Stored sessions titled at once when the picker opens. */
-const TITLE_CONCURRENCY = 4
 
 /** How often the running-state clock repaints while a turn is open. */
 const STATUS_TICK_MS = 1000
@@ -958,17 +948,23 @@ export function apply(ctx: Context, config: unknown): void {
   }
 
   /**
-   * Take the keyboard for a picker.
+   * Where a bare `--resume` gets its list, and the ports it drives.
    *
-   * The list is already in hand, so the picker is interactive immediately while
-   * the titles that make its rows recognizable stream in behind it.
+   * The keyboard is taken through a port rather than here: how a picker holds
+   * it, and how long it may, is the modal owner's business.
    */
-  const askForSession = async (history: SessionHistory, sessions: readonly StoredSession[]): Promise<SessionId | undefined> => {
-    const titles = new Map<string, string>()
-    void loadTitles(history, sessions, titles)
-    const picked = await openPicker(new SessionPicker(sessions, () => titles, undefined, () => keymap), refuseReason)
-    return picked === undefined ? undefined : SessionId(picked)
-  }
+  const sessionPicker = createSessionPicker(ctx, {
+    keymap: () => keymap,
+    notice: message => model.notice(message),
+    render: () => tui.requestRender(),
+    // A stored session's own mode can only disagree with one this run named, and
+    // only a roster can say whether the name it uses still exists.
+    validateStoredPreset: async id => {
+      if (requestedPreset === undefined || agentPresets === undefined) return
+      await presetFor(SessionId(id), true, undefined)
+    },
+    openPicker: (picker, vet) => openPicker(picker, vet),
+  })
 
   /** Give the keyboard back to the editor and answer whoever opened the picker. */
   const settlePicker = (id: string | undefined): void => {
@@ -982,23 +978,6 @@ export function apply(ctx: Context, config: unknown): void {
     tui.setFocus(editor)
     settle?.(id)
     tui.requestRender()
-  }
-
-  /**
-   * Why this run cannot open a stored session, or undefined when it can.
-   *
-   * A session runs the mode its own log recorded, so a `--preset` that
-   * disagrees with it can only be refused: the picker asks first so the refusal
-   * lands in the list rather than after the terminal has been handed back.
-   */
-  const refuseReason = async (id: string): Promise<string | undefined> => {
-    if (requestedPreset === undefined || agentPresets === undefined) return undefined
-    try {
-      await presetFor(SessionId(id), true, undefined)
-      return undefined
-    } catch (error) {
-      return error instanceof Error ? error.message : String(error)
-    }
   }
 
   /**
@@ -1193,58 +1172,6 @@ export function apply(ctx: Context, config: unknown): void {
     },
     notice: message => model.notice(message),
   })
-
-  /** Title the listed sessions without making the reader wait for the slowest log. */
-  const loadTitles = async (
-    history: SessionHistory,
-    sessions: readonly StoredSession[],
-    titles: Map<string, string>,
-  ): Promise<void> => {
-    const queue = [...sessions]
-    const worker = async (): Promise<void> => {
-      for (;;) {
-        const next = queue.shift()
-        if (next === undefined) return
-        try {
-          const title = await readSessionTitle(history, next)
-          if (title === undefined) continue
-          titles.set(next.id, title)
-          tui.requestRender()
-        } catch {
-          // A log this build cannot read stays listed by id; the picker is not
-          // the place to explain storage, and one bad session is not the list.
-        }
-      }
-    }
-    await Promise.all(Array.from({ length: TITLE_CONCURRENCY }, worker))
-  }
-
-  const storedSessions = async (): Promise<{ history: SessionHistory; sessions: readonly StoredSession[] } | undefined> => {
-    const history = createSessionHistory(ctx)
-    if (history === undefined) {
-      model.notice('this profile has no session storage, so there is nothing to resume')
-      tui.requestRender()
-      return undefined
-    }
-    try {
-      const sessions = await history.list(PICKER_LIMIT)
-      if (sessions.length === 0) {
-        model.notice('no stored sessions to resume')
-        tui.requestRender()
-        return undefined
-      }
-      return { history, sessions }
-    } catch (error) {
-      model.notice(`could not list stored sessions: ${error instanceof Error ? error.message : String(error)}`)
-      tui.requestRender()
-      return undefined
-    }
-  }
-
-  const chooseSession = async (): Promise<SessionId | undefined> => {
-    const listed = await storedSessions()
-    return listed === undefined ? undefined : askForSession(listed.history, listed.sessions)
-  }
 
   /**
    * Replay a stored session so a resumed run opens on the conversation the
@@ -2451,7 +2378,7 @@ export function apply(ctx: Context, config: unknown): void {
         tui.requestRender()
         return
       case 'resume':
-        void chooseSession().then(picked => picked === undefined ? undefined : switchSession(picked)).catch((error: unknown) => {
+        void sessionPicker.chooseSession().then(picked => picked === undefined ? undefined : switchSession(picked)).catch((error: unknown) => {
           model.notice(`could not resume: ${error instanceof Error ? error.message : String(error)}`)
           tui.requestRender()
         })
@@ -2697,7 +2624,7 @@ export function apply(ctx: Context, config: unknown): void {
       await openAgent(resolved.sessionId, resolved.resume)
       return
     }
-    const picked = await chooseSession()
+    const picked = await sessionPicker.chooseSession()
     if (picked === undefined) {
       requestExit(0)
       return
