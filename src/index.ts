@@ -7,7 +7,6 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import { startAgent, type ForkInheritance, type TuiAgent } from './agent/host.ts'
 import { createSessionHistory, presetOfStoredSession } from './agent/history.ts'
 import { createPresetRoster, parsePresetArgument, type PresetRoster, type PresetSummary } from './agent/presets.ts'
-import { createToolPresenter } from './agent/present.ts'
 import { forkPoint, type ForkEvent } from './agent/fork.ts'
 import { hiddenTail, NO_UNDO, redoStep, resetUndo, turnsOf, UNDO_TURN_SETTLE_MS, undoStep, type TurnPoint, type UndoState } from './agent/undo.ts'
 import { createStatusFacts } from './agent/status.ts'
@@ -15,10 +14,8 @@ import { ModelSwitch, createModelCatalog, parseModelArgument, readModelRouteKey,
 import { describeMissingOptional, describeMissingRequired, probeComposition } from './compat/probe.ts'
 import { LOCAL_COMMANDS, type Submission } from './input/submission.ts'
 import { chordKeysLine, surfaceKeysLine } from './input/keymap.ts'
-import { hintKeys, type Keymap } from './input/actions.ts'
 import { type ActionLayer, type SurfaceActionId } from './input/action-catalog.ts'
 import { resolveConfig } from './config.ts'
-import { FoldCursor, ViewGeneration, replayIfCurrent } from './fold-cursor.ts'
 import { BELL, shouldRingBell } from './terminal/bell.ts'
 import { clipboardSequence } from './terminal/clipboard.ts'
 import { windowTitle } from './terminal/title.ts'
@@ -34,10 +31,10 @@ import { createModalInput } from './surface/modal-input.ts'
 import { createPromptInput } from './surface/prompt-input.ts'
 import { createPromptMemory } from './surface/prompt-memory.ts'
 import { createSessionPicker } from './surface/session-picker.ts'
+import { backHint, createSessionView } from './surface/session-view.ts'
 import { createTerminalLifecycle } from './surface/terminal-lifecycle.ts'
 import { formatTokens } from './tokens.ts'
-import { TranscriptModel } from './transcript.ts'
-import { WorkFold, describeTodos, planSelectedActive, planToggleLine, readPlanState, type PlanModeState } from './work.ts'
+import { describeTodos, planSelectedActive, planToggleLine, readPlanState, type PlanModeState } from './work.ts'
 import { WorkDock } from './ui/dock.ts'
 import { GateInputBar } from './ui/gate-input.ts'
 import { surfaceLayout } from './ui/layout.ts'
@@ -67,12 +64,6 @@ export const name = 'tui'
  * every card to a bare generic row.
  */
 export const inject = ['agents', 'tools']
-
-/** What the back hint names when the reader has unbound the key it would advertise. */
-const BACK_HINT_FALLBACK = 'ctrl+b'
-
-/** What the reader presses to leave a view they did not open. */
-const backHint = (map: Keymap): string => `${hintKeys(map, 'surface.back') || BACK_HINT_FALLBACK} returns to this session`
 
 /** How often the running-state clock repaints while a turn is open. */
 const STATUS_TICK_MS = 1000
@@ -142,7 +133,7 @@ export function apply(ctx: Context, config: unknown): void {
    */
   const appearance = createAppearance(ctx, {
     color: () => resolved.color,
-    notice: message => model.notice(message),
+    notice: message => sessionView.notice(message),
     render: () => tui.requestRender(),
     invalidateMarkdown: () => markdown.invalidate(),
     invalidateView: () => view.invalidate(),
@@ -177,15 +168,15 @@ export function apply(ctx: Context, config: unknown): void {
       void promptMemory.openHistoryPicker()
     },
     back: () => {
-      if (viewedSession !== activeSession) void showAgentSession()
+      if (sessionView.viewingChild()) void sessionView.showDriven()
     },
     queuedPrompts: () => queuedPrompts(),
     turnRunning: () => turnOpen,
-    viewingChild: () => viewedSession !== activeSession,
+    viewingChild: () => sessionView.viewingChild(),
     interrupt: () => {
       agent?.interrupt()
     },
-    notice: message => model.notice(message),
+    notice: message => sessionView.notice(message),
     requestExit: code => requestExit(code),
     recordPrompt: text => promptMemory.record(text),
     runSubmission: submission => runSubmission(submission),
@@ -195,15 +186,21 @@ export function apply(ctx: Context, config: unknown): void {
   appearance.registerSection()
 
   /**
-   * The agent scope the tool presenter resolves against.
+   * The transcript on screen, and the fold that feeds it.
    *
-   * Tools are registered in the scoped world the session's preset mounts, so a
-   * card can only read its tool's own render intent while this names that
-   * agent. It follows whatever session the transcript is folding, because a
-   * child on screen reads through the child's scope, not the parent's.
+   * Built before anything that draws it, and before the session it opens on is
+   * driven: every read it takes of the driven identity, the staged cutoff, and
+   * the render target is a port taken at call time, because all three move as
+   * the reader switches sessions.
    */
-  let presentScope: Agent | undefined
-  const model = new TranscriptModel(createToolPresenter(ctx, () => presentScope))
+  const sessionView = createSessionView(ctx, {
+    initialSession: resolved.sessionId,
+    drivenSession: () => activeSession,
+    stagedCutoff: () => stagedCut,
+    agentScope: id => ctx.agents?.get(id),
+    liveEvents: id => liveSession(id)?.snapshotEvents?.(),
+    render: () => tui.requestRender(),
+  })
   /**
    * The prompt's own memory, constructed where the box that draws its ghost
    * already exists; the settings readers stay live because the document is
@@ -215,7 +212,7 @@ export function apply(ctx: Context, config: unknown): void {
     historyMaxEntries: appearance.historyMaxEntries,
     theme,
     keymap: appearance.keymap,
-    notice: message => model.notice(message),
+    notice: message => sessionView.notice(message),
     render: () => tui.requestRender(),
     editorText: () => editor.getExpandedText(),
     setEditorText: text => {
@@ -233,7 +230,6 @@ export function apply(ctx: Context, config: unknown): void {
     openPicker: picker => modalInput.openPicker(picker),
   })
   const ghostBrush = promptMemory.ghostBrush
-  const work = new WorkFold()
   const modelSwitch = new ModelSwitch()
   const agentPresets = createPresetRoster(ctx)
   /** The mode named on the command line, which is the only one that may conflict. */
@@ -260,17 +256,17 @@ export function apply(ctx: Context, config: unknown): void {
   const backgroundWork = createBackgroundWork(ctx, {
     drivingAgent: () => agent,
     activeSession: () => activeSession,
-    notice: text => model.notice(text),
-    marker: text => model.marker(text),
+    notice: text => sessionView.notice(text),
+    marker: text => sessionView.marker(text),
     render: () => tui.requestRender(),
     navigate: id => {
-      void showSession(SessionId(id))
+      void sessionView.show(SessionId(id))
     },
   })
   const markdown = new MarkdownRenderer(theme.markdown, createMermaidTransform({ theme, mode: () => appearance.mermaidMode() }))
   const terminalLifecycle = createTerminalLifecycle(ctx, {
-    reportFrameError: error => model.reportError(error),
-    notice: message => model.notice(message),
+    reportFrameError: error => sessionView.reportError(error),
+    notice: message => sessionView.notice(message),
     copyRows: () => view.copyRows(),
     activeSession: () => activeSession,
     sessionOpened: () => sessionOpened,
@@ -285,12 +281,8 @@ export function apply(ctx: Context, config: unknown): void {
   const { terminal, tui, herdr, disposers, writeTerminal, requestExit, editDraft, exited } = terminalLifecycle
   /** The session this surface drives: commands, approvals, and the bell belong to it. */
   let activeSession = resolved.sessionId
-  /** The session the transcript is showing, which can be one of its children. */
-  let viewedSession = resolved.sessionId
-  /** Only the newest transcript switch may finish an asynchronous stored-log read. */
-  const viewGeneration = new ViewGeneration()
 
-  const view = new TranscriptView(model, theme, markdown, {
+  const view = new TranscriptView(sessionView.model, theme, markdown, {
     state: appearance.viewState,
     gate: () => modalInput.gateCard(),
     picker: () => modalInput.pickerCard(),
@@ -323,11 +315,7 @@ export function apply(ctx: Context, config: unknown): void {
     refreshCompletion: () => promptInput.applyCompletion(),
     activeSession: () => activeSession,
   })
-  // The presenter closure outlives the composition's own teardown, so it must
-  // not keep an agent alive after its world unwinds.
-  disposers.push(() => {
-    presentScope = undefined
-  })
+  disposers.push(sessionView.clearPresentScope)
   let agent: TuiAgent | undefined
   let turnOpen = false
   /**
@@ -357,12 +345,12 @@ export function apply(ctx: Context, config: unknown): void {
     // Read per paint rather than written into the marker the view left behind:
     // a hint stored with the transcript would keep naming the key of the day it
     // was written, and the reader may remap it with the row already on screen.
-    back: () => (viewedSession === activeSession ? undefined : backHint(appearance.keymap())),
+    back: () => (sessionView.viewingChild() ? backHint(appearance.keymap()) : undefined),
     stash: () => stash?.entryCount,
   })
   const statusBar = new StatusBar(statusFacts, theme)
-  const dock = new WorkDock(() => work.state(), theme, () => backgroundWork.jobs(), () => backgroundWork.roster.list(), undefined, id => {
-    void showSession(SessionId(id))
+  const dock = new WorkDock(() => sessionView.workState(), theme, () => backgroundWork.jobs(), () => backgroundWork.roster.list(), undefined, id => {
+    void sessionView.show(SessionId(id))
   })
   // The queue is read from the agent this terminal drives rather than from the
   // session on screen, because it sits on the editor that submits to that agent.
@@ -397,7 +385,7 @@ export function apply(ctx: Context, config: unknown): void {
    */
   const sessionPicker = createSessionPicker(ctx, {
     keymap: appearance.keymap,
-    notice: message => model.notice(message),
+    notice: message => sessionView.notice(message),
     render: () => tui.requestRender(),
     // A stored session's own mode can only disagree with one this run named, and
     // only a roster can say whether the name it uses still exists.
@@ -431,126 +419,17 @@ export function apply(ctx: Context, config: unknown): void {
 
   stash = promptMemory.buildStash()
 
-  /**
-   * Replay a stored session so a resumed run opens on the conversation the
-   * reader left, not on an empty screen: the durable log is the transcript.
-   */
-  /**
-   * Fold one session's history into the transcript.
-   *
-   * A live session answers from memory, which is the only source that includes
-   * events not yet flushed and the only one that works for a child that has not
-   * materialized; a session this process is not running falls back to storage.
-   */
+  /** The live session this process runs, which is the only source holding an unflushed tail. */
   const liveSession = (id: SessionId): { snapshotEvents?: () => readonly ForkEvent[] } | undefined =>
     (ctx.get('sessions') as { get?: (id: SessionId) => { snapshotEvents?: () => readonly ForkEvent[] } | undefined } | undefined)?.get?.(id)
 
-  /**
-   * The fold's place in the viewed session's durable sequence.
-   *
-   * A resumed session is folded while its agent's loop is already live, so the
-   * same event can reach the surface twice: once on the stream and once from the
-   * log the fold is reading. The sequence number every durable event carries is
-   * what tells the two apart.
-   */
-  const foldCursor = new FoldCursor()
-
-  /** Every transcript reset revokes reads started for the previous view. */
-  const resetView = (): (() => boolean) => {
-    const current = viewGeneration.begin()
-    model.reset()
-    work.reset()
-    return current
-  }
-
-  /**
-   * Fold one durable event into the view, unless a staged cursor hides it.
-   *
-   * Undo never deletes, so the log keeps the hidden suffix; this filter is the
-   * one place the transcript and the log disagree about where the session ends.
-   */
-  const applyDurable = (session: SessionId, event: ForkEvent): void => {
-    if (stagedCut !== undefined && session === activeSession && typeof event.seq === 'number' && event.seq >= stagedCut) return
-    if (foldCursor.accept(session, event)) applyEvent(event)
-  }
-
-  const foldHistory = async (id: SessionId, through?: number, current: () => boolean = () => true): Promise<number> => {
-    // Resolved before the fold so every card reads its tool through the scope
-    // that actually registered it; a stored session nobody runs has none.
-    presentScope = ctx.agents?.get(id)
-    // Every fold starts a cleared transcript, so a session already known to the
-    // cursor is read from its first event rather than from where it left off.
-    foldCursor.reset()
-    const inMemory = liveSession(id)?.snapshotEvents?.()
-    if (inMemory !== undefined) {
-      const events = through === undefined ? inMemory : inMemory.slice(0, through)
-      for (const event of events) applyDurable(id, event)
-      return events.length
-    }
-    // Only a live session can be staged: undo acts on the agent this terminal
-    // drives, and a stored log has no cursor to hide a suffix from.
-    const history = createSessionHistory(ctx)
-    if (history === undefined) return 0
-    return replayIfCurrent(() => history.read(id), current, event => applyDurable(id, event))
-  }
-
-  const replayHistory = async (id: SessionId): Promise<void> => {
-    try {
-      const folded = await foldHistory(id)
-      if (folded > 0) model.notice(`replayed ${folded} events from the stored log`)
-    } catch (error) {
-      model.notice(`could not replay this session: ${error instanceof Error ? error.message : String(error)}`)
-    }
-  }
-
-  /**
-   * Show another session in the transcript without leaving this one.
-   *
-   * A delegation is an ordinary session, so the reader can read what a child is
-   * doing rather than only that it exists; the agent this terminal drives does
-   * not change, which keeps commands, approvals, and the bell where they were.
-   */
-  const showSession = async (id: SessionId): Promise<void> => {
-    const previous = viewedSession
-    const current = resetView()
-    viewedSession = id
-    try {
-      await foldHistory(id, undefined, current)
-    } catch (error) {
-      if (!current()) return
-      model.notice(`could not read that session: ${error instanceof Error ? error.message : String(error)}`)
-    }
-    if (!current()) return
-    const returned = id === activeSession && previous !== activeSession
-    model.marker(returned ? 'back to the session this terminal drives' : `viewing ${id}`)
-    tui.requestRender()
-  }
-
-  const showAgentSession = async (): Promise<void> => {
-    await showSession(activeSession)
-  }
-
-  /** Feed one durable event to everything that folds it. */
-  const applyEvent = (event: { readonly type: string; readonly data?: unknown }): void => {
-    model.apply(event)
-    work.apply(event)
-  }
-
-  /** Every event of a session, from memory when this process runs it. */
-  const sessionEvents = async (id: SessionId): Promise<readonly ForkEvent[]> => {
-    const inMemory = liveSession(id)?.snapshotEvents?.()
-    if (inMemory !== undefined) return inMemory
-    const history = createSessionHistory(ctx)
-    return history === undefined ? [] : history.read(id)
-  }
-
   /** The closed turns of the session this terminal drives, newest last. */
-  const currentTurns = async (): Promise<readonly TurnPoint[]> => turnsOf(await sessionEvents(activeSession))
+  const currentTurns = async (): Promise<readonly TurnPoint[]> => turnsOf(await sessionView.sessionEvents(activeSession))
 
   /** Fold the transcript through the staged cut, or the whole log at the tip. */
   const redrawStaged = async (): Promise<void> => {
-    resetView()
-    await foldHistory(activeSession, stagedCut)
+    sessionView.reset()
+    await sessionView.fold(activeSession, stagedCut)
   }
 
   /** Park queued prompts one per stash entry, newest first so popping replays queue order. */
@@ -588,14 +467,14 @@ export function apply(ctx: Context, config: unknown): void {
     const queued = queuedPrompts()
     if (!turnOpen && queued.length === 0) return 0
     if (queued.length > 0 && stash === undefined) {
-      model.notice('queued prompts have no stash to park in; undo cancelled')
+      sessionView.notice('queued prompts have no stash to park in; undo cancelled')
       tui.requestRender()
       return undefined
     }
     agent?.interrupt()
     if (queued.length > 0) await parkQueued(queued)
     if (turnOpen && !(await waitForTurnEnd(UNDO_TURN_SETTLE_MS))) {
-      model.notice('could not stop the turn; undo cancelled')
+      sessionView.notice('could not stop the turn; undo cancelled')
       tui.requestRender()
       return undefined
     }
@@ -606,14 +485,14 @@ export function apply(ctx: Context, config: unknown): void {
     if (undoPending) return
     undoPending = true
     void (async () => {
-      if (viewedSession !== activeSession) {
-        model.notice('undo works on the session this terminal drives · ctrl+b comes back')
+      if (sessionView.viewingChild()) {
+        sessionView.notice('undo works on the session this terminal drives · ctrl+b comes back')
         tui.requestRender()
         return
       }
       const turns = await currentTurns()
       if (undoState.hidden >= turns.length && !turnOpen) {
-        model.notice('nothing to undo')
+        sessionView.notice('nothing to undo')
         tui.requestRender()
         return
       }
@@ -622,7 +501,7 @@ export function apply(ctx: Context, config: unknown): void {
       // again must not park it and end up with two copies.
       const holdsDraft = draft !== '' && draft !== undoState.lastRestored
       if (holdsDraft && stash === undefined) {
-        model.notice('the bar holds a draft and there is no stash to park it in; undo cancelled')
+        sessionView.notice('the bar holds a draft and there is no stash to park it in; undo cancelled')
         tui.requestRender()
         return
       }
@@ -631,13 +510,13 @@ export function apply(ctx: Context, config: unknown): void {
       const settled = await currentTurns()
       const next = undoStep(undoState, settled)
       if (next === undefined) {
-        model.notice('nothing to undo')
+        sessionView.notice('nothing to undo')
         tui.requestRender()
         return
       }
       if (holdsDraft) {
         await stash?.stashEditor(draft)
-        model.notice('the draft in the bar was parked in the stash')
+        sessionView.notice('the draft in the bar was parked in the stash')
       }
       undoState = next
       stagedCut = hiddenTail(next, settled)?.seedCount
@@ -646,11 +525,11 @@ export function apply(ctx: Context, config: unknown): void {
       // The parking count rides the undo notice: a notice of its own would be
       // replaced before the frame could show it.
       const parkedNote = parked === 0 ? '' : ` · ${parked} queued prompt${parked === 1 ? '' : 's'} parked in the stash`
-      model.notice(`undo · ${next.hidden} prompt${next.hidden === 1 ? '' : 's'} hidden${parkedNote} · prefix r redo`)
+      sessionView.notice(`undo · ${next.hidden} prompt${next.hidden === 1 ? '' : 's'} hidden${parkedNote} · prefix r redo`)
       tui.requestRender()
     })()
       .catch((error: unknown) => {
-        model.notice(`undo failed: ${error instanceof Error ? error.message : String(error)}`)
+        sessionView.notice(`undo failed: ${error instanceof Error ? error.message : String(error)}`)
         tui.requestRender()
       })
       .finally(() => {
@@ -660,8 +539,8 @@ export function apply(ctx: Context, config: unknown): void {
 
   const runRedoCommand = (): void => {
     void (async () => {
-      if (viewedSession !== activeSession) {
-        model.notice('redo works on the session this terminal drives · ctrl+b comes back')
+      if (sessionView.viewingChild()) {
+        sessionView.notice('redo works on the session this terminal drives · ctrl+b comes back')
         tui.requestRender()
         return
       }
@@ -670,7 +549,7 @@ export function apply(ctx: Context, config: unknown): void {
       const restored = undoState.lastRestored
       const next = redoStep(undoState, turns)
       if (next === undefined) {
-        model.notice('nothing to redo')
+        sessionView.notice('nothing to redo')
         tui.requestRender()
         return
       }
@@ -679,12 +558,12 @@ export function apply(ctx: Context, config: unknown): void {
       await redrawStaged()
       // A composer the reader edited is theirs; only text this state wrote is replaced.
       if (before === restored) editor.setText(next.lastRestored)
-      model.notice(next.hidden === 0
+      sessionView.notice(next.hidden === 0
         ? 'redo · back at the newest prompt'
         : `redo · ${next.hidden} prompt${next.hidden === 1 ? '' : 's'} hidden`)
       tui.requestRender()
     })().catch((error: unknown) => {
-      model.notice(`redo failed: ${error instanceof Error ? error.message : String(error)}`)
+      sessionView.notice(`redo failed: ${error instanceof Error ? error.message : String(error)}`)
       tui.requestRender()
     })
   }
@@ -701,7 +580,7 @@ export function apply(ctx: Context, config: unknown): void {
     try {
       const previous = agent
       if (previous === undefined) {
-        model.notice('the agent is still starting; try again in a moment')
+        sessionView.notice('the agent is still starting; try again in a moment')
         tui.requestRender()
         return
       }
@@ -710,7 +589,7 @@ export function apply(ctx: Context, config: unknown): void {
         return
       }
       const source = activeSession
-      const events = await sessionEvents(source)
+      const events = await sessionView.sessionEvents(source)
       const turns = turnsOf(events)
       const tail = hiddenTail(undoState, turns)
       const seed = tail === undefined ? [] : events.slice(0, tail.seedCount)
@@ -718,15 +597,15 @@ export function apply(ctx: Context, config: unknown): void {
       agent = undefined
       turnOpen = false
       turnStartedAt = undefined
-      presentScope = undefined
-      resetView()
+      sessionView.clearPresentScope()
+      sessionView.reset()
       backgroundWork.resetRoster()
       await previous.dispose()
       const opened = await openAgent(childId, false, seed.length === 0 ? undefined : { from: source, events: seed })
-      model.notice(`continuing in a new branch · ${source} keeps the undone turns`)
+      sessionView.notice(`continuing in a new branch · ${source} keeps the undone turns`)
       opened.submit(text)
     } catch (error) {
-      model.notice(`could not send: ${error instanceof Error ? error.message : String(error)}`)
+      sessionView.notice(`could not send: ${error instanceof Error ? error.message : String(error)}`)
       tui.requestRender()
     }
   }
@@ -793,7 +672,7 @@ export function apply(ctx: Context, config: unknown): void {
     })
     sessionOpened = true
     activeSession = id
-    viewedSession = id
+    sessionView.setViewed(id)
     agent = handle
     // A cursor counts the turns of one log; the session just opened has its own.
     undoState = resetUndo(id)
@@ -815,21 +694,21 @@ export function apply(ctx: Context, config: unknown): void {
     })
     // A session with no history to fold still has to present its first live
     // card through the right scope, so the scope is set before any event can.
-    presentScope = handle.agent
+    sessionView.setPresentScope(handle.agent)
     // Replayed only once the agent exists, because the fold reads every card
     // through the scope the preset mounted; a fold before that scope existed
     // degraded each replayed card to a bare generic row. The agent's loop is
     // live by now, so the fold and the stream race over the same events; the
     // durable sequence number is what keeps one event from landing twice.
-    if (resume) await replayHistory(id)
+    if (resume) await sessionView.replay(id)
     // A branch inherits the conversation the reader was already reading, so it
     // opens on that history rather than on an empty screen.
-    if (fork !== undefined) await foldHistory(id)
+    if (fork !== undefined) await sessionView.fold(id)
     disposers.push(() => {
       void handle.dispose()
     })
     promptInput.installCompletion()
-    model.notice(`session ${handle.sessionId}${resume ? ' (resumed)' : ''}`)
+    sessionView.notice(`session ${handle.sessionId}${resume ? ' (resumed)' : ''}`)
     tui.requestRender()
     // Returned so a caller that replaced the handle can send through the new
     // one without a fresh read of state TypeScript can no longer widen.
@@ -842,12 +721,12 @@ export function apply(ctx: Context, config: unknown): void {
     agent = undefined
     // Drop the outgoing scope before its agent is disposed, so no card folded
     // during the transition can read a torn-down world.
-    presentScope = undefined
+    sessionView.clearPresentScope()
     turnOpen = false
     // The outgoing turn's clock dies with its agent; leaving it set would time
     // the session being joined by work it never ran.
     turnStartedAt = undefined
-    resetView()
+    sessionView.reset()
     backgroundWork.resetRoster()
     if (previous !== undefined) await previous.dispose()
     await openAgent(id, true)
@@ -884,10 +763,10 @@ export function apply(ctx: Context, config: unknown): void {
   const runExportCommand = (argument: string): void => {
     const path = resolve(argument === '' ? defaultExportFile(String(activeSession)) : argument)
     try {
-      writeFileSync(path, transcriptToText(model.entries()), 'utf8')
-      model.notice(`transcript written to ${path}`)
+      writeFileSync(path, transcriptToText(sessionView.model.entries()), 'utf8')
+      sessionView.notice(`transcript written to ${path}`)
     } catch (error) {
-      model.notice(`could not write ${path}: ${error instanceof Error ? error.message : String(error)}`)
+      sessionView.notice(`could not write ${path}: ${error instanceof Error ? error.message : String(error)}`)
     }
     tui.requestRender()
   }
@@ -903,7 +782,7 @@ export function apply(ctx: Context, config: unknown): void {
   /** Start a fresh session without leaving the terminal. */
   const runNewCommand = (title: string): void => {
     if (agent === undefined) {
-      model.notice('the agent is still starting; try again in a moment')
+      sessionView.notice('the agent is still starting; try again in a moment')
       tui.requestRender()
       return
     }
@@ -912,15 +791,15 @@ export function apply(ctx: Context, config: unknown): void {
       agent = undefined
       turnOpen = false
       turnStartedAt = undefined
-      resetView()
+      sessionView.reset()
       backgroundWork.resetRoster()
       if (previous !== undefined) await previous.dispose()
       await openAgent(SessionId(`tui-session-${randomUUID()}`), false)
       if (title !== '') runRenameCommand(title)
-      model.notice('started a new session')
+      sessionView.notice('started a new session')
       tui.requestRender()
     })().catch((error: unknown) => {
-      model.notice(`could not start a session: ${error instanceof Error ? error.message : String(error)}`)
+      sessionView.notice(`could not start a session: ${error instanceof Error ? error.message : String(error)}`)
       tui.requestRender()
     })
   }
@@ -938,7 +817,7 @@ export function apply(ctx: Context, config: unknown): void {
     // again: the retry is what makes a broken composition file recoverable,
     // while a surface that has opened no session yet is still starting.
     if (agent === undefined && !sessionOpened) {
-      model.notice('the agent is still starting; try again in a moment')
+      sessionView.notice('the agent is still starting; try again in a moment')
       tui.requestRender()
       return
     }
@@ -948,7 +827,7 @@ export function apply(ctx: Context, config: unknown): void {
     // bar. Reopening the session drops the inbox, so a reload that would take
     // those words asks for the key instead of asking a question of its own.
     if (turnOpen || queued.length > 0) {
-      model.notice(
+      sessionView.notice(
         queued.length > 0
           ? `${queued.length} queued ${queued.length === 1 ? 'prompt' : 'prompts'} would be dropped — ctrl+c hands them back to the bar, then /reload`
           : 'a turn is running — ctrl+c interrupts it first (delivered text is kept), then /reload',
@@ -961,18 +840,18 @@ export function apply(ctx: Context, config: unknown): void {
       // The same transition a session switch takes, aimed at the session
       // already open: dispose, then join its preset generation anew.
       await switchSession(id)
-      model.notice("reloaded this session's composition; the transcript was replayed")
+      sessionView.notice("reloaded this session's composition; the transcript was replayed")
       tui.requestRender()
     })().catch((error: unknown) => {
       const reason = error instanceof Error ? error.message : String(error)
-      model.notice(`could not reload: ${reason} — fix the composition and /reload again`)
+      sessionView.notice(`could not reload: ${reason} — fix the composition and /reload again`)
       tui.requestRender()
     })
   }
 
   /** Show the todo list the agent has been keeping. */
   const runTodoCommand = (): void => {
-    model.notice(describeTodos(work.state().todos))
+    sessionView.notice(describeTodos(sessionView.workState().todos))
     tui.requestRender()
   }
 
@@ -983,29 +862,29 @@ export function apply(ctx: Context, config: unknown): void {
    * which is also the only route that works over SSH.
    */
   const runCopyCommand = (): void => {
-    const last = [...model.entries()].reverse().find(entry => entry.kind === 'assistant')
+    const last = [...sessionView.model.entries()].reverse().find(entry => entry.kind === 'assistant')
     if (last === undefined || last.kind !== 'assistant') {
-      model.notice('nothing to copy yet')
+      sessionView.notice('nothing to copy yet')
       tui.requestRender()
       return
     }
     terminal.write(clipboardSequence(last.text))
-    model.notice(`copied ${last.text.length} characters through the terminal`)
+    sessionView.notice(`copied ${last.text.length} characters through the terminal`)
     tui.requestRender()
   }
 
   const runForkCommand = (title: string): void => {
     if (agent === undefined) {
-      model.notice('the agent is still starting; try again in a moment')
+      sessionView.notice('the agent is still starting; try again in a moment')
       tui.requestRender()
       return
     }
     void (async () => {
       const source = activeSession
-      const events = await sessionEvents(source)
+      const events = await sessionView.sessionEvents(source)
       const point = forkPoint(events)
       if (point === undefined) {
-        model.notice('nothing to fork yet: this session has no completed turn')
+        sessionView.notice('nothing to fork yet: this session has no completed turn')
         tui.requestRender()
         return
       }
@@ -1014,44 +893,44 @@ export function apply(ctx: Context, config: unknown): void {
       agent = undefined
       turnOpen = false
       turnStartedAt = undefined
-      resetView()
+      sessionView.reset()
       backgroundWork.resetRoster()
       if (previous !== undefined) await previous.dispose()
       await openAgent(childId, false, { from: source, events: events.slice(0, point.inheritedEvents) })
       if (title !== '') runRenameCommand(title)
-      model.notice(`forked from ${source} at event ${point.boundarySeq} — ${point.inheritedEvents} inherited`)
+      sessionView.notice(`forked from ${source} at event ${point.boundarySeq} — ${point.inheritedEvents} inherited`)
       tui.requestRender()
     })().catch((error: unknown) => {
-      model.notice(`could not fork: ${error instanceof Error ? error.message : String(error)}`)
+      sessionView.notice(`could not fork: ${error instanceof Error ? error.message : String(error)}`)
       tui.requestRender()
     })
   }
 
   const runRenameCommand = (title: string): void => {
     if (title === '') {
-      model.notice('use /rename <title>; the title is what the resume picker shows')
+      sessionView.notice('use /rename <title>; the title is what the resume picker shows')
       tui.requestRender()
       return
     }
     const session = (ctx.get('sessions') as { get?: (id: SessionId) => unknown } | undefined)?.get?.(activeSession)
     const titles = ctx.get('sessionTitle') as { rename?: (session: unknown, title: string) => { readonly title?: string } } | undefined
     if (session === undefined || typeof titles?.rename !== 'function') {
-      model.notice('this profile has no session-title service, so this session cannot be renamed')
+      sessionView.notice('this profile has no session-title service, so this session cannot be renamed')
       tui.requestRender()
       return
     }
     try {
       const accepted = titles.rename(session, title)
-      model.notice(`session renamed to "${typeof accepted?.title === 'string' ? accepted.title : title}"`)
+      sessionView.notice(`session renamed to "${typeof accepted?.title === 'string' ? accepted.title : title}"`)
     } catch (error) {
-      model.notice(`could not rename: ${error instanceof Error ? error.message : String(error)}`)
+      sessionView.notice(`could not rename: ${error instanceof Error ? error.message : String(error)}`)
     }
     tui.requestRender()
   }
 
   const runModelCommand = (argument: string): void => {
     if (catalog === undefined) {
-      model.notice('this profile has no llm service, so models cannot be listed or switched')
+      sessionView.notice('this profile has no llm service, so models cannot be listed or switched')
       tui.requestRender()
       return
     }
@@ -1064,12 +943,12 @@ export function apply(ctx: Context, config: unknown): void {
         return
       case 'list-models':
         void catalog.models(command.provider).then(entries => {
-          model.notice(entries.length === 0
+          sessionView.notice(entries.length === 0
             ? `${command.provider} advertises no models; an id may still work`
             : `${command.provider}: ${entries.map(entry => entry.id).join(' ')}`)
           tui.requestRender()
         }).catch((error: unknown) => {
-          model.notice(`could not list models: ${error instanceof Error ? error.message : String(error)}`)
+          sessionView.notice(`could not list models: ${error instanceof Error ? error.message : String(error)}`)
           tui.requestRender()
         })
         return
@@ -1077,7 +956,7 @@ export function apply(ctx: Context, config: unknown): void {
         const choice = command.choice
         if (choice.reasoningEffort === undefined) {
           modelSwitch.choose(choice)
-          model.notice(`model set to ${choice.provider}/${choice.model} for the next step`)
+          sessionView.notice(`model set to ${choice.provider}/${choice.model} for the next step`)
           tui.requestRender()
           return
         }
@@ -1089,23 +968,23 @@ export function apply(ctx: Context, config: unknown): void {
             const info = await catalog.efforts(choice.provider, choice.model)
             const efforts = info?.efforts ?? []
             if (!efforts.some(effort => effort.id === choice.reasoningEffort)) {
-              model.notice(efforts.length === 0
+              sessionView.notice(efforts.length === 0
                 ? `/model: ${choice.provider}/${choice.model} advertises no reasoning efforts`
                 : `/model: ${choice.provider}/${choice.model} does not offer reasoning effort "${choice.reasoningEffort}" — offers: ${efforts.map(effort => effort.id).join(' ')}`)
               tui.requestRender()
               return
             }
             modelSwitch.choose(choice)
-            model.notice(`model set to ${choice.provider}/${choice.model} (${choice.reasoningEffort}) for the next step`)
+            sessionView.notice(`model set to ${choice.provider}/${choice.model} (${choice.reasoningEffort}) for the next step`)
           } catch (error) {
-            model.notice(`/model: could not read reasoning efforts: ${error instanceof Error ? error.message : String(error)}`)
+            sessionView.notice(`/model: could not read reasoning efforts: ${error instanceof Error ? error.message : String(error)}`)
           }
           tui.requestRender()
         })()
         return
       }
       case 'invalid':
-        model.notice(`/model: ${command.reason}`)
+        sessionView.notice(`/model: ${command.reason}`)
         tui.requestRender()
         return
     }
@@ -1119,7 +998,7 @@ export function apply(ctx: Context, config: unknown): void {
     modelSwitch.choose(effortId === PROVIDER_DEFAULT_EFFORT_ID
       ? { provider, model: modelId }
       : { provider, model: modelId, reasoningEffort: effortId })
-    model.notice(`reasoning effort for ${provider}/${modelId} set to ${effortId === PROVIDER_DEFAULT_EFFORT_ID ? 'provider default' : effortId} for the next step`)
+    sessionView.notice(`reasoning effort for ${provider}/${modelId} set to ${effortId === PROVIDER_DEFAULT_EFFORT_ID ? 'provider default' : effortId} for the next step`)
     tui.requestRender()
   }
 
@@ -1161,7 +1040,7 @@ export function apply(ctx: Context, config: unknown): void {
       model: route.model,
       ...keep === undefined ? {} : { reasoningEffort: keep },
     })
-    model.notice(`model set to ${route.provider}/${route.model} for the next step`)
+    sessionView.notice(`model set to ${route.provider}/${route.model} for the next step`)
     tui.requestRender()
   }
 
@@ -1191,7 +1070,7 @@ export function apply(ctx: Context, config: unknown): void {
       ))
       if (picked !== undefined) applyEffort(route.provider, route.model, picked)
     } catch (error) {
-      model.notice(`could not read reasoning efforts: ${error instanceof Error ? error.message : String(error)}`)
+      sessionView.notice(`could not read reasoning efforts: ${error instanceof Error ? error.message : String(error)}`)
     }
     tui.requestRender()
   }
@@ -1207,13 +1086,13 @@ export function apply(ctx: Context, config: unknown): void {
    */
   const openModelPicker = async (): Promise<void> => {
     if (catalog === undefined) {
-      model.notice('this profile has no llm service, so models cannot be listed or switched')
+      sessionView.notice('this profile has no llm service, so models cannot be listed or switched')
       tui.requestRender()
       return
     }
     const providers = catalog.providers()
     if (providers.length === 0) {
-      model.notice('no provider is configured; add one before choosing a model')
+      sessionView.notice('no provider is configured; add one before choosing a model')
       tui.requestRender()
       return
     }
@@ -1251,13 +1130,13 @@ export function apply(ctx: Context, config: unknown): void {
    */
   const openEffortPicker = async (): Promise<void> => {
     if (catalog === undefined) {
-      model.notice('this profile has no llm service, so reasoning efforts cannot be read')
+      sessionView.notice('this profile has no llm service, so reasoning efforts cannot be read')
       tui.requestRender()
       return
     }
     const facts = statusFacts()
     if (facts.provider === undefined || facts.model === undefined) {
-      model.notice('no model route is in use; /model <provider>/<model> picks one first')
+      sessionView.notice('no model route is in use; /model <provider>/<model> picks one first')
       tui.requestRender()
       return
     }
@@ -1267,7 +1146,7 @@ export function apply(ctx: Context, config: unknown): void {
       const info = await catalog.efforts(facts.provider, facts.model)
       const efforts = info?.efforts ?? []
       if (efforts.length === 0) {
-        model.notice(`${facts.provider}/${facts.model} advertises no reasoning efforts`)
+        sessionView.notice(`${facts.provider}/${facts.model} advertises no reasoning efforts`)
         return
       }
       const picked = await modalInput.openPicker(new EffortPicker(
@@ -1277,7 +1156,7 @@ export function apply(ctx: Context, config: unknown): void {
       ))
       if (picked !== undefined) applyEffort(facts.provider, facts.model, picked)
     } catch (error) {
-      model.notice(`could not read reasoning efforts: ${error instanceof Error ? error.message : String(error)}`)
+      sessionView.notice(`could not read reasoning efforts: ${error instanceof Error ? error.message : String(error)}`)
     } finally {
       openingEfforts = false
       tui.requestRender()
@@ -1295,12 +1174,12 @@ export function apply(ctx: Context, config: unknown): void {
    */
   const runPresetCommand = (argument: string): void => {
     if (agentPresets === undefined) {
-      model.notice('this profile has no agent roster, so there is no mode to choose')
+      sessionView.notice('this profile has no agent roster, so there is no mode to choose')
       tui.requestRender()
       return
     }
     if (agent === undefined) {
-      model.notice('the agent is still starting; try again in a moment')
+      sessionView.notice('the agent is still starting; try again in a moment')
       tui.requestRender()
       return
     }
@@ -1309,7 +1188,7 @@ export function apply(ctx: Context, config: unknown): void {
     const command = parsePresetArgument(argument)
     if (command.kind === 'pick') {
       if (agentPresets.started(session)) {
-        model.notice(`this session runs ${current === undefined ? 'a mode' : `"${current}"`} and has already started, so its mode is fixed — /new starts a fresh session`)
+        sessionView.notice(`this session runs ${current === undefined ? 'a mode' : `"${current}"`} and has already started, so its mode is fixed — /new starts a fresh session`)
         tui.requestRender()
         return
       }
@@ -1327,9 +1206,9 @@ export function apply(ctx: Context, config: unknown): void {
       seat = chosen
       // The durable selection is folded as a marker on the session it belongs
       // to, so a reader watching a child has to come back to see it.
-      if (viewedSession !== activeSession) await showSession(activeSession)
+      if (sessionView.viewingChild()) await sessionView.show(activeSession)
     } catch (error) {
-      model.notice(`could not switch the mode: ${error instanceof Error ? error.message : String(error)}`)
+      sessionView.notice(`could not switch the mode: ${error instanceof Error ? error.message : String(error)}`)
     }
     tui.requestRender()
   }
@@ -1360,18 +1239,18 @@ export function apply(ctx: Context, config: unknown): void {
     }, current)
   }
 
-  const planActive = (): boolean => planSelectedActive(planState(), work.state().planMode)
+  const planActive = (): boolean => planSelectedActive(planState(), sessionView.workState().planMode)
 
   const runCommand = (name: string, line: string): void => {
     const current = agent
     const commands = registry()
     if (current === undefined) {
-      model.notice('the agent is still starting; try again in a moment')
+      sessionView.notice('the agent is still starting; try again in a moment')
       tui.requestRender()
       return
     }
     if (commands === undefined || commands.find(current.agent, name) === undefined) {
-      model.notice(`unknown command: /${name} — ${helpText()}`)
+      sessionView.notice(`unknown command: /${name} — ${helpText()}`)
       tui.requestRender()
       return
     }
@@ -1379,10 +1258,10 @@ export function apply(ctx: Context, config: unknown): void {
     void commands.execute(current.agent, line, [], controller.signal).then(execution => {
       const result = execution?.result
       if (result === undefined) return
-      model.notice(result.kind === 'error' ? `/${name} failed: ${result.text ?? 'no detail'}` : `/${name} ${result.text ?? 'done'}`)
+      sessionView.notice(result.kind === 'error' ? `/${name} failed: ${result.text ?? 'no detail'}` : `/${name} ${result.text ?? 'done'}`)
       tui.requestRender()
     }).catch((error: unknown) => {
-      model.notice(`/${name} failed: ${error instanceof Error ? error.message : String(error)}`)
+      sessionView.notice(`/${name} failed: ${error instanceof Error ? error.message : String(error)}`)
       tui.requestRender()
     })
   }
@@ -1457,7 +1336,7 @@ export function apply(ctx: Context, config: unknown): void {
         // A layer that does not exist is not a filter that matches nothing: the
         // reader asked for something by name, so the answer names the names.
         if (submission.argument !== '' && layer === undefined) {
-          model.notice(`unknown layer "${submission.argument}" · ${KEYMAP_LAYERS.join(' ')}`)
+          sessionView.notice(`unknown layer "${submission.argument}" · ${KEYMAP_LAYERS.join(' ')}`)
           tui.requestRender()
           return
         }
@@ -1474,7 +1353,7 @@ export function apply(ctx: Context, config: unknown): void {
         // Submitting a command consumes the line it was typed on, so this path
         // can only carry a draft it was given; parking the bar's own draft is
         // what the chord is for.
-        if (submission.argument.trim() === '') model.notice('usage: /stash <draft>, or ctrl+x then s to park the editor')
+        if (submission.argument.trim() === '') sessionView.notice('usage: /stash <draft>, or ctrl+x then s to park the editor')
         else void stash?.stashEditor(submission.argument)
         return
       case 'stash-draft':
@@ -1503,9 +1382,9 @@ export function apply(ctx: Context, config: unknown): void {
         const context = facts.contextTokens === undefined
           ? undefined
           : `context ${formatTokens(facts.contextTokens)}${facts.contextWindow === undefined ? '' : `/${formatTokens(facts.contextWindow)}`}`
-        model.notice([
+        sessionView.notice([
           `session ${activeSession}`,
-          viewedSession === activeSession ? undefined : `viewing ${viewedSession}`,
+          sessionView.viewingChild() ? undefined : `viewing ${sessionView.viewed()}`,
           facts.model === undefined
             ? undefined
             : `model ${facts.provider === undefined ? '' : `${facts.provider}/`}${facts.model}${facts.effort === undefined ? '' : ` (${facts.effort})`}`,
@@ -1521,7 +1400,7 @@ export function apply(ctx: Context, config: unknown): void {
         return
       }
       case 'clear':
-        resetView()
+        sessionView.reset()
         tui.requestRender()
         return
       case 'undo':
@@ -1531,12 +1410,12 @@ export function apply(ctx: Context, config: unknown): void {
         runRedoCommand()
         return
       case 'help':
-        model.notice(helpText())
+        sessionView.notice(helpText())
         tui.requestRender()
         return
       case 'resume':
         void sessionPicker.chooseSession().then(picked => picked === undefined ? undefined : switchSession(picked)).catch((error: unknown) => {
-          model.notice(`could not resume: ${error instanceof Error ? error.message : String(error)}`)
+          sessionView.notice(`could not resume: ${error instanceof Error ? error.message : String(error)}`)
           tui.requestRender()
         })
         return
@@ -1550,7 +1429,7 @@ export function apply(ctx: Context, config: unknown): void {
         return
       case 'prompt':
         if (agent === undefined) {
-          model.notice('the agent is still starting; try again in a moment')
+          sessionView.notice('the agent is still starting; try again in a moment')
           tui.requestRender()
           return
         }
@@ -1595,10 +1474,7 @@ export function apply(ctx: Context, config: unknown): void {
       // session even while the transcript shows a child's conversation.
       if (event.type === 'agent/inbox/spliced') tui.requestRender()
     }
-    if (session.id !== viewedSession) return
-    presentScope = ctx.agents?.get(session.id)
-    applyDurable(session.id, event)
-    tui.requestRender()
+    sessionView.observe(session.id, event)
   }))
 
   /**
@@ -1633,22 +1509,7 @@ export function apply(ctx: Context, config: unknown): void {
   // The board is live state: watch it directly rather than folding events.
   disposers.push(backgroundWork.watchJobs())
 
-  // The transcript belongs to the session on screen, while status, the bell,
-  // and the queue stay with the agent this terminal drives. A live delta or a
-  // failure folded into the wrong model would print one session's words as
-  // another's, and the durable copy that follows would never correct it.
-  disposers.push(ctx.on('agent/error', payload => {
-    if (payload.agent.id !== viewedSession) return
-    model.reportError(payload.error)
-    tui.requestRender()
-  }))
-
-  disposers.push(ctx.on('agent/assistant-stream', payload => {
-    if (payload.agent.id !== viewedSession) return
-    if (payload.frame.type !== 'chunk') return
-    model.applyStreamChunk(payload.frame.chunk)
-    tui.requestRender()
-  }))
+  disposers.push(...sessionView.agentListeners())
 
   disposers.push(appearance.settingsListener())
 
@@ -1656,7 +1517,7 @@ export function apply(ctx: Context, config: unknown): void {
   disposers.push(appearance.watchThemes())
 
   const degraded = describeMissingOptional(probe)
-  if (degraded !== undefined) model.notice(degraded)
+  if (degraded !== undefined) sessionView.notice(degraded)
 
   /**
    * Open the session this run was launched for.
@@ -1702,7 +1563,7 @@ export function apply(ctx: Context, config: unknown): void {
     herdr.publish()
     // A refused settings edit is only visible now that the surface owns the
     // screen; whatever the scope found before this point prints here instead.
-    appearance.openNotices(message => model.notice(message))
+    appearance.openNotices(message => sessionView.notice(message))
     await boot()
   }
 
