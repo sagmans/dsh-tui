@@ -1,7 +1,6 @@
 import { ProcessTerminal } from '@earendil-works/pi-tui'
 import type { Context } from '@deepseek-ai/cordis'
 import type { SessionId } from '@deepseek-ai/dsh-session'
-import type { TuiAgent } from '../agent/host.ts'
 import { createHerdrReporter, type HerdrReporter } from '../herdr/reporter.ts'
 import { PROFILE_NAME, resumeHint } from '../identity.ts'
 import { clipboardSequence } from '../terminal/clipboard.ts'
@@ -45,15 +44,6 @@ export interface TerminalLifecyclePorts {
   readonly holdDraft: (text: string) => void
   /** Put an edited draft back into the bar. */
   readonly writeDraft: (text: string) => void
-  /**
-   * Let go of the agent in service and everything projected from it, handing the
-   * handle back to be stopped.
-   *
-   * The handle, the turn it ran, the scope its cards read through, the transcript
-   * folded from it, and its background roster are the composer's own state, so
-   * this owner asks for the handle rather than writing any of it.
-   */
-  readonly takeOutgoingAgent: () => TuiAgent | undefined
 }
 
 /** The handles and operations the composing surface routes to this owner. */
@@ -77,16 +67,6 @@ export interface TerminalLifecycle {
   readonly disposed: () => boolean
   readonly exited: () => boolean
   readonly requestExit: (code: number, reason?: string) => void
-  /**
-   * Stop the agent in service and let go of what it projected.
-   *
-   * Every replacement of the agent this terminal drives — a staged send, a
-   * session switch, a reload, a new session, a fork — has to let the outgoing one
-   * go the same way, and in this order: the handle and its projections go before
-   * the world they name is torn down, and the stop is awaited so the next agent
-   * joins a surface nothing of the previous one is still writing to.
-   */
-  readonly disposeOutgoing: () => Promise<void>
   /** Hand the draft to the reader's own editor and take back what it saved. */
   readonly editDraft: () => void
 }
@@ -170,11 +150,6 @@ export function createTerminalLifecycle(ctx: Context, ports: TerminalLifecyclePo
     for (const dispose of disposers.reverse()) dispose()
     return released.finally(unregisterExit)
   })
-
-  const disposeOutgoing = async (): Promise<void> => {
-    const previous = ports.takeOutgoingAgent()
-    if (previous !== undefined) await previous.dispose()
-  }
 
   const requestExit = (code: number, reason?: string): void => {
     if (exited) return
@@ -295,7 +270,6 @@ export function createTerminalLifecycle(ctx: Context, ports: TerminalLifecyclePo
     disposed: () => disposed,
     exited: () => exited,
     requestExit,
-    disposeOutgoing,
     editDraft,
   }
 }

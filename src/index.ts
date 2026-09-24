@@ -1,26 +1,21 @@
-import { randomUUID } from 'node:crypto'
 import { writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { type Component, ScrollView } from '@earendil-works/pi-tui'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { startAgent, type ForkInheritance, type TuiAgent } from './agent/host.ts'
 import { createSessionHistory, presetOfStoredSession } from './agent/history.ts'
 import { createPresetRoster } from './agent/presets.ts'
-import { forkPoint, type ForkEvent } from './agent/fork.ts'
+import type { ForkEvent } from './agent/fork.ts'
 import { createStatusFacts } from './agent/status.ts'
 import { describeMissingOptional, describeMissingRequired, probeComposition } from './compat/probe.ts'
 import { LOCAL_COMMANDS, type Submission } from './input/submission.ts'
 import { chordKeysLine, surfaceKeysLine } from './input/keymap.ts'
 import { type ActionLayer, type SurfaceActionId } from './input/action-catalog.ts'
 import { resolveConfig } from './config.ts'
-import { BELL, shouldRingBell } from './terminal/bell.ts'
 import { clipboardSequence } from './terminal/clipboard.ts'
 import { windowTitle } from './terminal/title.ts'
-import { driverReportFor, sessionStartReason } from './herdr/state.ts'
 import { defaultExportFile, transcriptToText } from './export.ts'
 import { toolDisplayFor } from './tool-display.ts'
-import { pendingPrompts } from './queue.ts'
 import { KEYMAP_LAYERS, keymapLayer } from './keys-command.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { createAppearance } from './surface/appearance.ts'
@@ -30,6 +25,7 @@ import { createModelChoice } from './surface/model-choice.ts'
 import { createPromptInput } from './surface/prompt-input.ts'
 import { createPromptMemory } from './surface/prompt-memory.ts'
 import { createPresetChoice } from './surface/preset-choice.ts'
+import { createSessionLifecycle } from './surface/session-lifecycle.ts'
 import { createSessionPicker } from './surface/session-picker.ts'
 import { backHint, createSessionView } from './surface/session-view.ts'
 import { createStagedTurns } from './surface/staged-turns.ts'
@@ -58,9 +54,6 @@ export const name = 'tui'
  * every card to a bare generic row.
  */
 export const inject = ['agents', 'tools']
-
-/** How often the running-state clock repaints while a turn is open. */
-const STATUS_TICK_MS = 1000
 
 /** The preset registry, asked for a service the agent's own composition holds. */
 interface ServiceFor {
@@ -164,17 +157,17 @@ export function apply(ctx: Context, config: unknown): void {
     back: () => {
       if (sessionView.viewingChild()) void sessionView.showDriven()
     },
-    queuedPrompts: () => queuedPrompts(),
-    turnRunning: () => turnOpen,
+    queuedPrompts: () => sessionLifecycle.queuedPrompts(),
+    turnRunning: () => sessionLifecycle.turnRunning(),
     viewingChild: () => sessionView.viewingChild(),
     interrupt: () => {
-      agent?.interrupt()
+      sessionLifecycle.drivingAgent()?.interrupt()
     },
     notice: message => sessionView.notice(message),
     requestExit: code => requestExit(code),
     recordPrompt: text => promptMemory.record(text),
     runSubmission: submission => runSubmission(submission),
-    drivenAgent: () => agent?.agent,
+    drivenAgent: () => sessionLifecycle.drivingAgent()?.agent,
     registeredCommands: target => registry()?.list(target),
   })
   appearance.registerSection()
@@ -189,7 +182,7 @@ export function apply(ctx: Context, config: unknown): void {
    */
   const sessionView = createSessionView(ctx, {
     initialSession: resolved.sessionId,
-    drivenSession: () => activeSession,
+    drivenSession: () => sessionLifecycle.activeSession(),
     stagedCutoff: () => stagedTurns.stagedCutoff(),
     agentScope: id => ctx.agents?.get(id),
     liveEvents: id => liveSession(id)?.snapshotEvents?.(),
@@ -218,7 +211,7 @@ export function apply(ctx: Context, config: unknown): void {
     // holding the draft in another program owns it just as firmly: a pop that
     // landed then would be deleted from the bank and then overwritten.
     editorAvailable: () => !promptBar.isBorrowed() && !terminalLifecycle.handedOver(),
-    activeSession: () => activeSession,
+    activeSession: () => sessionLifecycle.activeSession(),
     // The keyboard's lifetime is the modal owner's, so the list is handed over
     // rather than driven here.
     openPicker: picker => modalInput.openPicker(picker),
@@ -252,18 +245,18 @@ export function apply(ctx: Context, config: unknown): void {
       return history === undefined ? undefined : await presetOfStoredSession(history, id)
     },
     livePreset: id => agentPresets?.current(liveSession(id)),
-    drivingAgent: () => agent,
+    drivingAgent: () => sessionLifecycle.drivingAgent(),
     keymap: appearance.keymap,
     openPicker: picker => modalInput.openPicker(picker),
     notice: message => sessionView.notice(message),
     render: () => tui.requestRender(),
     returnToDrivenSession: async () => {
-      if (sessionView.viewingChild()) await sessionView.show(activeSession)
+      if (sessionView.viewingChild()) await sessionView.show(sessionLifecycle.activeSession())
     },
   })
   const backgroundWork = createBackgroundWork(ctx, {
-    drivingAgent: () => agent,
-    activeSession: () => activeSession,
+    drivingAgent: () => sessionLifecycle.drivingAgent(),
+    activeSession: () => sessionLifecycle.activeSession(),
     notice: text => sessionView.notice(text),
     marker: text => sessionView.marker(text),
     render: () => tui.requestRender(),
@@ -276,31 +269,17 @@ export function apply(ctx: Context, config: unknown): void {
     reportFrameError: error => sessionView.reportError(error),
     notice: message => sessionView.notice(message),
     copyRows: () => view.copyRows(),
-    activeSession: () => activeSession,
-    sessionOpened: () => sessionOpened,
-    turnRunning: () => turnOpen,
-    stopClock: () => clearInterval(statusTicker),
+    activeSession: () => sessionLifecycle.activeSession(),
+    sessionOpened: () => sessionLifecycle.sessionOpened(),
+    turnRunning: () => sessionLifecycle.turnRunning(),
+    stopClock: () => sessionLifecycle.stopClock(),
     exit: appExit,
     draftText: () => editor.getExpandedText(),
     draftBorrowed: () => promptBar.isBorrowed(),
     holdDraft: text => promptBar.replaceHeld(text),
     writeDraft: text => editor.setText(text),
-    // The handle, the turn it ran, and the projections built from it are the
-    // composer's own state, so the owner asks for them when an agent is replaced.
-    takeOutgoingAgent: () => {
-      const previous = agent
-      agent = undefined
-      turnOpen = false
-      turnStartedAt = undefined
-      sessionView.clearPresentScope()
-      sessionView.reset()
-      backgroundWork.resetRoster()
-      return previous
-    },
   })
   const { terminal, tui, herdr, disposers, writeTerminal, requestExit, editDraft, exited } = terminalLifecycle
-  /** The session this surface drives: commands, approvals, and the bell belong to it. */
-  let activeSession = resolved.sessionId
 
   const view = new TranscriptView(sessionView.model, theme, markdown, {
     state: appearance.viewState,
@@ -333,11 +312,9 @@ export function apply(ctx: Context, config: unknown): void {
     keymap: appearance.keymap,
     promptBar,
     refreshCompletion: () => promptInput.applyCompletion(),
-    activeSession: () => activeSession,
+    activeSession: () => sessionLifecycle.activeSession(),
   })
   disposers.push(sessionView.clearPresentScope)
-  let agent: TuiAgent | undefined
-  let turnOpen = false
   /**
    * The staged cursor over the session this terminal drives, and the prompts
    * parked behind it.
@@ -348,32 +325,29 @@ export function apply(ctx: Context, config: unknown): void {
    */
   const stagedTurns = createStagedTurns({
     viewingChild: () => sessionView.viewingChild(),
-    activeSession: () => activeSession,
+    activeSession: () => sessionLifecycle.activeSession(),
     sessionEvents: id => sessionView.sessionEvents(id),
     resetTranscript: () => sessionView.reset(),
     foldTranscript: (id, cutoff) => sessionView.fold(id, cutoff),
-    drivingAgent: () => agent,
-    disposeOutgoing: () => terminalLifecycle.disposeOutgoing(),
-    openSession: (id, resume, fork) => openAgent(id, resume, fork),
-    queuedPrompts: () => queuedPrompts(),
+    drivingAgent: () => sessionLifecycle.drivingAgent(),
+    disposeOutgoing: () => sessionLifecycle.disposeOutgoing(),
+    openSession: (id, resume, fork) => sessionLifecycle.openAgent(id, resume, fork),
+    queuedPrompts: () => sessionLifecycle.queuedPrompts(),
     canPark: () => stash !== undefined,
     parkPrompt: text => stash?.stashEditor(text) ?? Promise.resolve(),
-    turnRunning: () => turnOpen,
+    turnRunning: () => sessionLifecycle.turnRunning(),
     draft: () => editor.getExpandedText(),
     writeDraft: text => editor.setText(text),
     notice: message => sessionView.notice(message),
     render: () => tui.requestRender(),
   })
-  let turnStartedAt: number | undefined
-  /** Whether a session was really opened, which is what an exit hint can name. */
-  let sessionOpened = false
   // The bank is built once the picker exists to answer for it, so the status
   // source is late-bound: the footer must not read a half-constructed stash.
   let stash: PromptStash | undefined
 
   const statusFacts = createStatusFacts(ctx, {
-    sessionId: () => activeSession,
-    activity: () => ({ running: turnOpen, startedAt: turnStartedAt }),
+    sessionId: () => sessionLifecycle.activeSession(),
+    activity: () => sessionLifecycle.activity(),
     override: () => modelChoice.current(),
     home: process.env.HOME,
     chord: () => promptInput.chordHint(),
@@ -387,15 +361,47 @@ export function apply(ctx: Context, config: unknown): void {
   const dock = new WorkDock(() => sessionView.workState(), theme, () => backgroundWork.jobs(), () => backgroundWork.roster.list(), undefined, id => {
     void sessionView.show(SessionId(id))
   })
-  // The queue is read from the agent this terminal drives rather than from the
-  // session on screen, because it sits on the editor that submits to that agent.
-  const queuedPrompts = (): readonly string[] => pendingPrompts(ctx, liveSession(activeSession))
-  const queue = new QueueBar(queuedPrompts, theme)
-  // Only a running turn has anything to say over time, so the clock stops with it.
-  const statusTicker: ReturnType<typeof setInterval> = setInterval(() => {
-    if (turnOpen) tui.requestRender()
-  }, STATUS_TICK_MS)
-  disposers.push(() => clearInterval(statusTicker))
+  const queue = new QueueBar(() => sessionLifecycle.queuedPrompts(), theme)
+  /**
+   * The agent this terminal drives, and the clock that repaints it while a turn
+   * is open.
+   *
+   * Built after the widgets that draw it and before the layout that mounts them,
+   * and every port is read at call time: the readers above exist before this
+   * owner does, and the session it drives moves under them.
+   */
+  const sessionLifecycle = createSessionLifecycle(ctx, {
+    initialSession: resolved.sessionId,
+    model: resolved.model,
+    provider: resolved.provider,
+    bell: resolved.bell,
+    presetFor: (id, resume, fork) => presetChoice.presetFor(id, resume, fork),
+    installModelChoice: agentCtx => modelChoice.setup(agentCtx),
+    mountPreset: async (agentCtx, preset) => {
+      await agentPresets?.mount(agentCtx, preset)
+    },
+    liveSession: id => liveSession(id),
+    installCompletion: () => promptInput.installCompletion(),
+    sessionEvents: id => sessionView.sessionEvents(id),
+    setViewed: id => sessionView.setViewed(id),
+    setPresentScope: scope => sessionView.setPresentScope(scope),
+    clearPresentScope: sessionView.clearPresentScope,
+    resetTranscript: () => sessionView.reset(),
+    replay: id => sessionView.replay(id),
+    fold: id => sessionView.fold(id),
+    notice: message => sessionView.notice(message),
+    render: () => tui.requestRender(),
+    promptMemorySessionOpened: () => promptMemory.sessionOpened(),
+    stagedSessionOpened: id => stagedTurns.sessionOpened(id),
+    turnSettled: () => stagedTurns.turnSettled(),
+    acceptCatalog: info => backgroundWork.acceptCatalog(info),
+    resetRoster: () => backgroundWork.resetRoster(),
+    refreshJobs: () => backgroundWork.refresh(),
+    herdr,
+    writeTerminal,
+    exiting: exited,
+    disposers,
+  })
   // A window that outlived the surface would repaint a screen that is gone.
   disposers.push(() => promptInput.disarmChord())
 
@@ -448,84 +454,6 @@ export function apply(ctx: Context, config: unknown): void {
   const liveSession = (id: SessionId): { snapshotEvents?: () => readonly ForkEvent[] } | undefined =>
     (ctx.get('sessions') as { get?: (id: SessionId) => { snapshotEvents?: () => readonly ForkEvent[] } | undefined } | undefined)?.get?.(id)
 
-  const openAgent = async (id: SessionId, resume: boolean, fork?: ForkInheritance): Promise<TuiAgent> => {
-    // Settled before the transcript is touched, so a refusal leaves neither a
-    // half-replayed session nor a half-composed agent behind.
-    const preset = await presetChoice.presetFor(id, resume, fork)
-    const handle = await startAgent(ctx, {
-      sessionId: id,
-      resume,
-      model: resolved.model,
-      provider: resolved.provider,
-      cwd: process.cwd(),
-      preset,
-      setup: async agentCtx => {
-        modelChoice.setup(agentCtx)
-        if (preset !== undefined) await agentPresets?.mount(agentCtx, preset)
-      },
-      ...(fork === undefined ? {} : { fork }),
-    })
-    sessionOpened = true
-    activeSession = id
-    sessionView.setViewed(id)
-    agent = handle
-    // A cursor counts the turns of one log; the session just opened has its own.
-    stagedTurns.sessionOpened(id)
-    promptMemory.sessionOpened()
-    // agent/status is emitted on transitions only, so a driver that was
-    // already running when this surface attached — a resume that wakes
-    // straight away — would otherwise stay unreported until it stops. The
-    // status is read once here and settled before the session identity, so the
-    // report that carries the new session id states the driver's real phase
-    // rather than the one the previous session left behind.
-    herdr.driver(handle.agent.status)
-    // The agent's own id is reported rather than the requested one: a resume can
-    // be answered by the session the log actually holds.
-    herdr.session({
-      id: String(handle.sessionId),
-      cwd: process.cwd(),
-      reason: sessionStartReason({ forked: fork !== undefined, resumed: resume }),
-    })
-    // A session with no history to fold still has to present its first live
-    // card through the right scope, so the scope is set before any event can.
-    sessionView.setPresentScope(handle.agent)
-    // Replayed only once the agent exists, because the fold reads every card
-    // through the scope the preset mounted; a fold before that scope existed
-    // degraded each replayed card to a bare generic row. The agent's loop is
-    // live by now, so the fold and the stream race over the same events; the
-    // durable sequence number is what keeps one event from landing twice.
-    if (resume) await sessionView.replay(id)
-    // A branch inherits the conversation the reader was already reading, so it
-    // opens on that history rather than on an empty screen.
-    if (fork !== undefined) await sessionView.fold(id)
-    disposers.push(() => {
-      void handle.dispose()
-    })
-    promptInput.installCompletion()
-    sessionView.notice(`session ${handle.sessionId}${resume ? ' (resumed)' : ''}`)
-    tui.requestRender()
-    // Returned so a caller that replaced the handle can send through the new
-    // one without a fresh read of state TypeScript can no longer widen.
-    return handle
-  }
-
-  /** Move the surface to another stored session without leaving the terminal. */
-  const switchSession = async (id: SessionId): Promise<void> => {
-    const previous = agent
-    agent = undefined
-    // Drop the outgoing scope before its agent is disposed, so no card folded
-    // during the transition can read a torn-down world.
-    sessionView.clearPresentScope()
-    turnOpen = false
-    // The outgoing turn's clock dies with its agent; leaving it set would time
-    // the session being joined by work it never ran.
-    turnStartedAt = undefined
-    sessionView.reset()
-    backgroundWork.resetRoster()
-    if (previous !== undefined) await previous.dispose()
-    await openAgent(id, true)
-  }
-
   /**
    * Show or choose the route the next step will use.
    *
@@ -541,13 +469,6 @@ export function apply(ctx: Context, config: unknown): void {
    * running and stop it.
    */
   /**
-   * Give this session a title.
-   *
-   * The title is what the resume picker shows and what every other surface
-   * displays, so a reader who has several sessions can name the one they are in
-   * without waiting for the harness to guess.
-   */
-  /**
    * Write what the reader can see to a file.
    *
    * The base's `/export` downloads the log through the browser, which a
@@ -555,7 +476,7 @@ export function apply(ctx: Context, config: unknown): void {
    * looking at — the thing worth pasting into a message.
    */
   const runExportCommand = (argument: string): void => {
-    const path = resolve(argument === '' ? defaultExportFile(String(activeSession)) : argument)
+    const path = resolve(argument === '' ? defaultExportFile(String(sessionLifecycle.activeSession())) : argument)
     try {
       writeFileSync(path, transcriptToText(sessionView.model.entries()), 'utf8')
       sessionView.notice(`transcript written to ${path}`)
@@ -563,84 +484,6 @@ export function apply(ctx: Context, config: unknown): void {
       sessionView.notice(`could not write ${path}: ${error instanceof Error ? error.message : String(error)}`)
     }
     tui.requestRender()
-  }
-
-  /**
-   * Branch this conversation and continue in the branch.
-   *
-   * The branch is a real session with its own identity that inherits a prefix
-   * of this one, so a reader can try something without spending the
-   * conversation they already had. The cut is anchored to the last completed
-   * turn, because half an exchange is not a state to hand a model.
-   */
-  /** Start a fresh session without leaving the terminal. */
-  const runNewCommand = (title: string): void => {
-    if (agent === undefined) {
-      sessionView.notice('the agent is still starting; try again in a moment')
-      tui.requestRender()
-      return
-    }
-    void (async () => {
-      const previous = agent
-      agent = undefined
-      turnOpen = false
-      turnStartedAt = undefined
-      sessionView.reset()
-      backgroundWork.resetRoster()
-      if (previous !== undefined) await previous.dispose()
-      await openAgent(SessionId(`tui-session-${randomUUID()}`), false)
-      if (title !== '') runRenameCommand(title)
-      sessionView.notice('started a new session')
-      tui.requestRender()
-    })().catch((error: unknown) => {
-      sessionView.notice(`could not start a session: ${error instanceof Error ? error.message : String(error)}`)
-      tui.requestRender()
-    })
-  }
-
-  /**
-   * Compose this session's agent again without leaving the conversation.
-   *
-   * A preset's standing mount only re-reads its composition file for an agent
-   * that joins after the file changed, so an edited preset, skill, or prompt
-   * file reaches a running session only by joining anew. The durable log is
-   * replayed afterwards, so the reader keeps the conversation they were reading.
-   */
-  const runReloadCommand = (): void => {
-    // A failed reload leaves no agent behind, so the command has to be usable
-    // again: the retry is what makes a broken composition file recoverable,
-    // while a surface that has opened no session yet is still starting.
-    if (agent === undefined && !sessionOpened) {
-      sessionView.notice('the agent is still starting; try again in a moment')
-      tui.requestRender()
-      return
-    }
-    const queued = queuedPrompts()
-    // Work the reader would lose is a decision, and the interrupt key already
-    // owns that decision: it stops the turn and hands queued words back to the
-    // bar. Reopening the session drops the inbox, so a reload that would take
-    // those words asks for the key instead of asking a question of its own.
-    if (turnOpen || queued.length > 0) {
-      sessionView.notice(
-        queued.length > 0
-          ? `${queued.length} queued ${queued.length === 1 ? 'prompt' : 'prompts'} would be dropped — ctrl+c hands them back to the bar, then /reload`
-          : 'a turn is running — ctrl+c interrupts it first (delivered text is kept), then /reload',
-      )
-      tui.requestRender()
-      return
-    }
-    const id = activeSession
-    void (async () => {
-      // The same transition a session switch takes, aimed at the session
-      // already open: dispose, then join its preset generation anew.
-      await switchSession(id)
-      sessionView.notice("reloaded this session's composition; the transcript was replayed")
-      tui.requestRender()
-    })().catch((error: unknown) => {
-      const reason = error instanceof Error ? error.message : String(error)
-      sessionView.notice(`could not reload: ${reason} — fix the composition and /reload again`)
-      tui.requestRender()
-    })
   }
 
   /** Show the todo list the agent has been keeping. */
@@ -667,64 +510,9 @@ export function apply(ctx: Context, config: unknown): void {
     tui.requestRender()
   }
 
-  const runForkCommand = (title: string): void => {
-    if (agent === undefined) {
-      sessionView.notice('the agent is still starting; try again in a moment')
-      tui.requestRender()
-      return
-    }
-    void (async () => {
-      const source = activeSession
-      const events = await sessionView.sessionEvents(source)
-      const point = forkPoint(events)
-      if (point === undefined) {
-        sessionView.notice('nothing to fork yet: this session has no completed turn')
-        tui.requestRender()
-        return
-      }
-      const childId = SessionId(`tui-session-${randomUUID()}`)
-      const previous = agent
-      agent = undefined
-      turnOpen = false
-      turnStartedAt = undefined
-      sessionView.reset()
-      backgroundWork.resetRoster()
-      if (previous !== undefined) await previous.dispose()
-      await openAgent(childId, false, { from: source, events: events.slice(0, point.inheritedEvents) })
-      if (title !== '') runRenameCommand(title)
-      sessionView.notice(`forked from ${source} at event ${point.boundarySeq} — ${point.inheritedEvents} inherited`)
-      tui.requestRender()
-    })().catch((error: unknown) => {
-      sessionView.notice(`could not fork: ${error instanceof Error ? error.message : String(error)}`)
-      tui.requestRender()
-    })
-  }
-
-  const runRenameCommand = (title: string): void => {
-    if (title === '') {
-      sessionView.notice('use /rename <title>; the title is what the resume picker shows')
-      tui.requestRender()
-      return
-    }
-    const session = (ctx.get('sessions') as { get?: (id: SessionId) => unknown } | undefined)?.get?.(activeSession)
-    const titles = ctx.get('sessionTitle') as { rename?: (session: unknown, title: string) => { readonly title?: string } } | undefined
-    if (session === undefined || typeof titles?.rename !== 'function') {
-      sessionView.notice('this profile has no session-title service, so this session cannot be renamed')
-      tui.requestRender()
-      return
-    }
-    try {
-      const accepted = titles.rename(session, title)
-      sessionView.notice(`session renamed to "${typeof accepted?.title === 'string' ? accepted.title : title}"`)
-    } catch (error) {
-      sessionView.notice(`could not rename: ${error instanceof Error ? error.message : String(error)}`)
-    }
-    tui.requestRender()
-  }
-
 
   const helpText = (): string => {
-    const current = agent?.agent
+    const current = sessionLifecycle.drivingAgent()?.agent
     const registered = current === undefined || registry() === undefined
       ? []
       : registry()?.list(current).map(command => `/${command.name}`) ?? []
@@ -740,7 +528,7 @@ export function apply(ctx: Context, config: unknown): void {
    * rather than a replay of the events this surface happened to see.
    */
   const planState = (): PlanModeState | undefined => {
-    const current = agent?.agent
+    const current = sessionLifecycle.drivingAgent()?.agent
     if (current === undefined) return undefined
     const presets = ctx.get('agentPresets') as ServiceFor | undefined
     return readPlanState({
@@ -752,7 +540,7 @@ export function apply(ctx: Context, config: unknown): void {
   const planActive = (): boolean => planSelectedActive(planState(), sessionView.workState().planMode)
 
   const runCommand = (name: string, line: string): void => {
-    const current = agent
+    const current = sessionLifecycle.drivingAgent()
     const commands = registry()
     if (current === undefined) {
       sessionView.notice('the agent is still starting; try again in a moment')
@@ -800,7 +588,7 @@ export function apply(ctx: Context, config: unknown): void {
         backgroundWork.runJobsCommand(submission.argument)
         return
       case 'rename':
-        runRenameCommand(submission.title)
+        sessionLifecycle.runRenameCommand(submission.title)
         return
       case 'export':
         runExportCommand(submission.path)
@@ -809,13 +597,13 @@ export function apply(ctx: Context, config: unknown): void {
         backgroundWork.runSubagentsCommand(submission.argument)
         return
       case 'fork':
-        runForkCommand(submission.title)
+        sessionLifecycle.runForkCommand(submission.title)
         return
       case 'new':
-        runNewCommand(submission.title)
+        sessionLifecycle.runNewCommand(submission.title)
         return
       case 'reload':
-        runReloadCommand()
+        sessionLifecycle.runReloadCommand()
         return
       case 'todo':
         runTodoCommand()
@@ -858,7 +646,7 @@ export function apply(ctx: Context, config: unknown): void {
         void stash?.apply(submission.selector)
         return
       case 'stash-list':
-        void stash?.list(String(activeSession))
+        void stash?.list(String(sessionLifecycle.activeSession()))
         return
       case 'stash-drop':
         void stash?.drop(submission.selector)
@@ -875,7 +663,7 @@ export function apply(ctx: Context, config: unknown): void {
           ? undefined
           : `context ${formatTokens(facts.contextTokens)}${facts.contextWindow === undefined ? '' : `/${formatTokens(facts.contextWindow)}`}`
         sessionView.notice([
-          `session ${activeSession}`,
+          `session ${sessionLifecycle.activeSession()}`,
           sessionView.viewingChild() ? undefined : `viewing ${sessionView.viewed()}`,
           facts.model === undefined
             ? undefined
@@ -906,7 +694,7 @@ export function apply(ctx: Context, config: unknown): void {
         tui.requestRender()
         return
       case 'resume':
-        void sessionPicker.chooseSession().then(picked => picked === undefined ? undefined : switchSession(picked)).catch((error: unknown) => {
+        void sessionPicker.chooseSession().then(picked => picked === undefined ? undefined : sessionLifecycle.switchSession(picked)).catch((error: unknown) => {
           sessionView.notice(`could not resume: ${error instanceof Error ? error.message : String(error)}`)
           tui.requestRender()
         })
@@ -919,78 +707,32 @@ export function apply(ctx: Context, config: unknown): void {
       case 'command':
         runCommand(submission.name, submission.line)
         return
-      case 'prompt':
-        if (agent === undefined) {
+      case 'prompt': {
+        const driven = sessionLifecycle.drivingAgent()
+        if (driven === undefined) {
           sessionView.notice('the agent is still starting; try again in a moment')
           tui.requestRender()
           return
         }
         // While a turn is running the human is steering it, not opening another.
-        if (turnOpen) agent.steer(submission.text)
+        if (sessionLifecycle.turnRunning()) driven.steer(submission.text)
         else {
           modelChoice.adoptDefault()
           void stagedTurns.send(submission.text)
         }
+        return
+      }
     }
   }
 
   promptInput.attachSubmit()
 
   disposers.push(ctx.on('session/event', (session, event) => {
-    // The surface state — activity, timer, title, bell, job board — belongs to
-    // the agent this terminal drives, even while a child is on screen.
-    if (session.id === activeSession) {
-      // The parent's catalog names the child; lifecycle events carry only its id.
-      if ((event as { type: string }).type === 'subagent/catalog') {
-        backgroundWork.acceptCatalog(event.data)
-        tui.requestRender()
-      }
-      if (event.type === 'turn/start') {
-        turnOpen = true
-        turnStartedAt = Date.now()
-        writeTerminal(windowTitle(process.cwd(), 'working'))
-      }
-      if (event.type === 'turn/end') {
-        const ranFor = turnStartedAt === undefined ? 0 : Date.now() - turnStartedAt
-        turnOpen = false
-        turnStartedAt = undefined
-        // An undo may be parked waiting for exactly this boundary.
-        stagedTurns.turnSettled()
-        writeTerminal(windowTitle(process.cwd(), 'ready'))
-        if (shouldRingBell({ bell: resolved.bell, ranForMs: ranFor, exiting: exited() })) writeTerminal(BELL)
-        // A job the turn started may have settled while the reader was watching
-        // something else, and nothing else refreshes a live board.
-        backgroundWork.refresh()
-      }
-      // A claim or a discard changes what is queued, and that belongs to this
-      // session even while the transcript shows a child's conversation.
-      if (event.type === 'agent/inbox/spliced') tui.requestRender()
-    }
+    sessionLifecycle.observe(session, event)
     sessionView.observe(session.id, event)
   }))
 
-  /**
-   * Subagent lifecycle arrives as a service event rather than a session event,
-   * so it is decoration in the transcript: the parent's durable catalog
-   * carries the child's task. The name is cast so a rename in the
-   * harness cannot break compilation of this surface.
-   */
-  const listenFor = (name: string, handler: (...args: readonly unknown[]) => void): (() => void) =>
-    (ctx.on as unknown as (event: string, listener: (...args: readonly unknown[]) => void) => () => void)(name, handler)
-
-  // Herdr hears the driver rather than each turn: a run that chains turns
-  // through a pending inbox is one stretch of work, and a turn boundary inside
-  // it would read as done between two turns of an agent that is still working.
-  // The turn listeners above keep the title and the bell, which are about the
-  // reader's own conversation.
-  disposers.push(listenFor('agent/status', payload => {
-    // Read against the driven session at delivery time: the reader can switch
-    // sessions between two transitions, and the row must follow the one this
-    // terminal now drives.
-    const status = driverReportFor(payload, activeSession)
-    if (status === undefined) return
-    herdr.driver(status)
-  }))
+  disposers.push(...sessionLifecycle.driverListeners())
 
   disposers.push(...backgroundWork.subagentListeners())
 
@@ -1021,7 +763,7 @@ export function apply(ctx: Context, config: unknown): void {
    */
   const boot = async (): Promise<void> => {
     if (!resolved.resumePicker) {
-      await openAgent(resolved.sessionId, resolved.resume)
+      await sessionLifecycle.openAgent(resolved.sessionId, resolved.resume)
       return
     }
     const picked = await sessionPicker.chooseSession()
@@ -1029,7 +771,7 @@ export function apply(ctx: Context, config: unknown): void {
       requestExit(0)
       return
     }
-    await openAgent(picked, true)
+    await sessionLifecycle.openAgent(picked, true)
   }
 
   /**
