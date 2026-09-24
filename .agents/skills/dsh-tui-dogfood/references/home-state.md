@@ -1,8 +1,7 @@
 # What a ~/.dsh home holds, and what a dogfood run touches
 
 Read this when a dogfood run behaves differently from the developer's own
-surface. It is the operational detail behind
-[../SKILL.md](../SKILL.md) and [DEVELOPMENT.md](../../../DEVELOPMENT.md).
+profile. It gives the operational detail behind [../SKILL.md](../SKILL.md).
 
 ## The entries
 
@@ -31,14 +30,15 @@ their real state.
 
 ## What the dogfood clone changes
 
-One line: `@sagmans/dsh-tui` in `profiles/<name>/package.json` is repointed at
-the checkout under test (`dsh plugin --profile <name> add <checkout>`), and the
-pnpm lockfile follows. Every other bundle, the whole patch overlay, and every
-home entry are copies of the real ones.
+The checkout package name selects its bundle in `profiles/<name>/package.json`.
+The generic helper adds it once if absent, repoints only its dependency, and
+rebuilds cloned local symlinks. It uses `dsh plugin add` only if the profile is
+missing after `dsh --help`, and does not modify the lockfile of an existing
+profile. Other bundles and the profile patch remain copied from the source home.
 
 `sessions/` is the only entry left out by default: it is the bulk of a home
 (190M of 200M in a busy one) and a test drive rarely needs it. `--with-sessions`
-copies it, which is what makes `--resume` reach the developer's history.
+copies it when present, which makes `--resume` reach the developer's history.
 
 ## Failure modes worth knowing
 
@@ -46,9 +46,12 @@ copies it, which is what makes `--resume` reach the developer's history.
   does not resolve and still exits 0; the profile then composes the base alone and
   the surface waits with no output. Check
   `node -p "require('<home>/profiles/<name>/package.json').dsh.profile.bundles"`.
-- **The clone is a copy, not a link.** Editing shared state inside it (a theme, a
-  setting) changes nothing in the real home; re-seed with `--reseed` when the
-  real home has moved on.
+- **Mutable home state must remain inside the clone.** External symlinks in
+  settings, storages, or sessions and multiply linked mutable files stop the run.
+  Package links in `profiles/node_modules`, `profiles/*/node_modules`, and
+  `profiles/*/.dsh-module-fallback/node_modules` can point to global installs or
+  external checkouts, but not into the source home. Writes through permitted
+  package links are not isolated. Re-seed with `--reseed` when the source changes.
 - **The clone keeps a copy of the credentials.** Create it in a scratch
   directory, keep it `700`, and `--clean` it when done.
 - **The launcher decides the harness, not the profile.** `pnpm dsh` runs the
@@ -61,10 +64,10 @@ copies it, which is what makes `--resume` reach the developer's history.
 ## Cleanup
 
 ```sh
-./scripts/dogfood/run-tui-from-worktree.sh --status      # which clone, which target
-./scripts/dogfood/run-tui-from-worktree.sh --clean       # removes it (marker-guarded)
+~/.agents/skills/dsh-tui-dogfood/scripts/run-plugin-from-worktree.sh --status      # which clone, which target
+~/.agents/skills/dsh-tui-dogfood/scripts/run-plugin-from-worktree.sh --clean       # removes it (marker-guarded)
 ```
 
-The default clone lives at `${TMPDIR:-/tmp}/dsh-dogfood/<worktree>` and survives
-as long as the temp directory does. A hand-made scratch home is `rm -rf`-able
-once its session has been exported, if it matters.
+The default clone lives at `${TMPDIR:-/tmp}/dsh-dogfood/<worktree>-<checkout-id>`
+and survives until `--clean` removes it. Cleanup validates the scratch-home
+marker against its canonical home, source, checkout, and profile.
