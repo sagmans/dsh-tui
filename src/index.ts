@@ -24,14 +24,6 @@ import { hiddenTail, NO_UNDO, redoStep, resetUndo, turnsOf, UNDO_TURN_SETTLE_MS,
 import { PROFILE_NAME, resumeHint } from './identity.ts'
 import { createStatusFacts } from './agent/status.ts'
 import { ModelSwitch, createModelCatalog, parseModelArgument, readModelRouteKey, type ModelChoice, type ModelRoute } from './agent/model.ts'
-import { JOB_READ_LINES, createJobDirectory, describeJobs, parseJobsArgument, type JobSummary } from './jobs.ts'
-import {
-  SubagentRoster,
-  createSubagentControl,
-  describeSubagents,
-  parseSubagentsArgument,
-  resolveRun,
-} from './subagents.ts'
 import { describeMissingOptional, describeMissingRequired, probeComposition } from './compat/probe.ts'
 import type { ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
 import type { AskUserQuestionAnswer } from '@deepseek-ai/dsh-user-questions'
@@ -76,6 +68,7 @@ import { DEFAULT_THEME, builtinNames, builtinThemesDir, ensureThemesHome, export
 import { KEYMAP_LAYERS, keymapLayer } from './keys-command.ts'
 import { resetSequence } from './theme-resolver.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
+import { createBackgroundWork } from './surface/background-work.ts'
 import { formatTokens } from './tokens.ts'
 import { TranscriptModel } from './transcript.ts'
 import { WorkFold, describeTodos, planSelectedActive, planToggleLine, readPlanState, type PlanModeState } from './work.ts'
@@ -135,11 +128,6 @@ const STATUS_TICK_MS = 1000
 
 /** Reverse video for the cell the cursor occupies, so a ghost keeps the cursor visible. */
 const GHOST_CURSOR_PREFIX = '\u001b[7m'
-
-
-function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined
-}
 
 /** The preset registry, asked for a service the agent's own composition holds. */
 interface ServiceFor {
@@ -478,10 +466,16 @@ export function apply(ctx: Context, config: unknown): void {
    */
   const seatMode = (): string | undefined => seat ?? agentPresets?.defaultId
   const catalog = createModelCatalog(ctx)
-  const jobDirectory = createJobDirectory(ctx)
-  let jobs: readonly JobSummary[] = []
-  const roster = new SubagentRoster()
-  const subagentControl = createSubagentControl(ctx)
+  const backgroundWork = createBackgroundWork(ctx, {
+    drivingAgent: () => agent,
+    activeSession: () => activeSession,
+    notice: text => model.notice(text),
+    marker: text => model.marker(text),
+    render: () => tui.requestRender(),
+    navigate: id => {
+      void showSession(SessionId(id))
+    },
+  })
   const markdown = new MarkdownRenderer(theme.markdown, createMermaidTransform({ theme, mode: () => mermaidMode }))
   const restore = createRestoreRegistry()
   const terminal = new ProcessTerminal()
@@ -604,12 +598,6 @@ export function apply(ctx: Context, config: unknown): void {
   let exited = false
   /** Whether a session was really opened, which is what an exit hint can name. */
   let sessionOpened = false
-  /** Re-read the job board; it is live state, so nothing else can fold it. */
-  const refreshJobs = (): void => {
-    jobs = agent === undefined || jobDirectory === undefined ? [] : jobDirectory.list(agent.agent)
-    tui.requestRender()
-  }
-
   // The bank is built once the picker exists to answer for it, so the status
   // source is late-bound: the footer must not read a half-constructed stash.
   let stash: PromptStash | undefined
@@ -627,7 +615,7 @@ export function apply(ctx: Context, config: unknown): void {
     stash: () => stash?.entryCount,
   })
   const statusBar = new StatusBar(statusFacts, theme)
-  const dock = new WorkDock(() => work.state(), theme, () => jobs, () => roster.list(), undefined, id => {
+  const dock = new WorkDock(() => work.state(), theme, () => backgroundWork.jobs(), () => backgroundWork.roster.list(), undefined, id => {
     void showSession(SessionId(id))
   })
   // The queue is read from the agent this terminal drives rather than from the
@@ -1547,7 +1535,7 @@ export function apply(ctx: Context, config: unknown): void {
       turnStartedAt = undefined
       presentScope = undefined
       resetView()
-      roster.reset()
+      backgroundWork.resetRoster()
       await previous.dispose()
       const opened = await openAgent(childId, false, seed.length === 0 ? undefined : { from: source, events: seed })
       model.notice(`continuing in a new branch · ${source} keeps the undone turns`)
@@ -1677,7 +1665,7 @@ export function apply(ctx: Context, config: unknown): void {
     // the session being joined by work it never ran.
     turnStartedAt = undefined
     resetView()
-    roster.reset()
+    backgroundWork.resetRoster()
     if (previous !== undefined) await previous.dispose()
     await openAgent(id, true)
   }
@@ -1696,87 +1684,6 @@ export function apply(ctx: Context, config: unknown): void {
    * invisible: the board is the only place a reader can see what is still
    * running and stop it.
    */
-  /**
-   * List or stop the delegations this session started.
-   *
-   * A child runs in the same process as an ordinary agent, so a stop is the
-   * cancel a reader's Ctrl+C sends to the parent; nothing here reaches into the
-   * child's own session, which keeps its own transcript either way.
-   */
-  const runSubagentsCommand = (argument: string): void => {
-    const command = parseSubagentsArgument(argument)
-    switch (command.kind) {
-      case 'list':
-        model.notice(describeSubagents(roster.list(), Date.now()))
-        tui.requestRender()
-        return
-      case 'open': {
-        const run = resolveRun(roster.list(), command.id)
-        if (run === undefined) {
-          model.notice(`${command.id}: no single child matches; /subagents lists them`)
-          tui.requestRender()
-          return
-        }
-        void showSession(SessionId(run.id))
-        return
-      }
-      case 'kill': {
-        const stopped = subagentControl?.stop(command.id) ?? false
-        model.notice(stopped
-          ? `${command.id}: stop requested`
-          : `${command.id}: no live child with that id`)
-        tui.requestRender()
-        return
-      }
-      case 'invalid':
-        model.notice(`/subagents: ${command.reason}`)
-        tui.requestRender()
-        return
-    }
-  }
-
-  const runJobsCommand = (argument: string): void => {
-    if (jobDirectory === undefined) {
-      model.notice('this profile has no job registry, so there is nothing to list')
-      tui.requestRender()
-      return
-    }
-    if (agent === undefined) {
-      model.notice('the agent is still starting; try again in a moment')
-      tui.requestRender()
-      return
-    }
-    const command = parseJobsArgument(argument)
-    switch (command.kind) {
-      case 'list':
-        refreshJobs()
-        model.notice(describeJobs(jobs, Date.now()))
-        tui.requestRender()
-        return
-      case 'read': {
-        const result = jobDirectory.read(agent.agent, command.id)
-        const text = result?.text.trim() ?? ''
-        model.notice(text === ''
-          ? `${command.id}: no output yet`
-          : `${command.id} output\n${text.split('\n').slice(-JOB_READ_LINES).join('\n')}`)
-        refreshJobs()
-        return
-      }
-      case 'kill': {
-        const outcome = jobDirectory.kill(agent.agent, command.id)
-        model.notice(outcome === undefined
-          ? `${command.id}: no such job`
-          : outcome === 'requested' ? `${command.id}: stop requested` : `${command.id} had already finished`)
-        refreshJobs()
-        return
-      }
-      case 'invalid':
-        model.notice(`/jobs: ${command.reason}`)
-        tui.requestRender()
-        return
-    }
-  }
-
   /**
    * Give this session a title.
    *
@@ -1823,7 +1730,7 @@ export function apply(ctx: Context, config: unknown): void {
       turnOpen = false
       turnStartedAt = undefined
       resetView()
-      roster.reset()
+      backgroundWork.resetRoster()
       if (previous !== undefined) await previous.dispose()
       await openAgent(SessionId(`tui-session-${randomUUID()}`), false)
       if (title !== '') runRenameCommand(title)
@@ -1925,7 +1832,7 @@ export function apply(ctx: Context, config: unknown): void {
       turnOpen = false
       turnStartedAt = undefined
       resetView()
-      roster.reset()
+      backgroundWork.resetRoster()
       if (previous !== undefined) await previous.dispose()
       await openAgent(childId, false, { from: source, events: events.slice(0, point.inheritedEvents) })
       if (title !== '') runRenameCommand(title)
@@ -2378,7 +2285,7 @@ export function apply(ctx: Context, config: unknown): void {
         runPresetCommand(submission.argument)
         return
       case 'jobs':
-        runJobsCommand(submission.argument)
+        backgroundWork.runJobsCommand(submission.argument)
         return
       case 'rename':
         runRenameCommand(submission.title)
@@ -2387,7 +2294,7 @@ export function apply(ctx: Context, config: unknown): void {
         runExportCommand(submission.path)
         return
       case 'subagents':
-        runSubagentsCommand(submission.argument)
+        backgroundWork.runSubagentsCommand(submission.argument)
         return
       case 'fork':
         runForkCommand(submission.title)
@@ -2588,7 +2495,7 @@ export function apply(ctx: Context, config: unknown): void {
     if (session.id === activeSession) {
       // The parent's catalog names the child; lifecycle events carry only its id.
       if ((event as { type: string }).type === 'subagent/catalog') {
-        roster.catalog(event.data)
+        backgroundWork.acceptCatalog(event.data)
         tui.requestRender()
       }
       if (event.type === 'turn/start') {
@@ -2606,7 +2513,7 @@ export function apply(ctx: Context, config: unknown): void {
         if (shouldRingBell({ bell: resolved.bell, ranForMs: ranFor, exiting: exited })) writeTerminal(BELL)
         // A job the turn started may have settled while the reader was watching
         // something else, and nothing else refreshes a live board.
-        refreshJobs()
+        backgroundWork.refresh()
       }
       // A claim or a discard changes what is queued, and that belongs to this
       // session even while the transcript shows a child's conversation.
@@ -2641,23 +2548,7 @@ export function apply(ctx: Context, config: unknown): void {
     herdr.driver(status)
   }))
 
-  disposers.push(listenFor('subagent/start', info => {
-    roster.start(info)
-    const record = asRecord(info)
-    const provider = typeof record?.provider === 'string' ? record.provider : 'subagent'
-    const id = typeof record?.id === 'string' ? record.id : ''
-    model.marker(`subagent ${provider} started${id === '' ? '' : ` · ${id}`}`)
-    tui.requestRender()
-  }))
-
-  disposers.push(listenFor('subagent/end', info => {
-    roster.end(info)
-    const record = asRecord(info)
-    const provider = typeof record?.provider === 'string' ? record.provider : 'subagent'
-    const stop = typeof record?.stopReason === 'string' ? record.stopReason : undefined
-    model.marker(`subagent ${provider} finished${stop === undefined ? '' : ` · ${stop}`}`)
-    tui.requestRender()
-  }))
+  disposers.push(...backgroundWork.subagentListeners())
 
   // Answering these two waterfalls is what makes a terminal surface usable at
   // all: without an answerer every gated tool fails closed, and the model's
@@ -2718,10 +2609,7 @@ export function apply(ctx: Context, config: unknown): void {
   disposers.push(ctx.on('commands/change', () => installCompletion()))
 
   // The board is live state: watch it directly rather than folding events.
-  disposers.push(jobDirectory?.watch(owner => {
-    if (owner !== undefined && (owner as { id?: string }).id !== activeSession) return
-    refreshJobs()
-  }) ?? (() => {}))
+  disposers.push(backgroundWork.watchJobs())
 
   // The transcript belongs to the session on screen, while status, the bell,
   // and the queue stay with the agent this terminal drives. A live delta or a
