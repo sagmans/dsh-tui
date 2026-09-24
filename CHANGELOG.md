@@ -10,6 +10,9 @@ breaking change, and a patch carries only fixes.
 
 ### Changed
 
+- Terminal text now reads its escape grammar, its modelled style state, and its
+  two public policies from three modules. Recognition is the trust boundary the
+  drawing paths depend on, so it no longer changes beside row layout.
 - The token contract, the shipped appearance, and the resolution algorithm each
   live in their own module. Appearance defaults and colour resolution change for
   reasons the token vocabulary does not, and the coverage sweep now fails beside
