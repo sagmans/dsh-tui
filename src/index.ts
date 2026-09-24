@@ -2579,6 +2579,11 @@ export function apply(ctx: Context, config: unknown): void {
     // The surface state — activity, timer, title, bell, job board — belongs to
     // the agent this terminal drives, even while a child is on screen.
     if (session.id === activeSession) {
+      // The parent's catalog names the child; lifecycle events carry only its id.
+      if ((event as { type: string }).type === 'subagent/catalog') {
+        roster.catalog(event.data)
+        tui.requestRender()
+      }
       if (event.type === 'turn/start') {
         turnOpen = true
         turnStartedAt = Date.now()
@@ -2608,8 +2613,8 @@ export function apply(ctx: Context, config: unknown): void {
 
   /**
    * Subagent lifecycle arrives as a service event rather than a session event,
-   * so it is decoration in the transcript: the durable record of a delegation
-   * is the tool call that asked for it. The name is cast so a rename in the
+   * so it is decoration in the transcript: the parent's durable catalog
+   * carries the child's task. The name is cast so a rename in the
    * harness cannot break compilation of this surface.
    */
   const listenFor = (name: string, handler: (...args: readonly unknown[]) => void): (() => void) =>

@@ -45,6 +45,40 @@ describe('SubagentRoster', () => {
     expect(roster.list()[0]).toMatchObject({ runId: 'run-9', id: 'child-9', provider: 'fork', status: 'completed' })
   })
 
+  it('shows a cataloged task on a child that starts later', () => {
+    const roster = new SubagentRoster(() => 1_000)
+    roster.catalog({ childId: START.id, label: 'Inspect the dock renderer' })
+    roster.start(START)
+    expect(describeSubagent(roster.list()[0]!, 2_000)).toContain('Inspect the dock renderer')
+  })
+
+  it('updates a running child when its task arrives later', () => {
+    const roster = new SubagentRoster(() => 1_000)
+    roster.start(START)
+    roster.catalog({ childId: START.id, label: 'Write regression tests' })
+    expect(describeSubagent(roster.list()[0]!, 2_000)).toContain('Write regression tests')
+  })
+
+  it('keeps labels on settled children and clears them for a new session', () => {
+    const roster = new SubagentRoster(() => 1_000)
+    roster.catalog({ childId: START.id, label: 'Review session events' })
+    roster.start(START)
+    roster.end({ ...START, stopReason: 'completed' })
+    expect(describeSubagent(roster.list()[0]!, 2_000)).toContain('Review session events')
+    roster.reset()
+    roster.start(START)
+    expect(describeSubagent(roster.list()[0]!, 2_000)).not.toContain('Review session events')
+  })
+
+  it('limits tasks to ten words and removes terminal controls', () => {
+    const roster = new SubagentRoster(() => 1_000)
+    roster.catalog({ childId: START.id, label: 'one two three four five six seven eight nine ten eleven\n\x1b[31m' })
+    roster.start(START)
+    expect(describeSubagent(roster.list()[0]!, 2_000)).toContain('one two three four five six seven eight nine ten · spawn · running')
+    expect(describeSubagent(roster.list()[0]!, 2_000)).not.toContain('eleven')
+    expect(describeSubagent(roster.list()[0]!, 2_000)).not.toContain('\x1b')
+  })
+
   it('ignores a payload it cannot identify', () => {
     const roster = new SubagentRoster()
     roster.start({ provider: 'spawn' })

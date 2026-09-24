@@ -2,6 +2,7 @@ import { stripTerminalSequences, visibleWidth } from '@earendil-works/pi-tui'
 import { describe, expect, it } from 'vitest'
 import { createTheme } from '@/theme.ts'
 import { DEFAULT_PALETTE } from '@/theme-tokens.ts'
+import { SubagentRoster } from '@/subagents.ts'
 import { DOCK_TODO_LIMIT, WorkDock } from '@/ui/dock.ts'
 import type { WorkState } from '@/work.ts'
 
@@ -102,6 +103,14 @@ describe('WorkDock', () => {
     expect(lines).toHaveLength(2)
     expect(lines[0]).toBe(rule('⚇ subagents · 1 running', 80))
     expect(lines[1]).toContain('▸ child-ab · spawn · running')
+  })
+
+  it('shows the task from a parent catalog on the running child row', () => {
+    const roster = new SubagentRoster(() => 1_000)
+    roster.catalog({ childId: 'child-abcdef', label: 'Review terminal rendering' })
+    roster.start({ runId: 'r1', provider: 'spawn', id: 'child-abcdef' })
+    const lines = new WorkDock(() => EMPTY, theme, () => [], () => roster.list(), () => 2_000).render(80)
+    expect(stripTerminalSequences(lines[1]!)).toContain('child-ab · Review terminal rendering · spawn · running 1s')
   })
 
   it('drops the subagent board once every delegation has settled', () => {
