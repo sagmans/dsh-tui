@@ -1,6 +1,6 @@
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { describe, expect, it } from 'vitest'
-import { FoldCursor } from '@/fold-cursor.ts'
+import { FoldCursor, ViewGeneration, replayIfCurrent } from '@/fold-cursor.ts'
 
 /** A sequence number only means something inside the session that issued it. */
 const SESSION = 'session-a' as SessionId
@@ -59,5 +59,37 @@ describe('FoldCursor', () => {
     const cursor = new FoldCursor()
     cursor.accept(SESSION, { type: 'notice', data: {} })
     expect(cursor.accept(SESSION, { type: 'turn/start', data: {}, seq: 0 })).toBe(true)
+  })
+})
+
+describe('replayIfCurrent', () => {
+  it('discards delayed child logs when another child or the parent view wins', async () => {
+    const pending: ((events: readonly string[]) => void)[] = []
+    const read = (): Promise<readonly string[]> => new Promise(resolve => { pending.push(resolve) })
+    const painted: string[] = []
+    let viewed = 'first'
+    const first = replayIfCurrent(read, () => viewed === 'first', event => { painted.push(event) })
+    viewed = 'second'
+    const second = replayIfCurrent(read, () => viewed === 'second', event => { painted.push(event) })
+    viewed = 'parent'
+    const back = replayIfCurrent(read, () => viewed === 'parent', event => { painted.push(event) })
+    pending[2]?.(['parent message'])
+    expect(await back).toBe(1)
+    pending[0]?.(['first child message'])
+    pending[1]?.(['second child message'])
+    expect(await Promise.all([first, second])).toEqual([0, 0])
+    expect(painted).toEqual(['parent message'])
+  })
+
+  it('discards a child read when a driven session resets before opening', async () => {
+    const views = new ViewGeneration()
+    let resolveRead: ((events: readonly string[]) => void) | undefined
+    const read = (): Promise<readonly string[]> => new Promise(resolve => { resolveRead = resolve })
+    const painted: string[] = []
+    const child = replayIfCurrent(read, views.begin(), event => { painted.push(event) })
+    views.begin()
+    resolveRead?.(['stale child message'])
+    expect(await child).toBe(0)
+    expect(painted).toEqual([])
   })
 })

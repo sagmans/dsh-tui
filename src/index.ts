@@ -53,7 +53,7 @@ import {
 } from './input/keymap.ts'
 import { defaultKeymap, hintKeys, surfaceBindings, type ActionLayer, type Keymap, type SurfaceActionId } from './input/actions.ts'
 import { resolveConfig } from './config.ts'
-import { FoldCursor } from './fold-cursor.ts'
+import { FoldCursor, ViewGeneration, replayIfCurrent } from './fold-cursor.ts'
 import { createRestoreRegistry } from './terminal/restore.ts'
 import { ExternalEditor } from './terminal/external-editor.ts'
 import { installSignalRestore } from './terminal/signals.ts'
@@ -528,6 +528,8 @@ export function apply(ctx: Context, config: unknown): void {
   let activeSession = resolved.sessionId
   /** The session the transcript is showing, which can be one of its children. */
   let viewedSession = resolved.sessionId
+  /** Only the newest transcript switch may finish an asynchronous stored-log read. */
+  const viewGeneration = new ViewGeneration()
   /** What the surface needs of a list to drive it, wherever that list is drawn. */
   interface Picker {
     handleKey(data: string): PickerAction | undefined
@@ -1278,6 +1280,14 @@ export function apply(ctx: Context, config: unknown): void {
    */
   const foldCursor = new FoldCursor()
 
+  /** Every transcript reset revokes reads started for the previous view. */
+  const resetView = (): (() => boolean) => {
+    const current = viewGeneration.begin()
+    model.reset()
+    work.reset()
+    return current
+  }
+
   /**
    * Fold one durable event into the view, unless a staged cursor hides it.
    *
@@ -1289,7 +1299,7 @@ export function apply(ctx: Context, config: unknown): void {
     if (foldCursor.accept(session, event)) applyEvent(event)
   }
 
-  const foldHistory = async (id: SessionId, through?: number): Promise<number> => {
+  const foldHistory = async (id: SessionId, through?: number, current: () => boolean = () => true): Promise<number> => {
     // Resolved before the fold so every card reads its tool through the scope
     // that actually registered it; a stored session nobody runs has none.
     presentScope = ctx.agents?.get(id)
@@ -1306,9 +1316,7 @@ export function apply(ctx: Context, config: unknown): void {
     // drives, and a stored log has no cursor to hide a suffix from.
     const history = createSessionHistory(ctx)
     if (history === undefined) return 0
-    const events = await history.read(id)
-    for (const event of events) applyDurable(id, event)
-    return events.length
+    return replayIfCurrent(() => history.read(id), current, event => applyDurable(id, event))
   }
 
   const replayHistory = async (id: SessionId): Promise<void> => {
@@ -1329,14 +1337,15 @@ export function apply(ctx: Context, config: unknown): void {
    */
   const showSession = async (id: SessionId): Promise<void> => {
     const previous = viewedSession
-    model.reset()
-    work.reset()
+    const current = resetView()
     viewedSession = id
     try {
-      await foldHistory(id)
+      await foldHistory(id, undefined, current)
     } catch (error) {
+      if (!current()) return
       model.notice(`could not read that session: ${error instanceof Error ? error.message : String(error)}`)
     }
+    if (!current()) return
     const returned = id === activeSession && previous !== activeSession
     model.marker(returned ? 'back to the session this terminal drives' : `viewing ${id}`)
     tui.requestRender()
@@ -1365,8 +1374,7 @@ export function apply(ctx: Context, config: unknown): void {
 
   /** Fold the transcript through the staged cut, or the whole log at the tip. */
   const redrawStaged = async (): Promise<void> => {
-    model.reset()
-    work.reset()
+    resetView()
     await foldHistory(activeSession, stagedCut)
   }
 
@@ -1536,8 +1544,7 @@ export function apply(ctx: Context, config: unknown): void {
       turnOpen = false
       turnStartedAt = undefined
       presentScope = undefined
-      model.reset()
-      work.reset()
+      resetView()
       roster.reset()
       await previous.dispose()
       const opened = await openAgent(childId, false, seed.length === 0 ? undefined : { from: source, events: seed })
@@ -1667,8 +1674,7 @@ export function apply(ctx: Context, config: unknown): void {
     // The outgoing turn's clock dies with its agent; leaving it set would time
     // the session being joined by work it never ran.
     turnStartedAt = undefined
-    model.reset()
-    work.reset()
+    resetView()
     roster.reset()
     if (previous !== undefined) await previous.dispose()
     await openAgent(id, true)
@@ -1814,8 +1820,7 @@ export function apply(ctx: Context, config: unknown): void {
       agent = undefined
       turnOpen = false
       turnStartedAt = undefined
-      model.reset()
-      work.reset()
+      resetView()
       roster.reset()
       if (previous !== undefined) await previous.dispose()
       await openAgent(SessionId(`tui-session-${randomUUID()}`), false)
@@ -1917,8 +1922,7 @@ export function apply(ctx: Context, config: unknown): void {
       agent = undefined
       turnOpen = false
       turnStartedAt = undefined
-      model.reset()
-      work.reset()
+      resetView()
       roster.reset()
       if (previous !== undefined) await previous.dispose()
       await openAgent(childId, false, { from: source, events: events.slice(0, point.inheritedEvents) })
@@ -2524,8 +2528,7 @@ export function apply(ctx: Context, config: unknown): void {
         return
       }
       case 'clear':
-        model.reset()
-        work.reset()
+        resetView()
         tui.requestRender()
         return
       case 'undo':

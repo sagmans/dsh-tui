@@ -15,6 +15,29 @@ import type { ForkEvent } from './agent/fork.ts'
  * conversation against the old one's numbering and drop all of it.
  */
 
+/** A late stored log must not repaint a transcript the reader already left. */
+export async function replayIfCurrent<Event>(
+  read: () => Promise<readonly Event[]>,
+  current: () => boolean,
+  apply: (event: Event) => void,
+): Promise<number> {
+  const events = await read()
+  if (!current()) return 0
+  for (const event of events) apply(event)
+  return events.length
+}
+
+/** An older asynchronous fold must lose ownership when the view resets. */
+export class ViewGeneration {
+  private generation = 0
+
+  /** An old view cannot regain ownership if its read finishes out of order. */
+  begin(): () => boolean {
+    const generation = ++this.generation
+    return () => generation === this.generation
+  }
+}
+
 /** Consumes durable events in sequence order, each exactly once per session. */
 export class FoldCursor {
   private session: SessionId | undefined
