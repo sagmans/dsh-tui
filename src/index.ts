@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { type Component, type KeyId, ProcessTerminal, ScrollView, isKeyRelease, matchesKey, type CombinedAutocompleteProvider } from '@earendil-works/pi-tui'
+import { type Component, type KeyId, ScrollView, isKeyRelease, matchesKey, type CombinedAutocompleteProvider } from '@earendil-works/pi-tui'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 // Type-only: the command registry publishes the change event this surface
@@ -13,7 +13,6 @@ import { createPresetRoster, parsePresetArgument, type PresetRoster, type Preset
 import { createToolPresenter } from './agent/present.ts'
 import { forkPoint, type ForkEvent } from './agent/fork.ts'
 import { hiddenTail, NO_UNDO, redoStep, resetUndo, turnsOf, UNDO_TURN_SETTLE_MS, undoStep, type TurnPoint, type UndoState } from './agent/undo.ts'
-import { PROFILE_NAME, resumeHint } from './identity.ts'
 import { createStatusFacts } from './agent/status.ts'
 import { ModelSwitch, createModelCatalog, parseModelArgument, readModelRouteKey, type ModelChoice, type ModelRoute } from './agent/model.ts'
 import { describeMissingOptional, describeMissingRequired, probeComposition } from './compat/probe.ts'
@@ -39,15 +38,10 @@ import { defaultKeymap, hintKeys, surfaceBindings, type Keymap } from './input/a
 import { type ActionLayer, type SurfaceActionId } from './input/action-catalog.ts'
 import { resolveConfig } from './config.ts'
 import { FoldCursor, ViewGeneration, replayIfCurrent } from './fold-cursor.ts'
-import { createRestoreRegistry } from './terminal/restore.ts'
-import { ExternalEditor } from './terminal/external-editor.ts'
-import { installSignalRestore } from './terminal/signals.ts'
-import { WarningSafeTui } from './terminal/warning-screen.ts'
 import { BELL, shouldRingBell } from './terminal/bell.ts'
 import { clipboardSequence } from './terminal/clipboard.ts'
-import { CLEAR_TITLE, windowTitle } from './terminal/title.ts'
+import { windowTitle } from './terminal/title.ts'
 import { driverReportFor, sessionStartReason } from './herdr/state.ts'
-import { createHerdrReporter } from './herdr/reporter.ts'
 import { defaultExportFile, transcriptToText } from './export.ts'
 import { createTheme, forwardEditorTheme, forwardMarkdownTheme, type TuiTheme } from './theme.ts'
 import { detectColourMode, type ColourMode } from './theme-capability.ts'
@@ -61,10 +55,10 @@ import { SessionId } from '@deepseek-ai/dsh-session'
 import { createBackgroundWork } from './surface/background-work.ts'
 import { createPromptMemory } from './surface/prompt-memory.ts'
 import { createSessionPicker } from './surface/session-picker.ts'
+import { createTerminalLifecycle } from './surface/terminal-lifecycle.ts'
 import { formatTokens } from './tokens.ts'
 import { TranscriptModel } from './transcript.ts'
 import { WorkFold, describeTodos, planSelectedActive, planToggleLine, readPlanState, type PlanModeState } from './work.ts'
-import { cleanCopied } from './ui/copy.ts'
 import { WorkDock } from './ui/dock.ts'
 import { GateInputBar } from './ui/gate-input.ts'
 import { surfaceLayout } from './ui/layout.ts'
@@ -419,7 +413,7 @@ export function apply(ctx: Context, config: unknown): void {
     // would become somebody's answer instead of a parked prompt. An editor
     // holding the draft in another program owns it just as firmly: a pop that
     // landed then would be deleted from the bank and then overwritten.
-    editorAvailable: () => !promptBar.isBorrowed() && !handedOver,
+    editorAvailable: () => !promptBar.isBorrowed() && !terminalLifecycle.handedOver(),
     activeSession: () => activeSession,
     // The keyboard's lifetime is the modal owner's, so the list is handed over
     // rather than driven here.
@@ -461,44 +455,21 @@ export function apply(ctx: Context, config: unknown): void {
     },
   })
   const markdown = new MarkdownRenderer(theme.markdown, createMermaidTransform({ theme, mode: () => mermaidMode }))
-  const restore = createRestoreRegistry()
-  const terminal = new ProcessTerminal()
-  const tui = new WarningSafeTui(terminal, { copySelection })
-  // A frame that cannot be drawn leaves the last good screen up, so the failure
-  // has to reach the transcript: otherwise the surface looks frozen and nothing
-  // on screen can say why.
-  tui.onFrameError = error => model.reportError(error)
-  /** Whether a child process owns the terminal, which is when nothing here may write to it. */
-  let handedOver = false
-  /** Whether the host has unloaded this surface, after which nothing may start it again. */
-  let disposed = false
-  /** An exit asked for while a child owned the terminal, run once the screen is ours again. */
-  let deferredExit: { readonly code: number; readonly reason: string | undefined } | undefined
-  /**
-   * Write to the tty, but only while this surface owns it.
-   *
-   * An editor the reader opened draws its own screen on the same terminal, so a
-   * title or a bell from here would land on top of it and, for a bell, sound as
-   * if the editor had failed. The title is written again when the screen comes
-   * back; a bell that fell in the gap is dropped rather than rung late.
-   */
-  const writeTerminal = (text: string): void => {
-    if (!handedOver) terminal.write(text)
-  }
-
-  /**
-   * Put a copied selection on the clipboard as the words it selected.
-   *
-   * A terminal copies the screen, so a drag across a message takes the box the
-   * message was drawn in along with it. The rows the last frame drew are the
-   * account of that frame, so the copy is read back through them: the shape the
-   * surface added comes off, and nothing the reader wrote does.
-   */
-  function copySelection(text: string): Promise<boolean> {
-    if (handedOver) return Promise.resolve(false)
-    terminal.write(clipboardSequence(cleanCopied(text, view.copyRows())))
-    return Promise.resolve(true)
-  }
+  const terminalLifecycle = createTerminalLifecycle(ctx, {
+    reportFrameError: error => model.reportError(error),
+    notice: message => model.notice(message),
+    copyRows: () => view.copyRows(),
+    activeSession: () => activeSession,
+    sessionOpened: () => sessionOpened,
+    turnRunning: () => turnOpen,
+    stopClock: () => clearInterval(statusTicker),
+    exit: appExit,
+    draftText: () => editor.getExpandedText(),
+    draftBorrowed: () => promptBar.isBorrowed(),
+    holdDraft: text => promptBar.replaceHeld(text),
+    writeDraft: text => editor.setText(text),
+  })
+  const { terminal, tui, herdr, disposers, writeTerminal, requestExit, editDraft, exited } = terminalLifecycle
   /** The one gate a terminal can present at a time, and how it settles its caller. */
   type PendingGate =
     | { readonly kind: 'approval'; readonly gate: ApprovalGate; readonly settle: (outcome: ApprovalOutcome) => void }
@@ -559,7 +530,6 @@ export function apply(ctx: Context, config: unknown): void {
   // Answers are written in the reader's own editor, which is why a question
   // borrows the bar instead of drawing a second one beside it.
   const promptBar = new PromptBar(editor)
-  const disposers: Array<() => void> = []
   // The presenter closure outlives the composition's own teardown, so it must
   // not keep an agent alive after its world unwinds.
   disposers.push(() => {
@@ -579,7 +549,6 @@ export function apply(ctx: Context, config: unknown): void {
   /** Whether an undo is settling an interrupt, so a second press cannot race it. */
   let undoPending = false
   let turnStartedAt: number | undefined
-  let exited = false
   /** Whether a session was really opened, which is what an exit hint can name. */
   let sessionOpened = false
   // The bank is built once the picker exists to answer for it, so the status
@@ -614,33 +583,6 @@ export function apply(ctx: Context, config: unknown): void {
   // A window that outlived the surface would repaint a screen that is gone.
   disposers.push(() => keyChord.disarm())
 
-  // A containing Herdr is told what this pane is doing; away from one the
-  // reporter is inert, so the surface never depends on being multiplexed.
-  const herdr = createHerdrReporter()
-  // Kept out of the disposal list on purpose: the row is handed back before
-  // this stops guarding it, so a host that leaves during the release still
-  // releases synchronously.
-  const unregisterExit = herdr.registerExitRelease()
-
-  restore.add(() => tui.stop())
-  ctx.effect(() => () => {
-    // A surface the host unloads owns no screen and keeps no listeners, so a
-    // child still running in another process must not be handed a start().
-    disposed = true
-    // The pane stops being an agent before the process that claimed it unwinds:
-    // a release that ran after the reports were unregistered would race them,
-    // and one that never ran would leave a row that reads as a live agent. The
-    // reports already on the wire are settled first, because Herdr ignores a
-    // release for a pane nothing has claimed yet — the report that followed it
-    // would otherwise claim the row back. The promise is returned so a host that
-    // waits for teardown waits for the row too, and the exit listener outlives
-    // the wait, so one that does not still hands the row back synchronously.
-    const released = herdr.release().catch(() => undefined)
-    restore.restore()
-    for (const dispose of disposers.reverse()) dispose()
-    return released.finally(unregisterExit)
-  })
-
   tui.setLayoutRoot(surfaceLayout({
     transcript: new ScrollView(view, { follow: 'end', primary: true, overscroll: 'chain' }),
     dock,
@@ -649,47 +591,6 @@ export function apply(ctx: Context, config: unknown): void {
     status: statusBar,
   }))
   tui.setFocus(editor)
-
-  const requestExit = (code: number, reason?: string): void => {
-    if (exited) return
-    // A child owns the terminal: restoring it here would leave the reader a
-    // shell behind an editor that is still running, and would put its tty back
-    // into cooked mode under it. The exit waits for the screen to come back.
-    if (handedOver) {
-      deferredExit = { code, reason }
-      return
-    }
-    exited = true
-    clearInterval(statusTicker)
-    // The screen goes back at once, so leaving feels like leaving; the row goes
-    // back behind it. Reports already on the wire are settled first, because
-    // Herdr ignores the release of a pane nothing has claimed yet — the report
-    // that followed it would otherwise claim the row back during shutdown.
-    terminal.write(CLEAR_TITLE)
-    restore.restore()
-    void herdr
-      .release()
-      // Nobody is left to report a release that failed on the way out, and a
-      // row that could not be cleared is not a reason to keep the process.
-      .catch(() => undefined)
-      .finally(() => {
-        // Everything below is written after the release: a failure nobody can
-        // read is not a failure that was reported.
-        if (reason !== undefined) terminal.write(`\ndsh-tui: ${reason}\n`)
-        // The hint is computed here rather than read from the context because
-        // only the surface knows which session it is leaving: a fork or a
-        // switch moves it. A run that opened nothing has nothing to offer back:
-        // the identity it was launched with names no log, so pointing at it
-        // would send the reader to a conversation that does not exist.
-        if (sessionOpened) terminal.write(`\n${resumeHint(String(activeSession), PROFILE_NAME)}\n`)
-        appExit(code)
-      })
-  }
-
-  // A signal ends the process from outside the surface, and the default action
-  // would leave the reader on a screen no shell prompt is drawn in: the same
-  // shutdown a quit key runs goes to the signals a supervisor sends.
-  disposers.push(installSignalRestore({ shutdown: code => requestExit(code, 'interrupted') }))
 
   const openGate = (next: PendingGate): void => {
     pending = next
@@ -1068,50 +969,6 @@ export function apply(ctx: Context, config: unknown): void {
   }
 
   stash = promptMemory.buildStash()
-
-  /**
-   * The reader's own editor, opened over the draft the bar holds.
-   *
-   * The screen is handed over rather than drawn beside: an editor needs the
-   * terminal, so this is the one moment the surface is not the process painting
-   * on it. Every failure is reported as a notice and leaves the bar as it was,
-   * because the caller is a key press with nowhere to put an error.
-   */
-  const externalEditor = new ExternalEditor({
-    suspend: () => {
-      handedOver = true
-      try {
-        // The frame is left in place rather than repainted into the normal
-        // buffer: the editor is about to paint over that same screen.
-        tui.stop({ preserveScreen: true })
-      } catch (error) {
-        // A stop that failed leaves the screen ours; leaving the flag up would
-        // suppress every later title and defer every exit for good.
-        handedOver = false
-        throw error
-      }
-    },
-    resume: () => {
-      // Whatever the host unloaded is not coming back: starting it again would
-      // paint on a terminal this process is done with, into listeners that are gone.
-      if (disposed) return
-      try {
-        tui.start()
-      } finally {
-        handedOver = false
-      }
-      // Entering the alternate screen clears it, and any render asked for while
-      // the child owned the terminal was dropped after setting the very flag that
-      // makes the next ordinary request a no-op: without a forced one the reader
-      // would get a blank screen with a working keyboard under it.
-      tui.requestRender(true)
-      // The title is state this surface owns and the handoff swallowed any change
-      // to it, so a turn that ended while the editor was open would leave
-      // "working" up until the next turn.
-      writeTerminal(windowTitle(process.cwd(), turnOpen ? 'working' : 'ready'))
-    },
-    notice: message => model.notice(message),
-  })
 
   /**
    * Replay a stored session so a resumed run opens on the conversation the
@@ -2223,19 +2080,7 @@ export function apply(ctx: Context, config: unknown): void {
         void stash?.clear()
         return
       case 'editor':
-        void externalEditor.edit(editor.getExpandedText()).then(text => {
-          if (text !== undefined) {
-            // A gate can open while the child owns the screen, and the bar then
-            // holds somebody's answer: the edited draft waits behind it instead
-            // of being written into a question the reader never answered.
-            if (promptBar.isBorrowed()) promptBar.replaceHeld(text)
-            else editor.setText(text)
-            tui.requestRender()
-          }
-          const pendingExit = deferredExit
-          deferredExit = undefined
-          if (pendingExit !== undefined) requestExit(pendingExit.code, pendingExit.reason)
-        })
+        editDraft()
         return
       case 'status': {
         const facts = statusFacts()
@@ -2333,7 +2178,7 @@ export function apply(ctx: Context, config: unknown): void {
         // An undo may be parked waiting for exactly this boundary.
         turnSettled?.()
         writeTerminal(windowTitle(process.cwd(), 'ready'))
-        if (shouldRingBell({ bell: resolved.bell, ranForMs: ranFor, exiting: exited })) writeTerminal(BELL)
+        if (shouldRingBell({ bell: resolved.bell, ranForMs: ranFor, exiting: exited() })) writeTerminal(BELL)
         // A job the turn started may have settled while the reader was watching
         // something else, and nothing else refreshes a live board.
         backgroundWork.refresh()
