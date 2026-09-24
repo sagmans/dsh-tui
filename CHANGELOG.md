@@ -36,6 +36,12 @@ breaking change, and a patch carries only fixes.
   live in their own module. Appearance defaults and colour resolution change for
   reasons the token vocabulary does not, and the coverage sweep now fails beside
   the table it guards.
+- The mounted surface is now a composition root under 500 lines: the terminal's
+  lifetime, the one modal interaction, the prompt bar's presses, prompt memory
+  and its draft bank, session discovery, the driven agent, the transcript on
+  screen, staged turns, the session's mode, the model route, background work,
+  appearance, and the command plane each own their state, so a change to one
+  capability no longer moves beside the others in a single file.
 
 ### Added
 
