@@ -94,9 +94,19 @@ export function createModelChoice(ctx: Context, ports: ModelChoicePorts): ModelC
       case 'switch': {
         const choice = command.choice
         if (choice.reasoningEffort === undefined) {
-          modelSwitch.choose(choice)
-          ports.notice(`model set to ${choice.provider}/${choice.model} for the next step`)
-          ports.render()
+          // Naming no level still leaves one in force, and the model the reader
+          // is moving to decides whether it can take it: a level the request
+          // path would refuse makes an otherwise usable model look broken.
+          void (async () => {
+            const carried = await carriedEffort(choice.provider, choice.model)
+            modelSwitch.choose({
+              provider: choice.provider,
+              model: choice.model,
+              ...(carried.effort === undefined ? {} : { reasoningEffort: carried.effort }),
+            })
+            ports.notice(`model set to ${choice.provider}/${choice.model} for the next step${droppedClause(carried.dropped)}`)
+            ports.render()
+          })()
           return
         }
         // The route decides which efforts exist, so an explicit one is checked
@@ -166,20 +176,44 @@ export function createModelChoice(ctx: Context, ports: ModelChoicePorts): ModelC
     }
   }
 
+  /**
+   * The effort a switch may carry onto the route it lands on.
+   *
+   * The levels belong to the exact route, so the level in force is checked
+   * against the model the reader moves to: the request path refuses an
+   * unsupported level before the provider sees it, and that refusal reads as
+   * the chosen model being broken. The model's own default is the fallback the
+   * picker's provider-default row also produces, and the level given up is
+   * named because silence would leave the reader reading a level that is no
+   * longer in force.
+   */
+  const carriedEffort = async (provider: string, modelId: string): Promise<{ effort?: string; dropped?: string }> => {
+    const inForce = effectiveRoute()?.reasoningEffort
+    if (inForce === undefined || catalog === undefined) return {}
+    try {
+      const efforts = (await catalog.efforts(provider, modelId))?.efforts ?? []
+      return efforts.some(effort => effort.id === inForce) ? { effort: inForce } : { dropped: inForce }
+    } catch {
+      // The directory is advisory here: a switch the reader asked for must not
+      // fail on it, and a route's default is the one state every model accepts.
+      return {}
+    }
+  }
+
+  /** The clause a switch adds when the effort in force could not travel with it. */
+  const droppedClause = (dropped: string | undefined): string => dropped === undefined
+    ? ''
+    : ` — dropped reasoning effort "${dropped}" because this model does not offer it`
+
   /** Put the reader's route choice in force for the next step. */
-  const applyRoute = (route: PickedRoute): void => {
-    const current = effectiveRoute()
-    // The levels belong to the route, so a switch clears an explicit effort
-    // while re-picking the route already in force is not a switch.
-    const keep = current !== undefined && current.provider === route.provider && current.model === route.model
-      ? current.reasoningEffort
-      : undefined
+  const applyRoute = async (route: PickedRoute): Promise<void> => {
+    const carried = await carriedEffort(route.provider, route.model)
     modelSwitch.choose({
       provider: route.provider,
       model: route.model,
-      ...keep === undefined ? {} : { reasoningEffort: keep },
+      ...(carried.effort === undefined ? {} : { reasoningEffort: carried.effort }),
     })
-    ports.notice(`model set to ${route.provider}/${route.model} for the next step`)
+    ports.notice(`model set to ${route.provider}/${route.model} for the next step${droppedClause(carried.dropped)}`)
     ports.render()
   }
 
@@ -252,7 +286,7 @@ export function createModelChoice(ctx: Context, ports: ModelChoicePorts): ModelC
       if (picked === undefined) return
       const route = readModelRouteKey(picked)
       if (route === undefined) return
-      applyRoute(route)
+      await applyRoute(route)
       await offerRouteEfforts(route)
     } finally {
       openingModels = false

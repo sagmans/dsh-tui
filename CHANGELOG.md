@@ -62,6 +62,11 @@ breaking change, and a patch carries only fixes.
 
 ### Fixed
 
+- Switching model no longer leaves a reasoning effort in force that the chosen
+  model cannot take, which made the next turn fail with `does not support
+  reasoning effort`. The level in force now travels with the switch only while
+  the model offers it, and a level the model does not offer falls back to the
+  model's own default with one notice naming the model and the dropped level.
 - The one-command dogfood run now works on the first try. A profile installs its
   local bundles as symlinks relative to the home they were installed in, so a
   clone at another depth — a scratch home under the temporary directory — left
