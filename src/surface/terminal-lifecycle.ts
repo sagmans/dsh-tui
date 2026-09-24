@@ -69,6 +69,8 @@ export interface TerminalLifecycle {
   readonly requestExit: (code: number, reason?: string) => void
   /** Hand the draft to the reader's own editor and take back what it saved. */
   readonly editDraft: () => void
+  /** Register the supervisor signals that end this surface the way a quit does. */
+  readonly signalShutdown: () => () => void
 }
 
 /**
@@ -187,10 +189,16 @@ export function createTerminalLifecycle(ctx: Context, ports: TerminalLifecyclePo
       })
   }
 
-  // A signal ends the process from outside the surface, and the default action
-  // would leave the reader on a screen no shell prompt is drawn in: the same
-  // shutdown a quit key runs goes to the signals a supervisor sends.
-  disposers.push(installSignalRestore({ shutdown: code => requestExit(code, 'interrupted') }))
+  /**
+   * Take the signals a supervisor sends into the same shutdown a quit key runs.
+   *
+   * A signal ends the process from outside the surface, and the default action
+   * would leave the reader on a screen no shell prompt is drawn in. Returned
+   * rather than pushed here: the composer owns the one ordered teardown list, so
+   * this registration keeps the position that list already gave it.
+   */
+  const signalShutdown = (): (() => void) =>
+    installSignalRestore({ shutdown: code => requestExit(code, 'interrupted') })
 
   /**
    * The reader's own editor, opened over the draft the bar holds.
@@ -271,5 +279,6 @@ export function createTerminalLifecycle(ctx: Context, ports: TerminalLifecyclePo
     exited: () => exited,
     requestExit,
     editDraft,
+    signalShutdown,
   }
 }

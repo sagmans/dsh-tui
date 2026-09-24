@@ -393,6 +393,9 @@ export function apply(ctx: Context, config: unknown): void {
   })
   // A window that outlived the surface would repaint a screen that is gone.
   disposers.push(() => promptInput.disarmChord())
+  // Registered here rather than inside the terminal owner: this is the position
+  // the one teardown list gave the signal seam before the surface was split.
+  disposers.push(terminalLifecycle.signalShutdown())
 
   tui.setLayoutRoot(surfaceLayout({
     transcript: new ScrollView(view, { follow: 'end', primary: true, overscroll: 'chain' }),
