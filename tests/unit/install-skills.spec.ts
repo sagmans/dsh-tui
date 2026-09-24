@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { lstatSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync, mkdirSync } from 'node:fs'
+import { lstatSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { installBundledSkill, SKILL_NAME } from '@/install-skills.ts'
@@ -40,6 +40,35 @@ describe('installBundledSkill', () => {
     expect(readFileSync(join(destination, 'SKILL.md'), 'utf8')).toBe('keep me')
   })
 
+  it('replaces an existing skill only when update is explicit', () => {
+    const home = scratchHome()
+    const destination = installBundledSkill(home)
+    writeFileSync(join(destination, 'SKILL.md'), 'custom copy')
+    writeFileSync(join(destination, 'stale.txt'), 'remove on update')
+
+    expect(installBundledSkill(home, true)).toBe(destination)
+    expect(readFileSync(join(destination, 'SKILL.md'), 'utf8')).toContain(SKILL_HEADER)
+    expect(() => readFileSync(join(destination, 'stale.txt'), 'utf8')).toThrow()
+    expect(lstatSync(join(destination, 'scripts', 'run-plugin-from-worktree.sh')).mode & 0o111).not.toBe(0)
+    expect(readdirSync(join(home, '.agents', 'skills'))).toEqual([SKILL_NAME])
+  })
+
+  it('installs normally with update when no copy exists', () => {
+    const home = scratchHome()
+    const destination = installBundledSkill(home, true)
+    expect(readFileSync(join(destination, 'SKILL.md'), 'utf8')).toContain(SKILL_HEADER)
+  })
+
+  it('rejects a non-directory copy even with update', () => {
+    const home = scratchHome()
+    const destination = join(home, '.agents', 'skills', SKILL_NAME)
+    mkdirSync(join(home, '.agents', 'skills'), { recursive: true })
+    writeFileSync(destination, 'preserve user data')
+
+    expect(() => installBundledSkill(home, true)).toThrow(/not a directory/)
+    expect(readFileSync(destination, 'utf8')).toBe('preserve user data')
+  })
+
   it('rejects a symlink at the destination and preserves its target', () => {
     const home = scratchHome()
     const target = join(home, 'elsewhere')
@@ -48,6 +77,7 @@ describe('installBundledSkill', () => {
     symlinkSync(target, join(home, '.agents', 'skills', SKILL_NAME))
 
     expect(() => installBundledSkill(home)).toThrow(/already exists/)
+    expect(() => installBundledSkill(home, true)).toThrow()
     expect(lstatSync(target).isDirectory()).toBe(true)
   })
 

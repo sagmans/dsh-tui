@@ -128,8 +128,10 @@ requires `name` and `description` and may add `whenToUse`, `metadata`,
 
 This repository ships [`dsh-tui-dogfood`](.agents/skills/dsh-tui-dogfood/SKILL.md).
 Run `dsh --profile tui install-skills` to copy it to `~/.agents/skills/` for use
-from any dsh plugin checkout. The command refuses to overwrite an existing copy.
-The skill tells an agent how to hand a developer an isolated profile to test.
+from any dsh plugin checkout. An existing copy prompts for confirmation on a
+TTY. Use `dsh --profile tui install-skills --update` to replace it without a
+prompt. The skill tells an agent how to hand a developer an isolated profile
+to test.
 
 The surface's bundle patch disables the base `skill-filesystem` row on purpose.
 A session's preset mounts that row. Thus, `--profile tui` scans the roots above.

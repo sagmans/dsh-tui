@@ -8,7 +8,7 @@
  * so a packaging mistake fails here instead of in a user's profile.
  */
 import { execFileSync } from 'node:child_process'
-import { lstatSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
+import { lstatSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -151,6 +151,14 @@ try {
   const helper = lstatSync(join(destination, SKILL_HELPER))
   if (!helper.isFile() || helper.isSymbolicLink() || (helper.mode & 0o111) === 0) {
     problems.push('installed dogfood helper is not executable')
+  }
+  writeFileSync(join(destination, 'stale.txt'), 'old copy')
+  const updated = installBundledSkill(join(out, 'home'), true)
+  if (updated !== destination || readdirSync(updated).includes('stale.txt')) {
+    problems.push('updating the packaged skill left an old file behind')
+  }
+  if ((lstatSync(join(updated, SKILL_HELPER)).mode & 0o111) === 0) {
+    problems.push('updated dogfood helper is not executable')
   }
 
   const patch = readFileSync(join(ROOT, 'cordis.patch.yml'), 'utf8')

@@ -41,8 +41,21 @@ dsh --profile tui install-skills
 The command copies `dsh-tui-dogfood` to
 `~/.agents/skills/dsh-tui-dogfood/`. Agents can then load it from any dsh
 plugin repository. The skill uses a cloned dsh home, so tests do not change
-your real profile. The command needs no TTY. It refuses to overwrite an
-existing skill. `npm install` does not copy skills into your home.
+your real profile. A first install needs no TTY. `npm install` does not copy
+skills into your home.
+
+If the skill exists, the command asks `Update existing skill? [y/N]` in a
+terminal. Only `y` or `yes` replaces it. Enter or `n` keeps the existing
+copy. To update without a prompt, including in non-interactive runs, use:
+
+```sh
+dsh --profile tui install-skills --update
+```
+
+Updating removes any local changes inside the previous skill directory.
+The command stages the new copy before replacement and restores the old
+copy if replacement fails. If cleanup fails after replacement, the new copy
+stays installed and the command reports the old backup path.
 
 ### Confirm the plugin mounted
 

@@ -17,7 +17,8 @@ breaking change, and a patch carries only fixes.
   child’s text to view that session’s transcript.
 - `dsh --profile tui install-skills` copies `dsh-tui-dogfood` to the user
   skill root only on request. The skill supports any dsh plugin checkout through
-  a cloned home. The command leaves existing skill copies untouched.
+  a cloned home. An existing copy prompts before replacement; `--update` skips
+  the prompt.
 
 ### Fixed
 
