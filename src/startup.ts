@@ -5,6 +5,7 @@ import { parseCmdline } from '@deepseek-ai/dsh-cmdline'
 import { CONFIGURED_AGENT_IDENTITIES_KEY } from '@deepseek-ai/dsh-agent-loop'
 import type { TuiStartup } from './contracts.ts'
 import { LaunchUsageError, PROFILE_NAME, identityOf, resolveLaunchIntent, resumeHint } from './identity.ts'
+import { installBundledSkill } from './install-skills.ts'
 
 export const name = 'tui-startup'
 
@@ -39,6 +40,22 @@ export function apply(ctx: Context): void {
     .option('--preset <preset>', 'agent preset (mode) the new session runs')
     .option('--no-color', 'disable ANSI styling')
     .option('--no-bell', 'do not ring the terminal bell when a long turn finishes')
+
+  program.command('install-skills')
+    .description('install the bundled dogfood skill into ~/.agents/skills/')
+    .action(() => {
+      const exit = ctx.get('appExit')
+      if (exit === undefined) throw new Error('dsh --profile tui: the launcher must provide appExit')
+      let destination: string
+      try {
+        destination = installBundledSkill()
+      } catch (error) {
+        program.error(`dsh --profile tui install-skills: ${error instanceof Error ? error.message : String(error)}`)
+        return
+      }
+      process.stdout.write(`Installed ${destination}\n`)
+      exit(0)
+    })
 
   program.action((
     mode: string | undefined,

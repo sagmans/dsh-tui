@@ -33,6 +33,7 @@
   },
   "files": [
     "lib",
+    ".agents/skills/dsh-tui-dogfood",
     "themes",
     "cordis.patch.yml",
     "README.md"

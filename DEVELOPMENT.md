@@ -126,11 +126,13 @@ deliberately not discovered, so a `references/` directory is safe. Frontmatter
 requires `name` and `description` and may add `whenToUse`, `metadata`,
 `disable-model-invocation`, and `user-invocable`.
 
-This repository ships one: [`dogfood-tui`](.agents/skills/dogfood-tui/SKILL.md),
-the practice above written for an agent that has to hand a developer a profile to
-test in. The surface's own bundle patch disables the base `skill-filesystem`
-row on purpose — a session's preset mounts its own — so the roots above are the
-ones a `--profile tui` session actually scans.
+This repository ships [`dsh-tui-dogfood`](.agents/skills/dsh-tui-dogfood/SKILL.md).
+Run `dsh --profile tui install-skills` to copy it to `~/.agents/skills/` for use
+from any dsh plugin checkout. The command refuses to overwrite an existing copy.
+The skill tells an agent how to hand a developer an isolated profile to test.
+
+The surface's bundle patch disables the base `skill-filesystem` row on purpose.
+A session's preset mounts that row. Thus, `--profile tui` scans the roots above.
 
 ## Troubleshooting
 

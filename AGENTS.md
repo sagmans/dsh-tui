@@ -44,7 +44,7 @@ proven by that gate — run `tools/pty-drive.mjs` and read the screen it prints.
   `scripts/npm/release.py`.
 - `scripts/dogfood/run-tui-from-worktree.sh` clones the developer's home, points
   the clone's own profile at a worktree, and runs the surface there;
-  `.agents/skills/dogfood-tui/` is the same practice as a skill an agent loads,
+  `.agents/skills/dsh-tui-dogfood/` is the packaged skill an agent loads,
   and [DEVELOPMENT.md](DEVELOPMENT.md) is the long form.
 - `lib/` is build output and `.plans/` is local planning scratch; both are
   gitignored and neither is edited by hand.
