@@ -15,7 +15,7 @@ export interface SubagentRun {
 }
 
 /** Child rows the dock lists before the count takes over. */
-export const DOCK_SUBAGENT_LIMIT = 2
+export const DOCK_SUBAGENT_LIMIT = 3
 
 /** Id characters kept in a row, so an id cannot smuggle in a control sequence. */
 const SHORT_ID_LENGTH = 8

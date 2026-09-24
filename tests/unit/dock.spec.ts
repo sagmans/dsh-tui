@@ -1,4 +1,4 @@
-import { stripTerminalSequences, visibleWidth } from '@earendil-works/pi-tui'
+import { stripTerminalSequences, visibleWidth, type TuiMouseEvent } from '@earendil-works/pi-tui'
 import { describe, expect, it } from 'vitest'
 import { createTheme } from '@/theme.ts'
 import { DEFAULT_PALETTE } from '@/theme-tokens.ts'
@@ -111,6 +111,50 @@ describe('WorkDock', () => {
     roster.start({ runId: 'r1', provider: 'spawn', id: 'child-abcdef' })
     const lines = new WorkDock(() => EMPTY, theme, () => [], () => roster.list(), () => 2_000).render(80)
     expect(stripTerminalSequences(lines[1]!)).toContain('child-ab · Review terminal rendering · spawn · running 1s')
+  })
+
+  it('previews three running children and reveals the rest on a heading click', () => {
+    const runs = Array.from({ length: 5 }, (_, index) => ({
+      runId: `r${index}`, provider: 'spawn', id: `child-${index}`, startedAt: 1_000, status: 'running' as const,
+    }))
+    const dock = new WorkDock(() => EMPTY, theme, () => [], () => runs, () => 2_000)
+    const click: TuiMouseEvent = {
+      type: 'click', button: 'left', x: 5, y: 0, screenX: 5, screenY: 0, width: 80, height: 5,
+      shift: false, alt: false, ctrl: false,
+    }
+    expect(dock.render(80)).toEqual([
+      rule('⚇ subagents ▸ · 5 running', 80),
+      '  ▸ child-0 · spawn · running 1s',
+      '  ▸ child-1 · spawn · running 1s',
+      '  ▸ child-2 · spawn · running 1s',
+      '  … 2 more',
+    ])
+    expect(dock.handleMouse(click)).toEqual({ handled: true, render: true })
+    expect(dock.render(80)).toEqual([
+      rule('⚇ subagents ▾ · 5 running', 80),
+      ...runs.map(run => `  ▸ ${run.id} · spawn · running 1s`),
+    ])
+    expect(dock.handleMouse(click)).toEqual({ handled: true, render: true })
+    expect(dock.render(80)).toHaveLength(5)
+  })
+
+  it('ignores clicks on other rows and only left-clicks the heading', () => {
+    const runs = Array.from({ length: 4 }, (_, index) => ({
+      runId: `r${index}`, provider: 'spawn', id: `child-${index}`, startedAt: 1_000, status: 'running' as const,
+    }))
+    const dock = new WorkDock(() => ({ ...EMPTY, goal: { objective: 'Inspect dock', roundsStarted: 1, maxRounds: 2, phase: 'active' } }), theme, () => [], () => runs)
+    const click: TuiMouseEvent = {
+      type: 'click', button: 'left', x: 5, y: 1, screenX: 5, screenY: 1, width: 80, height: 6,
+      shift: false, alt: false, ctrl: false,
+    }
+    expect(dock.render(80)[1]).toBe(rule('⚇ subagents ▸ · 4 running', 80))
+    expect(dock.handleMouse({ ...click, y: 0 })).toBeUndefined()
+    expect(dock.handleMouse({ ...click, y: 2 })).toBeUndefined()
+    expect(dock.handleMouse({ ...click, button: 'right' })).toBeUndefined()
+    expect(dock.handleMouse({ ...click, type: 'press' })).toBeUndefined()
+    expect(dock.render(80)[1]).toBe(rule('⚇ subagents ▸ · 4 running', 80))
+    expect(dock.handleMouse(click)).toEqual({ handled: true, render: true })
+    expect(dock.render(80)[1]).toBe(rule('⚇ subagents ▾ · 4 running', 80))
   })
 
   it('drops the subagent board once every delegation has settled', () => {
