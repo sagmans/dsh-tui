@@ -21,7 +21,8 @@ import {
   TOKEN_NAME_SET,
   TokensSchema,
 } from './theme-schema.ts'
-import { DEFAULT_PALETTE, type PaletteName, type StyleSpec, type ThemedSpecs, type TuiToken } from './theme-tokens.ts'
+import { DEFAULT_PALETTE } from './theme-defaults.ts'
+import type { PaletteName, StyleSpec, ThemedSpecs, TuiToken } from './theme-tokens.ts'
 
 /** Settings namespace owned by the terminal surface. */
 export const TUI_SETTINGS_NAMESPACE = 'dsh-tui'

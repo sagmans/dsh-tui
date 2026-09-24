@@ -8,6 +8,13 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+### Changed
+
+- The token contract, the shipped appearance, and the resolution algorithm each
+  live in their own module. Appearance defaults and colour resolution change for
+  reasons the token vocabulary does not, and the coverage sweep now fails beside
+  the table it guards.
+
 ### Added
 
 - Running subagents in the dock now show the parent agent’s task label,

@@ -3,7 +3,7 @@ import { stripTerminalSequences, type TUI, type TuiMouseEvent, visibleWidth } fr
 import { cardOfCall, cardOfResult, contentLines, CARD_DETAIL_MAX, CARD_SHELL_PREVIEW, SUBCALL_MAX, type ToolPresenter } from '@/cards.ts'
 import type { GateCard } from '@/gates.ts'
 import { createTheme, forwardEditorTheme, forwardMarkdownTheme, type TuiTheme } from '@/theme.ts'
-import { DEFAULT_PALETTE, DIFF_ADDED_BAND } from '@/theme-tokens.ts'
+import { DEFAULT_PALETTE, DIFF_ADDED_BAND } from '@/theme-defaults.ts'
 import { SECOND_MS, TranscriptModel, type TranscriptEntry } from '@/transcript.ts'
 import { cleanCopied } from '@/ui/copy.ts'
 import { MarkdownRenderer } from '@/ui/markdown.ts'

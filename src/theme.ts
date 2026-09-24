@@ -3,7 +3,9 @@ import { codeBlockLines, plainCodeLines } from './ui/diff.ts'
 import { oneRow } from './text.ts'
 import { renderTerminalText } from './terminal-text.ts'
 import { detectColourMode, type ColourMode } from './theme-capability.ts'
-import { DEFAULT_PALETTE, DEFAULT_TOKENS, resetSequence, resolveToken, type ResolvedStyle, type TuiToken } from './theme-tokens.ts'
+import { DEFAULT_PALETTE, DEFAULT_TOKENS } from './theme-defaults.ts'
+import { resetSequence, resolveToken, type ResolvedStyle } from './theme-resolver.ts'
+import type { TuiToken } from './theme-tokens.ts'
 import { themeLayer, type ThemeOverrides } from './theme-settings.ts'
 
 /** What a caller gets when it has written no settings at all. */

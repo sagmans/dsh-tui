@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { builtinNames, DEFAULT_THEME } from '@/theme-files.ts'
 import { parseSettings, themeLayer, toOverrides } from '@/theme-settings.ts'
-import { mergeTokenSpec, PALETTE_NAMES, TUI_TOKENS, type PaletteName, type StyleSpec } from '@/theme-tokens.ts'
+import { mergeTokenSpec } from '@/theme-resolver.ts'
+import { PALETTE_NAMES, TUI_TOKENS, type PaletteName, type StyleSpec } from '@/theme-tokens.ts'
 import { createTheme } from '@/theme.ts'
 import { builtinLibrary } from '../support/themes.ts'
 

@@ -1,7 +1,7 @@
 import { stripTerminalSequences, visibleWidth, type TuiMouseEvent } from '@earendil-works/pi-tui'
 import { describe, expect, it } from 'vitest'
 import { createTheme } from '@/theme.ts'
-import { DEFAULT_PALETTE } from '@/theme-tokens.ts'
+import { DEFAULT_PALETTE } from '@/theme-defaults.ts'
 import { SubagentRoster } from '@/subagents.ts'
 import { DOCK_TODO_LIMIT, WorkDock } from '@/ui/dock.ts'
 import type { WorkState } from '@/work.ts'

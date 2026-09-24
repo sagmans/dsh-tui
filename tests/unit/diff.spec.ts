@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { stripTerminalSequences } from '@earendil-works/pi-tui'
 import { createTheme, type TuiTheme } from '@/theme.ts'
-import { DEFAULT_PALETTE, DIFF_ADDED_BAND, DIFF_REMOVED_BAND, type StyleSpec, type TuiToken } from '@/theme-tokens.ts'
+import { DEFAULT_PALETTE, DIFF_ADDED_BAND, DIFF_REMOVED_BAND } from '@/theme-defaults.ts'
+import { type StyleSpec, type TuiToken } from '@/theme-tokens.ts'
 import {
   codeBlockLines,
   DIFF_EMPHASIS_MAX_GRAPHEMES,

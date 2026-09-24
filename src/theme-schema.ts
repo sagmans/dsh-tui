@@ -7,13 +7,8 @@
 // it was handed, so a theme file still loads with no settings service mounted.
 
 import z from '@deepseek-ai/schemastery'
-import {
-  DEFAULT_PALETTE,
-  PALETTE_NAMES,
-  TUI_TOKENS,
-  type PaletteName,
-  type StyleSpec,
-} from './theme-tokens.ts'
+import { DEFAULT_PALETTE } from './theme-defaults.ts'
+import { PALETTE_NAMES, TUI_TOKENS, type PaletteName, type StyleSpec } from './theme-tokens.ts'
 
 /**
  * A colour a writer may name.

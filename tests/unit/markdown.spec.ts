@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createTheme, forwardMarkdownTheme } from '@/theme.ts'
-import { DEFAULT_PALETTE, DIFF_ADDED_BAND, DIFF_REMOVED_BAND } from '@/theme-tokens.ts'
+import { DEFAULT_PALETTE, DIFF_ADDED_BAND, DIFF_REMOVED_BAND } from '@/theme-defaults.ts'
 import { MARKDOWN_CACHE_LIMIT, MarkdownRenderer } from '@/ui/markdown.ts'
 import { createMermaidTransform } from '@/ui/mermaid.ts'
 
