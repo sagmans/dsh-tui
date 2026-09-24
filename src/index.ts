@@ -1,5 +1,3 @@
-import { writeFileSync } from 'node:fs'
-import { resolve } from 'node:path'
 import { type Component, ScrollView } from '@earendil-works/pi-tui'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -8,34 +6,25 @@ import { createPresetRoster } from './agent/presets.ts'
 import type { ForkEvent } from './agent/fork.ts'
 import { createStatusFacts } from './agent/status.ts'
 import { describeMissingOptional, describeMissingRequired, probeComposition } from './compat/probe.ts'
-import { LOCAL_COMMANDS, type Submission } from './input/submission.ts'
-import { chordKeysLine, surfaceKeysLine } from './input/keymap.ts'
-import { type ActionLayer, type SurfaceActionId } from './input/action-catalog.ts'
 import { resolveConfig } from './config.ts'
-import { clipboardSequence } from './terminal/clipboard.ts'
 import { windowTitle } from './terminal/title.ts'
-import { defaultExportFile, transcriptToText } from './export.ts'
 import { toolDisplayFor } from './tool-display.ts'
-import { KEYMAP_LAYERS, keymapLayer } from './keys-command.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { createAppearance } from './surface/appearance.ts'
 import { createBackgroundWork } from './surface/background-work.ts'
+import { createCommands } from './surface/commands.ts'
 import { createModalInput } from './surface/modal-input.ts'
 import { createModelChoice } from './surface/model-choice.ts'
 import { createPromptInput } from './surface/prompt-input.ts'
 import { createPromptMemory } from './surface/prompt-memory.ts'
 import { createPresetChoice } from './surface/preset-choice.ts'
 import { createSessionLifecycle } from './surface/session-lifecycle.ts'
-import { createSessionPicker } from './surface/session-picker.ts'
 import { backHint, createSessionView } from './surface/session-view.ts'
 import { createStagedTurns } from './surface/staged-turns.ts'
 import { createTerminalLifecycle } from './surface/terminal-lifecycle.ts'
-import { formatTokens } from './tokens.ts'
-import { describeTodos, planSelectedActive, planToggleLine, readPlanState, type PlanModeState } from './work.ts'
 import { WorkDock } from './ui/dock.ts'
 import { GateInputBar } from './ui/gate-input.ts'
 import { surfaceLayout } from './ui/layout.ts'
-import { KeymapPicker } from './ui/keymap-picker.ts'
 import { PromptBar } from './ui/prompt.ts'
 import { MarkdownRenderer } from './ui/markdown.ts'
 import { createMermaidTransform } from './ui/mermaid.ts'
@@ -166,9 +155,9 @@ export function apply(ctx: Context, config: unknown): void {
     notice: message => sessionView.notice(message),
     requestExit: code => requestExit(code),
     recordPrompt: text => promptMemory.record(text),
-    runSubmission: submission => runSubmission(submission),
+    runSubmission: submission => commands.runSubmission(submission),
     drivenAgent: () => sessionLifecycle.drivingAgent()?.agent,
-    registeredCommands: target => registry()?.list(target),
+    registeredCommands: target => commands.registeredCommands(target),
   })
   appearance.registerSection()
 
@@ -279,7 +268,7 @@ export function apply(ctx: Context, config: unknown): void {
     holdDraft: text => promptBar.replaceHeld(text),
     writeDraft: text => editor.setText(text),
   })
-  const { terminal, tui, herdr, disposers, writeTerminal, requestExit, editDraft, exited } = terminalLifecycle
+  const { terminal, tui, herdr, disposers, writeTerminal, requestExit, exited } = terminalLifecycle
 
   const view = new TranscriptView(sessionView.model, theme, markdown, {
     state: appearance.viewState,
@@ -416,314 +405,42 @@ export function apply(ctx: Context, config: unknown): void {
 
   disposers.push(promptInput.inputListener())
 
-  const registry = (): CommandRegistry | undefined => ctx.get('commands') as CommandRegistry | undefined
-
-  /**
-   * Where a bare `--resume` gets its list, and the ports it drives.
-   *
-   * The keyboard is taken through a port rather than here: how a picker holds
-   * it, and how long it may, is the modal owner's business.
-   */
-  const sessionPicker = createSessionPicker(ctx, {
-    keymap: appearance.keymap,
-    notice: message => sessionView.notice(message),
-    render: () => tui.requestRender(),
-    // A stored session's own mode can only disagree with one this run named, and
-    // only a roster can say whether the name it uses still exists.
-    validateStoredPreset: async id => {
-      if (resolved.preset === undefined || agentPresets === undefined) return
-      await presetChoice.presetFor(SessionId(id), true, undefined)
-    },
-    openPicker: (picker, vet) => modalInput.openPicker(picker, vet),
-  })
-
-  /**
-   * Open the key map over the surface.
-   *
-   * Nothing here is a pick: a row names an action and the keys reaching it, so
-   * the id the list settles on is thrown away. What the reader came for is the
-   * list itself, and the filter that narrows it.
-   */
-  const openKeyMap = (layer: ActionLayer | undefined): void => {
-    void modalInput.openPicker(new KeymapPicker(appearance.keymap, layer), undefined, 'popup')
-  }
-
   stash = promptMemory.buildStash()
+
+  /**
+   * The command plane, wired to the owners every submission is delegated to.
+   *
+   * Built once the bank exists, because the parked-draft commands route to the
+   * very bank the footer counts; every other port is a live read, so a command
+   * typed after a session switch answers for the session now on screen.
+   */
+  const commands = createCommands(ctx, {
+    launch: {
+      sessionId: resolved.sessionId,
+      resume: resolved.resume,
+      resumePicker: resolved.resumePicker,
+    },
+    preset: resolved.preset,
+    presetRoster: agentPresets,
+    missingOptional: () => describeMissingOptional(probe),
+    session: sessionLifecycle,
+    transcript: sessionView,
+    route: modelChoice,
+    modes: presetChoice,
+    work: backgroundWork,
+    staged: stagedTurns,
+    memory: promptMemory,
+    appearance,
+    terminal: terminalLifecycle,
+    modals: modalInput,
+    statusFacts: () => statusFacts(),
+    stash: () => stash,
+    render: () => tui.requestRender(),
+  })
 
   /** The live session this process runs, which is the only source holding an unflushed tail. */
   const liveSession = (id: SessionId): { snapshotEvents?: () => readonly ForkEvent[] } | undefined =>
     (ctx.get('sessions') as { get?: (id: SessionId) => { snapshotEvents?: () => readonly ForkEvent[] } | undefined } | undefined)?.get?.(id)
-
-  /**
-   * Show or choose the route the next step will use.
-   *
-   * The choice is session-scoped: it changes nothing about the settings a later
-   * run reads, and the loop logs its own durable notice when the route a request
-   * actually used changes.
-   */
-  /**
-   * Show, read, or kill a background job.
-   *
-   * A terminal has no second window, so a job started by the model is otherwise
-   * invisible: the board is the only place a reader can see what is still
-   * running and stop it.
-   */
-  /**
-   * Write what the reader can see to a file.
-   *
-   * The base's `/export` downloads the log through the browser, which a
-   * terminal has no way to do, so this dumps the transcript the reader is
-   * looking at — the thing worth pasting into a message.
-   */
-  const runExportCommand = (argument: string): void => {
-    const path = resolve(argument === '' ? defaultExportFile(String(sessionLifecycle.activeSession())) : argument)
-    try {
-      writeFileSync(path, transcriptToText(sessionView.model.entries()), 'utf8')
-      sessionView.notice(`transcript written to ${path}`)
-    } catch (error) {
-      sessionView.notice(`could not write ${path}: ${error instanceof Error ? error.message : String(error)}`)
-    }
-    tui.requestRender()
-  }
-
-  /** Show the todo list the agent has been keeping. */
-  const runTodoCommand = (): void => {
-    sessionView.notice(describeTodos(sessionView.workState().todos))
-    tui.requestRender()
-  }
-
-  /**
-   * Put the last answer on the reader's clipboard.
-   *
-   * The clipboard belongs to the terminal, so this asks it through OSC 52 —
-   * which is also the only route that works over SSH.
-   */
-  const runCopyCommand = (): void => {
-    const last = [...sessionView.model.entries()].reverse().find(entry => entry.kind === 'assistant')
-    if (last === undefined || last.kind !== 'assistant') {
-      sessionView.notice('nothing to copy yet')
-      tui.requestRender()
-      return
-    }
-    terminal.write(clipboardSequence(last.text))
-    sessionView.notice(`copied ${last.text.length} characters through the terminal`)
-    tui.requestRender()
-  }
-
-
-  const helpText = (): string => {
-    const current = sessionLifecycle.drivingAgent()?.agent
-    const registered = current === undefined || registry() === undefined
-      ? []
-      : registry()?.list(current).map(command => `/${command.name}`) ?? []
-    const commands = registered.length === 0 ? 'none registered yet' : registered.join(' ')
-    return `commands: ${commands} · surface: ${LOCAL_COMMANDS.join(' ')} · keys: ${surfaceKeysLine(appearance.keymap())} · ${chordKeysLine(appearance.keymap())}`
-  }
-
-  /**
-   * Whether the agent this surface is driving is in plan mode.
-   *
-   * The dock's fold is the fallback, for a composition without the plan
-   * package: with the controller present its answer is the agent's own state
-   * rather than a replay of the events this surface happened to see.
-   */
-  const planState = (): PlanModeState | undefined => {
-    const current = sessionLifecycle.drivingAgent()?.agent
-    if (current === undefined) return undefined
-    const presets = ctx.get('agentPresets') as ServiceFor | undefined
-    return readPlanState({
-      direct: name => ctx.get(name),
-      forAgent: (target, name) => presets?.serviceFor(target, name),
-    }, current)
-  }
-
-  const planActive = (): boolean => planSelectedActive(planState(), sessionView.workState().planMode)
-
-  const runCommand = (name: string, line: string): void => {
-    const current = sessionLifecycle.drivingAgent()
-    const commands = registry()
-    if (current === undefined) {
-      sessionView.notice('the agent is still starting; try again in a moment')
-      tui.requestRender()
-      return
-    }
-    if (commands === undefined || commands.find(current.agent, name) === undefined) {
-      sessionView.notice(`unknown command: /${name} — ${helpText()}`)
-      tui.requestRender()
-      return
-    }
-    const controller = new AbortController()
-    void commands.execute(current.agent, line, [], controller.signal).then(execution => {
-      const result = execution?.result
-      if (result === undefined) return
-      sessionView.notice(result.kind === 'error' ? `/${name} failed: ${result.text ?? 'no detail'}` : `/${name} ${result.text ?? 'done'}`)
-      tui.requestRender()
-    }).catch((error: unknown) => {
-      sessionView.notice(`/${name} failed: ${error instanceof Error ? error.message : String(error)}`)
-      tui.requestRender()
-    })
-  }
-
-
-  /**
-   * Carry out one classified line, wherever it was asked for.
-   *
-   * A chord asks for the same things the command line does, so both arrive
-   * here: a chord cannot behave differently from the command it stands for.
-   */
-  const runSubmission = (submission: Submission): void => {
-    switch (submission.kind) {
-      case 'empty':
-        return
-      case 'quit':
-        requestExit(0)
-        return
-      case 'model':
-        modelChoice.runModelCommand(submission.argument)
-        return
-      case 'preset':
-        presetChoice.runPresetCommand(submission.argument)
-        return
-      case 'jobs':
-        backgroundWork.runJobsCommand(submission.argument)
-        return
-      case 'rename':
-        sessionLifecycle.runRenameCommand(submission.title)
-        return
-      case 'export':
-        runExportCommand(submission.path)
-        return
-      case 'subagents':
-        backgroundWork.runSubagentsCommand(submission.argument)
-        return
-      case 'fork':
-        sessionLifecycle.runForkCommand(submission.title)
-        return
-      case 'new':
-        sessionLifecycle.runNewCommand(submission.title)
-        return
-      case 'reload':
-        sessionLifecycle.runReloadCommand()
-        return
-      case 'todo':
-        runTodoCommand()
-        return
-      case 'theme':
-        appearance.runThemeCommand(submission.argument)
-        return
-      case 'keys': {
-        const layer = submission.argument === '' ? undefined : keymapLayer(submission.argument)
-        // A layer that does not exist is not a filter that matches nothing: the
-        // reader asked for something by name, so the answer names the names.
-        if (submission.argument !== '' && layer === undefined) {
-          sessionView.notice(`unknown layer "${submission.argument}" · ${KEYMAP_LAYERS.join(' ')}`)
-          tui.requestRender()
-          return
-        }
-        openKeyMap(layer)
-        return
-      }
-      case 'copy':
-        runCopyCommand()
-        return
-      case 'history':
-        promptMemory.runHistoryCommand(submission.argument)
-        return
-      case 'stash':
-        // Submitting a command consumes the line it was typed on, so this path
-        // can only carry a draft it was given; parking the bar's own draft is
-        // what the chord is for.
-        if (submission.argument.trim() === '') sessionView.notice('usage: /stash <draft>, or ctrl+x then s to park the editor')
-        else void stash?.stashEditor(submission.argument)
-        return
-      case 'stash-draft':
-        void stash?.stashEditor()
-        return
-      case 'stash-pop':
-        void stash?.pop(submission.selector)
-        return
-      case 'stash-apply':
-        void stash?.apply(submission.selector)
-        return
-      case 'stash-list':
-        void stash?.list(String(sessionLifecycle.activeSession()))
-        return
-      case 'stash-drop':
-        void stash?.drop(submission.selector)
-        return
-      case 'stash-clear':
-        void stash?.clear()
-        return
-      case 'editor':
-        editDraft()
-        return
-      case 'status': {
-        const facts = statusFacts()
-        const context = facts.contextTokens === undefined
-          ? undefined
-          : `context ${formatTokens(facts.contextTokens)}${facts.contextWindow === undefined ? '' : `/${formatTokens(facts.contextWindow)}`}`
-        sessionView.notice([
-          `session ${sessionLifecycle.activeSession()}`,
-          sessionView.viewingChild() ? undefined : `viewing ${sessionView.viewed()}`,
-          facts.model === undefined
-            ? undefined
-            : `model ${facts.provider === undefined ? '' : `${facts.provider}/`}${facts.model}${facts.effort === undefined ? '' : ` (${facts.effort})`}`,
-          facts.agentPreset === undefined ? undefined : `mode ${facts.agentPreset}`,
-          facts.preset === undefined ? undefined : `permissions ${facts.preset}`,
-          context,
-          facts.uncachedInputTokens === undefined && facts.outputTokens === undefined
-            ? undefined
-            : `tokens in ${formatTokens(facts.uncachedInputTokens ?? 0)} out ${formatTokens(facts.outputTokens ?? 0)}`,
-          `cwd ${facts.cwd}`,
-        ].filter(part => part !== undefined).join(' · '))
-        tui.requestRender()
-        return
-      }
-      case 'clear':
-        sessionView.reset()
-        tui.requestRender()
-        return
-      case 'undo':
-        stagedTurns.undo()
-        return
-      case 'redo':
-        stagedTurns.redo()
-        return
-      case 'help':
-        sessionView.notice(helpText())
-        tui.requestRender()
-        return
-      case 'resume':
-        void sessionPicker.chooseSession().then(picked => picked === undefined ? undefined : sessionLifecycle.switchSession(picked)).catch((error: unknown) => {
-          sessionView.notice(`could not resume: ${error instanceof Error ? error.message : String(error)}`)
-          tui.requestRender()
-        })
-        return
-      // Plan mode is a command the harness owns, so the chord asks the host for
-      // the state and names the command for the other one: one key, both ways.
-      case 'plan':
-        runCommand('plan', planToggleLine(planActive()))
-        return
-      case 'command':
-        runCommand(submission.name, submission.line)
-        return
-      case 'prompt': {
-        const driven = sessionLifecycle.drivingAgent()
-        if (driven === undefined) {
-          sessionView.notice('the agent is still starting; try again in a moment')
-          tui.requestRender()
-          return
-        }
-        // While a turn is running the human is steering it, not opening another.
-        if (sessionLifecycle.turnRunning()) driven.steer(submission.text)
-        else {
-          modelChoice.adoptDefault()
-          void stagedTurns.send(submission.text)
-        }
-        return
-      }
-    }
-  }
 
   promptInput.attachSubmit()
 
@@ -750,59 +467,7 @@ export function apply(ctx: Context, config: unknown): void {
   appearance.createThemesHome()
   disposers.push(appearance.watchThemes())
 
-  const degraded = describeMissingOptional(probe)
-  if (degraded !== undefined) sessionView.notice(degraded)
-
-  /**
-   * Open the session this run was launched for.
-   *
-   * A bare `--resume` asks a question only the reader can answer, so the
-   * picker runs before anything is created: the agent is then opened on the
-   * chosen session rather than swapped afterwards, which would leave the first
-   * one's turn half-started.
-   */
-  const boot = async (): Promise<void> => {
-    if (!resolved.resumePicker) {
-      await sessionLifecycle.openAgent(resolved.sessionId, resolved.resume)
-      return
-    }
-    const picked = await sessionPicker.chooseSession()
-    if (picked === undefined) {
-      requestExit(0)
-      return
-    }
-    await sessionLifecycle.openAgent(picked, true)
-  }
-
-  /**
-   * Take the screen, then open the session this run was launched for.
-   *
-   * A mode named on the command line is resolved FIRST: the alt screen swallows
-   * the launcher's own error output, so a mode this roster does not offer has to
-   * be answered while the shell still owns the terminal.
-   */
-  const start = async (): Promise<void> => {
-    // A named mode that disagrees with the one this session recorded is refused
-    // here as well as at the open, because the alternate screen closes over
-    // whatever was painted on it: the reader would see the failure, not the
-    // reason.
-    await presetChoice.validateLaunch({
-      sessionId: resolved.sessionId,
-      resume: resolved.resume,
-      resumePicker: resolved.resumePicker,
-    })
-    tui.start()
-    writeTerminal(windowTitle(process.cwd(), 'ready'))
-    // Claiming the pane's agent row does not wait for a session: the pane is
-    // already on screen and already idle, and a session may still be chosen.
-    herdr.publish()
-    // A refused settings edit is only visible now that the surface owns the
-    // screen; whatever the scope found before this point prints here instead.
-    appearance.openNotices(message => sessionView.notice(message))
-    await boot()
-  }
-
-  void start().catch((error: unknown) => {
+  void commands.start().catch((error: unknown) => {
     requestExit(1, error instanceof Error ? error.message : String(error))
   })
 }
