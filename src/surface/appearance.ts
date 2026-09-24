@@ -29,6 +29,14 @@ const MS_PER_SECOND = 1000
 export interface AppearancePorts {
   /** Whether colour was asked for at launch; the flag outranks anything configured. */
   readonly color: () => boolean
+  /**
+   * The theme the row's own configuration pins, or nothing when it pins none.
+   *
+   * Read from the row rather than taken from the section, because a harness that
+   * keeps configuration per row has no `dsh-tui:` section to write a name into:
+   * the row is then the only layer a profile patch can carry a theme in.
+   */
+  readonly rowTheme: string | undefined
   readonly notice: (message: string) => void
   readonly render: () => void
   readonly invalidateMarkdown: () => void
@@ -135,10 +143,21 @@ export function createAppearance(ctx: Context, ports: AppearancePorts): Appearan
    * ends mid-preview has still persisted only what the reader chose.
    */
   let previewTheme: string | undefined
+  /**
+   * The theme in force: the reader's section, then the name the row pins, then
+   * whatever file answers to no name at all.
+   *
+   * One question asked at two scopes. A section belongs to the settings document,
+   * so a reader who has one is naming a theme for it; the row belongs to the
+   * profile, and a harness that keeps configuration per row has no document left
+   * to hold a name — which is why the row is read here, below the section and
+   * above the default, rather than as the only answer.
+   */
+  const themeName = (section: TuiSettings): string | undefined => section.theme ?? ports.rowTheme
   const applyTheme = (section: TuiSettings): void => {
-    // The row under the cursor outranks the document while a list is open, so a
-    // theme is judged on the reader's own transcript before it is taken.
-    current = createTheme(themeMode(), toOverrides({ ...section, theme: previewTheme ?? section.theme }, themeLibrary))
+    // The row under the cursor outranks both while a list is open, so a theme is
+    // judged on the reader's own transcript before it is taken.
+    current = createTheme(themeMode(), toOverrides({ ...section, theme: previewTheme ?? themeName(section) }, themeLibrary))
   }
   /** Repaint the surface: both caches hold rows drawn under the table this replaced. */
   const restyle = (): void => {
@@ -262,7 +281,7 @@ export function createAppearance(ctx: Context, ports: AppearancePorts): Appearan
    * section, which is still theirs.
    */
   const reportMissingTheme = (section: TuiSettings): void => {
-    const name = section.theme
+    const name = themeName(section)
     if (name === undefined || themeLibrary.get(name) !== undefined) return
     settingsNotice.post(`dsh-tui theme "${name}" is not a theme · themes: ${themeLibrary.names().join(' · ')} · the default, ${DEFAULT_THEME}, is drawn instead`)
   }
@@ -277,7 +296,9 @@ export function createAppearance(ctx: Context, ports: AppearancePorts): Appearan
   const openThemePicker = async (): Promise<void> => {
     const picked = await ports.openPicker(new ThemePicker(
       () => themeLibrary,
-      () => appliedSection?.theme,
+      // What the surface draws right now, so a name pinned in the row is the
+      // row the list opens on instead of reading as no choice at all.
+      () => appliedSection === undefined ? ports.rowTheme : themeName(appliedSection),
       () => keymap,
       theme => showTheme(theme?.name),
     ))
@@ -303,7 +324,11 @@ export function createAppearance(ctx: Context, ports: AppearancePorts): Appearan
     // The table answers the other question a theme raises — which layer drew a
     // shade — and stays reachable by name now that the list has the command.
     if (head === 'tokens') {
-      for (const line of renderThemeTable(toOverrides(readSection(), themeLibrary), themeLibrary)) ports.notice(line)
+      // The table answers for the appearance on screen, not only for the
+      // document: a row-pinned theme would otherwise read as every shade
+      // untouched, which is the opposite of the question this command answers.
+      const section = readSection()
+      for (const line of renderThemeTable(toOverrides({ ...section, theme: themeName(section) }, themeLibrary), themeLibrary)) ports.notice(line)
       ports.render()
       return
     }
@@ -343,7 +368,8 @@ export function createAppearance(ctx: Context, ports: AppearancePorts): Appearan
    * Registration is how the document learns the section exists at all; without
    * it a hand-written `dsh-tui:` block would be dropped on the next save. The
    * first read happens here too, because this is the only scope the service
-   * may be touched in.
+   * may be touched in, and a harness that has no section to register leaves the
+   * row's own config as the store instead.
    */
   const registerSection = (): void => {
     ctx.inject(['settings'], settingsCtx => {
@@ -357,8 +383,8 @@ export function createAppearance(ctx: Context, ports: AppearancePorts): Appearan
           owner: settingsCtx,
           ns: TUI_SETTINGS_NAMESPACE,
           schema: TuiSettingsSchema,
-          // Nothing to layer under the section: the read below takes whatever
-          // the section resolves to and nothing above it.
+          // Nothing to layer under the section: the row's own theme is applied
+          // by the read below, where the section and the row are ranked together.
           entry: {},
           onChange: () => {
             applySettings()
@@ -372,9 +398,9 @@ export function createAppearance(ctx: Context, ports: AppearancePorts): Appearan
         settingsNotice.post(settingsProblemMessage(error) + ' · prompt history stays off until the section parses')
         return
       }
-      // No section API: this harness keeps configuration per plugin row, so
-      // there is nothing here to read and nothing to refuse either. Staying
-      // quiet is a read of that composition, not a failure to report.
+      // No section API: this harness keeps configuration per plugin row, so the
+      // row's `theme` is the durable choice and nothing here can hold a history
+      // switch. Staying quiet is a read of that composition, not a refusal.
       if (opened === undefined) return
       const scope = opened
       readSection = () => readScope(scope, message => settingsNotice.post(message))

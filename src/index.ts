@@ -109,6 +109,9 @@ export function apply(ctx: Context, config: unknown): void {
    */
   const appearance = createAppearance(ctx, {
     color: () => resolved.color,
+    // The row's own theme is the layer a profile patch can pin on a harness
+    // that keeps settings per row, so it is read here beside the section.
+    rowTheme: resolved.theme,
     notice: message => sessionView.notice(message),
     render: () => tui.requestRender(),
     invalidateMarkdown: () => markdown.invalidate(),

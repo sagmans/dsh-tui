@@ -54,6 +54,11 @@ breaking change, and a patch carries only fixes.
   skill root only on request. The skill supports any dsh plugin checkout through
   a cloned home. An existing copy prompts before replacement; `--update` skips
   the prompt.
+- A theme can be pinned in this bundle's own row config, which is the layer that
+  reaches the surface on a harness keeping settings per plugin row: the profile
+  patch carries the name where the settings document no longer can. The
+  `dsh-tui:` section still outranks the row, and the shipped default answers when
+  neither names a theme. `/theme tokens` reports the row-pinned name too.
 
 ### Fixed
 

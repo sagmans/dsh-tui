@@ -1,5 +1,5 @@
 import { SessionId } from '@deepseek-ai/dsh-session'
-import type { TuiStartup } from './contracts.ts'
+import type { TuiRowConfig } from './contracts.ts'
 
 /** A composed row whose configuration cannot describe a runnable terminal surface. */
 export class TuiConfigError extends Error {}
@@ -31,7 +31,7 @@ function optionalBoolean(value: unknown, field: string, fallback: boolean): bool
  * may hand-configure this row in a profile patch, so the row validates its own
  * input instead of trusting the layer above it.
  */
-export function resolveConfig(raw: unknown): TuiStartup {
+export function resolveConfig(raw: unknown): TuiRowConfig {
   if (typeof raw !== 'object' || raw === null) {
     throw new TuiConfigError('tui row configuration must be a mapping')
   }
@@ -43,6 +43,7 @@ export function resolveConfig(raw: unknown): TuiStartup {
     model: optionalString(record.model, 'model'),
     provider: optionalString(record.provider, 'provider'),
     preset: optionalString(record.preset, 'preset'),
+    theme: optionalString(record.theme, 'theme'),
     color: optionalBoolean(record.color, 'color', true),
     bell: optionalBoolean(record.bell, 'bell', true),
   }

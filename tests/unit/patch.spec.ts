@@ -81,6 +81,16 @@ const LIBRARY_PACKAGES = ['@deepseek-ai/schemastery']
 /** The mode a flagless run joins, which has to be one the roster actually ships. */
 const ROSTER_DEFAULT = 'ptc'
 
+/**
+ * Row options no launch flag publishes.
+ *
+ * `theme` is pinned in a profile patch instead: a harness that keeps settings per
+ * row has no document section to write a name into, so the row's own config is
+ * where the choice travels — and deriving it from the startup service would
+ * forward a flag this surface deliberately does not offer.
+ */
+const ROW_ONLY_OPTIONS = ['theme']
+
 /** The row list before the patch's single `insert:` block. */
 function patchHead(text: string): { id: string; disabled: boolean }[] {
   const end = text.indexOf('\n- insert:')
@@ -143,7 +153,9 @@ describe('the bundle patch', () => {
     expect(requireRow(rows, 'tui-startup').id).toBe(startupRowName)
     expect(row.body).toContain(`inject: [${TUI_STARTUP_SERVICE}]`)
     const keys = configKeys(row)
-    expect(keys.sort()).toEqual(Object.keys(resolveConfig({ sessionId: 'patch-spec' })).sort())
+    const forwarded = Object.keys(resolveConfig({ sessionId: 'patch-spec' }))
+      .filter(key => !ROW_ONLY_OPTIONS.includes(key))
+    expect(keys.sort()).toEqual(forwarded.sort())
     for (const key of keys) {
       expect(row.body).toContain(`${key}: !!js ctx.${TUI_STARTUP_SERVICE}.${key}`)
     }
