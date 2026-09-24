@@ -1,23 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import {
-  cardDetailRows,
-  CARD_DETAIL_MAX,
-  CARD_LINE_LIMIT,
-  CARD_SHELL_PREVIEW,
-  cardOfCall,
-  cardOfResult,
-  carriedFields,
-  clip,
-  mergeCards,
-  renderFileDiff,
-  rowText,
-  shellFoldHint,
-  shellRetentionHint,
-  subCallRow,
-  subCallRows,
-  type CardRow,
-  type ToolCard,
-} from '@/cards.ts'
+import { cardDetailRows, CARD_SHELL_PREVIEW, shellFoldHint, shellRetentionHint } from '@/cards/preview.ts'
+import { CARD_DETAIL_MAX, CARD_LINE_LIMIT, clip, rowText, type CardRow, type ToolCard } from '@/cards.ts'
+import { cardOfCall, cardOfResult, renderFileDiff } from '@/cards/presenter.ts'
+import { carriedFields, mergeCards, subCallRow, subCallRows } from '@/cards/composition.ts'
 
 /** The words of each row, which is what most assertions are about. */
 const texts = (rows: readonly CardRow[]): string[] => rows.map(rowText)

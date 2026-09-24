@@ -1,12 +1,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import {
-  cardOfCall,
-  cardOfResult,
-  contentLines,
-  type ToolPresenter,
-  type ToolResultInput,
-} from '../cards.ts'
+import { cardOfCall, cardOfResult } from '../cards/presenter.ts'
+import { contentLines, type ToolPresenter, type ToolResultInput } from '../cards.ts'
 
 function parseArguments(argumentsJson: string): unknown {
   try {

@@ -10,6 +10,9 @@ breaking change, and a patch carries only fixes.
 
 ### Changed
 
+- Tool cards now take their shape from one module, sub-call folding from
+  another, the preview window from a third, and per-tool rendering from the
+  presenter, so a new tool family touches the presenter alone.
 - Terminal text now reads its escape grammar, its modelled style state, and its
   two public policies from three modules. Recognition is the trust boundary the
   drawing paths depend on, so it no longer changes beside row layout.

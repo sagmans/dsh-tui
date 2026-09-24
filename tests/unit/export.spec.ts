@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { SUBCALL_MAX, type ToolPresenter } from '@/cards.ts'
+import { SUBCALL_MAX } from '@/cards/composition.ts'
+import { type ToolPresenter } from '@/cards.ts'
 import { defaultExportFile, transcriptToText } from '@/export.ts'
 import { TranscriptModel } from '@/transcript.ts'
 

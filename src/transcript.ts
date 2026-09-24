@@ -1,4 +1,5 @@
-import { cardFromLines, carriedFields, contentLines, mergeCards, subCallRow, subCallRows, SUBCALL_MAX, type ToolCard, type ToolPresenter, type ToolSubCallRows } from './cards.ts'
+import { cardFromLines, contentLines, type ToolCard, type ToolPresenter, type ToolSubCallRows } from './cards.ts'
+import { carriedFields, mergeCards, subCallRow, subCallRows, SUBCALL_MAX } from './cards/composition.ts'
 import { injectionSummary } from './injection.ts'
 import { sliceGraphemes, tailGraphemes } from './text.ts'
 import { countTokens } from './tokens.ts'

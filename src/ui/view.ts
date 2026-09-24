@@ -6,7 +6,8 @@ import {
   visibleWidth,
   wrapTextWithAnsi,
 } from '@earendil-works/pi-tui'
-import { cardDetailRows, clip, oneLine, shellFoldHint, shellRetentionHint, type CardPreview, type CardRow, type CardStat, type CardStatKind, type ToolCard, type ToolCardKind, type ToolSubCall } from '../cards.ts'
+import { cardDetailRows, shellFoldHint, shellRetentionHint, type CardPreview } from '../cards/preview.ts'
+import { clip, oneLine, type CardRow, type CardStat, type CardStatKind, type ToolCard, type ToolCardKind, type ToolSubCall } from '../cards.ts'
 import { defaultKeymap, hintKeys, type Keymap } from '../input/actions.ts'
 import { CUSTOM_ROW_NUMBER, type GateCard } from '../gates.ts'
 import { SECOND_MS, type LiveCallState, type TranscriptEntry, type TranscriptModel } from '../transcript.ts'

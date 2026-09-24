@@ -1,4 +1,5 @@
-import { CARD_DETAIL_MAX, CARD_SHELL_PREVIEW } from './cards.ts'
+import { CARD_DETAIL_MAX } from './cards.ts'
+import { CARD_SHELL_PREVIEW } from './cards/preview.ts'
 
 /**
  * How one tool's cards draw.

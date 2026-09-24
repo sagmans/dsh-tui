@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { cardOfCall, cardOfResult, contentLines, rowText, SUBCALL_MAX, type ToolCard, type ToolPresenter } from '@/cards.ts'
+import { cardOfCall, cardOfResult } from '@/cards/presenter.ts'
+import { contentLines, rowText, type ToolCard, type ToolPresenter } from '@/cards.ts'
+import { SUBCALL_MAX } from '@/cards/composition.ts'
 import { REASONING_CHAR_LIMIT, TranscriptModel } from '@/transcript.ts'
 
 const text = (value: string) => [{ type: 'text', text: value }]
