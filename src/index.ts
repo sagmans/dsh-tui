@@ -9,7 +9,6 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-commands'
 import { startAgent, type ForkInheritance, type TuiAgent } from './agent/host.ts'
 import { createSessionHistory, presetOfStoredSession } from './agent/history.ts'
-import { createPromptHistory } from './agent/prompt-history.ts'
 import { createPresetRoster, parsePresetArgument, type PresetRoster, type PresetSummary } from './agent/presets.ts'
 import { createToolPresenter } from './agent/present.ts'
 import { forkPoint, type ForkEvent } from './agent/fork.ts'
@@ -25,7 +24,6 @@ import { QuestionGate, toGateQuestions } from './gates/questions.ts'
 import { cancelStep, quitStep } from './input/cancel.ts'
 import { createAnswerCompletionProvider, createCompletionProvider } from './input/completion.ts'
 import { createFileIndex } from './input/file-index.ts'
-import { ghostSuffix } from './input/ghost.ts'
 import { LOCAL_COMMANDS, classifySubmission, type Submission } from './input/submission.ts'
 import { createDeferredNotice } from './settings-notice.ts'
 import {
@@ -59,9 +57,9 @@ import { pendingPrompts } from './queue.ts'
 import { renderThemeTable } from './theme-command.ts'
 import { DEFAULT_THEME, builtinNames, builtinThemesDir, ensureThemesHome, exportTheme, loadThemes, themesHomeDir, watchThemes } from './theme-files.ts'
 import { KEYMAP_LAYERS, keymapLayer } from './keys-command.ts'
-import { resetSequence } from './theme-resolver.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { createBackgroundWork } from './surface/background-work.ts'
+import { createPromptMemory } from './surface/prompt-memory.ts'
 import { createSessionPicker } from './surface/session-picker.ts'
 import { formatTokens } from './tokens.ts'
 import { TranscriptModel } from './transcript.ts'
@@ -69,8 +67,6 @@ import { WorkFold, describeTodos, planSelectedActive, planToggleLine, readPlanSt
 import { cleanCopied } from './ui/copy.ts'
 import { WorkDock } from './ui/dock.ts'
 import { GateInputBar } from './ui/gate-input.ts'
-import type { GhostBrush } from './ui/editor.ts'
-import { HistoryPicker } from './ui/history-picker.ts'
 import { surfaceLayout } from './ui/layout.ts'
 import { KeymapPicker } from './ui/keymap-picker.ts'
 import { PickerPopup, POPUP_MAX_HEIGHT, popupWidth } from './ui/picker-card.ts'
@@ -89,8 +85,7 @@ import {
 import { QueueBar } from './ui/queue.ts'
 import { StatusBar } from './ui/status.ts'
 import { DEFAULT_VIEW_STATE, TranscriptView } from './ui/view.ts'
-import { PromptStash } from './stash.ts'
-import { confirmedClear, StashConfirmPicker, StashPicker } from './ui/stash-picker.ts'
+import type { PromptStash } from './stash.ts'
 import { ThemePicker } from './ui/theme-picker.ts'
 
 export const name = 'tui'
@@ -115,9 +110,6 @@ const backHint = (map: Keymap): string => `${hintKeys(map, 'surface.back') || BA
 
 /** How often the running-state clock repaints while a turn is open. */
 const STATUS_TICK_MS = 1000
-
-/** Reverse video for the cell the cursor occupies, so a ghost keeps the cursor visible. */
-const GHOST_CURSOR_PREFIX = '\u001b[7m'
 
 /** The preset registry, asked for a service the agent's own composition holds. */
 interface ServiceFor {
@@ -406,32 +398,34 @@ export function apply(ctx: Context, config: unknown): void {
   let presentScope: Agent | undefined
   const model = new TranscriptModel(createToolPresenter(ctx, () => presentScope))
   /**
-   * The reader's prompt history: global across projects, recorded from every
-   * submitted line, and offered back as they type. Built before the bar so its
-   * first load cannot race the first suggestion.
+   * The prompt's own memory, constructed where the box that draws its ghost
+   * already exists; the settings readers stay live because the document is
+   * hot-reloaded.
    */
-  const promptHistory = createPromptHistory({
-    cap: () => historyMaxEntries,
-    warn: message => {
-      model.notice(message)
+  const promptMemory = createPromptMemory({
+    historyEnabled: () => historyEnabled,
+    historyGhost: () => historyGhost,
+    historyMaxEntries: () => historyMaxEntries,
+    theme,
+    keymap: () => keymap,
+    notice: message => model.notice(message),
+    render: () => tui.requestRender(),
+    editorText: () => editor.getExpandedText(),
+    setEditorText: text => {
+      editor.setText(text)
       tui.requestRender()
     },
+    // A question answers in this editor, so a draft written into a borrowed bar
+    // would become somebody's answer instead of a parked prompt. An editor
+    // holding the draft in another program owns it just as firmly: a pop that
+    // landed then would be deleted from the bank and then overwritten.
+    editorAvailable: () => !promptBar.isBorrowed() && !handedOver,
+    activeSession: () => activeSession,
+    // The keyboard's lifetime is the modal owner's, so the list is handed over
+    // rather than driven here.
+    openPicker: picker => openPicker(picker),
   })
-  /**
-   * The dimmed completion drawn from recorded prompts.
-   *
-   * Colour is the affordance: with styling off the suggestion would be
-   * unreadable text the reader could still accept, which is worse than none.
-   * The cursor cell is also reversed so the cursor stays visible on the ghost.
-   */
-  const ghostBrush: GhostBrush = {
-    enabled: () => historyEnabled && historyGhost && theme.color && theme.visible('editor.ghost'),
-    suggestion: input => ghostSuffix({ entries: promptHistory.entries(), ...input }),
-    paint: (text, cell) => {
-      const styled = theme.style('editor.ghost', text)
-      return cell === 'cursor' ? GHOST_CURSOR_PREFIX + styled + resetSequence() : styled
-    },
-  }
+  const ghostBrush = promptMemory.ghostBrush
   const work = new WorkFold()
   const modelSwitch = new ModelSwitch()
   const agentPresets = createPresetRoster(ctx)
@@ -760,7 +754,7 @@ export function apply(ctx: Context, config: unknown): void {
       return true
     },
     history: () => {
-      void openHistoryPicker()
+      void promptMemory.openHistoryPicker()
       return true
     },
     back: () => {
@@ -1063,32 +1057,6 @@ export function apply(ctx: Context, config: unknown): void {
     chooseTheme(picked)
   }
 
-  /**
-   * Reverse search over recorded prompts, seeded with whatever is in the bar.
-   *
-   * A pick replaces the draft; a cancel leaves it exactly as it was, because the
-   * list was opened to look rather than to lose what is already typed.
-   */
-  const openHistoryPicker = async (): Promise<void> => {
-    if (!historyEnabled) {
-      model.notice('prompt history is disabled in ' + TUI_SETTINGS_NAMESPACE + ' settings')
-      tui.requestRender()
-      return
-    }
-    if (promptHistory.entries().length === 0) {
-      const blocked = promptHistory.blockedReason()
-      model.notice(blocked === undefined ? 'no prompt history yet' : 'prompt history is unavailable: ' + blocked)
-      tui.requestRender()
-      return
-    }
-    // The expanded text is what the reader wrote; a large paste sits in the bar
-    // as a marker, and seeding with it would filter out the prompt it came from.
-    const picked = await openPicker(new HistoryPicker(() => promptHistory.entries(), editor.getExpandedText(), () => keymap))
-    if (picked === undefined) return
-    editor.setText(picked)
-    tui.requestRender()
-  }
-
   /** The roster as the picker paints it, refreshed when the picker opens. */
   let presetRows: readonly PresetSummary[] = []
 
@@ -1099,35 +1067,7 @@ export function apply(ctx: Context, config: unknown): void {
     return await openPicker(new PresetPicker(() => presetRows, () => currentId, () => keymap))
   }
 
-  /**
-   * The prompt bank for the session this surface drives.
-   *
-   * The surface owns the editor, the picker, and the notices, so the bank is
-   * handed the few things it needs to reach them and nothing else: the commands
-   * stay free of terminal state and are exercised without one in the tests.
-   */
-  stash = new PromptStash(
-    {
-      getEditorText: () => editor.getExpandedText(),
-      setEditorText: text => {
-        editor.setText(text)
-        tui.requestRender()
-      },
-      // A question answers in this editor, so a draft written into a borrowed bar
-      // would become somebody's answer instead of a parked prompt. An editor
-      // holding the draft in another program owns it just as firmly: a pop that
-      // landed then would be deleted from the bank and then overwritten.
-      editorIsAvailable: () => !promptBar.isBorrowed() && !handedOver,
-      notice: message => model.notice(message),
-      pick: (entries, label) => openPicker(new StashPicker(entries, label, () => keymap)),
-      confirm: async count => confirmedClear(await openPicker(new StashConfirmPicker(count, () => keymap))),
-      render: () => tui.requestRender(),
-    },
-    // The bank follows the session this surface drives, not the directory it
-    // runs in: two terminals in one checkout keep separate drafts, and a resume
-    // finds the ones it parked. Read per command so a switch retargets it.
-    { sessionId: () => String(activeSession) },
-  )
+  stash = promptMemory.buildStash()
 
   /**
    * The reader's own editor, opened over the draft the bar holds.
@@ -1540,9 +1480,7 @@ export function apply(ctx: Context, config: unknown): void {
     // A cursor counts the turns of one log; the session just opened has its own.
     undoState = resetUndo(id)
     stagedCut = undefined
-    // The bank follows the session, so the footer stops counting the drafts of
-    // the session just left and the next command reads this session's file.
-    void stash?.open()
+    promptMemory.sessionOpened()
     // agent/status is emitted on transitions only, so a driver that was
     // already running when this surface attached — a resume that wakes
     // straight away — would otherwise stay unreported until it stops. The
@@ -2150,48 +2088,6 @@ export function apply(ctx: Context, config: unknown): void {
     })
   }
 
-  /** Show where history is kept, or forget it; the file is global to this machine. */
-  const runHistoryCommand = (argument: string): void => {
-    // The line that asked for this is recorded before the command runs, but that
-    // write rides the store's queue; waiting for it lets the count describe the
-    // file the reader has, not the state before their own line landed.
-    void promptHistory.flush().then(() => {
-      if (argument === '') {
-        const count = promptHistory.entries().length
-        const blocked = promptHistory.blockedReason()
-        model.notice([
-          count + (count === 1 ? ' prompt recorded' : ' prompts recorded'),
-          promptHistory.path(),
-          blocked === undefined ? undefined : 'writes disabled: ' + blocked,
-        ].filter(part => part !== undefined).join(' · '))
-        tui.requestRender()
-        return
-      }
-      if (argument !== 'clear') {
-        model.notice('usage: /history shows where history is kept · /history clear forgets every prompt')
-        tui.requestRender()
-        return
-      }
-      // A refused write cannot remove anything, so saying "forgot 0 prompts"
-      // would describe a successful clear the file never had.
-      const blocked = promptHistory.blockedReason()
-      if (blocked !== undefined) {
-        model.notice('prompt history is unavailable: ' + blocked)
-        tui.requestRender()
-        return
-      }
-      return promptHistory.clear().then(removed => {
-        model.notice('forgot ' + removed + (removed === 1 ? ' prompt' : ' prompts'))
-        tui.requestRender()
-      })
-    }).catch(error => {
-      // The store keeps what the file still holds, so the reader is told the
-      // clear failed rather than being shown a count that never landed.
-      model.notice('could not clear prompt history: ' + (error instanceof Error ? error.message : String(error)))
-      tui.requestRender()
-    })
-  }
-
   /**
    * Carry out one classified line, wherever it was asked for.
    *
@@ -2299,7 +2195,7 @@ export function apply(ctx: Context, config: unknown): void {
         runCopyCommand()
         return
       case 'history':
-        runHistoryCommand(submission.argument)
+        promptMemory.runHistoryCommand(submission.argument)
         return
       case 'stash':
         // Submitting a command consumes the line it was typed on, so this path
@@ -2412,7 +2308,7 @@ export function apply(ctx: Context, config: unknown): void {
     // The library's own history feeds the up/down keys; the store below feeds
     // ghost completion and reverse search, and is global rather than per-session.
     editor.addToHistory(text)
-    if (historyEnabled) promptHistory.record(text)
+    promptMemory.record(text)
     runSubmission(submission)
   }
 
