@@ -10,6 +10,9 @@ breaking change, and a patch carries only fixes.
 
 ### Changed
 
+- The transcript view keeps row order, clicks, and caches, while tool-card,
+  gate-card, and message drawing each live in their own renderer, so a card or a
+  thought can change without touching the row cache around it.
 - The transcript keeps reading order and in-flight text, while the bookkeeping
   a tool row shares between its request, its nested dispatches, and its result
   lives in a call fold that hands back the rows to commit; recorded message
