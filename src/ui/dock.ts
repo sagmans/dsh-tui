@@ -55,6 +55,7 @@ const TODO_GLYPHS: Readonly<Record<OpenTodoStatus, string>> = {
 }
 /** The mark a row that is still in flight carries, for a job and a delegation alike. */
 const RUNNING_MARK = '▸'
+const SUBAGENT_ROW_INDENT = '  '
 
 /** Each todo state is its own element, so one can be toned without the others. */
 const TODO_TOKENS: Readonly<Record<OpenTodoStatus, TuiToken>> = {
@@ -79,8 +80,10 @@ function orderTodos(todos: readonly OpenTodo[]): readonly OpenTodo[] {
 export class WorkDock implements Component {
   /** A choice lasts while more than the preview's rows remain live. */
   private subagentsExpanded = false
-  /** The last painted heading, not a guessed offset above the editor. */
-  private subagentHeadingRow: number | undefined
+  /** Rendered rows delimit the section even when its heading is hidden. */
+  private subagentSection: { start: number; end: number; toggleable: boolean } | undefined
+  /** Text spans retain full child ids; the drawn ids may be shortened. */
+  private readonly subagentTexts = new Map<number, { id: string; endX: number }>()
 
   constructor(
     private readonly state: () => WorkState,
@@ -91,16 +94,26 @@ export class WorkDock implements Component {
     private readonly subagents: () => readonly SubagentRun[] = () => [],
     /** Clock for elapsed times, so a frame can be pinned in a test. */
     private readonly now: () => number = () => Date.now(),
+    /** A child opens through the same read-only transcript path as /subagents open. */
+    private readonly openSubagent?: (id: string) => void,
   ) {}
 
   invalidate(): void {
     // Paint rebuilds click geometry; invalidation must preserve the reader’s fold choice.
   }
 
-  /** A visible heading is the sole hit target; other dock rows keep their clicks. */
+  /** Text opens its child; other cells in a foldable section control that fold. */
   handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
-    if (event.type !== 'click' || event.button !== 'left' || event.y !== this.subagentHeadingRow) return undefined
+    if (event.type !== 'click' || event.button !== 'left') return undefined
     if (event.x < 0 || event.x >= event.width || event.y < 0 || event.y >= event.height) return undefined
+    const text = this.subagentTexts.get(event.y)
+    if (text !== undefined && event.x >= visibleWidth(SUBAGENT_ROW_INDENT) && event.x < text.endX) {
+      if (this.openSubagent === undefined) return undefined
+      this.openSubagent(text.id)
+      return { handled: true, render: true }
+    }
+    const section = this.subagentSection
+    if (section === undefined || !section.toggleable || event.y < section.start || event.y >= section.end) return undefined
     this.subagentsExpanded = !this.subagentsExpanded
     return { handled: true, render: true }
   }
@@ -174,24 +187,28 @@ export class WorkDock implements Component {
     const running = runs.filter(run => run.status === 'running')
     if (running.length <= DOCK_SUBAGENT_LIMIT) this.subagentsExpanded = false
     if (running.length === 0) return
+    const start = lines.length
+    const headingRows = this.theme.visible('dock.subagents.heading') ? 1 : 0
     const limit = this.subagentsExpanded ? running.length : DOCK_SUBAGENT_LIMIT
     const now = this.now()
     const rows: string[] = []
     for (const run of running.slice(0, limit)) {
       if (!this.theme.visible('dock.subagents.running')) continue
-      const lead = `  ${RUNNING_MARK} `
-      rows.push(this.theme.cut(this.theme.rich(`${lead}${describeSubagent(run, now)}`, { token: 'dock.subagents.running', column: visibleWidth(lead) }), width, '…'))
+      const lead = `${SUBAGENT_ROW_INDENT}${RUNNING_MARK} `
+      const row = this.theme.cut(this.theme.rich(`${lead}${describeSubagent(run, now)}`, { token: 'dock.subagents.running', column: visibleWidth(lead) }), width, '…')
+      this.subagentTexts.set(start + headingRows + rows.length, { id: run.id, endX: visibleWidth(row) })
+      rows.push(row)
     }
     if (running.length > limit && this.theme.visible('dock.subagents.overflow')) {
       rows.push(this.theme.style('dock.subagents.overflow', this.theme.cut(`  … ${running.length - limit} more`, width, '…')))
     }
-    if (running.length > DOCK_SUBAGENT_LIMIT && this.theme.visible('dock.subagents.heading')) this.subagentHeadingRow = lines.length
     const foldMark = running.length <= DOCK_SUBAGENT_LIMIT ? '' : ` ${this.subagentsExpanded ? SUBAGENTS_EXPANDED_MARK : SUBAGENTS_COLLAPSED_MARK}`
     this.pushSection(lines, width, {
       heading: `${SUBAGENTS_MARK} subagents${foldMark} · ${running.length} running`,
       headingToken: 'dock.subagents.heading',
       borderToken: 'dock.subagents.border',
     }, rows)
+    this.subagentSection = { start, end: lines.length, toggleable: running.length > DOCK_SUBAGENT_LIMIT }
   }
 
   private pushJobs(lines: string[], jobs: readonly JobSummary[], width: number): void {
@@ -219,7 +236,8 @@ export class WorkDock implements Component {
   }
 
   render(width: number): string[] {
-    this.subagentHeadingRow = undefined
+    this.subagentSection = undefined
+    this.subagentTexts.clear()
     if (width <= 0) return []
     const state = this.state()
     const lines: string[] = []

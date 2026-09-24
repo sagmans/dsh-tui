@@ -623,7 +623,9 @@ export function apply(ctx: Context, config: unknown): void {
     stash: () => stash?.entryCount,
   })
   const statusBar = new StatusBar(statusFacts, theme)
-  const dock = new WorkDock(() => work.state(), theme, () => jobs, () => roster.list())
+  const dock = new WorkDock(() => work.state(), theme, () => jobs, () => roster.list(), undefined, id => {
+    void showSession(SessionId(id))
+  })
   // The queue is read from the agent this terminal drives rather than from the
   // session on screen, because it sits on the editor that submits to that agent.
   const queuedPrompts = (): readonly string[] => pendingPrompts(ctx, liveSession(activeSession))

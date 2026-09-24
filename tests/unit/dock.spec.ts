@@ -138,23 +138,64 @@ describe('WorkDock', () => {
     expect(dock.render(80)).toHaveLength(5)
   })
 
-  it('ignores clicks on other rows and only left-clicks the heading', () => {
+  it('toggles from a child row’s empty cells, but not from goal or job rows', () => {
     const runs = Array.from({ length: 4 }, (_, index) => ({
       runId: `r${index}`, provider: 'spawn', id: `child-${index}`, startedAt: 1_000, status: 'running' as const,
     }))
-    const dock = new WorkDock(() => ({ ...EMPTY, goal: { objective: 'Inspect dock', roundsStarted: 1, maxRounds: 2, phase: 'active' } }), theme, () => [], () => runs)
+    const jobs = [{ id: 'bash-1', kind: 'bash', label: 'build', status: 'running' as const, startedAt: 1_000, finishedAt: undefined }]
+    const dock = new WorkDock(() => ({ ...EMPTY, goal: { objective: 'Inspect dock', roundsStarted: 1, maxRounds: 2, phase: 'active' } }), theme, () => jobs, () => runs)
     const click: TuiMouseEvent = {
-      type: 'click', button: 'left', x: 5, y: 1, screenX: 5, screenY: 1, width: 80, height: 6,
+      type: 'click', button: 'left', x: 5, y: 1, screenX: 5, screenY: 1, width: 80, height: 8,
       shift: false, alt: false, ctrl: false,
     }
     expect(dock.render(80)[1]).toBe(rule('⚇ subagents ▸ · 4 running', 80))
     expect(dock.handleMouse({ ...click, y: 0 })).toBeUndefined()
-    expect(dock.handleMouse({ ...click, y: 2 })).toBeUndefined()
+    expect(dock.handleMouse({ ...click, y: 2, x: 70 })).toEqual({ handled: true, render: true })
+    expect(dock.render(80)[1]).toBe(rule('⚇ subagents ▾ · 4 running', 80))
+    expect(dock.handleMouse({ ...click, y: 6 })).toBeUndefined()
     expect(dock.handleMouse({ ...click, button: 'right' })).toBeUndefined()
     expect(dock.handleMouse({ ...click, type: 'press' })).toBeUndefined()
-    expect(dock.render(80)[1]).toBe(rule('⚇ subagents ▸ · 4 running', 80))
-    expect(dock.handleMouse(click)).toEqual({ handled: true, render: true })
     expect(dock.render(80)[1]).toBe(rule('⚇ subagents ▾ · 4 running', 80))
+    expect(dock.handleMouse(click)).toEqual({ handled: true, render: true })
+    expect(dock.render(80)[1]).toBe(rule('⚇ subagents ▸ · 4 running', 80))
+  })
+
+  it('opens a child by its full id only from its visible text', () => {
+    const id = 'child-abcdef123456'
+    const runs = Array.from({ length: 4 }, (_, index) => ({
+      runId: `r${index}`, provider: 'spawn', id: index === 0 ? id : `child-${index}`, startedAt: 1_000, status: 'running' as const,
+    }))
+    let opened: string | undefined
+    const dock = new WorkDock(() => EMPTY, theme, () => [], () => runs, () => 2_000, childId => { opened = childId })
+    const lines = dock.render(80)
+    const click: TuiMouseEvent = {
+      type: 'click', button: 'left', x: visibleWidth(lines[1]!) - 1, y: 1, screenX: 5, screenY: 1, width: 80, height: 5,
+      shift: false, alt: false, ctrl: false,
+    }
+    expect(dock.handleMouse(click)).toEqual({ handled: true, render: true })
+    expect(opened).toBe(id)
+    expect(dock.render(80)[0]).toBe(rule('⚇ subagents ▸ · 4 running', 80))
+    expect(dock.handleMouse({ ...click, x: visibleWidth(lines[1]!) })).toEqual({ handled: true, render: true })
+    expect(dock.render(80)[0]).toBe(rule('⚇ subagents ▾ · 4 running', 80))
+    expect(opened).toBe(id)
+  })
+
+  it('toggles from the overflow row and the blank indentation before a child', () => {
+    const runs = Array.from({ length: 5 }, (_, index) => ({
+      runId: `r${index}`, provider: 'spawn', id: `child-${index}`, startedAt: 1_000, status: 'running' as const,
+    }))
+    let opened: string | undefined
+    const dock = new WorkDock(() => EMPTY, theme, () => [], () => runs, () => 2_000, childId => { opened = childId })
+    dock.render(80)
+    const click: TuiMouseEvent = {
+      type: 'click', button: 'left', x: 3, y: 4, screenX: 3, screenY: 4, width: 80, height: 5,
+      shift: false, alt: false, ctrl: false,
+    }
+    expect(dock.handleMouse(click)).toEqual({ handled: true, render: true })
+    expect(dock.render(80)[0]).toBe(rule('⚇ subagents ▾ · 5 running', 80))
+    expect(dock.handleMouse({ ...click, x: 0, y: 1 })).toEqual({ handled: true, render: true })
+    expect(dock.render(80)[0]).toBe(rule('⚇ subagents ▸ · 5 running', 80))
+    expect(opened).toBeUndefined()
   })
 
   it('drops the subagent board once every delegation has settled', () => {
