@@ -4,16 +4,25 @@
  *
  * A cloned home is a sandbox: a dogfood run may write only inside it. Two kinds
  * of link are legitimate there — a package entry that resolves to an installed
- * package or another checkout, and a link that stays inside the clone. Every
- * other link (a dotfile linked into a shared prompt tree is the common case)
- * reaches a path the run could write through, so it is copied in as a regular
- * file before the run starts and the link is dropped.
+ * package or another checkout, and a link that stays inside the clone. A link
+ * that escapes is either copied in or refused, and which one depends on who
+ * writes the entry: the instruction files below are only read, so the bytes come
+ * along; everything else (credentials, settings, storages, sessions, profiles)
+ * is state the run may write, and a link out of the clone would let that write
+ * reach the developer's own home. Refusing is the safe answer there.
  *
  * Usage: clone-links.mjs check|materialize <home> <source>
  */
 import fs from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
+
+/**
+ * Entries the surface only reads. A developer commonly links AGENTS.md into a
+ * shared tree, and refusing that would stop an otherwise safe run, so the copy
+ * is made instead. Nothing here may be added that any component writes.
+ */
+export const INSTRUCTION_ENTRIES = new Set(['AGENTS.md', 'CLAUDE.md'])
 
 /**
  * Paths whose whole purpose is to point at an installed package, which may live
@@ -26,6 +35,11 @@ export const packageEntry = (parts) => parts[0] === 'profiles' && (
 )
 
 export const inside = (root, file) => file === root || file.startsWith(root + path.sep)
+
+const instruction = (home, file) => {
+  const parts = path.relative(home, file).split(path.sep)
+  return parts.length === 1 && INSTRUCTION_ENTRIES.has(parts[0])
+}
 
 /**
  * Absolute path a link target will occupy once it exists. A clone may hold a
@@ -67,15 +81,15 @@ export function problems(home, source) {
   return found
 }
 
-/** Replace every escaping link with a copy of what it points at. */
+/** Copy every escaping instruction link in, so the clone can read it as its own. */
 export function materialize(home) {
   const report = { copied: 0, dropped: 0 }
   const visit = (dir) => {
     for (const entry of entries(dir)) {
       const file = path.join(dir, entry.name)
-      const parts = partsOf(home, file)
       if (entry.isSymbolicLink()) {
-        if (packageEntry(parts)) continue
+        const parts = partsOf(home, file)
+        if (packageEntry(parts) || !instruction(home, file)) continue
         const target = destination(path.resolve(dir, fs.readlinkSync(file)))
         if (inside(home, target)) continue
         if (!fs.existsSync(target)) {
@@ -111,7 +125,7 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
     process.exitCode = found.length ? 1 : 0
   } else if (mode === 'materialize') {
     const report = materialize(home)
-    console.log('materialize: ' + report.copied + ' external link(s) copied, ' + report.dropped + ' dangling link(s) dropped')
+    console.log('materialize: ' + report.copied + ' instruction link(s) copied, ' + report.dropped + ' dangling link(s) dropped')
   } else {
     console.error('usage: clone-links.mjs check|materialize <home> <source>')
     process.exitCode = 2

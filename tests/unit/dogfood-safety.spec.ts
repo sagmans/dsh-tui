@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { chmodSync, existsSync, linkSync, mkdirSync, readFileSync, readlinkSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, linkSync, lstatSync, mkdirSync, readFileSync, readlinkSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createDogfoodFixture, GENERIC_SCRIPT } from './dogfood-fixture.js'
@@ -152,6 +152,20 @@ node -e 'const fs = require("node:fs"); fs.writeFileSync(process.env.DSH_TEST_SN
     const result = generic(['--home', scratchHome])
     expect(result.status).not.toBe(0)
     expect(result.stderr).toMatch(/symlink|escape/)
+  })
+
+  it.each(['AGENTS.md', 'CLAUDE.md'])('copies a shared %s link in, and keeps writes to it inside the clone', (entry) => {
+    const shared = join(root, 'shared-prompts')
+    mkdirSync(shared)
+    writeFileSync(join(shared, entry), 'shared instructions')
+    symlinkSync(join(shared, entry), join(sourceHome, entry))
+    const result = generic(['--home', scratchHome])
+    expect(result.status, result.stderr).toBe(0)
+    const cloned = join(scratchHome, entry)
+    expect(lstatSync(cloned).isFile()).toBe(true)
+    expect(readFileSync(cloned, 'utf8')).toBe('shared instructions')
+    writeFileSync(cloned, 'edited in the clone')
+    expect(readFileSync(join(shared, entry), 'utf8')).toBe('shared instructions')
   })
 
   const extraModuleRoots = [

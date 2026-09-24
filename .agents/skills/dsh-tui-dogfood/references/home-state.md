@@ -52,10 +52,11 @@ copies it when present, which makes `--resume` reach the developer's history.
   settings, storages, or sessions and multiply linked mutable files stop the run.
   Package links in `profiles/node_modules`, `profiles/*/node_modules`, and
   `profiles/*/.dsh-module-fallback/node_modules` can point to global installs or
-  external checkouts, but not into the source home. Any other link that escapes
-  the clone is copied in as a regular file while seeding, which is what a dotfile
-  linked into a shared prompt tree needs. Writes through permitted package links
-  are not isolated. Re-seed with `--reseed` when the source changes.
+  external checkouts, but not into the source home. An instruction file linked
+  into a shared prompt tree (`AGENTS.md`, `CLAUDE.md`) is read only and is copied
+  in while seeding, so the clone stays self-contained; a link to state the run may
+  write still stops the run. Writes through permitted package links are not
+  isolated. Re-seed with `--reseed` when the source changes.
 - **The clone keeps a copy of the credentials.** Create it in a scratch
   directory, keep it `700`, and `--clean` it when done.
 - **The launcher decides the harness, not the profile.** `pnpm dsh` runs the
