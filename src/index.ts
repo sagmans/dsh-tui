@@ -16,10 +16,6 @@ import { hiddenTail, NO_UNDO, redoStep, resetUndo, turnsOf, UNDO_TURN_SETTLE_MS,
 import { createStatusFacts } from './agent/status.ts'
 import { ModelSwitch, createModelCatalog, parseModelArgument, readModelRouteKey, type ModelChoice, type ModelRoute } from './agent/model.ts'
 import { describeMissingOptional, describeMissingRequired, probeComposition } from './compat/probe.ts'
-import type { ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
-import type { AskUserQuestionAnswer } from '@deepseek-ai/dsh-user-questions'
-import { ApprovalGate, type GateAnswer } from './gates.ts'
-import { QuestionGate, toGateQuestions } from './gates/questions.ts'
 import { cancelStep, quitStep } from './input/cancel.ts'
 import { createAnswerCompletionProvider, createCompletionProvider } from './input/completion.ts'
 import { createFileIndex } from './input/file-index.ts'
@@ -53,6 +49,7 @@ import { DEFAULT_THEME, builtinNames, builtinThemesDir, ensureThemesHome, export
 import { KEYMAP_LAYERS, keymapLayer } from './keys-command.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { createBackgroundWork } from './surface/background-work.ts'
+import { createModalInput } from './surface/modal-input.ts'
 import { createPromptMemory } from './surface/prompt-memory.ts'
 import { createSessionPicker } from './surface/session-picker.ts'
 import { createTerminalLifecycle } from './surface/terminal-lifecycle.ts'
@@ -63,7 +60,6 @@ import { WorkDock } from './ui/dock.ts'
 import { GateInputBar } from './ui/gate-input.ts'
 import { surfaceLayout } from './ui/layout.ts'
 import { KeymapPicker } from './ui/keymap-picker.ts'
-import { PickerPopup, POPUP_MAX_HEIGHT, popupWidth } from './ui/picker-card.ts'
 import { PromptBar } from './ui/prompt.ts'
 import { MarkdownRenderer } from './ui/markdown.ts'
 import { createMermaidTransform } from './ui/mermaid.ts'
@@ -73,8 +69,6 @@ import {
   PROVIDER_DEFAULT_EFFORT_ID,
   PresetPicker,
   effortChoices,
-  type PickerAction,
-  type PickerCard,
 } from './ui/picker.ts'
 import { QueueBar } from './ui/queue.ts'
 import { StatusBar } from './ui/status.ts'
@@ -417,7 +411,7 @@ export function apply(ctx: Context, config: unknown): void {
     activeSession: () => activeSession,
     // The keyboard's lifetime is the modal owner's, so the list is handed over
     // rather than driven here.
-    openPicker: picker => openPicker(picker),
+    openPicker: picker => modalInput.openPicker(picker),
   })
   const ghostBrush = promptMemory.ghostBrush
   const work = new WorkFold()
@@ -470,55 +464,17 @@ export function apply(ctx: Context, config: unknown): void {
     writeDraft: text => editor.setText(text),
   })
   const { terminal, tui, herdr, disposers, writeTerminal, requestExit, editDraft, exited } = terminalLifecycle
-  /** The one gate a terminal can present at a time, and how it settles its caller. */
-  type PendingGate =
-    | { readonly kind: 'approval'; readonly gate: ApprovalGate; readonly settle: (outcome: ApprovalOutcome) => void }
-    | { readonly kind: 'question'; readonly gate: QuestionGate; readonly settle: (answers: GateAnswer[]) => void }
-
   /** The session this surface drives: commands, approvals, and the bell belong to it. */
   let activeSession = resolved.sessionId
   /** The session the transcript is showing, which can be one of its children. */
   let viewedSession = resolved.sessionId
   /** Only the newest transcript switch may finish an asynchronous stored-log read. */
   const viewGeneration = new ViewGeneration()
-  /** What the surface needs of a list to drive it, wherever that list is drawn. */
-  interface Picker {
-    handleKey(data: string): PickerAction | undefined
-    /** The row window the caller can afford, or the shipped window when it names none. */
-    card(window?: number): PickerCard
-    setNote(text: string | undefined): void
-  }
-  /** The one picker a terminal can present at a time, and how it settles its caller. */
-  interface PendingPicker {
-    readonly picker: Picker
-    readonly settle: (id: string | undefined) => void
-    /**
-     * Why this run cannot open an id, or undefined when it can.
-     *
-     * Asked before a pick settles, so a refusal the reader can act on stays in
-     * the menu they are already looking at instead of ending the run.
-     */
-    readonly vet: ((id: string) => Promise<string | undefined>) | undefined
-    /**
-     * The card as the transcript draws it, or undefined when this list is drawn
-     * over the transcript instead.
-     *
-     * A popup keeps its rows to itself: the work the reader paused stays the
-     * context for what they are choosing, and repeating the list under the box
-     * would only push that work off the screen.
-     */
-    readonly card: (() => PickerCard) | undefined
-    /** Give back whatever this list was given: the screen a popup was shown on. */
-    readonly release: (() => void) | undefined
-  }
-  let pending: PendingGate | undefined
-  let pendingPicker: PendingPicker | undefined
-  /** A pick being vetted owns the list, not the keyboard: filtering stays live while its verdict is read. */
-  let vetting = false
+
   const view = new TranscriptView(model, theme, markdown, {
     state: () => viewState,
-    gate: () => pending?.gate.card(),
-    picker: () => pendingPicker?.card?.(),
+    gate: () => modalInput.gateCard(),
+    picker: () => modalInput.pickerCard(),
     keys: () => keymap,
     toolDisplay: tool => toolDisplayFor(toolDisplay, tool),
   })
@@ -530,6 +486,24 @@ export function apply(ctx: Context, config: unknown): void {
   // Answers are written in the reader's own editor, which is why a question
   // borrows the bar instead of drawing a second one beside it.
   const promptBar = new PromptBar(editor)
+
+  /**
+   * The one modal interaction at a time, and the keyboard it holds.
+   *
+   * Built before the transcript view so the view can ask it for a card: the
+   * card a gate or picker draws is read per paint, never copied.
+   */
+  const modalInput = createModalInput(ctx, {
+    herdr,
+    editor,
+    tui,
+    terminal,
+    theme,
+    keymap: () => keymap,
+    promptBar,
+    refreshCompletion: () => applyCompletion(),
+    activeSession: () => activeSession,
+  })
   // The presenter closure outlives the composition's own teardown, so it must
   // not keep an agent alive after its world unwinds.
   disposers.push(() => {
@@ -591,33 +565,6 @@ export function apply(ctx: Context, config: unknown): void {
     status: statusBar,
   }))
   tui.setFocus(editor)
-
-  const openGate = (next: PendingGate): void => {
-    pending = next
-    // The card's own title names the decision, which is what a reader glancing
-    // at a wall of panes needs in order to know which one to open.
-    herdr.block(next.gate.card().title)
-    // A gate owns the keyboard: the editor must not collect the decision keys.
-    editor.disableSubmit = true
-    tui.setFocus(null)
-    // A question is answered in this editor, which the gate draws under the row
-    // being answered, so the hardware cursor belongs to it while it is borrowed.
-    // It is set after the focus is cleared, which unmarks the component it left.
-    editor.focused = next.kind === 'question'
-    tui.requestRender()
-  }
-
-  const closeGate = (): void => {
-    pending = undefined
-    herdr.unblock()
-    editor.disableSubmit = false
-    // The question is answered or skipped, so the reader gets their prompt back
-    // in the bar they left it in, with the menu the prompt bar offered.
-    promptBar.giveBack()
-    applyCompletion()
-    tui.setFocus(editor)
-    tui.requestRender()
-  }
 
   /**
    * Whether the bar holds anything the reader wrote.
@@ -726,65 +673,7 @@ export function apply(ctx: Context, config: unknown): void {
     // on. Falls through rather than consuming, which leaves a component that
     // asked for releases its own half.
     if (isKeyRelease(data)) return undefined
-    if (pending !== undefined) {
-      if (pending.kind === 'approval') {
-        const outcome = pending.gate.handleKey(data)
-        if (outcome === undefined) tui.requestRender()
-        else {
-          pending.settle(outcome)
-          closeGate()
-        }
-      } else {
-        const answers = pending.gate.handleKey(data)
-        if (answers === undefined) tui.requestRender()
-        else {
-          pending.settle(answers)
-          closeGate()
-        }
-      }
-      return { consume: true }
-    }
-    if (pendingPicker !== undefined) {
-      const action = pendingPicker.picker.handleKey(data)
-      if (action === undefined) {
-        tui.requestRender()
-        return { consume: true }
-      }
-      if (vetting) {
-        // A refusal check must not take the keyboard with it: the reader keeps
-        // filtering and can still leave, while a second pick waits for the
-        // first verdict rather than racing it.
-        if (action.kind === 'cancel') settlePicker(undefined)
-        return { consume: true }
-      }
-      if (action.kind === 'cancel') {
-        settlePicker(undefined)
-        return { consume: true }
-      }
-      const vet = pendingPicker.vet
-      if (vet === undefined) {
-        settlePicker(action.id)
-        return { consume: true }
-      }
-      vetting = true
-      void (async () => {
-        let reason: string | undefined
-        try {
-          reason = await vet(action.id)
-        } finally {
-          // A check that fails must not take the keyboard with it.
-          vetting = false
-        }
-        if (pendingPicker === undefined) return
-        if (reason === undefined) {
-          settlePicker(action.id)
-          return
-        }
-        pendingPicker.picker.setNote(reason)
-        tui.requestRender()
-      })()
-      return { consume: true }
-    }
+    if (modalInput.handleKey(data)) return { consume: true }
     // A chord is the surface's second key: the prefix is consumed and the
     // footer names what may follow, while a key that finishes nothing is handed
     // on. Detail the reader asked for is always available, even mid-turn: the
@@ -858,68 +747,8 @@ export function apply(ctx: Context, config: unknown): void {
       if (requestedPreset === undefined || agentPresets === undefined) return
       await presetFor(SessionId(id), true, undefined)
     },
-    openPicker: (picker, vet) => openPicker(picker, vet),
+    openPicker: (picker, vet) => modalInput.openPicker(picker, vet),
   })
-
-  /** Give the keyboard back to the editor and answer whoever opened the picker. */
-  const settlePicker = (id: string | undefined): void => {
-    const settle = pendingPicker?.settle
-    // The screen goes back before the keyboard does: a box left behind a settled
-    // list would sit over the transcript until something else repainted.
-    pendingPicker?.release?.()
-    pendingPicker = undefined
-    herdr.unblock()
-    editor.disableSubmit = false
-    tui.setFocus(editor)
-    settle?.(id)
-    tui.requestRender()
-  }
-
-  /**
-   * Take the keyboard for a picker and answer with the id it settled on.
-   *
-   * Where the list is drawn is the caller's decision, because it is a decision
-   * about the reader's attention. A list that is the destination — a session to
-   * open, a model to switch to — joins the transcript and is read with it. A
-   * list that is a reference for the work in front of the reader is drawn over
-   * that work instead, so looking something up does not cost them their place.
-   * The keyboard is owned the same way either way.
-   */
-  const openPicker = (
-    picker: Picker,
-    vet?: (id: string) => Promise<string | undefined>,
-    placement: 'inline' | 'popup' = 'inline',
-  ): Promise<string | undefined> =>
-    new Promise<string | undefined>(resolve => {
-      const overlay = placement === 'popup'
-        ? tui.showOverlay(
-            new PickerPopup(rows => picker.card(rows), () => terminal.rows, theme),
-            {
-              width: popupWidth(terminal.columns),
-              maxHeight: POPUP_MAX_HEIGHT,
-              anchor: 'center',
-              margin: 1,
-              // The surface's own listener reads every press before a focused
-              // component does, so the box needs no focus to be driven; taking it
-              // would only move focus away from where the reader left it.
-              nonCapturing: true,
-            },
-          )
-        : undefined
-      pendingPicker = {
-        picker,
-        settle: resolve,
-        vet,
-        card: overlay === undefined ? () => picker.card() : undefined,
-        release: overlay === undefined ? undefined : () => overlay.hide(),
-      }
-      // A picker owns the keyboard exactly as a gate does: nothing moves until
-      // the reader chooses, so it is the same kind of wait.
-      herdr.block(picker.card().title)
-      editor.disableSubmit = true
-      tui.setFocus(null)
-      tui.requestRender()
-    })
 
   /**
    * Open the key map over the surface.
@@ -929,7 +758,7 @@ export function apply(ctx: Context, config: unknown): void {
    * list itself, and the filter that narrows it.
    */
   const openKeyMap = (layer: ActionLayer | undefined): void => {
-    void openPicker(new KeymapPicker(() => keymap, layer), undefined, 'popup')
+    void modalInput.openPicker(new KeymapPicker(() => keymap, layer), undefined, 'popup')
   }
 
   /**
@@ -941,7 +770,7 @@ export function apply(ctx: Context, config: unknown): void {
    * looked.
    */
   const openThemePicker = async (): Promise<void> => {
-    const picked = await openPicker(new ThemePicker(
+    const picked = await modalInput.openPicker(new ThemePicker(
       () => themeLibrary,
       () => appliedSection?.theme,
       () => keymap,
@@ -965,7 +794,7 @@ export function apply(ctx: Context, config: unknown): void {
   const askForPreset = async (currentId: string | undefined): Promise<string | undefined> => {
     if (agentPresets === undefined) return undefined
     presetRows = await agentPresets.list()
-    return await openPicker(new PresetPicker(() => presetRows, () => currentId, () => keymap))
+    return await modalInput.openPicker(new PresetPicker(() => presetRows, () => currentId, () => keymap))
   }
 
   stash = promptMemory.buildStash()
@@ -1723,7 +1552,7 @@ export function apply(ctx: Context, config: unknown): void {
       const effective = current !== undefined && current.provider === route.provider && current.model === route.model
         ? current.reasoningEffort
         : undefined
-      const picked = await openPicker(new EffortPicker(
+      const picked = await modalInput.openPicker(new EffortPicker(
         () => effortChoices(efforts, effective),
         `reasoning effort · ${route.provider}/${route.model}`,
         () => keymap,
@@ -1769,7 +1598,7 @@ export function apply(ctx: Context, config: unknown): void {
           // One adapter's discovery failure is not the list's to explain.
         })
       }
-      const picked = await openPicker(new ModelPicker(() => routes, effectiveRoute, () => keymap))
+      const picked = await modalInput.openPicker(new ModelPicker(() => routes, effectiveRoute, () => keymap))
       if (picked === undefined) return
       const route = readModelRouteKey(picked)
       if (route === undefined) return
@@ -1809,7 +1638,7 @@ export function apply(ctx: Context, config: unknown): void {
         model.notice(`${facts.provider}/${facts.model} advertises no reasoning efforts`)
         return
       }
-      const picked = await openPicker(new EffortPicker(
+      const picked = await modalInput.openPicker(new EffortPicker(
         () => effortChoices(efforts, facts.effort),
         `reasoning effort · ${facts.provider}/${facts.model}`,
         () => keymap,
@@ -2218,61 +2047,7 @@ export function apply(ctx: Context, config: unknown): void {
 
   disposers.push(...backgroundWork.subagentListeners())
 
-  // Answering these two waterfalls is what makes a terminal surface usable at
-  // all: without an answerer every gated tool fails closed, and the model's
-  // questions never reach the human.
-  disposers.push(ctx.on('approval/request', (request, next) => {
-    if (request.agent.id !== activeSession) return next()
-    return new Promise<ApprovalOutcome>(resolve => {
-      const gate = new ApprovalGate(request.toolName, request.reason, () => keymap)
-      request.signal?.addEventListener('abort', () => {
-        gate.cancel()
-        if (pending?.gate === gate) closeGate()
-        resolve('cancelled')
-      }, { once: true })
-      openGate({ kind: 'approval', gate, settle: resolve })
-    })
-  }))
-
-  disposers.push(ctx.on('user-questions/request', (request, next) => {
-    const agentId = (request as { agent?: { id?: string } }).agent?.id
-    if (agentId !== undefined && agentId !== activeSession) return next()
-    const questions = toGateQuestions(request)
-    if (questions.length === 0) return next()
-    return new Promise<AskUserQuestionAnswer>(resolve => {
-      const gate = promptBar.borrow(() => {
-        // The bar is an answer's for as long as the gate holds it, so the menu
-        // it once offered commands through is replaced before a key can reach it.
-        const built = new QuestionGate(questions, editor, () => keymap)
-        applyCompletion()
-        return built
-      })
-      // The seam takes mutable selection arrays and an optional custom field, so
-      // the read-only gate answer is copied into that exact shape here.
-      const settle = (answers: GateAnswer[]): void => {
-        request.signal?.removeEventListener('abort', onAbort)
-        resolve({
-          answers: answers.map(answer => ({
-            id: answer.id,
-            selected: [...answer.selected],
-            ...(answer.custom === undefined ? {} : { custom: answer.custom }),
-          })),
-        })
-      }
-      // A question whose caller is gone has no reader, so the gate must release
-      // the keyboard instead of collecting an answer the aborted call discards.
-      const onAbort = (): void => {
-        gate.cancel()
-        if (pending?.gate === gate) closeGate()
-        settle([])
-      }
-      openGate({ kind: 'question', gate, settle })
-      request.signal?.addEventListener('abort', onAbort, { once: true })
-      // A signal that aborted before the listener existed never emits, so the
-      // state has to be read once after subscribing.
-      if (request.signal?.aborted === true) onAbort()
-    })
-  }))
+  disposers.push(...modalInput.requestListeners())
 
   disposers.push(ctx.on('commands/change', () => installCompletion()))
 
