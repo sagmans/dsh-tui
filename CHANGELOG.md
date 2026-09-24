@@ -10,6 +10,10 @@ breaking change, and a patch carries only fixes.
 
 ### Changed
 
+- The transcript keeps reading order and in-flight text, while the bookkeeping
+  a tool row shares between its request, its nested dispatches, and its result
+  lives in a call fold that hands back the rows to commit; recorded message
+  reading sits in its own module.
 - Decision gates keep their question state machine, their question-card
   projection, and the shared gate contract in three modules, so a rendering
   change no longer sits beside the cursor and selection rules it draws.
