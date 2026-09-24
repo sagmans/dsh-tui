@@ -15,6 +15,10 @@ breaking change, and a patch carries only fixes.
 - The subagent dock now previews three running children. Click the heading,
   overflow row, or blank space in the section to expand or collapse it. Click a
   child’s text to view that session’s transcript.
+- `dsh --profile tui install-skills` copies `dsh-tui-dogfood` to the user
+  skill root only on request. The skill supports any dsh plugin checkout through
+  a cloned home. An existing copy prompts before replacement; `--update` skips
+  the prompt.
 
 ### Fixed
 
@@ -53,7 +57,7 @@ breaking change, and a patch carries only fixes.
   and starts the surface there — so a change meets the bundles, patch overlay,
   settings, and themes the daily driver actually runs, while every write lands in
   the clone. [DEVELOPMENT.md](DEVELOPMENT.md) says when a clone, a fresh home, or
-  the real one is the right call, and `.agents/skills/dogfood-tui/` ships the same
+  the real one is the right call, and `.agents/skills/dsh-tui-dogfood/` ships the same
   practice as a skill an agent working in this repository loads.
 
 - `ctrl+x` then `u` (or `/undo`) hides the newest prompt with its whole turn and

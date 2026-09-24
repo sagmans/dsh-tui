@@ -8,12 +8,14 @@
  * so a packaging mistake fails here instead of in a user's profile.
  */
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
+import { lstatSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
+const INSTALL_LIFECYCLE_SCRIPTS = ['preinstall', 'install', 'postinstall']
+const SKILL_HELPER = join('scripts', 'run-plugin-from-worktree.sh')
 
 /** Entries a loader or a reader needs in the tarball. */
 const REQUIRED = [
@@ -23,6 +25,10 @@ const REQUIRED = [
   'package/LICENSE',
   'package/lib/index.js',
   'package/lib/startup.js',
+  'package/lib/install-skills.js',
+  'package/.agents/skills/dsh-tui-dogfood/SKILL.md',
+  'package/.agents/skills/dsh-tui-dogfood/references/home-state.md',
+  'package/.agents/skills/dsh-tui-dogfood/scripts/run-plugin-from-worktree.sh',
 ]
 
 // Derived rather than listed: the surface reads the built-in themes out of the
@@ -137,6 +143,24 @@ try {
     if (FORBIDDEN.some(pattern => pattern.test(entry))) problems.push(`should not ship: ${entry}`)
   }
 
+  // npm normalizes packaged file modes, so test the helper after copying from the tarball.
+  const unpacked = mkdtempSync(join(out, 'unpacked-'))
+  execFileSync('tar', ['-xzf', join(out, tarball), '-C', unpacked], { stdio: 'inherit' })
+  const { installBundledSkill } = await import(pathToFileURL(join(unpacked, 'package', 'lib', 'install-skills.js')).href)
+  const destination = installBundledSkill(join(out, 'home'))
+  const helper = lstatSync(join(destination, SKILL_HELPER))
+  if (!helper.isFile() || helper.isSymbolicLink() || (helper.mode & 0o111) === 0) {
+    problems.push('installed dogfood helper is not executable')
+  }
+  writeFileSync(join(destination, 'stale.txt'), 'old copy')
+  const updated = installBundledSkill(join(out, 'home'), true)
+  if (updated !== destination || readdirSync(updated).includes('stale.txt')) {
+    problems.push('updating the packaged skill left an old file behind')
+  }
+  if ((lstatSync(join(updated, SKILL_HELPER)).mode & 0o111) === 0) {
+    problems.push('updated dogfood helper is not executable')
+  }
+
   const patch = readFileSync(join(ROOT, 'cordis.patch.yml'), 'utf8')
   for (const row of PATCH_ROWS) {
     if (!patch.includes(row)) problems.push(`the bundle patch no longer names ${row}`)
@@ -159,6 +183,11 @@ try {
   }
 
   const manifest = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
+  for (const script of INSTALL_LIFECYCLE_SCRIPTS) {
+    if (manifest.scripts?.[script] !== undefined) {
+      problems.push(`the package must never use the ${script} install hook`)
+    }
+  }
   const declared = manifest.dsh?.bundle?.patch
   if (typeof declared !== 'string' || !entries.includes(`package/${declared.replace(/^\.\//u, '')}`)) {
     problems.push('the manifest does not point at a patch file that ships')

@@ -6,7 +6,7 @@ Status: **v1 feature-complete; published on npm as `@sagmans/dsh-tui`.** The sur
 
 ## Install
 
-A profile keeps this plugin as one bundle layer. Install it from a checkout of this repository, or from the registry (`0.1.0` or later). Both paths need Node.js >= 22.19 and `pnpm` on `PATH`. Both need a real terminal: stdin and stdout must be TTYs.
+A profile keeps this plugin as one bundle layer. Install it from a checkout of this repository, or from the registry (`0.1.0` or later). Both paths need Node.js >= 22.19 and `pnpm` on `PATH`. Interactive sessions need a real terminal: stdin and stdout must be TTYs.
 
 ### From a plugin checkout
 
@@ -29,6 +29,33 @@ dsh --profile tui
 ```
 
 Releases are published, so this path works today. A checkout stays the path for unreleased work.
+
+### Install the dogfood skill (optional)
+
+Run this explicit command after you add the plugin:
+
+```sh
+dsh --profile tui install-skills
+```
+
+The command copies `dsh-tui-dogfood` to
+`~/.agents/skills/dsh-tui-dogfood/`. Agents can then load it from any dsh
+plugin repository. The skill uses a cloned dsh home, so tests do not change
+your real profile. A first install needs no TTY. `npm install` does not copy
+skills into your home.
+
+If the skill exists, the command asks `Update existing skill? [y/N]` in a
+terminal. Only `y` or `yes` replaces it. Enter or `n` keeps the existing
+copy. To update without a prompt, including in non-interactive runs, use:
+
+```sh
+dsh --profile tui install-skills --update
+```
+
+Updating removes any local changes inside the previous skill directory.
+The command stages the new copy before replacement and restores the old
+copy if replacement fails. If cleanup fails after replacement, the new copy
+stays installed and the command reports the old backup path.
 
 ### Confirm the plugin mounted
 
