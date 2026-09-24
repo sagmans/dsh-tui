@@ -6,7 +6,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { startAgent, type ForkInheritance, type TuiAgent } from './agent/host.ts'
 import { createSessionHistory, presetOfStoredSession } from './agent/history.ts'
-import { createPresetRoster, parsePresetArgument, type PresetRoster, type PresetSummary } from './agent/presets.ts'
+import { createPresetRoster } from './agent/presets.ts'
 import { forkPoint, type ForkEvent } from './agent/fork.ts'
 import { createStatusFacts } from './agent/status.ts'
 import { describeMissingOptional, describeMissingRequired, probeComposition } from './compat/probe.ts'
@@ -29,6 +29,7 @@ import { createModalInput } from './surface/modal-input.ts'
 import { createModelChoice } from './surface/model-choice.ts'
 import { createPromptInput } from './surface/prompt-input.ts'
 import { createPromptMemory } from './surface/prompt-memory.ts'
+import { createPresetChoice } from './surface/preset-choice.ts'
 import { createSessionPicker } from './surface/session-picker.ts'
 import { backHint, createSessionView } from './surface/session-view.ts'
 import { createStagedTurns } from './surface/staged-turns.ts'
@@ -42,7 +43,6 @@ import { KeymapPicker } from './ui/keymap-picker.ts'
 import { PromptBar } from './ui/prompt.ts'
 import { MarkdownRenderer } from './ui/markdown.ts'
 import { createMermaidTransform } from './ui/mermaid.ts'
-import { PresetPicker } from './ui/picker.ts'
 import { QueueBar } from './ui/queue.ts'
 import { StatusBar } from './ui/status.ts'
 import { TranscriptView } from './ui/view.ts'
@@ -237,26 +237,30 @@ export function apply(ctx: Context, config: unknown): void {
     render: () => tui.requestRender(),
   })
   const agentPresets = createPresetRoster(ctx)
-  /** The mode named on the command line, which is the only one that may conflict. */
-  const requestedPreset = resolved.preset
   /**
-   * The mode a session the reader starts from here on joins.
-   *
-   * A launch flag seeds it and a successful switch updates it, so `/new` and
-   * `/fork` land in the mode the reader last chose; nothing is written to
-   * settings, because the mode of a session is not a property of the machine.
-   * Unset means nobody chose, which is where the roster's default applies.
+   * Which mode a session takes, read through ports because the open path mounts
+   * through the same roster and the screen, the keyboard, the notice, and the
+   * session the reader watches all belong to the surface around it.
    */
-  let seat = requestedPreset
-  /**
-   * The mode a session takes its seat in: the reader's latest choice, or the
-   * roster's default read at this moment.
-   *
-   * The default cannot be captured when this row applies: it comes from the
-   * settings document, which may be read after that, so a captured copy would
-   * pin every later session to the mode the bundle happened to ship.
-   */
-  const seatMode = (): string | undefined => seat ?? agentPresets?.defaultId
+  const presetChoice = createPresetChoice({
+    agentPresets,
+    requestedPreset: resolved.preset,
+    // The mode a session ran is a property of its own log, which is the same
+    // history this surface lists the stored sessions from.
+    storedPreset: async id => {
+      const history = createSessionHistory(ctx)
+      return history === undefined ? undefined : await presetOfStoredSession(history, id)
+    },
+    livePreset: id => agentPresets?.current(liveSession(id)),
+    drivingAgent: () => agent,
+    keymap: appearance.keymap,
+    openPicker: picker => modalInput.openPicker(picker),
+    notice: message => sessionView.notice(message),
+    render: () => tui.requestRender(),
+    returnToDrivenSession: async () => {
+      if (sessionView.viewingChild()) await sessionView.show(activeSession)
+    },
+  })
   const backgroundWork = createBackgroundWork(ctx, {
     drivingAgent: () => agent,
     activeSession: () => activeSession,
@@ -421,8 +425,8 @@ export function apply(ctx: Context, config: unknown): void {
     // A stored session's own mode can only disagree with one this run named, and
     // only a roster can say whether the name it uses still exists.
     validateStoredPreset: async id => {
-      if (requestedPreset === undefined || agentPresets === undefined) return
-      await presetFor(SessionId(id), true, undefined)
+      if (resolved.preset === undefined || agentPresets === undefined) return
+      await presetChoice.presetFor(SessionId(id), true, undefined)
     },
     openPicker: (picker, vet) => modalInput.openPicker(picker, vet),
   })
@@ -438,69 +442,16 @@ export function apply(ctx: Context, config: unknown): void {
     void modalInput.openPicker(new KeymapPicker(appearance.keymap, layer), undefined, 'popup')
   }
 
-  /** The roster as the picker paints it, refreshed when the picker opens. */
-  let presetRows: readonly PresetSummary[] = []
-
-  /** Choose the mode a session that has not started yet will run. */
-  const askForPreset = async (currentId: string | undefined): Promise<string | undefined> => {
-    if (agentPresets === undefined) return undefined
-    presetRows = await agentPresets.list()
-    return await modalInput.openPicker(new PresetPicker(() => presetRows, () => currentId, appearance.keymap))
-  }
-
   stash = promptMemory.buildStash()
 
   /** The live session this process runs, which is the only source holding an unflushed tail. */
   const liveSession = (id: SessionId): { snapshotEvents?: () => readonly ForkEvent[] } | undefined =>
     (ctx.get('sessions') as { get?: (id: SessionId) => { snapshotEvents?: () => readonly ForkEvent[] } | undefined } | undefined)?.get?.(id)
 
-  /**
-   * The mode one agent joins.
-   *
-   * A resumed session keeps the composition its own log recorded, because
-   * swapping it would leave logged tool calls the new composition cannot make —
-   * the same reason the harness refuses a switch once a turn has run. A session
-   * that recorded none, which is every session written before modes existed,
-   * takes the seat; a branch inherits the mode its parent is running.
-   */
-  const presetFor = async (id: SessionId, resume: boolean, fork: ForkInheritance | undefined): Promise<string | undefined> => {
-    if (agentPresets === undefined) return undefined
-    if (fork !== undefined) return agentPresets.current(liveSession(fork.from)) ?? seatMode()
-    if (!resume) return seatMode()
-    const history = createSessionHistory(ctx)
-    const stored = history === undefined ? undefined : await presetOfStoredSession(history, id)
-    if (stored === undefined) return seatMode()
-    const resolvedStored = await resolveStored(id, stored)
-    if (resolvedStored === undefined) {
-      // The composition this session recorded is gone. Naming one explicitly is
-      // the reader's only way forward, so that is the one case an override is
-      // taken for a stored session.
-      if (requestedPreset !== undefined) return (await agentPresets.resolve(requestedPreset)).id
-      throw new Error(
-        `session ${id} runs mode "${stored}", which this roster no longer offers; name another with --preset`,
-      )
-    }
-    if (requestedPreset !== undefined && requestedPreset !== resolvedStored) {
-      throw new Error(
-        `session ${id} runs mode "${resolvedStored}", so --preset ${requestedPreset} does not apply; /preset ${requestedPreset} switches it before its first turn`,
-      )
-    }
-    return resolvedStored
-  }
-
-  /** The stored mode's roster row, or undefined when the roster no longer offers it. */
-  const resolveStored = async (id: SessionId, stored: string): Promise<string | undefined> => {
-    try {
-      return (await agentPresets?.resolve(stored))?.id
-    } catch {
-      return undefined
-    }
-  }
-
   const openAgent = async (id: SessionId, resume: boolean, fork?: ForkInheritance): Promise<TuiAgent> => {
     // Settled before the transcript is touched, so a refusal leaves neither a
     // half-replayed session nor a half-composed agent behind.
-    const preset = await presetFor(id, resume, fork)
+    const preset = await presetChoice.presetFor(id, resume, fork)
     const handle = await startAgent(ctx, {
       sessionId: id,
       resume,
@@ -772,56 +723,6 @@ export function apply(ctx: Context, config: unknown): void {
   }
 
 
-  /**
-   * Show or choose the mode this session runs.
-   *
-   * The mode decides which tools, prompt sections, and skills exist at all, so
-   * it is fixed once a turn has run: the harness refuses the swap and this
-   * surface explains why rather than pretending otherwise. Before the first
-   * turn the switch is recorded in the log, which is what keeps the transcript
-   * honest about the composition later turns ran under.
-   */
-  const runPresetCommand = (argument: string): void => {
-    if (agentPresets === undefined) {
-      sessionView.notice('this profile has no agent roster, so there is no mode to choose')
-      tui.requestRender()
-      return
-    }
-    if (agent === undefined) {
-      sessionView.notice('the agent is still starting; try again in a moment')
-      tui.requestRender()
-      return
-    }
-    const session = agent.agent.session
-    const current = agentPresets.current(session)
-    const command = parsePresetArgument(argument)
-    if (command.kind === 'pick') {
-      if (agentPresets.started(session)) {
-        sessionView.notice(`this session runs ${current === undefined ? 'a mode' : `"${current}"`} and has already started, so its mode is fixed — /new starts a fresh session`)
-        tui.requestRender()
-        return
-      }
-      void askForPreset(current).then(picked => picked === undefined ? undefined : applyPreset(picked))
-      return
-    }
-    void applyPreset(command.id)
-  }
-
-  /** Join this session to another mode and remember it for the next session. */
-  const applyPreset = async (id: string): Promise<void> => {
-    if (agentPresets === undefined || agent === undefined) return
-    try {
-      const chosen = await agentPresets.select(agent.agent, id)
-      seat = chosen
-      // The durable selection is folded as a marker on the session it belongs
-      // to, so a reader watching a child has to come back to see it.
-      if (sessionView.viewingChild()) await sessionView.show(activeSession)
-    } catch (error) {
-      sessionView.notice(`could not switch the mode: ${error instanceof Error ? error.message : String(error)}`)
-    }
-    tui.requestRender()
-  }
-
   const helpText = (): string => {
     const current = agent?.agent
     const registered = current === undefined || registry() === undefined
@@ -893,7 +794,7 @@ export function apply(ctx: Context, config: unknown): void {
         modelChoice.runModelCommand(submission.argument)
         return
       case 'preset':
-        runPresetCommand(submission.argument)
+        presetChoice.runPresetCommand(submission.argument)
         return
       case 'jobs':
         backgroundWork.runJobsCommand(submission.argument)
@@ -1139,14 +1040,15 @@ export function apply(ctx: Context, config: unknown): void {
    * be answered while the shell still owns the terminal.
    */
   const start = async (): Promise<void> => {
-    if (requestedPreset !== undefined && agentPresets !== undefined) {
-      seat = (await agentPresets.resolve(requestedPreset)).id
-    }
     // A named mode that disagrees with the one this session recorded is refused
     // here as well as at the open, because the alternate screen closes over
     // whatever was painted on it: the reader would see the failure, not the
-    // reason. With a picker the session is not known yet, so it waits for one.
-    if (!resolved.resumePicker) await presetFor(resolved.sessionId, resolved.resume, undefined)
+    // reason.
+    await presetChoice.validateLaunch({
+      sessionId: resolved.sessionId,
+      resume: resolved.resume,
+      resumePicker: resolved.resumePicker,
+    })
     tui.start()
     writeTerminal(windowTitle(process.cwd(), 'ready'))
     // Claiming the pane's agent row does not wait for a session: the pane is
