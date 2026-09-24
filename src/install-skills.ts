@@ -31,20 +31,30 @@ function ensureDirectory(path: string): void {
 /** The archive strips execute bits, so set them only on a verified regular helper. */
 function copyBundledSkill(destination: string): void {
   mkdirSync(destination)
-  for (const entry of readdirSync(SKILL_SOURCE)) {
-    cpSync(join(SKILL_SOURCE, entry), join(destination, entry), { recursive: true, force: false, errorOnExist: true })
+  try {
+    for (const entry of readdirSync(SKILL_SOURCE)) {
+      cpSync(join(SKILL_SOURCE, entry), join(destination, entry), { recursive: true, force: false, errorOnExist: true })
+    }
+    const scripts = join(destination, 'scripts')
+    const scriptsEntry = lstatSync(scripts)
+    if (!scriptsEntry.isDirectory() || scriptsEntry.isSymbolicLink()) {
+      throw new Error(`invalid bundled skill scripts: ${scripts}`)
+    }
+    const helper = join(scripts, HELPER_FILENAME)
+    const helperEntry = lstatSync(helper)
+    if (!helperEntry.isFile() || helperEntry.isSymbolicLink() || helperEntry.nlink !== 1) {
+      throw new Error(`invalid bundled skill helper: ${helper}`)
+    }
+    chmodSync(helper, EXECUTABLE_MODE)
+  } catch (error) {
+    // A failed fresh copy must not turn the next unflagged install into a collision.
+    try {
+      rmSync(destination, { recursive: true, force: true })
+    } catch (cleanupError) {
+      throw new Error(`skill copy failed; partial copy may remain at ${destination}: ${String(cleanupError)}`, { cause: error })
+    }
+    throw error
   }
-  const scripts = join(destination, 'scripts')
-  const scriptsEntry = lstatSync(scripts)
-  if (!scriptsEntry.isDirectory() || scriptsEntry.isSymbolicLink()) {
-    throw new Error(`invalid bundled skill scripts: ${scripts}`)
-  }
-  const helper = join(scripts, HELPER_FILENAME)
-  const helperEntry = lstatSync(helper)
-  if (!helperEntry.isFile() || helperEntry.isSymbolicLink() || helperEntry.nlink !== 1) {
-    throw new Error(`invalid bundled skill helper: ${helper}`)
-  }
-  chmodSync(helper, EXECUTABLE_MODE)
 }
 
 /** Stage updates before moving an existing user skill, and restore it if replacement fails. */

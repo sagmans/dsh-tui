@@ -33,6 +33,19 @@ function existingSkill(): { home: string; destination: string } {
 }
 
 describe('installBundledSkill update rollback', () => {
+  it('removes a failed first installation so an unflagged retry succeeds', async () => {
+    const home = mkdtempSync(join(tmpdir(), SCRATCH_PREFIX))
+    SCRATCH_HOMES.push(home)
+    vi.mocked(cpSync).mockImplementationOnce(() => { throw new Error('initial copy failed') })
+
+    expect(() => installBundledSkill(home)).toThrow('initial copy failed')
+    expect(readdirSync(join(home, '.agents', 'skills'))).toEqual([])
+
+    const actual = await vi.importActual<typeof import('node:fs')>('node:fs')
+    vi.mocked(cpSync).mockImplementation(actual.cpSync)
+    expect(installBundledSkill(home)).toBe(join(home, '.agents', 'skills', SKILL_NAME))
+  })
+
   it('keeps the old copy when staging the new skill fails', async () => {
     const { home, destination } = existingSkill()
     vi.mocked(cpSync).mockImplementationOnce(() => { throw new Error('staging failed') })
