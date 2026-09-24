@@ -8,7 +8,6 @@ import { startAgent, type ForkInheritance, type TuiAgent } from './agent/host.ts
 import { createSessionHistory, presetOfStoredSession } from './agent/history.ts'
 import { createPresetRoster, parsePresetArgument, type PresetRoster, type PresetSummary } from './agent/presets.ts'
 import { forkPoint, type ForkEvent } from './agent/fork.ts'
-import { hiddenTail, NO_UNDO, redoStep, resetUndo, turnsOf, UNDO_TURN_SETTLE_MS, undoStep, type TurnPoint, type UndoState } from './agent/undo.ts'
 import { createStatusFacts } from './agent/status.ts'
 import { ModelSwitch, createModelCatalog, parseModelArgument, readModelRouteKey, type ModelChoice, type ModelRoute } from './agent/model.ts'
 import { describeMissingOptional, describeMissingRequired, probeComposition } from './compat/probe.ts'
@@ -32,6 +31,7 @@ import { createPromptInput } from './surface/prompt-input.ts'
 import { createPromptMemory } from './surface/prompt-memory.ts'
 import { createSessionPicker } from './surface/session-picker.ts'
 import { backHint, createSessionView } from './surface/session-view.ts'
+import { createStagedTurns } from './surface/staged-turns.ts'
 import { createTerminalLifecycle } from './surface/terminal-lifecycle.ts'
 import { formatTokens } from './tokens.ts'
 import { describeTodos, planSelectedActive, planToggleLine, readPlanState, type PlanModeState } from './work.ts'
@@ -196,7 +196,7 @@ export function apply(ctx: Context, config: unknown): void {
   const sessionView = createSessionView(ctx, {
     initialSession: resolved.sessionId,
     drivenSession: () => activeSession,
-    stagedCutoff: () => stagedCut,
+    stagedCutoff: () => stagedTurns.stagedCutoff(),
     agentScope: id => ctx.agents?.get(id),
     liveEvents: id => liveSession(id)?.snapshotEvents?.(),
     render: () => tui.requestRender(),
@@ -277,6 +277,18 @@ export function apply(ctx: Context, config: unknown): void {
     draftBorrowed: () => promptBar.isBorrowed(),
     holdDraft: text => promptBar.replaceHeld(text),
     writeDraft: text => editor.setText(text),
+    // The handle, the turn it ran, and the projections built from it are the
+    // composer's own state, so the owner asks for them when an agent is replaced.
+    takeOutgoingAgent: () => {
+      const previous = agent
+      agent = undefined
+      turnOpen = false
+      turnStartedAt = undefined
+      sessionView.clearPresentScope()
+      sessionView.reset()
+      backgroundWork.resetRoster()
+      return previous
+    },
   })
   const { terminal, tui, herdr, disposers, writeTerminal, requestExit, editDraft, exited } = terminalLifecycle
   /** The session this surface drives: commands, approvals, and the bell belong to it. */
@@ -319,16 +331,31 @@ export function apply(ctx: Context, config: unknown): void {
   let agent: TuiAgent | undefined
   let turnOpen = false
   /**
-   * The staged undo cursor for the session this terminal drives.
+   * The staged cursor over the session this terminal drives, and the prompts
+   * parked behind it.
    *
-   * Prompts are never deleted: the cursor chooses how much of the live log the
-   * transcript shows. A cursor counts the turns of one log, so openAgent resets it.
+   * Every port is read at call time — the agent, the session, the draft, the
+   * queue all move while an undo settles an interrupt — so this owner can exist
+   * before the agent it replaces does.
    */
-  let undoState: UndoState = NO_UNDO
-  /** Event index the transcript must not fold past while turns are hidden. */
-  let stagedCut: number | undefined
-  /** Whether an undo is settling an interrupt, so a second press cannot race it. */
-  let undoPending = false
+  const stagedTurns = createStagedTurns({
+    viewingChild: () => sessionView.viewingChild(),
+    activeSession: () => activeSession,
+    sessionEvents: id => sessionView.sessionEvents(id),
+    resetTranscript: () => sessionView.reset(),
+    foldTranscript: (id, cutoff) => sessionView.fold(id, cutoff),
+    drivingAgent: () => agent,
+    disposeOutgoing: () => terminalLifecycle.disposeOutgoing(),
+    openSession: (id, resume, fork) => openAgent(id, resume, fork),
+    queuedPrompts: () => queuedPrompts(),
+    canPark: () => stash !== undefined,
+    parkPrompt: text => stash?.stashEditor(text) ?? Promise.resolve(),
+    turnRunning: () => turnOpen,
+    draft: () => editor.getExpandedText(),
+    writeDraft: text => editor.setText(text),
+    notice: message => sessionView.notice(message),
+    render: () => tui.requestRender(),
+  })
   let turnStartedAt: number | undefined
   /** Whether a session was really opened, which is what an exit hint can name. */
   let sessionOpened = false
@@ -423,193 +450,6 @@ export function apply(ctx: Context, config: unknown): void {
   const liveSession = (id: SessionId): { snapshotEvents?: () => readonly ForkEvent[] } | undefined =>
     (ctx.get('sessions') as { get?: (id: SessionId) => { snapshotEvents?: () => readonly ForkEvent[] } | undefined } | undefined)?.get?.(id)
 
-  /** The closed turns of the session this terminal drives, newest last. */
-  const currentTurns = async (): Promise<readonly TurnPoint[]> => turnsOf(await sessionView.sessionEvents(activeSession))
-
-  /** Fold the transcript through the staged cut, or the whole log at the tip. */
-  const redrawStaged = async (): Promise<void> => {
-    sessionView.reset()
-    await sessionView.fold(activeSession, stagedCut)
-  }
-
-  /** Park queued prompts one per stash entry, newest first so popping replays queue order. */
-  const parkQueued = async (queued: readonly string[]): Promise<void> => {
-    for (const text of [...queued].reverse()) await stash?.stashEditor(text)
-  }
-
-  /** Resolver for the turn/end an undo is waiting on, set only while waiting. */
-  let turnSettled: (() => void) | undefined
-
-  /** Wait for the interrupted turn to close, bounded so undo can give up honestly. */
-  const waitForTurnEnd = (timeoutMs: number): Promise<boolean> =>
-    new Promise(resolve => {
-      const timer = setTimeout(() => {
-        turnSettled = undefined
-        resolve(false)
-      }, timeoutMs)
-      turnSettled = () => {
-        clearTimeout(timer)
-        turnSettled = undefined
-        resolve(true)
-      }
-    })
-
-  /**
-   * Stop the running turn and empty the inbox so the cut lands on a closed
-   * turn/end; queued prompts are parked first because cancelling drops them.
-   *
-   * Returns undefined when the reader's words cannot be kept: a queue with no
-   * stash to park it in, or a turn that will not close. Both leave the cursor
-   * untouched, so the transcript keeps showing what the model actually saw; a
-   * number is how many queued prompts were parked before the turn was stopped.
-   */
-  const settleForUndo = async (): Promise<number | undefined> => {
-    const queued = queuedPrompts()
-    if (!turnOpen && queued.length === 0) return 0
-    if (queued.length > 0 && stash === undefined) {
-      sessionView.notice('queued prompts have no stash to park in; undo cancelled')
-      tui.requestRender()
-      return undefined
-    }
-    agent?.interrupt()
-    if (queued.length > 0) await parkQueued(queued)
-    if (turnOpen && !(await waitForTurnEnd(UNDO_TURN_SETTLE_MS))) {
-      sessionView.notice('could not stop the turn; undo cancelled')
-      tui.requestRender()
-      return undefined
-    }
-    return queued.length
-  }
-
-  const runUndoCommand = (): void => {
-    if (undoPending) return
-    undoPending = true
-    void (async () => {
-      if (sessionView.viewingChild()) {
-        sessionView.notice('undo works on the session this terminal drives · ctrl+b comes back')
-        tui.requestRender()
-        return
-      }
-      const turns = await currentTurns()
-      if (undoState.hidden >= turns.length && !turnOpen) {
-        sessionView.notice('nothing to undo')
-        tui.requestRender()
-        return
-      }
-      const draft = editor.getExpandedText()
-      // Text this state itself restored is not the reader's draft, so undoing
-      // again must not park it and end up with two copies.
-      const holdsDraft = draft !== '' && draft !== undoState.lastRestored
-      if (holdsDraft && stash === undefined) {
-        sessionView.notice('the bar holds a draft and there is no stash to park it in; undo cancelled')
-        tui.requestRender()
-        return
-      }
-      const parked = await settleForUndo()
-      if (parked === undefined) return
-      const settled = await currentTurns()
-      const next = undoStep(undoState, settled)
-      if (next === undefined) {
-        sessionView.notice('nothing to undo')
-        tui.requestRender()
-        return
-      }
-      if (holdsDraft) {
-        await stash?.stashEditor(draft)
-        sessionView.notice('the draft in the bar was parked in the stash')
-      }
-      undoState = next
-      stagedCut = hiddenTail(next, settled)?.seedCount
-      await redrawStaged()
-      editor.setText(next.lastRestored)
-      // The parking count rides the undo notice: a notice of its own would be
-      // replaced before the frame could show it.
-      const parkedNote = parked === 0 ? '' : ` · ${parked} queued prompt${parked === 1 ? '' : 's'} parked in the stash`
-      sessionView.notice(`undo · ${next.hidden} prompt${next.hidden === 1 ? '' : 's'} hidden${parkedNote} · prefix r redo`)
-      tui.requestRender()
-    })()
-      .catch((error: unknown) => {
-        sessionView.notice(`undo failed: ${error instanceof Error ? error.message : String(error)}`)
-        tui.requestRender()
-      })
-      .finally(() => {
-        undoPending = false
-      })
-  }
-
-  const runRedoCommand = (): void => {
-    void (async () => {
-      if (sessionView.viewingChild()) {
-        sessionView.notice('redo works on the session this terminal drives · ctrl+b comes back')
-        tui.requestRender()
-        return
-      }
-      const turns = await currentTurns()
-      const before = editor.getExpandedText()
-      const restored = undoState.lastRestored
-      const next = redoStep(undoState, turns)
-      if (next === undefined) {
-        sessionView.notice('nothing to redo')
-        tui.requestRender()
-        return
-      }
-      undoState = next
-      stagedCut = hiddenTail(next, turns)?.seedCount
-      await redrawStaged()
-      // A composer the reader edited is theirs; only text this state wrote is replaced.
-      if (before === restored) editor.setText(next.lastRestored)
-      sessionView.notice(next.hidden === 0
-        ? 'redo · back at the newest prompt'
-        : `redo · ${next.hidden} prompt${next.hidden === 1 ? '' : 's'} hidden`)
-      tui.requestRender()
-    })().catch((error: unknown) => {
-      sessionView.notice(`redo failed: ${error instanceof Error ? error.message : String(error)}`)
-      tui.requestRender()
-    })
-  }
-
-  /**
-   * Send the reader's prompt, branching first when the transcript is staged.
-   *
-   * Context is derived from the log, so a send while turns are hidden has to
-   * continue in a child seeded with the visible prefix; submitting in place would
-   * show the model the prompts the reader undid. Every send passes through here so
-   * the branch has one commit point, not one per caller.
-   */
-  const commitStagedSend = async (text: string): Promise<void> => {
-    try {
-      const previous = agent
-      if (previous === undefined) {
-        sessionView.notice('the agent is still starting; try again in a moment')
-        tui.requestRender()
-        return
-      }
-      if (undoState.hidden === 0) {
-        previous.submit(text)
-        return
-      }
-      const source = activeSession
-      const events = await sessionView.sessionEvents(source)
-      const turns = turnsOf(events)
-      const tail = hiddenTail(undoState, turns)
-      const seed = tail === undefined ? [] : events.slice(0, tail.seedCount)
-      const childId = SessionId(`tui-session-${randomUUID()}`)
-      agent = undefined
-      turnOpen = false
-      turnStartedAt = undefined
-      sessionView.clearPresentScope()
-      sessionView.reset()
-      backgroundWork.resetRoster()
-      await previous.dispose()
-      const opened = await openAgent(childId, false, seed.length === 0 ? undefined : { from: source, events: seed })
-      sessionView.notice(`continuing in a new branch · ${source} keeps the undone turns`)
-      opened.submit(text)
-    } catch (error) {
-      sessionView.notice(`could not send: ${error instanceof Error ? error.message : String(error)}`)
-      tui.requestRender()
-    }
-  }
-
   /**
    * The mode one agent joins.
    *
@@ -675,8 +515,7 @@ export function apply(ctx: Context, config: unknown): void {
     sessionView.setViewed(id)
     agent = handle
     // A cursor counts the turns of one log; the session just opened has its own.
-    undoState = resetUndo(id)
-    stagedCut = undefined
+    stagedTurns.sessionOpened(id)
     promptMemory.sessionOpened()
     // agent/status is emitted on transitions only, so a driver that was
     // already running when this surface attached — a resume that wakes
@@ -1404,10 +1243,10 @@ export function apply(ctx: Context, config: unknown): void {
         tui.requestRender()
         return
       case 'undo':
-        runUndoCommand()
+        stagedTurns.undo()
         return
       case 'redo':
-        runRedoCommand()
+        stagedTurns.redo()
         return
       case 'help':
         sessionView.notice(helpText())
@@ -1437,7 +1276,7 @@ export function apply(ctx: Context, config: unknown): void {
         if (turnOpen) agent.steer(submission.text)
         else {
           adoptDefaultRoute()
-          void commitStagedSend(submission.text)
+          void stagedTurns.send(submission.text)
         }
     }
   }
@@ -1463,7 +1302,7 @@ export function apply(ctx: Context, config: unknown): void {
         turnOpen = false
         turnStartedAt = undefined
         // An undo may be parked waiting for exactly this boundary.
-        turnSettled?.()
+        stagedTurns.turnSettled()
         writeTerminal(windowTitle(process.cwd(), 'ready'))
         if (shouldRingBell({ bell: resolved.bell, ranForMs: ranFor, exiting: exited() })) writeTerminal(BELL)
         // A job the turn started may have settled while the reader was watching
