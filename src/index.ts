@@ -1,12 +1,9 @@
 import { randomUUID } from 'node:crypto'
 import { writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { type Component, type KeyId, ScrollView, isKeyRelease, matchesKey, type CombinedAutocompleteProvider } from '@earendil-works/pi-tui'
+import { type Component, type KeyId, ScrollView } from '@earendil-works/pi-tui'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-// Type-only: the command registry publishes the change event this surface
-// listens to, and the event map is declaration-merged by that package.
-import type {} from '@deepseek-ai/dsh-commands'
 import { startAgent, type ForkInheritance, type TuiAgent } from './agent/host.ts'
 import { createSessionHistory, presetOfStoredSession } from './agent/history.ts'
 import { createPresetRoster, parsePresetArgument, type PresetRoster, type PresetSummary } from './agent/presets.ts'
@@ -16,21 +13,15 @@ import { hiddenTail, NO_UNDO, redoStep, resetUndo, turnsOf, UNDO_TURN_SETTLE_MS,
 import { createStatusFacts } from './agent/status.ts'
 import { ModelSwitch, createModelCatalog, parseModelArgument, readModelRouteKey, type ModelChoice, type ModelRoute } from './agent/model.ts'
 import { describeMissingOptional, describeMissingRequired, probeComposition } from './compat/probe.ts'
-import { cancelStep, quitStep } from './input/cancel.ts'
-import { createAnswerCompletionProvider, createCompletionProvider } from './input/completion.ts'
-import { createFileIndex } from './input/file-index.ts'
-import { LOCAL_COMMANDS, classifySubmission, type Submission } from './input/submission.ts'
+import { LOCAL_COMMANDS, type Submission } from './input/submission.ts'
 import { createDeferredNotice } from './settings-notice.ts'
 import {
-  ChordReader,
   DEFAULT_PREFIX_KEYS,
   DEFAULT_PREFIX_WINDOW_S,
-  chordBindings,
   chordKeysLine,
-  installKeybindings,
   surfaceKeysLine,
 } from './input/keymap.ts'
-import { defaultKeymap, hintKeys, surfaceBindings, type Keymap } from './input/actions.ts'
+import { defaultKeymap, hintKeys, type Keymap } from './input/actions.ts'
 import { type ActionLayer, type SurfaceActionId } from './input/action-catalog.ts'
 import { resolveConfig } from './config.ts'
 import { FoldCursor, ViewGeneration, replayIfCurrent } from './fold-cursor.ts'
@@ -50,6 +41,7 @@ import { KEYMAP_LAYERS, keymapLayer } from './keys-command.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { createBackgroundWork } from './surface/background-work.ts'
 import { createModalInput } from './surface/modal-input.ts'
+import { createPromptInput } from './surface/prompt-input.ts'
 import { createPromptMemory } from './surface/prompt-memory.ts'
 import { createSessionPicker } from './surface/session-picker.ts'
 import { createTerminalLifecycle } from './surface/terminal-lifecycle.ts'
@@ -280,14 +272,51 @@ export function apply(ctx: Context, config: unknown): void {
   let historyGhost = defaultSettings().history.ghost
   let historyMaxEntries = defaultSettings().history.maxEntries
   /**
-   * The chord between a prefix and the action that follows it.
+   * The prompt bar's own presses, built here rather than beside the bar.
    *
-   * Built here, before the terminal exists, because the settings scope applies
-   * first and has to be able to end a chord armed under the keymap it replaced.
-   * The repaint the window also wants is late-bound: only a key press reaches
-   * it, and no key can arrive before the surface has started.
+   * The settings scope below applies first and has to be able to end a chord
+   * armed under the keymap it replaced, so this owner exists before the terminal
+   * or the editor do; each port reads them at call time for that reason.
    */
-  const keyChord = new ChordReader(() => prefixKeys, () => chordBindings(keymap), () => prefixWindowMs, () => tui.requestRender())
+  const promptInput = createPromptInput(ctx, {
+    keymap: () => keymap,
+    prefixKeys: () => prefixKeys,
+    prefixWindowMs: () => prefixWindowMs,
+    tui: () => tui,
+    editor: () => editor,
+    promptBar: () => promptBar,
+    modalHandleKey: data => modalInput.handleKey(data),
+    toggleCards: () => {
+      viewState.expandCards = !viewState.expandCards
+    },
+    toggleSubCalls: () => {
+      viewState.expandSubCalls = !viewState.expandSubCalls
+    },
+    toggleReasoning: () => {
+      viewState.expandReasoning = !viewState.expandReasoning
+    },
+    openEffortPicker: () => {
+      void openEffortPicker()
+    },
+    openHistoryPicker: () => {
+      void promptMemory.openHistoryPicker()
+    },
+    back: () => {
+      if (viewedSession !== activeSession) void showAgentSession()
+    },
+    queuedPrompts: () => queuedPrompts(),
+    turnRunning: () => turnOpen,
+    viewingChild: () => viewedSession !== activeSession,
+    interrupt: () => {
+      agent?.interrupt()
+    },
+    notice: message => model.notice(message),
+    requestExit: code => requestExit(code),
+    recordPrompt: text => promptMemory.record(text),
+    runSubmission: submission => runSubmission(submission),
+    drivenAgent: () => agent?.agent,
+    registeredCommands: target => registry()?.list(target),
+  })
   /**
    * Seed the display the reader configured.
    *
@@ -303,14 +332,11 @@ export function apply(ctx: Context, config: unknown): void {
     prefixKeys = section.prefixes
     prefixWindowMs = section.prefixWindow * MS_PER_SECOND
     keymap = section.keymap
-    // Installed where the library reads it, so a remap lands on the next press
-    // rather than at the next restart.
-    installKeybindings(keymap)
+    promptInput.installBindings()
     historyEnabled = section.history.enabled
     historyGhost = section.history.ghost
     historyMaxEntries = section.history.maxEntries
-    // A chord armed under the keymap the reader just replaced is not their chord.
-    keyChord.disarm()
+    promptInput.disarmChord()
   }
   /**
    * Read the reader's section once and apply everything it configures.
@@ -481,7 +507,7 @@ export function apply(ctx: Context, config: unknown): void {
   // The key map goes in before the bar exists, so no press can be read as the
   // send the library submits on by default. A settings document read after this
   // point installs over it, which is why the bar reads the map per press.
-  installKeybindings(keymap)
+  promptInput.installBindings()
   const editor = new GateInputBar(tui, theme.editor, () => keymap, ghostBrush)
   // Answers are written in the reader's own editor, which is why a question
   // borrows the bar instead of drawing a second one beside it.
@@ -501,7 +527,7 @@ export function apply(ctx: Context, config: unknown): void {
     theme,
     keymap: () => keymap,
     promptBar,
-    refreshCompletion: () => applyCompletion(),
+    refreshCompletion: () => promptInput.applyCompletion(),
     activeSession: () => activeSession,
   })
   // The presenter closure outlives the composition's own teardown, so it must
@@ -534,7 +560,7 @@ export function apply(ctx: Context, config: unknown): void {
     activity: () => ({ running: turnOpen, startedAt: turnStartedAt }),
     override: () => modelSwitch.current(),
     home: process.env.HOME,
-    chord: () => keyChord.hint(),
+    chord: () => promptInput.chordHint(),
     // Read per paint rather than written into the marker the view left behind:
     // a hint stored with the transcript would keep naming the key of the day it
     // was written, and the reader may remap it with the row already on screen.
@@ -555,7 +581,7 @@ export function apply(ctx: Context, config: unknown): void {
   }, STATUS_TICK_MS)
   disposers.push(() => clearInterval(statusTicker))
   // A window that outlived the surface would repaint a screen that is gone.
-  disposers.push(() => keyChord.disarm())
+  disposers.push(() => promptInput.disarmChord())
 
   tui.setLayoutRoot(surfaceLayout({
     transcript: new ScrollView(view, { follow: 'end', primary: true, overscroll: 'chain' }),
@@ -566,170 +592,9 @@ export function apply(ctx: Context, config: unknown): void {
   }))
   tui.setFocus(editor)
 
-  /**
-   * Whether the bar holds anything the reader wrote.
-   *
-   * Whitespace counts: it is a character the editor holds, and a press that
-   * clears it is the press the reader asked for. A paste counts expanded,
-   * because a marker is content rather than an absence of it.
-   */
-  const barHasText = (): boolean => editor.getExpandedText() !== ''
-
-  /**
-   * What each key the surface answers itself does; false hands the press back.
-   *
-   * Keyed by the table's own ids, so a key added to {@link SURFACE_ACTIONS}
-   * without a handler here fails to compile rather than doing nothing.
-   */
-  const surfaceActions: Readonly<Record<SurfaceActionId, () => boolean>> = {
-    toolDetail: () => {
-      viewState.expandCards = !viewState.expandCards
-      tui.requestRender()
-      return true
-    },
-    subCalls: () => {
-      viewState.expandSubCalls = !viewState.expandSubCalls
-      tui.requestRender()
-      return true
-    },
-    reasoning: () => {
-      viewState.expandReasoning = !viewState.expandReasoning
-      tui.requestRender()
-      return true
-    },
-    effort: () => {
-      void openEffortPicker()
-      return true
-    },
-    history: () => {
-      void promptMemory.openHistoryPicker()
-      return true
-    },
-    back: () => {
-      if (viewedSession !== activeSession) void showAgentSession()
-      return true
-    },
-    interrupt: () => {
-      // In raw mode Ctrl+C never reaches the process as SIGINT, so the surface
-      // decides what one press takes back — and a press with nothing left to
-      // cancel is handed back rather than spent on leaving.
-      const queued = queuedPrompts()
-      const step = cancelStep({
-        barHasText: barHasText(),
-        queuedPrompts: queued.length,
-        turnRunning: turnOpen,
-        viewingChild: viewedSession !== activeSession,
-      })
-      switch (step) {
-        case 'clear-editor':
-          editor.setText('')
-          tui.requestRender()
-          return true
-        case 'reclaim-queued':
-          // The interrupt drops whatever the agent had not started, so the words
-          // are read before it is stopped and handed back to the bar: a key that
-          // means "stop" must not be the key that loses the reader's own prompts.
-          agent?.interrupt()
-          editor.setText(queued.join('\n'))
-          model.notice(`interrupt requested · ${queued.length} queued ${queued.length === 1 ? 'prompt' : 'prompts'} back in the bar`)
-          tui.requestRender()
-          return true
-        case 'interrupt-turn':
-          agent?.interrupt()
-          model.notice('interrupt requested')
-          tui.requestRender()
-          return true
-        case 'leave-child-view':
-          void showAgentSession()
-          return true
-        case 'hand-back':
-          return false
-      }
-    },
-    quit: () => {
-      // The only key that leaves. Text in the bar keeps it for the editor, so
-      // the library's delete forward is never taken from a reader who is editing.
-      switch (quitStep({ barHasText: barHasText(), overlayOpen: tui.hasOverlay(), turnRunning: turnOpen })) {
-        case 'cancel-then-quit':
-          // An exit that waits on a tool call is not an exit, so the turn is
-          // asked to stop and the leave does not wait for the answer.
-          agent?.interrupt()
-          requestExit(0)
-          return true
-        case 'quit':
-          requestExit(0)
-          return true
-        case 'hand-back':
-          return false
-      }
-    },
-  }
-
-  disposers.push(tui.addInputListener(data => {
-    // A key arrives as a press and a release once the surface asks the terminal
-    // to report key events, and this library drops the release only for the
-    // focused component: a listener sees both halves, so an arrow key that is
-    // acted on twice steps a picker two rows and answers a question two options
-    // on. Falls through rather than consuming, which leaves a component that
-    // asked for releases its own half.
-    if (isKeyRelease(data)) return undefined
-    if (modalInput.handleKey(data)) return { consume: true }
-    // A chord is the surface's second key: the prefix is consumed and the
-    // footer names what may follow, while a key that finishes nothing is handed
-    // on. Detail the reader asked for is always available, even mid-turn: the
-    // collapsed view is a default, not the only state.
-    const chorded = keyChord.handle(data)
-    if (chorded !== undefined) {
-      if (chorded.kind === 'action') runSubmission(chorded.binding.submission)
-      tui.requestRender()
-      return { consume: true }
-    }
-    for (const binding of surfaceBindings(keymap)) {
-      if (!matchesKey(data, binding.key)) continue
-      return surfaceActions[binding.action]() ? { consume: true } : undefined
-    }
-    return undefined
-  }))
+  disposers.push(promptInput.inputListener())
 
   const registry = (): CommandRegistry | undefined => ctx.get('commands') as CommandRegistry | undefined
-
-  /** One scan of the workspace, shared by both menus: the listing is read-only and cached. */
-  const fileIndex = createFileIndex(process.cwd())
-  /** The menu the prompt bar offers: the commands this session can run, and the workspace's files. */
-  let promptCompletion: CombinedAutocompleteProvider | undefined
-  /** The menu an answer offers, which is the same menu without the commands. */
-  let answerCompletion: CombinedAutocompleteProvider | undefined
-
-  /**
-   * Give the bar the menu its current role calls for.
-   *
-   * A question borrows the prompt bar's editor rather than drawing its own, so
-   * the provider has to follow the borrow: a slash command is a line this
-   * surface would run, and an answer is text the model reads, so the two roles
-   * must not share one menu.
-   */
-  const applyCompletion = (): void => {
-    const chosen = promptBar.isBorrowed() ? answerCompletion : promptCompletion
-    if (chosen !== undefined) editor.setAutocompleteProvider(chosen)
-  }
-
-  /**
-   * Offer completion for whatever this session can run right now.
-   *
-   * The registry is agent-scoped and still empty while the agent starts, so the
-   * menu is rebuilt when the agent arrives and whenever a package registers
-   * another command. Both providers are built here because the answer's is the
-   * prompt bar's own minus the commands, and a rebuild while a question is open
-   * must not leave the answer menu unreachable.
-   */
-  const installCompletion = (): void => {
-    const current = agent?.agent
-    const commands = registry()
-    if (current === undefined || commands === undefined) return
-    answerCompletion = createAnswerCompletionProvider(process.cwd(), fileIndex)
-    promptCompletion = createCompletionProvider(commands.list(current), process.cwd(), fileIndex)
-    applyCompletion()
-  }
 
   /**
    * Where a bare `--resume` gets its list, and the ports it drives.
@@ -1196,7 +1061,7 @@ export function apply(ctx: Context, config: unknown): void {
     disposers.push(() => {
       void handle.dispose()
     })
-    installCompletion()
+    promptInput.installCompletion()
     model.notice(`session ${handle.sessionId}${resume ? ' (resumed)' : ''}`)
     tui.requestRender()
     // Returned so a caller that replaced the handle can send through the new
@@ -1976,15 +1841,7 @@ export function apply(ctx: Context, config: unknown): void {
     }
   }
 
-  editor.onSubmit = text => {
-    const submission = classifySubmission(text)
-    if (submission.kind === 'empty') return
-    // The library's own history feeds the up/down keys; the store below feeds
-    // ghost completion and reverse search, and is global rather than per-session.
-    editor.addToHistory(text)
-    promptMemory.record(text)
-    runSubmission(submission)
-  }
+  promptInput.attachSubmit()
 
   disposers.push(ctx.on('session/event', (session, event) => {
     // The surface state — activity, timer, title, bell, job board — belongs to
@@ -2049,7 +1906,7 @@ export function apply(ctx: Context, config: unknown): void {
 
   disposers.push(...modalInput.requestListeners())
 
-  disposers.push(ctx.on('commands/change', () => installCompletion()))
+  disposers.push(...promptInput.commandListeners())
 
   // The board is live state: watch it directly rather than folding events.
   disposers.push(backgroundWork.watchJobs())
