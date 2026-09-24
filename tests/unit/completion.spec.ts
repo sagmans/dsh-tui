@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { commandMenu, createAnswerCompletionProvider, createCompletionProvider } from '@/input/completion.ts'
-import { createFileIndex, type FileIndex } from '@/input/file-search.ts'
+import { createFileIndex, type FileIndex } from '@/input/file-index.ts'
 import { LOCAL_COMMANDS, LOCAL_COMMAND_DESCRIPTIONS } from '@/input/submission.ts'
 
 const signal = new AbortController().signal

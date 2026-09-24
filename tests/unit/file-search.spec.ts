@@ -3,15 +3,9 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import {
-  atToken,
-  atValue,
-  createFileIndex,
-  listWorkspaceFiles,
-  rankFiles,
-  walkFiles,
-  type Candidate,
-} from '@/input/file-search.ts'
+import { atToken, atValue, rankFiles, type Candidate } from '@/input/file-search.ts'
+import { createFileIndex } from '@/input/file-index.ts'
+import { listWorkspaceFiles, walkFiles } from '@/input/workspace-files.ts'
 
 const scratch: string[] = []
 function scratchDir(): string {

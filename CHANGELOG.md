@@ -10,6 +10,9 @@ breaking change, and a patch carries only fixes.
 
 ### Changed
 
+- Enumeration of the workspace, the shared file index and its deadlines, and
+  the @-mention grammar each sit in their own module, so the walk that lists
+  files no longer changes beside the ranking that offers them.
 - The action table, the spelling equivalences a key press is matched by, and
   the collision policy a layered keymap is judged with now sit in three modules,
   leaving the effective-map resolution and its display queries above them.
