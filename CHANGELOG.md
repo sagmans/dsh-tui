@@ -8,6 +8,17 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+### Fixed
+
+- The one-command dogfood run now works on the first try. A profile installs its
+  local bundles as symlinks relative to the home they were installed in, so a
+  clone at another depth — a scratch home under the temporary directory — left
+  every one dangling and dsh refused to mount the profile; the script rebuilt
+  each link from the absolute `link:` spec the profile's `package.json` already
+  carried, and does so without `dsh plugin add`, which re-materialised the same
+  relative links and dropped the other bundles the profile had, failing the run
+  on its own bundle guard. `pnpm test` pins both halves on a synthetic home.
+
 ## [0.6.0] - 2026-09-24
 
 ### Added

@@ -276,15 +276,63 @@ if [[ "$build" == 1 ]]; then
   (cd "$target_path" && pnpm run build) || die "pnpm run build failed in $target_path"
 fi
 
-# The plugin add command creates the profile when it is missing and repoints the
-# bundle when it is not, which is exactly the one thing that differs from the
-# real home.
+# A profile's local bundles are installed as relative symlinks under its own
+# node_modules, and those paths only resolve at the depth of the home they were
+# installed in. A clone at a different depth (a /tmp scratch home) leaves every
+# one dangling, so dsh refuses to mount the profile. Rebuild each link from the
+# absolute 'link:' spec its package.json already carries. The profile is created
+# from the shipped template when it is missing, then rewritten, because
+# 'dsh plugin add' re-materialises the same relative links and drops the other
+# bundles the profile had.
 step "pointing profile '$profile' at $target_path"
-DSH_HOME="$home" "$dsh_bin" plugin --profile "$profile" add "$target_path" >&2 || die "dsh plugin add failed"
+profile_dir="$home/profiles/$profile"
+if [[ ! -f "$profile_json" ]]; then
+  DSH_HOME="$home" "$dsh_bin" --profile "$profile" --from-default-profile "$profile" --help >/dev/null 2>&1 \
+    || DSH_HOME="$home" "$dsh_bin" plugin --profile "$profile" add "$target_path" >&2 \
+    || die "could not create profile '$profile' in $home"
+fi
+[[ -f "$profile_json" ]] || die "profile '$profile' has no package.json at $profile_json"
+
+# Point the bundle under test at the checkout, leaving every other dependency's
+# spec untouched. The bundle must already be listed; inserting it would put the
+# tool rows in two layers and fail composition.
+if ! node -e "process.exit(require(process.argv[1]).dsh.profile.bundles.includes('@sagmans/dsh-tui') ? 0 : 1)" "$profile_json"; then
+  die "profile '$profile' does not list @sagmans/dsh-tui (bundles: $(describe_bundles)); add it to the profile first"
+fi
+node -e "
+const fs = require('node:fs')
+const path = process.argv[1]
+const target = process.argv[2]
+const manifest = JSON.parse(fs.readFileSync(path, 'utf8'))
+manifest.dependencies = manifest.dependencies || {}
+manifest.dependencies['@sagmans/dsh-tui'] = 'link:' + target
+fs.writeFileSync(path, JSON.stringify(manifest, null, 2) + '\n')
+" "$profile_json" "$target_path"
+
+# Materialise every 'link:' dependency as an absolute symlink, which is what a
+# fresh install would do at this home's own depth.
+relink_profile() {
+  local manifest="$1" directory="$2" entry spec name dest
+  while IFS= read -r entry; do
+    [[ -n "$entry" ]] || continue
+    name="${entry%%=*}"
+    spec="${entry#*=}"
+    dest="$directory/node_modules/$name"
+    mkdir -p "$(dirname "$dest")"
+    rm -rf "$dest"
+    ln -s "${spec#link:}" "$dest"
+  done < <(node -e "
+const m = require(process.argv[1])
+for (const [name, spec] of Object.entries(m.dependencies || {})) {
+  if (String(spec).startsWith('link:')) console.log(name + '=' + spec)
+}
+" "$manifest")
+}
+relink_profile "$profile_json" "$profile_dir"
 
 bundles="$(describe_bundles)"
 if ! node -e "process.exit(require(process.argv[1]).dsh.profile.bundles.includes('@sagmans/dsh-tui') ? 0 : 1)" "$profile_json"; then
-  die "profile '$profile' does not list @sagmans/dsh-tui after add (bundles: $bundles)"
+  die "profile '$profile' does not list @sagmans/dsh-tui after relink (bundles: $bundles)"
 fi
 
 printf '\n' >&2

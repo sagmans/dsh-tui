@@ -136,13 +136,15 @@ ones a `--profile tui` session actually scans.
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| the surface waits with no output and `--help` waits with it | the bundle left `dsh.profile.bundles`, usually after the linked checkout moved | re-run `dsh plugin --profile tui add <checkout>` |
+| the surface waits with no output and `--help` waits with it | the bundle left `dsh.profile.bundles`, or a local bundle's link does not resolve at the clone's depth | re-run the dogfood script (it rebuilds every `link:` as an absolute symlink); `dsh plugin add` re-materialises relative links and drops the other bundles |
 | a source edit has no effect | the profile loads `lib/` | `pnpm run build`, or use the dogfood script |
 | `error: Insufficient Balance` on every turn | the provider account behind the copied credentials has no credit | top up or point `--model`/provider elsewhere |
 | `pnpm dsh --profile tui` exits before the surface appears | pnpm's dependency check fails on the harness checkout's own postinstall | see [README.md](README.md#launching-from-a-harness-checkout) |
 | `pnpm dsh` boots the workspace-linked dev harness and composition fails | `pnpm dsh` runs the harness checkout's own `dsh`, not the released one | `dsh`, or `--dsh <released bin.js>`; `pty-drive` takes `--launcher` |
 
-A broken link is silent: `dsh plugin install` drops a bundle it cannot resolve
-and still exits 0, so a missing row is worth checking against
+A broken link is silent: `dsh plugin install` and `dsh plugin add` drop a bundle
+they cannot resolve and still exit 0, so a missing row is worth checking against
 `node -p "require('<home>/profiles/tui/package.json').dsh.profile.bundles"`
-before anything else.
+before anything else. The dogfood script rebuilds every local `link:` as an
+absolute symlink for exactly this reason: a profile installs those links relative
+to the home it was made in, so a clone at another depth leaves them dangling.
