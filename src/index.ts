@@ -9,7 +9,6 @@ import { createSessionHistory, presetOfStoredSession } from './agent/history.ts'
 import { createPresetRoster, parsePresetArgument, type PresetRoster, type PresetSummary } from './agent/presets.ts'
 import { forkPoint, type ForkEvent } from './agent/fork.ts'
 import { createStatusFacts } from './agent/status.ts'
-import { ModelSwitch, createModelCatalog, parseModelArgument, readModelRouteKey, type ModelChoice, type ModelRoute } from './agent/model.ts'
 import { describeMissingOptional, describeMissingRequired, probeComposition } from './compat/probe.ts'
 import { LOCAL_COMMANDS, type Submission } from './input/submission.ts'
 import { chordKeysLine, surfaceKeysLine } from './input/keymap.ts'
@@ -27,6 +26,7 @@ import { SessionId } from '@deepseek-ai/dsh-session'
 import { createAppearance } from './surface/appearance.ts'
 import { createBackgroundWork } from './surface/background-work.ts'
 import { createModalInput } from './surface/modal-input.ts'
+import { createModelChoice } from './surface/model-choice.ts'
 import { createPromptInput } from './surface/prompt-input.ts'
 import { createPromptMemory } from './surface/prompt-memory.ts'
 import { createSessionPicker } from './surface/session-picker.ts'
@@ -42,13 +42,7 @@ import { KeymapPicker } from './ui/keymap-picker.ts'
 import { PromptBar } from './ui/prompt.ts'
 import { MarkdownRenderer } from './ui/markdown.ts'
 import { createMermaidTransform } from './ui/mermaid.ts'
-import {
-  EffortPicker,
-  ModelPicker,
-  PROVIDER_DEFAULT_EFFORT_ID,
-  PresetPicker,
-  effortChoices,
-} from './ui/picker.ts'
+import { PresetPicker } from './ui/picker.ts'
 import { QueueBar } from './ui/queue.ts'
 import { StatusBar } from './ui/status.ts'
 import { TranscriptView } from './ui/view.ts'
@@ -162,7 +156,7 @@ export function apply(ctx: Context, config: unknown): void {
     toggleSubCalls: appearance.toggleSubCalls,
     toggleReasoning: appearance.toggleReasoning,
     openEffortPicker: () => {
-      void openEffortPicker()
+      void modelChoice.openEffortPicker()
     },
     openHistoryPicker: () => {
       void promptMemory.openHistoryPicker()
@@ -230,7 +224,18 @@ export function apply(ctx: Context, config: unknown): void {
     openPicker: picker => modalInput.openPicker(picker),
   })
   const ghostBrush = promptMemory.ghostBrush
-  const modelSwitch = new ModelSwitch()
+  /**
+   * The route this session runs with, built before the status facts that report
+   * it and read through ports because the screen, the keyboard and the settings
+   * document that supplies the default all belong to the surface around it.
+   */
+  const modelChoice = createModelChoice(ctx, {
+    statusFacts: () => statusFacts(),
+    keymap: appearance.keymap,
+    openPicker: picker => modalInput.openPicker(picker),
+    notice: message => sessionView.notice(message),
+    render: () => tui.requestRender(),
+  })
   const agentPresets = createPresetRoster(ctx)
   /** The mode named on the command line, which is the only one that may conflict. */
   const requestedPreset = resolved.preset
@@ -252,7 +257,6 @@ export function apply(ctx: Context, config: unknown): void {
    * pin every later session to the mode the bundle happened to ship.
    */
   const seatMode = (): string | undefined => seat ?? agentPresets?.defaultId
-  const catalog = createModelCatalog(ctx)
   const backgroundWork = createBackgroundWork(ctx, {
     drivingAgent: () => agent,
     activeSession: () => activeSession,
@@ -366,7 +370,7 @@ export function apply(ctx: Context, config: unknown): void {
   const statusFacts = createStatusFacts(ctx, {
     sessionId: () => activeSession,
     activity: () => ({ running: turnOpen, startedAt: turnStartedAt }),
-    override: () => modelSwitch.current(),
+    override: () => modelChoice.current(),
     home: process.env.HOME,
     chord: () => promptInput.chordHint(),
     // Read per paint rather than written into the marker the view left behind:
@@ -505,7 +509,7 @@ export function apply(ctx: Context, config: unknown): void {
       cwd: process.cwd(),
       preset,
       setup: async agentCtx => {
-        modelSwitch.install(agentCtx)
+        modelChoice.setup(agentCtx)
         if (preset !== undefined) await agentPresets?.mount(agentCtx, preset)
       },
       ...(fork === undefined ? {} : { fork }),
@@ -767,240 +771,6 @@ export function apply(ctx: Context, config: unknown): void {
     tui.requestRender()
   }
 
-  const runModelCommand = (argument: string): void => {
-    if (catalog === undefined) {
-      sessionView.notice('this profile has no llm service, so models cannot be listed or switched')
-      tui.requestRender()
-      return
-    }
-    const command = parseModelArgument(argument, catalog.providers(), modelSwitch.current())
-    switch (command.kind) {
-      case 'current':
-        // Choosing by eye is the point of a terminal selector; the picker
-        // heads itself with the route the next step will actually use.
-        void openModelPicker()
-        return
-      case 'list-models':
-        void catalog.models(command.provider).then(entries => {
-          sessionView.notice(entries.length === 0
-            ? `${command.provider} advertises no models; an id may still work`
-            : `${command.provider}: ${entries.map(entry => entry.id).join(' ')}`)
-          tui.requestRender()
-        }).catch((error: unknown) => {
-          sessionView.notice(`could not list models: ${error instanceof Error ? error.message : String(error)}`)
-          tui.requestRender()
-        })
-        return
-      case 'switch': {
-        const choice = command.choice
-        if (choice.reasoningEffort === undefined) {
-          modelSwitch.choose(choice)
-          sessionView.notice(`model set to ${choice.provider}/${choice.model} for the next step`)
-          tui.requestRender()
-          return
-        }
-        // The route decides which efforts exist, so an explicit one is checked
-        // against the adapter before it is put in force: a typo must not become
-        // a request the provider rejects.
-        void (async () => {
-          try {
-            const info = await catalog.efforts(choice.provider, choice.model)
-            const efforts = info?.efforts ?? []
-            if (!efforts.some(effort => effort.id === choice.reasoningEffort)) {
-              sessionView.notice(efforts.length === 0
-                ? `/model: ${choice.provider}/${choice.model} advertises no reasoning efforts`
-                : `/model: ${choice.provider}/${choice.model} does not offer reasoning effort "${choice.reasoningEffort}" — offers: ${efforts.map(effort => effort.id).join(' ')}`)
-              tui.requestRender()
-              return
-            }
-            modelSwitch.choose(choice)
-            sessionView.notice(`model set to ${choice.provider}/${choice.model} (${choice.reasoningEffort}) for the next step`)
-          } catch (error) {
-            sessionView.notice(`/model: could not read reasoning efforts: ${error instanceof Error ? error.message : String(error)}`)
-          }
-          tui.requestRender()
-        })()
-        return
-      }
-      case 'invalid':
-        sessionView.notice(`/model: ${command.reason}`)
-        tui.requestRender()
-        return
-    }
-  }
-
-  /** Whether a route's effort list is being read, so a second key cannot race it. */
-  let openingEfforts = false
-
-  /** Put the reader's effort choice in force for the next step. */
-  const applyEffort = (provider: string, modelId: string, effortId: string): void => {
-    modelSwitch.choose(effortId === PROVIDER_DEFAULT_EFFORT_ID
-      ? { provider, model: modelId }
-      : { provider, model: modelId, reasoningEffort: effortId })
-    sessionView.notice(`reasoning effort for ${provider}/${modelId} set to ${effortId === PROVIDER_DEFAULT_EFFORT_ID ? 'provider default' : effortId} for the next step`)
-    tui.requestRender()
-  }
-
-  /** Whether a model picker's catalog is being read, so a second key cannot race it. */
-  let openingModels = false
-
-  /** One route, as the picker names it; the effort is not part of the choice here. */
-  type PickedRoute = { readonly provider: string; readonly model: string }
-
-  /**
-   * The route the next step would actually use.
-   *
-   * Without a choice of its own the surface reports the composition default,
-   * not that it has no opinion: the picker's heading and its marked row have to
-   * agree with the status line about the route in force.
-   */
-  const effectiveRoute = (): ModelChoice | undefined => {
-    const chosen = modelSwitch.current()
-    if (chosen !== undefined) return chosen
-    const facts = statusFacts()
-    if (facts.provider === undefined || facts.model === undefined) return undefined
-    return {
-      provider: facts.provider,
-      model: facts.model,
-      ...facts.effort === undefined ? {} : { reasoningEffort: facts.effort },
-    }
-  }
-
-  /** Put the reader's route choice in force for the next step. */
-  const applyRoute = (route: PickedRoute): void => {
-    const current = effectiveRoute()
-    // The levels belong to the route, so a switch clears an explicit effort
-    // while re-picking the route already in force is not a switch.
-    const keep = current !== undefined && current.provider === route.provider && current.model === route.model
-      ? current.reasoningEffort
-      : undefined
-    modelSwitch.choose({
-      provider: route.provider,
-      model: route.model,
-      ...keep === undefined ? {} : { reasoningEffort: keep },
-    })
-    sessionView.notice(`model set to ${route.provider}/${route.model} for the next step`)
-    tui.requestRender()
-  }
-
-  /**
-   * Offer the levels a route advertises, after the route is already in force.
-   *
-   * Cancelling the list is a real choice — the reader keeps the model with the
-   * provider's own default — which is why the route is applied first. The list
-   * is read before the picker opens because the rows are the route's own
-   * metadata; a menu painted before that arrived could offer a level the
-   * request would then be refused for.
-   */
-  const offerRouteEfforts = async (route: PickedRoute): Promise<void> => {
-    if (catalog === undefined) return
-    try {
-      const info = await catalog.efforts(route.provider, route.model)
-      const efforts = info?.efforts ?? []
-      if (efforts.length === 0) return
-      const current = effectiveRoute()
-      const effective = current !== undefined && current.provider === route.provider && current.model === route.model
-        ? current.reasoningEffort
-        : undefined
-      const picked = await modalInput.openPicker(new EffortPicker(
-        () => effortChoices(efforts, effective),
-        `reasoning effort · ${route.provider}/${route.model}`,
-        appearance.keymap,
-      ))
-      if (picked !== undefined) applyEffort(route.provider, route.model, picked)
-    } catch (error) {
-      sessionView.notice(`could not read reasoning efforts: ${error instanceof Error ? error.message : String(error)}`)
-    }
-    tui.requestRender()
-  }
-
-  /**
-   * Offer every model the configured routes advertise.
-   *
-   * Rows come from the routes the llm service registered — the providers this
-   * deployment configured — and each provider's models join the open list as
-   * its catalog resolves, so the picker is filterable before the slowest
-   * adapter answers. A route whose catalog cannot be read stays reachable by
-   * name through the text form rather than by an explanation in the list.
-   */
-  const openModelPicker = async (): Promise<void> => {
-    if (catalog === undefined) {
-      sessionView.notice('this profile has no llm service, so models cannot be listed or switched')
-      tui.requestRender()
-      return
-    }
-    const providers = catalog.providers()
-    if (providers.length === 0) {
-      sessionView.notice('no provider is configured; add one before choosing a model')
-      tui.requestRender()
-      return
-    }
-    if (openingModels) return
-    openingModels = true
-    try {
-      const routes: ModelRoute[] = []
-      for (const provider of providers) {
-        void catalog.models(provider.id).then(entries => {
-          if (entries.length === 0) return
-          routes.push(...entries.map(entry => ({ provider: provider.id, model: entry.id, name: entry.name })))
-          tui.requestRender()
-        }).catch(() => {
-          // One adapter's discovery failure is not the list's to explain.
-        })
-      }
-      const picked = await modalInput.openPicker(new ModelPicker(() => routes, effectiveRoute, appearance.keymap))
-      if (picked === undefined) return
-      const route = readModelRouteKey(picked)
-      if (route === undefined) return
-      applyRoute(route)
-      await offerRouteEfforts(route)
-    } finally {
-      openingModels = false
-      tui.requestRender()
-    }
-  }
-
-  /**
-   * Offer the efforts the route in force advertises.
-   *
-   * The list is read before the picker opens because the rows are the route's
-   * own metadata; a menu painted before that arrived could offer a level the
-   * request would then be refused for.
-   */
-  const openEffortPicker = async (): Promise<void> => {
-    if (catalog === undefined) {
-      sessionView.notice('this profile has no llm service, so reasoning efforts cannot be read')
-      tui.requestRender()
-      return
-    }
-    const facts = statusFacts()
-    if (facts.provider === undefined || facts.model === undefined) {
-      sessionView.notice('no model route is in use; /model <provider>/<model> picks one first')
-      tui.requestRender()
-      return
-    }
-    if (openingEfforts) return
-    openingEfforts = true
-    try {
-      const info = await catalog.efforts(facts.provider, facts.model)
-      const efforts = info?.efforts ?? []
-      if (efforts.length === 0) {
-        sessionView.notice(`${facts.provider}/${facts.model} advertises no reasoning efforts`)
-        return
-      }
-      const picked = await modalInput.openPicker(new EffortPicker(
-        () => effortChoices(efforts, facts.effort),
-        `reasoning effort · ${facts.provider}/${facts.model}`,
-        appearance.keymap,
-      ))
-      if (picked !== undefined) applyEffort(facts.provider, facts.model, picked)
-    } catch (error) {
-      sessionView.notice(`could not read reasoning efforts: ${error instanceof Error ? error.message : String(error)}`)
-    } finally {
-      openingEfforts = false
-      tui.requestRender()
-    }
-  }
 
   /**
    * Show or choose the mode this session runs.
@@ -1105,24 +875,6 @@ export function apply(ctx: Context, config: unknown): void {
     })
   }
 
-  /**
-   * Put the deployment default in force before the first turn.
-   *
-   * The agent is created before the settings file has been read, so the route
-   * its loop captured is the composition placeholder; the reader's default —
-   * effort included — only exists by the time they can type. Adopting it here
-   * is what makes the status line's route the one the request actually uses.
-   */
-  const adoptDefaultRoute = (): void => {
-    if (modelSwitch.current() !== undefined) return
-    const facts = statusFacts()
-    if (facts.provider === undefined || facts.model === undefined) return
-    modelSwitch.adopt({
-      provider: facts.provider,
-      model: facts.model,
-      ...(facts.effort === undefined ? {} : { reasoningEffort: facts.effort }),
-    })
-  }
 
   /**
    * Carry out one classified line, wherever it was asked for.
@@ -1138,7 +890,7 @@ export function apply(ctx: Context, config: unknown): void {
         requestExit(0)
         return
       case 'model':
-        runModelCommand(submission.argument)
+        modelChoice.runModelCommand(submission.argument)
         return
       case 'preset':
         runPresetCommand(submission.argument)
@@ -1275,7 +1027,7 @@ export function apply(ctx: Context, config: unknown): void {
         // While a turn is running the human is steering it, not opening another.
         if (turnOpen) agent.steer(submission.text)
         else {
-          adoptDefaultRoute()
+          modelChoice.adoptDefault()
           void stagedTurns.send(submission.text)
         }
     }
