@@ -332,8 +332,9 @@ if [[ ! -d "$home" ]]; then
       if [[ -f "$source_home/$seed" ]]; then cp -p "$source_home/$seed" "$home/$seed"; fi
     done
   elif command -v rsync >/dev/null 2>&1; then
-    rsync -a --exclude '/sessions/' --exclude '/.dsh-dogfood' "$source_home/" "$home/"
-    if [[ "$with_sessions" == 1 && -d "$source_home/sessions" ]]; then rsync -a "$source_home/sessions/" "$home/sessions/"; fi
+    # Preserving the source root's mode can expose copied credentials before final chmod.
+    rsync -a --no-perms --exclude '/sessions/' --exclude '/.dsh-dogfood' "$source_home/" "$home/"
+    if [[ "$with_sessions" == 1 && -d "$source_home/sessions" ]]; then rsync -a --no-perms "$source_home/sessions/" "$home/sessions/"; fi
   else
     # tar carries the tree without the bulk of the sessions; BSD tar takes the
     # exclude in the same form as GNU tar.

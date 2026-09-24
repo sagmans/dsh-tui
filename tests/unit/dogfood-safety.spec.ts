@@ -4,6 +4,8 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createDogfoodFixture, GENERIC_SCRIPT } from './dogfood-fixture.js'
 
+const REAL_RSYNC = spawnSync('sh', ['-c', 'command -v rsync'], { encoding: 'utf8' }).stdout.trim()
+
 /**
  * Scratch homes contain copied credentials and mutable profile state, so tests
  * use synthetic source homes and assert that unsafe clone links never escape.
@@ -33,6 +35,28 @@ describe('dogfood cloned-home boundaries', () => {
     expect(result.status, result.stderr).toBe(0)
     expect(statSync(scratchHome).mode & 0o777).toBe(0o700)
     expect(statSync(join(scratchHome, '.credentials.yaml')).mode & 0o777).toBe(0o600)
+  })
+
+  it.skipIf(!REAL_RSYNC)('keeps the scratch root private throughout rsync copying', () => {
+    chmodSync(sourceHome, 0o755)
+    writeFileSync(join(sourceHome, '.credentials.yaml'), 'test-secret')
+    chmodSync(join(sourceHome, '.credentials.yaml'), 0o644)
+    const bin = join(root, 'bin')
+    mkdirSync(bin)
+    const snapshot = join(root, 'copy-modes.json')
+    const rsync = join(bin, 'rsync')
+    writeFileSync(rsync, `#!/bin/sh
+"$DSH_TEST_REAL_RSYNC" "$@" || exit $?
+node -e 'const fs = require("node:fs"); fs.writeFileSync(process.env.DSH_TEST_SNAPSHOT, JSON.stringify({ home: fs.statSync(process.env.DSH_TEST_CLONE).mode & 0o777, credentials: fs.statSync(process.env.DSH_TEST_CLONE + "/.credentials.yaml").mode & 0o777 }))'
+`)
+    chmodSync(rsync, 0o755)
+    const result = spawnSync('bash', [GENERIC_SCRIPT, '--source-home', sourceHome, '--home', scratchHome, '--dsh', stubDsh, '--no-build', '--no-launch'], {
+      cwd: checkout,
+      encoding: 'utf8',
+      env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, DSH_TEST_REAL_RSYNC: REAL_RSYNC, DSH_TEST_SNAPSHOT: snapshot, DSH_TEST_CLONE: scratchHome },
+    })
+    expect(result.status, result.stderr).toBe(0)
+    expect(JSON.parse(readFileSync(snapshot, 'utf8')).home).toBe(0o700)
   })
 
   it.each(['--clean', '--reseed'])('refuses %s on source home with a copied marker', (action) => {
