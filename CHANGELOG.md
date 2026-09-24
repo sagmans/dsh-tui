@@ -8,6 +8,8 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-24
+
 ### Added
 
 - A tool call now says what it is doing in the colour of its own name rather
@@ -506,7 +508,8 @@ breaking change, and a patch carries only fixes.
 - Publication through npm OIDC trusted publishing, with the first version
   bootstrapped by hand ([#5](https://github.com/sagmans/dsh-tui/pull/5)).
 
-[Unreleased]: https://github.com/sagmans/dsh-tui/compare/v0.5.2...HEAD
+[Unreleased]: https://github.com/sagmans/dsh-tui/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/sagmans/dsh-tui/compare/v0.5.2...v0.6.0
 [0.5.2]: https://github.com/sagmans/dsh-tui/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/sagmans/dsh-tui/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/sagmans/dsh-tui/compare/v0.4.0...v0.5.0
