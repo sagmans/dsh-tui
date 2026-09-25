@@ -1,17 +1,14 @@
 // Disk layout for prompt stashes.
 //
-// A bank is scoped to one session: two terminals working in the same directory
-// keep separate drafts, and a resumed session finds the drafts it parked before
-// the restart, because the session id is what a resume preserves. The id is
-// flattened into a filename-safe key that stays human-readable in the agent
-// directory.
+// A bank follows either the absolute working directory or one session. The
+// distinct key versions prevent an absolute directory from ever colliding with
+// a session id, while both identifiers stay readable under the stash directory.
 //
 // Readability cannot be bought with injectivity: a separator made of hyphens
-// cannot be told apart from a hyphen inside a session id, and truncating a long
-// id can land on a name a shorter id already owns. Two sessions sharing one bank
-// would let one read or delete another's drafts, so every key ends with a digest
-// of the exact session id. The readable part is then only a label: two distinct
-// ids collide in the label, never in the file.
+// cannot be told apart from a hyphen inside an owner id, and truncating a long
+// id can land on a name a shorter id already owns. Two distinct owners sharing
+// one bank would expose drafts, so every key ends with a digest of the exact id. The readable part is then only a label: two distinct
+// identifiers collide in the label, never in the file.
 
 import { createHash } from 'node:crypto'
 import { homedir } from 'node:os'
@@ -19,6 +16,11 @@ import path from 'node:path'
 
 /** The directory `DSH_HOME` points at when the environment names none. */
 const DEFAULT_DSH_HOME_DIR = '.dsh'
+
+/** A bank follows the current directory by default; session mode keeps drafts private to one session. */
+export const DEFAULT_STASH_SCOPE = 'path' as const
+export const STASH_SCOPES = [DEFAULT_STASH_SCOPE, 'session'] as const
+export type StashScope = typeof STASH_SCOPES[number]
 
 /** The subtree of `DSH_HOME` this surface owns. */
 const STASH_DIR_NAME = 'tui-stash'
@@ -29,8 +31,8 @@ const STASH_DIR_NAME = 'tui-stash'
 // common 255-byte filename limit.
 const SANITIZE_MAX_LENGTH = 200
 const SEPARATOR = '--'
-const KEY_FORMAT_VERSION = 'v2'
-const KEY_PREFIX = `${KEY_FORMAT_VERSION}${SEPARATOR}`
+const SESSION_KEY_FORMAT_VERSION = 'v2'
+const PATH_KEY_FORMAT_VERSION = 'v3'
 const ESCAPE_CHARACTER = '%'
 const ESCAPED_ESCAPE_CHARACTER = '%25'
 const ESCAPED_SEPARATOR = '%2D%2D'
@@ -40,13 +42,13 @@ const HASH_ALGORITHM = 'sha256'
 /** 64 bits of digest, which no deliberate name can be built to collide with. */
 const HASH_LENGTH = 16
 
-/** The stash file for one session. */
+/** The stash file for one scope owner. */
 export interface StashPaths {
-  /** The exact session this bank belongs to. */
+  /** Exact scope owner, retained in the on-disk sessionId field. */
   readonly sessionId: string
-  /** Flattened session id, used as the on-disk key. */
+  /** Flattened owner id, used as the on-disk key. */
   readonly key: string
-  /** JSON file holding this session's stash entries. */
+  /** JSON file holding this bank's stash entries. */
   readonly file: string
 }
 
@@ -71,12 +73,13 @@ function truncateToUtf8Bytes(value: string, maxBytes: number): string {
   return result
 }
 
-export function sanitizeSessionId(sessionId: string): string {
+export function sanitizeSessionId(sessionId: string, version: string = SESSION_KEY_FORMAT_VERSION): string {
+  const keyPrefix = `${version}${SEPARATOR}`
   const readable = sessionId.split('/').filter(Boolean).map(escapeSegment).join(SEPARATOR)
   const digest = createHash(HASH_ALGORITHM).update(sessionId, 'utf8').digest('hex').slice(0, HASH_LENGTH)
   const suffix = `${SEPARATOR}${digest}`
-  const budget = SANITIZE_MAX_LENGTH - Buffer.byteLength(KEY_PREFIX) - Buffer.byteLength(suffix)
-  return `${KEY_PREFIX}${truncateToUtf8Bytes(readable, Math.max(budget, 0))}${suffix}`
+  const budget = SANITIZE_MAX_LENGTH - Buffer.byteLength(keyPrefix) - Buffer.byteLength(suffix)
+  return `${keyPrefix}${truncateToUtf8Bytes(readable, Math.max(budget, 0))}${suffix}`
 }
 
 /**
@@ -91,12 +94,12 @@ export function dshHomeDir(env: NodeJS.ProcessEnv = process.env, home: string = 
   return configured === undefined || configured === '' ? path.join(home, DEFAULT_DSH_HOME_DIR) : configured
 }
 
-/** The root every session's stash file sits under. */
+/** The root every bank's stash file sits under. */
 export function stashBaseDir(env: NodeJS.ProcessEnv = process.env, home: string = homedir()): string {
   return path.join(dshHomeDir(env, home), STASH_DIR_NAME)
 }
 
-export function resolveStashPaths(sessionId: string, baseDir: string = stashBaseDir()): StashPaths {
-  const key = sanitizeSessionId(sessionId)
+export function resolveStashPaths(sessionId: string, baseDir: string = stashBaseDir(), scope: StashScope = 'session'): StashPaths {
+  const key = sanitizeSessionId(sessionId, scope === 'path' ? PATH_KEY_FORMAT_VERSION : SESSION_KEY_FORMAT_VERSION)
   return { sessionId, key, file: path.join(baseDir, `${key}.json`) }
 }

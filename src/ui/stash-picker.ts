@@ -34,7 +34,7 @@ export function stashLabel(text: string): string {
 }
 
 /**
- * The drafts of one session, chosen by key press.
+ * The drafts of one bank, chosen by key press.
  *
  * The id a pick settles on is the entry id, so a pop survives the list being
  * re-read while it is open and can never take the wrong draft after a concurrent
@@ -45,13 +45,13 @@ export function stashLabel(text: string): string {
 export class StashPicker extends ListPicker<ResolvedEntry> {
   constructor(
     entries: readonly ResolvedEntry[],
-    sessionLabel: string,
+    bankLabel: string,
     keys: () => Keymap,
     now: () => number = () => Date.now(),
   ) {
     super(
       () => entries,
-      () => `stash · ${sessionLabel} · ${entries.length} draft${entries.length === 1 ? '' : 's'}`,
+      () => `stash · ${bankLabel} · ${entries.length} draft${entries.length === 1 ? '' : 's'}`,
       row => row.entry.id,
       (row): PickerRow => ({
         label: `[${row.index}] ${stashLabel(row.entry.text)}`,

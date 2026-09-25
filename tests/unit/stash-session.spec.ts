@@ -5,6 +5,7 @@
 
 import { rmSync } from 'node:fs'
 import { afterEach, describe, expect, it } from 'vitest'
+import { PromptStash } from '@/stash.ts'
 import { resolveStashPaths } from '@/stash/paths.ts'
 import { loadStashStore } from '@/stash/store.ts'
 import { SESSION, OTHER_SESSION, SESSION_CHANGED, scratchDirs, scratchBase, FakeHost, bank, movingWriter } from './fixtures/stash.ts'
@@ -100,6 +101,86 @@ describe('listing drafts', () => {
       await stash.list('~/app')
       expect(host.last()).toBe('no stashed drafts')
     })
+})
+
+describe('path scope', () => {
+  it('uses the working directory by default across new sessions', async () => {
+    const baseDir = scratchBase()
+    await new PromptStash(new FakeHost(), { baseDir, sessionId: () => SESSION }).stashEditor('default path')
+    const host = new FakeHost()
+    const next = new PromptStash(host, { baseDir, sessionId: () => OTHER_SESSION })
+    await next.apply(undefined)
+    expect(host.editorText).toBe('default path')
+  })
+
+  it('shares drafts across sessions in the same absolute directory after restart', async () => {
+    const baseDir = scratchBase()
+    const directory = scratchBase()
+    await bank(new FakeHost(), { baseDir, scope: 'path', directory }).stashEditor('shared draft')
+
+    const otherHost = new FakeHost()
+    const other = bank(otherHost, { baseDir, scope: 'path', directory, sessionId: () => OTHER_SESSION })
+    await other.open()
+    expect(other.entryCount).toBe(1)
+    await other.list('other session')
+    expect(otherHost.pickedLabel).toBe(directory)
+    await other.pop(undefined)
+    expect(otherHost.editorText).toBe('shared draft')
+
+    const reloaded = bank(new FakeHost(), { baseDir, scope: 'path', directory })
+    await reloaded.open()
+    expect(reloaded.entryCount).toBe(0)
+  })
+
+  it('refreshes the shared footer count after another terminal writes and this session changes', async () => {
+    const baseDir = scratchBase()
+    const directory = scratchBase()
+    let session = SESSION
+    const current = bank(new FakeHost(), { baseDir, scope: 'path', directory, sessionId: () => session })
+    await current.open()
+    expect(current.entryCount).toBe(0)
+    await bank(new FakeHost(), { baseDir, scope: 'path', directory, sessionId: () => OTHER_SESSION }).stashEditor('new draft')
+    session = OTHER_SESSION
+    await current.open()
+    expect(current.entryCount).toBe(1)
+  })
+
+  it('names the shared directory when a queued stash finishes after a session switch', async () => {
+    const baseDir = scratchBase()
+    const directory = scratchBase()
+    let session = SESSION
+    const host = new FakeHost()
+    const stash = bank(host, {
+      baseDir, scope: 'path', directory,
+      sessionId: () => session,
+      write: movingWriter(() => { session = OTHER_SESSION }),
+    })
+
+    await stash.stashEditor('still in the bank')
+    expect(host.last()).toBe('the session changed; the stash stayed with the directory it belonged to')
+    expect(host.editorText).toBe('still in the bank')
+    const other = bank(new FakeHost(), { baseDir, scope: 'path', directory, sessionId: () => OTHER_SESSION })
+    await other.open()
+    expect(other.entryCount).toBe(1)
+  })
+
+  it('isolates different absolute paths and session-scoped banks', async () => {
+    const baseDir = scratchBase()
+    const directory = scratchBase()
+    const otherDirectory = scratchBase()
+    await bank(new FakeHost(), { baseDir, scope: 'path', directory }).stashEditor('path draft')
+    await bank(new FakeHost(), { baseDir, scope: 'session', directory }).stashEditor('session draft')
+
+    const elsewhere = bank(new FakeHost(), { baseDir, scope: 'path', directory: otherDirectory })
+    await elsewhere.open()
+    expect(elsewhere.entryCount).toBe(0)
+    const samePath = bank(new FakeHost(), { baseDir, scope: 'path', directory, sessionId: () => OTHER_SESSION })
+    await samePath.open()
+    expect(samePath.entryCount).toBe(1)
+    const sameSession = bank(new FakeHost(), { baseDir, scope: 'session', directory })
+    await sameSession.open()
+    expect(sameSession.entryCount).toBe(1)
+  })
 })
 
 describe('session scope', () => {

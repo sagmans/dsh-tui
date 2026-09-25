@@ -186,7 +186,7 @@ force, and the `keys:` section moves any of them — see [Keys](#keys).
 | Ctrl+T | pick the reasoning effort for the next step |
 | Ctrl+R | reverse-search recorded prompts: the list opens filtered by whatever is in the bar, `enter` puts one back, `esc` keeps the draft |
 | Ctrl+X then S | stash the current draft |
-| Ctrl+X then L | open this session's stashed drafts |
+| Ctrl+X then L | open the current stash bank's drafts |
 | Ctrl+X then M | open the model picker |
 | Ctrl+X then Y | copy the last answer to the clipboard |
 | Ctrl+X then E | edit the draft in `$VISUAL` (or `$EDITOR`) and take back what it saves |
@@ -236,9 +236,9 @@ force, and the `keys:` section moves any of them — see [Keys](#keys).
 | `/stash <draft>` | park the text given after the command (`ctrl+x` then `s` parks the editor) |
 | `/stash-pop [index\|id]` | put a stashed draft into the editor and remove it (newest by default) |
 | `/stash-apply [index\|id]` | put a stashed draft into the editor and keep it |
-| `/stash-list` | pick from this session's stashed drafts; `enter` pops the marked one |
+| `/stash-list` | pick from the current stash bank's drafts; `enter` pops the marked one |
 | `/stash-drop [index\|id]` | delete a stashed draft without using it |
-| `/stash-clear` | delete every draft stashed in this session, after a confirmation |
+| `/stash-clear` | delete every draft in the current stash bank, after a confirmation |
 | `/quit` | leave and print the resume command |
 
 Typing `@` opens this workspace's files above the editor, ranked as the fragment is typed the way a fuzzy finder ranks a path list: `@edtr` reaches `src/ui/editor.ts` without spelling the separators, a directory offers itself with a trailing slash so typing continues into it, and a path holding a space is quoted. A directory whose own name holds a space offers no row, because the menu stops following the token once one is in it; the files under it are still listed, each quoted whole. The rows are what git tracks or would add, with ignored paths left out, so a suggestion never names build output or a secret the repository deliberately ignores; a tree git does not own is walked instead, skipping `node_modules`, `.git`, and the rest of the build litter. A path typed from the working directory still completes on Tab as before.
@@ -297,10 +297,33 @@ Any other `/command` goes to the command registry, so `/plan`, `/compact`, `/goa
 says so, because submitting a command consumes the line it was typed on and there
 is nothing left of the draft to park. `/stash-pop` puts a parked draft back and
 removes it, so a prompt written for the wrong moment survives a restart instead
-of being retyped or sent; `l` opens the list of them. A stash belongs to the
-session it was parked in, so a second terminal in the same checkout never sees
-these drafts while resuming the session does; the footer shows `stash N` while
-any are waiting, ranked above the context and cache numbers it shares a row with.
+of being retyped or sent; `l` opens the list of them. By default, a stash
+belongs to the absolute working directory where the TUI started: new or resumed
+sessions in the same worktree share drafts. Set `stash.scope: session` on the TUI
+row in the profile's `cordis.patch.yml` to keep each session's drafts separate:
+
+```yaml
+- id: tui
+  config:
+    sessionId: !!js ctx.tuiStartup.sessionId
+    resume: !!js ctx.tuiStartup.resume
+    resumePicker: !!js ctx.tuiStartup.resumePicker
+    model: !!js ctx.tuiStartup.model
+    provider: !!js ctx.tuiStartup.provider
+    preset: !!js ctx.tuiStartup.preset
+    color: !!js ctx.tuiStartup.color
+    bell: !!js ctx.tuiStartup.bell
+    stash:
+      scope: session
+```
+
+A profile override replaces the row's config, so keep its startup mappings as
+shown. Editing the bundle's `tui` row config instead needs only the `stash` block.
+
+Use `scope: path` (the default) to share drafts by directory. Changing the
+scope does not move existing drafts; switch back to the old scope to read them.
+The footer shows `stash N` while drafts are waiting, ranked above the context
+and cache numbers it shares a row with.
 
 A selector is the number the list shows in brackets — `0` is the newest — or the
 entry's own id; leaving it out takes the newest. `apply` and `pop` refuse to
@@ -318,7 +341,7 @@ the write is attempted. The bar is only cleared while it still holds that same
 draft and no question has borrowed it, so an answer typed during the write is
 never wiped by a stash finishing.
 
-The bank is one JSON file per session under `$DSH_HOME/tui-stash`, written with
+Each path or session bank is one JSON file under `$DSH_HOME/tui-stash`, written with
 owner-only permissions (`0700` directory, `0600` file) through a no-follow open,
 and every directory the path passes through must be owned by the reader (or by
 root) and not writable by anyone else — the sticky bit is the only exception,
@@ -882,8 +905,9 @@ The automated checks drive a real PTY, but they run on this machine's terminal. 
 | type a prompt without sending it, then answer a question | the prompt bar steps aside while the question is open and holds the same prompt again afterwards |
 | `echo hi \| dsh --profile tui` | refuses with a non-zero exit and a message naming the TTY requirement |
 | `/stash`, `/stash-pop` in one terminal | the footer shows `stash 1` after the stash and the draft returns to the editor after the pop |
-| a second `dsh --profile tui` in the same directory | `/stash-list` says `no stashed drafts`, and the first terminal's bank is untouched |
-| `/quit`, then `dsh --profile tui --resume=<id>` | `/stash-list` still shows the draft that session parked |
+| a second `dsh --profile tui` in the same directory | `/stash-list` shows the first terminal's drafts; a pop removes the shared draft from both banks |
+| `stash.scope: session` in the TUI row, then a second session in the same directory | `/stash-list` says `no stashed drafts` in the second session |
+| `/quit`, then `dsh --profile tui --resume=<id>` | `/stash-list` still shows the draft parked in that directory |
 | hand-edit `$DSH_HOME/tui-stash/<key>.json` into invalid JSON, then `/stash-list` | the surface reports the quarantine path, starts empty, and leaves the moved file readable |
 | `ctrl+x` then `e` with `$VISUAL` set to your editor | the alternate screen gives way to that editor with the draft in it; saving returns to the same frame with what was saved in the bar, and nothing is submitted |
 | the same with `$VISUAL` and `$EDITOR` unset | the draft stays in the bar, and a notice names the variables to set |

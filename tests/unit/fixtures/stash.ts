@@ -28,6 +28,7 @@ export class FakeHost implements StashHost {
   confirmResult = false
   editorAvailable = true
   picked: readonly ResolvedEntry[] = []
+  pickedLabel = ''
   pickChooser: (entries: readonly ResolvedEntry[]) => string | undefined = () => undefined
 
   getEditorText(): string {
@@ -46,8 +47,9 @@ export class FakeHost implements StashHost {
     this.notices.push(message)
   }
 
-  async pick(entries: readonly ResolvedEntry[]): Promise<string | undefined> {
+  async pick(entries: readonly ResolvedEntry[], label: string): Promise<string | undefined> {
     this.picked = entries
+    this.pickedLabel = label
     return this.pickChooser(entries)
   }
 
@@ -69,10 +71,12 @@ export class FakeHost implements StashHost {
 }
 export function bank(
   host: FakeHost,
-  overrides: { baseDir?: string; write?: StashWriter; sessionId?: () => string } = {},
+  overrides: { baseDir?: string; write?: StashWriter; sessionId?: () => string; scope?: 'path' | 'session'; directory?: string } = {},
 ): PromptStash {
   return new PromptStash(host, {
     sessionId: overrides.sessionId ?? (() => SESSION),
+    scope: overrides.scope ?? 'session',
+    directory: overrides.directory,
     baseDir: overrides.baseDir ?? scratchBase(),
     ...(overrides.write === undefined ? {} : { write: overrides.write }),
   })

@@ -3,6 +3,7 @@ import { createPromptHistory } from '../agent/prompt-history.ts'
 import { ghostSuffix } from '../input/ghost.ts'
 import type { Keymap } from '../input/actions.ts'
 import { PromptStash } from '../stash.ts'
+import type { StashScope } from '../stash/paths.ts'
 import type { TuiTheme } from '../theme.ts'
 import { resetSequence } from '../theme-resolver.ts'
 import { TUI_SETTINGS_NAMESPACE } from '../theme-settings.ts'
@@ -40,6 +41,7 @@ export interface PromptMemoryPorts {
   readonly historyEnabled: () => boolean
   readonly historyGhost: () => boolean
   readonly historyMaxEntries: () => number
+  readonly stashScope: StashScope
   readonly theme: TuiTheme
   readonly keymap: () => Keymap
   readonly notice: (message: string) => void
@@ -81,7 +83,7 @@ export interface PromptMemory {
  * The memory the prompt keeps of what was typed, and what it offers back.
  *
  * Two stores, one subject: the prompt history is global and written from every
- * submitted line, while the stash parks a draft for the session in force. Both
+ * submitted line, while the stash parks a draft for the selected bank. Both
  * are read through the same editor and both answer in a list, so they share the
  * one owner that knows what the reader is looking at.
  */
@@ -208,10 +210,9 @@ export function createPromptMemory(ports: PromptMemoryPorts): PromptMemory {
         confirm: async count => confirmedClear(await ports.openPicker(new StashConfirmPicker(count, () => ports.keymap()))),
         render: () => ports.render(),
       },
-      // The bank follows the session this surface drives, not the directory it
-      // runs in: two terminals in one checkout keep separate drafts, and a resume
-      // finds the ones it parked. Read per command so a switch retargets it.
-      { sessionId: () => String(ports.activeSession()) },
+      // A session switch must never redirect a queued command to another bank;
+      // path mode still guards the editor against writing into the next session.
+      { sessionId: () => String(ports.activeSession()), scope: ports.stashScope },
     )
     return stash
   }
@@ -219,8 +220,8 @@ export function createPromptMemory(ports: PromptMemoryPorts): PromptMemory {
   /**
    * Follow the session the surface has just opened.
    *
-   * The bank follows the session, so the footer stops counting the drafts of
-   * the session just left and the next command reads this session's file.
+   * Session banks switch owners here; shared path banks refresh their count
+   * because another surface can change the bank between sessions.
    */
   const sessionOpened = (): void => {
     void stash?.open()
