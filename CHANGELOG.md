@@ -8,6 +8,21 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+### Fixed
+
+- TUI preferences now expose a Config schema for source hosts while preserving
+  released section APIs and standalone core provider discovery. Config-backed
+  writes reject schema runtimes without native live references instead of
+  persisting a change that the running surface cannot apply.
+- Row preferences apply before prompt history and rendering. Config-backed
+  history and ghost completion require explicit opt-in, so delayed or failed
+  legacy imports cannot enable recording first.
+- Unsupported preference writes now report failure. Rejected theme changes
+  restore the applied appearance, and theme diagnostics use that same state.
+- Malformed preference reads preserve readable privacy opt-outs and the last valid
+  appearance. History checks publicly exposed raw opt-outs even when an invalid
+  sibling prevents the host from committing or notifying a change.
+
 ### Changed
 
 - Enumeration of the workspace, the shared file index and its deadlines, and

@@ -10,6 +10,30 @@ import { TUI_SETTINGS_NAMESPACE, parseSettings,
   TuiSettingsSchema, defaultSettings, readScope, toOverrides } from '@/theme-settings.ts'
 
 describe('the dsh-tui settings section', () => {
+  it.each([false, 3, 'no', [], null].map(raw => ({ raw })))('rejects a scalar section without enabling history: $raw', ({ raw }) => {
+    expect(() => parseSettings(raw)).toThrow(/mapping/)
+    const settings = readScope({ get: () => raw }, () => {})
+    expect(settings.history.enabled).toBe(false)
+    expect(settings.history.ghost).toBe(false)
+  })
+
+  it.each(['no', false, []].map(tools => ({ tools })))('rejects a malformed tools block: $tools', ({ tools }) => {
+    expect(() => parseSettings({ tools })).toThrow(/mapping/)
+  })
+
+  it('retains readable false switches when another history field fails', () => {
+    const raw = { history: { enabled: false, ghost: false, maxEntries: 'invalid' } }
+    const settings = readScope({ get: () => raw }, () => {})
+    expect(settings.history.enabled).toBe(false)
+    expect(settings.history.ghost).toBe(false)
+    expect(raw.history.maxEntries).toBe('invalid')
+  })
+
+  it.each(['false', null, []].map(history => ({ history })))('disables unreadable history blocks: $history', ({ history }) => {
+    const settings = readScope({ get: () => ({ history }) }, () => {})
+    expect(settings.history.enabled).toBe(false)
+    expect(settings.history.ghost).toBe(false)
+  })
   it('owns the namespace the reader writes in settings.yaml', () => {
     expect(TUI_SETTINGS_NAMESPACE).toBe('dsh-tui')
   })

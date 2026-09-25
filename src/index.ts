@@ -6,7 +6,8 @@ import { createPresetRoster } from './agent/presets.ts'
 import type { ForkEvent } from './agent/fork.ts'
 import { createStatusFacts } from './agent/status.ts'
 import { describeMissingOptional, describeMissingRequired, probeComposition } from './compat/probe.ts'
-import { resolveConfig } from './config.ts'
+import { hasLiveRowSettings, readRowSettings, resolveConfig } from './config.ts'
+export { Config } from './config.ts'
 import { windowTitle } from './terminal/title.ts'
 import { toolDisplayFor } from './tool-display.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
@@ -112,6 +113,8 @@ export function apply(ctx: Context, config: unknown): void {
     // The row's own theme is the layer a profile patch can pin on a harness
     // that keeps settings per row, so it is read here beside the section.
     rowTheme: resolved.theme,
+    rowSettings: () => readRowSettings(config),
+    rowSettingsLive: hasLiveRowSettings(config),
     notice: message => sessionView.notice(message),
     render: () => tui.requestRender(),
     invalidateMarkdown: () => markdown.invalidate(),

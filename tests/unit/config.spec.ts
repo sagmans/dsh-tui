@@ -1,7 +1,34 @@
 import { describe, expect, it } from 'vitest'
-import { TuiConfigError, resolveConfig } from '@/config.ts'
+import { Config, TuiConfigError, hasLiveRowSettings, readRowSettings, resolveConfig } from '@/config.ts'
+import { TuiSettingsSchema } from '@/theme-settings.ts'
 
 describe('resolveConfig', () => {
+  it('does not mistake source metadata for native live Config references', () => {
+    const parsed = Config({ sessionId: 'abc', history: { enabled: false, ghost: false } })
+    expect(hasLiveRowSettings(parsed)).toBe(false)
+    expect(Object.values(Config.dict!).some(field => Reflect.get(field.meta, 'volatile') === true)).toBe(false)
+    expect(readRowSettings(parsed)).toMatchObject({ history: { enabled: false, ghost: false } })
+  })
+
+  it('reads the native reference protocol at fixed preference fields only', () => {
+    const values: Record<string, unknown> = { theme: 'violet-orbit', history: { enabled: false, ghost: false } }
+    const row = Object.fromEntries(Object.keys(TuiSettingsSchema.dict!).map(key => [key, {
+      [Symbol.for('cosmokit.volatile.write')]: () => {},
+      get: () => values[key],
+    }]))
+    expect(hasLiveRowSettings(row)).toBe(true)
+    expect(readRowSettings(row)).toEqual(values)
+    expect(resolveConfig({ sessionId: 'abc', ...row }).theme).toBe('violet-orbit')
+    values.theme = 'deepseek-blue'
+    expect(readRowSettings(row)).toMatchObject({ theme: 'deepseek-blue' })
+  })
+
+  it('preserves malformed raw preferences without treating arbitrary get methods as native references', () => {
+    const history = { get: () => { throw new Error('must not call data') }, enabled: false }
+    expect(readRowSettings({ history })).toEqual({ history })
+    expect(hasLiveRowSettings({ history })).toBe(false)
+  })
+
   it('resolves a launch-provided configuration with defaults', () => {
     expect(resolveConfig({ sessionId: 'abc' })).toEqual({
       sessionId: 'abc',

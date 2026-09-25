@@ -37,7 +37,7 @@ describe('the settings section seam', () => {
     const scope = { get: vi.fn((): unknown => ({ theme: 'violet-orbit' })), update: vi.fn(async () => {}) }
     const register = vi.fn(() => scope)
     const opened = openSection({ register }, requestWith(() => {}))
-    expect(register).toHaveBeenCalledWith('dsh-tui', { schema: true })
+    expect(register).toHaveBeenCalledWith('dsh-tui', { schema: true }, { base: {} })
     expect(opened?.get()).toEqual({ theme: 'violet-orbit' })
     await opened?.update({ theme: 'lagoon' })
     expect(scope.update).toHaveBeenCalledWith({ theme: 'lagoon' })
@@ -97,11 +97,52 @@ describe('the settings section seam', () => {
     await expect(opened!.update({ theme: 'lagoon' })).rejects.toThrow(/cannot write/)
   })
 
-  it('owns nothing on a harness whose settings are per-row forms', () => {
-    // The newest service projects each plugin's own Config into a profile-patch
-    // form, so there is no document section for this seam to register; the
-    // caller's row config is the store and silence is the honest answer.
-    const forms = { describe: () => [], update: async () => {} }
-    expect(openSection(forms, requestWith(() => {}))).toBeUndefined()
+  it.each([undefined, null, {}])('refuses unreadable settings and unsupported writes: %s', async service => {
+    const opened = openSection(service, requestWith(() => {}))!
+    expect(() => opened.get()).toThrow(/cannot read/)
+    await expect(opened.update({ theme: 'lagoon' })).rejects.toThrow(/cannot write/)
+  })
+
+  it('rejects source writes when schema metadata has no native live references', async () => {
+    const update = vi.fn(async () => {})
+    const forms = { describe: () => [{ ns: 'terminal', value: {}, revision: 0 }], update }
+    const opened = openSection(forms, {
+      ...requestWith(() => {}), config: { ns: 'terminal', get: () => ({}), live: false },
+    })
+    await expect(opened.update({ theme: 'lagoon' })).rejects.toThrow(/cannot write live Config/)
+    expect(update).not.toHaveBeenCalled()
+  })
+
+  it('uses the actual Config entry identity and revision, never the legacy namespace', async () => {
+    const value = { theme: 'violet-orbit', history: { enabled: false, ghost: false } }
+    const update = vi.fn(async () => {})
+    const forms = { describe: () => [{ ns: 'terminal-custom', value, revision: 7 }], update }
+    const opened = openSection(forms, {
+      ...requestWith(() => {}), config: { ns: 'terminal-custom', get: () => ({}), live: true },
+    })!
+    expect(opened.get()).toEqual(value)
+    await opened.update({ theme: 'lagoon' })
+    expect(update).toHaveBeenCalledWith('terminal-custom', { theme: 'lagoon' }, 7)
+  })
+
+  it('rejects missing Config ownership instead of writing a similarly named entry', async () => {
+    const update = vi.fn(async () => {})
+    const forms = { describe: () => [{ ns: 'dsh-tui', value: {}, revision: 0 }], update }
+    const opened = openSection(forms, {
+      ...requestWith(() => {}), config: { ns: 'other', get: () => ({ history: { enabled: false } }), live: true },
+    })!
+    expect(opened.get()).toEqual({ history: { enabled: false } })
+    await expect(opened.update({ theme: 'lagoon' })).rejects.toThrow(/cannot write/)
+    expect(update).not.toHaveBeenCalled()
+  })
+
+  it('rejects a read-only Config service even when it exposes update', async () => {
+    const update = vi.fn(async () => {})
+    const forms = { writable: false, describe: () => [{ ns: 'terminal', value: {}, revision: 0 }], update }
+    const opened = openSection(forms, {
+      ...requestWith(() => {}), config: { ns: 'terminal', get: () => ({}), live: true },
+    })!
+    await expect(opened.update({ theme: 'lagoon' })).rejects.toThrow(/cannot write/)
+    expect(update).not.toHaveBeenCalled()
   })
 })

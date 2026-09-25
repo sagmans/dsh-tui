@@ -1,6 +1,5 @@
 import type { KeyId } from '@earendil-works/pi-tui'
 import type { Context } from '@deepseek-ai/cordis'
-import { openSection, type SectionScope } from '../compat/section.ts'
 import { defaultKeymap, type Keymap } from '../input/actions.ts'
 import { DEFAULT_PREFIX_KEYS, DEFAULT_PREFIX_WINDOW_S } from '../input/keymap.ts'
 import { createDeferredNotice, type NoticeSink } from '../settings-notice.ts'
@@ -8,10 +7,11 @@ import { createTheme, forwardEditorTheme, forwardMarkdownTheme, type TuiTheme } 
 import { detectColourMode, type ColourMode } from '../theme-capability.ts'
 import { renderThemeTable } from '../theme-command.ts'
 import { DEFAULT_THEME, builtinNames, builtinThemesDir, ensureThemesHome, exportTheme, loadThemes, themesHomeDir, watchThemes } from '../theme-files.ts'
-import { TUI_SETTINGS_NAMESPACE, TuiSettingsSchema, defaultSettings, readScope, settingsProblemMessage, toOverrides, type MermaidMode, type TuiSettings } from '../theme-settings.ts'
+import { defaultSettings, toOverrides, type MermaidMode, type TuiSettings } from '../theme-settings.ts'
 import type { ToolDisplayTable } from '../tool-display.ts'
 import { ThemePicker } from '../ui/theme-picker.ts'
 import { DEFAULT_VIEW_STATE, type ViewState } from '../ui/view.ts'
+import { createAppearancePreferences } from './appearance-preferences.ts'
 import type { Picker } from './modal-input.ts'
 import type { PromptInput } from './prompt-input.ts'
 
@@ -37,6 +37,10 @@ export interface AppearancePorts {
    * the row is then the only layer a profile patch can carry a theme in.
    */
   readonly rowTheme: string | undefined
+  /** Keep source Config references live rather than capturing their startup values. */
+  readonly rowSettings: () => unknown
+  /** Source Loader can apply live edits only when its schema runtime created native references. */
+  readonly rowSettingsLive: boolean
   readonly notice: (message: string) => void
   readonly render: () => void
   readonly invalidateMarkdown: () => void
@@ -94,14 +98,6 @@ export interface Appearance {
 export function createAppearance(ctx: Context, ports: AppearancePorts): Appearance {
   const themeMode = (): ColourMode => (ports.color() ? detectColourMode(process.env) : 'none')
   /**
-   * The reader's section, or nothing when the service is not mounted.
-   *
-   * The service is only readable inside an `inject` scope — asking for it
-   * outside one is a composition error, not a missing value — so this stays a
-   * late-bound read that the injection point and the change event both use.
-   */
-  let readSection = (): TuiSettings => defaultSettings()
-  /**
    * The themes this session can draw.
    *
    * Read from disk rather than compiled in, so a file the reader saves is a theme
@@ -112,15 +108,6 @@ export function createAppearance(ctx: Context, ports: AppearancePorts): Appearan
    */
   const themesHome = themesHomeDir()
   let themeLibrary = loadThemes(themesHome, builtinThemesDir())
-  /**
-   * Persist a theme choice, replaced once the section is registered.
-   *
-   * A theme picked mid-session has to outlive it, so the choice is written
-   * through the same scope the reader's document is read from instead of kept
-   * in memory: the host persists it, and the change comes back through
-   * `settings/updated` like any other edit — which is what restyles the screen.
-   */
-  let chooseTheme = (_name: string): void => {}
   /**
    * A refused settings edit, kept until the surface can show it: stderr is
    * behind the alt screen, and the section is read on a schedule of its own.
@@ -153,7 +140,7 @@ export function createAppearance(ctx: Context, ports: AppearancePorts): Appearan
    * to hold a name — which is why the row is read here, below the section and
    * above the default, rather than as the only answer.
    */
-  const themeName = (section: TuiSettings): string | undefined => section.theme ?? ports.rowTheme
+  const themeName = (section: TuiSettings): string | undefined => section.theme ?? (preferences.configBacked() ? undefined : ports.rowTheme)
   const applyTheme = (section: TuiSettings): void => {
     // The row under the cursor outranks both while a list is open, so a theme is
     // judged on the reader's own transcript before it is taken.
@@ -229,8 +216,8 @@ export function createAppearance(ctx: Context, ports: AppearancePorts): Appearan
   /** Every action's keys in force; the settings document owns it and a press reads it live. */
   let keymap: Keymap = defaultKeymap()
   /** Whether prompts are recorded and offered, and the cap on how many; the settings document owns all three. */
-  let historyEnabled = defaultSettings().history.enabled
-  let historyGhost = defaultSettings().history.ghost
+  let historyEnabled = false
+  let historyGhost = false
   let historyMaxEntries = defaultSettings().history.maxEntries
   /**
    * Seed the display the reader configured.
@@ -260,15 +247,21 @@ export function createAppearance(ctx: Context, ports: AppearancePorts): Appearan
    * One read per change, because a refused section is reported on the way past:
    * reading it once per field would show the reader the same refusal twice.
    */
+  let applyingSettings = false
   const applySettings = (): void => {
-    const section = readSection()
-    appliedSection = section
-    // A settings edit ends any preview: what the document says is now the choice,
-    // and a name left over from a list would outrank it.
-    previewTheme = undefined
-    reportMissingTheme(section)
-    applyTheme(section)
-    applyDisplay(section)
+    // describe() can synchronously announce its first snapshot while it is being read.
+    if (applyingSettings) return
+    applyingSettings = true
+    try {
+      const section = preferences.read()
+      previewTheme = undefined
+      reportMissingTheme(section)
+      applyTheme(section)
+      appliedSection = section
+      applyDisplay(section)
+    } finally {
+      applyingSettings = false
+    }
   }
   /**
    * Say so when the reader named a theme that nothing answers to.
@@ -310,7 +303,7 @@ export function createAppearance(ctx: Context, ports: AppearancePorts): Appearan
     // would flash the theme the reader just left. The write clears the preview as
     // it lands, and a write that fails says so, leaving a theme that is still one
     // of theirs rather than shades nothing chose.
-    chooseTheme(picked)
+    preferences.chooseTheme(picked)
   }
   const runThemeCommand = (argument: string): void => {
     // A bare command is the list: a theme is judged by looking at it, so
@@ -327,8 +320,8 @@ export function createAppearance(ctx: Context, ports: AppearancePorts): Appearan
       // The table answers for the appearance on screen, not only for the
       // document: a row-pinned theme would otherwise read as every shade
       // untouched, which is the opposite of the question this command answers.
-      const section = readSection()
-      for (const line of renderThemeTable(toOverrides({ ...section, theme: themeName(section) }, themeLibrary), themeLibrary)) ports.notice(line)
+      const section = appliedSection ?? preferences.read()
+      for (const line of renderThemeTable(toOverrides({ ...section, theme: previewTheme ?? themeName(section) }, themeLibrary), themeLibrary)) ports.notice(line)
       ports.render()
       return
     }
@@ -360,71 +353,18 @@ export function createAppearance(ctx: Context, ports: AppearancePorts): Appearan
       ports.render()
       return
     }
-    chooseTheme(head)
+    preferences.chooseTheme(head)
   }
-  /**
-   * Own the section, so the harness validates and persists it for the reader.
-   *
-   * Registration is how the document learns the section exists at all; without
-   * it a hand-written `dsh-tui:` block would be dropped on the next save. The
-   * first read happens here too, because this is the only scope the service
-   * may be touched in, and a harness that has no section to register leaves the
-   * row's own config as the store instead.
-   */
-  const registerSection = (): void => {
-    ctx.inject(['settings'], settingsCtx => {
-      let opened: SectionScope | undefined
-      try {
-        // Registration parses the document against the schema, so a section the
-        // schema itself refuses throws here — inside a fiber whose failure the
-        // screen never shows. Reporting it through the same holder keeps a typo
-        // from costing the reader every setting they wrote, silently.
-        opened = openSection(settingsCtx.settings, {
-          owner: settingsCtx,
-          ns: TUI_SETTINGS_NAMESPACE,
-          schema: TuiSettingsSchema,
-          // Nothing to layer under the section: the row's own theme is applied
-          // by the read below, where the section and the row are ranked together.
-          entry: {},
-          onChange: () => {
-            applySettings()
-            restyle()
-          },
-        })
-      } catch (error) {
-        // Nothing registered means nothing to read, so the reader's switch cannot
-        // be confirmed: recording stays off rather than falling back to on.
-        historyEnabled = false
-        settingsNotice.post(settingsProblemMessage(error) + ' · prompt history stays off until the section parses')
-        return
-      }
-      // No section API: this harness keeps configuration per plugin row, so the
-      // row's `theme` is the durable choice and nothing here can hold a history
-      // switch. Staying quiet is a read of that composition, not a refusal.
-      if (opened === undefined) return
-      const scope = opened
-      readSection = () => readScope(scope, message => settingsNotice.post(message))
-      chooseTheme = name => {
-        void scope.update({ theme: name }).then(
-          () => ports.notice(`theme · ${name} · written to the settings document`),
-          (error: unknown) => settingsNotice.post(settingsProblemMessage(error)),
-        )
-      }
-      applySettings()
-    })
-  }
-  /**
-   * Restyle a running session when the reader's section changes.
-   *
-   * The settings document is hot-reloaded by the host, so a reader watching a
-   * shade land never has to leave the session to see it — which is what makes
-   * tuning one bearable instead of a restart per attempt. The event is
-   * namespace-filtered: another surface's preferences are not our repaint.
-   */
-  const settingsListener = (): (() => void) => ctx.on('settings/updated', ns => {
-    if (String(ns) !== TUI_SETTINGS_NAMESPACE) return
-    applySettings()
-    restyle()
+  const preferences = createAppearancePreferences(ctx, {
+    rowSettings: ports.rowSettings,
+    rowSettingsLive: ports.rowSettingsLive,
+    applied: () => appliedSection,
+    apply: applySettings,
+    restyle,
+    restorePreview: () => showTheme(undefined),
+    disableHistory: () => { historyEnabled = false; historyGhost = false },
+    notice: ports.notice,
+    problem: message => settingsNotice.post(message),
   })
   let reportedThemes = new Set<string>()
   const reportThemes = (): void => {
@@ -471,13 +411,13 @@ export function createAppearance(ctx: Context, ports: AppearancePorts): Appearan
     keymap: () => keymap,
     prefixKeys: () => prefixKeys,
     prefixWindowMs: () => prefixWindowMs,
-    historyEnabled: () => historyEnabled,
-    historyGhost: () => historyGhost,
+    historyEnabled: () => preferences.allowsHistory('enabled', historyEnabled),
+    historyGhost: () => preferences.allowsHistory('ghost', historyGhost),
     historyMaxEntries: () => historyMaxEntries,
     openNotices: sink => settingsNotice.open(sink),
-    registerSection,
+    registerSection: preferences.register,
     createThemesHome,
-    settingsListener,
+    settingsListener: preferences.listen,
     watchThemes: watchThemeFiles,
     runThemeCommand,
   }

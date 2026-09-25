@@ -61,7 +61,7 @@ export const PALETTE_NAME_SET: ReadonlySet<string> = new Set(PALETTE_NAMES)
 
 /** A mapping as it was written, or undefined when the value is not one. */
 export function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined
+  return typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined
 }
 
 /**

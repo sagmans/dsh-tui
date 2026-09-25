@@ -1,102 +1,121 @@
-/**
- * Section ownership seam.
- *
- * The settings capability moved between harness releases: the published rc line
- * exposes `register`, which hands the owner a scope to read and write through,
- * while the newer provider exposes `installSection`, which registers the same
- * namespace but reports the current value through a source thunk and routes the
- * write through the service itself. The surface consumes one narrow shape either
- * way, so the difference stays behind this seam instead of reaching the
- * appearance owner and the readers of its section.
- */
+/** Keep released section ownership and Config-backed profile edits behind one checked seam. */
 import type { Context } from '@deepseek-ai/cordis'
 
-/** The narrow surface the appearance owner consumes: read the section, write a patch. */
+const READ_UNSUPPORTED = 'the settings service cannot read the section; prompt history stays off'
+const WRITE_UNSUPPORTED = 'the settings service cannot write the section; the patch was not applied'
+const CONFIG_NOT_LIVE = 'the settings service cannot write live Config with this schema runtime; the patch was not applied'
+
+/** Appearance must not report success until its durable owner accepts the patch. */
 export interface SectionScope {
-  /** The section as it resolves now, the reader's own layer included. */
+  readonly kind: 'installSection' | 'register' | 'config' | 'unsupported'
   get(): unknown
-  /** Merge one patch into the section's user layer; rejects when the harness refuses it. */
   update(patch: object): Promise<void>
+  /** Raw opt-outs can precede a valid commit and therefore never reach get() or notifications. */
+  readUser(): { readonly value: unknown; readonly revision: number } | undefined
 }
 
-/**
- * How the installing shape reports the section.
- *
- * `setSource` swaps the authoritative thunk as the namespace attaches to and
- * detaches from the provider; `onChange` fires once per commit, which is how the
- * surface hears an edit when there is no scope of its own to watch.
- */
+/** The installing API changes its authoritative reader when the provider detaches. */
 interface SectionHooks<T> {
   setSource(current: () => T): void
   onChange(): void
 }
 
-/** The settings service as a structural read, because the mounted shape depends on the harness release. */
+/** Source hosts expose plain snapshots keyed by profile entry options.id, not qualified Loader paths. */
+interface ConfigDescriptor {
+  ns: string
+  value: unknown
+  user?: unknown
+  revision: number
+}
+
+/** Probe behavior, not CLI identity: both host generations can share a version label. */
 interface SettingsSeam {
   installSection?(owner: Context, ns: string, schema: unknown, entry: unknown, hooks: SectionHooks<unknown>): void
-  register?(ns: string, schema: unknown): SectionScope
-  update?(ns: string, patch: object): Promise<void>
+  register?(ns: string, schema: unknown, options: { base: unknown }): Pick<SectionScope, 'get' | 'update'>
+  describe?(): ConfigDescriptor[]
+  update?(ns: string, patch: object, revision?: number): Promise<void>
+  writable?: boolean
 }
 
-/** One request to own the reader's section. */
+/** The row reader is needed before the Loader marks the calling fiber active. */
 export interface SectionRequest<T> {
-  /** Context the registration belongs to; unloading it removes the namespace again. */
   readonly owner: Context
-  /** Namespace the reader writes the section under. */
   readonly ns: string
-  /** Schemastery schema the provider validates the section against. */
   readonly schema: unknown
-  /** Value the section falls back to whenever no provider holds it. */
   readonly entry: T
-  /** Called once per committed change, after the section was re-read. */
   readonly onChange: () => void
+  readonly config?: { readonly ns: string | undefined; readonly get: () => unknown; readonly live: boolean }
 }
 
-/**
- * Own the reader's section on whichever service shape the harness mounts.
- *
- * The installing shape is tried first because it is the one a newer provider
- * keeps: the older service still carries both, and there the two are the same
- * registration, so preferring the narrower API loses nothing and stops a
- * harness that dropped `register` from failing here.
- *
- * Returns nothing when the service offers neither shape. The newest configuration
- * service projects each plugin's own Config into a form over the profile patch,
- * so there is no document section to register; the caller's row Config is then
- * the only durable store, and silence is the honest answer — an error would
- * report a missing section that this harness never had.
- */
-export function openSection<T>(service: unknown, request: SectionRequest<T>): SectionScope | undefined {
-  const settings = service as SettingsSeam
+/** Never manufacture a successful write when no supported owner can persist it. */
+export function openSection<T>(service: unknown, request: SectionRequest<T>): SectionScope {
+  const settings = (service ?? {}) as SettingsSeam
+  const refuseWrite = (): Promise<never> => Promise.reject(new Error(WRITE_UNSUPPORTED))
+  const readUser = (ns: string | undefined): ReturnType<SectionScope['readUser']> => {
+    if (typeof settings.describe !== 'function') return undefined
+    const descriptor = settings.describe().find(row => row.ns === ns)
+    if (descriptor === undefined || !Number.isSafeInteger(descriptor.revision) || descriptor.revision < 0) {
+      throw new Error(READ_UNSUPPORTED)
+    }
+    return { value: descriptor.user, revision: descriptor.revision }
+  }
   if (typeof settings.installSection === 'function') {
-    // The read is the provider's thunk: it answers with the resolved section
-    // while the namespace is attached and with the composition entry after a
-    // detach, so a scope of our own would only shadow that answer.
     let source: () => unknown = () => request.entry
-    // The provider reports the attach through `onChange` before this call
-    // returns, and the caller can only re-read the section once it holds the
-    // scope below; forwarding that first report would read a surface that is
-    // still being wired. The caller reads once right after opening instead.
+    // An attach notification precedes the caller receiving its scope.
     let attached = false
     settings.installSection(request.owner, request.ns, request.schema, request.entry, {
-      setSource: current => { source = current as () => unknown },
+      setSource: current => { source = current },
       onChange: () => { if (attached) request.onChange() },
     })
     attached = true
-    const update = settings.update?.bind(settings)
     return {
+      kind: 'installSection',
+      readUser: () => readUser(request.ns),
       get: () => source(),
-      // The installing shape hands back no scope, so the write goes through the
-      // service. Refusing loudly rather than swallowing the patch: a theme the
-      // reader chose must not look written when nothing accepted it.
-      update: patch => update === undefined
-        ? Promise.reject(new Error('the settings service cannot write the section; the patch was not applied'))
-        : update(request.ns, patch),
+      update: async patch => {
+        if (settings.writable === false || typeof settings.update !== 'function') return refuseWrite()
+        await settings.update(request.ns, patch)
+      },
     }
   }
   if (typeof settings.register === 'function') {
-    const scope = settings.register(request.ns, request.schema)
-    return { get: () => scope.get(), update: patch => scope.update(patch) }
+    const scope = settings.register(request.ns, request.schema, { base: request.entry })
+    return {
+      kind: 'register',
+      readUser: () => readUser(request.ns),
+      get: () => scope.get(),
+      update: async patch => {
+        if (settings.writable === false || typeof scope.update !== 'function') return refuseWrite()
+        await scope.update(patch)
+      },
+    }
   }
-  return undefined
+  if (typeof settings.describe === 'function' && request.config !== undefined) {
+    const config = request.config
+    const descriptor = (): ConfigDescriptor | undefined => config.ns === undefined
+      ? undefined
+      : settings.describe!().find(row => row.ns === config.ns)
+    return {
+      kind: 'config',
+      readUser: () => readUser(config.ns),
+      // Config is readable during startup even before describe() includes this fiber.
+      get: () => {
+        const current = descriptor()
+        return current === undefined ? config.get() : current.value
+      },
+      update: async patch => {
+        if (!config.live) throw new Error(CONFIG_NOT_LIVE)
+        const current = descriptor()
+        if (current === undefined || settings.writable === false || typeof settings.update !== 'function'
+          || !Number.isSafeInteger(current.revision) || current.revision < 0) return refuseWrite()
+        await settings.update(current.ns, patch, current.revision)
+      },
+    }
+  }
+  return {
+    kind: 'unsupported',
+    readUser: () => { throw new Error(READ_UNSUPPORTED) },
+    get: () => { throw new Error(READ_UNSUPPORTED) },
+    update: refuseWrite,
+  }
 }
