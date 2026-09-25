@@ -1,17 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import {
-  ARGUMENT_BLUE,
-  DEFAULT_PALETTE,
-  DIFF_ADDED_BAND,
-  DIFF_REMOVED_BAND,
-  USER_PROMPT_MINT,
-  DEFAULT_TOKENS,
-  PALETTE_NAMES,
-  TUI_TOKENS,
-  type StyleSpec,
-  type TuiToken,
-  resolveToken,
-} from '@/theme-tokens.ts'
+import { ARGUMENT_BLUE, DEFAULT_PALETTE, DIFF_ADDED_BAND, DIFF_REMOVED_BAND, USER_PROMPT_MINT, DEFAULT_TOKENS } from '@/theme-defaults.ts'
+import { resolveToken } from '@/theme-resolver.ts'
+import { PALETTE_NAMES, TUI_TOKENS, type StyleSpec, type TuiToken } from '@/theme-tokens.ts'
 
 const overrides = (entries: Partial<Record<TuiToken, StyleSpec>>) =>
   new Map(Object.entries(entries) as [TuiToken, StyleSpec][])

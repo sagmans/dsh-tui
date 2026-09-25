@@ -1,0 +1,92 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`styled golden frames > renders the busy dock with its escapes 1`] = `
+[
+  "[1m◎ goal round 6/256 · complete the plan for this dsh-tui plugin[0m",
+  "[1m⏸ plan mode · answer the plan before edits happen[0m",
+  "[38;2;39;245;200m┄┄ [0m[1m⚇ subagents · 1 running[0m[38;2;39;245;200m ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄[0m",
+  "[38;2;138;138;138m  ▸ c000cfa3 · spawn · running 4s[0m",
+  "[38;2;215;175;95m┄┄ [0m[1m⛭ jobs · 1 running[0m[38;2;215;175;95m ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄[0m",
+  "[38;2;138;138;138m  ▸ bash-1 · running 12s — sleep 45 && echo bg-done[0m",
+  "[38;2;95;175;215m┄┄ [0m[1m☰ todos · 1 left[0m[38;2;95;175;215m ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄[0m",
+  "[38;2;138;138;138m  ▸ verify the dock[0m",
+]
+`;
+
+exports[`styled golden frames > renders the parked-draft count with its escapes 1`] = `
+[
+  "[38;2;138;138;138m● ready[0m[38;2;138;138;138m · [0m[38;2;138;138;138mstandard[0m[38;2;138;138;138m · [0m[38;2;138;138;138mzai-coding-cn/glm-5.3[0m[38;2;138;138;138m (max)[0m[38;2;138;138;138m · [0m[38;2;138;138;138mworkspace-write[0m[38;2;138;138;138m · [0m[38;2;95;175;215mstash 3[0m[38;2;138;138;138m · [0m[0m…[0m",
+]
+`;
+
+exports[`styled golden frames > renders the queued prompts with their escapes 1`] = `
+[
+  "[38;2;138;138;138m╭──────────────────────────────────────────────────────────────────────────────╮[0m",
+  "[38;2;138;138;138m│[0m [2;3malso mention the queue in the summary[0m                                        [38;2;138;138;138m│[0m",
+  "[38;2;138;138;138m╰──────────────────────────────────────────────────────────────────────────────╯[0m",
+  "[38;2;138;138;138m╭──────────────────────────────────────────────────────────────────────────────╮[0m",
+  "[38;2;138;138;138m│[0m [2;3mand keep the README sentence short, with the same shape the bar above the[0m    [38;2;138;138;138m│[0m",
+  "[38;2;138;138;138m│[0m [2;3meditor draws[0m                                                                 [38;2;138;138;138m│[0m",
+  "[38;2;138;138;138m╰──────────────────────────────────────────────────────────────────────────────╯[0m",
+]
+`;
+
+exports[`styled golden frames > renders the status row with its escapes 1`] = `
+[
+  "[38;2;138;138;138m● ready[0m[38;2;138;138;138m · [0m[38;2;138;138;138mstandard[0m[38;2;138;138;138m · [0m[38;2;138;138;138mzai-coding-cn/glm-5.3[0m[38;2;138;138;138m (max)[0m[38;2;138;138;138m · [0m[38;2;138;138;138mworkspace-write[0m[38;2;138;138;138m · [0m[38;2;138;138;138mctx 17.5k/[0m…[0m",
+]
+`;
+
+exports[`styled golden frames > renders the transcript with its escapes 1`] = `
+[
+  "[38;2;138;138;138m╭──────────────────────────────────────────────────────────────────────────────╮[0m",
+  "[38;2;138;138;138m│[0m [38;2;39;245;200madd a dock above the editor[0m                                                  [38;2;138;138;138m│[0m",
+  "[38;2;138;138;138m╰──────────────────────────────────────────────────────────────────────────────╯[0m",
+  "[38;2;138;138;138minjected dsh-agent-instructions · 3 lines — <system-reminder>[0m",
+  "[3;38;2;102;102;102mreasoning · 14 tokens[0m[3;38;2;102;102;102m (shift+tab)[0m",
+  "[38;2;214;194;154m╭──────────────────────────────────────────────────────────────────────────────╮[0m",
+  "[38;2;214;194;154m│[0m Done.                                                                        [38;2;214;194;154m│[0m",
+  "[38;2;214;194;154m│[0m                                                                              [38;2;214;194;154m│[0m",
+  "[38;2;214;194;154m│[0m [38;2;95;175;215m- [0mfold the work state                                                        [38;2;214;194;154m│[0m",
+  "[38;2;214;194;154m│[0m [38;2;95;175;215m- [0mrender it only when it says something                                      [38;2;214;194;154m│[0m",
+  "[38;2;214;194;154m│[0m                                                                              [38;2;214;194;154m│[0m",
+  "[38;2;214;194;154m│[0m [38;2;138;138;138m\`\`\`ts[0m                                                                        [38;2;214;194;154m│[0m",
+  "[38;2;214;194;154m│[0m   const dock = new WorkDock(state, theme)                                    [38;2;214;194;154m│[0m",
+  "[38;2;214;194;154m│[0m [38;2;138;138;138m\`\`\`[0m                                                                          [38;2;214;194;154m│[0m",
+  "[38;2;214;194;154m╰──────────────────────────────────────────────────────────────────────────────╯[0m",
+  "[38;2;95;175;215mbash[0m [38;2;141;179;217mpnpm test[0m[38;2;138;138;138m · [0m[38;2;138;138;138mexit 0[0m[38;2;138;138;138m · [0m[38;2;138;138;138m1 line[0m",
+  "[38;2;95;175;215mread[0m [38;2;141;179;217msrc/ui/view.ts[0m  [38;2;138;138;138mL1–3[0m[38;2;138;138;138m · [0m[38;2;138;138;138m3 lines[0m[38;2;138;138;138m · [0m[38;2;138;138;138m23 tok[0m",
+  "[38;2;138;138;138mcompacted 3 events (≈4200 tokens)[0m",
+]
+`;
+
+exports[`terminal text > draws a tab, a colour, and a carriage return at 40 columns 1`] = `
+[
+  "run",
+  "    run report",
+  "    name        role",
+  "    red plain",
+  "    progress 100%",
+  "    exit 0",
+]
+`;
+
+exports[`terminal text > draws a tab, a colour, and a carriage return at 80 columns 1`] = `
+[
+  "run",
+  "    run report",
+  "    name        role",
+  "    red plain",
+  "    progress 100%",
+  "    exit 0",
+]
+`;
+
+exports[`terminal text > draws the colour when the terminal has one, and no escape when it does not 1`] = `
+"[38;2;95;175;215mrun[0m
+    [38;2;141;179;217mrun report[0m
+    [38;2;138;138;138mname        role[0m
+    [38;2;138;138;138m[38;5;1mred[39m[38;2;138;138;138m plain[0m
+    [38;2;138;138;138mprogress 100%[0m
+    [38;2;138;138;138mexit 0[0m"
+`;

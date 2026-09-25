@@ -4,16 +4,8 @@ import {
   type AutocompleteSuggestions,
   type SlashCommand,
 } from '@earendil-works/pi-tui'
-import {
-  atToken,
-  atValue,
-  createFileIndex,
-  offerableCandidate,
-  rankFiles,
-  SUGGESTION_LIMIT,
-  type Candidate,
-  type FileIndex,
-} from './file-search.ts'
+import { atToken, atValue, offerableCandidate, rankFiles, SUGGESTION_LIMIT, type Candidate } from './file-search.ts'
+import { createFileIndex, type FileIndex } from './file-index.ts'
 import { LOCAL_COMMANDS, LOCAL_COMMAND_DESCRIPTIONS } from './submission.ts'
 import { renderTerminalText } from '../terminal-text.ts'
 

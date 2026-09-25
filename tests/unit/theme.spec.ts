@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { createTheme, forwardEditorTheme, forwardMarkdownTheme } from '@/theme.ts'
 import type { ThemeOverrides } from '@/theme-settings.ts'
-import { DEFAULT_PALETTE, type StyleSpec, type TuiToken } from '@/theme-tokens.ts'
+import { DEFAULT_PALETTE } from '@/theme-defaults.ts'
+import { type StyleSpec, type TuiToken } from '@/theme-tokens.ts'
 
 const overrides = (tokens: Partial<Record<TuiToken, StyleSpec>>, palette = DEFAULT_PALETTE): ThemeOverrides => ({
   palette,

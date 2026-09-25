@@ -10,6 +10,65 @@ breaking change, and a patch carries only fixes.
 
 ### Added
 
+- `install-skills` ships both bundled skills: the dogfood helper, and
+  `dsh-tui-update-models`, which names every place a provider or model is wired,
+  the catalog fields that carry price, context window, and reasoning effort, and
+  the checks that show an inherited value before it reaches a session.
+
+### Fixed
+
+- Model discovery failures now report a safe diagnostic instead of silently hiding
+  a failed provider's catalog. Healthy routes remain selectable.
+- TUI preferences now expose a Config schema for source hosts while preserving
+  released section APIs and standalone core provider discovery. Config-backed
+  writes reject schema runtimes without native live references instead of
+  persisting a change that the running surface cannot apply.
+- Row preferences apply before prompt history and rendering. Config-backed
+  history and ghost completion require explicit opt-in, so delayed or failed
+  legacy imports cannot enable recording first.
+- Unsupported preference writes now report failure. Rejected theme changes
+  restore the applied appearance, and theme diagnostics use that same state.
+- Malformed preference reads preserve readable privacy opt-outs and the last valid
+  appearance. History checks publicly exposed raw opt-outs even when an invalid
+  sibling prevents the host from committing or notifying a change.
+
+### Changed
+
+- Enumeration of the workspace, the shared file index and its deadlines, and
+  the @-mention grammar each sit in their own module, so the walk that lists
+  files no longer changes beside the ranking that offers them.
+- The action table, the spelling equivalences a key press is matched by, and
+  the collision policy a layered keymap is judged with now sit in three modules,
+  leaving the effective-map resolution and its display queries above them.
+- The transcript view keeps row order, clicks, and caches, while tool-card,
+  gate-card, and message drawing each live in their own renderer, so a card or a
+  thought can change without touching the row cache around it.
+- The transcript keeps reading order and in-flight text, while the bookkeeping
+  a tool row shares between its request, its nested dispatches, and its result
+  lives in a call fold that hands back the rows to commit; recorded message
+  reading sits in its own module.
+- Decision gates keep their question state machine, their question-card
+  projection, and the shared gate contract in three modules, so a rendering
+  change no longer sits beside the cursor and selection rules it draws.
+- Tool cards now take their shape from one module, sub-call folding from
+  another, the preview window from a third, and per-tool rendering from the
+  presenter, so a new tool family touches the presenter alone.
+- Terminal text now reads its escape grammar, its modelled style state, and its
+  two public policies from three modules. Recognition is the trust boundary the
+  drawing paths depend on, so it no longer changes beside row layout.
+- The token contract, the shipped appearance, and the resolution algorithm each
+  live in their own module. Appearance defaults and colour resolution change for
+  reasons the token vocabulary does not, and the coverage sweep now fails beside
+  the table it guards.
+- The mounted surface is now a composition root under 500 lines: the terminal's
+  lifetime, the one modal interaction, the prompt bar's presses, prompt memory
+  and its draft bank, session discovery, the driven agent, the transcript on
+  screen, staged turns, the session's mode, the model route, background work,
+  appearance, and the command plane each own their state, so a change to one
+  capability no longer moves beside the others in a single file.
+
+### Added
+
 - Running subagents in the dock now show the parent agent’s task label,
   limited to ten words, beside their ID and status.
 - The subagent dock now previews three running children. Click the heading,
@@ -19,9 +78,24 @@ breaking change, and a patch carries only fixes.
   skill root only on request. The skill supports any dsh plugin checkout through
   a cloned home. An existing copy prompts before replacement; `--update` skips
   the prompt.
+- A theme can be pinned in this bundle's own row config, which is the layer that
+  reaches the surface on a harness keeping settings per plugin row: the profile
+  patch carries the name where the settings document no longer can. The
+  `dsh-tui:` section still outranks the row, and the shipped default answers when
+  neither names a theme. `/theme tokens` reports the row-pinned name too.
+- `dsh --profile tui list-models` prints every provider/model the model picker
+  can reach, one `provider/model<TAB>name` line in picker order, and exits
+  without opening the alternate screen, so provider wiring is testable through a
+  pipe. It exits 1 when the llm listing is unavailable or when nothing is
+  configured to advertise a model.
 
 ### Fixed
 
+- Switching model no longer leaves a reasoning effort in force that the chosen
+  model cannot take, which made the next turn fail with `does not support
+  reasoning effort`. The level in force now travels with the switch only while
+  the model offers it, and a level the model does not offer falls back to the
+  model's own default with one notice naming the model and the dropped level.
 - The one-command dogfood run now works on the first try. A profile installs its
   local bundles as symlinks relative to the home they were installed in, so a
   clone at another depth — a scratch home under the temporary directory — left
@@ -30,6 +104,20 @@ breaking change, and a patch carries only fixes.
   carried, and does so without `dsh plugin add`, which re-materialised the same
   relative links and dropped the other bundles the profile had, failing the run
   on its own bundle guard. `pnpm test` pins both halves on a synthetic home.
+- A developer home that links its instructions outside it — `AGENTS.md` into a
+  shared prompt tree is the common one — no longer stops the dogfood clone.
+  Seeding copies such a read-only link in as a regular file, while a link to state
+  the run may write (credentials, settings, storages, sessions, profiles) still
+  stops the run, and links that stay inside the clone are left alone. The link
+  policy lives in one module, so the seeding step and the validator read the same
+  rules.
+- The terminal surface no longer refuses a reader's settings on a harness whose
+  ownership API is spelled differently. It registers its `dsh-tui:` section
+  through whichever shape the mounted settings service offers, so a stored
+  section parses and the prompt-history switch it carries is honoured instead of
+  recording being forced off. A harness that keeps configuration per plugin row
+  has no section at all, and that composition is read quietly rather than
+  reported as a missing section.
 
 ## [0.6.0] - 2026-09-24
 

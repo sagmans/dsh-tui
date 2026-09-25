@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { Marked } from '@earendil-works/pi-tui'
 import { createTheme } from '@/theme.ts'
-import { DEFAULT_PALETTE } from '@/theme-tokens.ts'
+import { DEFAULT_PALETTE } from '@/theme-defaults.ts'
 import { createMermaidTransform, MERMAID_CACHE_LIMIT, MERMAID_MAX_SOURCE, type MermaidTransform } from '@/ui/mermaid.ts'
 import type { MermaidMode } from '@/theme-settings.ts'
 

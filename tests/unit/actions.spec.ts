@@ -1,16 +1,8 @@
 import { TUI_KEYBINDINGS, type KeyId } from '@earendil-works/pi-tui'
 import { describe, expect, it } from 'vitest'
-import {
-  ACTION_CATALOG,
-  KEYMAP_ALIASES,
-  defaultKeymap,
-  keysFor,
-  newShadows,
-  normalizeKey,
-  resolveKeymap,
-  shadowsOf,
-  type Action,
-} from '@/input/actions.ts'
+import { defaultKeymap, keysFor, newShadows, resolveKeymap, shadowsOf } from '@/input/actions.ts'
+import { ACTION_CATALOG, KEYMAP_ALIASES, type Action } from '@/input/action-catalog.ts'
+import { normalizeKey } from '@/input/key-press.ts'
 
 /** The keys every action the surface owns ships with, spelled as the reader writes them. */
 const SHIPPED: Readonly<Record<string, readonly string[]>> = {

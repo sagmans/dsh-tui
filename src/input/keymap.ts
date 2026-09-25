@@ -1,5 +1,7 @@
 import { KeybindingsManager, TUI_KEYBINDINGS, matchesKey, setKeybindings, type KeyId } from '@earendil-works/pi-tui'
-import { ACTION_CATALOG, ENTER_KEY, LIBRARY_KEY_ADDITIONS, defaultKeymap, keysFor, type Keymap } from './actions.ts'
+import { defaultKeymap, keysFor, type Keymap } from './actions.ts'
+import { ACTION_CATALOG, LIBRARY_KEY_ADDITIONS } from './action-catalog.ts'
+import { ENTER_KEY } from './key-press.ts'
 import type { Submission } from './submission.ts'
 
 /** How long an armed chord waits for the key that follows it, in seconds. */

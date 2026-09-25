@@ -1,4 +1,5 @@
-import { ACTION_CATALOG, actionLabel, keyName, keysFor, newShadows, type ActionLayer, type Keymap } from './input/actions.ts'
+import { actionLabel, keyName, keysFor, newShadows, type Keymap } from './input/actions.ts'
+import { ACTION_CATALOG, type ActionLayer } from './input/action-catalog.ts'
 
 /** The layers a reader may ask for, in the order the table lists them. */
 export const KEYMAP_LAYERS: readonly ActionLayer[] = ['prompt', 'surface', 'chord', 'gate', 'question', 'picker', 'library']

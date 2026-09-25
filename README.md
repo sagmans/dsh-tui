@@ -144,7 +144,17 @@ dsh --profile tui --preset minimal          # start in a shipped mode other than
 dsh --profile tui --model deepseek-chat
 dsh --profile tui --no-color
 dsh --profile tui --no-bell            # do not ring when a long turn finishes
+dsh --profile tui list-models          # print every provider/model the picker can reach
 ```
+
+`list-models` prints one line per route the `/model` picker can reach —
+`provider/model`, a tab, then the model's display name — in picker order:
+providers as the llm service registered them, then each provider's own model
+order. It writes plain stdout, so it works piped or redirected, never opens the
+alternate screen, and exits 0 after printing at least one route. When the
+profile has no llm service, when the provider listing cannot be read, or when
+nothing is configured to advertise a model, it names the reason on stderr and
+exits 1.
 
 Every key below is a shipped default. `/keys` opens every action the surface
 and its library can perform as a list you filter as you type, with the keys in
@@ -250,7 +260,7 @@ While a turn runs, a prompt submitted into the editor waits in the agent's own i
 
 Copying is read back through what the surface drew rather than through the screen, so a selection is the words alone: dragging across a message takes its box with it on screen, and the surface takes its own frame back out before the text reaches the clipboard — the sides, the padding beside them, and the rules above and below. A selection that covers a whole message, two of them, or a part of one is read the same way, and a row the transcript did not draw — the editor's own bar, a picker's card — is copied exactly as it read, and a selection that was nothing but frame is handed back as the reader made it, because a copy is never emptied. The frame still comes back in a copy taken with the terminal's own selection — Shift held while dragging, or a terminal that keeps selection to itself — which is the one path no program can filter.
 
-Every submitted line is also kept in a global prompt history at
+When prompt history is enabled, each submitted line is kept in a global history at
 `$DSH_HOME/prompt-history.json`. Typing the start of a prompt that was sent
 before draws the rest of the newest match after the cursor in a faint shade.
 `Ctrl+E` takes the whole suggestion and the word-movement key takes the next
@@ -355,8 +365,8 @@ must not also be a way to lose the work.
 
 Every styled element is a named token with a shipped default, and every key is
 an action with one, so the surface can be restyled and rebound without touching
-code. Preferences live in the same user-settings document as every other
-(`$DSH_HOME/settings.yaml`), under a `dsh-tui:` section:
+code. Released hosts with section APIs store preferences in
+`$DSH_HOME/settings.yaml`, under a `dsh-tui:` section:
 
 ```yaml
 dsh-tui:
@@ -390,6 +400,61 @@ dsh-tui:
     dock.jobs.heading:
       hidden: true            # the element renders nothing at all
 ```
+
+Config-backed source hosts store the same preference fields in the TUI entry's
+`config` in the active profile patch. Use the actual entry ID, normally `tui`,
+not the legacy `dsh-tui` namespace. For example:
+
+```yaml
+- id: tui
+  config:
+    theme: violet-orbit
+    history:
+      enabled: false
+      ghost: false
+```
+
+The plugin exports a Config schema for all preferences shown above, including
+`prefix`, `prefixWindow`, and `keys`. Launch fields such as `sessionId`,
+`model`, and `provider` remain separate from live preference edits.
+The settings service owns persistence. TUI does not create another preference store.
+It uses released `installSection` or `register` APIs, or Config-backed
+`describe` and revision-checked `update` APIs. Unsupported or read-only writes
+show a notice instead of reporting success. A rejected theme selection restores
+the applied theme, and `/theme tokens` reports that same appearance.
+
+On Config-backed hosts, absent `history.enabled` and `history.ghost` stay off.
+Set each switch to `true` explicitly to enable it. This prevents recording while
+the host's asynchronous legacy import is pending or has failed. Released section
+hosts retain their existing defaults. If the host reports unreadable preferences,
+history stays off. Readable `false` switches survive errors in other fields.
+Malformed updates retain the last valid appearance and do not overwrite their source.
+
+When public descriptors expose raw user layers, history checks those layers at use
+time. A readable opt-out survives rejected siblings even without a change event.
+Another rejected opt-in cannot clear this protection; a valid committed update can.
+A released-provider limit remains: after an absent user section, rejected scalar
+sections can produce identical public descriptors. TUI cannot detect that transition
+without host validity metadata, so normal released defaults remain active.
+
+The inspected source host has no legacy import alias from `dsh-tui` to `tui`.
+Exporting Config does not resolve that namespace mismatch. The host can rename
+`settings.yaml` to `settings.yaml.imported` before import completes.
+TUI does not retry or restore that file automatically. Preserve current privacy
+opt-outs and copy only the intended legacy fields into the actual TUI entry's
+`config`. Keep the original file for rollback.
+
+Live Config edits require the loaded schema runtime to create native volatile
+references. The released schemastery 3.18.2 implementation used by this checkout's
+unit tests lacks that API. A source host can resolve a different implementation
+with the same version label. TUI checks the loaded implementation and actual
+references, not the package version or CLI identity.
+
+If the loaded schema runtime lacks native support, TUI exports ordinary fields
+rather than unsupported live metadata. TUI then rejects Config-backed writes,
+and the host cannot import preferences through its volatile-field settings API.
+Reading row preferences still works, and ordinary profile changes use the host's
+reload lifecycle. Native schema-backed hosts can apply live preference updates.
 
 Every field is optional, so a section that changes one shade is enough. The
 document is hot-reloaded: an edit restyles a running session and re-arms the
@@ -805,6 +870,7 @@ The workflow stores no npm token: the registry trusts `release.yml` on the `npm-
 
 - Two different things are called a preset. The agent mode (`--preset`, `/preset`) is fixed once a session has produced a turn; the permission preset (`/permission <preset>`, named in the status line) can change at any time.
 - `/model` changes the route and reasoning effort for the running session only. Catalog membership is advisory — an adapter may accept an id it does not advertise, while an explicit effort is checked against the route's own levels before it is applied. The picker offers the routes this deployment configured, not the ones it can prove credentialed: a provider whose key or sign-in is still missing appears like any other, and its first request names the missing credential.
+- Model discovery failures show a safe notice. Healthy provider catalogs remain selectable. Check provider configuration and credentials before retrying `/model`.
 - Scrolling is the mouse wheel, or the terminal's own scrollback keys where it offers them.
 - A turn that ran longer than ten seconds rings the terminal bell when it ends, because the reader may have walked away; `--no-bell` turns that off.
 - The dock shows the goal, plan mode, the todo items still to do, and any background job or delegation still running; a settled item leaves rather than turns into a completed row, and the list clears when the next turn opens so a fresh task never inherits the previous one's checklist. The transcript marks where older history was compacted away. `/plan` toggles plan mode; `/plan <message>` also steers that message, which is the base command's own behaviour.
@@ -832,7 +898,7 @@ discipline as this one.
 | Plugin | What it adds |
 |---|---|
 | [`@sagmans/dsh-auto-compact`](https://github.com/sagmans/dsh-auto-compact) | An absolute token trigger for automatic compaction: the conversation condenses at `min(thresholdTokens, contextWindow × thresholdRatio)` instead of the window ratio alone, so a large-window model pays a fixed price, with per-route overrides. Its patch swaps the shipped `compaction-basic` backend — the same row this bundle already takes out of the global composition — so the profile still keeps exactly one compaction service, and this surface needs no setting for it. |
-| [`@sagmans/dsh-provider-extra`](https://github.com/sagmans/dsh-provider-extra) | Extra provider routes: OpenCode Go, which sends the live conversation id in `x-opencode-session` for routing and prompt caching, and OpenAI Codex over a ChatGPT subscription's OAuth flow with the harness credential store. Its routes join the `/model` picker like every configured provider. |
+| [`@sagmans/dsh-provider-extra`](https://github.com/sagmans/dsh-provider-extra) | Extra provider routes: OpenCode Go, which sends the live conversation id in `x-opencode-session` for routing and prompt caching, and OpenAI Codex over a ChatGPT subscription's OAuth flow with the harness credential store. Its routes join the `/model` picker like every configured provider. TUI also works without this package, using the core `llm` and `agentDefaultModel` services. |
 
 ```sh
 dsh plugin --profile tui add @sagmans/dsh-auto-compact

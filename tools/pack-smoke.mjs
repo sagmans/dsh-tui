@@ -8,14 +8,19 @@
  * so a packaging mistake fails here instead of in a user's profile.
  */
 import { execFileSync } from 'node:child_process'
-import { lstatSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { registerHooks } from 'node:module'
+import { lstatSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const INSTALL_LIFECYCLE_SCRIPTS = ['preinstall', 'install', 'postinstall']
+const SKILL_NAME = 'dsh-tui-dogfood'
+const MODEL_SKILL_NAME = 'dsh-tui-update-models'
 const SKILL_HELPER = join('scripts', 'run-plugin-from-worktree.sh')
+const OPTIONAL_PROVIDER_PACKAGE = '@sagmans/dsh-provider-extra'
+const CONFIG_SMOKE_INPUT = { sessionId: 'package-config-smoke', history: { enabled: false, ghost: false } }
 
 /** Entries a loader or a reader needs in the tarball. */
 const REQUIRED = [
@@ -29,6 +34,9 @@ const REQUIRED = [
   'package/.agents/skills/dsh-tui-dogfood/SKILL.md',
   'package/.agents/skills/dsh-tui-dogfood/references/home-state.md',
   'package/.agents/skills/dsh-tui-dogfood/scripts/run-plugin-from-worktree.sh',
+  `package/.agents/skills/${MODEL_SKILL_NAME}/SKILL.md`,
+  `package/.agents/skills/${MODEL_SKILL_NAME}/references/model-wiring.md`,
+  `package/.agents/skills/${MODEL_SKILL_NAME}/scripts/dump-model-catalog.mjs`,
 ]
 
 // Derived rather than listed: the surface reads the built-in themes out of the
@@ -146,16 +154,42 @@ try {
   // npm normalizes packaged file modes, so test the helper after copying from the tarball.
   const unpacked = mkdtempSync(join(out, 'unpacked-'))
   execFileSync('tar', ['-xzf', join(out, tarball), '-C', unpacked], { stdio: 'inherit' })
+  // Reuse frozen dependencies, but refuse the optional provider even if installed transitively.
+  symlinkSync(join(ROOT, 'node_modules'), join(unpacked, 'package', 'node_modules'), 'dir')
+  const standalone = registerHooks({
+    resolve(specifier, context, nextResolve) {
+      if (specifier === OPTIONAL_PROVIDER_PACKAGE || specifier.startsWith(OPTIONAL_PROVIDER_PACKAGE + '/')) {
+        throw new Error('the standalone TUI package must not load ' + OPTIONAL_PROVIDER_PACKAGE)
+      }
+      return nextResolve(specifier, context)
+    },
+  })
+  try {
+    const plugin = await import(pathToFileURL(join(unpacked, 'package', 'lib', 'index.js')).href)
+    const validated = plugin.Config?.['~standard']?.validate(structuredClone(CONFIG_SMOKE_INPUT))
+    if (validated?.issues || validated?.value?.history?.enabled !== false || validated?.value?.history?.ghost !== false) {
+      problems.push('the packaged Config does not preserve false history preferences')
+    }
+  } finally {
+    standalone.deregister()
+  }
   const { installBundledSkill } = await import(pathToFileURL(join(unpacked, 'package', 'lib', 'install-skills.js')).href)
-  const destination = installBundledSkill(join(out, 'home'))
+  const destination = installBundledSkill(SKILL_NAME, join(out, 'home'))
   const helper = lstatSync(join(destination, SKILL_HELPER))
   if (!helper.isFile() || helper.isSymbolicLink() || (helper.mode & 0o111) === 0) {
     problems.push('installed dogfood helper is not executable')
   }
   writeFileSync(join(destination, 'stale.txt'), 'old copy')
-  const updated = installBundledSkill(join(out, 'home'), true)
+  const updated = installBundledSkill(SKILL_NAME, join(out, 'home'), true)
   if (updated !== destination || readdirSync(updated).includes('stale.txt')) {
     problems.push('updating the packaged skill left an old file behind')
+  }
+  const modelSkill = installBundledSkill(MODEL_SKILL_NAME, join(out, 'home'))
+  if (!readFileSync(join(modelSkill, 'SKILL.md'), 'utf8').includes('name: ' + MODEL_SKILL_NAME)) {
+    problems.push('the packaged model skill is not the one install-skills installs')
+  }
+  if ((lstatSync(join(modelSkill, 'scripts', 'dump-model-catalog.mjs')).mode & 0o111) === 0) {
+    problems.push('the packaged model catalog dump is not executable')
   }
   if ((lstatSync(join(updated, SKILL_HELPER)).mode & 0o111) === 0) {
     problems.push('updated dogfood helper is not executable')
@@ -183,6 +217,13 @@ try {
   }
 
   const manifest = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
+  for (const name of Object.keys({ ...manifest.dependencies, ...manifest.peerDependencies, ...manifest.optionalDependencies })) {
+    if (name === OPTIONAL_PROVIDER_PACKAGE) problems.push('the standalone package must not depend on ' + name)
+  }
+  if (patch.includes(OPTIONAL_PROVIDER_PACKAGE)) problems.push('the bundle patch must not require ' + OPTIONAL_PROVIDER_PACKAGE)
+  for (const [, id] of patch.matchAll(/- id: ([^\n]+)\n  disabled: true/gu)) {
+    if (!DISABLED_ROWS.includes(id)) problems.push('the bundle must not disable additional host rows: ' + id)
+  }
   for (const script of INSTALL_LIFECYCLE_SCRIPTS) {
     if (manifest.scripts?.[script] !== undefined) {
       problems.push(`the package must never use the ${script} install hook`)

@@ -1,7 +1,7 @@
 import type { ThemeLibrary } from './theme-files.ts'
 import { themeLayer, type ThemeOverrides } from './theme-settings.ts'
+import { mergeTokenSpec } from './theme-resolver.ts'
 import {
-  mergeTokenSpec,
   PALETTE_NAMES,
   TUI_TOKENS,
   type ColourSpec,

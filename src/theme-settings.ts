@@ -21,7 +21,8 @@ import {
   TOKEN_NAME_SET,
   TokensSchema,
 } from './theme-schema.ts'
-import { DEFAULT_PALETTE, type PaletteName, type StyleSpec, type ThemedSpecs, type TuiToken } from './theme-tokens.ts'
+import { DEFAULT_PALETTE } from './theme-defaults.ts'
+import type { PaletteName, StyleSpec, ThemedSpecs, TuiToken } from './theme-tokens.ts'
 
 /** Settings namespace owned by the terminal surface. */
 export const TUI_SETTINGS_NAMESPACE = 'dsh-tui'
@@ -177,6 +178,7 @@ function toolOutput(value: unknown, field: string): ToolOutputDisplay {
  * error, because the surface cannot know which tools a profile mounts.
  */
 function parseTools(raw: unknown): Record<string, WrittenToolDisplay> {
+  if (raw !== undefined && asRecord(raw) === undefined) throw new Error('tools must be a mapping of display fields')
   const block = asRecord(raw) ?? {}
   const specs: Record<string, WrittenToolDisplay> = {}
   for (const [tool, value] of Object.entries(block)) {
@@ -193,8 +195,10 @@ function parseTools(raw: unknown): Record<string, WrittenToolDisplay> {
 
 /** The reader-facing shape of the `dsh-tui:` section. */
 export function parseSettings(raw: unknown): TuiSettings {
+  if (asRecord(raw) === undefined) throw new Error('dsh-tui settings must be a mapping')
   rejectUnknownKeys(raw)
-  const section = asRecord(raw) ?? {}
+  const section = asRecord(raw)!
+  if (section.history !== undefined && asRecord(section.history) === undefined) throw new Error('history must be a mapping')
   const parsed = SECTION(section) as unknown as {
     theme: string | undefined
     palette: Record<PaletteName, string>
@@ -351,28 +355,29 @@ export function settingsProblemMessage(error: unknown): string {
 /**
  * Read a registered scope's section, or nothing when it cannot be read.
  *
- * A malformed section must not cost the reader their session: an unreadable
- * one falls back to the shipped table, which is the appearance the surface had
- * before any of this existed. The caller is told on the way past, because a
- * silently ignored typo is the exact failure this section is meant to prevent;
- * stderr alone is invisible under the alternate screen.
+ * A malformed candidate must not replace a working appearance or erase an
+ * opt-out. Startup has no previous appearance, so only then do shipped defaults
+ * supply the fallback. Notices stay visible above the alternate screen.
  */
-export function readScope(scope: { get(): unknown }, onProblem?: (message: string) => void): TuiSettings {
+export function readScope(scope: { get(): unknown }, onProblem?: (message: string) => void, previous?: TuiSettings): TuiSettings {
   let raw: unknown = undefined
   try {
-    raw = scope.get() ?? {}
+    raw = scope.get()
     return parseSettings(raw)
   } catch (error) {
     const message = settingsProblemMessage(error)
     if (onProblem === undefined) process.stderr.write(`dsh-tui: ${message}\n`)
     else onProblem(message)
-    // The rest of the refused section falls back to the shipped table, but
-    // recording is a privacy choice: an explicit switch survives a typo
-    // somewhere else, and a switch that could not be read stays off rather than
-    // quietly turning the store back on.
-    const fallback = defaultSettings()
-    if (raw === undefined) return { ...fallback, history: { ...fallback.history, enabled: false } }
-    return { ...fallback, history: salvageHistory(raw) }
+    // Last-good appearance and readable opt-outs survive a rejected candidate;
+    // a switch that cannot be read must never authorize recording.
+    const fallback = previous ?? defaultSettings()
+    const history = salvageHistory(raw)
+    // A rejected candidate cannot revoke an already applied opt-out.
+    return { ...fallback, history: {
+      ...history,
+      enabled: previous?.history.enabled === false ? false : history.enabled,
+      ghost: previous?.history.ghost === false ? false : history.ghost,
+    } }
   }
 }
 
@@ -386,11 +391,13 @@ export function readScope(scope: { get(): unknown }, onProblem?: (message: strin
 function salvageHistory(raw: unknown): HistorySettings {
   const fallback = defaultSettings().history
   const history = asRecord(asRecord(raw)?.history)
-  if (history === undefined) return fallback
+  if (history === undefined) return asRecord(raw) !== undefined && asRecord(raw)!.history === undefined
+    ? fallback
+    : { ...fallback, enabled: false, ghost: false }
   const enabled = history.enabled === undefined
     ? fallback.enabled
     : typeof history.enabled === 'boolean' ? history.enabled : false
-  const ghost = typeof history.ghost === 'boolean' ? history.ghost : fallback.ghost
+  const ghost = history.ghost === undefined ? fallback.ghost : typeof history.ghost === 'boolean' ? history.ghost : false
   const maxEntries = typeof history.maxEntries === 'number'
     && Number.isSafeInteger(history.maxEntries)
     && history.maxEntries >= 1

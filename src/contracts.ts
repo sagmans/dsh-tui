@@ -24,9 +24,38 @@ export interface TuiStartup {
   readonly bell: boolean
 }
 
+/**
+ * The row's own configuration: every launch option, plus what only the profile
+ * can name.
+ *
+ * Split from the startup service because no command-line flag can carry these
+ * values. A harness that keeps settings per row has no `dsh-tui:` document
+ * section left to write a theme into, so the row's own config is the one place a
+ * profile patch pins it — and that makes the row the config surface for it, not
+ * the launcher.
+ */
+export interface TuiRowConfig extends TuiStartup {
+  /**
+   * Theme the row pins, below the settings section and above the package default.
+   *
+   * The section is the reader's own document and still outranks this; the
+   * package's default answers when neither names a theme.
+   */
+  readonly theme: string | undefined
+}
+
 declare module '@deepseek-ai/cordis' {
   interface Context {
     tuiStartup?: TuiStartup
+    /**
+     * Set when this invocation must print the model directory and exit instead
+     * of mounting the surface.
+     *
+     * The flag is a boolean because the directory is read after the llm row
+     * mounts, which is after the command line has already parsed: the action
+     * only orders the listing, it never prints.
+     */
+    tuiListModels?: boolean
     /** Printed after the terminal is handed back, so the session stays recoverable. */
     tuiGoodbyeMessage?: string
   }

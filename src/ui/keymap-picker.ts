@@ -1,4 +1,5 @@
-import { hintKeys, moveHint, type ActionLayer, type Keymap } from '../input/actions.ts'
+import { hintKeys, moveHint, type Keymap } from '../input/actions.ts'
+import { type ActionLayer } from '../input/action-catalog.ts'
 import { keymapRows, layerNote, type KeymapRow } from '../keys-command.ts'
 import { ListPicker } from './picker.ts'
 

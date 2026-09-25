@@ -2,9 +2,10 @@ import { cpSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, wri
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { installBundledSkill, SKILL_NAME } from '@/install-skills.ts'
+import { installBundledSkill } from '@/install-skills.ts'
 
 const SCRATCH_PREFIX = 'dsh-tui-update-test-'
+const SKILL_NAME = 'dsh-tui-dogfood'
 const OLD_COPY = 'user-edited skill'
 const SCRATCH_HOMES: string[] = []
 
@@ -27,7 +28,7 @@ afterEach(async () => {
 function existingSkill(): { home: string; destination: string } {
   const home = mkdtempSync(join(tmpdir(), SCRATCH_PREFIX))
   SCRATCH_HOMES.push(home)
-  const destination = installBundledSkill(home)
+  const destination = installBundledSkill(SKILL_NAME, home)
   writeFileSync(join(destination, 'SKILL.md'), OLD_COPY)
   return { home, destination }
 }
@@ -38,19 +39,19 @@ describe('installBundledSkill update rollback', () => {
     SCRATCH_HOMES.push(home)
     vi.mocked(cpSync).mockImplementationOnce(() => { throw new Error('initial copy failed') })
 
-    expect(() => installBundledSkill(home)).toThrow('initial copy failed')
+    expect(() => installBundledSkill(SKILL_NAME, home)).toThrow('initial copy failed')
     expect(readdirSync(join(home, '.agents', 'skills'))).toEqual([])
 
     const actual = await vi.importActual<typeof import('node:fs')>('node:fs')
     vi.mocked(cpSync).mockImplementation(actual.cpSync)
-    expect(installBundledSkill(home)).toBe(join(home, '.agents', 'skills', SKILL_NAME))
+    expect(installBundledSkill(SKILL_NAME, home)).toBe(join(home, '.agents', 'skills', SKILL_NAME))
   })
 
   it('keeps the old copy when staging the new skill fails', async () => {
     const { home, destination } = existingSkill()
     vi.mocked(cpSync).mockImplementationOnce(() => { throw new Error('staging failed') })
 
-    expect(() => installBundledSkill(home, true)).toThrow('staging failed')
+    expect(() => installBundledSkill(SKILL_NAME, home, true)).toThrow('staging failed')
     expect(readFileSync(join(destination, 'SKILL.md'), 'utf8')).toBe(OLD_COPY)
     expect(readdirSync(join(home, '.agents', 'skills'))).toEqual([SKILL_NAME])
     expect(renameSync).not.toHaveBeenCalled()
@@ -64,7 +65,7 @@ describe('installBundledSkill update rollback', () => {
       actual.rmSync(path, options)
     })
 
-    expect(() => installBundledSkill(home, true)).toThrow(/skill updated;.*backup cleanup failed/)
+    expect(() => installBundledSkill(SKILL_NAME, home, true)).toThrow(/skill updated;.*backup cleanup failed/)
     expect(readFileSync(join(destination, 'SKILL.md'), 'utf8')).not.toBe(OLD_COPY)
     const skills = join(home, '.agents', 'skills')
     const backup = readdirSync(skills).find(name => name !== SKILL_NAME)
@@ -81,7 +82,7 @@ describe('installBundledSkill update rollback', () => {
       actual.renameSync(from, to)
     })
 
-    expect(() => installBundledSkill(home, true)).toThrow('replacement failed')
+    expect(() => installBundledSkill(SKILL_NAME, home, true)).toThrow('replacement failed')
     expect(readFileSync(join(destination, 'SKILL.md'), 'utf8')).toBe(OLD_COPY)
     expect(readdirSync(join(home, '.agents', 'skills'))).toEqual([SKILL_NAME])
     expect(renameSync).toHaveBeenCalledTimes(3)
