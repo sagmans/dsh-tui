@@ -71,6 +71,7 @@ export interface LifecycleFacts {
   readonly blockedCount: number
   readonly blockedMessage: string | undefined
   readonly driverRunning: boolean
+  readonly backgroundRunning: boolean
 }
 
 export interface LifecycleReport {
@@ -87,7 +88,7 @@ export interface LifecycleReport {
  */
 export function lifecycleReport(facts: LifecycleFacts): LifecycleReport {
   if (facts.blockedCount > 0) return { state: HERDR_STATES.blocked, message: facts.blockedMessage }
-  if (facts.driverRunning) return { state: HERDR_STATES.working, message: undefined }
+  if (facts.driverRunning || facts.backgroundRunning) return { state: HERDR_STATES.working, message: undefined }
   return { state: HERDR_STATES.idle, message: undefined }
 }
 

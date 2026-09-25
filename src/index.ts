@@ -277,6 +277,7 @@ export function apply(ctx: Context, config: unknown): void {
     navigate: id => {
       void sessionView.show(SessionId(id))
     },
+    backgroundChanged: running => herdr.background(running),
   })
   const markdown = new MarkdownRenderer(theme.markdown, createMermaidTransform({ theme, mode: () => appearance.mermaidMode() }))
   const terminalLifecycle = createTerminalLifecycle(ctx, {

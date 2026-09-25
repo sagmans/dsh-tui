@@ -201,6 +201,9 @@ export function createSessionLifecycle(ctx: Context, ports: SessionLifecyclePort
     activeSession = id
     ports.setViewed(id)
     agent = handle
+    // A resumed agent can already own live jobs, so the pane must know about
+    // them before its driver's phase is reported as idle.
+    ports.refreshJobs()
     // A cursor counts the turns of one log; the session just opened has its own.
     ports.stagedSessionOpened(id)
     ports.promptMemorySessionOpened()

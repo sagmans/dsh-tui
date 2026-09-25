@@ -68,6 +68,10 @@ breaking change, and a patch carries only fixes.
 
 ### Fixed
 
+- Herdr no longer announces the pane as done when the parent agent stops but a
+  subagent or background job is still running. The row stays working until the
+  last live task settles, including the handoff from a settled job to the
+  parent's completion-notice turn.
 - A picker no longer claims the pane's Herdr row as `blocked`. Herdr answers that
   transition with a needs-attention notification and its sound, for the focused
   pane as well as a background one, so opening the model, reasoning, preset,
