@@ -22,7 +22,11 @@ directory or branch tail. A path selects that checkout directly. The helper read
 runs `pnpm run build` only when the checkout declares a build script. It adds
 the bundle once if absent from the cloned profile, updates only its dependency,
 restores local links from `link:` specifications, and launches
-`dsh --profile tui` by default. The legacy
+`dsh --profile tui` by default. For this TUI, the packaged helper checks
+the launcher against compatible releases in the checkout’s `package.json` before
+cloning. This checkout uses installed `dsh 0.1.5-rc.3` for PTY tests. Never
+substitute `pnpm dsh` or a `--dsh` path from a Harness source checkout: that
+host may migrate the cloned `settings.yaml`. The legacy
 `scripts/dogfood/run-tui-from-worktree.sh` remains available in dsh-tui and
 defaults to that script's checkout even when called elsewhere.
 

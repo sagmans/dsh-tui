@@ -106,15 +106,9 @@ dsh plugin --profile tui remove @sagmans/dsh-tui
 
 The profile then keeps `@deepseek-ai/dsh-base` and no application, so `dsh --profile tui` waits with no output. Add the plugin again to use the profile.
 
-### Launching from a harness checkout
+### Use the installed Harness launcher
 
-`pnpm dsh --profile tui` is the sanctioned launcher, but pnpm verifies that dependencies are current before it runs any script, and a checkout whose `postinstall` refuses to take over a user-owned `core.hooksPath` fails that check — the process exits before the surface starts. Any of these reaches the surface:
-
-```sh
-pnpm --config.verify-deps-before-run=false dsh --profile tui   # from the checkout
-CI=true pnpm dsh --profile tui                                 # also suppresses the check
-node "$CHECKOUT/apps/cli/lib/bin.js" --profile tui             # needs neither pnpm nor the check
-```
+Run `dsh --version` and confirm `0.1.5-rc.3` before launching this plugin. `pnpm dsh` from a Harness source checkout runs its development host, not the installed release. That host can migrate `settings.yaml` and is outside this plugin's supported range; do not use it for TUI dogfooding.
 
 ## Troubleshooting
 
@@ -133,7 +127,7 @@ Two facts explain most failures.
 | `dsh-tui: both stdin and stdout must be TTYs` | stdin or stdout is a pipe, a file, or a CI runner | run the command from a terminal |
 | Node warnings, such as `ExperimentalWarning: stripTypeScriptTypes …`, appear after exit | the TUI holds runtime warnings until it returns the terminal to your shell; startup warnings remain visible before the TUI starts | read the warnings in your shell after exit; no warning-suppression flag is needed |
 | Changes under `src/` have no effect | a linked profile loads `lib/`, not `src/` | `pnpm run build` in the plugin checkout |
-| `pnpm dsh --profile tui` exits before the surface appears | pnpm's dependency check fails on the harness checkout's own postinstall | see [Launching from a harness checkout](#launching-from-a-harness-checkout) |
+| TUI preferences disappear after launching a Harness source checkout | that host treats `settings.yaml` as migration input, not live preferences | use installed `dsh 0.1.5-rc.3` with a cloned home; preserve the original settings file |
 | `--preset <id>` is refused, because the session's agent preset is fixed | a session keeps the mode that composed it, and this session already took a turn | `/preset <id>` before the first turn, or resume without `--preset` |
 | `--resume <id>` starts a new session | the id is a bare UUID | pass the stored id, `tui-session-…` included; a bare `--resume` opens the picker |
 | `dsh: profile "tui" does not exist` | the profile is not created yet | the `add` command creates it |
@@ -825,22 +819,18 @@ pnpm test
 pnpm run build
 ```
 
-**A linked profile loads the built entry point**, so edits under `src/` are invisible to `dsh --profile tui` until `pnpm run build` runs. Drive the real surface end to end — it rebuilds first, allocates a PTY, sends a prompt, and prints what the screen showed:
+**A linked profile loads the built entry point**, so edits under `src/` are invisible to `dsh --profile tui` until `pnpm run build` runs. The PTY driver rebuilds, checks nested links in the isolated `--home`, and rejects launchers other than `dsh 0.1.5-rc.3`.
 
-```sh
-node tools/pty-drive.mjs --prompt 'Reply with exactly: pong'
-node tools/pty-drive.mjs --prompt 'Run: echo hi' --approve 20   # answer the approval gate
-node tools/pty-drive.mjs --home /tmp/scratch-home --seconds 20  # no credentials: proves failures are visible
-node tools/pty-drive.mjs --prompt 'Run: echo hi' --click 20:12   # press the left button at row 12
-```
-
-Keep verification off your real home: install the profile into a throwaway one and copy only the credentials it needs.
+Clone your configured home with the dogfood helper for realistic runs. A minimal throwaway home can also expose startup failures without touching your real state:
 
 ```sh
 S=$(mktemp -d)
 cp ~/.dsh/.credentials.yaml ~/.dsh/settings.yaml "$S/" && chmod 600 "$S"/*.yaml
 DSH_HOME="$S" dsh plugin --profile tui add "$PWD"
 node tools/pty-drive.mjs --home "$S" --prompt 'Reply with exactly: pong'
+node tools/pty-drive.mjs --home "$S" --prompt 'Run: echo hi' --approve 20
+node tools/pty-drive.mjs --home "$S" --seconds 20 --prompt ''
+node tools/pty-drive.mjs --home "$S" --prompt 'Run: echo hi' --click 20:12
 ```
 
 Test specs import plugin sources through the `@/` alias. Under this test runner the spec file is resolved with a root-relative id, so parent-relative imports (`../src/...`) do not resolve; the alias and its matching `tsconfig.test.json` path mapping avoid that.

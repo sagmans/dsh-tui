@@ -5,6 +5,7 @@ import { join } from 'node:path'
 export const REPO_ROOT = join(__dirname, '..', '..')
 export const SCRIPT = join(REPO_ROOT, 'scripts', 'dogfood', 'run-tui-from-worktree.sh')
 export const GENERIC_SCRIPT = join(REPO_ROOT, '.agents', 'skills', 'dsh-tui-dogfood', 'scripts', 'run-plugin-from-worktree.sh')
+const COMPATIBLE_DSH_RELEASES = { '0.1.5-rc.1': 'compatible', '0.1.5-rc.2': 'compatible', '0.1.5-rc.3': 'compatible' }
 
 export function createDogfoodFixture() {
   // macOS resolves /tmp to /private/tmp; the script uses 'pwd -P', so compare
@@ -16,7 +17,7 @@ export function createDogfoodFixture() {
 
   // The legacy wrapper expects this name; generic tests replace it as needed.
   mkdirSync(checkout, { recursive: true })
-  writeFileSync(join(checkout, 'package.json'), JSON.stringify({ name: '@sagmans/dsh-tui' }))
+  writeFileSync(join(checkout, 'package.json'), JSON.stringify({ name: '@sagmans/dsh-tui', dsh: { compatibility: { dshReleases: COMPATIBLE_DSH_RELEASES } } }))
 
   // Two sibling bundles the profile links to, so the relink has more than one
   // link to rebuild and a dropped-bundle regression cannot pass.
@@ -27,7 +28,7 @@ export function createDogfoodFixture() {
   // A stub launcher: the script insists a dsh exists even when the profile is
   // present and no dsh command is run, and CI has none on PATH.
   const stubDsh = join(root, 'stub-dsh')
-  writeFileSync(stubDsh, '#!/usr/bin/env bash\nexit 0\n')
+  writeFileSync(stubDsh, '#!/bin/sh\nif [ "$1" = "--version" ]; then echo 0.1.5-rc.3; fi\nexit 0\n')
   chmodSync(stubDsh, 0o755)
 
   // The source home's profile declares absolute 'link:' specs, exactly as a
