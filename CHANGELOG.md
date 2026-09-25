@@ -8,6 +8,8 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-09-25
+
 ### Added
 
 - A session that starts with an installed skill this build has moved past says
@@ -16,6 +18,18 @@ breaking change, and a patch carries only fixes.
   the old wiring after the bundle that shipped it changed; the comparison reads
   the content this package ships, which leaves a helper's execute bit, a note
   kept beside a skill, and a skill that was never installed unremarked.
+
+- A click on a PTC card's own header shows or hides the calls that card
+  dispatched, for that card alone, so reading one program does not open every
+  other program in the session. The click opens one level: the calls arrive as
+  the single row each is read at, and the program's own rows stay behind the key
+  that opens cards. `Ctrl+Y` still decides for all of them at once.
+
+- The title of a wait is also reported as Herdr's `blocked` display label, which
+  its sidebar draws through the `state_text` token. Herdr keeps the message that
+  accompanies the state without rendering it, so a pane waiting on a decision
+  showed a colour and nothing else; the default agent rows omit `state_text`, and
+  the README carries the row that names the tool.
 
 ### Changed
 
@@ -51,20 +65,6 @@ breaking change, and a patch carries only fixes.
   reader was reading the program's work; the answer under them is what the card
   is read for, and the calls are one click on the card's own header away.
   `dsh-tui: subcalls: inline` starts a session with them drawn instead.
-
-### Added
-
-- A click on a PTC card's own header shows or hides the calls that card
-  dispatched, for that card alone, so reading one program does not open every
-  other program in the session. The click opens one level: the calls arrive as
-  the single row each is read at, and the program's own rows stay behind the key
-  that opens cards. `Ctrl+Y` still decides for all of them at once.
-
-- The title of a wait is also reported as Herdr's `blocked` display label, which
-  its sidebar draws through the `state_text` token. Herdr keeps the message that
-  accompanies the state without rendering it, so a pane waiting on a decision
-  showed a colour and nothing else; the default agent rows omit `state_text`, and
-  the README carries the row that names the tool.
 
 ### Fixed
 
@@ -695,7 +695,8 @@ breaking change, and a patch carries only fixes.
 - Publication through npm OIDC trusted publishing, with the first version
   bootstrapped by hand ([#5](https://github.com/sagmans/dsh-tui/pull/5)).
 
-[Unreleased]: https://github.com/sagmans/dsh-tui/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/sagmans/dsh-tui/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/sagmans/dsh-tui/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/sagmans/dsh-tui/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/sagmans/dsh-tui/compare/v0.5.2...v0.6.0
 [0.5.2]: https://github.com/sagmans/dsh-tui/compare/v0.5.1...v0.5.2
