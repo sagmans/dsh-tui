@@ -41,6 +41,7 @@ function fixture(): Fixture {
   const herdr: HerdrReporter = {
     enabled: true,
     driver: () => {},
+    background: () => {},
     block: (key, message) => {
       waits.push({ kind: 'block', key, message })
     },

@@ -5,6 +5,7 @@ import {
   JOB_READ_LINES,
   createJobDirectory,
   describeJobs,
+  isLive,
   parseJobsArgument,
   type JobDirectory,
   type JobSummary,
@@ -31,6 +32,8 @@ export interface BackgroundWorkPorts {
   readonly render: () => void
   /** Show the session a child runs in; the viewed-session owner performs it. */
   readonly navigate: (id: string) => void
+  /** Keep the pane claimed while this session's children or jobs are live. */
+  readonly backgroundChanged: (running: boolean) => void
 }
 
 /** The commands and live reads the composing surface routes to this owner. */
@@ -65,11 +68,30 @@ export function createBackgroundWork(ctx: Context, ports: BackgroundWorkPorts): 
   let jobs: readonly JobSummary[] = []
   const roster = new SubagentRoster()
   const subagentControl = createSubagentControl(ctx)
+  let pendingIdle: ReturnType<typeof setImmediate> | undefined
+
+  const reportBackground = (): void => {
+    const live = roster.running().length > 0 || jobs.some(job => isLive(job.status))
+    if (live) {
+      if (pendingIdle !== undefined) clearImmediate(pendingIdle)
+      pendingIdle = undefined
+      ports.backgroundChanged(true)
+      return
+    }
+    if (pendingIdle !== undefined) return
+    // The job registry announces settlement before its completion listener
+    // wakes the parent; let that handoff finish before claiming the pane idle.
+    pendingIdle = setImmediate(() => {
+      pendingIdle = undefined
+      ports.backgroundChanged(roster.running().length > 0 || jobs.some(job => isLive(job.status)))
+    })
+  }
 
   /** Re-read the job board; it is live state, so nothing else can fold it. */
   const refresh = (): void => {
     const agent = ports.drivingAgent()
     jobs = agent === undefined || jobDirectory === undefined ? [] : jobDirectory.list(agent.agent)
+    reportBackground()
     ports.render()
   }
 
@@ -169,12 +191,17 @@ export function createBackgroundWork(ctx: Context, ports: BackgroundWorkPorts): 
     jobs: () => jobs,
     refresh,
     acceptCatalog: info => roster.catalog(info),
-    resetRoster: () => roster.reset(),
+    resetRoster: () => {
+      roster.reset()
+      jobs = []
+      reportBackground()
+    },
     runSubagentsCommand,
     runJobsCommand,
     subagentListeners: () => [
       listenFor('subagent/start', info => {
         roster.start(info)
+        reportBackground()
         const record = asRecord(info)
         const provider = typeof record?.provider === 'string' ? record.provider : 'subagent'
         const id = typeof record?.id === 'string' ? record.id : ''
@@ -183,6 +210,7 @@ export function createBackgroundWork(ctx: Context, ports: BackgroundWorkPorts): 
       }),
       listenFor('subagent/end', info => {
         roster.end(info)
+        reportBackground()
         const record = asRecord(info)
         const provider = typeof record?.provider === 'string' ? record.provider : 'subagent'
         const stop = typeof record?.stopReason === 'string' ? record.stopReason : undefined

@@ -60,6 +60,8 @@ export interface HerdrReporter {
    * read as done between two turns of an agent that is still working.
    */
   driver(status: DriverStatus): void
+  /** Work the driven session still owns after its foreground driver settles. */
+  background(running: boolean): void
   /**
    * A decision is waiting on the reader, under the key of the slot holding it.
    *
@@ -102,6 +104,7 @@ export function createHerdrReporter(options: HerdrReporterOptions = {}): HerdrRe
    */
   const waits = new Map<string, string>()
   let driverRunning = false
+  let backgroundRunning = false
   let sessionId: string | undefined
   let wantedState: LifecycleReport | undefined
   let wantedSession: { readonly sessionId: string; readonly reason: SessionStartReason } | undefined
@@ -217,6 +220,10 @@ export function createHerdrReporter(options: HerdrReporterOptions = {}): HerdrRe
       driverRunning = status === 'running'
       reporter.publish()
     },
+    background(running) {
+      backgroundRunning = running
+      reporter.publish()
+    },
     block(key, message) {
       waits.set(key, boundedMessage(message))
       reporter.publish()
@@ -238,7 +245,7 @@ export function createHerdrReporter(options: HerdrReporterOptions = {}): HerdrRe
       reporter.publish(true)
     },
     publish(force = false) {
-      const next = lifecycleReport({ blockedCount: waits.size, blockedMessage: [...waits.values()].at(-1), driverRunning })
+      const next = lifecycleReport({ blockedCount: waits.size, blockedMessage: [...waits.values()].at(-1), driverRunning, backgroundRunning })
       if (force || isReportChange(wantedState, next)) {
         wantedState = next
         stateSent = false

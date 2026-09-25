@@ -12,7 +12,7 @@ import {
   type LifecycleFacts,
 } from '@/herdr/state.ts'
 
-const NOTHING_PENDING: LifecycleFacts = { blockedCount: 0, blockedMessage: undefined, driverRunning: false }
+const NOTHING_PENDING: LifecycleFacts = { blockedCount: 0, blockedMessage: undefined, driverRunning: false, backgroundRunning: false }
 
 describe('lifecycleReport', () => {
   it('is idle when nothing is running and nothing is waiting', () => {
@@ -30,12 +30,12 @@ describe('lifecycleReport', () => {
   })
 
   it('outranks a running driver with a wait, and names it', () => {
-    const report = lifecycleReport({ blockedCount: 1, blockedMessage: 'approval needed · Bash', driverRunning: true })
+    const report = lifecycleReport({ blockedCount: 1, blockedMessage: 'approval needed · Bash', driverRunning: true, backgroundRunning: false })
     expect(report).toEqual({ state: HERDR_STATES.blocked, message: 'approval needed · Bash' })
   })
 
   it('keeps the newest wait while waits stack', () => {
-    const report = lifecycleReport({ blockedCount: 2, blockedMessage: 'question · continue?', driverRunning: false })
+    const report = lifecycleReport({ blockedCount: 2, blockedMessage: 'question · continue?', driverRunning: false, backgroundRunning: false })
     expect(report.state).toBe(HERDR_STATES.blocked)
     expect(report.message).toBe('question · continue?')
   })
