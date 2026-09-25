@@ -1,4 +1,6 @@
+import type { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it } from 'vitest'
+import { createModelCatalog } from '@/agent/model.ts'
 import { modelListLines, type ModelListCatalog } from '@/model-list.ts'
 
 /** A catalog answering from a table, so a spec states only the order it asserts. */
@@ -25,17 +27,12 @@ describe('modelListLines', () => {
     ])
   })
 
-  it('separates the route from the display name with one tab', async () => {
-    const lines = await modelListLines(catalogOf([['alpha', [{ id: 'a1', name: 'Alpha One' }]]]))
-    expect(lines).toEqual(['alpha/a1\tAlpha One'])
-    expect(lines[0]?.split('\t')).toEqual(['alpha/a1', 'Alpha One'])
-  })
-
   it('falls back to the model id when the adapter advertises no name', async () => {
-    await expect(modelListLines(catalogOf([['alpha', [{ id: 'a1' }]]]))).resolves.toEqual(['alpha/a1\ta1'])
-  })
-
-  it('prints no line for a deployment with no providers', async () => {
-    await expect(modelListLines(catalogOf([]))).resolves.toEqual([])
+    // Driven through the real catalog: an adapter's entry is normalized before
+    // the listing ever formats it, so a hand-built shape would prove nothing.
+    const catalog = createModelCatalog({
+      get: () => ({ listProviders: () => [{ id: 'alpha', name: 'Alpha' }], listModels: async () => [{ id: 'a1' }] }),
+    } as unknown as Context) as ModelListCatalog
+    await expect(modelListLines(catalog)).resolves.toEqual(['alpha/a1\ta1'])
   })
 })

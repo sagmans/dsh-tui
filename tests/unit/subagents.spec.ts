@@ -5,17 +5,9 @@ import {
   describeSubagents,
   parseSubagentsArgument,
   resolveRun,
-  shortId,
 } from '@/subagents.ts'
 
 const START = { runId: 'run-1', provider: 'spawn', id: 'child-abcdef123456', local: true }
-
-describe('shortId', () => {
-  it('keeps enough of an id to tell two children apart', () => {
-    expect(shortId('child-abcdef123456')).toBe('child-ab')
-    expect(shortId('short')).toBe('short')
-  })
-})
 
 describe('SubagentRoster', () => {
   it('tracks a run from start to end', () => {
@@ -77,6 +69,9 @@ describe('SubagentRoster', () => {
     expect(describeSubagent(roster.list()[0]!, 2_000)).toContain('one two three four five six seven eight nine ten · spawn · running')
     expect(describeSubagent(roster.list()[0]!, 2_000)).not.toContain('eleven')
     expect(describeSubagent(roster.list()[0]!, 2_000)).not.toContain('\x1b')
+    // An id no longer than the row keeps is already readable, so nothing is cut.
+    roster.start({ runId: 'run-2', provider: 'spawn', id: 'short' })
+    expect(describeSubagent(roster.list()[1]!, 2_000)).toContain('short · spawn · running')
   })
 
   it('ignores a payload it cannot identify', () => {

@@ -124,6 +124,17 @@ const HOST_ROWS = [
   '@deepseek-ai/dsh-tool-subagent/model-selection-settings',
 ]
 
+/**
+ * First-party dependencies that are libraries rather than cordis plugins.
+ *
+ * They are imported by this plugin's own code, so nothing mounts them as a row;
+ * the declared-against-mounted check below has to know them by name or it would
+ * demand a patch row for a package that has no plugin to mount.
+ */
+const LIBRARY_PACKAGES = [
+  '@deepseek-ai/schemastery',
+]
+
 function walk(directory) {
   const found = []
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
@@ -237,6 +248,14 @@ try {
     if (manifest.dependencies?.[name] === undefined) {
       problems.push(`the patch mounts ${name} but the manifest does not depend on it`)
     }
+  }
+  // The other direction: a first-party dependency the profile must resolve has
+  // to have a row that mounts it, or the packaged bundle ships a dependency no
+  // composition ever loads.
+  for (const name of Object.keys(manifest.dependencies ?? {})) {
+    if (!name.startsWith('@deepseek-ai/')) continue
+    if (LIBRARY_PACKAGES.includes(name)) continue
+    if (!named.has(name)) problems.push(`the manifest depends on ${name}, but no patch row mounts it`)
   }
 
   // npm resolves a required peer by installing a private copy. Against the

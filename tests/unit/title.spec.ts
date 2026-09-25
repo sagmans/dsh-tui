@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CLEAR_TITLE, TITLE_DIR_LIMIT, titleSequence, windowTitle } from '@/terminal/title.ts'
+import { CLEAR_TITLE, titleSequence, windowTitle } from '@/terminal/title.ts'
 
 const BEL = '\u0007'
 const ESC = '\u001b'
@@ -23,9 +23,9 @@ describe('windowTitle', () => {
 
   it('keeps a long path inside the tab', () => {
     const long = `/a/${'x'.repeat(80)}/end`
-    const title = windowTitle(long, 'ready')
-    expect(title.length).toBeLessThan(TITLE_DIR_LIMIT + 30)
-    expect(title).toContain('…')
+    // The cut keeps the deepest segment whole, so a tab bar still says which
+    // checkout the session runs in after the path is shortened.
+    expect(windowTitle(long, 'ready')).toBe(`${ESC}]0;dsh-tui · …${'x'.repeat(35)}/end · ready${BEL}`)
   })
 
   it('clears rather than guesses when asked to hand the title back', () => {

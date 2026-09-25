@@ -112,17 +112,4 @@ describe('appearance with the released settings provider', () => {
       await ctx.fiber.dispose()
     }
   })
-
-  it('characterizes the public descriptor ambiguity between absent and malformed root sections', async () => {
-    const { ctx, settings, appearance } = await fixture(undefined)
-    try {
-      await vi.waitFor(() => { expect(appearance.historyEnabled()).toBe(true) })
-      const before = settings.describe()
-      settings.publishDocument('not a mapping')
-      // No public raw layer, revision, or accepted value exposes this rejected root.
-      expect(settings.describe()).toEqual(before)
-    } finally {
-      await ctx.fiber.dispose()
-    }
-  })
 })

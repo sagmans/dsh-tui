@@ -106,6 +106,7 @@ describe('withStashFileLock', () => {
     await expect(withStashFileLock(file, async () => 'ran')).rejects.toThrow(/timed out waiting/)
     expect(readFileSync(join(lockDir, 'owner.json'), 'utf8')).toBe(before)
     expect(existsSync(lockDir)).toBe(true)
+    expect(readdirSync(lockDir)).toEqual(['owner.json'])
   })
 
   /**
@@ -121,16 +122,6 @@ describe('withStashFileLock', () => {
         return 'read'
       }),
     ).resolves.toBe('read')
-  })
-
-  it('reports a lock that cannot be released as a committed mutation, not a lost one', async () => {
-    const file = scratchFile()
-    await expect(
-      withStashMutationLock(file, async () => {
-        await stealLock(`${file}.lock`)
-        return { didPersist: true, result: 'written' }
-      }),
-    ).rejects.toThrow(/mutation committed but lock-release failed/)
   })
 
   /**
@@ -235,16 +226,6 @@ describe('withStashFileLock', () => {
     expect(readdirSync(join(file, '..')).filter(name => name.startsWith('.claim-'))).toEqual([])
   })
 
-  it('leaves a live lock exactly where it is while looking at it', async () => {
-    const file = scratchFile()
-    const lockDir = `${file}.lock`
-    await holdLock(lockDir, { pid: process.pid, host: hostname() })
-    const before = readFileSync(join(lockDir, 'owner.json'), 'utf8')
-    await expect(withStashFileLock(file, async () => 'ran')).rejects.toThrow(/timed out waiting/)
-    expect(readFileSync(join(lockDir, 'owner.json'), 'utf8')).toBe(before)
-    expect(readdirSync(lockDir)).toEqual(['owner.json'])
-  })
-
   /**
    * A reclaimer killed between winning the claim and clearing it is the one
    * state a reader has to resolve by hand, so the contender has to stop and say
@@ -280,13 +261,6 @@ describe('withStashFileLock', () => {
 })
 
 describe('withStashMutationLock', () => {
-  it('unwraps the mutation result', async () => {
-    const file = scratchFile()
-    await expect(
-      withStashMutationLock(file, async () => ({ didPersist: true, result: 'saved' })),
-    ).resolves.toBe('saved')
-  })
-
   it('reports a persisted mutation whose release failed as committed, never as lost', async () => {
     const file = scratchFile()
     const failure = withStashMutationLock(file, async () => {

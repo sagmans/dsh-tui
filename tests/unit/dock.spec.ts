@@ -2,7 +2,6 @@ import { stripTerminalSequences, visibleWidth, type TuiMouseEvent } from '@earen
 import { describe, expect, it } from 'vitest'
 import { createTheme } from '@/theme.ts'
 import { DEFAULT_PALETTE } from '@/theme-defaults.ts'
-import { SubagentRoster } from '@/subagents.ts'
 import { DOCK_TODO_LIMIT, WorkDock } from '@/ui/dock.ts'
 import type { WorkState } from '@/work.ts'
 
@@ -105,14 +104,6 @@ describe('WorkDock', () => {
     expect(lines[1]).toContain('▸ child-ab · spawn · running')
   })
 
-  it('shows the task from a parent catalog on the running child row', () => {
-    const roster = new SubagentRoster(() => 1_000)
-    roster.catalog({ childId: 'child-abcdef', label: 'Review terminal rendering' })
-    roster.start({ runId: 'r1', provider: 'spawn', id: 'child-abcdef' })
-    const lines = new WorkDock(() => EMPTY, theme, () => [], () => roster.list(), () => 2_000).render(80)
-    expect(stripTerminalSequences(lines[1]!)).toContain('child-ab · Review terminal rendering · spawn · running 1s')
-  })
-
   it('previews three running children and reveals the rest on a heading click', () => {
     const runs = Array.from({ length: 5 }, (_, index) => ({
       runId: `r${index}`, provider: 'spawn', id: `child-${index}`, startedAt: 1_000, status: 'running' as const,
@@ -136,6 +127,10 @@ describe('WorkDock', () => {
     ])
     expect(dock.handleMouse(click)).toEqual({ handled: true, render: true })
     expect(dock.render(80)).toHaveLength(5)
+    // The blank columns before a child's own row are inside the section too, so a
+    // click there has to do what the same click on the heading did.
+    expect(dock.handleMouse({ ...click, x: 0, y: 1 })).toEqual({ handled: true, render: true })
+    expect(dock.render(80)[0]).toBe(rule('⚇ subagents ▾ · 5 running', 80))
   })
 
   it('toggles from a child row’s empty cells, but not from goal or job rows', () => {
@@ -180,33 +175,11 @@ describe('WorkDock', () => {
     expect(opened).toBe(id)
   })
 
-  it('toggles from the overflow row and the blank indentation before a child', () => {
-    const runs = Array.from({ length: 5 }, (_, index) => ({
-      runId: `r${index}`, provider: 'spawn', id: `child-${index}`, startedAt: 1_000, status: 'running' as const,
-    }))
-    let opened: string | undefined
-    const dock = new WorkDock(() => EMPTY, theme, () => [], () => runs, () => 2_000, childId => { opened = childId })
-    dock.render(80)
-    const click: TuiMouseEvent = {
-      type: 'click', button: 'left', x: 3, y: 4, screenX: 3, screenY: 4, width: 80, height: 5,
-      shift: false, alt: false, ctrl: false,
-    }
-    expect(dock.handleMouse(click)).toEqual({ handled: true, render: true })
-    expect(dock.render(80)[0]).toBe(rule('⚇ subagents ▾ · 5 running', 80))
-    expect(dock.handleMouse({ ...click, x: 0, y: 1 })).toEqual({ handled: true, render: true })
-    expect(dock.render(80)[0]).toBe(rule('⚇ subagents ▸ · 5 running', 80))
-    expect(opened).toBeUndefined()
-  })
-
   it('drops the subagent board once every delegation has settled', () => {
     const runs = [
       { runId: 'r2', provider: 'fork', id: 'child-2', startedAt: 1_000, status: 'failed' as const, finishedAt: 2_000 },
     ]
     expect(new WorkDock(() => EMPTY, theme, () => [], () => runs).render(80)).toEqual([])
-  })
-
-  it('takes no rows when no job is running', () => {
-    expect(new WorkDock(() => EMPTY, theme, () => []).render(80)).toEqual([])
   })
 
   it('names a section on the edge of its list instead of on a row above it', () => {
@@ -268,6 +241,10 @@ describe('WorkDock theming', () => {
     expect(lines[0]).toContain('38;2;39;245;200m')
     expect(lines[2]).toContain('38;2;215;175;95m')
     expect(lines[4]).toContain('38;2;95;175;215m')
+    // A section rule is not the only element a row answers to: the job row carries
+    // the running element's own colour wherever the row is drawn.
+    const red = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['dock.jobs.running', { fg: '#ff0000' }]]) })
+    expect(new WorkDock(() => EMPTY, red, () => job('running')).render(80)[1]).toContain('38;2;255;0;0')
   })
 
   it('falls back to the heading row when the rule is hidden', () => {
@@ -277,14 +254,5 @@ describe('WorkDock theming', () => {
     const lines = new WorkDock(() => EMPTY, bare, () => job('running')).render(80)
     expect(stripTerminalSequences(lines[0] ?? '')).toBe('⛭ jobs · 1 running')
     expect(lines[1]).toContain('▸ bash-1 · running')
-  })
-
-  it('keeps a settled job off screen however the live job element is styled', () => {
-    // A settled job has no element of its own any more, because no element can
-    // reach a row the dock refuses to draw; styling the live one must not
-    // resurrect it either.
-    const styled = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['dock.jobs.running', { fg: '#ff0000' }]]) })
-    expect(new WorkDock(() => EMPTY, styled, () => job('completed')).render(80)).toEqual([])
-    expect(new WorkDock(() => EMPTY, styled, () => job('running')).render(80)[1]).toContain('38;2;255;0;0')
   })
 })

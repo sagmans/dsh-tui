@@ -34,21 +34,26 @@ describe('applying a draft', () => {
       expect(host.last()).toBe('Applied [1]')
     })
   it('refuses to overwrite a draft already in the editor', async () => {
-      const host = new FakeHost()
-      const stash = bank(host)
-      await stash.stashEditor('parked')
-      host.editorText = 'mine'
-      await stash.apply(undefined)
-      expect(host.editorText).toBe('mine')
-      expect(host.last()).toBe('clear or stash the current draft before applying or popping')
-      expect(stash.entryCount).toBe(1)
+      for (const take of ['apply', 'pop'] as const) {
+        const host = new FakeHost()
+        const stash = bank(host)
+        await stash.stashEditor('parked')
+        host.editorText = 'mine'
+        await (take === 'apply' ? stash.apply(undefined) : stash.pop(undefined))
+        expect(host.editorText).toBe('mine')
+        expect(host.last()).toBe('clear or stash the current draft before applying or popping')
+        expect(stash.entryCount).toBe(1)
+      }
     })
   it('names a selector that matches nothing', async () => {
-      const host = new FakeHost()
-      const stash = bank(host)
-      await stash.stashEditor('parked')
-      await stash.apply('ghost')
-      expect(host.last()).toBe('no stash matching "ghost"')
+      for (const take of ['apply', 'drop'] as const) {
+        const host = new FakeHost()
+        const stash = bank(host)
+        await stash.stashEditor('parked')
+        await (take === 'apply' ? stash.apply('ghost') : stash.drop('ghost'))
+        expect(host.last()).toBe('no stash matching "ghost"')
+        expect(stash.entryCount).toBe(1)
+      }
     })
   it('says the bank is empty rather than matching an empty selector', async () => {
       const host = new FakeHost()
@@ -83,15 +88,6 @@ describe('popping a draft', () => {
       await first.pop(undefined)
       expect(mine.editorText).toBe('added elsewhere')
       expect(first.entryCount).toBe(0)
-    })
-  it('refuses to overwrite a draft already in the editor', async () => {
-      const host = new FakeHost()
-      const stash = bank(host)
-      await stash.stashEditor('parked')
-      host.editorText = 'mine'
-      await stash.pop(undefined)
-      expect(host.editorText).toBe('mine')
-      expect(stash.entryCount).toBe(1)
     })
   /**
      * A question borrows the bar and empties it, so an empty editor is not proof
@@ -149,13 +145,5 @@ describe('dropping drafts', () => {
       expect(host.editorText).toBe('mine')
       expect(host.last()).toBe('Dropped [0]')
       expect(stash.entryCount).toBe(0)
-    })
-  it('names a selector that matches nothing', async () => {
-      const host = new FakeHost()
-      const stash = bank(host)
-      await stash.stashEditor('one')
-      await stash.drop('ghost')
-      expect(host.last()).toBe('no stash matching "ghost"')
-      expect(stash.entryCount).toBe(1)
     })
 })

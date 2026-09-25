@@ -52,6 +52,41 @@ describe('pickerCardLines', () => {
       '   enter open · esc cancel',
     ])
   })
+
+  it('folds the picker keys under a narrow screen instead of cutting the way out off', () => {
+    // The hint is how a reader learns to leave the list, so a narrow screen folds
+    // it rather than dropping the keys a press still answers.
+    const lines = pickerCardLines(card({
+      rows: [{ label: 'fix the parser', description: '/work · 3m ago', current: true }],
+      hint: '↑/ctrl+p or ↓/ctrl+n move · enter open · esc/ctrl+c cancel · type to filter',
+      filter: '',
+      above: 0,
+      below: 0,
+    }), 40, theme)
+    const hint = lines.join(' ').replace(/\s+/gu, ' ')
+    expect(hint).toContain('esc/ctrl+c cancel')
+    expect(hint).toContain('type to filter')
+    for (const line of lines) expect(visibleWidth(line)).toBeLessThanOrEqual(40)
+  })
+
+  it('wraps the reason a pick was refused under the heading', () => {
+    // A reason that does not fit has to keep going rather than be cut off: the
+    // reader is being told why the thing they picked did not happen.
+    const lines = pickerCardLines(card({
+      title: 'resume a session · 1 stored',
+      note: 'session tui-session-a runs mode "cordis", so --preset standard does not apply; /preset standard switches it before its first turn',
+      rows: [{ label: 'tui-session-a', description: '/work · 3m ago', current: true }],
+      filter: '',
+      above: 0,
+      below: 0,
+    }), 60, theme)
+    const heading = lines.findIndex(line => line.includes('resume a session'))
+    const row = lines.findIndex(line => line.includes('❯ tui-session-a'))
+    const note = lines.slice(heading + 1, row).join(' ').replace(/\s+/gu, ' ')
+    expect(note).toContain('session tui-session-a runs mode "cordis"')
+    expect(note).toContain('switches it before its first turn')
+    expect(lines[heading + 1]?.length).toBeLessThanOrEqual(60)
+  })
 })
 
 describe('PickerPopup', () => {
@@ -66,11 +101,10 @@ describe('PickerPopup', () => {
   it('asks the list for as many rows as the terminal can afford, not for the whole list', () => {
     const tall = popup(48).render(60)
     const short = popup(18).render(60)
-    expect(rowsDrawn(tall)).toBe(popupRowBudget(48))
-    expect(rowsDrawn(short)).toBe(popupRowBudget(18))
-    expect(rowsDrawn(tall)).toBeGreaterThan(rowsDrawn(short))
-    expect(tall.length).toBeLessThanOrEqual(popupHeight(48))
-    expect(short.length).toBeLessThanOrEqual(popupHeight(18))
+    expect(rowsDrawn(tall)).toBe(31)
+    expect(rowsDrawn(short)).toBe(7)
+    expect(tall.length).toBeLessThanOrEqual(38)
+    expect(short.length).toBeLessThanOrEqual(14)
   })
 
   it('draws nothing once the list is gone', () => {
@@ -96,7 +130,7 @@ describe('PickerPopup', () => {
   })
 
   it('reserves the box its frame and its hint before the rows', () => {
-    expect(popupRowBudget(20)).toBe(popupHeight(20) - 7)
+    expect(popupRowBudget(20)).toBe(9)
     expect(popupRowBudget(2)).toBe(3)
   })
 })

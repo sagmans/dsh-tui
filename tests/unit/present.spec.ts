@@ -76,24 +76,28 @@ describe('createToolPresenter', () => {
     expect(card?.detail.map(rowText)).toEqual(['line one', 'line two'])
   })
 
-  it('resolves the tool in the session scope, not the plugin root', () => {
-    const seen: unknown[] = []
+  it.each([
+    {
+      asking: 'call',
+      card: 'Read a.ts',
+      definition: { presentCall: (args: { path: string }) => ({ card: 'generic' as const, title: `Read ${args.path}` }) },
+    },
+    {
+      asking: 'result',
+      card: 'ok',
+      definition: { presentResult: () => ({ card: 'generic' as const, title: 'ok' }) },
+    },
+  ])('resolves a $asking in the session scope, not the plugin root', ({ asking, card, definition }) => {
     const agent = { id: 'tui-session-x' } as unknown as Agent
+    // Only the session-scoped lookup answers, so a card here is the proof the
+    // presenter asked with the scope: a plugin-root lookup would render the
+    // fallback row (or nothing) instead of the definition's own title.
     const ctx = {
-      tools: { get: (name: string, scope: Agent | undefined) => { seen.push(name, scope); return undefined } },
+      tools: { get: (_name: string, scope: Agent | undefined) => (scope === agent ? definition : undefined) },
     } as unknown as Context
-    createToolPresenter(ctx, () => agent).call('bash', '{}')
-    expect(seen).toEqual(['bash', agent])
-  })
-
-  it('resolves a result in the session scope too', () => {
-    const seen: unknown[] = []
-    const agent = { id: 'tui-session-y' } as unknown as Agent
-    const ctx = {
-      tools: { get: (name: string, scope: Agent | undefined) => { seen.push(name, scope); return undefined } },
-    } as unknown as Context
-    createToolPresenter(ctx, () => agent).result('read', input)
-    expect(seen).toEqual(['read', agent])
+    const presenter = createToolPresenter(ctx, () => agent)
+    const built = asking === 'call' ? presenter.call('read', '{"path":"a.ts"}') : presenter.result('read', input)
+    expect(built).toMatchObject({ kind: 'generic', title: card })
   })
 
   it('declares the tools service it reads its cards through', () => {

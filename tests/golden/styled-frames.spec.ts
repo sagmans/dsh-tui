@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { createTheme } from '@/theme.ts'
-import { WIDTHS, fixture, parkedStatus, busyDock, queued, terminalTextFrame } from './fixtures/frames.ts'
+import { WIDTHS, fixture, parkedStatus, busyDock, queued, terminalTextFrame, mermaidFixture, markdownMessages } from './fixtures/frames.ts'
 
 
 describe('terminal text', () => {
@@ -44,5 +44,11 @@ describe('styled golden frames', () => {
     })
   it('renders the queued prompts with their escapes', () => {
       expect(queued(styled).render(80)).toMatchSnapshot()
+    })
+  it('renders the diagram with its escapes', () => {
+      expect(mermaidFixture(styled).render(80)).toMatchSnapshot()
+    })
+  it('renders the prompt and the thought with their escapes', () => {
+      expect(markdownMessages(styled).render(80)).toMatchSnapshot()
     })
 })

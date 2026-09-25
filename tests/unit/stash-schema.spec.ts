@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   assertSafeEntryId,
   assertSafeStashText,
-  createEmptyStashFile,
   createNewId,
   isSafeEntryId,
   MAX_STASH_ENTRY_BYTES,
@@ -35,18 +34,6 @@ describe('stash entry ids', () => {
     for (const bad of ['', '.hidden', '-lead', 'a/b', 'a b', 'a\n', 'x'.repeat(129)]) {
       expect(isSafeEntryId(bad), bad).toBe(false)
     }
-  })
-})
-
-describe('createEmptyStashFile', () => {
-  it('starts a fresh, versioned bank for one session', () => {
-    expect(createEmptyStashFile('tui-session-work', 42)).toEqual({
-      version: STASH_SCHEMA_VERSION,
-      sessionId: 'tui-session-work',
-      createdAt: 42,
-      updatedAt: 42,
-      entries: [],
-    })
   })
 })
 

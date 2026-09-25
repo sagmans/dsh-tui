@@ -56,11 +56,6 @@ describe('upsertEntry', () => {
     expect(next.map(item => item.text)).toEqual(['newer', 'older'])
   })
 
-  it('caps the list at maxEntries', () => {
-    const next = upsertEntry([entry('a', 1), entry('b', 2)], 'c', AT(3), 2)
-    expect(next.map(item => item.text)).toEqual(['c', 'a'])
-  })
-
   it('never moves a timestamp backwards', () => {
     const next = upsertEntry([entry('same', 5)], 'same', AT(1), 10)
     expect(next[0]?.updatedAt).toBe(AT(5))
@@ -303,6 +298,9 @@ describe('createPromptHistory', () => {
     history.record('c')
     await history.flush()
     expect(history.entries().map(item => item.text)).toEqual(['c', 'b'])
+    // The cap is the store's promise about the file it owns, not just about the
+    // list it hands back.
+    expect(JSON.parse(await readFile(history.path(), 'utf8')).entries.map((item: PromptEntry) => item.text)).toEqual(['c', 'b'])
   })
 
   it('never records a control sequence a brush could draw or insert', async () => {

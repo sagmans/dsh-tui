@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createDeferredNotice } from '../../src/settings-notice.ts'
+import { createDeferredNotice } from '@/settings-notice.ts'
 
 describe('createDeferredNotice', () => {
   it('prints a notice straight away once the screen owns the output', () => {

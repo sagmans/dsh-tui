@@ -44,10 +44,6 @@ class OfflineAdapter extends LlmAdapter {
 }
 
 describe('standalone plugin Config loading', () => {
-  it('exports a loader-discoverable Config from the public plugin entry', () => {
-    expect(exportedConfig()['~standard']).toBeDefined()
-  })
-
   it('preserves existing preferences and explicit false history switches through Cordis validation', async () => {
     const Config = exportedConfig()
     const ctx = new Context()

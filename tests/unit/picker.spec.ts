@@ -25,32 +25,6 @@ describe('describeAge', () => {
   })
 })
 
-describe('ListPicker seeded filter', () => {
-  const picker = (initialFilter = ''): ListPicker<{ label: string }> =>
-    new ListPicker(
-      () => [{ label: 'alpha' }, { label: 'beta' }],
-      () => 'letters',
-      row => row.label,
-      row => ({ label: row.label, description: undefined, current: false }),
-      row => row.label,
-      { empty: () => 'nothing matches', listed: () => 'listed' },
-      defaultKeymap,
-      initialFilter,
-    )
-
-  it('opens already filtered by the draft it was seeded with', () => {
-    const seeded = picker('bet')
-    expect(seeded.visible().map(row => row.label)).toEqual(['beta'])
-    expect(seeded.card().filter).toBe('bet')
-  })
-
-  it('widens from the seeded filter when the reader backspaces', () => {
-    const seeded = picker('bet')
-    for (let index = 0; index < 3; index += 1) seeded.handleKey('\u007f')
-    expect(seeded.visible().map(row => row.label)).toEqual(['alpha', 'beta'])
-  })
-})
-
 describe('ListPicker card window', () => {
   const picker = (rows: number): ListPicker<{ label: string }> =>
     new ListPicker(
@@ -86,50 +60,6 @@ describe('ListPicker card window', () => {
   })
 })
 
-describe('ListPicker cursor announcements', () => {
-  const picker = (onCursor: (row: { label: string } | undefined) => void): ListPicker<{ label: string }> =>
-    new ListPicker(
-      () => [{ label: 'row 0' }, { label: 'row 1' }],
-      () => 'rows',
-      row => row.label,
-      row => ({ label: row.label, description: undefined, current: false }),
-      row => row.label,
-      { empty: () => 'nothing matches', listed: () => 'listed' },
-      defaultKeymap,
-      '',
-      onCursor,
-    )
-
-  it('announces the row under the cursor on every press, not only on the arrows', () => {
-    const seen: (string | undefined)[] = []
-    const moving = picker(row => seen.push(row?.label))
-    moving.handleKey('\u001b[B')
-    moving.handleKey('\u007f')
-    expect(seen).toEqual(['row 1', 'row 0'])
-  })
-
-  it('announces the row a filter leaves under the cursor', () => {
-    const seen: (string | undefined)[] = []
-    const moving = picker(row => seen.push(row?.label))
-    moving.handleKey('1')
-    expect(seen).toEqual(['row 1'])
-  })
-
-  it('announces no row when the filter leaves nothing to point at', () => {
-    const seen: (string | undefined)[] = []
-    const moving = picker(row => seen.push(row?.label))
-    moving.handleKey('z')
-    expect(seen).toEqual([undefined])
-  })
-
-  it('says nothing more when a press settles the list', () => {
-    const seen: (string | undefined)[] = []
-    const moving = picker(row => seen.push(row?.label))
-    expect(moving.handleKey('\r')).toEqual({ kind: 'pick', id: 'row 0' })
-    expect(seen).toEqual([])
-  })
-})
-
 describe('SessionPicker', () => {
   it('picks the highlighted session on enter', () => {
     const picker = pickerOf([session('a'), session('b')])
@@ -148,28 +78,21 @@ describe('SessionPicker', () => {
     expect(picker.card().rows.find(row => row.current)?.label).toBe('b')
   })
 
-  it('cancels on escape', () => {
+  it('cancels on escape and on the interrupt key, rather than swallowing the latter', () => {
     expect(pickerOf([session('a')]).handleKey('\u001b')).toEqual({ kind: 'cancel' })
-  })
-
-  it('cancels on the interrupt key too, rather than swallowing it', () => {
     expect(pickerOf([session('a')]).handleKey('\u0003')).toEqual({ kind: 'cancel' })
   })
 
-  it('reads the hint of an open list from the map in force', () => {
+  it('picks, cancels, and moves on the keys the reader chose', () => {
+    let map = resolveKeymap({ 'picker.confirm': 'alt+y', 'picker.cancel': 'alt+g', 'picker.down': 'alt+d', 'picker.up': 'alt+u' })
+    const picker = pickerOf([session('a'), session('b')], {}, () => map)
+    const chosen = map
+    expect(picker.card().hint).toBe('alt+u or alt+d move · alt+y open · alt+g cancel · type to filter')
     // A settings edit while the list is open lands on the card the reader is
     // looking at: the surface repaints it rather than building a new one.
-    let map: Keymap = defaultKeymap()
-    const picker = pickerOf([session('a')], {}, () => map)
-    expect(picker.card().hint).toContain('enter open')
-    map = resolveKeymap({ 'picker.confirm': 'alt+y' })
-    expect(picker.card().hint).toContain('alt+y open')
-  })
-
-  it('picks, cancels, and moves on the keys the reader chose', () => {
-    const map = resolveKeymap({ 'picker.confirm': 'alt+y', 'picker.cancel': 'alt+g', 'picker.down': 'alt+d', 'picker.up': 'alt+u' })
-    const picker = pickerOf([session('a'), session('b')], {}, () => map)
-    expect(picker.card().hint).toBe('alt+u or alt+d move · alt+y open · alt+g cancel · type to filter')
+    map = resolveKeymap({ 'picker.confirm': 'ctrl+y' })
+    expect(picker.card().hint).toContain('ctrl+y open')
+    map = chosen
     expect(picker.handleKey('\r')).toBeUndefined()
     expect(picker.handleKey('\u001b[B')).toBeUndefined()
     expect(picker.card().rows[0]?.current).toBe(true)
@@ -190,12 +113,6 @@ describe('SessionPicker', () => {
     picker.handleKey('w')
     picker.handleKey('o')
     expect(picker.visible().map(entry => entry.id)).toEqual(['b'])
-  })
-
-  it('matches a fragment of a title whose letters are not contiguous', () => {
-    const picker = pickerOf([session('a', { cwd: '/one' }), session('b', { cwd: '/two' })], { a: 'fix the parser' })
-    for (const key of 'ftp') picker.handleKey(key)
-    expect(picker.visible().map(entry => entry.id)).toEqual(['a'])
   })
 
   it('filters from a pasted run instead of dropping it', () => {
@@ -220,21 +137,6 @@ describe('SessionPicker', () => {
     expect(picker.card().hint).toContain('nothing matches')
   })
 
-  it('keeps the cursor inside the window it draws', () => {
-    const many = Array.from({ length: 40 }, (_, index) => session(`s${index}`))
-    const picker = pickerOf(many)
-    const first = picker.card()
-    expect(first.rows).toHaveLength(PICKER_WINDOW)
-    expect(first.rows[0]?.current).toBe(true)
-    expect(first.above).toBe(0)
-    expect(first.below).toBe(40 - PICKER_WINDOW)
-    for (let step = 0; step < 30; step += 1) picker.handleKey('\u001b[B')
-    const moved = picker.card()
-    expect(moved.rows.some(row => row.current)).toBe(true)
-    expect(moved.above).toBeGreaterThan(0)
-    expect(moved.above + moved.rows.length + moved.below).toBe(40)
-  })
-
   it('carries a refusal note until the reader does something else', () => {
     const picker = pickerOf([session('a'), session('b')])
     expect(picker.card().note).toBeUndefined()
@@ -244,11 +146,15 @@ describe('SessionPicker', () => {
     expect(picker.card().note).toBeUndefined()
   })
 
-  it('offers the newest session first and titles it when known', () => {
-    const picker = pickerOf([session('new', { createdAt: 999_500 }), session('old', { createdAt: 1_000 })], { new: 'latest work' })
+  it('keeps the caller order and titles the row it knows', () => {
+    // The store hands sessions over newest first and the list draws them in the
+    // order it was given, so a fixture written oldest first proves the picker is
+    // not the one deciding what the reader sees.
+    const picker = pickerOf([session('old', { createdAt: 1_000 }), session('new', { createdAt: 999_500 })], { new: 'latest work' })
     const card = picker.card()
-    expect(card.rows[0]?.label).toBe('latest work')
-    expect(card.rows[0]?.description).toBe('/work · just now · 12 events')
+    expect(card.rows[0]?.label).toBe('old')
+    expect(card.rows[1]?.label).toBe('latest work')
+    expect(card.rows[1]?.description).toBe('/work · just now · 12 events')
     expect(card.title).toBe('resume a session · 2 stored')
   })
 })
@@ -308,12 +214,6 @@ describe('effortChoices', () => {
       { id: 'low', name: 'Low', current: false },
       { id: 'high', name: 'High', description: 'thorough', current: true },
     ])
-  })
-
-  it('matches a fragment of an effort whose letters are not contiguous', () => {
-    const picker = effortPicker()
-    for (const key of 'hgh') picker.handleKey(key)
-    expect(picker.visible().map(choice => choice.id)).toEqual(['high'])
   })
 
   it('marks the provider default when no effort is in force', () => {

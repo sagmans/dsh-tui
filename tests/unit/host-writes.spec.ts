@@ -75,20 +75,30 @@ describe('holdHostWrites', () => {
     guard.release()
     const flushed = screen.written.at(-1) ?? ''
     expect(flushed).toContain('67890')
-    expect(flushed).toContain(HOST_WRITE_DROPPED)
+    expect(flushed).toBe(`${HOST_WRITE_DROPPED} (1 writes)\n67890`)
     expect(flushed).not.toContain('12345')
   })
 
   it('gives every stream its own write back, exactly as it found it', () => {
     const screen = stream()
     const terminal = stream()
-    const before = screen.write
+    const before = Object.getOwnPropertyDescriptor(screen, 'write')
     const guard = holdHostWrites({ terminal, targets: [screen] })
-    expect(screen.write).not.toBe(before)
+    expect(screen.write).not.toBe(before?.value)
     guard.release()
-    expect(screen.write).toBe(before)
+    // The descriptor, not only the function: a stream that owned its write must
+    // end writable and enumerable exactly as it started.
+    expect(Object.getOwnPropertyDescriptor(screen, 'write')).toEqual(before)
     guard.release()
-    expect(screen.write).toBe(before)
+    expect(Object.getOwnPropertyDescriptor(screen, 'write')).toEqual(before)
+
+    // A write that came from the prototype was never the stream's own, so the
+    // restore has to remove this seam rather than pin the prototype's function.
+    const inherited = Object.create(stream()) as FakeStream
+    const inheritedGuard = holdHostWrites({ terminal: stream(), targets: [inherited] })
+    expect(Object.getOwnPropertyDescriptor(inherited, 'write')).toBeDefined()
+    inheritedGuard.release()
+    expect(Object.getOwnPropertyDescriptor(inherited, 'write')).toBeUndefined()
   })
 
   it('answers a host write the way the stream would have', () => {

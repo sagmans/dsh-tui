@@ -117,7 +117,12 @@ describe('ThemePicker preview', () => {
     expect(seen).toEqual([undefined])
   })
 
-  it('settles on the name of the row it is on', () => {
-    expect(picker(library(), 'mine').handleKey('\r')).toEqual({ kind: 'pick', id: 'mine' })
+  it('settles on the name of the row it is on, announcing nothing more', () => {
+    const seen: (string | undefined)[] = []
+    const settling = picker(library(), 'mine', theme => seen.push(theme?.name))
+    expect(settling.handleKey('\r')).toEqual({ kind: 'pick', id: 'mine' })
+    // A press that settles the list is not a move: the row was announced
+    // already, so the caller's preview is not spoken twice.
+    expect(seen).toEqual([])
   })
 })

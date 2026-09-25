@@ -116,8 +116,21 @@ describe('listWorkspaceFiles containment', () => {
       writeFileSync(join(root, 'a.ts'), '')
       writeFileSync(join(root, 'secret.env'), '')
       track(root, 'a.ts', '.gitignore')
+      // The index is the only source of truth for what is tracked, so an
+      // unreadable one lists nothing: a fallback walk would offer the very
+      // ignored files git was asked about.
       writeFileSync(join(root, '.git', 'index'), 'not an index')
       expect(await listWorkspaceFiles(root, signal)).toEqual([])
+      // A git that fails for any other reason gets the same answer, which is
+      // what separates a real failure from the one exit code that means the
+      // directory is simply not a repository. The fake git is a shell script on
+      // PATH, which is not how Windows finds git, so this leg runs only where
+      // that seam works.
+      if (process.platform !== 'win32') {
+        await withFakeGit('echo "fatal: something broke" >&2; exit 1', async () => {
+          expect(await listWorkspaceFiles(root, signal)).toEqual([])
+        })
+      }
     })
   it.skipIf(!hasGit)('lists a conflicted path once instead of once per index stage', async () => {
       const root = gitRepo()
@@ -125,16 +138,6 @@ describe('listWorkspaceFiles containment', () => {
       execFileSync('git', ['update-index', '--index-info'], { cwd: root, input: `${stages}\n` })
       const found = await listWorkspaceFiles(root, signal)
       expect(found.filter(entry => entry.path === 'a.ts')).toHaveLength(1)
-    })
-  it.skipIf(process.platform === 'win32')('does not walk a repository git cannot answer for', async () => {
-      const root = scratchDir()
-      mkdirSync(join(root, '.git'))
-      writeFileSync(join(root, '.gitignore'), 'secret.env\n')
-      writeFileSync(join(root, 'secret.env'), '')
-      writeFileSync(join(root, 'a.ts'), '')
-      await withFakeGit('echo "fatal: something broke" >&2; exit 1', async () => {
-        expect(await listWorkspaceFiles(root, signal)).toEqual([])
-      })
     })
   it.skipIf(process.platform === 'win32')('walks when git says the directory is not a repository', async () => {
       const root = scratchDir()

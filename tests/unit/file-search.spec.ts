@@ -5,8 +5,9 @@
 
 import { afterEach, describe, expect, it } from 'vitest'
 import { rmSync } from 'node:fs'
-import { atToken, atValue, rankFiles } from '@/input/file-search.ts'
-import { scratch, file, directory } from './fixtures/workspace.ts'
+import { createCompletionProvider } from '@/input/completion.ts'
+import { atToken, atValue, rankFiles, SUGGESTION_LIMIT } from '@/input/file-search.ts'
+import { scratch, file, directory, signal } from './fixtures/workspace.ts'
 
 afterEach(() => {
   for (const root of scratch.splice(0)) rmSync(root, { recursive: true, force: true })
@@ -65,9 +66,17 @@ describe('rankFiles', () => {
       const candidates = [file('src/app.ts'), directory('src/app')]
       expect(rankFiles('app', candidates, 20).map(entry => entry.path)).toEqual(['src/app', 'src/app.ts'])
     })
-  it('holds the list to the suggestions a menu can show', () => {
-      const candidates = Array.from({ length: 25 }, (_, index) => file(`src/file-${index}.ts`))
-      expect(rankFiles('file', candidates, 20)).toHaveLength(20)
+  it('holds the list to the suggestions a menu can show', async () => {
+      // The cap is the menu's own, so the rows are gathered through the provider
+      // the editor is handed rather than through the ranker's limit argument:
+      // the listing is longer than the cap, so nothing else can shorten it.
+      const candidates = Array.from({ length: SUGGESTION_LIMIT + 5 }, (_, index) => file(`src/file-${index}.ts`))
+      const provider = createCompletionProvider([], '/workspace', {
+        candidates: async () => candidates,
+        reachable: async () => true,
+      })
+      const found = await provider.getSuggestions(['@file'], 0, 5, { signal })
+      expect(found?.items).toHaveLength(SUGGESTION_LIMIT)
     })
   it('matches a path whose spaces were quoted', () => {
       const candidates = [file('docs/my file.md'), file('docs/other.md')]

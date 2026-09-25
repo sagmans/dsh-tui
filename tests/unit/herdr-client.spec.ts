@@ -3,7 +3,7 @@ import { createServer, type Server, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { acceptedTokens, createHerdrClient, socketEndpoint } from '@/herdr/client.ts'
+import { acceptedTokens, createHerdrClient } from '@/herdr/client.ts'
 import { HERDR_AGENT, HERDR_SOURCE, MAX_METADATA_VALUE_CHARS, METADATA_TOKENS } from '@/herdr/constants.ts'
 import type { HerdrEnvironment } from '@/herdr/client.ts'
 
@@ -170,12 +170,15 @@ describe('createHerdrClient', () => {
   })
 
   it('is inert away from Herdr and never dials', async () => {
-    const started = Date.now()
-    const client = createHerdrClient({ HERDR_ENV: '1', HERDR_SOCKET_PATH: '/nonexistent.sock' }, { timeoutMs: 5000 })
+    // A listener standing where the transport would dial is what makes "never
+    // dials" falsifiable: a connection attempt lands in its request log even
+    // though the report itself resolves without one.
+    const herdr = await listen(ok)
+    const client = createHerdrClient({ HERDR_ENV: '1', HERDR_SOCKET_PATH: herdr.path })
 
     expect(client.enabled).toBe(false)
     expect(await client.reportState({ state: 'idle', message: undefined, seq: 1, sessionId: undefined })).toBe(true)
-    expect(Date.now() - started).toBeLessThan(200)
+    expect(herdr.requests).toEqual([])
   })
 
   it('retries a report the server answered with an error', async () => {
@@ -320,37 +323,43 @@ describe('createHerdrClient', () => {
   })
 
   it('settles at once when the transport owes nothing', async () => {
-    const herdr = await listen(ok)
-    const client = createHerdrClient(env(herdr.path), { attempts: 1, timeoutMs: 60 })
+    // A listener that hangs up ends the attempt long before the report's 5s
+    // budget: a settle that waited on that budget rather than on the work still
+    // owed would be held here for seconds, which the bound below refuses.
+    const herdr = await listen(() => HANGUP)
+    const client = createHerdrClient(env(herdr.path), { attempts: 1, timeoutMs: 5_000 })
     const started = Date.now()
 
+    const report = client.reportState({ state: 'working', message: undefined, seq: 1, sessionId: undefined })
+    await new Promise(resolve => setTimeout(resolve, HANGUP_DELAY_MS + 20))
+    client.stop()
     await client.settle()
 
+    expect(await report).toBe(false)
     expect(Date.now() - started).toBeLessThan(1_000)
   })
 })
 
 describe('acceptedTokens', () => {
-  it('clears a token whose value is absent', () => {
-    expect(acceptedTokens({ dsh_session: 'x', dsh_cwd: undefined })).toEqual({ dsh_session: 'x', dsh_cwd: null })
-  })
-
-  it('clears a value too long to be held whole', () => {
-    // Herdr shortens what it cannot hold, and a shortened path reads as a
-    // different directory; clearing the token is the only honest answer.
-    const long = 'y'.repeat(MAX_METADATA_VALUE_CHARS + 1)
-    expect(acceptedTokens({ dsh_cwd: long, dsh_session: 'x' })).toEqual({ dsh_cwd: null, dsh_session: 'x' })
-  })
-
-  it('keeps a value at the limit', () => {
-    const exact = 'y'.repeat(MAX_METADATA_VALUE_CHARS)
-    expect(acceptedTokens({ dsh_cwd: exact })).toEqual({ dsh_cwd: exact })
-  })
-})
-
-describe('socketEndpoint', () => {
-  it('is the path itself where sockets are files', () => {
-    if (process.platform === 'win32') return
-    expect(socketEndpoint('/tmp/herdr.sock')).toBe('/tmp/herdr.sock')
+  it.each([
+    {
+      name: 'clears a token whose value is absent',
+      tokens: { dsh_session: 'x', dsh_cwd: undefined },
+      accepted: { dsh_session: 'x', dsh_cwd: null },
+    },
+    {
+      // Herdr shortens what it cannot hold, and a shortened path reads as a
+      // different directory; clearing the token is the only honest answer.
+      name: 'clears a value too long to be held whole',
+      tokens: { dsh_session: 'x', dsh_cwd: 'y'.repeat(MAX_METADATA_VALUE_CHARS + 1) },
+      accepted: { dsh_session: 'x', dsh_cwd: null },
+    },
+    {
+      name: 'keeps a value at the limit',
+      tokens: { dsh_cwd: 'y'.repeat(MAX_METADATA_VALUE_CHARS) },
+      accepted: { dsh_cwd: 'y'.repeat(MAX_METADATA_VALUE_CHARS) },
+    },
+  ])('$name', ({ tokens, accepted }) => {
+    expect(acceptedTokens(tokens)).toEqual(accepted)
   })
 })

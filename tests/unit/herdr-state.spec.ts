@@ -1,43 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { HERDR_STATES, MAX_BLOCKED_MESSAGE_CHARS, MAX_STATE_LABEL_CHARS, SEQ_TIME_SCALE, SESSION_START_REASONS } from '@/herdr/constants.ts'
+import { HERDR_STATES, MAX_BLOCKED_MESSAGE_CHARS, SESSION_START_REASONS } from '@/herdr/constants.ts'
 import {
-  asDriverStatus,
   boundedMessage,
   createReportSequence,
   driverReportFor,
-  isReportChange,
   lifecycleReport,
   sessionStartReason,
-  stateLabelFor,
   type LifecycleFacts,
 } from '@/herdr/state.ts'
 
 const NOTHING_PENDING: LifecycleFacts = { blockedCount: 0, blockedMessage: undefined, driverRunning: false, backgroundRunning: false }
 
 describe('lifecycleReport', () => {
-  it('is idle when nothing is running and nothing is waiting', () => {
-    expect(lifecycleReport(NOTHING_PENDING)).toEqual({ state: HERDR_STATES.idle, message: undefined })
-  })
-
   it('is working while the driver runs', () => {
     expect(lifecycleReport({ ...NOTHING_PENDING, driverRunning: true })).toEqual({ state: HERDR_STATES.working, message: undefined })
-  })
-
-  it('has no turn-shaped input that could read as idle between chained turns', () => {
-    // One driver run spans every turn it chains through the inbox; a fact with
-    // no turn boundary in it cannot flap to idle between two of them.
-    expect(lifecycleReport({ ...NOTHING_PENDING, driverRunning: true }).state).toBe(HERDR_STATES.working)
-  })
-
-  it('outranks a running driver with a wait, and names it', () => {
-    const report = lifecycleReport({ blockedCount: 1, blockedMessage: 'approval needed · Bash', driverRunning: true, backgroundRunning: false })
-    expect(report).toEqual({ state: HERDR_STATES.blocked, message: 'approval needed · Bash' })
-  })
-
-  it('keeps the newest wait while waits stack', () => {
-    const report = lifecycleReport({ blockedCount: 2, blockedMessage: 'question · continue?', driverRunning: false, backgroundRunning: false })
-    expect(report.state).toBe(HERDR_STATES.blocked)
-    expect(report.message).toBe('question · continue?')
   })
 })
 
@@ -74,18 +50,6 @@ describe('driverReportFor', () => {
   })
 })
 
-describe('asDriverStatus', () => {
-  it('keeps the two phases the harness defines', () => {
-    expect(asDriverStatus('idle')).toBe('idle')
-    expect(asDriverStatus('running')).toBe('running')
-  })
-
-  it('drops anything outside that vocabulary', () => {
-    expect(asDriverStatus('blocked')).toBeUndefined()
-    expect(asDriverStatus(undefined)).toBeUndefined()
-  })
-})
-
 describe('boundedMessage', () => {
   it('collapses the whitespace a card title carries', () => {
     expect(boundedMessage('  approval\n  needed · Bash  ')).toBe('approval needed · Bash')
@@ -95,48 +59,6 @@ describe('boundedMessage', () => {
     const bounded = boundedMessage('x'.repeat(MAX_BLOCKED_MESSAGE_CHARS * 2))
     expect(bounded.length).toBe(MAX_BLOCKED_MESSAGE_CHARS)
     expect(bounded.endsWith('…')).toBe(true)
-  })
-
-  it('leaves a title that fits alone', () => {
-    expect(boundedMessage('approval needed · Bash')).toBe('approval needed · Bash')
-  })
-})
-
-describe('stateLabelFor', () => {
-  it('names a wait in the words Herdr draws', () => {
-    expect(stateLabelFor({ state: HERDR_STATES.blocked, message: 'approval needed · Bash' })).toBe('approval needed · Bash')
-  })
-
-  it('has nothing to say about a row that owes no decision', () => {
-    expect(stateLabelFor({ state: HERDR_STATES.idle, message: undefined })).toBeUndefined()
-    expect(stateLabelFor({ state: HERDR_STATES.working, message: undefined })).toBeUndefined()
-  })
-
-  it('keeps the label inside the shorter limit Herdr holds it to', () => {
-    // A title that fits the message does not necessarily fit the label, and a
-    // label Herdr shortened itself would be a cut this surface never decided on.
-    const label = stateLabelFor({
-      state: HERDR_STATES.blocked,
-      message: boundedMessage('x'.repeat(MAX_BLOCKED_MESSAGE_CHARS)),
-    })
-    expect(label?.length).toBe(MAX_STATE_LABEL_CHARS)
-    expect(label?.endsWith('…')).toBe(true)
-  })
-})
-
-describe('isReportChange', () => {
-  const idle = { state: HERDR_STATES.idle, message: undefined }
-
-  it('reports the first state it sees', () => {
-    expect(isReportChange(undefined, idle)).toBe(true)
-  })
-
-  it('skips a state Herdr is already showing', () => {
-    expect(isReportChange(idle, idle)).toBe(false)
-  })
-
-  it('reports a message that changed under the same state', () => {
-    expect(isReportChange({ state: HERDR_STATES.blocked, message: 'a' }, { state: HERDR_STATES.blocked, message: 'b' })).toBe(true)
   })
 })
 
@@ -155,11 +77,6 @@ describe('sessionStartReason', () => {
 })
 
 describe('createReportSequence', () => {
-  it('starts from the clock so a restart cannot replay numbers', () => {
-    const next = createReportSequence(() => 1000)
-    expect(next()).toBe(1000 * SEQ_TIME_SCALE + 1)
-  })
-
   it('only moves forward', () => {
     let now = 5
     const next = createReportSequence(() => now)

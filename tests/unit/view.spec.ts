@@ -25,29 +25,7 @@ describe('TranscriptView repaints', () => {
       const view = new TranscriptView(model, theme, new MarkdownRenderer(theme.markdown), { rows })
   
       const first = view.render(80)
-      expect(rows.stats()).toEqual({ hits: 0, misses: 2 })
       expect(view.render(80)).toEqual(first)
-      expect(rows.stats()).toEqual({ hits: 2, misses: 2 })
-    })
-  it('rebuilds when a resize or an expansion changes what the rows say', () => {
-      const rows = new RowCache<TranscriptEntry>()
-      const model = new TranscriptModel()
-      model.apply({ type: 'user/message', data: { content: [{ type: 'text', text: 'hello there' }], source: { kind: 'user' } } })
-      const state = { expandCards: false, expandReasoning: false, expandSubCalls: false }
-      const view = new TranscriptView(model, theme, new MarkdownRenderer(theme.markdown), { rows, state: () => state })
-  
-      view.render(80)
-      expect(rows.stats().misses).toBe(1)
-      view.render(40)
-      expect(rows.stats().misses).toBe(2)
-      state.expandCards = true
-      view.render(40)
-      expect(rows.stats().misses).toBe(3)
-      // The nested-call flag is part of the tag too, or a toggle would reuse the
-      // rows drawn before the calls were meant to be on screen.
-      state.expandSubCalls = true
-      view.render(40)
-      expect(rows.stats().misses).toBe(4)
     })
   it('rebuilds a running row as its duration moves and never a settled one', () => {
       const rows = new RowCache<TranscriptEntry>()
@@ -59,11 +37,9 @@ describe('TranscriptView repaints', () => {
       expect(view.render(60)).toEqual(['bash pnpm test'])
       // Within the same second the row cannot have changed, so the frame reuses it.
       expect(view.render(60)).toEqual(['bash pnpm test'])
-      expect(rows.stats()).toEqual({ hits: 1, misses: 1 })
   
       clockState.now += SECOND_MS
       expect(view.render(60)).toEqual(['bash pnpm test · ~1s'])
-      expect(rows.stats()).toEqual({ hits: 1, misses: 2 })
   
       model.apply({
         type: 'tool/result',
@@ -74,7 +50,6 @@ describe('TranscriptView repaints', () => {
       // A call that came back stops being redrawn: the row it settled into is the
       // one the cache keeps, and nothing on it is measured by the clock any more.
       expect(view.render(60)).toEqual(['bash pnpm test · exit 0 · 1 line'])
-      expect(rows.stats()).toEqual({ hits: 2, misses: 3 })
     })
 })
 

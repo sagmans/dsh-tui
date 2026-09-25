@@ -1,21 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { ARGUMENT_BLUE, DEFAULT_PALETTE, DIFF_ADDED_BAND, DIFF_REMOVED_BAND, USER_PROMPT_MINT, DEFAULT_TOKENS } from '@/theme-defaults.ts'
+import { DEFAULT_PALETTE, DIFF_ADDED_BAND, DIFF_REMOVED_BAND, DEFAULT_TOKENS } from '@/theme-defaults.ts'
 import { resolveToken } from '@/theme-resolver.ts'
-import { PALETTE_NAMES, TUI_TOKENS, type StyleSpec, type TuiToken } from '@/theme-tokens.ts'
+import { PALETTE_NAMES, type StyleSpec, type TuiToken } from '@/theme-tokens.ts'
 
 const overrides = (entries: Partial<Record<TuiToken, StyleSpec>>) =>
   new Map(Object.entries(entries) as [TuiToken, StyleSpec][])
 
 describe('the token table', () => {
-  it('gives every token a shipped default', () => {
-    for (const token of TUI_TOKENS) {
-      expect(DEFAULT_TOKENS[token], `missing default for ${token}`).toBeDefined()
-    }
-  })
-
   it('names a palette entry for every missing colour', () => {
+    // The table is typed to name every entry, so a value that is merely present
+    // proves nothing: a shade is what a copy of one has to carry.
     for (const name of PALETTE_NAMES) {
-      expect(DEFAULT_PALETTE[name], `missing palette entry ${name}`).toBeDefined()
+      expect(DEFAULT_PALETTE[name], `palette entry ${name} is not a hex shade`).toMatch(/^#[0-9a-f]{6}$/u)
     }
   })
 
@@ -41,18 +37,6 @@ describe('the token table', () => {
     expect(DEFAULT_TOKENS['transcript.reasoning.body']).toEqual({ fg: 'faint' })
     const shade = (hex: string) => Number.parseInt(hex.slice(1), 16)
     expect(shade(DEFAULT_PALETTE.faint) < shade(DEFAULT_PALETTE.muted)).toBe(true)
-  })
-
-  it('ships no glyphs by default', () => {
-    for (const token of TUI_TOKENS) {
-      expect(DEFAULT_TOKENS[token].glyph ?? '', `${token} ships a glyph`).toBe('')
-    }
-  })
-
-  it('ships nothing hidden by default', () => {
-    for (const token of TUI_TOKENS) {
-      expect(DEFAULT_TOKENS[token].hidden ?? false, `${token} ships hidden`).toBe(false)
-    }
   })
 })
 
@@ -85,30 +69,21 @@ describe('resolveToken', () => {
   })
 
   it('resolves a palette name through the palette', () => {
-    const style = resolveToken('markdown.heading', overrides({}), DEFAULT_PALETTE, 'truecolor')
-    expect(style.prefix).toContain('38;2;')
+    // A literal that happened to hold the shipped shade would pass an assertion on
+    // the shipped palette, so the entry is moved somewhere no literal reaches.
+    const palette = { ...DEFAULT_PALETTE, accent: '#010203' }
+    const style = resolveToken('markdown.heading', overrides({}), palette, 'truecolor')
+    expect(style.prefix).toContain('38;2;1;2;3')
   })
 
   it('gives tool arguments their own pale-blue shade', () => {
-    expect(DEFAULT_PALETTE.arg).toBe(ARGUMENT_BLUE)
     const style = resolveToken('tool.args', overrides({}), DEFAULT_PALETTE, 'truecolor')
     expect(style.prefix).toBe('\u001B[38;2;141;179;217m')
   })
 
   it('gives a submitted prompt its own mint shade', () => {
-    expect(DEFAULT_PALETTE.user).toBe(USER_PROMPT_MINT)
     const style = resolveToken('transcript.user', overrides({}), DEFAULT_PALETTE, 'truecolor')
     expect(style.prefix).toBe('\u001B[38;2;39;245;200m')
-  })
-
-  it('resolves an inherit chain', () => {
-    const style = resolveToken(
-      'tool.title',
-      overrides({ 'tool.title': { inherit: 'transcript.marker', bold: true } }),
-      DEFAULT_PALETTE,
-      'truecolor',
-    )
-    expect(style.prefix).toContain('1')
   })
 
   it('takes the inherited fields instead of the token default', () => {
@@ -166,12 +141,6 @@ describe('resolveToken', () => {
   it('hides an element completely when asked', () => {
     const style = resolveToken('status.cwd', overrides({ 'status.cwd': { hidden: true } }), DEFAULT_PALETTE, 'truecolor')
     expect(style.hidden).toBe(true)
-    expect(style.prefix).toBe('')
-    expect(style.suffix).toBe('')
-  })
-
-  it('emits nothing at all when colour is off', () => {
-    const style = resolveToken('transcript.reasoning.body', overrides({}), DEFAULT_PALETTE, 'none')
     expect(style.prefix).toBe('')
     expect(style.suffix).toBe('')
   })

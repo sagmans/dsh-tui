@@ -181,38 +181,20 @@ describe('TranscriptModel nested PTC calls', () => {
       model.apply(start('other:ptc:1', 'read', { file_path: 'x.ts' }, 'other'))
       expect(model.entries()).toEqual([])
     })
-  it('keeps the nested calls when the result presenter declines', () => {
-      const presenter: ToolPresenter = {
-        call: name => ({ kind: 'generic', tool: name, title: name, detail: [], failed: false, totalLines: 0 }),
-        result: () => undefined,
-      }
+  it('marks a dispatched call in flight only until its dispatch log lands, and leaves it nothing to open', () => {
+      const presenter: ToolPresenter = { call: () => undefined, result: () => undefined }
       const model = new TranscriptModel(presenter)
-      model.apply(runCall)
-      model.apply(start('root:ptc:1', 'read', { file_path: 'x.ts' }))
-      model.apply(runResult)
-      const card = model.entries()[0]
-      expect(card?.kind === 'tool' && card.card.subCalls).toHaveLength(1)
-    })
-  it('marks a dispatched call in flight only until its dispatch log lands', () => {
-      const model = new TranscriptModel(recordingPresenter())
       model.apply(runCall)
       model.apply(start('root:ptc:1', 'read', { file_path: 'src/x.ts' }))
       // The start is logged before the call runs, so the row drawn from it is the
       // only sign a reader has that the program is waiting on this call.
       expect(subCallsOf(model).map(call => call.running)).toEqual([true])
-  
+
       model.apply(settle('root:ptc:1', 'read', { file_path: 'src/x.ts' }, false))
       expect(subCallsOf(model).map(call => call.running)).toEqual([false])
-    })
-  it('ends a dispatched call that answered with nothing to open', () => {
       // A call whose content the program discarded still settles: a row left
-      // saying it is running would outlive the program that dispatched it.
-      const presenter: ToolPresenter = { call: () => undefined, result: () => undefined }
-      const model = new TranscriptModel(presenter)
-      model.apply(runCall)
-      model.apply(start('root:ptc:1', 'read', { file_path: 'src/x.ts' }))
-      model.apply(settle('root:ptc:1', 'read', { file_path: 'src/x.ts' }, false))
-      expect(subCallsOf(model).map(call => call.running)).toEqual([false])
+      // saying it is running would outlive the program that dispatched it, and
+      // nothing it kept is there to open.
       expect(subCallsOf(model)[0]?.output).toBeUndefined()
     })
 })

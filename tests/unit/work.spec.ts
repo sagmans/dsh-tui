@@ -92,8 +92,14 @@ describe('WorkFold', () => {
   })
 
   it('ignores events that are not work state', () => {
-    const fold = foldWith({ type: 'turn/start', data: { turn: 1 } }, { type: 'todo/write', data: {} })
-    expect(fold.state().todos).toBeUndefined()
+    const fold = foldWith(
+      { type: 'todo/write', data: { todos: [{ content: 'one', status: 'pending' }] } },
+      { type: 'goal/change', data: { operation: 'create', roundsStarted: 2, goal: { objective: 'ship it', phase: 'active', maxGoalRounds: 256 } } },
+    )
+    const before = fold.state()
+    fold.apply({ type: 'message/delta', data: {} })
+    // An unhandled type has to leave the whole state alone, not just the list.
+    expect(fold.state()).toEqual(before)
   })
 })
 

@@ -21,14 +21,15 @@ describe('forkPoint', () => {
     expect(point?.boundarySeq).toBe(3)
   })
 
-  it('leaves an open turn behind', () => {
-    const events = [...turn(1, []), { type: 'turn/start', data: { turn: 2 } }, { type: 'user/message', data: {} }]
-    expect(forkPoint(events)?.inheritedEvents).toBe(4)
-  })
-
   it('keeps the trailing bookkeeping of the turn it cuts at', () => {
-    const events = [...turn(1, []), { type: 'session/title', data: { title: 'x' } }, { type: 'turn/start', data: { turn: 2 } }]
-    // The title belongs to the first turn and travels with it.
+    const events = [
+      ...turn(1, []),
+      { type: 'session/title', data: { title: 'x' } },
+      { type: 'turn/start', data: { turn: 2 } },
+      { type: 'user/message', data: {} },
+    ]
+    // The title belongs to the first turn and travels with it, while an open
+    // turn's own input is left behind with the turn it was never part of.
     expect(forkPoint(events)?.inheritedEvents).toBe(5)
   })
 

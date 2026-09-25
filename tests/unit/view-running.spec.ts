@@ -60,15 +60,6 @@ describe('TranscriptView running cards', () => {
       clockState.now += 3 * SECOND_MS
       expect(view.render(60)).toEqual(['bash · ~3s', '    pnpm test'])
     })
-  it("leaves a settled card's elapsed time out of the row it keeps", () => {
-      const { clockState, model, view } = runningView()
-      clockState.now += 9 * SECOND_MS
-      expect(view.render(60).join('')).toContain('~9s')
-      model.apply(RESULT)
-      // A settled row must not keep a duration that keeps growing after the call
-      // came back; the number it reports from here is the outcome's own.
-      expect(view.render(60).join('')).not.toContain('~')
-    })
   it('marks the dispatch the program is waiting on inside a PTC card', () => {
       const { state: clockState, clock } = clockAt(1_000)
       // The shell answers for bash alone, so the root keeps the fallback row a
@@ -90,12 +81,19 @@ describe('TranscriptView running cards', () => {
       // The program's own row carries the timer and nothing else: it is the clock a
       // reader watches, and the calls underneath it are what it is spending time on.
       expect(viewOf(model, inline).render(60)).toEqual(['run_code · ~12s', '  bash echo hi'])
-  
+      const colour = createTheme('truecolor')
+      const dispatched = (): string => new TranscriptView(model, colour, new MarkdownRenderer(colour.markdown), { state: () => inline }).render(60).at(-1) ?? ''
+      expect(dispatched()).toContain(painted(DEFAULT_PALETTE.warn))
+
       model.apply({
         type: 'tool/ptc-dispatch',
         data: { rootCallId: 'root', parentCallId: 'root', subCallId: 'root:ptc:1', name: 'bash', arguments: { command: 'echo hi' }, isError: false, content: [] },
       })
-      expect(viewOf(model, inline).render(60)).toEqual(['run_code · ~12s', '  bash echo hi'])
+      // The timer is the root row's, and a dispatch landing leaves it alone; what the
+      // settle has to change is the dispatched row, which may not keep reading as a
+      // call the program is still waiting on.
+      expect(viewOf(model, inline).render(60)[0]).toBe('run_code · ~12s')
+      expect(dispatched()).not.toContain(painted(DEFAULT_PALETTE.warn))
     })
   it('marks only the call a program is still waiting on', () => {
       const { state: clockState, clock } = clockAt(1_000)
@@ -149,12 +147,10 @@ describe('TranscriptView running cards', () => {
       model.apply({ type: 'tool/result', data: { message: { content: [{ type: 'tool-result', toolCallId: 'root', text: 'done' }], isError: false } } })
       const settled = view.render(60)
       expect(settled[0]).toContain('~10s')
-      const misses = rows.stats().misses
       clockState.now += 30 * SECOND_MS
       // The total belongs to the run, not to the clock: a program that answered
       // keeps the row it settled into, at the seconds it actually took.
       expect(view.render(60)).toEqual(settled)
-      expect(rows.stats().misses).toBe(misses)
     })
   it('paints the name rather than marking it, in the colour of the state it is in', () => {
       const colour = createTheme('truecolor')

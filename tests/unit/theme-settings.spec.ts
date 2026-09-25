@@ -128,18 +128,7 @@ describe('the dsh-tui settings section', () => {
 
   it('reports a refused section to the caller, not only to stderr', () => {
     const problems: string[] = []
-    const settings = readScope({ get: () => ({ tokens: { 'transcript.reasoning.bdy': { fg: '#fff' } } }) }, message => problems.push(message))
-    expect(settings).toEqual({
-      palette: {},
-      tokens: {},
-      subcalls: 'collapsed',
-      mermaid: 'streaming',
-      prefixes: ['ctrl+x'],
-      prefixWindow: 2,
-      keymap: defaultKeymap(),
-      history: { enabled: true, ghost: true, maxEntries: 2000 },
-      tools: defaultSettings().tools,
-    })
+    readScope({ get: () => ({ tokens: { 'transcript.reasoning.bdy': { fg: '#fff' } } }) }, message => problems.push(message))
     expect(problems[0]).toContain('transcript.reasoning.bdy')
   })
 
@@ -282,15 +271,6 @@ describe('the keys section', () => {
 })
 
 describe('a resolved section', () => {
-  it('does not report the schema fill-in as an override', () => {
-    // A registered scope hands back every declared key, empty ones included.
-    // Counting those as overrides blanked the shipped defaults and made
-    // /theme claim every element had been overridden.
-    const written = parseSettings({ tokens: { 'status.cwd': { fg: '#ff00ff' } } })
-    expect(Object.keys(written.tokens)).toEqual(['status.cwd'])
-    expect(written.tokens['status.model']).toBeUndefined()
-  })
-
   it('does not report the default palette as overridden', () => {
     const written = parseSettings({ palette: { muted: '#5c5c5c' } })
     expect(Object.keys(written.palette)).toEqual(['muted'])

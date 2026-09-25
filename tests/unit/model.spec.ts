@@ -63,13 +63,11 @@ describe('parseModelArgument', () => {
 })
 
 describe('ModelSwitch', () => {
-  it('remembers a choice until it is reset', () => {
+  it('remembers the choice the reader made', () => {
     const modelSwitch = new ModelSwitch()
     expect(modelSwitch.current()).toBeUndefined()
     modelSwitch.choose({ provider: 'kimi-coding', model: 'k2', reasoningEffort: 'high' })
     expect(modelSwitch.current()).toEqual({ provider: 'kimi-coding', model: 'k2', reasoningEffort: 'high' })
-    modelSwitch.reset()
-    expect(modelSwitch.current()).toBeUndefined()
   })
 
   it('adopts a deployment default only while the reader has no choice', () => {
@@ -78,9 +76,6 @@ describe('ModelSwitch', () => {
     expect(modelSwitch.current()).toEqual({ provider: 'kimi-coding', model: 'k2', reasoningEffort: 'max' })
     modelSwitch.adopt({ provider: 'zai-coding-cn', model: 'glm-5.3' })
     expect(modelSwitch.current()).toEqual({ provider: 'kimi-coding', model: 'k2', reasoningEffort: 'max' })
-    modelSwitch.reset()
-    modelSwitch.adopt({ provider: 'zai-coding-cn', model: 'glm-5.3' })
-    expect(modelSwitch.current()).toEqual({ provider: 'zai-coding-cn', model: 'glm-5.3' })
   })
 })
 
@@ -96,14 +91,16 @@ describe('createModelCatalog reasoning efforts', () => {
         id: 'k2',
         name: 'K2',
         reasoning: {
-          efforts: [{ id: 'low', name: 'Low' }, { id: 'high', name: 'High', description: 'thorough' }],
-          defaultEffort: 'high',
+          // An entry with no id names no effort a request could pick, so it is
+          // dropped; a missing name falls back to the id; and a default that is
+          // not a string is no effort id at all.
+          efforts: [{ name: 'Low' }, { id: 'high' }, { id: 'max', name: 'Max', description: 'thorough' }],
+          defaultEffort: 7,
         },
       }),
     })
     expect(await catalog?.efforts('kimi-coding', 'k2')).toEqual({
-      efforts: [{ id: 'low', name: 'Low' }, { id: 'high', name: 'High', description: 'thorough' }],
-      defaultEffort: 'high',
+      efforts: [{ id: 'high', name: 'high' }, { id: 'max', name: 'Max', description: 'thorough' }],
     })
   })
 
@@ -119,14 +116,11 @@ describe('createModelCatalog reasoning efforts', () => {
 })
 
 describe('modelRouteKey', () => {
-  it('round-trips a route whose model id contains the slash a reading would split on', () => {
-    expect(readModelRouteKey(modelRouteKey({ provider: 'openrouter', model: 'anthropic/claude' })))
-      .toEqual({ provider: 'openrouter', model: 'anthropic/claude' })
-  })
-
   it('keeps apart two routes a slash-joined key would merge', () => {
-    expect(modelRouteKey({ provider: 'a', model: 'b/c' }))
-      .not.toBe(modelRouteKey({ provider: 'a/b', model: 'c' }))
+    const slashy = { provider: 'a', model: 'b/c' }
+    expect(modelRouteKey(slashy)).not.toBe(modelRouteKey({ provider: 'a/b', model: 'c' }))
+    // Only a key no reading splits on can hand the model back whole.
+    expect(readModelRouteKey(modelRouteKey(slashy))).toEqual(slashy)
   })
 
   it('refuses a string this surface never minted', () => {

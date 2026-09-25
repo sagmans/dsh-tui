@@ -13,34 +13,7 @@ import { TranscriptView } from '@/ui/view.ts'
 import { theme, answerBar, COLLAPSED, viewOf } from './fixtures/transcript-view.ts'
 
 describe('TranscriptView picker', () => {
-  it('lists stored sessions with a cursor, a filter, and the keys that drive it', () => {
-      const picker: PickerCard = {
-        title: 'resume a session · 2 stored',
-        note: undefined,
-        rows: [
-          { label: 'fix the parser', description: '/work · 3m ago · 12 events', current: true },
-          { label: 'tui-session-b', description: '/tmp · 1d ago', current: false },
-        ],
-        filter: 'fix',
-        hint: '↑/ctrl+p or ↓/ctrl+n move · enter open · esc cancel · type to filter',
-        above: 2,
-        below: 3,
-      }
-      const view = new TranscriptView(new TranscriptModel(), theme, new MarkdownRenderer(theme.markdown), {
-        picker: () => picker,
-      })
-      const lines = view.render(80)
-      // No glyph by default: the picker's mark is a token now, and the shipped
-      // table ships none, so the heading is its words.
-      expect(lines).toContain('resume a session · 2 stored')
-      expect(lines).toContain('    filter: fix')
-      expect(lines).toContain('   ❯ fix the parser — /work · 3m ago · 12 events')
-      expect(lines).toContain('     tui-session-b — /tmp · 1d ago')
-      expect(lines).toContain('   … 2 newer')
-      expect(lines).toContain('   … 3 older')
-      expect(lines.some(line => line.includes('enter open'))).toBe(true)
-    })
-  it('folds the picker keys under a narrow screen instead of cutting the way out off', () => {
+  it('draws the picker the surface handed it', () => {
       const picker: PickerCard = {
         title: 'resume a session · 2 stored',
         note: undefined,
@@ -53,35 +26,11 @@ describe('TranscriptView picker', () => {
       const view = new TranscriptView(new TranscriptModel(), theme, new MarkdownRenderer(theme.markdown), {
         picker: () => picker,
       })
+      // The card's own rows and the fold of its keys belong to picker-card.spec.ts;
+      // what the view owns is drawing the card the surface handed it.
       const lines = view.render(40)
-      // The hint is how a reader learns to leave the list, so a narrow screen
-      // folds it rather than dropping the keys a press still answers.
-      const hint = lines.join(' ').replace(/\s+/gu, ' ')
-      expect(hint).toContain('esc/ctrl+c cancel')
-      expect(hint).toContain('type to filter')
-      for (const line of lines) expect(visibleWidth(line)).toBeLessThanOrEqual(40)
-    })
-  it('wraps the reason a pick was refused under the heading', () => {
-      const picker: PickerCard = {
-        title: 'resume a session · 1 stored',
-        note: 'session tui-session-a runs mode "cordis", so --preset standard does not apply; /preset standard switches it before its first turn',
-        rows: [{ label: 'tui-session-a', description: '/work · 3m ago', current: true }],
-        filter: '',
-        hint: '↑/ctrl+p or ↓/ctrl+n move · enter open · esc cancel · type to filter',
-        above: 0,
-        below: 0,
-      }
-      const view = new TranscriptView(new TranscriptModel(), theme, new MarkdownRenderer(theme.markdown), {
-        picker: () => picker,
-      })
-      const lines = view.render(60)
-      const heading = lines.findIndex(line => line.includes('resume a session'))
-      const row = lines.findIndex(line => line.includes('❯ tui-session-a'))
-      // A reason that does not fit has to keep going rather than be cut off.
-      const note = lines.slice(heading + 1, row).join(' ').replace(/\s+/gu, ' ')
-      expect(note).toContain('session tui-session-a runs mode "cordis"')
-      expect(note).toContain('switches it before its first turn')
-      expect(lines[heading + 1]?.length).toBeLessThanOrEqual(60)
+      expect(lines).toContain('resume a session · 2 stored')
+      expect(lines.join(' ').replace(/\s+/gu, ' ')).toContain('❯ fix the parser')
     })
 })
 

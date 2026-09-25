@@ -141,6 +141,7 @@ describe('createHerdrReporter', () => {
     // A settled decision must not keep naming the row: the reader would go
     // looking for a question that is already answered.
     expect(last.message).toBe('approval needed · Bash')
+    expect(labels(calls).at(-1)).toBe('approval needed · Bash')
 
     reporter.unblock(GATE_WAIT_KEY)
     expect((states(calls).at(-1) as StateReport).state).toBe('idle')
@@ -174,10 +175,14 @@ describe('createHerdrReporter', () => {
     const { calls, client } = recordingClient()
     const reporter = createHerdrReporter({ client, now: () => 1 })
 
-    reporter.unblock(GATE_WAIT_KEY)
     reporter.block(GATE_WAIT_KEY, 'approval needed · Bash')
+    reporter.unblock(QUESTION_WAIT)
 
-    expect((states(calls).at(-1) as StateReport).state).toBe('blocked')
+    // The gate's wait is still owed, and an end for a key nobody took must not
+    // mint a wait Herdr would then be told about: one state, still blocked.
+    expect(states(calls)).toEqual([
+      { state: 'blocked', message: 'approval needed · Bash', seq: 1001, sessionId: undefined },
+    ])
   })
 
   it('names the wait where Herdr can draw it, ahead of the state that needs the name', () => {
@@ -193,17 +198,6 @@ describe('createHerdrReporter', () => {
     expect(labels(calls)).toEqual(['approval needed · Bash', undefined])
     expect(calls.filter(call => call.kind === 'label' || call.kind === 'state').map(call => call.kind))
       .toEqual(['label', 'state', 'label', 'state'])
-  })
-
-  it('names the wait still owed while waits stack', () => {
-    const { calls, client } = recordingClient()
-    const reporter = createHerdrReporter({ client, now: () => 1 })
-
-    reporter.block(GATE_WAIT_KEY, 'approval needed · Bash')
-    reporter.block(QUESTION_WAIT, 'question · continue?')
-    reporter.unblock(QUESTION_WAIT)
-
-    expect(labels(calls).at(-1)).toBe('approval needed · Bash')
   })
 
   it('bounds the label to what Herdr holds whole', () => {
@@ -472,18 +466,14 @@ describe('releaseAgentSync', () => {
     ])
   })
 
-  it('does nothing away from Herdr', () => {
+  it.each([
+    { name: 'away from Herdr', env: { HERDR_PANE_ID: 'w3:p1' } },
+    { name: 'without a pane to release', env: { HERDR_ENV: '1', HERDR_SOCKET_PATH: '/tmp/unused.sock' } },
+    { name: 'without a socket to release through', env: { HERDR_ENV: '1', HERDR_PANE_ID: 'w3:p1' } },
+  ])('does nothing $name', ({ env }) => {
     const fake = fakeHerdrBinary()
 
-    releaseAgentSync({ HERDR_PANE_ID: 'w3:p1', HERDR_BIN_PATH: fake.bin, ARGV_SINK: fake.sink }, 1)
-
-    expect(fake.argv()).toEqual([])
-  })
-
-  it('does nothing without a pane to release', () => {
-    const fake = fakeHerdrBinary()
-
-    releaseAgentSync({ HERDR_ENV: '1', HERDR_SOCKET_PATH: '/tmp/unused.sock', HERDR_BIN_PATH: fake.bin, ARGV_SINK: fake.sink }, 1)
+    releaseAgentSync({ ...env, HERDR_BIN_PATH: fake.bin, ARGV_SINK: fake.sink }, 1)
 
     expect(fake.argv()).toEqual([])
   })

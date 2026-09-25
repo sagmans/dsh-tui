@@ -51,12 +51,17 @@ describe('ensurePrivateDirectory', () => {
   })
 
   it('accepts a sticky directory such as a shared temporary one', async () => {
-    const shared = join(scratch(), 'shared')
-    mkdirSync(shared, { recursive: true })
-    chmodSync(shared, 0o1777)
-    const directory = join(shared, 'stash')
-    await ensurePrivateDirectory(directory, 'stash directory')
-    expect(modeOf(directory)).toBe(0o700)
+    // A group member can rename an entry exactly as a stranger can, so the sticky
+    // bit is what makes a shared directory safe; one case is world-writable and
+    // one group-writable, and both have to land on the same answer.
+    for (const sharedMode of [0o1777, 0o1775]) {
+      const shared = join(scratch(), 'shared')
+      mkdirSync(shared, { recursive: true })
+      chmodSync(shared, sharedMode)
+      const directory = join(shared, 'stash')
+      await ensurePrivateDirectory(directory, 'stash directory')
+      expect(modeOf(directory)).toBe(0o700)
+    }
   })
 
   /**
@@ -86,13 +91,6 @@ describe('ensurePrivateDirectory', () => {
     await expect(ensurePrivateDirectory(join(shared, 'stash'), 'stash directory')).rejects.toThrow(
       /writable by other users/,
     )
-  })
-
-  it('accepts a group-writable ancestor that is sticky', async () => {
-    const shared = join(scratch(), 'shared')
-    mkdirSync(shared, { recursive: true })
-    chmodSync(shared, 0o1775)
-    await expect(ensurePrivateDirectory(join(shared, 'stash'), 'stash directory')).resolves.toBeUndefined()
   })
 
   /**

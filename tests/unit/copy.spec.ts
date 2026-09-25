@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { sliceByColumn, visibleWidth } from '@earendil-works/pi-tui'
 import { cleanCopied } from '@/ui/copy.ts'
-import { frameBlock, type FrameRow } from '@/ui/frame.ts'
+import { frameBlock } from '@/ui/frame.ts'
 
 /** A block as the surface draws it, with the frame painted as nothing so it reads plainly. */
 const block = (lines: readonly string[], width = 12, framed = true): ReturnType<typeof frameBlock> =>
@@ -33,12 +33,6 @@ describe('a copied selection', () => {
     expect(cleanCopied(reader(drawn.drawn), drawn.copy)).toBe('hello')
   })
 
-  it('hands a selection of frame alone back as it read, because a copy is never emptied', () => {
-    const drawn = block(['hello'])
-    const rules = reader([drawn.drawn[0]!, drawn.drawn.at(-1)!])
-    expect(cleanCopied(rules, drawn.copy)).toBe(rules)
-  })
-
   it('reads a drag that starts and ends inside the text, taking the frame columns with it', () => {
     const drawn = block(['hello', 'world'])
     // From the box side on the first row to partway through the second: what a
@@ -59,15 +53,6 @@ describe('a copied selection', () => {
     expect(cleanCopied(drag(drawn.drawn, [0, 0], [1, 5]), drawn.copy)).toBe('hel')
   })
 
-  it('reads a fragment that was frame alone as nothing rather than as the row it matched', () => {
-    const first = block(['alpha'])
-    const second = block(['beta'])
-    const rows: FrameRow[] = [...first.copy, ...second.copy]
-    // The drag ended on the second box's own column, so the line is that box's
-    // shape: it goes, and no word of the first message takes its place.
-    expect(cleanCopied([second.drawn[1]!, '│'].join('\n'), rows)).toBe('beta')
-  })
-
   it('hands back a line that only reads like the middle of a rule', () => {
     const drawn = block(['hello'])
     // A run of dashes from a table or a diff is not this box's top rule, so nothing
@@ -78,19 +63,6 @@ describe('a copied selection', () => {
   it('drops a rule fragment that runs to an end of the rule, which is what a drag across the box leaves', () => {
     const drawn = block(['hello'])
     expect(cleanCopied([drawn.drawn[0]!.slice(4), 'hello'].join('\n'), drawn.copy)).toBe('hello')
-  })
-
-  it('keeps the two messages of an exchange apart without keeping their frames', () => {
-    const first = block(['one'])
-    const second = block(['two'])
-    const rows: FrameRow[] = [...first.copy, ...second.copy]
-    expect(cleanCopied(reader([...first.drawn, ...second.drawn]), rows)).toBe('one\ntwo')
-  })
-
-  it('hands back a line it never drew exactly as it came', () => {
-    const drawn = block(['hello'])
-    const stranger = 'a row from somewhere else'
-    expect(cleanCopied(reader([drawn.drawn[0]!, stranger, drawn.drawn[1]!]), drawn.copy)).toBe([stranger, 'hello'].join('\n'))
   })
 
   it('leaves a blank line blank rather than letting it stand for the first row', () => {

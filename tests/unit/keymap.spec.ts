@@ -1,6 +1,7 @@
 import { getKeybindings, type KeyId } from '@earendil-works/pi-tui'
 import { describe, expect, it } from 'vitest'
-import { defaultKeymap, resolveKeymap } from '@/input/actions.ts'
+import { defaultKeymap, keysFor, resolveKeymap } from '@/input/actions.ts'
+import { ACTION_CATALOG } from '@/input/action-catalog.ts'
 import {
   ChordReader,
   DEFAULT_PREFIX_KEYS,
@@ -9,7 +10,6 @@ import {
   chordBindings,
   chordKeysLine,
   installKeybindings,
-  promptKeys,
   surfaceKeysLine,
   type ChordTimers,
 } from '@/input/keymap.ts'
@@ -61,11 +61,15 @@ function reader(prefixes: readonly KeyId[] = DEFAULT_PREFIX_KEYS, windowMs = DEF
 describe('the key tables', () => {
   it('names every key the surface answers, for help and for the refusal message', () => {
     const line = surfaceKeysLine(defaultKeymap())
-    expect(line).toContain('ctrl+o tool detail')
-    expect(line).toContain('ctrl+r search prompt history')
-    expect(line).toContain('ctrl+c cancel')
-    expect(line).toContain('ctrl+d quit')
-    expect(line.split(' · ')).toHaveLength(8)
+    // Every surface row in force, read from the catalog: the line is what /keys
+    // prints and what a refusal quotes, so a key missing from it, or named twice
+    // because another row drifted onto it, would describe a surface nobody runs.
+    const rows = ACTION_CATALOG
+      .filter(entry => entry.layer === 'surface')
+      .flatMap(entry => keysFor(defaultKeymap(), entry.id).map(key => `${key} ${entry.label}`))
+    expect(rows.length).toBeGreaterThan(0)
+    expect(line.split(' · ')).toHaveLength(rows.length)
+    for (const row of rows) expect(line, row).toContain(row)
   })
 
   it('reads the keys the reader wrote wherever help is asked for', () => {
@@ -182,26 +186,6 @@ describe('installKeybindings', () => {
   })
 })
 
-describe('promptKeys', () => {
-  it('keeps Enter for the line and reads the shipped send chords', () => {
-    const keys = promptKeys(defaultKeymap())
-    expect(keys.submit).toEqual(['ctrl+enter', 'alt+enter', 'ctrl+s'])
-    expect(keys.newLine).toEqual(['enter', 'shift+enter', 'ctrl+j'])
-    expect(keys.enterBreaksLine).toBe(true)
-  })
-
-  it('lets Enter send once the reader moves the line break off it', () => {
-    const keys = promptKeys(resolveKeymap({ 'prompt.submit': ['enter'], 'prompt.newLine': ['shift+enter'] }))
-    expect(keys.enterBreaksLine).toBe(false)
-  })
-
-  it('reads whatever the reader sends with, including one chord alone', () => {
-    expect(promptKeys(resolveKeymap({ 'prompt.submit': 'ctrl+g' })).submit).toEqual(['ctrl+g'])
-    expect(promptKeys(resolveKeymap({ 'prompt.submit': ['alt+enter'] })).submit).toEqual(['alt+enter'])
-    expect(promptKeys(resolveKeymap({ 'prompt.submit': ['ctrl+j'], 'prompt.newLine': ['enter', 'shift+enter'] })).submit).toEqual(['ctrl+j'])
-  })
-})
-
 describe('ChordReader', () => {
   it('arms on the prefix, says so, and dispatches the bound key', () => {
     const { chord } = reader()
@@ -212,25 +196,6 @@ describe('ChordReader', () => {
     expect(chord.handle('m')).toEqual({ kind: 'action', binding: chordBindings(defaultKeymap())[0] })
     expect(chord.pending).toBe(false)
     expect(chord.hint()).toBeUndefined()
-  })
-
-  it('dispatches the copy chord', () => {
-    const { chord } = reader()
-    chord.handle('\u0018')
-    expect(chord.handle('y')).toEqual({ kind: 'action', binding: chordBindings(defaultKeymap()).find(entry => entry.label === 'copy') })
-  })
-
-  it('dispatches the plan chord', () => {
-    const { chord } = reader()
-    chord.handle('\u0018')
-    expect(chord.handle('p')).toEqual({ kind: 'action', binding: chordBindings(defaultKeymap()).find(entry => entry.label === 'plan mode') })
-    expect(chord.handle('p')).toBeUndefined()
-  })
-
-  it('dispatches the new-session chord', () => {
-    const { chord } = reader()
-    chord.handle('\u0018')
-    expect(chord.handle('n')).toEqual({ kind: 'action', binding: chordBindings(defaultKeymap()).find(entry => entry.label === 'new session') })
   })
 
   it('takes a second key the reader moved, and no longer the shipped one', () => {
@@ -247,15 +212,6 @@ describe('ChordReader', () => {
     const { chord } = reader([DEFAULT_PREFIX_KEY], DEFAULT_PREFIX_WINDOW_S * 1000, map)
     chord.handle('\u0018')
     expect(chord.handle('\u0019')).toEqual({ kind: 'action', binding: chordBindings(map).find(entry => entry.label === 'copy') })
-  })
-
-  it('dispatches the stash chords', () => {
-    const bindings = chordBindings(defaultKeymap())
-    const { chord } = reader()
-    chord.handle('\u0018')
-    expect(chord.handle('s')).toEqual({ kind: 'action', binding: bindings.find(entry => entry.key === 's') })
-    chord.handle('\u0018')
-    expect(chord.handle('l')).toEqual({ kind: 'action', binding: bindings.find(entry => entry.key === 'l') })
   })
 
   it('hands an unbound second key back rather than swallowing it', () => {

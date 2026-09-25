@@ -4,12 +4,8 @@ import { LaunchUsageError, identityOf, resolveLaunchIntent, resumeHint } from '@
 const base = { mode: undefined, session: undefined, resumeFlag: undefined, newSession: undefined } as const
 
 describe('resolveLaunchIntent', () => {
-  it('mints a fresh session when nothing names one', () => {
-    expect(resolveLaunchIntent({ ...base })).toEqual({ resumeId: '', resumePicker: false, fresh: false })
-  })
-
   it('treats a bare --resume as a request for the picker', () => {
-    expect(resolveLaunchIntent({ ...base, resumeFlag: true })).toEqual({ resumeId: '', resumePicker: true, fresh: false })
+    expect(resolveLaunchIntent({ ...base, resumeFlag: true })).toEqual({ resumeId: '', resumePicker: true })
   })
 
   it('accepts an id from the flag or the positional form', () => {
@@ -37,11 +33,11 @@ describe('resolveLaunchIntent', () => {
 
 describe('identityOf', () => {
   it('resumes the named session and marks it as a resume', () => {
-    expect(identityOf({ resumeId: 'abc', resumePicker: false, fresh: false }, 'uuid')).toEqual({ id: 'abc', resume: true })
+    expect(identityOf({ resumeId: 'abc', resumePicker: false }, 'uuid')).toEqual({ id: 'abc', resume: true })
   })
 
   it('creates a fresh identity that embeds the generated uuid', () => {
-    expect(identityOf({ resumeId: '', resumePicker: false, fresh: true }, 'uuid')).toEqual({ id: 'tui-session-uuid', resume: false })
+    expect(identityOf({ resumeId: '', resumePicker: false }, 'uuid')).toEqual({ id: 'tui-session-uuid', resume: false })
   })
 })
 

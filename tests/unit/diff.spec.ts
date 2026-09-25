@@ -7,7 +7,6 @@ import {
   codeBlockLines,
   DIFF_EMPHASIS_MAX_GRAPHEMES,
   isDiffFence,
-  plainCodeLines,
   renderDiffBlock,
   type DiffLook,
   type FenceLook,
@@ -104,7 +103,6 @@ describe('a fenced diff', () => {
   it('keeps a fence of any other language exactly as the library draws it', () => {
     const active = createTheme('truecolor')
     const look = fenceLook(active)
-    expect(codeBlockLines('const a = 1', 'ts', look)).toEqual(plainCodeLines('const a = 1', look.plain))
     expect(codeBlockLines('const a = 1', 'ts', look)).toEqual(['const a = 1'])
     expect(codeBlockLines('const a = 1', undefined, look)).toEqual(['const a = 1'])
     // A language that merely starts the same way is not a diff either.

@@ -38,11 +38,11 @@ describe('sessionTitle', () => {
   })
 
   it('ignores a title that normalizes to nothing', () => {
-    expect(sessionTitle([{ type: 'session/title', data: { title: '   ' } }, user('first prompt')])).toBe('first prompt')
-  })
-
-  it('reads past events that are not messages', () => {
-    expect(sessionTitle([{ type: 'turn/start', data: { turn: 1 } }, user('hello')])).toBe('hello')
+    expect(sessionTitle([
+      { type: 'turn/start', data: { turn: 1 } },
+      { type: 'session/title', data: { title: '   ' } },
+      user('first prompt'),
+    ])).toBe('first prompt')
   })
 
   it('answers nothing for an empty log', () => {
@@ -63,7 +63,10 @@ const selected = (agentPreset: unknown): StoredEvent => ({ type: 'agent-preset/s
 
 describe('presetOfStoredSession', () => {
   it('reads the preset a session started with', async () => {
-    const history = storedHistory({ id: 's', agentPreset: 'ptc', eventCount: 2 })
+    // A selection is looked for in a tail window, so the header has to answer
+    // even when the log is far longer than that window.
+    const filler = Array.from({ length: PRESET_EVENT_LIMIT * 3 }, (_, index) => ({ type: 'turn/start', data: { turn: index } }))
+    const history = storedHistory({ id: 's', agentPreset: 'ptc', eventCount: filler.length }, filler)
     expect(await presetOfStoredSession(history, 's')).toBe('ptc')
   })
 
@@ -82,12 +85,6 @@ describe('presetOfStoredSession', () => {
       [...filler, selected('cordis')],
     )
     expect(await presetOfStoredSession(history, 's')).toBe('cordis')
-  })
-
-  it('keeps the header when a long log recorded no selection', async () => {
-    const filler = Array.from({ length: PRESET_EVENT_LIMIT * 3 }, () => ({ type: 'turn/start', data: {} }))
-    const history = storedHistory({ id: 's', agentPreset: 'minimal', eventCount: filler.length }, filler)
-    expect(await presetOfStoredSession(history, 's')).toBe('minimal')
   })
 
   it('answers nothing for a stored session that recorded no preset', async () => {

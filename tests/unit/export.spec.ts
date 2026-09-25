@@ -74,7 +74,9 @@ describe('transcriptToText', () => {
       type: 'tool/result',
       data: { message: { content: [{ type: 'tool-result', toolCallId: 'c1', text: Array.from({ length: 400 }, (_, i) => `row ${i}`).join('\n') }], isError: false } },
     })
-    expect(transcriptToText(model.entries())).toContain('more lines')
+    // The count is what says how much of the card the reader is missing, so an
+    // assertion that passes for any number proves nothing.
+    expect(transcriptToText(model.entries())).toContain('… 200 more lines')
   })
 
   it('dumps the reasoning body, not only its count', () => {

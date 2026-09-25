@@ -105,20 +105,11 @@ describe('shortPath', () => {
 })
 
 describe('usageTotals', () => {
-  it('reads the totals the token meter projects', () => {
-    const state = {
+  it('reads the totals the token meter projects and refuses any other shape', () => {
+    expect(usageTotals({
       totals: { uncachedInputTokens: 1_600, outputTokens: 3_100, cacheReadTokens: 8_700, cacheWriteTokens: 0 },
       last: { turn: 1, step: 1, buckets: {} },
-    }
-    expect(usageTotals(state)).toEqual({
-      uncachedInputTokens: 1_600,
-      outputTokens: 3_100,
-      cacheReadTokens: 8_700,
-      cacheWriteTokens: 0,
-    })
-  })
-
-  it('refuses a state that is not the projected shape', () => {
+    })).toEqual({ uncachedInputTokens: 1_600, outputTokens: 3_100, cacheReadTokens: 8_700, cacheWriteTokens: 0 })
     expect(usageTotals({ uncachedInputTokens: 1 })).toBeUndefined()
     expect(usageTotals(undefined)).toBeUndefined()
     expect(usageTotals({ totals: 'nope' })).toBeUndefined()
@@ -137,15 +128,6 @@ describe('cacheRate', () => {
     expect(cacheRate(undefined)).toBeUndefined()
   })
 
-  it('states the way back while another session is on screen', () => {
-    // The hint has to follow the map the reader has now rather than the one the
-    // session was opened under, so it is a fact of the row and not of the text.
-    expect(formatStatus(facts({ back: 'ctrl+g returns to this session' }), 200, theme)).toContain('ctrl+g returns to this session')
-    expect(formatStatus(facts(), 200, theme)).not.toContain('returns to this session')
-    // It leads the row with the chord, so a narrow terminal cuts the facts first.
-    expect(formatStatus(facts({ back: 'ctrl+g returns to this session' }), 30, theme)).toContain('ctrl+g returns')
-  })
-
   it('ignores counts a backend reported as something other than a number', () => {
     expect(cacheRate({ cacheReadTokens: '87', uncachedInputTokens: 13 })).toBeUndefined()
   })
@@ -156,6 +138,18 @@ describe('formatStatus', () => {
     expect(formatStatus(facts(), 200, theme)).toBe(
       '● ready · standard · deepseek-official/deepseek-chat (max) · workspace-write · ctx 12.4k/128k · cache 87% · ~/source/opensource/deepseek-harness/master',
     )
+    expect(formatStatus(facts({ agentPreset: 'minimal' }), 200, theme)).toBe(
+      '● ready · minimal · deepseek-official/deepseek-chat (max) · workspace-write · ctx 12.4k/128k · cache 87% · ~/source/opensource/deepseek-harness/master',
+    )
+  })
+
+  it('states the way back while another session is on screen', () => {
+    // The hint has to follow the map the reader has now rather than the one the
+    // session was opened under, so it is a fact of the row and not of the text.
+    expect(formatStatus(facts({ back: 'ctrl+g returns to this session' }), 200, theme)).toContain('ctrl+g returns to this session')
+    expect(formatStatus(facts(), 200, theme)).not.toContain('returns to this session')
+    // It leads the row with the chord, so a narrow terminal cuts the facts first.
+    expect(formatStatus(facts({ back: 'ctrl+g returns to this session' }), 30, theme)).toContain('ctrl+g returns')
   })
 
   it('shows how long the turn has been running', () => {
@@ -179,11 +173,6 @@ describe('formatStatus', () => {
       theme,
     )
     expect(line).toBe('● ready · ~/source/opensource/deepseek-harness/master')
-  })
-
-  it('states the mode before the model it applies to', () => {
-    const line = formatStatus(facts({ agentPreset: 'minimal' }), 200, theme)
-    expect(line.startsWith('● ready · minimal · deepseek-official/deepseek-chat')).toBe(true)
   })
 
   it('never overflows the row it was given', () => {

@@ -95,6 +95,7 @@ describe('the staged cursor', () => {
   })
 
   it('starts at the tip with nothing staged', () => {
-    expect(NO_UNDO).toEqual({ sessionId: undefined, hidden: 0, lastRestored: '' })
+    expect(hiddenTail(NO_UNDO, turns)).toBeUndefined()
+    expect(undoStep(NO_UNDO, turns)?.hidden).toBe(1)
   })
 })

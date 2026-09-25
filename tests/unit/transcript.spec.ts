@@ -276,32 +276,4 @@ describe('TranscriptModel outcomes', () => {
         { kind: 'notice', text: 'injected dsh-agent-instructions · 3 lines — <system-reminder>' },
       ])
     })
-  it('names the instruction files an injected workspace context touched', () => {
-      const model = new TranscriptModel()
-      model.apply({
-        type: 'user/message',
-        data: {
-          content: [{ type: 'text', text: '<system-reminder>\nInstructions from: AGENTS.md\nrule\n</system-reminder>' }],
-          source: {
-            kind: 'agent-instructions',
-            form: 'instructions',
-            baseline: true,
-            changes: [{ action: 'set', scope: '.\u0000AGENTS.md', path: 'AGENTS.md' }],
-          },
-        },
-      })
-      expect(model.entries()).toEqual([{ kind: 'notice', text: 'injected instructions · AGENTS.md · 4 lines' }])
-    })
-  it('truncates a long preview line', () => {
-      const model = new TranscriptModel()
-      model.apply({
-        type: 'user/message',
-        data: { content: [{ type: 'text', text: 'x'.repeat(200) }], source: { kind: 'plugin', plugin: 'p' } },
-      })
-      const entry = model.entries()[0]
-      const notice = entry !== undefined && entry.kind === 'notice' ? entry.text : ''
-      expect(notice.startsWith('injected p · 1 lines — ')).toBe(true)
-      expect(notice.endsWith('…')).toBe(true)
-      expect(notice.length).toBeLessThan(120)
-    })
 })

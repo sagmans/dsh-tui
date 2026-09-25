@@ -8,9 +8,7 @@ import {
   apply,
   foldReminder,
   inject,
-  missingListReminder,
   resolveTodoGuardConfig,
-  staleReminder,
   type OpenTodo,
   type TodoGuardConfig,
   type TodoListRead,
@@ -68,13 +66,20 @@ describe('TodoGuard', () => {
   })
 
   it('quotes the open items and the step count once stale', () => {
-    const guard = new TodoGuard(config({ staleSteps: 3 }))
+    const guard = new TodoGuard(config({ staleSteps: 3, previewItems: 2 }))
     const reminder = guard.observe(advanced(guard, 3), observation(listed([
       completed('done bit'),
       open('current bit', 'in_progress'),
+      open('second bit'),
+      open('third bit'),
     ])))
     expect(reminder?.text).toContain('current bit')
     expect(reminder?.text).not.toContain('done bit')
+    // Only previewItems are quoted; the rest is a count, so a long list cannot
+    // push the reminder past the row it rides on.
+    expect(reminder?.text).toContain('second bit')
+    expect(reminder?.text).not.toContain('third bit')
+    expect(reminder?.text).toContain('… 1 more')
     expect(reminder?.text).toContain('3 steps')
     expect(reminder?.summary).toBe('todos stale · 3 steps')
   })
@@ -132,7 +137,10 @@ describe('TodoGuard', () => {
   it('suggests a first list only after a turn runs long, and never over an empty write', () => {
     const guard = new TodoGuard(config({ missingListSteps: 2 }))
     const missing = advanced(guard, 2)
-    expect(guard.observe(missing, observation({ kind: 'absent' }))?.summary).toBe('todos missing · 2 steps')
+    const reminder = guard.observe(missing, observation({ kind: 'absent' }))
+    // The missing list has wording of its own, naming the steps that ran without one.
+    expect(reminder?.text).toContain('2 steps')
+    expect(reminder?.summary).toBe('todos missing · 2 steps')
     const cleared = advanced(guard, 2)
     expect(guard.observe(cleared, observation(listed([])))).toBeUndefined()
   })
@@ -141,19 +149,6 @@ describe('TodoGuard', () => {
     const guard = new TodoGuard(config({ staleSteps: 1, missingListSteps: 1 }))
     const session = advanced(guard, 4)
     expect(guard.observe(session, observation({ kind: 'unavailable' }))).toBeUndefined()
-  })
-
-  it('quotes at most previewItems and counts the rest', () => {
-    const reminder = staleReminder([open('one'), open('two'), open('three')], 6, 2)
-    expect(reminder.text).toContain('one')
-    expect(reminder.text).toContain('two')
-    expect(reminder.text).not.toContain('three')
-    expect(reminder.text).toContain('… 1 more')
-  })
-
-  it('has a distinct missing-list reminder', () => {
-    expect(missingListReminder(12).text).toContain('12 steps')
-    expect(missingListReminder(12).summary).toBe('todos missing · 12 steps')
   })
 })
 
@@ -188,9 +183,9 @@ describe('apply', () => {
   /** The two host surfaces the guard reads, wired the way Cordis wires them. */
   function fakeContext(
     state: { todos?: unknown; plan?: unknown },
-    options: { projections?: boolean; planThrows?: boolean } = {},
+    options: { planThrows?: boolean; todosThrows?: boolean } = {},
   ) {
-    const { projections = true, planThrows = false } = options
+    const { planThrows = false, todosThrows = false } = options
     const handlers = new Map<string, ((...args: unknown[]) => unknown)[]>()
     const ctx = {
       on(name: string, handler: (...args: unknown[]) => unknown) {
@@ -201,13 +196,13 @@ describe('apply', () => {
       },
       tools: { get: (name: string) => name === 'todo_write' ? {} : undefined },
       get(name: string) {
-        if (!projections) return undefined
         if (name !== 'sessionProjections') return undefined
         return {
           stateOf: (_session: unknown, key: string) => {
             // A throwing fold is the "cannot answer" case; `undefined` below is
             // the "key is not registered" case.
             if (key === 'plan' && planThrows) throw new Error('plan fold failed')
+            if (key === 'todos' && todosThrows) throw new Error('todos fold failed')
             return key === 'todos' ? state.todos : state.plan
           },
         }
@@ -258,8 +253,10 @@ describe('apply', () => {
     expect((await run(handlers, { session }, { isError: false, concludesTurn: true })).additionalContexts).toBeUndefined()
   })
 
-  it('stays silent when the projection registry is unavailable', async () => {
-    const { ctx, handlers } = fakeContext({}, { projections: false })
+  it('stays silent when the todos projection cannot answer', async () => {
+    // The registry is present and the plan key is simply not registered, so the
+    // only thing left that can silence this read is a todos unit that throws.
+    const { ctx, handlers } = fakeContext({}, { todosThrows: true })
     apply(ctx as unknown as Context, { staleSteps: 1, missingListSteps: 1 })
     const session = {}
     handlers.get('session/event')?.[0]?.(session, { type: 'step/start' })

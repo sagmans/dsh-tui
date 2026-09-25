@@ -31,27 +31,14 @@ describe('sanitizeSessionId', () => {
   it('keeps two long ids apart when only their tails differ', () => {
     const one = sanitizeSessionId(`tui-session-${LONG_ID}-one`)
     const two = sanitizeSessionId(`tui-session-${LONG_ID}-two`)
-    expect(Buffer.byteLength(one)).toBeLessThanOrEqual(200)
-    expect(Buffer.byteLength(two)).toBeLessThanOrEqual(200)
+    // An id made of many segments has to fit the same filename budget as one long
+    // segment, so the key stays openable however the id is shaped.
+    const segmented = sanitizeSessionId(
+      `tui-session-${Array.from({ length: 60 }, (_, index) => `part-${index}`).join('/')}`,
+    )
+    for (const key of [one, two, segmented]) expect(Buffer.byteLength(key)).toBeLessThanOrEqual(200)
     expect(one).not.toBe(two)
     expect(one).toMatch(DIGEST_PATTERN)
-  })
-
-  it('keeps a truncated label from taking a name a shorter id could own', () => {
-    const long = `tui-session-${LONG_ID}`
-    const truncated = sanitizeSessionId(long)
-    // A session whose own id is the truncated label is a different session, and
-    // must not find the long id's bank.
-    expect(sanitizeSessionId(truncated.replace(/^v2--/u, '').replaceAll('--', '/'))).not.toBe(truncated)
-  })
-
-  it('stays within a filename for an id far past the limit', () => {
-    const long = `tui-session-${Array.from({ length: 60 }, (_, index) => `part-${index}`).join('/')}`
-    expect(Buffer.byteLength(sanitizeSessionId(long))).toBeLessThanOrEqual(200)
-  })
-
-  it('is stable for the same session, so a resume finds the same bank', () => {
-    expect(sanitizeSessionId('tui-session-abc')).toBe(sanitizeSessionId('tui-session-abc'))
   })
 })
 

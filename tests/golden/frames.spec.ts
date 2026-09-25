@@ -4,7 +4,6 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { createTheme } from '@/theme.ts'
 import { WIDTHS, fixture, parkedStatus, mermaidFixture, markdownMessages, busyDock, queued, pickerCard, modelPickerCard, stashPickerCard, gateCard, runningFrame, dispatchedFrame } from './fixtures/frames.ts'
 
 
@@ -38,19 +37,18 @@ describe('golden frames', () => {
       it(`renders a busy dock at ${width} columns`, () => {
         expect(busyDock().render(width)).toMatchSnapshot()
       })
-  
-      it(`renders the session picker at ${width} columns`, () => {
-        expect(pickerCard().card()).toMatchSnapshot()
-      })
-  
-      it(`renders the model picker at ${width} columns`, () => {
-        expect(modelPickerCard().card()).toMatchSnapshot()
-      })
-  
-      it(`renders the stash picker at ${width} columns`, () => {
-        expect(stashPickerCard().card()).toMatchSnapshot()
-      })
     }
+  // A picker card is built for one width rather than the frame around it — card()
+  // takes no width — so the list is drawn once instead of looping over both.
+  it('renders the session picker at 80 columns', () => {
+      expect(pickerCard().card()).toMatchSnapshot()
+    })
+  it('renders the model picker at 80 columns', () => {
+      expect(modelPickerCard().card()).toMatchSnapshot()
+    })
+  it('renders the stash picker at 80 columns', () => {
+      expect(stashPickerCard().card()).toMatchSnapshot()
+    })
   for (const width of WIDTHS) {
       it(`renders a call that has not answered yet at ${width} columns`, () => {
         expect(runningFrame().render(width)).toMatchSnapshot()
@@ -64,13 +62,6 @@ describe('golden frames', () => {
   it('renders the status row with parked drafts at 80 columns', () => {
       expect(parkedStatus(3).render(80)).toMatchSnapshot()
     })
-  it('folds the same event log into identical rows, as a resume must', () => {
-      // A resume replays the durable events into a fresh fold, so the same log has
-      // to produce the same rows rather than a different order or an append.
-      const live = fixture().view.render(80)
-      const resumed = fixture().view.render(80)
-      expect(resumed).toEqual(live)
-    })
 })
 
 describe('a mermaid reply', () => {
@@ -79,9 +70,6 @@ describe('a mermaid reply', () => {
         expect(mermaidFixture().render(width)).toMatchSnapshot()
       })
     }
-  it('renders the diagram with its escapes', () => {
-      expect(mermaidFixture(createTheme('truecolor')).render(80)).toMatchSnapshot()
-    })
 })
 
 describe('markdown messages', () => {
@@ -90,7 +78,4 @@ describe('markdown messages', () => {
         expect(markdownMessages().render(width)).toMatchSnapshot()
       })
     }
-  it('renders the prompt and the thought with their escapes', () => {
-      expect(markdownMessages(createTheme('truecolor')).render(80)).toMatchSnapshot()
-    })
 })

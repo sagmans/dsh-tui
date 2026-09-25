@@ -5,11 +5,10 @@
 
 import { describe, expect, it } from 'vitest'
 import { stripTerminalSequences, visibleWidth } from '@earendil-works/pi-tui'
-import { cardOfCall, cardOfResult } from '@/cards/presenter.ts'
-import { contentLines, type ToolPresenter } from '@/cards.ts'
 import { createTheme } from '@/theme.ts'
 import { DEFAULT_PALETTE, DIFF_ADDED_BAND } from '@/theme-defaults.ts'
-import { TranscriptModel } from '@/transcript.ts'
+import type { TuiToken } from '@/theme-tokens.ts'
+import { TranscriptModel, type FoldableEvent } from '@/transcript.ts'
 import { MarkdownRenderer } from '@/ui/markdown.ts'
 import { TranscriptView } from '@/ui/view.ts'
 import { theme, COLLAPSED, viewOf, mouse } from './fixtures/transcript-view.ts'
@@ -41,22 +40,16 @@ describe('TranscriptView text', () => {
       expect(body).toContain('- one')
       expect(body).toContain('- two')
     })
-  it("closes a human prompt into the editor's own frame", () => {
+  const closedFrames: ReadonlyArray<[string, FoldableEvent]> = [
+    ['a human prompt', { type: 'user/message', data: { content: [{ type: 'text', text: 'hello there' }], source: { kind: 'user' } } }],
+    ['a reply', { type: 'assistant/message', data: { message: { content: [{ type: 'text', text: 'hello there' }] } } }],
+  ]
+  it.each(closedFrames)("closes %s into the editor's own frame", (_said, event) => {
       const model = new TranscriptModel()
-      model.apply({ type: 'user/message', data: { content: [{ type: 'text', text: 'hello there' }], source: { kind: 'user' } } })
-      // The box the editor and the queued prompts draw, so a submitted prompt reads
-      // as the object it was typed into rather than as one more paragraph.
-      expect(viewOf(model).render(40)).toEqual([
-        `╭${'─'.repeat(38)}╮`,
-        `│ hello there${' '.repeat(25)} │`,
-        `╰${'─'.repeat(38)}╯`,
-      ])
-    })
-  it('closes a reply into a frame of its own', () => {
-      const model = new TranscriptModel()
-      model.apply({ type: 'assistant/message', data: { message: { content: [{ type: 'text', text: 'hello there' }] } } })
-      // A reply is the other object of an exchange, so it is framed like the prompt
-      // that asked for it rather than left as one more paragraph of the transcript.
+      model.apply(event)
+      // The box the editor and the queued prompts draw, so both objects of an
+      // exchange read as the thing that was typed into rather than as paragraphs of
+      // the transcript.
       expect(viewOf(model).render(40)).toEqual([
         `╭${'─'.repeat(38)}╮`,
         `│ hello there${' '.repeat(25)} │`,
@@ -156,13 +149,6 @@ describe('TranscriptView text', () => {
       expect(drawn).toContain('```mermaid')
       expect(stripTerminalSequences(drawn)).not.toContain('**')
     })
-  it('wraps a long line to the width it was given', () => {
-      const model = new TranscriptModel()
-      model.apply({ type: 'user/message', data: { content: [{ type: 'text', text: 'x'.repeat(50) }], source: { kind: 'user' } } })
-      const lines = viewOf(model).render(20)
-      expect(lines.length).toBeGreaterThan(1)
-      for (const line of lines) expect(line.length).toBeLessThanOrEqual(20)
-    })
   it('wraps a long prompt inside its frame instead of cutting it', () => {
       const model = new TranscriptModel()
       model.apply({ type: 'user/message', data: { content: [{ type: 'text', text: 'x'.repeat(50) }], source: { kind: 'user' } } })
@@ -181,37 +167,20 @@ describe('TranscriptView text', () => {
 describe('TranscriptView markers', () => {
   it('sets a boundary row apart from what anyone said', () => {
       const model = new TranscriptModel()
+      model.apply({ type: 'user/message', data: { content: [{ type: 'text', text: 'hello there' }], source: { kind: 'user' } } })
       model.marker('compacted 12 events (≈3000 tokens)')
-      expect(viewOf(model).render(60)).toEqual(['compacted 12 events (≈3000 tokens)'])
+      model.apply({ type: 'assistant/message', data: { message: { content: [{ type: 'text', text: 'the answer' }] } } })
+      const lines = viewOf(model).render(60)
+      // The marker is bare text between two framed objects, and framing it would
+      // read as something one of them said.
+      const marker = lines.indexOf('compacted 12 events (≈3000 tokens)')
+      expect(marker).toBeGreaterThan(0)
+      expect(lines[marker - 1]?.startsWith('╰')).toBe(true)
+      expect(lines[marker + 1]?.startsWith('╭')).toBe(true)
     })
 })
 
 describe('TranscriptView expansion', () => {
-  /** A tool card of `rows` lines, from a tool that presents shell output only when asked. */
-    const withRows = (rows: number, name = 'read'): TranscriptModel => {
-      const lines = Array.from({ length: rows }, (_, index) => `row ${index}`)
-      const presenter: ToolPresenter = {
-        call: (toolName, argumentsJson) => cardOfCall(
-          toolName === 'bash'
-            ? { card: 'terminal', title: 'Run echo rows' }
-            : { card: 'generic', title: `Read ${argumentsJson}` },
-          toolName,
-        ),
-        result: (toolName, input) => cardOfResult(
-          toolName === 'bash'
-            ? { card: 'terminal', title: 'Run echo rows', output: contentLines(input.content).join('\n'), exitCode: 0 }
-            : { card: 'generic', title: `Read ${name}` },
-          { name: toolName, failed: input.isError, contentLines: contentLines(input.content) },
-        ),
-      }
-      const model = new TranscriptModel(presenter)
-      model.apply({ type: 'tool/call', data: { name, arguments: '{"path":"a.ts"}', callId: 'c1' } })
-      model.apply({
-        type: 'tool/result',
-        data: { message: { content: [{ type: 'tool-result', toolCallId: 'c1', text: lines.join('\n') }], isError: false } },
-      })
-      return model
-    }
   it('opens one clicked thought and leaves the other folded', () => {
       const model = new TranscriptModel()
       model.apply({
@@ -286,19 +255,28 @@ describe('TranscriptView theming', () => {
       model.apply({ type: 'user/message', data: { content: [{ type: 'text', text: 'hello there' }], source: { kind: 'user' } } })
       return model
     }
+  const replyModel = (): TranscriptModel => {
+      const model = new TranscriptModel()
+      model.apply({ type: 'assistant/message', data: { message: { content: [{ type: 'text', text: 'the answer' }] } } })
+      return model
+    }
+  const hiddenFrames: ReadonlyArray<[string, TuiToken, () => TranscriptModel, string]> = [
+    ['a prompt', 'transcript.user.border', userModel, ' \u001b[38;2;39;245;200mhello there\u001b[0m'],
+    ['a reply', 'transcript.assistant.border', replyModel, ' the answer'],
+  ]
   it('dresses a prompt in its mint shade without the weight', () => {
       const colour = createTheme('truecolor')
       const lines = new TranscriptView(userModel(), colour, new MarkdownRenderer(colour.markdown), { state: () => COLLAPSED }).render(40)
       expect(lines.join('\n')).toContain('\u001b[38;2;39;245;200mhello there\u001b[0m')
       expect(lines.join('\n')).not.toContain('\u001b[1;')
     })
-  it('draws a prompt bare when the frame is hidden', () => {
-      const bare = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['transcript.user.border', { hidden: true }]]) })
-      const lines = new TranscriptView(userModel(), bare, new MarkdownRenderer(bare.markdown), { state: () => COLLAPSED }).render(40)
+  it.each(hiddenFrames)('draws %s bare when its frame element is hidden', (_kind, token, model, expected) => {
+      const bare = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([[token, { hidden: true }]]) })
+      const lines = new TranscriptView(model(), bare, new MarkdownRenderer(bare.markdown), { state: () => COLLAPSED }).render(40)
       expect(lines).toHaveLength(1)
       // No frame, but the text keeps the column the frame's own air gave it, so a
-      // theme that hides the border does not move the prompt.
-      expect(lines[0]?.trimEnd()).toBe(' \u001b[38;2;39;245;200mhello there\u001b[0m')
+      // theme that hides the border does not move what it framed.
+      expect(lines[0]?.trimEnd()).toBe(expected)
     })
   it('keeps a submitted prompt framed when the editor border is hidden', () => {
       const colour = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['editor.border', { hidden: true }]]) })
@@ -330,16 +308,6 @@ describe('TranscriptView theming', () => {
       // #d6c29a, the shade the shipped table gives the reply's own frame.
       expect(lines[0]).toContain('38;2;214;194;154')
       expect(lines.at(-1)).toContain('38;2;214;194;154')
-    })
-  it('draws a reply bare when its frame element is hidden', () => {
-      const model = new TranscriptModel()
-      model.apply({ type: 'assistant/message', data: { message: { content: [{ type: 'text', text: 'the answer' }] } } })
-      const bare = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['transcript.assistant.border', { hidden: true }]]) })
-      const lines = new TranscriptView(model, bare, new MarkdownRenderer(bare.markdown), { state: () => COLLAPSED }).render(40)
-      expect(lines).toHaveLength(1)
-      // No frame, but the text keeps the column the frame's own air gave it, so a
-      // theme that hides the border does not move the reply.
-      expect(lines[0]?.trimEnd()).toBe(' the answer')
     })
   it('draws nothing for a hidden element', () => {
       const hidden = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['transcript.user', { hidden: true }]]) })

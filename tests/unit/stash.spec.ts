@@ -28,12 +28,19 @@ describe('stashing the editor draft', () => {
       expect(host.renders).toBeGreaterThan(0)
     })
   it('says so rather than writing an empty draft', async () => {
-      const host = new FakeHost()
-      const stash = bank(host)
-      host.editorText = '   \n  '
-      await stash.stashEditor()
-      expect(host.last()).toBe('nothing to stash')
-      expect(stash.entryCount).toBe(0)
+      // A blank argument names nothing, so the command falls back to the bar;
+      // whichever of the two is blank, nothing may be written.
+      for (const { bar, typed } of [
+        { bar: '   \n  ', typed: undefined },
+        { bar: '', typed: '   ' },
+      ] as const) {
+        const host = new FakeHost()
+        const stash = bank(host)
+        host.editorText = bar
+        await stash.stashEditor(typed)
+        expect(host.last()).toBe('nothing to stash')
+        expect(stash.entryCount).toBe(0)
+      }
     })
   it('stores a draft given on the command line and leaves the bar clear', async () => {
       const host = new FakeHost()
@@ -89,13 +96,6 @@ describe('stashing the editor draft', () => {
       await stash.stashEditor('the only copy')
       expect(host.editorText).toBe('the only copy')
       expect(host.last()).toContain('stash failed')
-    })
-  it('says nothing to stash when neither the command nor the bar holds one', async () => {
-      const host = new FakeHost()
-      const stash = bank(host)
-      await stash.stashEditor('   ')
-      expect(host.last()).toBe('nothing to stash')
-      expect(stash.entryCount).toBe(0)
     })
   /**
      * The draft is on disk, so reporting a failure would invite a retry that

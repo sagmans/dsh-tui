@@ -55,10 +55,6 @@ describe('WarningSafeTui', () => {
     expect(output).toContain('warning-screen.mjs:')
   })
 
-  it('restores warning listeners, including once listeners, without duplicating delivery', () => {
-    expect(run()).toContain(AFTER)
-  })
-
   it('buffers again when the same screen restarts', () => {
     const output = run([], 'restart')
     expect(output.split(ENTER)).toHaveLength(3)

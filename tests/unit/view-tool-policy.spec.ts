@@ -7,10 +7,9 @@ import { describe, expect, it } from 'vitest'
 import { visibleWidth } from '@earendil-works/pi-tui'
 import { cardOfCall, cardOfResult } from '@/cards/presenter.ts'
 import { contentLines, type ToolPresenter } from '@/cards.ts'
-import { CARD_SHELL_PREVIEW } from '@/cards/preview.ts'
 import { TranscriptModel } from '@/transcript.ts'
 import { TranscriptView } from '@/ui/view.ts'
-import { DEFAULT_TOOL_DISPLAY, toolDisplayTable } from '@/tool-display.ts'
+import { toolDisplayTable } from '@/tool-display.ts'
 import { COLLAPSED, viewOf, mouse } from './fixtures/transcript-view.ts'
 
 describe('TranscriptView tool display policy', () => {
@@ -65,13 +64,24 @@ describe('TranscriptView tool display policy', () => {
       const lines = view.render(60)
       expect(lines.filter(line => line.startsWith('    row '))).toEqual(['    row 23', '    row 24'])
       expect(lines.at(-1)).toBe('    … 23 earlier lines · ctrl+o shows more')
+      // A tail at least as wide as the output draws no hint: nothing was dropped.
+      const whole = viewOf(shell(3), COLLAPSED, undefined, toolDisplayTable({ bash: { output: 'tail', tail: 3 } }))
+      expect(whole.render(60)).toEqual(['bash Run echo rows · exit 0', '    row 0', '    row 1', '    row 2'])
     })
   it('ships the fold the settings document names, not a hard-coded one', () => {
       // The shipped default has to be the one the settings types describe, or a
       // reader who writes nothing gets a different screen than the docs promise.
       const view = viewOf(shell(3), COLLAPSED, undefined, toolDisplayTable())
       expect(view.render(60)).toEqual(['bash Run echo rows · exit 0 · 3 lines'])
-      expect(DEFAULT_TOOL_DISPLAY).toEqual({ collapsed: true, output: 'hidden', tail: CARD_SHELL_PREVIEW })
+      // A document that names a tail widens the same card, so the fold is the
+      // table's answer and not a constant the renderer keeps to itself.
+      const named = viewOf(shell(3), COLLAPSED, undefined, toolDisplayTable({ bash: { output: 'tail', tail: 2 } }))
+      expect(named.render(60)).toEqual([
+        'bash Run echo rows · exit 0 · 1 line',
+        '    row 1',
+        '    row 2',
+        '    … 1 earlier lines · ctrl+o shows more',
+      ])
     })
   it('toggles one clicked message and leaves its neighbour alone', () => {
       const view = viewOf(pair())

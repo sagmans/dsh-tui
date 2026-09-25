@@ -1,8 +1,8 @@
-import { chmodSync, cpSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { SKILL_UPDATE_COMMAND, describeSkillDrift, driftedSkillNames } from '@/install-skills.ts'
+import { SKILL_UPDATE_COMMAND, describeSkillDrift, driftedSkillNames, installBundledSkills } from '@/install-skills.ts'
 
 /**
  * A startup line earns its place by being true: a reader who sees it and runs
@@ -131,16 +131,17 @@ describe('bundled skill drift', () => {
   })
 
   it('reports the copy an install-skills --update run leaves behind as matching', () => {
-    const { home, bundled } = fixture()
-    installCopy(home, 'dsh-tui-dogfood', 'stale')
-    expect(describeSkillDrift(home, bundled)).toBeDefined()
+    // The round trip goes through the real installer over the packaged skill
+    // root: a fixture copy of the bundled tree would only prove the fixture.
+    const home = scratch('dsh-tui-drift-home-')
+    installBundledSkills(home)
+    writeFileSync(join(home, '.agents', 'skills', 'dsh-tui-dogfood', 'SKILL.md'), 'edited by the reader')
+    expect(describeSkillDrift(home)).toBeDefined()
 
     // The command the line names replaces the copy with the bundled tree, so
     // the very next start must find nothing to report.
-    const destination = join(home, '.agents', 'skills', 'dsh-tui-dogfood')
-    rmSync(destination, { recursive: true, force: true })
-    cpSync(join(bundled, 'dsh-tui-dogfood'), destination, { recursive: true })
+    installBundledSkills(home, true)
 
-    expect(describeSkillDrift(home, bundled)).toBeUndefined()
+    expect(describeSkillDrift(home)).toBeUndefined()
   })
 })
