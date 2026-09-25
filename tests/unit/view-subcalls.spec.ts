@@ -96,6 +96,40 @@ describe('TranscriptView nested PTC calls', () => {
       const lines = viewOf(foldedProgram(calls), INLINE).render(60)
       expect(lines).toContain('  … 1 more calls')
     })
+  it('opens a program from one click on its row, and folds it back the same way', () => {
+      const model = foldedProgram([
+        { name: 'read', args: { file_path: 'src/x.ts' } },
+        { name: 'bash', args: { command: 'git status' } },
+      ])
+      // No state of its own: this is the shipped default a fresh session reads.
+      const view = viewOf(model)
+      expect(view.render(60)).toEqual(['search the tree'])
+      // The one row a folded card has is the program's target, so it answers for
+      // the program: the calls arrive with the body they pushed down, and the
+      // reader asked for the work rather than for its parts.
+      expect(view.handleMouse(mouse('click', 'left', 0))).toEqual({ handled: true, render: true })
+      expect(view.render(60)).toEqual(['search the tree', '  read src/x.ts', '  bash git status · exit 0', '    done'])
+      // The same row takes the program back to the one row it started as.
+      view.handleMouse(mouse('click', 'left', 0))
+      expect(view.render(60)).toEqual(['search the tree'])
+      // A program holds no state a click cannot undo, so the two rows are the
+      // whole of what one row toggles between.
+      view.handleMouse(mouse('click', 'left', 0))
+      expect(view.render(60)).toEqual(['search the tree', '  read src/x.ts', '  bash git status · exit 0', '    done'])
+    })
+  it('leaves one program’s fold alone when another is clicked', () => {
+      const model = foldedProgram([{ name: 'read', args: { file_path: 'src/x.ts' } }])
+      // A second card, so the click on one has a neighbour to leave alone.
+      model.apply({ type: 'tool/call', data: { name: 'run_code', arguments: '{"description":"second"}', callId: 'root2' } })
+      model.apply({ type: 'tool/ptc-dispatch-start', data: { rootCallId: 'root2', parentCallId: 'root2', subCallId: 'root2:ptc:1', name: 'read', arguments: { file_path: 'src/z.ts' } } })
+      model.apply({ type: 'tool/result', data: { message: { content: [{ type: 'tool-result', toolCallId: 'root2', text: 'done' }], isError: false } } })
+      const view = viewOf(model)
+      expect(view.render(60)).toEqual(['search the tree', 'search the tree'])
+      view.handleMouse(mouse('click', 'left', 0))
+      expect(view.render(60)).toEqual(['search the tree', '  read src/x.ts', '    done', 'search the tree'])
+      view.handleMouse(mouse('click', 'left', 0))
+      expect(view.render(60)).toEqual(['search the tree', 'search the tree'])
+    })
   it('opens a dispatched shell call to the rows it printed', () => {
       const model = foldedProgram([
         { name: 'bash', args: { command: 'echo hi' }, content: 'hi\nthere' },

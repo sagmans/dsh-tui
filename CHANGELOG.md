@@ -26,6 +26,19 @@ breaking change, and a patch carries only fixes.
   provider-data directory to inherit from, so a reading no longer depends on
   which harness is installed.
 
+- A PTC program's dispatched calls start folded. One `run_code` card can
+  dispatch hundreds of calls, and the rows arrived by default whether or not a
+  reader was reading the program's work; the answer under them is what the card
+  is read for, and the calls are one click on the card's own header away.
+  `dsh-tui: subcalls: inline` starts a session with them drawn instead.
+
+### Added
+
+- A click on a PTC card's own header shows or hides the calls that card
+  dispatched, for that card alone: the rows travel with the card's own fold, so
+  one message opens and closes without moving every other program in the
+  session. `Ctrl+Y` still decides for all of them at once.
+
 ## [0.7.0] - 2026-09-25
 
 ### Added

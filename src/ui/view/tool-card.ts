@@ -15,7 +15,7 @@ import { type LiveCallState } from '../../transcript/tool-calls.ts'
 import { type ToolDisplaySpec } from '../../tool-display.ts'
 import { CARD_ROW_TOKEN, type TuiToken } from '../../theme-tokens.ts'
 import { type TuiTheme } from '../../theme.ts'
-import { type ViewState, type ClickSpan } from '../view.ts'
+import { type ClickSpan } from '../view.ts'
 
 /** A nested call is a signpost under its card, so it sits one step shallower than that card's detail. */
 const SUBCALL_INDENT = '  '
@@ -64,13 +64,22 @@ const DETAIL_INDENT = '    '
 
 export interface ToolCardsContext {
   readonly theme: TuiTheme
-  readonly state: () => ViewState
   readonly keymap: () => Keymap
   readonly toolDisplay: (tool: string) => ToolDisplaySpec
   readonly expansionOf: (entry: Extract<TranscriptEntry, { kind: 'tool' }>) => boolean
+  /**
+   * Whether this card draws the calls its program dispatched.
+   *
+   * Read per card rather than off {@link ViewState.expandSubCalls}, because the
+   * header of one card is a toggle for that card: a reader opens the program
+   * they are reading, and the key is still the one press for all of them.
+   */
+  readonly subCallsOpen: (entry: Extract<TranscriptEntry, { kind: 'tool' }>) => boolean
   readonly liveCall: (callId: string) => LiveCallState
   readonly cardOpenHint: () => string
   readonly toolKey: (id: string) => string | undefined
+  /** The key of the one card's own nested-call toggle, which only a card that dispatched calls draws. */
+  readonly subCallsKey: (id: string) => string | undefined
   readonly subCallKey: (parentId: string, id: string) => string
   readonly subCallOpen: (parentId: string, id: string) => boolean
 }
@@ -127,7 +136,9 @@ export class ToolCards {
       // The calls a program dispatched sit under the header whether the card is
       // open or folded: one line per call is what the card stands for, and hiding
       // them behind the card's own fold made a program's work invisible.
-      if (this.context.state().expandSubCalls) this.pushSubCalls(lines, entry, width, spans)
+      const nestedKey = card.subCalls === undefined ? undefined : this.context.subCallsKey(entry.id)
+      const nested = this.context.subCallsOpen(entry)
+      if (nested) this.pushSubCalls(lines, entry, width, spans)
       if (expanded && card.kind === 'terminal' && card.argument !== undefined && card.argument !== '' && this.context.theme.visible('tool.args')) {
         this.pushStyledWrapped(lines, this.context.theme.rich(card.argument, { token: 'tool.args', column: visibleWidth(DETAIL_INDENT) }), width, DETAIL_INDENT)
       }
@@ -159,8 +170,17 @@ export class ToolCards {
           lines.push(this.context.theme.style('tool.hint', this.context.theme.cut(`${DETAIL_INDENT}${hint}`, width, '')))
         }
       }
+      // A card that dispatched calls draws two targets over the rows it laid
+      // down: its header answers for those calls, and every row below it folds
+      // the card the way every other card folds. The call rows keep the tighter
+      // targets they draw for themselves, so opening one call still opens that
+      // call rather than hiding the list around it.
+      const body = lines.length
+      if (nestedKey !== undefined) {
+        spans.push({ key: nestedKey, start, end: nested ? body : lines.length, expanded: nested })
+      }
       const key = this.context.toolKey(entry.id)
-      if (key !== undefined) spans.push({ key, start, end: lines.length, expanded })
+      if (key !== undefined) spans.push({ key, start: nestedKey === undefined || !expanded ? start : body, end: lines.length, expanded })
     }
   /**
      * The calls one card dispatched, one entry each.
