@@ -72,6 +72,7 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
     "test": "vitest run",
+    "coverage": "vitest run --coverage",
     "test:release": "python3 -m unittest discover -s tests/release -p 'test_*.py'",
     "prepare": "npm run build",
     "prepack": "npm run build",
@@ -147,6 +148,7 @@
     "@deepseek-ai/dsh-user-approval": "0.1.5-rc.3",
     "@deepseek-ai/dsh-user-questions": "0.1.5-rc.3",
     "@types/node": "^24.0.0",
+    "@vitest/coverage-v8": "4.1.11",
     "node-pty": "1.1.0",
     "typescript": "^5.9.0",
     "vitest": "^4.1.0"

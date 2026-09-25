@@ -13,5 +13,13 @@ export default defineConfig({
     include: ['tests/**/*.spec.ts'],
     environment: 'node',
     reporters: 'dot',
+    coverage: {
+      provider: 'v8',
+      // Only the shipped plugin counts: specs, fixtures, and tooling would
+      // otherwise inflate the number the audit judges.
+      include: ['src/**/*.ts'],
+      reporter: ['text-summary', 'json-summary'],
+      reportsDirectory: 'coverage',
+    },
   },
 })
