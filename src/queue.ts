@@ -50,7 +50,7 @@ function textOf(message: Record<string, unknown>): string {
 }
 
 /** The reader's own prompts still waiting in one inbox projection state. */
-export function promptsOf(state: unknown): readonly string[] {
+function promptsOf(state: unknown): readonly string[] {
   const inbox = asRecord(state)
   if (inbox === undefined) return []
   const prompts: string[] = []

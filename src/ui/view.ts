@@ -1,4 +1,4 @@
-import { RowCache, type RowCacheStats } from './rows.ts'
+import { RowCache } from './rows.ts'
 import { type PickerCard } from './picker.ts'
 import { pickerCardLines } from './picker-card.ts'
 import { ANSWER_FACE, type MarkdownRenderer } from './markdown.ts'
@@ -226,10 +226,6 @@ private get viewState(): ViewState {
     }
     this.clicked.set(span.key, !span.expanded)
     return { handled: true, render: true }
-  }
-/** The cache's own account of the work it avoided; a test reads this. */
-  rowStats(): RowCacheStats {
-    return this.rows.stats()
   }
 invalidate(): void {
     // The rows are keyed by width and expansion state, so a real change misses

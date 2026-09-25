@@ -73,13 +73,8 @@ interface CommandRegistry {
  * mistakes and changes interaction semantics, so an unattended invocation
  * fails loud instead: a caller that wants one-shot output uses headless mode.
  */
-export function assertInteractiveTerminal(input: {
-  readonly stdinIsTTY?: boolean
-  readonly stdoutIsTTY?: boolean
-} = {}): void {
-  const stdin = input.stdinIsTTY ?? process.stdin.isTTY === true
-  const stdout = input.stdoutIsTTY ?? process.stdout.isTTY === true
-  if (!stdin || !stdout) {
+export function assertInteractiveTerminal(): void {
+  if (process.stdin.isTTY !== true || process.stdout.isTTY !== true) {
     throw new Error('dsh-tui: both stdin and stdout must be TTYs; run this profile from a terminal or SSH session')
   }
 }

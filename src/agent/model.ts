@@ -168,17 +168,6 @@ export class ModelSwitch {
     if (this.selection.current !== undefined) return
     this.choose(choice)
   }
-
-  /** Forget the choice, so the session returns to the composition default. */
-  reset(): void {
-    this.selection.current = undefined
-    this.selection.assembled = undefined
-  }
-
-  dispose(): void {
-    this.installed?.()
-    this.installed = undefined
-  }
 }
 
 /** The reasoning levels one exact route offers, described structurally. */

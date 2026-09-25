@@ -3,9 +3,8 @@ export type RestoreHook = () => void
 
 /** Registry that guarantees every registered hook runs exactly once. */
 export interface RestoreRegistry {
-  add(hook: RestoreHook): () => void
+  add(hook: RestoreHook): void
   restore(): void
-  readonly size: number
 }
 
 /**
@@ -24,13 +23,9 @@ export function createRestoreRegistry(): RestoreRegistry {
         // Registering after release means the owner is already gone; run it now
         // rather than silently keeping a mutation the terminal never reclaims.
         hook()
-        return () => {}
+        return
       }
       hooks.push(hook)
-      return () => {
-        const index = hooks.indexOf(hook)
-        if (index >= 0) hooks.splice(index, 1)
-      }
     },
     restore() {
       restored = true
@@ -42,9 +37,6 @@ export function createRestoreRegistry(): RestoreRegistry {
           // A failing hook must not prevent the remaining ones from running.
         }
       }
-    },
-    get size() {
-      return hooks.length
     },
   }
 }

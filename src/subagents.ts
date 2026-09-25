@@ -28,7 +28,7 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
 }
 
 /** Short form of a child session id: enough to tell two children apart. */
-export function shortId(id: string): string {
+function shortId(id: string): string {
   return id.length <= SHORT_ID_LENGTH ? id : id.slice(0, SHORT_ID_LENGTH)
 }
 
@@ -148,7 +148,7 @@ export function parseSubagentsArgument(argument: string): SubagentsCommand {
 }
 
 /** Names the most recent run, for a reader who just watched one start. */
-export const LAST_RUN = 'last'
+const LAST_RUN = 'last'
 
 /**
  * Find one run by exact id or unambiguous prefix.
