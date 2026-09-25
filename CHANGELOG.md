@@ -33,6 +33,11 @@ breaking change, and a patch carries only fixes.
 
 ### Changed
 
+- Prompt stashes now default to one bank per absolute working directory, so sessions
+  started in the same worktree can share drafts. Set `stash.scope: session` in the
+  TUI profile row to retain session-private banks; switching scopes leaves earlier
+  drafts in their original banks.
+
 - The default theme is `violet-orbit`. A document that names no theme drew
   `deepseek-blue`, which stays shipped and selectable by name; the port of pi's
   theme is now what a fresh session meets. The default is still a file a reader

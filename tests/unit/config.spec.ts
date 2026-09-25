@@ -38,14 +38,15 @@ describe('resolveConfig', () => {
       provider: undefined,
       preset: undefined,
       theme: undefined,
+      stashScope: 'path',
       color: true,
       bell: true,
     })
   })
 
   it('keeps explicit values', () => {
-    expect(resolveConfig({ sessionId: 'abc', resume: true, resumePicker: true, model: 'm', provider: 'p', preset: 'ptc', theme: 'violet-orbit', color: false, bell: false }))
-      .toEqual({ sessionId: 'abc', resume: true, resumePicker: true, model: 'm', provider: 'p', preset: 'ptc', theme: 'violet-orbit', color: false, bell: false })
+    expect(resolveConfig({ sessionId: 'abc', resume: true, resumePicker: true, model: 'm', provider: 'p', preset: 'ptc', theme: 'violet-orbit', stash: { scope: 'session' }, color: false, bell: false }))
+      .toEqual({ sessionId: 'abc', resume: true, resumePicker: true, model: 'm', provider: 'p', preset: 'ptc', theme: 'violet-orbit', stashScope: 'session', color: false, bell: false })
   })
 
   it('reads a theme pinned in the row config, and blank as absent', () => {
@@ -54,6 +55,15 @@ describe('resolveConfig', () => {
     // default theme rather than a theme named nothing.
     expect(resolveConfig({ sessionId: 'abc', theme: 'violet-orbit' }).theme).toBe('violet-orbit')
     expect(resolveConfig({ sessionId: 'abc', theme: '  ' }).theme).toBeUndefined()
+  })
+
+  it('rejects invalid stash scopes instead of silently sharing a different bank', () => {
+    expect(() => resolveConfig({ sessionId: 'abc', stash: { scope: 'worktree' } })).toThrow(TuiConfigError)
+    expect(() => resolveConfig({ sessionId: 'abc', stash: { scope: 1 } })).toThrow(TuiConfigError)
+    expect(() => resolveConfig({ sessionId: 'abc', stash: 'session' })).toThrow(TuiConfigError)
+    expect(() => resolveConfig({ sessionId: 'abc', stash: { scpoe: 'session' } })).toThrow(TuiConfigError)
+    expect(() => resolveConfig(Config({ sessionId: 'abc', stash: { scpoe: 'session' } }))).toThrow(TuiConfigError)
+    expect(() => resolveConfig({ sessionId: 'abc', stash: null })).toThrow(TuiConfigError)
   })
 
   it('treats blank optional strings as absent', () => {

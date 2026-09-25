@@ -87,9 +87,10 @@ const ROSTER_DEFAULT = 'ptc'
  * `theme` is pinned in a profile patch instead: a harness that keeps settings per
  * row has no document section to write a name into, so the row's own config is
  * where the choice travels — and deriving it from the startup service would
- * forward a flag this surface deliberately does not offer.
+ * forward a flag this surface deliberately does not offer. Stash scope also
+ * belongs to the profile row rather than the command-line startup service.
  */
-const ROW_ONLY_OPTIONS = ['theme']
+const ROW_ONLY_OPTIONS = ['theme', 'stashScope']
 
 /** The row list before the patch's single `insert:` block. */
 function patchHead(text: string): { id: string; disabled: boolean }[] {

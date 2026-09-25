@@ -1,4 +1,4 @@
-// StashStore: on-disk CRUD for stash entries, scoped to one session.
+// StashStore: on-disk CRUD for entries owned by one path or session.
 //
 // Entries are stored newest-first (`entries[0]` is `stash@{0}`), mirroring git's
 // index-0-is-tip convention. Every mutation re-reads the file inside an

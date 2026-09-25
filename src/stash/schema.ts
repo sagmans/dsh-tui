@@ -46,12 +46,11 @@ export interface StashEntry {
 export interface StashFile {
   readonly version: typeof STASH_SCHEMA_VERSION
   /**
-   * The exact session this bank belongs to.
+   * The exact bank owner, either a session id or an absolute directory.
    *
-   * The key alone cannot prove ownership: it is a flattened label that two
-   * sessions could once have shared. The exact id is compared on every read, so
-   * a file that belongs to another session is quarantined rather than read or
-   * deleted as this one's.
+   * The key alone cannot prove ownership: two distinct owners can share a
+   * flattened label. Comparing this id on every read prevents one bank from
+   * reading or deleting another bank's drafts.
    */
   readonly sessionId: string
   readonly createdAt: number

@@ -211,6 +211,7 @@ export function apply(ctx: Context, config: unknown): void {
     historyEnabled: appearance.historyEnabled,
     historyGhost: appearance.historyGhost,
     historyMaxEntries: appearance.historyMaxEntries,
+    stashScope: resolved.stashScope,
     theme,
     keymap: appearance.keymap,
     notice: message => sessionView.notice(message),

@@ -6,9 +6,10 @@
 // without a terminal and keeps the editor's own text rules — an expanded paste
 // and an empty bar — in exactly one place.
 
+import path from 'node:path'
 import { FileTooLargeError } from './stash/private-fs.ts'
 import { StashCommittedError } from './stash/lock.ts'
-import { resolveStashPaths, stashBaseDir } from './stash/paths.ts'
+import { DEFAULT_STASH_SCOPE, resolveStashPaths, stashBaseDir, type StashScope } from './stash/paths.ts'
 import type { ResolvedEntry } from './stash/schema.ts'
 import {
   loadStashStore,
@@ -24,6 +25,7 @@ const NO_DRAFTS_MESSAGE = 'no stashed drafts'
 const CORRUPT_RECOVERY_MESSAGE = 'corrupt stash data was quarantined to'
 const CORRUPT_RECOVERY_UNSYNCED_MESSAGE = ' (its directory could not be synced, so the copy may not survive a crash)'
 const SESSION_CHANGED_MESSAGE = 'the session changed; the stash stayed with the session it belonged to'
+const PATH_SESSION_CHANGED_MESSAGE = 'the session changed; the stash stayed with the directory it belonged to'
 
 const stashedMessage = (index: number): string => `Stashed [${index}]`
 const appliedMessage = (index: number): string => `Applied [${index}]`
@@ -55,7 +57,7 @@ export interface StashHost {
   editorIsAvailable(): boolean
   notice(message: string): void
   /** Ask the reader which entry to take, by id; undefined when they leave. */
-  pick(entries: readonly ResolvedEntry[], sessionLabel: string): Promise<string | undefined>
+  pick(entries: readonly ResolvedEntry[], bankLabel: string): Promise<string | undefined>
   /** Ask the reader to confirm clearing `count` drafts. */
   confirm(count: number): Promise<boolean>
   render(): void
@@ -72,6 +74,10 @@ export interface PromptStashOptions {
    * caller that re-reads it, because following the surface is its whole job.
    */
   readonly sessionId: () => string
+  /** Share a bank by absolute directory, or keep one bank per session. */
+  readonly scope?: StashScope | undefined
+  /** Override the working directory captured at construction; tests avoid changing process cwd. */
+  readonly directory?: string | undefined
   /** Override the storage root; tests keep it inside a scratch directory. */
   readonly baseDir?: string | undefined
   readonly now?: (() => number) | undefined
@@ -87,10 +93,12 @@ function describeFailure(error: unknown): string {
 
 export class PromptStash {
   private readonly baseDir: string
+  private readonly bankScope: StashScope
+  private readonly directory: string
   private readonly now: (() => number) | undefined
   private readonly write: StashWriter | undefined
   private store: StashStore | undefined
-  /** The session `store` was read for, so a switch can be told from a re-read. */
+  /** Bank identity prevents a session switch from showing another bank's count. */
   private scope: string | undefined
   private count = 0
   /** The queue a second command waits behind, so writes never interleave. */
@@ -101,24 +109,25 @@ export class PromptStash {
     private readonly options: PromptStashOptions,
   ) {
     this.baseDir = options.baseDir ?? stashBaseDir()
+    this.bankScope = options.scope ?? DEFAULT_STASH_SCOPE
+    this.directory = path.resolve(options.directory ?? process.cwd())
     this.now = options.now
     this.write = options.write
   }
 
-  /** How many drafts this session holds, as last read. */
+  /** How many drafts the active bank holds, as last read. */
   get entryCount(): number {
     return this.count
   }
 
   /**
-   * Read the bank of the session in force, so the status count is real before a
-   * command and after the surface moves to another session. A read creates
-   * nothing on disk, so a session that never stashes leaves no file behind.
+   * Read the bank in force, so the status count follows either selected scope.
+   * A read creates nothing on disk, so a bank without drafts leaves no file.
    */
   open(): Promise<void> {
     return this.enqueue(async () => {
       try {
-        await this.ensure(this.options.sessionId())
+        await (await this.ensure(this.options.sessionId())).refresh()
       } catch (error) {
         this.host.notice(describeFailure(error))
       }
@@ -174,7 +183,7 @@ export class PromptStash {
       // during the write, and a session switch moves the whole surface on.
       const current = this.isCurrentSession(sessionId)
       if (current && this.host.editorIsAvailable() && this.host.getEditorText() === text) this.host.setEditorText('')
-      this.host.notice(current ? (warning ?? stashedMessage(resolved.index)) : SESSION_CHANGED_MESSAGE)
+      this.host.notice(current ? (warning ?? stashedMessage(resolved.index)) : this.sessionChangedMessage())
     })
   }
 
@@ -219,7 +228,7 @@ export class PromptStash {
       // The list is handed each entry with the index the bank gives it, so the
       // row a reader picks and the selector they could have typed agree.
       const rows = store.entries.map((entry, index) => ({ entry, index }))
-      const picked = await this.host.pick(rows, sessionLabel)
+      const picked = await this.host.pick(rows, this.bankScope === 'path' ? this.directory : sessionLabel)
       if (picked === undefined) return
       await this.popFrom(store, sessionId, picked)
     })
@@ -331,18 +340,27 @@ export class PromptStash {
   }
 
   /**
-   * The store of one session, loaded on first use.
+   * The store of one bank, loaded on first use.
    *
-   * The session is passed in rather than read here: a command must act on the
-   * session the reader was on when they asked for it, even when the surface
-   * moves on before the queue reaches that command.
+   * Capture the session at submission so a queued command never retargets
+   * its bank after the surface moves to another session.
    */
   private async ensure(sessionId: string): Promise<StashStore> {
-    if (this.store !== undefined && this.scope === sessionId) return this.store
-    const store = await loadStashStore(resolveStashPaths(sessionId, this.baseDir), this.now, this.write)
+    const bankId = this.bankId(sessionId)
+    if (this.store !== undefined && this.scope === bankId) return this.store
+    const owner = this.bankScope === 'path' ? this.directory : sessionId
+    const store = await loadStashStore(resolveStashPaths(owner, this.baseDir, this.bankScope), this.now, this.write)
     this.store = store
-    this.scope = sessionId
+    this.scope = bankId
     return store
+  }
+
+  private sessionChangedMessage(): string {
+    return this.bankScope === 'path' ? PATH_SESSION_CHANGED_MESSAGE : SESSION_CHANGED_MESSAGE
+  }
+
+  private bankId(sessionId: string): string {
+    return `${this.bankScope}:${this.bankScope === 'path' ? this.directory : sessionId}`
   }
 
   private run(sessionId: string, operation: (store: StashStore) => Promise<void>): Promise<void> {
@@ -370,7 +388,7 @@ export class PromptStash {
    */
   private abandonIfMoved(sessionId: string): boolean {
     if (this.isCurrentSession(sessionId)) return false
-    this.host.notice(SESSION_CHANGED_MESSAGE)
+    this.host.notice(this.sessionChangedMessage())
     return true
   }
 
@@ -383,9 +401,8 @@ export class PromptStash {
   /** Publish the bank's size and any quarantine the last read produced. */
   private sync(): void {
     if (this.store !== undefined) {
-      // A store read for a session the surface has left is not the count to
-      // draw; the open that follows the switch publishes the right one.
-      this.count = this.scope === this.options.sessionId() ? this.store.entryCount : 0
+      // A store read for a bank the surface has left must not set its count.
+      this.count = this.scope === this.bankId(this.options.sessionId()) ? this.store.entryCount : 0
       const quarantine = this.store.takeQuarantine()
       if (quarantine !== undefined) {
         const durability = quarantine.syncFailed ? CORRUPT_RECOVERY_UNSYNCED_MESSAGE : ''

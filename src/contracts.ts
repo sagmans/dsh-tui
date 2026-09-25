@@ -35,6 +35,8 @@ export interface TuiStartup {
  * the launcher.
  */
 export interface TuiRowConfig extends TuiStartup {
+  /** Select a shared directory bank or a private session bank for parked drafts. */
+  readonly stashScope: import('./stash/paths.ts').StashScope
   /**
    * Theme the row pins, below the settings section and above the package default.
    *

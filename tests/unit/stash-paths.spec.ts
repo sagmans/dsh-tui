@@ -76,6 +76,15 @@ describe('resolveStashPaths', () => {
     expect(paths.file).toBe(`/base/${paths.key}.json`)
   })
 
+  it('keeps path banks separate from session banks even when their identifiers match', () => {
+    const directory = '/worktree/project'
+    const pathBank = resolveStashPaths(directory, '/base', 'path')
+    expect(pathBank.file).not.toBe(resolveStashPaths(directory, '/base', 'session').file)
+    expect(pathBank.file).toBe(resolveStashPaths(directory, '/base', 'path').file)
+    expect(pathBank.file).not.toBe(resolveStashPaths('/worktree/other', '/base', 'path').file)
+    expect(pathBank.key).toMatch(/^v3--/u)
+  })
+
   it('gives two sessions two files and one session one file', () => {
     expect(resolveStashPaths('a', '/base').file).not.toBe(resolveStashPaths('b', '/base').file)
     expect(resolveStashPaths('a', '/base').file).toBe(resolveStashPaths('a', '/base').file)

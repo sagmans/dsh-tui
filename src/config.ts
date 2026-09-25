@@ -1,4 +1,5 @@
 import { SessionId } from '@deepseek-ai/dsh-session'
+import { DEFAULT_STASH_SCOPE, STASH_SCOPES } from './stash/paths.ts'
 import z from '@deepseek-ai/schemastery'
 import { TuiSettingsSchema } from './theme-settings.ts'
 import type { TuiRowConfig } from './contracts.ts'
@@ -24,6 +25,7 @@ export const Config = z.object({
   preset: z.string(),
   color: z.boolean().default(true),
   bell: z.boolean().default(true),
+  stash: z.object({ scope: z.union([...STASH_SCOPES]).default(DEFAULT_STASH_SCOPE) }).default({ scope: DEFAULT_STASH_SCOPE }),
   ...Object.fromEntries(Object.entries(PREFERENCE_SCHEMA).map(([key, schema]) => {
     const field = new z((key === 'history' ? CONFIG_HISTORY : schema).toJSON())
     // False metadata makes source Loader silently skip ordinary config updates.
@@ -78,6 +80,17 @@ function optionalString(value: unknown, field: string): string | undefined {
   return trimmed === '' ? undefined : trimmed
 }
 
+function stashScope(value: unknown): typeof STASH_SCOPES[number] {
+  if (value === undefined) return DEFAULT_STASH_SCOPE
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new TuiConfigError('stash must be a mapping')
+  const unknown = Object.keys(value).filter(key => key !== 'scope')
+  if (unknown.length !== 0) throw new TuiConfigError(`unknown stash key: ${unknown.join(', ')}`)
+  const scope = Object.hasOwn(value, 'scope') ? (value as Record<string, unknown>).scope : undefined
+  if (scope === undefined) return DEFAULT_STASH_SCOPE
+  if (scope === 'path' || scope === 'session') return scope
+  throw new TuiConfigError('stash.scope must be path or session')
+}
+
 function optionalBoolean(value: unknown, field: string, fallback: boolean): boolean {
   if (value === undefined || value === null) return fallback
   if (typeof value !== 'boolean') throw new TuiConfigError(`${field} must be a boolean when present`)
@@ -104,6 +117,7 @@ export function resolveConfig(raw: unknown): TuiRowConfig {
     provider: optionalString(record.provider, 'provider'),
     preset: optionalString(record.preset, 'preset'),
     theme: optionalString(preferenceValue(record.theme), 'theme'),
+    stashScope: stashScope(record.stash),
     color: optionalBoolean(record.color, 'color', true),
     bell: optionalBoolean(record.bell, 'bell', true),
   }
