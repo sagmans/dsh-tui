@@ -159,14 +159,26 @@ export function createPresetChoice(ports: PresetChoicePorts): PresetChoice {
     const roster = ports.agentPresets
     const agent = ports.drivingAgent()
     if (roster === undefined || agent === undefined) return
+    let chosen: string
     try {
-      const chosen = await roster.select(agent.agent, id)
-      seat = chosen
-      // The durable selection is folded as a marker on the session it belongs
-      // to, so a reader watching a child has to come back to see it.
-      await ports.returnToDrivenSession()
+      chosen = await roster.select(agent.agent, id)
     } catch (error) {
       ports.notice(`could not switch the mode: ${error instanceof Error ? error.message : String(error)}`)
+      ports.render()
+      return
+    }
+    seat = chosen
+    // The durable selection is folded as a marker on the session it belongs
+    // to, so a reader watching a child has to come back to see it.
+    try {
+      await ports.returnToDrivenSession()
+    } catch (error) {
+      // The mode did move, so the notice has to say so: naming the switch here
+      // would send the reader hunting for a failure their next session already
+      // escaped.
+      ports.notice(
+        `the mode switched to "${chosen}", but the return to the driven session failed: ${error instanceof Error ? error.message : String(error)}`,
+      )
     }
     ports.render()
   }

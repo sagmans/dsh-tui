@@ -74,8 +74,6 @@ export interface StagedTurns {
   readonly stagedCutoff: () => number | undefined
   /** The cursor over this session's closed turns. */
   readonly cursor: () => UndoState
-  /** Whether an undo is settling an interrupt, so a second press cannot race it. */
-  readonly pending: () => boolean
   /**
    * The cursor at the tip of the session just opened.
    *
@@ -136,8 +134,9 @@ export function createStagedTurns(ports: StagedTurnPorts): StagedTurns {
    * turn/end; queued prompts are parked first because cancelling drops them.
    *
    * Returns undefined when the reader's words cannot be kept: a queue with no
-   * bank to park it in, or a turn that will not close. Both leave the cursor
-   * untouched, so the transcript keeps showing what the model actually saw; a
+   * bank to park it in, a park that fails, or a turn that will not close. All
+   * leave the cursor untouched, so the transcript keeps showing what the model
+   * actually saw; a
    * number is how many queued prompts were parked before the turn was stopped.
    */
   const settleForUndo = async (): Promise<number | undefined> => {
@@ -148,8 +147,18 @@ export function createStagedTurns(ports: StagedTurnPorts): StagedTurns {
       ports.render()
       return undefined
     }
+    // Park before the interrupt: cancelling the turn drops the queue, so a
+    // park that fails must refuse the undo while the words are still queued.
+    if (queued.length > 0) {
+      try {
+        await parkQueued(queued)
+      } catch {
+        ports.notice('could not park the queued prompts; undo cancelled')
+        ports.render()
+        return undefined
+      }
+    }
     ports.drivingAgent()?.interrupt()
-    if (queued.length > 0) await parkQueued(queued)
     if (ports.turnRunning() && !(await waitForTurnEnd(UNDO_TURN_SETTLE_MS))) {
       ports.notice('could not stop the turn; undo cancelled')
       ports.render()
@@ -161,6 +170,10 @@ export function createStagedTurns(ports: StagedTurnPorts): StagedTurns {
   const runUndoCommand = (): void => {
     if (pending) return
     pending = true
+    // A cursor counts one session's turns, so an undo that outlives a session
+    // switch must not write the old session's step into the new session's bar.
+    const pressedFor = ports.activeSession()
+    const overtaken = (): boolean => ports.activeSession() !== pressedFor
     void (async () => {
       if (ports.viewingChild()) {
         ports.notice('undo works on the session this terminal drives · ctrl+b comes back')
@@ -168,6 +181,7 @@ export function createStagedTurns(ports: StagedTurnPorts): StagedTurns {
         return
       }
       const turns = await currentTurns()
+      if (overtaken()) return
       if (cursor.hidden >= turns.length && !ports.turnRunning()) {
         ports.notice('nothing to undo')
         ports.render()
@@ -184,7 +198,9 @@ export function createStagedTurns(ports: StagedTurnPorts): StagedTurns {
       }
       const parked = await settleForUndo()
       if (parked === undefined) return
+      if (overtaken()) return
       const settledTurns = await currentTurns()
+      if (overtaken()) return
       const next = undoStep(cursor, settledTurns)
       if (next === undefined) {
         ports.notice('nothing to undo')
@@ -193,11 +209,13 @@ export function createStagedTurns(ports: StagedTurnPorts): StagedTurns {
       }
       if (holdsDraft) {
         await ports.parkPrompt(draft)
+        if (overtaken()) return
         ports.notice('the draft in the bar was parked in the stash')
       }
       cursor = next
       cut = hiddenTail(next, settledTurns)?.seedCount
       await redrawStaged()
+      if (overtaken()) return
       ports.writeDraft(next.lastRestored)
       // The parking count rides the undo notice: a notice of its own would be
       // replaced before the frame could show it.
@@ -215,6 +233,10 @@ export function createStagedTurns(ports: StagedTurnPorts): StagedTurns {
   }
 
   const runRedoCommand = (): void => {
+    // An undo that is still settling owns the cursor; a redo now would step
+    // the state that undo is about to replace, so it is dropped like a second
+    // undo press.
+    if (pending) return
     void (async () => {
       if (ports.viewingChild()) {
         ports.notice('redo works on the session this terminal drives · ctrl+b comes back')
@@ -286,7 +308,6 @@ export function createStagedTurns(ports: StagedTurnPorts): StagedTurns {
   return {
     stagedCutoff: () => cut,
     cursor: () => cursor,
-    pending: () => pending,
     sessionOpened: id => {
       cursor = resetUndo(id)
       cut = undefined

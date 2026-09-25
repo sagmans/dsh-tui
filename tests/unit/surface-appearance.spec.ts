@@ -22,15 +22,26 @@ const BROKEN_THEME = 'palette: [unclosed\n'
 const MS_PER_SECOND = 1000
 /** The refusal a theme choice gets when nothing on the host can own the section. */
 const WRITE_UNSUPPORTED = 'the settings service cannot write the section; the patch was not applied'
+/** Rounds a case re-makes a save for while the watcher has not reported it. */
+const SAVE_ROUNDS = 40
+/** Pause between those rounds, which together bound the wait at ten seconds. */
+const SAVE_ROUND_MS = 250
 /**
- * How long a case waits for the theme directory watcher to report a save.
+ * Re-makes a save until the directory watcher reports it.
  *
- * The watcher answers on the filesystem's schedule and debounces it, and the
- * suite runs its spec files in parallel, so the stopwatch a default bound makes
- * of an idle machine is a flake under load. This is a ceiling, not a duration
- * the case wants: a watcher that never reports still fails, just not on timing.
+ * The watcher answers on the filesystem's own schedule, and on a busy machine a
+ * single event can sit behind other IO for seconds — longer than any honest
+ * bound — while a repeated save is a fresh event every round. What the cases
+ * assert is that a save is read, not that one write's event wins a race with
+ * the scheduler.
  */
-const WATCH_SETTLE_MS = 5_000
+const saveUntil = async (file: string, body: string, read: () => boolean): Promise<void> => {
+  for (let round = 0; !read() && round < SAVE_ROUNDS; round += 1) {
+    writeFileSync(file, body)
+    await new Promise(resolve => setTimeout(resolve, SAVE_ROUND_MS))
+  }
+  expect(read()).toBe(true)
+}
 /**
  * The ceiling a case that waits on the watcher runs under.
  *
@@ -526,14 +537,12 @@ describe('createAppearance themes on disk', () => {
     given.openNotices()
     const broken = (): string[] => given.openNotices().filter(line => line.includes('broken.yaml'))
 
-    writeFileSync(join(themesDir(), 'broken.yaml'), BROKEN_THEME)
-    await vi.waitFor(() => { expect(broken()).toHaveLength(1) }, { timeout: WATCH_SETTLE_MS })
+    await saveUntil(join(themesDir(), 'broken.yaml'), BROKEN_THEME, () => broken().length === 1)
 
     // A later save re-reads the whole directory, so an unfixed file would
     // otherwise repeat its complaint on each one.
     const renders = given.renders()
-    writeFileSync(join(themesDir(), 'other.yaml'), OWN_THEME)
-    await vi.waitFor(() => { expect(given.renders()).toBeGreaterThan(renders) }, { timeout: WATCH_SETTLE_MS })
+    await saveUntil(join(themesDir(), 'other.yaml'), OWN_THEME, () => given.renders() > renders)
 
     expect(broken()).toHaveLength(1)
   }, WATCH_TEST_TIMEOUT_MS)
@@ -544,8 +553,7 @@ describe('createAppearance themes on disk', () => {
     const unwatch = given.appearance.watchThemes()
     given.openNotices()
 
-    writeFileSync(join(themesDir(), 'first.yaml'), BROKEN_THEME)
-    await vi.waitFor(() => { expect(given.openNotices().join('\n')).toContain('first.yaml') }, { timeout: WATCH_SETTLE_MS })
+    await saveUntil(join(themesDir(), 'first.yaml'), BROKEN_THEME, () => given.openNotices().join('\n').includes('first.yaml'))
 
     unwatch()
     writeFileSync(join(themesDir(), 'second.yaml'), BROKEN_THEME)

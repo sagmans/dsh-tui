@@ -203,6 +203,30 @@ describe('WarningSafeTui warning hold', () => {
     expect(process.emit).toBe(originalEmit)
   })
 
+  it('releases the held host streams even when a warning listener throws at close', () => {
+    const tui = new WarningSafeTui(fakeTerminal())
+    const stdoutWrite = process.stdout.write
+    const stderrWrite = process.stderr.write
+    const boom = new Error('listener-failed-at-close')
+    const listener = (): void => {
+      throw boom
+    }
+    process.on('warning', listener)
+    tui.start()
+    try {
+      process.emit('warning', new Error('deferred while the screen is up'))
+      expect(() => tui.stop()).toThrow(boom)
+      // The hold is the terminal's own, so it must already be gone here: a
+      // reader's stdout and stderr cannot stay captive to a broken listener
+      // until some later stop() happens to release them.
+      expect(process.stdout.write).toBe(stdoutWrite)
+      expect(process.stderr.write).toBe(stderrWrite)
+    } finally {
+      process.removeListener('warning', listener)
+      tui.stop()
+    }
+  })
+
   it('reports the first frame that cannot draw and stays quiet about the next', () => {
     const tui = new WarningSafeTui(fakeTerminal())
     const errors: unknown[] = []

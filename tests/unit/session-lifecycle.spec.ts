@@ -406,7 +406,7 @@ describe('createSessionLifecycle', () => {
     expect(given.lifecycle.sessionOpened()).toBe(false)
   })
 
-  it('leaves nothing driving when a switch is refused after letting the old agent go', async () => {
+  it('leaves the session exactly as it was when a switch is refused', async () => {
     const given = fixture()
     const handle = await given.lifecycle.openAgent(SESSION_A, false)
 
@@ -414,41 +414,51 @@ describe('createSessionLifecycle', () => {
     given.refusePreset(new Error('the composition file is broken'))
     await expect(given.lifecycle.switchSession(SESSION_B)).rejects.toThrow('the composition file is broken')
 
-    // A switch lets the outgoing agent go before it asks for the next one, so a
-    // refusal leaves nothing driving: the reader keeps the session they had and
-    // no agent at all, which only a reload that now succeeds can repair.
+    // The new session settles before the outgoing agent is let go, so a
+    // refusal leaves the same agent driving the same session, with the screen
+    // and the roster it was already showing.
     expect(handle.sessionId).toBe(SESSION_A)
-    expect(given.lifecycle.drivingAgent()).toBeUndefined()
+    expect(given.lifecycle.drivingAgent()).toBe(handle)
     expect(given.lifecycle.activeSession()).toBe(SESSION_A)
-    expect(given.disposed()).toBe(1)
-    // The screen the reader was reading is gone before the mode is even asked
-    // for, so a refusal leaves them on a session with nothing driving it.
-    expect(given.trace).toEqual(['clearPresentScope', 'resetTranscript', 'resetRoster', `presetFor:${SESSION_B}:true:false`])
-
-    given.refusePreset(undefined)
-    given.lifecycle.runReloadCommand()
-    await flush()
-
-    expect(given.lifecycle.drivingAgent()).toBeDefined()
-    expect(given.lifecycle.activeSession()).toBe(SESSION_A)
-    expect(given.notices.at(-1)).toBe("reloaded this session's composition; the transcript was replayed")
+    expect(given.disposed()).toBe(0)
+    expect(given.trace).toEqual([`presetFor:${SESSION_B}:true:false`])
   })
 
-  it('switches session by letting the outgoing agent go first', async () => {
+  it('switches on a retry after a refusal, stopping the outgoing agent once', async () => {
+    const given = fixture()
+    await given.lifecycle.openAgent(SESSION_A, false)
+
+    given.refusePreset(new Error('the composition file is broken'))
+    await expect(given.lifecycle.switchSession(SESSION_B)).rejects.toThrow('the composition file is broken')
+
+    // The refusal above took nothing away, so the retry is an ordinary switch
+    // rather than a repair of a surface with no agent driving it.
+    given.refusePreset(undefined)
+    await given.lifecycle.switchSession(SESSION_B)
+
+    expect(given.lifecycle.drivingAgent()?.sessionId).toBe(SESSION_B)
+    expect(given.lifecycle.activeSession()).toBe(SESSION_B)
+    expect(given.disposed()).toBe(1)
+    expect(given.notices.at(-1)).toBe(`session ${SESSION_B} (resumed)`)
+  })
+
+  it('switches session by settling the new open before the outgoing agent goes', async () => {
     const given = fixture()
     await given.lifecycle.openAgent(SESSION_A, false)
     given.trace.length = 0
 
     await given.lifecycle.switchSession(SESSION_B)
 
-    // The next agent must join a surface nothing is still writing to, so the
-    // handle, its projections and the scope they read through all go first.
-    expect(given.trace.slice(0, 5)).toEqual([
+    // The mode is asked for and composed while the outgoing agent still drives;
+    // its scope, transcript and roster only go once the new session is
+    // accepted, so the replay that follows folds into a cleared screen.
+    expect(given.trace.slice(0, 6)).toEqual([
+      `presetFor:${SESSION_B}:true:false`,
+      'installModelChoice',
+      `mountPreset:${PRESET}`,
       'clearPresentScope',
       'resetTranscript',
       'resetRoster',
-      `presetFor:${SESSION_B}:true:false`,
-      'installModelChoice',
     ])
     expect(given.disposed()).toBe(1)
     expect(given.lifecycle.activeSession()).toBe(SESSION_B)
@@ -616,14 +626,15 @@ describe('createSessionLifecycle', () => {
     await flush()
 
     // Reopening the same session is the switch a reader was already able to
-    // make, so the preset generation is composed again and the log is replayed.
+    // make, so the preset generation is composed again and the log is replayed
+    // into the screen the outgoing agent only now lets go of.
     expect(given.trace).toEqual([
-      'clearPresentScope',
-      'resetTranscript',
-      'resetRoster',
       `presetFor:${SESSION_A}:true:false`,
       'installModelChoice',
       `mountPreset:${PRESET}`,
+      'clearPresentScope',
+      'resetTranscript',
+      'resetRoster',
       `setViewed:${SESSION_A}`,
       `stagedSessionOpened:${SESSION_A}`,
       'promptMemorySessionOpened',
@@ -648,8 +659,9 @@ describe('createSessionLifecycle', () => {
     expect(given.notices.at(-1)).toBe(
       'could not reload: the composition file has a syntax error — fix the composition and /reload again',
     )
-    // A failed reload leaves no agent behind, so the retry has to be allowed:
-    // otherwise a broken composition file is not recoverable from the keyboard.
+    // The failed reload kept the outgoing agent driving, so the retry re-enters
+    // a surface that never stopped answering the keyboard.
+    expect(given.lifecycle.drivingAgent()).toBeDefined()
     given.refusePreset(undefined)
     given.lifecycle.runReloadCommand()
     await flush()

@@ -41,6 +41,8 @@ interface State {
   held: (() => void)[] | undefined
   /** When set, opening the replacement session rejects. */
   openFailure: Error | undefined
+  /** When set, every park rejects, which is how a full bank reaches undo. */
+  parkFailure: unknown
   agent: TuiAgent | undefined
   queued: readonly string[]
   canPark: boolean
@@ -78,6 +80,7 @@ function harness(events: readonly ForkEvent[] = []): Harness {
     failure: undefined,
     held: undefined,
     openFailure: undefined,
+    parkFailure: undefined,
     agent: undefined,
     queued: [],
     canPark: true,
@@ -136,6 +139,7 @@ function harness(events: readonly ForkEvent[] = []): Harness {
     canPark: () => state.canPark,
     parkPrompt: async (text: string) => {
       rec.trace.push(`park:${text}`)
+      if (state.parkFailure !== undefined) throw state.parkFailure
     },
     turnRunning: () => state.turnRunning,
     draft: () => state.draft,
@@ -206,7 +210,6 @@ describe("the cursor over the session's turns", () => {
     expect(h.rec.written).toEqual(['ask 2'])
     expect(h.rec.notices).toEqual(['undo · 1 prompt hidden · prefix r redo'])
     expect(h.staged.stagedCutoff()).toBe(4)
-    expect(h.staged.pending()).toBe(false)
   })
 
   it('reports nothing to undo on a log with no closed turn', async () => {
@@ -284,12 +287,10 @@ describe("the cursor over the session's turns", () => {
     h.state.held = []
     h.staged.undo()
     h.staged.undo()
-    expect(h.staged.pending()).toBe(true)
     h.release()
     await settle()
     expect(h.rec.folds).toEqual([4])
     expect(h.rec.notices).toEqual(['undo · 1 prompt hidden · prefix r redo'])
-    expect(h.staged.pending()).toBe(false)
   })
 
   it('stringifies a failure that is not an Error', async () => {
@@ -306,12 +307,26 @@ describe("the cursor over the session's turns", () => {
     h.staged.undo()
     await settle()
     expect(h.rec.notices).toEqual(['undo failed: log unreadable'])
-    expect(h.staged.pending()).toBe(false)
 
     h.state.failure = undefined
     h.staged.undo()
     await settle()
     expect(h.rec.written).toEqual(['ask 2'])
+  })
+
+  it('abandons the undo when the driven session changes while it reads the log', async () => {
+    const h = harness(TWO_TURNS)
+    h.state.held = []
+    h.staged.undo()
+    h.state.session = OTHER_SESSION
+    h.staged.sessionOpened(OTHER_SESSION)
+    h.release()
+    await settle()
+    expect(h.staged.cursor()).toEqual({ sessionId: OTHER_SESSION, hidden: 0, lastRestored: '' })
+    expect(h.staged.stagedCutoff()).toBeUndefined()
+    expect(h.rec.folds).toEqual([])
+    expect(h.rec.written).toEqual([])
+    expect(h.rec.notices).toEqual([])
   })
 })
 
@@ -323,7 +338,6 @@ describe('the interrupt an undo settles', () => {
     h.staged.undo()
     await settle()
     expect(h.rec.trace).toEqual(['interrupt'])
-    expect(h.staged.pending()).toBe(true)
     expect(h.rec.notices).toEqual([])
 
     // The composer hears every turn/end, so the settle is delivered more than
@@ -333,7 +347,6 @@ describe('the interrupt an undo settles', () => {
     await settle()
     expect(h.rec.folds).toEqual([4])
     expect(h.rec.notices).toEqual(['undo · 1 prompt hidden · prefix r redo'])
-    expect(h.staged.pending()).toBe(false)
   })
 
   it('reports nothing to undo when stopping a turn hid nothing new', async () => {
@@ -361,7 +374,6 @@ describe('the interrupt an undo settles', () => {
     expect(h.rec.notices).toEqual(['could not stop the turn; undo cancelled'])
     expect(h.rec.folds).toEqual([])
     expect(h.staged.cursor().hidden).toBe(0)
-    expect(h.staged.pending()).toBe(false)
   })
 
   it('refuses the undo when queued prompts have no bank to park in', async () => {
@@ -376,14 +388,31 @@ describe('the interrupt an undo settles', () => {
     expect(h.staged.cursor().hidden).toBe(0)
   })
 
-  it('parks queued prompts newest first so a pop replays queue order', async () => {
+  it('parks queued prompts newest first, before the interrupt that drops them', async () => {
     const h = harness(TWO_TURNS)
     h.drive()
     h.state.queued = ['first', 'second']
     h.staged.undo()
     await settle()
-    expect(h.rec.trace.filter(call => call.startsWith('park:'))).toEqual(['park:second', 'park:first'])
+    // Cancelling the turn drops the queue, so every park must land first.
+    expect(h.rec.trace).toEqual(['park:second', 'park:first', 'interrupt'])
     expect(h.rec.notices).toEqual(['undo · 1 prompt hidden · 2 queued prompts parked in the stash · prefix r redo'])
+  })
+
+  it('refuses the undo and keeps the turn running when a park fails', async () => {
+    const h = harness(TWO_TURNS)
+    h.drive()
+    h.state.turnRunning = true
+    h.state.queued = ['waiting']
+    h.state.parkFailure = new Error('stash locked')
+    h.staged.undo()
+    await settle()
+    expect(h.rec.notices).toEqual(['could not park the queued prompts; undo cancelled'])
+    // No interrupt: cancelling would drop the very words that could not be parked.
+    expect(h.rec.trace).toEqual(['park:waiting'])
+    expect(h.state.queued).toEqual(['waiting'])
+    expect(h.rec.folds).toEqual([])
+    expect(h.staged.cursor().hidden).toBe(0)
   })
 
   it('names a single parked prompt in the singular', async () => {
@@ -393,6 +422,27 @@ describe('the interrupt an undo settles', () => {
     h.staged.undo()
     await settle()
     expect(h.rec.notices).toEqual(['undo · 1 prompt hidden · 1 queued prompt parked in the stash · prefix r redo'])
+  })
+
+  it('abandons the undo when the driven session changes while it settles', async () => {
+    const h = harness(TWO_TURNS)
+    h.staged.undo()
+    await settle()
+    h.drive()
+    h.state.turnRunning = true
+    h.staged.undo()
+    await settle()
+    h.state.session = OTHER_SESSION
+    h.staged.sessionOpened(OTHER_SESSION)
+    h.staged.turnSettled()
+    await settle()
+    // The press belonged to the session it started in: none of its step may
+    // land on the cursor, cut, or bar of the session now driven.
+    expect(h.staged.cursor()).toEqual({ sessionId: OTHER_SESSION, hidden: 0, lastRestored: '' })
+    expect(h.staged.stagedCutoff()).toBeUndefined()
+    expect(h.rec.folds).toEqual([4])
+    expect(h.rec.written).toEqual(['ask 2'])
+    expect(h.rec.notices).toEqual(['undo · 1 prompt hidden · prefix r redo'])
   })
 })
 
@@ -522,5 +572,30 @@ describe('forward again after an undo', () => {
     await settle()
     expect(h.rec.notices.at(-1)).toBe('redo failed: log gone')
     expect(h.staged.cursor().hidden).toBe(1)
+  })
+
+  it('ignores a redo pressed while an undo is still settling', async () => {
+    const h = harness(TWO_TURNS)
+    h.staged.undo()
+    await settle()
+    h.drive()
+    h.state.turnRunning = true
+    h.staged.undo()
+    await settle()
+    // A redo now would step the cursor the settling undo is about to replace.
+    h.staged.redo()
+    h.staged.turnSettled()
+    await settle()
+    expect(h.rec.notices).toEqual([
+      'undo · 1 prompt hidden · prefix r redo',
+      'undo · 2 prompts hidden · prefix r redo',
+    ])
+    expect(h.rec.written).toEqual(['ask 2', 'ask 1'])
+    expect(h.rec.folds).toEqual([4, 0])
+
+    // The refusal spans only the settle: afterwards redo answers again.
+    h.staged.redo()
+    await settle()
+    expect(h.rec.notices.at(-1)).toBe('redo · 1 prompt hidden')
   })
 })

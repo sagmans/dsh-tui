@@ -558,6 +558,34 @@ describe('createModalInput pickers', () => {
     await expect(opened).resolves.toBe('busy')
   })
 
+  it('settles a crashed check as a refusal and leaves no rejection unhandled', async () => {
+    const given = fixture()
+    const modals = createModalInput(given.ctx, given.ports)
+    const picker = scriptedPicker()
+    const rejections: unknown[] = []
+    const onRejection = (error: unknown): void => {
+      rejections.push(error)
+    }
+    process.on('unhandledRejection', onRejection)
+    const opened = modals.openPicker(picker, () => Promise.reject(new Error('vet-port-crashed')))
+
+    picker.action = { kind: 'pick', id: 'busy' }
+    expect(modals.handleKey(ENTER)).toBe(true)
+    await expect(opened).resolves.toBeUndefined()
+    // A rejection the check leaked would only be reported as unhandled on a later tick.
+    await settle()
+    process.removeListener('unhandledRejection', onRejection)
+
+    // A crashed check cannot vouch for the row and has no refusal text to keep
+    // the menu open with, so the pick settles refused and the keyboard returns.
+    expect(rejections).toEqual([])
+    expect(modals.pickerCard()).toBeUndefined()
+    expect(picker.notes).toEqual([])
+    expect(given.editor.disableSubmit).toBe(false)
+    expect(given.focus.at(-1)).toBe(given.ports.editor)
+    expect(modals.handleKey('j')).toBe(false)
+  })
+
   it('answers a cancelled menu at once and ignores the verdict that arrives later', async () => {
     const given = fixture()
     const modals = createModalInput(given.ctx, given.ports)

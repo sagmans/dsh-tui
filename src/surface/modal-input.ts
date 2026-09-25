@@ -246,13 +246,23 @@ export function createModalInput(ctx: Context, ports: ModalInputPorts): ModalInp
       vetting = true
       void (async () => {
         let reason: string | undefined
+        let vetCrashed = false
         try {
           reason = await vet(action.id)
+        } catch {
+          // A check that crashes cannot vouch for the row and carries no refusal
+          // text to keep the menu open with, so the pick settles as refused
+          // instead of surfacing as a rejection nothing ever handles.
+          vetCrashed = true
         } finally {
           // A check that fails must not take the keyboard with it.
           vetting = false
         }
         if (pendingPicker === undefined) return
+        if (vetCrashed) {
+          settlePicker(undefined)
+          return
+        }
         if (reason === undefined) {
           settlePicker(action.id)
           return

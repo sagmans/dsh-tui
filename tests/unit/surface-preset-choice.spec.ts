@@ -383,9 +383,12 @@ describe('createPresetChoice runPresetCommand', () => {
 
     given.choice.runPresetCommand('ptc')
 
-    // The switch landed and the seat moved with it; the message names the whole
-    // operation, so it reads as a mode that did not change when only the view did.
-    await vi.waitFor(() => { expect(given.notices).toEqual(['could not switch the mode: the view refused to move']) })
+    // The switch landed and the seat moved with it, so the notice has to say
+    // the mode changed and name only the return that failed; a message that
+    // blames the switch would send the reader redoing what already took.
+    await vi.waitFor(() => {
+      expect(given.notices).toEqual(['the mode switched to "ptc", but the return to the driven session failed: the view refused to move'])
+    })
     expect(given.choice.currentSeat()).toBe(PARENT_MODE)
     expect(given.renders()).toBe(1)
   })

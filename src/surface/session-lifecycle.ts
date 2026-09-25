@@ -110,7 +110,12 @@ export interface SessionLifecycle {
   readonly disposeOutgoing: () => Promise<void>
   /** Start the agent for a session, which is what a replacement joins. */
   readonly openAgent: (id: SessionId, resume: boolean, fork?: ForkInheritance) => Promise<TuiAgent>
-  /** Move the surface to another stored session without leaving the terminal. */
+  /**
+   * Move the surface to another stored session without leaving the terminal.
+   *
+   * The new session settles before the outgoing agent is let go, so a refused
+   * switch leaves the session the reader was driving untouched.
+   */
   readonly switchSession: (id: SessionId) => Promise<void>
   /** Start a fresh session without leaving the terminal. */
   readonly runNewCommand: (title: string) => void
@@ -197,6 +202,12 @@ export function createSessionLifecycle(ctx: Context, ports: SessionLifecyclePort
       },
       ...(fork === undefined ? {} : { fork }),
     })
+    // The new session's agent is accepted before the outgoing one is let go:
+    // the settled questions above are where an open is refused, and a refusal
+    // has to find the reader's own agent still driving an untouched screen.
+    // The paths that already let it go — /new, /fork, a staged branch — arrive
+    // with none installed.
+    if (agent !== undefined) await disposeOutgoing()
     sessionOpened = true
     activeSession = id
     ports.setViewed(id)
@@ -245,7 +256,8 @@ export function createSessionLifecycle(ctx: Context, ports: SessionLifecyclePort
   }
 
   const switchSession = async (id: SessionId): Promise<void> => {
-    await disposeOutgoing()
+    // The open owns the handover: settling the new session first is what keeps
+    // a refused switch from taking the reader's agent away with it.
     await openAgent(id, true)
   }
 
@@ -277,9 +289,11 @@ export function createSessionLifecycle(ctx: Context, ports: SessionLifecyclePort
    * the reader keeps the conversation they were reading.
    */
   const runReloadCommand = (): void => {
-    // A failed reload leaves no agent behind, so the command has to be usable
-    // again: the retry is what makes a broken composition file recoverable,
-    // while a surface that has opened no session yet is still starting.
+    // A failed reload keeps the outgoing agent driving, and a failed /new or
+    // /fork is the case that leaves none: the command has to stay usable in
+    // both, because the retry is what makes a broken composition file
+    // recoverable, while a surface that has opened no session yet is still
+    // starting.
     if (agent === undefined && !sessionOpened) {
       ports.notice('the agent is still starting; try again in a moment')
       ports.render()

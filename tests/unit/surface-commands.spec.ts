@@ -1,11 +1,11 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import { transcriptToText } from '@/export.ts'
+import { defaultExportFile, transcriptToText } from '@/export.ts'
 import { defaultKeymap } from '@/input/actions.ts'
 import type { RegisteredCommand } from '@/input/completion.ts'
 import { chordKeysLine, surfaceKeysLine } from '@/input/keymap.ts'
@@ -16,6 +16,7 @@ import type { Picker } from '@/surface/modal-input.ts'
 import type { PromptStash } from '@/stash.ts'
 import { clipboardSequence } from '@/terminal/clipboard.ts'
 import { windowTitle } from '@/terminal/title.ts'
+import { THEMES_DIR_NAME } from '@/theme-files.ts'
 import { formatTokens } from '@/tokens.ts'
 import type { TranscriptEntry } from '@/transcript.ts'
 import type { StatusFacts } from '@/ui/status.ts'
@@ -354,6 +355,7 @@ function scratch(): string {
 }
 
 afterEach(() => {
+  vi.unstubAllEnvs()
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true })
 })
 
@@ -699,6 +701,23 @@ describe('createCommands export', () => {
     expect(readFileSync(path, 'utf8')).toBe(transcriptToText(given.entries))
     expect(given.notices).toEqual(['transcript written to ' + path])
     expect(given.renders).toBe(1)
+  })
+
+  it('writes a dump with no destination into the themes home, never the working directory', () => {
+    const given = fixture()
+    given.entries = [{ kind: 'user', text: 'ask' }]
+    const home = scratch()
+    vi.stubEnv('DSH_HOME', home)
+
+    createCommands(given.ctx, given.ports).runSubmission({ kind: 'export', path: '' })
+
+    // The themes home is the one directory this surface creates under the
+    // harness home, so the dump lands beside files the reader already knows —
+    // and the directory the terminal was started in stays clean.
+    const path = join(home, THEMES_DIR_NAME, defaultExportFile(SESSION))
+    expect(readFileSync(path, 'utf8')).toBe(transcriptToText(given.entries))
+    expect(given.notices).toEqual(['transcript written to ' + path])
+    expect(existsSync(join(process.cwd(), defaultExportFile(SESSION)))).toBe(false)
   })
 
   it('keeps an unwritable dump a notice rather than a failure', () => {

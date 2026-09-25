@@ -66,6 +66,15 @@ function seedCorrupt(): void {
   writeFileSync(historyFile(), '{ not a history document')
 }
 
+/** A file a later build wrote, which this one must refuse rather than prune. */
+function seedNewerSchema(): void {
+  writeFileSync(historyFile(), JSON.stringify({
+    version: HISTORY_SCHEMA_VERSION + 1,
+    updatedAt: '2024-01-01T00:00:00.000Z',
+    entries: [entry('from a later build')],
+  }, null, 2))
+}
+
 interface Options {
   readonly historyEnabled?: () => boolean
   readonly historyGhost?: () => boolean
@@ -274,12 +283,32 @@ describe('reverse search over recorded prompts', () => {
     // open a list the reader would read as "I never wrote anything".
     expect(given.notices).toEqual([
       'prompt history is corrupt; writes are disabled and the file is left untouched',
-      `0 prompts recorded · ${historyFile()} · writes disabled: corrupt_history`,
+      `0 prompts recorded · ${historyFile()} · writes disabled: corrupt`,
     ])
 
     await given.memory.openHistoryPicker()
 
-    expect(given.notices.at(-1)).toBe('prompt history is unavailable: corrupt_history')
+    expect(given.notices.at(-1)).toBe('prompt history is unavailable: corrupt')
+    expect(given.pickers).toEqual([])
+  })
+
+  it('answers a file from a later build in the same words the store does', async () => {
+    seedNewerSchema()
+    const given = harness()
+    given.memory.runHistoryCommand('')
+    await vi.waitFor(() => {
+      if (!given.notices.some(text => text.includes('writes disabled: a newer format'))) {
+        throw new Error('the store has not refused the file')
+      }
+    })
+    // One condition, one name: the store's load warning already said "a newer
+    // format", so the status line and the refusal answer in those words rather
+    // than teaching the reader a second name for the same refusal.
+    expect(given.notices.at(-1)).toBe(`0 prompts recorded · ${historyFile()} · writes disabled: a newer format`)
+
+    await given.memory.openHistoryPicker()
+
+    expect(given.notices.at(-1)).toBe('prompt history is unavailable: a newer format')
     expect(given.pickers).toEqual([])
   })
 
@@ -378,7 +407,7 @@ describe('the history command', () => {
     })
     // Saying "forgot 0 prompts" would describe a successful clear the reader
     // would meet again on the next start.
-    expect(given.notices.at(-1)).toBe('prompt history is unavailable: corrupt_history')
+    expect(given.notices.at(-1)).toBe('prompt history is unavailable: corrupt')
   })
 
   it('reports a clear that failed instead of a count that never landed', async () => {

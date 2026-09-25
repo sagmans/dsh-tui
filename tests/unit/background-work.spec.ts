@@ -43,6 +43,8 @@ interface RegistryOptions {
   readonly kill?: unknown
   /** A registry that cannot report its own changes, which is a real composition. */
   readonly silent?: boolean
+  /** What a listing throws, for a registry that cannot be asked at all. */
+  readonly listError?: unknown
 }
 
 interface FixtureOptions {
@@ -77,6 +79,7 @@ function fixture(options: FixtureOptions = {}) {
     : {
         list: (caller?: unknown) => {
           listCalls.push(caller)
+          if (registryOptions.listError !== undefined) throw registryOptions.listError
           return registryOptions.jobs ?? []
         },
         read: (id: string, caller?: unknown) => {
@@ -205,6 +208,18 @@ describe('the job board', () => {
       { id: 'j1', kind: 'build', label: 'build the docs', status: 'running', startedAt: NOW - 5_000, finishedAt: undefined },
       { id: 'j2', kind: 'test', label: '', status: 'completed', startedAt: NOW - 120_000, finishedAt: NOW - 60_000 },
     ])
+  })
+
+  it('reports a registry that cannot be listed instead of dying', () => {
+    const given = fixture({ registry: { listError: new Error('registry is gone') } })
+
+    expect(() => given.work.runJobsCommand('')).not.toThrow()
+
+    // The command answers with the reason and keeps its shape: the reader is
+    // told why nothing was listed rather than the surface going silent.
+    expect(given.notices).toEqual(['could not list background jobs: registry is gone', 'no background jobs'])
+    expect(given.work.jobs()).toEqual([])
+    expect(given.renderCount()).toBe(2)
   })
 
   it('says there are no background jobs rather than an empty board', () => {
@@ -464,6 +479,20 @@ describe('watching the board', () => {
 
     dispose()
     expect(given.watchers).toEqual([])
+  })
+
+  it('keeps the watch alive when a refresh cannot list the board', () => {
+    const given = fixture({ registry: { listError: new Error('registry is gone') } })
+    const dispose = given.work.watchJobs()
+
+    // The watcher runs with no reader waiting on it, so a registry failure it
+    // meets has to stay a notice rather than escape into the host loop.
+    expect(() => given.watchers[0]?.({ id: SESSION })).not.toThrow()
+    expect(given.notices).toEqual(['could not list background jobs: registry is gone'])
+    expect(given.work.jobs()).toEqual([])
+    expect(given.renderCount()).toBe(1)
+
+    dispose()
   })
 
   it.each([

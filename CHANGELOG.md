@@ -63,6 +63,40 @@ breaking change, and a patch carries only fixes.
   is written. The title travels in the terminal's own escape sequence, so a
   control that survived it could reorder what the reader sees in the title bar
   and in their scrollback.
+- A switch the new session refuses leaves the session exactly as it was. The
+  outgoing agent was let go before the new one was asked for, so a refused
+  switch ended with nothing driving the surface — no agent, a cleared transcript,
+  and nothing to type into until a reload succeeded; the new session now settles
+  first and the old one goes only once it is accepted.
+- A preset whose mode landed but whose return to the driven session failed says
+  both halves. The notice blamed the switch for a failure that happened after
+  it, sending the reader to redo a change that had already been made.
+- An undo parks the queued prompts before it interrupts the running turn, as its
+  own contract claims. The interrupt cancelled the queue on its way out, so a
+  park that failed afterwards lost the queued words; parking first means a
+  refused park refuses the undo with the queue untouched.
+- A redo arriving while an undo is still settling is ignored, like a second
+  undo. It stepped a cursor the undo was about to replace, leaving the hidden
+  count and the draft wrong for the session it was answered in.
+- An undo abandoned mid-flight when the driven session changes underneath it.
+  It wrote the old session's step into the new session's cursor, cut and draft,
+  quietly corrupting the history the new session was reading.
+- A picker whose check crashes settles as a refusal instead of an unhandled
+  rejection. Node treats the rejection as fatal by default, so a vetting port
+  that threw took the whole surface down with the picker still open.
+- The terminal's streams are released even when a warning listener throws on the
+  way out. The throwing listener skipped the release beside it, leaving stdout
+  and stderr held until some later stop ran.
+- A history the store cannot read is named the same way wherever it is named.
+  The picker and the /history line printed the machine's reason where the
+  store's own warning had already chosen the reader's words, so one condition
+  answered to two names.
+- An export with no argument lands in the reader's theme directory instead of
+  the process's working directory. The command wrote wherever the reader happened
+  to be, which is usually a repository; the notice still names the path it took.
+- A background-jobs listing that fails is said, and the command keeps running.
+  A registry that threw escaped both /jobs and the watcher, so the reader got no
+  notice and the command died in place.
 
 ## [0.8.0] - 2026-09-25
 
