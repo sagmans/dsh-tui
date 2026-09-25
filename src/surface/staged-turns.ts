@@ -268,8 +268,10 @@ export function createStagedTurns(ports: StagedTurnPorts): StagedTurns {
       const source = ports.activeSession()
       const events = await ports.sessionEvents(source)
       const turns = turnsOf(events)
-      const tail = hiddenTail(cursor, turns)
-      const seed = tail === undefined ? [] : events.slice(0, tail.seedCount)
+      // hidden > 0 was settled above, and the driven session's log is read from
+      // memory, so the cursor still names a turn this list holds.
+      const tail = hiddenTail(cursor, turns)!
+      const seed = events.slice(0, tail.seedCount)
       const childId = SessionId(`tui-session-${randomUUID()}`)
       await ports.disposeOutgoing()
       const opened = await ports.openSession(childId, false, seed.length === 0 ? undefined : { from: source, events: seed })

@@ -207,8 +207,16 @@ export interface ToolCard {
  */
 export const CARD_DETAIL_MAX = 200
 
-/** Character budget for one detail row, so a minified file cannot flood the viewport. */
-export const CARD_LINE_LIMIT = 200
+/**
+ * Character budget for one styled fragment of a detail row, so a minified file
+ * cannot flood the viewport.
+ *
+ * A row is drawn from independent cells — a line number, a path, the text they
+ * introduce — so the budget bounds each cell on its own, and a row of three
+ * cells may carry three times it on purpose. Bounding the sum instead would
+ * starve the later cells of a row whose first cell already spent the budget.
+ */
+export const CARD_PART_LIMIT = 200
 
 /**
  * Cut text to a character budget, marking the cut.
@@ -225,8 +233,14 @@ export function clip(text: string, limit: number): string {
   return clipVisibleGraphemes(text, limit)
 }
 
+/**
+ * Cut one fragment of a row to the fragment budget.
+ *
+ * Rows reach here cell by cell, so a numbered line keeps its number whatever
+ * the line itself costs; {@link clipRow} is the only caller.
+ */
 export function clipLine(text: string): string {
-  return clip(text, CARD_LINE_LIMIT)
+  return clip(text, CARD_PART_LIMIT)
 }
 
 /**

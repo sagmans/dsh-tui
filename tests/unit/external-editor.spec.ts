@@ -13,6 +13,15 @@ import {
   type EditorTerminalHost,
 } from '@/terminal/external-editor.ts'
 
+/**
+ * What a spec gives the surface instead of the real budget.
+ *
+ * Short enough to wait out, and a hung fake answers nothing on its own, so only
+ * the timeout can end that wait — the case fails loudly rather than slowly if
+ * the bound ever goes missing again.
+ */
+const TEST_EDITOR_TIMEOUT_MS = 50
+
 /** What the fake child may tell its parent. */
 interface ChildSignals {
   error(error: Error): void
@@ -27,6 +36,8 @@ interface SpawnedCall {
 
 interface FakeSpawn {
   readonly calls: SpawnedCall[]
+  /** Every signal the surface sent the child, in the order it was sent. */
+  readonly kills: string[]
   /** The draft path the child was handed, once it has been spawned. */
   draft(): string
   /** What the child does before it answers; the default edits the file and exits clean. */
@@ -36,8 +47,10 @@ interface FakeSpawn {
 
 function fakeSpawn(): FakeSpawn {
   const calls: SpawnedCall[] = []
+  const kills: string[] = []
   const state: FakeSpawn = {
     calls,
+    kills,
     draft: () => calls.at(-1)?.args.at(-1) as string,
     respond: (draft, signals) => {
       writeFileSync(draft, 'edited in the child')
@@ -47,23 +60,32 @@ function fakeSpawn(): FakeSpawn {
       calls.push({ file, args, options })
       const errors: ((error: Error) => void)[] = []
       const exits: ((code: number | null, signal: string | null) => void)[] = []
-      const child = {
-        on(event: string, listener: (...args: unknown[]) => void) {
-          if (event === 'error') errors.push(listener as unknown as (error: Error) => void)
-          else exits.push(listener as unknown as (code: number | null, signal: string | null) => void)
-          return child
-        },
-      } as unknown as EditorChild
-      // Listeners are attached synchronously after the spawn returns, and a real
-      // child answers later, so the fake has to as well.
-      setImmediate(() => state.respond(state.draft(), {
+      const signals: ChildSignals = {
         error: error => {
           for (const listener of errors) listener(error)
         },
         exit: (code, signal = null) => {
           for (const listener of exits) listener(code, signal)
         },
-      }))
+      }
+      const child = {
+        on(event: string, listener: (...args: unknown[]) => void) {
+          if (event === 'error') errors.push(listener as unknown as (error: Error) => void)
+          else exits.push(listener as unknown as (code: number | null, signal: string | null) => void)
+          return child
+        },
+        kill(signal?: NodeJS.Signals) {
+          const sent = signal ?? 'SIGTERM'
+          kills.push(sent)
+          // A killed child answers later, with the signal it died from, and the
+          // surface waits for that answer before it takes the screen back.
+          setImmediate(() => signals.exit(null, sent))
+          return true
+        },
+      } as unknown as EditorChild
+      // Listeners are attached synchronously after the spawn returns, and a real
+      // child answers later, so the fake has to as well.
+      setImmediate(() => state.respond(state.draft(), signals))
       return child
     }) as EditorSpawn,
   }
@@ -102,7 +124,8 @@ function scratch(): string {
 
 afterEach(() => {
   for (const directory of scratchDirs.splice(0)) {
-    // A case that proved a removal failure left the tree unreadable on purpose.
+    // The case that watches a removal fail leaves its tree unreadable on
+    // purpose, so the permission comes back before the retry that sweeps it.
     try {
       chmodSync(directory, 0o700)
     } catch {
@@ -115,7 +138,7 @@ afterEach(() => {
 })
 
 /** One handoff's collaborators: the surface seam, the fake child, and the draft root. */
-function handoff(env: NodeJS.ProcessEnv = { EDITOR: 'nvim' }): {
+function handoff(env: NodeJS.ProcessEnv = { EDITOR: 'nvim' }, timeoutMs?: number): {
   readonly host: FakeHost
   readonly spawn: FakeSpawn
   readonly root: string
@@ -124,7 +147,7 @@ function handoff(env: NodeJS.ProcessEnv = { EDITOR: 'nvim' }): {
   const host = new FakeHost()
   const spawn = fakeSpawn()
   const root = scratch()
-  return { host, spawn, root, editor: new ExternalEditor(host, { env, tempRoot: root, spawn: spawn.spawn }) }
+  return { host, spawn, root, editor: new ExternalEditor(host, { env, tempRoot: root, spawn: spawn.spawn, timeoutMs }) }
 }
 
 describe('parseEditorCommand', () => {
@@ -214,6 +237,51 @@ describe('the external editor handoff', () => {
 
     await expect(editor.edit('draft')).resolves.toBe('saved before failing')
     expect(host.notices).toEqual([])
+  })
+
+  it('stops an editor that never exits and takes the screen back', async () => {
+    const { host, spawn, editor, root } = handoff({ EDITOR: 'nvim' }, TEST_EDITOR_TIMEOUT_MS)
+    // The child never answers at all: without the bound the screen would stay
+    // given up with no way back to the surface.
+    spawn.respond = () => undefined
+
+    await expect(editor.edit('the draft so far')).resolves.toBe('the draft so far')
+    expect(spawn.kills).toEqual(['SIGKILL'])
+    expect(host.events).toEqual(['suspend', 'resume'])
+    expect(host.last()).toContain('held the terminal past the editor timeout')
+    // The stuck editor is swept like any other, and the draft it left is the one
+    // taken back, so the bound cannot lose what the file holds.
+    expect(readdirSync(root)).toEqual([])
+  })
+
+  it('leaves an editor that exits inside the budget alone', async () => {
+    const { host, spawn, editor } = handoff({ EDITOR: 'nvim' }, TEST_EDITOR_TIMEOUT_MS)
+    spawn.respond = (draft, signals) => {
+      writeFileSync(draft, 'saved in time')
+      signals.exit(0)
+    }
+
+    await expect(editor.edit('draft')).resolves.toBe('saved in time')
+    // The budget bounds the wait only: a child that answers first is never
+    // signalled, and its exit is the only thing the reader hears about.
+    expect(spawn.kills).toEqual([])
+    expect(host.notices).toEqual([])
+  })
+
+  it('says where the draft went when the scratch directory cannot be removed', async () => {
+    const { host, spawn, editor, root } = handoff()
+    spawn.respond = (draft, signals) => {
+      writeFileSync(draft, 'the edited draft')
+      // Read and execute, no write: the draft inside stays readable while the
+      // removal that follows has no bit to unlink the tree with.
+      chmodSync(root, 0o500)
+      signals.exit(0)
+    }
+
+    await expect(editor.edit('draft')).resolves.toBe('the edited draft')
+    const kept = readdirSync(root)
+    expect(kept).toHaveLength(1)
+    expect(host.last()).toBe(`could not remove the scratch directory; the draft is still at ${join(root, kept[0] as string)}`)
   })
 
   it('refuses to hand the screen over when no editor is configured', async () => {

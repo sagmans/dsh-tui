@@ -4,7 +4,7 @@ import { createTheme } from '@/theme.ts'
 import { BoxedEditor } from '@/ui/editor.ts'
 import { PromptBar } from '@/ui/prompt.ts'
 
-const STUB_TUI = { requestRender: () => {}, terminal: { rows: 24, cols: 60 } } as unknown as TUI
+const STUB_TUI = { requestRender: () => {}, terminal: { rows: 24, columns: 60 } } as unknown as TUI
 
 function barOf(text = ''): { bar: PromptBar; editor: BoxedEditor } {
   const editor = new BoxedEditor(STUB_TUI, createTheme('none').editor)

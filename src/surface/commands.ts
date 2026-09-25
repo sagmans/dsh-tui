@@ -189,9 +189,10 @@ export function createCommands(ctx: Context, ports: CommandsPorts): Commands {
 
   const helpText = (): string => {
     const current = ports.session.drivingAgent()?.agent
-    const registered = current === undefined || registry() === undefined
-      ? []
-      : registry()?.list(current).map(command => `/${command.name}`) ?? []
+    // Read once: the registry is the surface's own lookup, and asking it twice
+    // for one line would let a changing roster answer the two halves differently.
+    const roster = registry()
+    const registered = current === undefined || roster === undefined ? [] : roster.list(current).map(command => `/${command.name}`)
     const commands = registered.length === 0 ? 'none registered yet' : registered.join(' ')
     return `commands: ${commands} · surface: ${LOCAL_COMMANDS.join(' ')} · keys: ${surfaceKeysLine(ports.appearance.keymap())} · ${chordKeysLine(ports.appearance.keymap())}`
   }

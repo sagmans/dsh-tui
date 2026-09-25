@@ -18,13 +18,51 @@ breaking change, and a patch carries only fixes.
   themes keep the label's accent. Hiding the token retires the paint and not the
   name, and the export and a dispatched row spell it too.
 
+- `pnpm coverage` reports the statements, branches, functions and lines the unit
+  suite reaches, per source file. Nothing else could: V8's own coverage sees the
+  modules Vite serves from virtual URLs, so it attributes no line back to `src/`.
+
 ### Changed
 
 - Submitted prompts now have a `transcript.user.border` token independent of the editor and assistant frames. `violet-orbit` ships the current `#6f76c9` prompt/editor and `#a89771` assistant frame shades without per-user overrides.
 
+- The unit suite holds one spec per contract instead of one per seam. Many specs
+  proved the same promise at the weaker boundary — a private helper's answer
+  where the fold was already asserted, a hand-built fixture where the real model
+  was already driven — and the options, exports and fields that existed only so a
+  spec could watch a private decision are gone with them.
+
+- `CARD_PART_LIMIT` is named for what it bounds. `CARD_LINE_LIMIT` read as a
+  card's whole budget, but the clip is applied per fragment of a row, so a row of
+  three cells carried three times the number; a row is now documented, and
+  tested, as one budget per cell.
+
+- A stash file no longer carries the `createdAt` and `updatedAt` it wrote on
+  every save and no reader ever read. A bank an older version wrote still loads:
+  the fields are extra keys rather than a shape the parser demands.
+
 ### Fixed
 
 - PTY dogfood now rejects homes with escaping links and requires the installed `dsh 0.1.5-rc.3` launcher. The worktree helper rejects incompatible hosts before cloning. Previously, the PTY driver ran the Harness source checkout and could treat live `settings.yaml` as migration input.
+- The message that stops activation when a profile lacks what the surface needs
+  arrives with each missing capability on its own line. It interpolated an escaped
+  newline, so the reader saw one line of literal backslashes and could not tell
+  two requirements apart.
+- `DSH_HOME` means the same directory everywhere. A value beginning with `~` was
+  expanded for prompt history but taken literally by the stash bank and the theme
+  directory, so `DSH_HOME=~/harness` split one home in two: the history under the
+  reader's home, and a directory named `~` beside the process's working directory.
+- A host whose `llm` service cannot list providers says so, instead of reporting
+  that the profile has no `llm` service at all. Two different states were answered
+  by one undefined, and the reader was sent to install a service they already had.
+- An editor that never exits no longer leaves the surface suspended. The handoff
+  waited on the child forever, so a hung `$VISUAL` held the alternate screen down
+  with no key able to bring it back; a ceiling kills it, the screen resumes, and a
+  draft the reader saved is still taken back.
+- The window title drops the invisible controls and the bidi overrides before it
+  is written. The title travels in the terminal's own escape sequence, so a
+  control that survived it could reorder what the reader sees in the title bar
+  and in their scrollback.
 
 ## [0.8.0] - 2026-09-25
 

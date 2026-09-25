@@ -256,8 +256,10 @@ export function createSessionLifecycle(ctx: Context, ports: SessionLifecyclePort
       return
     }
     void (async () => {
-      const previous = letGoOfOutgoing(false)
-      if (previous !== undefined) await previous.dispose()
+      // The `agent === undefined` return above is the only way in without a
+      // handle, so the one this transition lets go of is always there to stop.
+      const previous = letGoOfOutgoing(false)!
+      await previous.dispose()
       await openAgent(SessionId(`tui-session-${randomUUID()}`), false)
       if (title !== '') runRenameCommand(title)
       ports.notice('started a new session')
@@ -327,8 +329,10 @@ export function createSessionLifecycle(ctx: Context, ports: SessionLifecyclePort
         return
       }
       const childId = SessionId(`tui-session-${randomUUID()}`)
-      const previous = letGoOfOutgoing(false)
-      if (previous !== undefined) await previous.dispose()
+      // The driven session's log is read from memory, so no other command can
+      // have let the outgoing agent go since the guard that refused an absent one.
+      const previous = letGoOfOutgoing(false)!
+      await previous.dispose()
       await openAgent(childId, false, { from: source, events: events.slice(0, point.inheritedEvents) })
       if (title !== '') runRenameCommand(title)
       ports.notice(`forked from ${source} at event ${point.boundarySeq} — ${point.inheritedEvents} inherited`)

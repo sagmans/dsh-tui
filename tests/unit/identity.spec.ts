@@ -21,6 +21,10 @@ describe('resolveLaunchIntent', () => {
     expect(() => resolveLaunchIntent({ ...base, session: 'a' })).toThrow(LaunchUsageError)
   })
 
+  it('starts a fresh session for --new alone, with no picker', () => {
+    expect(resolveLaunchIntent({ ...base, newSession: true })).toEqual({ resumeId: '', resumePicker: false })
+  })
+
   it('refuses --new combined with a resume request', () => {
     expect(() => resolveLaunchIntent({ ...base, newSession: true, resumeFlag: true })).toThrow(LaunchUsageError)
     expect(() => resolveLaunchIntent({ ...base, newSession: true, mode: 'resume' })).toThrow(LaunchUsageError)

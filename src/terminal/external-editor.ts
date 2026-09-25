@@ -39,6 +39,20 @@ export const MAX_DRAFT_BYTES = 1_048_576
 /** The same budget as a word, so the notice reads as a size and cannot drift from it. */
 const MAX_DRAFT_LABEL = `${Math.round(MAX_DRAFT_BYTES / 1024 / 1024)} MiB`
 
+const SECOND_MS = 1000
+const MINUTE_MS = 60 * SECOND_MS
+
+/**
+ * How long the reader's editor may hold the terminal before it is stopped.
+ *
+ * A child that never exits is the one failure this handoff cannot report its way
+ * out of: the screen is already given up, so nothing can draw, no key is read,
+ * and the session ends with the terminal left in the editor's state. Thirty
+ * minutes is far past a draft anyone is still writing and firmly inside a
+ * morning, which is the line between a slow reader and a stuck process.
+ */
+export const EDITOR_TIMEOUT_MS = 30 * MINUTE_MS
+
 const NO_EDITOR_MESSAGE = 'no editor configured: set $VISUAL or $EDITOR to open the draft in one'
 const launchFailureMessage = (command: string, error: Error): string => `could not start ${command}: ${error.message}`
 const useFailureMessage = (error: unknown): string =>
@@ -50,6 +64,8 @@ const retainedMessage = (directory: string): string =>
   `could not remove the scratch directory; the draft is still at ${directory}`
 const resumeFailureMessage = (error: unknown): string =>
   `the screen did not come back cleanly: ${error instanceof Error ? error.message : 'unknown error'}`
+const timeoutMessage = (command: string): string =>
+  `${command} held the terminal past the editor timeout and was stopped; the draft was taken back`
 
 /** The quote a command line is currently inside, if any. */
 const QUOTES: ReadonlySet<string> = new Set(["'", '"'])
@@ -125,6 +141,7 @@ export interface EditorTerminalHost {
 export interface EditorChild {
   on(event: 'error', listener: (error: Error) => void): void
   on(event: 'exit', listener: (code: number | null, signal: string | null) => void): void
+  kill(signal?: NodeJS.Signals): boolean
 }
 
 export interface EditorSpawnOptions {
@@ -157,6 +174,8 @@ export interface ExternalEditorOptions {
   /** Where the scratch directory is made; tests keep theirs out of the real tmpdir. */
   readonly tempRoot?: string | undefined
   readonly spawn?: EditorSpawn | undefined
+  /** The wait before the child is stopped; a test can shorten it. */
+  readonly timeoutMs?: number | undefined
 }
 
 /**
@@ -170,6 +189,7 @@ export class ExternalEditor {
   private readonly env: NodeJS.ProcessEnv
   private readonly tempRoot: string
   private readonly spawn: EditorSpawn
+  private readonly timeoutMs: number
   /** Whether a child holds the terminal; a second handoff would stop it twice. */
   private running = false
 
@@ -180,6 +200,7 @@ export class ExternalEditor {
     this.env = options.env ?? process.env
     this.tempRoot = options.tempRoot ?? tmpdir()
     this.spawn = options.spawn ?? SPAWN
+    this.timeoutMs = options.timeoutMs ?? EDITOR_TIMEOUT_MS
   }
 
   /** Edit `text` in the reader's editor, and return what was saved, or undefined to keep the bar. */
@@ -289,6 +310,11 @@ export class ExternalEditor {
    * already told the reader why, and whatever it did save is what they meant to
    * keep. A child that never started emits `error` and no `exit`, so either one
    * settling the wait is the answer.
+   *
+   * A child that never exits is stopped at the timeout and reported through the
+   * host, because it cannot report for itself; its exit still settles this wait,
+   * so the draft it left on disk is read back exactly as an editor's own bad
+   * exit is — a stuck editor must not become a way to lose the draft.
    */
   private run(command: string, args: readonly string[], file: string): Promise<Error | undefined> {
     return new Promise(resolve => {
@@ -297,10 +323,21 @@ export class ExternalEditor {
         cwd: process.cwd(),
         env: this.env,
       })
+      // Armed before the wait so no exit can slip past between the two, and
+      // cleared by whichever event settles it, because a pending timer would
+      // hold the process open long after the editor is gone.
+      const expiry = setTimeout(() => {
+        this.host.notice(timeoutMessage(command))
+        // SIGKILL, the one signal an editor cannot install a handler for: the
+        // exit this promise still waits on is what keeps the terminal from
+        // being restored while a child could still be drawing on it.
+        child.kill('SIGKILL')
+      }, this.timeoutMs)
       let settled = false
       const settle = (error: Error | undefined): void => {
         if (settled) return
         settled = true
+        clearTimeout(expiry)
         resolve(error)
       }
       child.on('error', error => settle(error))

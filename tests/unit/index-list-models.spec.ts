@@ -74,17 +74,31 @@ describe('list-models in the tui row', () => {
     expect(process.stderr.write).not.toHaveBeenCalled()
   })
 
-  // `createModelCatalog` reports an absent service and one that cannot list
-  // providers the same way, so both shapes are the same refusal.
-  it.each([undefined, {}])('exits 1 with a stderr message when the llm service cannot serve a listing: %j', async (llm) => {
+  // The two causes of an absent catalog ask for opposite fixes, so the refusal
+  // names the one this composition met instead of always naming a missing service.
+  it('exits 1 asking to mount an llm service when the profile has none', async () => {
     setTTY(false)
     const exit = vi.fn()
     const ready = readiness()
-    const ctx = contextFor({ appExit: exit, appReady: ready.service, [LIST_MODELS_SERVICE]: true, llm })
+    const ctx = contextFor({ appExit: exit, appReady: ready.service, [LIST_MODELS_SERVICE]: true, llm: undefined })
     apply(ctx, undefined)
     ready.commit()
     await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(1))
     expect(process.stderr.write).toHaveBeenCalledWith(expect.stringContaining('no llm service'))
+    expect(process.stdout.write).not.toHaveBeenCalled()
+  })
+
+  it('exits 1 naming the mounted service, not a missing one, when it cannot list providers', async () => {
+    setTTY(false)
+    const exit = vi.fn()
+    const ready = readiness()
+    const ctx = contextFor({ appExit: exit, appReady: ready.service, [LIST_MODELS_SERVICE]: true, llm: {} })
+    apply(ctx, undefined)
+    ready.commit()
+    await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(1))
+    expect(process.stderr.write).toHaveBeenCalledWith(expect.stringContaining('cannot list providers'))
+    // Nothing is absent from this profile, so the line must not read as an install.
+    expect(process.stderr.write).not.toHaveBeenCalledWith(expect.stringContaining('no llm service'))
     expect(process.stdout.write).not.toHaveBeenCalled()
   })
 

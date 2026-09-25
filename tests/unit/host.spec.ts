@@ -1,5 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import { SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import { describe, expect, it } from 'vitest'
 import { startAgent } from '@/agent/host.ts'
 
@@ -49,6 +49,47 @@ describe('startAgent', () => {
     // A launch flag is explicit, so it stands alone: the deployment default must
     // not widen the route the reader asked for.
     expect(created[2]?.agentOptions).toEqual({ provider: 'zai-coding-cn', model: 'glm-5.3' })
+  })
+
+  it('seeds a fork with the inherited prefix and the count the host validates it at', async () => {
+    const created: Record<string, unknown>[] = []
+    const agents = {
+      create: (options: Record<string, unknown>) => {
+        created.push(options)
+        return Promise.resolve(handle)
+      },
+    }
+    const events = [{ type: 'turn/end' }]
+    await startAgent(ctxWithAgents(agents), {
+      ...RESUME,
+      resume: false,
+      fork: { from: SessionId('parent'), events },
+    })
+    // A fork replays a prefix of the parent's log, so the child has to be told
+    // both the events and where the cut was taken: a dropped count presents
+    // inherited history as the child's own and loses the parent's turns.
+    expect(created[0]).toMatchObject({
+      seed: events,
+      inheritedEventCount: SessionLogOffset(events.length),
+      meta: { parentSession: 'parent', isSeeded: true },
+    })
+  })
+
+  it('starts a launch that is not a fork with nothing inherited', async () => {
+    const created: { meta?: Record<string, unknown> }[] = []
+    const agents = {
+      create: (options: { meta?: Record<string, unknown> }) => {
+        created.push(options)
+        return Promise.resolve(handle)
+      },
+    }
+    await startAgent(ctxWithAgents(agents), { ...RESUME, resume: false })
+    // The seed marker is what makes the harness treat a log as inherited, so a
+    // session that branches off nothing must carry none of it.
+    expect(created[0]).not.toHaveProperty('seed')
+    expect(created[0]).not.toHaveProperty('inheritedEventCount')
+    expect(created[0]?.meta).not.toHaveProperty('isSeeded')
+    expect(created[0]?.meta).not.toHaveProperty('parentSession')
   })
 
   it('surfaces a resume failure that is not absence instead of masking it with a create', async () => {

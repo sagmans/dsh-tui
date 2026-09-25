@@ -9,11 +9,8 @@ import { hintKeys, type Keymap } from '../input/actions.ts'
 import { TranscriptModel } from '../transcript.ts'
 import { WorkFold, type WorkState } from '../work.ts'
 
-/** What the back hint names when the reader has unbound the key it would advertise. */
-const BACK_HINT_FALLBACK = 'ctrl+b'
-
 /** What the reader presses to leave a view they did not open. */
-export const backHint = (map: Keymap): string => `${hintKeys(map, 'surface.back') || BACK_HINT_FALLBACK} returns to this session`
+export const backHint = (map: Keymap): string => `${hintKeys(map, 'surface.back')} returns to this session`
 
 /**
  * What the transcript owner needs from the surface that composes it.

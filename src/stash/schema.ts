@@ -53,8 +53,6 @@ export interface StashFile {
    * reading or deleting another bank's drafts.
    */
   readonly sessionId: string
-  readonly createdAt: number
-  readonly updatedAt: number
   /** Newest first: `entries[0]` is `stash@{0}`. */
   readonly entries: readonly StashEntry[]
 }
@@ -63,8 +61,8 @@ export type Clock = () => number
 
 export const createNewId = (): string => randomUUID()
 
-export function createEmptyStashFile(sessionId: string, now: number): StashFile {
-  return { version: STASH_SCHEMA_VERSION, sessionId, createdAt: now, updatedAt: now, entries: [] }
+export function createEmptyStashFile(sessionId: string): StashFile {
+  return { version: STASH_SCHEMA_VERSION, sessionId, entries: [] }
 }
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
@@ -87,15 +85,18 @@ export function normalizeEntry(raw: unknown): StashEntry | undefined {
 /**
  * Read one stash file, or nothing when it is not this surface's current format.
  *
- * Strict on purpose: a duplicate id, a missing timestamp, or a foreign session
- * is corruption the store quarantines rather than a shape to repair, because a
- * silently repaired file can resurrect entries the reader thought they dropped —
- * or hand another session's drafts to this one.
+ * Strict on purpose: a duplicate id, a malformed entry timestamp, or a foreign
+ * session is corruption the store quarantines rather than a shape to repair,
+ * because a silently repaired file can resurrect entries the reader thought
+ * they dropped — or hand another session's drafts to this one.
+ *
+ * Keys this format does not name are ignored, which is what lets a bank an
+ * older build wrote keep loading: it persisted file-level timestamps nothing
+ * ever read, and refusing them would quarantine drafts that are still valid.
  */
 export function parseStashFile(raw: unknown): StashFile | undefined {
   if (!isRecord(raw) || raw.version !== STASH_SCHEMA_VERSION) return undefined
   if (typeof raw.sessionId !== 'string') return undefined
-  if (!isValidTimestamp(raw.createdAt) || !isValidTimestamp(raw.updatedAt)) return undefined
   if (!Array.isArray(raw.entries)) return undefined
   const entries: StashEntry[] = []
   const ids = new Set<string>()
@@ -105,7 +106,7 @@ export function parseStashFile(raw: unknown): StashFile | undefined {
     ids.add(entry.id)
     entries.push(entry)
   }
-  return { version: STASH_SCHEMA_VERSION, sessionId: raw.sessionId, createdAt: raw.createdAt, updatedAt: raw.updatedAt, entries }
+  return { version: STASH_SCHEMA_VERSION, sessionId: raw.sessionId, entries }
 }
 
 export interface ResolvedEntry {

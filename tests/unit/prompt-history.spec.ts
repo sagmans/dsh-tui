@@ -1,5 +1,5 @@
 import { chmod, mkdtemp, readFile, stat, writeFile } from 'node:fs/promises'
-import { homedir, tmpdir } from 'node:os'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
@@ -8,10 +8,10 @@ import {
   HISTORY_SCHEMA_VERSION,
   createPromptHistory,
   parseHistoryFile,
-  resolveDshHome,
   upsertEntry,
   type PromptEntry,
 } from '@/agent/prompt-history.ts'
+import { dshHomeDir } from '@/stash/paths.ts'
 
 const AT = (seconds: number): string => new Date(Date.UTC(2026, 0, 1, 0, 0, seconds)).toISOString()
 
@@ -28,19 +28,31 @@ async function scratchHome(): Promise<string> {
   return await mkdtemp(join(tmpdir(), 'dsh-tui-history-'))
 }
 
-describe('resolveDshHome', () => {
-  it('takes a non-blank DSH_HOME', () => {
-    expect(resolveDshHome({ DSH_HOME: '/tmp/custom' })).toBe('/tmp/custom')
+/** A stand-in OS home, so the resolution is driven without touching the process. */
+const TEST_HOME = '/home/tester'
+
+/**
+ * The stash bank and the theme files resolve the harness home through the same
+ * function, so the history cannot spell a leading `~` on its own: a scratch home
+ * of `~/harness` would then keep the prompts where neither of them looks.
+ */
+describe('the home the history is written under', () => {
+  it.each([
+    ['~', TEST_HOME],
+    ['~/harness', `${TEST_HOME}/harness`],
+    ['/tmp/custom', '/tmp/custom'],
+    ['   ', `${TEST_HOME}/.dsh`],
+  ])('lands inside the home the rest of the surface resolves: %s', (configured, resolved) => {
+    const history = createPromptHistory({
+      home: dshHomeDir({ DSH_HOME: configured }, TEST_HOME),
+      cap: () => DEFAULT_MAX_ENTRIES,
+    })
+    expect(history.path()).toBe(join(resolved, HISTORY_FILE_NAME))
   })
 
-  it('falls back to ~/.dsh for an absent or blank DSH_HOME', () => {
-    const fallback = join(homedir(), '.dsh')
-    expect(resolveDshHome({})).toBe(fallback)
-    expect(resolveDshHome({ DSH_HOME: '   ' })).toBe(fallback)
-  })
-
-  it('expands a tilde prefix rather than resolving it against the cwd', () => {
-    expect(resolveDshHome({ DSH_HOME: '~/harness' })).toBe(join(homedir(), 'harness'))
+  it('keeps the value as written when the environment names no home to expand', () => {
+    const history = createPromptHistory({ home: dshHomeDir({ DSH_HOME: '~' }, ''), cap: () => DEFAULT_MAX_ENTRIES })
+    expect(history.path()).toBe(join('~', HISTORY_FILE_NAME))
   })
 })
 

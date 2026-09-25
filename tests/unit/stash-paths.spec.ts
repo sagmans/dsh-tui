@@ -3,6 +3,9 @@ import { dshHomeDir, resolveStashPaths, sanitizeSessionId, stashBaseDir } from '
 
 const LONG_ID = 'x'.repeat(300)
 const DIGEST_PATTERN = /--[0-9a-f]{16}$/u
+/** A stand-in OS home, so the resolver is driven without touching the process. */
+const TEST_HOME = '/home/me'
+const FALLBACK_HOME = `${TEST_HOME}/.dsh`
 
 describe('sanitizeSessionId', () => {
   it('flattens a session id into a readable, versioned key', () => {
@@ -44,14 +47,34 @@ describe('sanitizeSessionId', () => {
 
 describe('DSH_HOME resolution', () => {
   it('uses the configured home, and only falls back when it names nothing', () => {
-    expect(dshHomeDir({ DSH_HOME: '/scratch/dsh' }, '/home/me')).toBe('/scratch/dsh')
-    expect(dshHomeDir({ DSH_HOME: '  /scratch/dsh  ' }, '/home/me')).toBe('/scratch/dsh')
-    expect(dshHomeDir({}, '/home/me')).toBe('/home/me/.dsh')
-    expect(dshHomeDir({ DSH_HOME: '   ' }, '/home/me')).toBe('/home/me/.dsh')
+    expect(dshHomeDir({ DSH_HOME: '/scratch/dsh' }, TEST_HOME)).toBe('/scratch/dsh')
+    expect(dshHomeDir({ DSH_HOME: '  /scratch/dsh  ' }, TEST_HOME)).toBe('/scratch/dsh')
+    expect(dshHomeDir({}, TEST_HOME)).toBe(FALLBACK_HOME)
+    expect(dshHomeDir({ DSH_HOME: '   ' }, TEST_HOME)).toBe(FALLBACK_HOME)
+  })
+
+  /**
+   * The stash bank, the theme files, and the prompt history all read the harness
+   * home from here, so one spelling of `~` has to name one directory for all
+   * three. `~user` and an interior `~` are ordinary path text everywhere but a
+   * shell, and rewriting them would move a directory the reader named exactly.
+   */
+  it.each([
+    ['~', TEST_HOME],
+    ['~/harness', `${TEST_HOME}/harness`],
+    ['~root/harness', '~root/harness'],
+    ['/scratch/~/keep', '/scratch/~/keep'],
+  ])('expands only the spellings that name the OS home: %s', (configured, expected) => {
+    expect(dshHomeDir({ DSH_HOME: configured }, TEST_HOME)).toBe(expected)
+  })
+
+  it('keeps the value as written when the environment names no home to expand', () => {
+    expect(dshHomeDir({ DSH_HOME: '~' }, '')).toBe('~')
   })
 
   it('keeps the stash under a directory this surface owns', () => {
-    expect(stashBaseDir({ DSH_HOME: '/scratch/dsh' }, '/home/me')).toBe('/scratch/dsh/tui-stash')
+    expect(stashBaseDir({ DSH_HOME: '/scratch/dsh' }, TEST_HOME)).toBe('/scratch/dsh/tui-stash')
+    expect(stashBaseDir({ DSH_HOME: '~/harness' }, TEST_HOME)).toBe(`${TEST_HOME}/harness/tui-stash`)
   })
 })
 

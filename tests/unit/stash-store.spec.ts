@@ -46,6 +46,31 @@ describe('StashStore load', () => {
     expect(store.entries).toEqual([])
   })
 
+  it('keeps loading a bank an older build wrote, dropping its file timestamps on the next write', async () => {
+    const { baseDir, file } = scratch()
+    const paths = resolveStashPaths(SESSION, baseDir)
+    // The previous build stamped the file itself, which nothing ever read; the
+    // drafts it holds are still valid and must survive the format change.
+    seed(
+      file,
+      JSON.stringify({
+        version: STASH_SCHEMA_VERSION,
+        sessionId: SESSION,
+        createdAt: 1,
+        updatedAt: 1,
+        entries: [{ id: 'legacy', text: 'older build', createdAt: 1 }],
+      }),
+    )
+    const store = await loadStashStore(paths, clock())
+    expect(store.takeQuarantine()).toBeUndefined()
+    expect(store.entries.map(entry => entry.id)).toEqual(['legacy'])
+
+    await store.add({ id: 'newer', text: 'this build' })
+    const persisted = JSON.parse(readFileSync(paths.file, 'utf8')) as Record<string, unknown>
+    expect(persisted).not.toHaveProperty('createdAt')
+    expect(persisted).not.toHaveProperty('updatedAt')
+  })
+
   it('quarantines a file that is not JSON, and says where it went', async () => {
     const { baseDir, file } = scratch()
     seed(file, 'not json at all')
@@ -65,8 +90,6 @@ describe('StashStore load', () => {
     const foreign = {
       version: STASH_SCHEMA_VERSION,
       sessionId: 'tui-session-elsewhere',
-      createdAt: 1,
-      updatedAt: 1,
       entries: [{ id: 'x', text: 'theirs', createdAt: 1 }],
     }
     seed(file, JSON.stringify(foreign))
@@ -182,8 +205,6 @@ describe('StashStore mutations', () => {
       JSON.stringify({
         version: STASH_SCHEMA_VERSION,
         sessionId: SESSION,
-        createdAt: 1,
-        updatedAt: 1,
         entries: [{ id: 'hand', text: 'wipe\u001b[2Jthe\u202E screen', createdAt: 1 }],
       }),
     )
@@ -201,12 +222,12 @@ describe('StashStore persistence', () => {
   it('refuses a write that would land past the read cap, leaving the bank alone', async () => {
     const { baseDir } = scratch()
     const paths = resolveStashPaths(SESSION, baseDir)
-    const seeded = { ...createEmptyStashFile(SESSION, 1), entries: [{ id: 'kept', text: 'one', createdAt: 1 }] }
+    const seeded = { ...createEmptyStashFile(SESSION), entries: [{ id: 'kept', text: 'one', createdAt: 1 }] }
     await writeStashFile(paths.file, seeded)
     const before = readFileSync(paths.file, 'utf8')
 
     const oversized = {
-      ...createEmptyStashFile(SESSION, 1),
+      ...createEmptyStashFile(SESSION),
       entries: Array.from({ length: 17 }, (_, index) => ({
         id: `big-${index}`,
         text: 'x'.repeat(MAX_STASH_ENTRY_BYTES),
@@ -221,7 +242,7 @@ describe('StashStore persistence', () => {
     // reader typed; a refused first save leaves no file behind.
     const fresh = scratch()
     const escaped = {
-      ...createEmptyStashFile(SESSION, 1),
+      ...createEmptyStashFile(SESSION),
       entries: [{ id: 'a', text: '"'.repeat(MAX_STASH_FILE_BYTES / 2 + 1), createdAt: 1 }],
     }
     await expect(writeStashFile(fresh.file, escaped)).rejects.toBeInstanceOf(StashFileTooLargeError)
@@ -285,7 +306,7 @@ describe('StashStore persistence', () => {
     const paths = resolveStashPaths(SESSION, baseDir)
     const size = 8 * 1024 * 1024
     await writeStashFile(paths.file, {
-      ...createEmptyStashFile(SESSION, 1),
+      ...createEmptyStashFile(SESSION),
       entries: [{ id: 'big', text: 'x'.repeat(size), createdAt: 1 }],
     })
     const reloaded = await loadStashStore(paths, clock())

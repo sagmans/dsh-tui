@@ -54,7 +54,7 @@ const STATUS_FACTS: StatusFacts = {
   home: '/Users/dev',
 }
 export /** The terminal the gate's bar renders against; a golden frame reads its rows only. */
-const STUB_TUI = { requestRender: () => {}, terminal: { rows: 24, cols: 80 } } as unknown as TUI
+const STUB_TUI = { requestRender: () => {}, terminal: { rows: 24, columns: 80 } } as unknown as TUI
 export /** The rows this frame pins: a shell command whose output waits behind its fold, and a file read. */
 const FIXTURE_COMMAND = 'pnpm test'
 export /** A fixed request time and a fixed wait, so a running row's duration is a constant. */

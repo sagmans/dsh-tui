@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { cardDetailRows, CARD_SHELL_PREVIEW, shellFoldHint } from '@/cards/preview.ts'
-import { CARD_DETAIL_MAX, CARD_LINE_LIMIT, clip, rowText, type CardRow, type ToolCard } from '@/cards.ts'
+import { bound, CARD_DETAIL_MAX, CARD_PART_LIMIT, clip, rowText, type CardRow, type ToolCard } from '@/cards.ts'
 import { cardOfCall, cardOfResult, renderFileDiff } from '@/cards/presenter.ts'
 import { carriedFields, mergeCards, subCallRow, subCallRows } from '@/cards/composition.ts'
 
@@ -30,6 +30,23 @@ describe('renderFileDiff', () => {
   it('reports an unchanged file as a no-op hunk', () => {
     const lines = renderFileDiff({ path: 'a.txt', oldText: 'same', newText: 'same' })
     expect(texts(lines)).toEqual(['a.txt  -0 +0', '@@ 1 unchanged line before'])
+  })
+})
+
+describe('bound', () => {
+  it('spends the row budget on every fragment of a row, not on their sum', () => {
+    // A search hit is three cells on one row — the path, the line number, and
+    // the matched text — and a minified match must not push the path or the
+    // number over a budget the row as a whole would have spent already.
+    const hit: CardRow = {
+      parts: [
+        { class: 'path', text: 'a'.repeat(CARD_PART_LIMIT * 2) },
+        { class: 'lineNumber', text: 'b'.repeat(CARD_PART_LIMIT * 2) },
+        { class: 'match', text: 'c'.repeat(CARD_PART_LIMIT * 2) },
+      ],
+    }
+    const bounded = bound([hit])
+    expect(bounded.detail[0]?.parts.map(part => part.text.length)).toEqual([CARD_PART_LIMIT, CARD_PART_LIMIT, CARD_PART_LIMIT])
   })
 })
 
@@ -148,6 +165,25 @@ describe('cardOfResult', () => {
     const card = cardOfResult({ card: 'terminal', output: 'a\nb\n', exitCode: 0 }, { name: 'bash', failed: false, contentLines: [] })
     expect(texts(card.detail)).toEqual(['a', 'b'])
     expect(card.totalLines).toBe(2)
+  })
+
+  it('names the signal a command died on and reads an empty signal as no signal', () => {
+    // The harness reports a shell's ending as its result rather than as an error,
+    // so a command killed by a signal has no failure flag of its own: the card
+    // has to say how it ended and mark it failed itself.
+    const signalled = cardOfResult(
+      { card: 'terminal', output: 'partial', signal: 'SIGTERM' },
+      { name: 'bash', failed: false, contentLines: [] },
+    )
+    expect(signalled.status).toBe('signal SIGTERM')
+    expect(signalled.failed).toBe(true)
+
+    const empty = cardOfResult(
+      { card: 'terminal', output: 'partial', signal: '', exitCode: 7 },
+      { name: 'bash', failed: false, contentLines: [] },
+    )
+    expect(empty.status).toBe('exit 7')
+    expect(empty.failed).toBe(true)
   })
 
   it('keeps the true tail and the status of output far past retention', () => {
@@ -419,7 +455,7 @@ describe('subCallRow', () => {
 
   it('clips a raw call so an oversized argument cannot fill the row', () => {
     const call = subCallRow('s4', 'mystery', `{"a":"${'x'.repeat(500)}"}`, { view: undefined, output: undefined, status: undefined, running: false, failed: false })
-    expect(call.argument?.length).toBeLessThanOrEqual(CARD_LINE_LIMIT)
+    expect(call.argument?.length).toBeLessThanOrEqual(CARD_PART_LIMIT)
   })
 })
 

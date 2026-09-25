@@ -14,6 +14,9 @@ import { createHash } from 'node:crypto'
 import { homedir } from 'node:os'
 import path from 'node:path'
 
+/** Environment variable that moves the harness home, matching the launcher. */
+export const DSH_HOME_ENV = 'DSH_HOME'
+
 /** The directory `DSH_HOME` points at when the environment names none. */
 const DEFAULT_DSH_HOME_DIR = '.dsh'
 
@@ -21,6 +24,12 @@ const DEFAULT_DSH_HOME_DIR = '.dsh'
 export const DEFAULT_STASH_SCOPE = 'path' as const
 export const STASH_SCOPES = [DEFAULT_STASH_SCOPE, 'session'] as const
 export type StashScope = typeof STASH_SCOPES[number]
+
+/** The character a hand-written `DSH_HOME` leads with when it names the OS home. */
+const HOME_TILDE = '~'
+
+/** What may follow that character and still mean a home directory, on either platform. */
+const HOME_TILDE_SEPARATORS = ['/', '\\'] as const
 
 /** The subtree of `DSH_HOME` this surface owns. */
 const STASH_DIR_NAME = 'tui-stash'
@@ -85,13 +94,33 @@ export function sanitizeSessionId(sessionId: string, version: string = SESSION_K
 /**
  * The directory the harness keeps its own state in.
  *
- * DSH_HOME is the one thing that moves that directory, and it is resolved the
- * same way the settings document resolves it, so a scratch home keeps stash data
- * out of a reader's real home during a test run.
+ * DSH_HOME is the one thing that moves that directory, so every reader resolves it
+ * here: the stash bank, the themes, and the prompt history all write under the
+ * answer, and a scratch home only keeps state out of a reader's real home while
+ * they agree on it. A blank override is treated as unset, because resolving to the
+ * working directory would scatter private state into whatever tree the reader
+ * happened to start from.
  */
 export function dshHomeDir(env: NodeJS.ProcessEnv = process.env, home: string = homedir()): string {
-  const configured = env.DSH_HOME?.trim()
-  return configured === undefined || configured === '' ? path.join(home, DEFAULT_DSH_HOME_DIR) : configured
+  const configured = env[DSH_HOME_ENV]?.trim()
+  if (configured === undefined || configured === '') return path.join(home, DEFAULT_DSH_HOME_DIR)
+  return expandHome(configured, home)
+}
+
+/**
+ * Expand a hand-written leading `~` into the caller's home.
+ *
+ * The value arrives from the environment rather than from a shell, so nothing has
+ * expanded it yet. `~user` and an interior `~` are ordinary path text everywhere
+ * but a shell, and rewriting them would move a directory the reader named exactly;
+ * with no home to expand into the value stays as written, because joining a blank
+ * home would land the state in the process's working directory by accident.
+ */
+function expandHome(value: string, home: string): string {
+  if (home === '') return value
+  if (value === HOME_TILDE) return home
+  const separator = HOME_TILDE_SEPARATORS.find(candidate => value.startsWith(HOME_TILDE + candidate))
+  return separator === undefined ? value : path.join(home, value.slice(HOME_TILDE.length + separator.length))
 }
 
 /** The root every bank's stash file sits under. */

@@ -6,12 +6,24 @@
  * it says what this session is and whether it is working.
  */
 
+import { stripControlCharacters } from '../text.ts'
+
 const OSC_INTRODUCER = '\u001b]'
 const STRING_TERMINATOR = '\u0007'
 const TITLE_CODE = '0'
 
-/** Characters that would end the sequence early and let the rest execute. */
-const UNSAFE = /[\u0000-\u001f\u007f]/gu
+/**
+ * What a one-row label drops on top of the shared strip.
+ *
+ * The sanitizer is not repeated here: `stripControlCharacters` is the one list of
+ * characters text can never carry back to a terminal, and it already removes the
+ * bidi overrides — which draw nothing, so the reader cannot see or remove them —
+ * along with the carriage return. A title written through a second range would
+ * become the hole that list exists to close. What the editor boundary keeps is
+ * the tab and the line feed it lays text out with, and a title has one row for
+ * neither: a tab moves the cursor inside a tab bar and a line feed splits it.
+ */
+const TITLE_BREAKS = /[\t\n]/gu
 
 /** How much of a directory name the title keeps. */
 export const TITLE_DIR_LIMIT = 40
@@ -24,7 +36,7 @@ export const TITLE_DIR_LIMIT = 40
  * reaching the terminal as a control character.
  */
 export function titleSequence(title: string): string {
-  return `${OSC_INTRODUCER}${TITLE_CODE};${title.replace(UNSAFE, '')}${STRING_TERMINATOR}`
+  return `${OSC_INTRODUCER}${TITLE_CODE};${stripControlCharacters(title).replace(TITLE_BREAKS, '')}${STRING_TERMINATOR}`
 }
 
 /** The window title for a session, in the terms a tab bar can show. */

@@ -188,17 +188,52 @@ interface LlmDirectory {
   }>
 }
 
-/** Read the advisory catalog of routes this composition can reach. */
-export function createModelCatalog(ctx: Context): {
+/** The advisory catalog of routes this composition can reach. */
+export interface ModelCatalog {
   providers(): readonly ProviderEntry[]
   models(provider: string): Promise<readonly { readonly id: string; readonly name: string }[]>
   efforts(provider: string, model: string): Promise<ModelEfforts | undefined>
-} | undefined {
-  const llm = ctx.get('llm') as LlmDirectory | undefined
-  if (typeof llm?.listProviders !== 'function') return undefined
+}
+
+/**
+ * Why a composition cannot answer with a model catalog.
+ *
+ * Both causes leave the catalog undefined, but they ask for different fixes: one
+ * means nothing is mounted, the other that the mounted llm predates the directory
+ * method, so a reader told only "no llm service" is sent to install what they
+ * already run.
+ */
+export type ModelCatalogGap = 'no_llm_service' | 'llm_without_provider_listing'
+
+/** Either the catalog or the reason there is none, never both. */
+export type ModelCatalogReading =
+  | { readonly kind: 'ready'; readonly catalog: ModelCatalog }
+  | { readonly kind: 'gap'; readonly gap: ModelCatalogGap }
+
+/** The one read of the llm service, which is the only place the two causes differ. */
+function readLlmService(ctx: Context): { readonly kind: 'ready'; readonly llm: LlmDirectory } | {
+  readonly kind: 'gap'
+  readonly gap: ModelCatalogGap
+} {
+  const llm = ctx.get('llm') as LlmDirectory | null | undefined
+  if (llm === undefined || llm === null) return { kind: 'gap', gap: 'no_llm_service' }
+  if (typeof llm.listProviders !== 'function') return { kind: 'gap', gap: 'llm_without_provider_listing' }
+  return { kind: 'ready', llm }
+}
+
+/**
+ * Read the advisory catalog of routes this composition can reach.
+ *
+ * The reason travels beside the catalog so a caller that refuses can say which
+ * cause it met; a caller that only wants routes reads `createModelCatalog`.
+ */
+export function readModelCatalog(ctx: Context): ModelCatalogReading {
+  const reading = readLlmService(ctx)
+  if (reading.kind === 'gap') return { kind: 'gap', gap: reading.gap }
+  const llm = reading.llm
   const providers = (): readonly ProviderEntry[] => (llm.listProviders?.() ?? []).flatMap(entry =>
     typeof entry.id === 'string' ? [{ id: entry.id, name: typeof entry.name === 'string' ? entry.name : entry.id }] : [])
-  return {
+  const catalog: ModelCatalog = {
     providers,
     models: async provider => {
       if (typeof llm.listModels !== 'function') return []
@@ -224,4 +259,11 @@ export function createModelCatalog(ctx: Context): {
       }
     },
   }
+  return { kind: 'ready', catalog }
+}
+
+/** The catalog alone, for a caller that has no refusal to word. */
+export function createModelCatalog(ctx: Context): ModelCatalog | undefined {
+  const reading = readModelCatalog(ctx)
+  return reading.kind === 'ready' ? reading.catalog : undefined
 }

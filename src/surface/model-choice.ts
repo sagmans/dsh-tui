@@ -6,6 +6,7 @@ import {
   readModelRouteKey,
   // agent/model.ts names the reader's choice `ModelChoice`, which is this
   // module's own owner; the type arrives here as the route it describes.
+  type ModelCatalog,
   type ModelChoice as ChosenRoute,
   type ModelRoute,
   type ProviderEntry,
@@ -92,7 +93,7 @@ export function createModelChoice(ctx: Context, ports: ModelChoicePorts): ModelC
       case 'current':
         // Choosing by eye is the point of a terminal selector; the picker
         // heads itself with the route the next step will actually use.
-        void openModelPicker(providers)
+        void openModelPicker(catalog, providers)
         return
       case 'list-models':
         void catalog.models(command.provider).then(entries => {
@@ -271,12 +272,7 @@ export function createModelChoice(ctx: Context, ports: ModelChoicePorts): ModelC
    * adapter answers. A route whose catalog cannot be read stays reachable by
    * name through the text form; a notice explains why its rows are missing.
    */
-  const openModelPicker = async (providers: readonly ProviderEntry[]): Promise<void> => {
-    if (catalog === undefined) {
-      ports.notice('this profile has no llm service, so models cannot be listed or switched')
-      ports.render()
-      return
-    }
+  const openModelPicker = async (directory: ModelCatalog, providers: readonly ProviderEntry[]): Promise<void> => {
     if (providers.length === 0) {
       ports.notice('no provider is configured; add one before choosing a model')
       ports.render()
@@ -287,7 +283,7 @@ export function createModelChoice(ctx: Context, ports: ModelChoicePorts): ModelC
     try {
       const routes: ModelRoute[] = []
       for (const provider of providers) {
-        void catalog.models(provider.id).then(entries => {
+        void directory.models(provider.id).then(entries => {
           if (entries.length === 0) return
           routes.push(...entries.map(entry => ({ provider: provider.id, model: entry.id, name: entry.name })))
           ports.render()

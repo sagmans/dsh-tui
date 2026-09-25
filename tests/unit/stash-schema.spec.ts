@@ -17,8 +17,6 @@ const entry = (id: string, text = id, createdAt = 1_000): StashEntry => ({ id, t
 const file = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
   version: STASH_SCHEMA_VERSION,
   sessionId: 'tui-session-work',
-  createdAt: 1,
-  updatedAt: 2,
   entries: [entry('a')],
   ...overrides,
 })
@@ -59,10 +57,16 @@ describe('parseStashFile', () => {
     expect(parseStashFile(file({ version: '1' }))).toBeUndefined()
   })
 
+  it('loads a bank an older build wrote, with the file timestamps nothing read', () => {
+    const legacy = { ...file(), createdAt: 1, updatedAt: 2 }
+    expect(parseStashFile(legacy)?.entries).toEqual([entry('a')])
+    // The fields are not read at all, so even a value the old validator would
+    // have refused cannot quarantine a bank whose drafts are still usable.
+    expect(parseStashFile({ ...file(), createdAt: 'yesterday', updatedAt: undefined })).toBeDefined()
+  })
+
   it('refuses a file whose entries could be ambiguous or unusable', () => {
     expect(parseStashFile(file({ sessionId: 3 }))).toBeUndefined()
-    expect(parseStashFile(file({ createdAt: 'yesterday' }))).toBeUndefined()
-    expect(parseStashFile(file({ updatedAt: undefined }))).toBeUndefined()
     expect(parseStashFile(file({ entries: 'none' }))).toBeUndefined()
     expect(parseStashFile(file({ entries: [entry('a'), entry('a')] }))).toBeUndefined()
     expect(parseStashFile(file({ entries: [{ id: 'a', text: 'x' }] }))).toBeUndefined()

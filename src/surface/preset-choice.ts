@@ -106,9 +106,7 @@ export function createPresetChoice(ports: PresetChoicePorts): PresetChoice {
   let presetRows: readonly PresetSummary[] = []
 
   /** Choose the mode a session that has not started yet will run. */
-  const askForPreset = async (currentId: string | undefined): Promise<string | undefined> => {
-    const roster = ports.agentPresets
-    if (roster === undefined) return undefined
+  const askForPreset = async (roster: PresetRoster, currentId: string | undefined): Promise<string | undefined> => {
     presetRows = await roster.list()
     return await ports.openPicker(new PresetPicker(() => presetRows, () => currentId, ports.keymap))
   }
@@ -204,7 +202,7 @@ export function createPresetChoice(ports: PresetChoicePorts): PresetChoice {
         ports.render()
         return
       }
-      void askForPreset(current).then(picked => picked === undefined ? undefined : applyPreset(picked))
+      void askForPreset(roster, current).then(picked => picked === undefined ? undefined : applyPreset(picked))
       return
     }
     void applyPreset(command.id)
