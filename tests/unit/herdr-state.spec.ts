@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { HERDR_STATES, MAX_BLOCKED_MESSAGE_CHARS, SESSION_START_REASONS } from '@/herdr/constants.ts'
+import { HERDR_STATES, MAX_BLOCKED_MESSAGE_CHARS, MAX_STATE_LABEL_CHARS, SESSION_START_REASONS } from '@/herdr/constants.ts'
 import {
   boundedMessage,
   createReportSequence,
   driverReportFor,
+  isReportChange,
   lifecycleReport,
   sessionStartReason,
+  stateLabelFor,
   type LifecycleFacts,
 } from '@/herdr/state.ts'
 
@@ -14,6 +16,31 @@ const NOTHING_PENDING: LifecycleFacts = { blockedCount: 0, blockedMessage: undef
 describe('lifecycleReport', () => {
   it('is working while the driver runs', () => {
     expect(lifecycleReport({ ...NOTHING_PENDING, driverRunning: true })).toEqual({ state: HERDR_STATES.working, message: undefined })
+  })
+
+  it('is blocked while a decision waits, and the wait outranks the driver', () => {
+    // A wait is the only thing a reader glancing at a wall of panes can act on,
+    // so an agent that is both running and waiting is reported as blocked.
+    expect(lifecycleReport({ blockedCount: 2, blockedMessage: 'approval needed', driverRunning: true }))
+      .toEqual({ state: HERDR_STATES.blocked, message: 'approval needed' })
+  })
+
+  it('is idle with nothing pending and no driver running', () => {
+    expect(lifecycleReport(NOTHING_PENDING)).toEqual({ state: HERDR_STATES.idle, message: undefined })
+  })
+})
+
+describe('isReportChange', () => {
+  const working = { state: HERDR_STATES.working, message: undefined } as const
+
+  it('reports a first report and every later change', () => {
+    expect(isReportChange(undefined, working)).toBe(true)
+    expect(isReportChange(working, { state: HERDR_STATES.blocked, message: 'approval needed' })).toBe(true)
+    expect(isReportChange({ state: HERDR_STATES.blocked, message: 'one' }, { state: HERDR_STATES.blocked, message: 'two' })).toBe(true)
+  })
+
+  it('stays quiet for a report that says what Herdr already shows', () => {
+    expect(isReportChange(working, { state: HERDR_STATES.working, message: undefined })).toBe(false)
   })
 })
 
@@ -59,6 +86,33 @@ describe('boundedMessage', () => {
     const bounded = boundedMessage('x'.repeat(MAX_BLOCKED_MESSAGE_CHARS * 2))
     expect(bounded.length).toBe(MAX_BLOCKED_MESSAGE_CHARS)
     expect(bounded.endsWith('…')).toBe(true)
+  })
+})
+
+describe('stateLabelFor', () => {
+  it('names the wait a blocked row holds', () => {
+    expect(stateLabelFor({ state: HERDR_STATES.blocked, message: 'approval\n  needed · bash' }))
+      .toBe('approval needed · bash')
+  })
+
+  it('leaves a blocked row unlabelled when its report carried no message', () => {
+    // Herdr draws this label in place of the state word, so a row with no
+    // decision to name must fall back to the state rather than a blank label.
+    expect(stateLabelFor({ state: HERDR_STATES.blocked, message: undefined })).toBeUndefined()
+  })
+
+  it('leaves a row that is not blocked unlabelled', () => {
+    expect(stateLabelFor({ state: HERDR_STATES.working, message: 'approval needed · bash' })).toBeUndefined()
+    expect(stateLabelFor({ state: HERDR_STATES.idle, message: undefined })).toBeUndefined()
+  })
+
+  it('cuts a label too long for the sidebar, keeping its start', () => {
+    const label = stateLabelFor({
+      state: HERDR_STATES.blocked,
+      message: 'x'.repeat(MAX_STATE_LABEL_CHARS * 2),
+    })
+    expect(label?.length).toBe(MAX_STATE_LABEL_CHARS)
+    expect(label?.endsWith('…')).toBe(true)
   })
 })
 

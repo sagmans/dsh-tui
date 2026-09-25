@@ -27,6 +27,14 @@ afterEach(() => {
 
 const modeOf = (path: string): number => statSync(path).mode & 0o777
 
+/**
+ * Distinct links in the over-long chain.
+ *
+ * The module walks at most 32 hops before refusing, so 34 links is past its own
+ * bound while the kernel could still resolve the whole chain to the real target.
+ */
+const CHAIN_LINKS = 34
+
 describe('ensurePrivateDirectory', () => {
   it('creates a directory only its owner can enter', async () => {
     const directory = join(scratch(), 'nested', 'stash')
@@ -155,6 +163,27 @@ describe('ensurePrivateDirectory', () => {
     symlinkSync(`${join(safe, 'jump')}/../private`, alias)
     await expect(ensurePrivateDirectory(join(alias, 'stash'), 'stash directory')).rejects.toThrow(
       /writable by other users/,
+    )
+  })
+
+  /**
+   * A two-link cycle is answered by the kernel's ELOOP before the walk can count
+   * a hop, so the module's own bound is only reached by a chain of distinct links
+   * longer than it will follow. The chain is handed over as the directory itself:
+   * each link is a direct child of the scratch root, so the walk reads one link at
+   * a time and the kernel's own hop limit is never the thing that answers.
+   */
+  it('refuses a chain of distinct links longer than it will walk', async () => {
+    const root = scratch()
+    const target = join(root, 'target')
+    mkdirSync(target)
+    chmodSync(target, 0o700)
+    const chain = Array.from({ length: CHAIN_LINKS }, (_, index) => join(root, `hop-${index}`))
+    symlinkSync(target, chain.at(-1)!)
+    for (let index = chain.length - 2; index >= 0; index -= 1) symlinkSync(chain[index + 1]!, chain[index]!)
+
+    await expect(ensurePrivateDirectory(chain[0]!, 'stash directory')).rejects.toThrow(
+      /stash directory at .* passes through too many links to be checked$/,
     )
   })
 
