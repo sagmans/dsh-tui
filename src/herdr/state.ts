@@ -9,6 +9,7 @@
 import {
   HERDR_STATES,
   MAX_BLOCKED_MESSAGE_CHARS,
+  MAX_STATE_LABEL_CHARS,
   SEQ_TIME_SCALE,
   SESSION_START_REASONS,
   type HerdrState,
@@ -97,8 +98,26 @@ export function lifecycleReport(facts: LifecycleFacts): LifecycleReport {
  * pending, which is the only job the message has.
  */
 export function boundedMessage(message: string): string {
-  const trimmed = message.replace(/\s+/gu, ' ').trim()
-  return trimmed.length <= MAX_BLOCKED_MESSAGE_CHARS ? trimmed : `${trimmed.slice(0, MAX_BLOCKED_MESSAGE_CHARS - 1)}…`
+  return bounded(message, MAX_BLOCKED_MESSAGE_CHARS)
+}
+
+/**
+ * What Herdr can render for the row's state.
+ *
+ * A wait's title reaches Herdr as a message, and 0.9.1 stores that message
+ * without drawing it anywhere, so the same text is offered again as the blocked
+ * state's display label — the one its sidebar's `state_text` token reads. A row
+ * that is not blocked has no decision to name.
+ */
+export function stateLabelFor(report: LifecycleReport): string | undefined {
+  if (report.state !== HERDR_STATES.blocked || report.message === undefined) return undefined
+  return bounded(report.message, MAX_STATE_LABEL_CHARS)
+}
+
+/** One line of text, cut where this surface decides rather than where Herdr does. */
+function bounded(text: string, limit: number): string {
+  const trimmed = text.replace(/\s+/gu, ' ').trim()
+  return trimmed.length <= limit ? trimmed : `${trimmed.slice(0, limit - 1)}…`
 }
 
 /**

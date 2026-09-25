@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { dirname } from 'node:path'
-import { GATE_WAIT_KEY, HERDR_AGENT, HERDR_SOURCE, SESSION_START_REASONS } from '@/herdr/constants.ts'
+import { GATE_WAIT_KEY, HERDR_AGENT, HERDR_SOURCE, MAX_STATE_LABEL_CHARS, SESSION_START_REASONS } from '@/herdr/constants.ts'
 import { createHerdrReporter, releaseAgentSync } from '@/herdr/reporter.ts'
 import type { HerdrClient, HerdrEnvironment } from '@/herdr/client.ts'
 import type { StateReport } from '@/herdr/client.ts'
@@ -12,7 +12,7 @@ import type { StateReport } from '@/herdr/client.ts'
 const QUESTION_WAIT = 'question'
 
 interface Recorded {
-  readonly kind: 'state' | 'session' | 'metadata'
+  readonly kind: 'state' | 'session' | 'metadata' | 'label'
   readonly value: unknown
 }
 
@@ -32,6 +32,7 @@ function recordingClient(): {
       reportState: async (report: StateReport) => (calls.push({ kind: 'state', value: report }), true),
       reportSession: async report => (calls.push({ kind: 'session', value: report }), true),
       reportMetadata: async tokens => (calls.push({ kind: 'metadata', value: tokens }), true),
+      reportStateLabel: async label => (calls.push({ kind: 'label', value: label }), true),
       stop: () => {
         transport.push('stop')
       },
@@ -43,6 +44,8 @@ function recordingClient(): {
 }
 
 const states = (calls: readonly Recorded[]): unknown[] => calls.filter(call => call.kind === 'state').map(call => call.value)
+/** The labels offered to Herdr, in order, with a clear reading as `undefined`. */
+const labels = (calls: readonly Recorded[]): unknown[] => calls.filter(call => call.kind === 'label').map(call => call.value)
 
 let temporary: string | undefined
 
@@ -177,6 +180,55 @@ describe('createHerdrReporter', () => {
     expect((states(calls).at(-1) as StateReport).state).toBe('blocked')
   })
 
+  it('names the wait where Herdr can draw it, ahead of the state that needs the name', () => {
+    const { calls, client } = recordingClient()
+    const reporter = createHerdrReporter({ client, now: () => 1 })
+
+    reporter.block(GATE_WAIT_KEY, 'approval needed · Bash')
+    reporter.unblock(GATE_WAIT_KEY)
+
+    // Herdr keeps a wait's message without rendering it, so the title travels
+    // again as the blocked row's label — and lands first, so the row is never
+    // caught reading as blocked with nothing to say about why.
+    expect(labels(calls)).toEqual(['approval needed · Bash', undefined])
+    expect(calls.filter(call => call.kind === 'label' || call.kind === 'state').map(call => call.kind))
+      .toEqual(['label', 'state', 'label', 'state'])
+  })
+
+  it('names the wait still owed while waits stack', () => {
+    const { calls, client } = recordingClient()
+    const reporter = createHerdrReporter({ client, now: () => 1 })
+
+    reporter.block(GATE_WAIT_KEY, 'approval needed · Bash')
+    reporter.block(QUESTION_WAIT, 'question · continue?')
+    reporter.unblock(QUESTION_WAIT)
+
+    expect(labels(calls).at(-1)).toBe('approval needed · Bash')
+  })
+
+  it('bounds the label to what Herdr holds whole', () => {
+    const { calls, client } = recordingClient()
+    const reporter = createHerdrReporter({ client, now: () => 1 })
+
+    reporter.block(GATE_WAIT_KEY, 'approval needed · ' + 'x'.repeat(MAX_STATE_LABEL_CHARS * 2))
+
+    const label = labels(calls).at(-1) as string
+    expect(label.length).toBe(MAX_STATE_LABEL_CHARS)
+    expect(label.endsWith('…')).toBe(true)
+  })
+
+  it('never clears a label it did not set', () => {
+    const { calls, client } = recordingClient()
+    const reporter = createHerdrReporter({ client, now: () => 1 })
+
+    reporter.driver('running')
+    reporter.publish(true)
+
+    // A pane that has owed nothing has nothing for Herdr to forget, and a clear
+    // sent for its own sake is a report spent on a row that never changed.
+    expect(labels(calls)).toEqual([])
+  })
+
   it('reports the session identity, the reason, and the tokens that carry it', () => {
     const { calls, client } = recordingClient()
     const reporter = createHerdrReporter({ client, now: () => 1 })
@@ -224,6 +276,7 @@ describe('createHerdrReporter', () => {
       reportState: async report => (calls.push({ kind: 'state', value: report }), reachable),
       reportSession: async () => true,
       reportMetadata: async () => true,
+      reportStateLabel: async () => true,
       stop: () => {},
       settle: async () => {},
     }
@@ -248,6 +301,7 @@ describe('createHerdrReporter', () => {
       reportState: async report => (calls.push({ kind: 'state', value: report }), false),
       reportSession: async () => true,
       reportMetadata: async () => true,
+      reportStateLabel: async () => true,
       stop: () => {},
       settle: async () => {},
     }
@@ -276,6 +330,7 @@ describe('createHerdrReporter', () => {
       }),
       reportSession: async () => true,
       reportMetadata: async () => true,
+      reportStateLabel: async () => true,
       stop: () => {
         if (!order.includes('stop')) order.push('stop')
       },
@@ -313,6 +368,7 @@ describe('createHerdrReporter', () => {
       reportState: async report => (calls.push({ kind: 'state', value: report }), true),
       reportSession: async report => (calls.push({ kind: 'session', value: report }), reachable),
       reportMetadata: async tokens => (calls.push({ kind: 'metadata', value: tokens }), reachable),
+      reportStateLabel: async () => true,
       stop: () => {},
       settle: async () => {},
     }

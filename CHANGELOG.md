@@ -49,6 +49,12 @@ breaking change, and a patch carries only fixes.
   the single row each is read at, and the program's own rows stay behind the key
   that opens cards. `Ctrl+Y` still decides for all of them at once.
 
+- The title of a wait is also reported as Herdr's `blocked` display label, which
+  its sidebar draws through the `state_text` token. Herdr keeps the message that
+  accompanies the state without rendering it, so a pane waiting on a decision
+  showed a colour and nothing else; the default agent rows omit `state_text`, and
+  the README carries the row that names the tool.
+
 ### Fixed
 
 - A picker no longer claims the pane's Herdr row as `blocked`. Herdr answers that

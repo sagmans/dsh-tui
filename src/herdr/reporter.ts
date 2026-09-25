@@ -30,6 +30,7 @@ import {
   createReportSequence,
   isReportChange,
   lifecycleReport,
+  stateLabelFor,
   type DriverStatus,
   type LifecycleReport,
 } from './state.ts'
@@ -64,7 +65,9 @@ export interface HerdrReporter {
    *
    * Reporting a wait is what makes Herdr raise a needs-attention notification,
    * so only a decision the agent owes the reader is one: a menu the reader
-   * opened themselves is navigation, not a wait.
+   * opened themselves is navigation, not a wait. The title is offered to Herdr
+   * twice, as the state's message and as its display label, because the message
+   * is stored without being drawn and the label is what its sidebar renders.
    */
   block(key: string, message: string): void
   /** The wait held under that key was settled, answered, or abandoned. */
@@ -103,9 +106,18 @@ export function createHerdrReporter(options: HerdrReporterOptions = {}): HerdrRe
   let wantedState: LifecycleReport | undefined
   let wantedSession: { readonly sessionId: string; readonly reason: SessionStartReason } | undefined
   let wantedMetadata: Readonly<Record<string, string | undefined>> | undefined
+  /**
+   * The label Herdr should be showing for a blocked row, if any.
+   *
+   * It starts settled rather than owed: a pane that has never held a wait has
+   * nothing for Herdr to forget, and clearing a label it never received would be
+   * a report spent on nothing.
+   */
+  let wantedLabel: string | undefined
   let stateSent = false
   let sessionSent = false
   let metadataSent = false
+  let labelSent = true
   let released = false
   let retryTimer: ReturnType<typeof setTimeout> | undefined
   let retryAttempt = 0
@@ -114,7 +126,8 @@ export function createHerdrReporter(options: HerdrReporterOptions = {}): HerdrRe
   const owed = (): boolean =>
     (wantedState !== undefined && !stateSent) ||
     (wantedSession !== undefined && !sessionSent) ||
-    (wantedMetadata !== undefined && !metadataSent)
+    (wantedMetadata !== undefined && !metadataSent) ||
+    !labelSent
 
   const cancelRetry = (): void => {
     if (retryTimer !== undefined) clearTimeout(retryTimer)
@@ -177,6 +190,16 @@ export function createHerdrReporter(options: HerdrReporterOptions = {}): HerdrRe
         afterDelivery(delivered)
       })
     }
+    if (!labelSent) {
+      // Ahead of the state so the row is named by the time it reads as blocked:
+      // a reader glancing at the sidebar should not catch it without its title.
+      const label = wantedLabel
+      labelSent = true
+      void client.reportStateLabel(label).then(delivered => {
+        if (!delivered) labelSent = false
+        afterDelivery(delivered)
+      })
+    }
     if (wantedState !== undefined && !stateSent) {
       const next = wantedState
       stateSent = true
@@ -219,6 +242,14 @@ export function createHerdrReporter(options: HerdrReporterOptions = {}): HerdrRe
       if (force || isReportChange(wantedState, next)) {
         wantedState = next
         stateSent = false
+      }
+      const label = stateLabelFor(next)
+      // Not forced with the state: a session switch changes what the pane is
+      // called, never which decision it owes, so re-sending a label Herdr
+      // already holds would be noise on the wire.
+      if (label !== wantedLabel) {
+        wantedLabel = label
+        labelSent = false
       }
       flush()
     },

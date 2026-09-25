@@ -90,6 +90,15 @@ export const MAX_METADATA_VALUE_CHARS = 80
 export const MAX_BLOCKED_MESSAGE_CHARS = 120
 
 /**
+ * The longest state label Herdr holds whole.
+ *
+ * Herdr shortens a longer one at its own limit, and a cut made server-side is one
+ * this surface can neither see nor test: bounding the label here keeps the
+ * ellipsis where the title meant it rather than wherever the multiplexer stopped.
+ */
+export const MAX_STATE_LABEL_CHARS = 80
+
+/**
  * The key a gate's wait is held under.
  *
  * Waits are keyed rather than counted because one modal slot can be taken over
