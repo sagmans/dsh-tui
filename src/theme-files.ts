@@ -36,7 +36,7 @@ export const THEMES_DIR_NAME = 'themes'
  * a reader can read, list, and copy: the package's own theme takes its place in
  * the list beside every other, so no default hides behind an absence.
  */
-export const DEFAULT_THEME = 'deepseek-blue'
+export const DEFAULT_THEME = 'violet-orbit'
 
 /** The extensions a theme file may carry, best first. */
 const THEME_EXTENSIONS = ['.yaml', '.yml'] as const

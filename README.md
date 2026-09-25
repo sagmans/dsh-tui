@@ -384,7 +384,7 @@ code. Released hosts with section APIs store preferences in
 
 ```yaml
 dsh-tui:
-  theme: violet-orbit         # restyle the whole surface by name (default: deepseek-blue)
+  theme: deepseek-blue        # restyle the whole surface by name (default: violet-orbit)
   subcalls: inline            # draw the calls a PTC program dispatched (default collapsed)
   mermaid: streaming          # draw a reply's mermaid fences: off, final, or streaming (default streaming)
   tools:
@@ -538,9 +538,9 @@ leaving a gap, and `NO_COLOR` draws the fence as plain text. `/export` and the
 session file still keep the fence exactly as the model wrote it.
 
 A theme restyles the whole surface by name, and a theme is a file. The package
-ships two: `deepseek-blue`, the table written out in full in the colours the
-project answers to, and `violet-orbit`, a port of pi's theme of that name — its
-palette, plus the elements it draws its own way. `deepseek-blue` is also what a
+ships two: `violet-orbit`, a port of pi's theme of that name — its palette, plus
+the elements it draws its own way — and `deepseek-blue`, the table written out
+in full in the colours the project answers to. `violet-orbit` is also what a
 document naming no theme draws, so the default look is a file you can read, list,
 and copy rather than a table compiled in. Your own themes live in
 `$DSH_HOME/themes/`, which the surface creates at start-up and watches, so saving
