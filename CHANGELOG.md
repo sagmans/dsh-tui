@@ -8,6 +8,8 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-25
+
 ### Added
 
 - `install-skills` ships both bundled skills: the dogfood helper, and
@@ -15,26 +17,25 @@ breaking change, and a patch carries only fixes.
   the catalog fields that carry price, context window, and reasoning effort, and
   the checks that show an inherited value before it reaches a session.
 
-### Fixed
-
-- The model catalog dump reads a model the catalog spells out in metadata with no
-  installed provider data, which is how a route the harness does not describe is
-  wired.
-
-- Model discovery failures now report a safe diagnostic instead of silently hiding
-  a failed provider's catalog. Healthy routes remain selectable.
-- TUI preferences now expose a Config schema for source hosts while preserving
-  released section APIs and standalone core provider discovery. Config-backed
-  writes reject schema runtimes without native live references instead of
-  persisting a change that the running surface cannot apply.
-- Row preferences apply before prompt history and rendering. Config-backed
-  history and ghost completion require explicit opt-in, so delayed or failed
-  legacy imports cannot enable recording first.
-- Unsupported preference writes now report failure. Rejected theme changes
-  restore the applied appearance, and theme diagnostics use that same state.
-- Malformed preference reads preserve readable privacy opt-outs and the last valid
-  appearance. History checks publicly exposed raw opt-outs even when an invalid
-  sibling prevents the host from committing or notifying a change.
+- Running subagents in the dock now show the parent agent’s task label,
+  limited to ten words, beside their ID and status.
+- The subagent dock now previews three running children. Click the heading,
+  overflow row, or blank space in the section to expand or collapse it. Click a
+  child’s text to view that session’s transcript.
+- `dsh --profile tui install-skills` copies `dsh-tui-dogfood` to the user
+  skill root only on request. The skill supports any dsh plugin checkout through
+  a cloned home. An existing copy prompts before replacement; `--update` skips
+  the prompt.
+- A theme can be pinned in this bundle's own row config, which is the layer that
+  reaches the surface on a harness keeping settings per plugin row: the profile
+  patch carries the name where the settings document no longer can. The
+  `dsh-tui:` section still outranks the row, and the shipped default answers when
+  neither names a theme. `/theme tokens` reports the row-pinned name too.
+- `dsh --profile tui list-models` prints every provider/model the model picker
+  can reach, one `provider/model<TAB>name` line in picker order, and exits
+  without opening the alternate screen, so provider wiring is testable through a
+  pipe. It exits 1 when the llm listing is unavailable or when nothing is
+  configured to advertise a model.
 
 ### Changed
 
@@ -71,29 +72,26 @@ breaking change, and a patch carries only fixes.
   appearance, and the command plane each own their state, so a change to one
   capability no longer moves beside the others in a single file.
 
-### Added
-
-- Running subagents in the dock now show the parent agent’s task label,
-  limited to ten words, beside their ID and status.
-- The subagent dock now previews three running children. Click the heading,
-  overflow row, or blank space in the section to expand or collapse it. Click a
-  child’s text to view that session’s transcript.
-- `dsh --profile tui install-skills` copies `dsh-tui-dogfood` to the user
-  skill root only on request. The skill supports any dsh plugin checkout through
-  a cloned home. An existing copy prompts before replacement; `--update` skips
-  the prompt.
-- A theme can be pinned in this bundle's own row config, which is the layer that
-  reaches the surface on a harness keeping settings per plugin row: the profile
-  patch carries the name where the settings document no longer can. The
-  `dsh-tui:` section still outranks the row, and the shipped default answers when
-  neither names a theme. `/theme tokens` reports the row-pinned name too.
-- `dsh --profile tui list-models` prints every provider/model the model picker
-  can reach, one `provider/model<TAB>name` line in picker order, and exits
-  without opening the alternate screen, so provider wiring is testable through a
-  pipe. It exits 1 when the llm listing is unavailable or when nothing is
-  configured to advertise a model.
-
 ### Fixed
+
+- The model catalog dump reads a model the catalog spells out in metadata with no
+  installed provider data, which is how a route the harness does not describe is
+  wired.
+
+- Model discovery failures now report a safe diagnostic instead of silently hiding
+  a failed provider's catalog. Healthy routes remain selectable.
+- TUI preferences now expose a Config schema for source hosts while preserving
+  released section APIs and standalone core provider discovery. Config-backed
+  writes reject schema runtimes without native live references instead of
+  persisting a change that the running surface cannot apply.
+- Row preferences apply before prompt history and rendering. Config-backed
+  history and ghost completion require explicit opt-in, so delayed or failed
+  legacy imports cannot enable recording first.
+- Unsupported preference writes now report failure. Rejected theme changes
+  restore the applied appearance, and theme diagnostics use that same state.
+- Malformed preference reads preserve readable privacy opt-outs and the last valid
+  appearance. History checks publicly exposed raw opt-outs even when an invalid
+  sibling prevents the host from committing or notifying a change.
 
 - Switching model no longer leaves a reasoning effort in force that the chosen
   model cannot take, which made the next turn fail with `does not support
@@ -623,7 +621,8 @@ breaking change, and a patch carries only fixes.
 - Publication through npm OIDC trusted publishing, with the first version
   bootstrapped by hand ([#5](https://github.com/sagmans/dsh-tui/pull/5)).
 
-[Unreleased]: https://github.com/sagmans/dsh-tui/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/sagmans/dsh-tui/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/sagmans/dsh-tui/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/sagmans/dsh-tui/compare/v0.5.2...v0.6.0
 [0.5.2]: https://github.com/sagmans/dsh-tui/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/sagmans/dsh-tui/compare/v0.5.0...v0.5.1

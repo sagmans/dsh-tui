@@ -1,6 +1,6 @@
 {
   "name": "@sagmans/dsh-tui",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Terminal (CLI TUI) surface for DeepSeek Harness: interactive dsh in a terminal, no browser required",
   "keywords": [
     "deepseek-harness",
