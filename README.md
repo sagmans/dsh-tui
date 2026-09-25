@@ -144,7 +144,17 @@ dsh --profile tui --preset minimal          # start in a shipped mode other than
 dsh --profile tui --model deepseek-chat
 dsh --profile tui --no-color
 dsh --profile tui --no-bell            # do not ring when a long turn finishes
+dsh --profile tui list-models          # print every provider/model the picker can reach
 ```
+
+`list-models` prints one line per route the `/model` picker can reach —
+`provider/model`, a tab, then the model's display name — in picker order:
+providers as the llm service registered them, then each provider's own model
+order. It writes plain stdout, so it works piped or redirected, never opens the
+alternate screen, and exits 0 after printing at least one route. When the
+profile has no llm service, when the provider listing cannot be read, or when
+nothing is configured to advertise a model, it names the reason on stderr and
+exits 1.
 
 Every key below is a shipped default. `/keys` opens every action the surface
 and its library can perform as a list you filter as you type, with the keys in

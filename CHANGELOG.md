@@ -76,6 +76,11 @@ breaking change, and a patch carries only fixes.
   patch carries the name where the settings document no longer can. The
   `dsh-tui:` section still outranks the row, and the shipped default answers when
   neither names a theme. `/theme tokens` reports the row-pinned name too.
+- `dsh --profile tui list-models` prints every provider/model the model picker
+  can reach, one `provider/model<TAB>name` line in picker order, and exits
+  without opening the alternate screen, so provider wiring is testable through a
+  pipe. It exits 1 when the llm listing is unavailable or when nothing is
+  configured to advertise a model.
 
 ### Fixed
 

@@ -10,6 +10,8 @@ import { hasLiveRowSettings, readRowSettings, resolveConfig } from './config.ts'
 export { Config } from './config.ts'
 import { windowTitle } from './terminal/title.ts'
 import { toolDisplayFor } from './tool-display.ts'
+import { runModelList } from './model-list.ts'
+import { LIST_MODELS_SERVICE } from './startup.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { createAppearance } from './surface/appearance.ts'
 import { createBackgroundWork } from './surface/background-work.ts'
@@ -89,6 +91,26 @@ export function assertInteractiveTerminal(input: {
  * the composition rows around it.
  */
 export function apply(ctx: Context, config: unknown): void {
+  const appExit = ctx.get('appExit')
+  if (appExit === undefined) {
+    throw new Error('dsh-tui: the dsh launcher must provide appExit; start this surface with dsh --profile tui')
+  }
+
+  // The listing is a pipeable dump, not a surface: it answers before the
+  // config, the composition probe, and the TTY gate, claims no terminal, and
+  // leaves the exit code to the command that owns the process.
+  if (ctx.get(LIST_MODELS_SERVICE) === true) {
+    // Provider rows mount after this one, so an immediate read would report an
+    // empty catalog; the launcher's committed startup is the first moment the
+    // composed adapters exist, and a failed boot must not print a listing.
+    const appReady = ctx.get('appReady')
+    if (appReady === undefined) {
+      throw new Error('dsh-tui: the dsh launcher must provide appReady; start this surface with dsh --profile tui')
+    }
+    appReady.onReady(() => { void runModelList(ctx, appExit) })
+    return
+  }
+
   const resolved = resolveConfig(config)
   assertInteractiveTerminal()
 
@@ -96,10 +118,6 @@ export function apply(ctx: Context, config: unknown): void {
   // and the reader deserves the row name rather than a stack trace mid-turn.
   const probe = probeComposition(service => ctx.get(service) !== undefined)
   if (probe.missingRequired.length > 0) throw new Error(describeMissingRequired(probe))
-  const appExit = ctx.get('appExit')
-  if (appExit === undefined) {
-    throw new Error('dsh-tui: the dsh launcher must provide appExit; start this surface with dsh --profile tui')
-  }
 
   /**
    * The reader's appearance, built first because everything this surface draws

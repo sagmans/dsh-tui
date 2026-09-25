@@ -47,6 +47,15 @@ export interface TuiRowConfig extends TuiStartup {
 declare module '@deepseek-ai/cordis' {
   interface Context {
     tuiStartup?: TuiStartup
+    /**
+     * Set when this invocation must print the model directory and exit instead
+     * of mounting the surface.
+     *
+     * The flag is a boolean because the directory is read after the llm row
+     * mounts, which is after the command line has already parsed: the action
+     * only orders the listing, it never prints.
+     */
+    tuiListModels?: boolean
     /** Printed after the terminal is handed back, so the session stays recoverable. */
     tuiGoodbyeMessage?: string
   }
