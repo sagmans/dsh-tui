@@ -35,9 +35,10 @@ breaking change, and a patch carries only fixes.
 ### Added
 
 - A click on a PTC card's own header shows or hides the calls that card
-  dispatched, for that card alone: the rows travel with the card's own fold, so
-  one message opens and closes without moving every other program in the
-  session. `Ctrl+Y` still decides for all of them at once.
+  dispatched, for that card alone, so reading one program does not open every
+  other program in the session. The click opens one level: the calls arrive as
+  the single row each is read at, and the program's own rows stay behind the key
+  that opens cards. `Ctrl+Y` still decides for all of them at once.
 
 ## [0.7.0] - 2026-09-25
 

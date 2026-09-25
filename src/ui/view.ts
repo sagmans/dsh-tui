@@ -215,16 +215,13 @@ private get viewState(): ViewState {
       if (span === undefined || candidate.end - candidate.start < span.end - span.start) span = candidate
     }
     if (span === undefined) return undefined
-    // One click on a program's header answers for the program: the row that drew
-    // the calls shows them with the body they produced, and takes both away again.
-    // The two travel together because a folded row is one line, and a reader who
-    // unfolded it asked about the work rather than about one row of it.
+    // One click on a program's header opens the one level under it: the calls the
+    // program dispatched, each still the single row it is read at. The program's
+    // own body is the level below that, and it stays folded here because a click
+    // that drew both would spend rows the reader never asked for, with nothing
+    // left to click for less. Ctrl+O is what opens a card's own rows.
     if (span.key.startsWith(NESTED_CALLS_CLICK_PREFIX)) {
-      const id = span.key.slice(NESTED_CALLS_CLICK_PREFIX.length)
-      const shown = this.clicked.get(span.key) !== true
-      const card = toolClickKey(id)
-      this.clicked.set(span.key, shown)
-      if (card !== undefined) this.clicked.set(card, shown)
+      this.clicked.set(span.key, this.clicked.get(span.key) !== true)
       return { handled: true, render: true }
     }
     this.clicked.set(span.key, !span.expanded)
