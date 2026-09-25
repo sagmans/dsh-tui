@@ -17,6 +17,10 @@ breaking change, and a patch carries only fixes.
 
 ### Fixed
 
+- The model catalog dump reads a model the catalog spells out in metadata with no
+  installed provider data, which is how a route the harness does not describe is
+  wired.
+
 - Model discovery failures now report a safe diagnostic instead of silently hiding
   a failed provider's catalog. Healthy routes remain selectable.
 - TUI preferences now expose a Config schema for source hosts while preserving
