@@ -8,6 +8,24 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+### Changed
+
+- The `dsh-tui-update-models` skill teaches the catalog the current
+  `dsh-provider-extra` build accepts: a route that owns its membership through
+  `filter`, a route that owns its endpoint through `api` and `baseURL`, the
+  aliases and request defaults a model may carry, and the refusals that reject
+  a whole candidate instead of one model. Exclusive ownership now names the
+  boot collision check, and the default selection documents what the pinned
+  host reads and what it cannot persist.
+
+- `dump-model-catalog.mjs` expands a `filter` route against the installed
+  provider data, keeps model capacity apart from a declared request default,
+  prints aliases and cost tiers, inherits a sourceless route's declared
+  protocol, and reports the declarations the resolver would refuse - including a
+  default selection the served models cannot answer. `--data` names the
+  provider-data directory to inherit from, so a reading no longer depends on
+  which harness is installed.
+
 ## [0.7.0] - 2026-09-25
 
 ### Added
