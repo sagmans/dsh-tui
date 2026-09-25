@@ -17,6 +17,7 @@ import {
   HERDR_PANE_ID_VAR,
   HERDR_SOCKET_PATH_VAR,
   HERDR_SOURCE,
+  HERDR_STATES,
   MAX_METADATA_VALUE_CHARS,
   MAX_RESPONSE_BYTES,
   RESPONSE_DELIMITER,
@@ -50,6 +51,14 @@ export interface HerdrClient {
   reportState(report: StateReport): Promise<boolean>
   reportSession(report: SessionReport): Promise<boolean>
   reportMetadata(tokens: Readonly<Record<string, string | undefined>>): Promise<boolean>
+  /**
+   * What Herdr writes for a blocked row, or the request to forget that label.
+   *
+   * A separate channel from the state report because Herdr keeps a wait's
+   * message without rendering it: the display label is the one its sidebar
+   * reads, so naming the decision the reader owes needs both.
+   */
+  reportStateLabel(label: string | undefined): Promise<boolean>
   /** Stop accepting reports and drop the ones still waiting. */
   stop(): void
   /** Wait until the transport has finished everything it took on. */
@@ -167,6 +176,18 @@ export function createHerdrClient(env: HerdrEnvironment = process.env, options: 
       return enqueue('pane.report_metadata', {
         applies_to_source: HERDR_SOURCE,
         tokens: acceptedTokens(tokens),
+      }, false)
+    },
+    reportStateLabel(label) {
+      // Not coalescing on purpose: a coalescing entry supersedes every coalescing
+      // one already queued, so a label riding that channel would silently drop a
+      // state report still waiting to be sent. The label is display-only and the
+      // queue is serial, so arrival order is all the ordering it needs.
+      return enqueue('pane.report_metadata', {
+        applies_to_source: HERDR_SOURCE,
+        ...(label === undefined
+          ? { clear_state_labels: true }
+          : { state_labels: { [HERDR_STATES.blocked]: label } }),
       }, false)
     },
     stop() {

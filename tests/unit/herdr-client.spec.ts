@@ -132,6 +132,43 @@ describe('createHerdrClient', () => {
     })
   })
 
+  it('offers a wait as the label Herdr renders for a blocked row', async () => {
+    const herdr = await listen(ok)
+    const client = createHerdrClient(env(herdr.path))
+
+    await client.reportStateLabel('approval needed · Bash')
+
+    expect(herdr.requests[0]?.method).toBe('pane.report_metadata')
+    expect(herdr.requests[0]?.params).toMatchObject({
+      applies_to_source: HERDR_SOURCE,
+      state_labels: { blocked: 'approval needed · Bash' },
+    })
+  })
+
+  it('forgets the label once no wait is owed', async () => {
+    const herdr = await listen(ok)
+    const client = createHerdrClient(env(herdr.path))
+
+    await client.reportStateLabel(undefined)
+
+    expect(herdr.requests[0]?.params).toMatchObject({ clear_state_labels: true })
+    expect(herdr.requests[0]?.params).not.toHaveProperty('state_labels')
+  })
+
+  it('sends a label beside a state report instead of replacing it', async () => {
+    const herdr = await listen(ok)
+    const client = createHerdrClient(env(herdr.path))
+
+    await Promise.all([
+      client.reportStateLabel('approval needed · Bash'),
+      client.reportState({ state: 'blocked', message: 'approval needed · Bash', seq: 4, sessionId: undefined }),
+    ])
+
+    // A coalescing label would supersede the state still queued behind it, and a
+    // row that never heard the state reads as whatever it read before.
+    expect(herdr.requests.map(request => request.method)).toEqual(['pane.report_metadata', 'pane.report_agent'])
+  })
+
   it('is inert away from Herdr and never dials', async () => {
     const started = Date.now()
     const client = createHerdrClient({ HERDR_ENV: '1', HERDR_SOCKET_PATH: '/nonexistent.sock' }, { timeoutMs: 5000 })

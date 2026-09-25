@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { HERDR_STATES, MAX_BLOCKED_MESSAGE_CHARS, SEQ_TIME_SCALE, SESSION_START_REASONS } from '@/herdr/constants.ts'
+import { HERDR_STATES, MAX_BLOCKED_MESSAGE_CHARS, MAX_STATE_LABEL_CHARS, SEQ_TIME_SCALE, SESSION_START_REASONS } from '@/herdr/constants.ts'
 import {
   asDriverStatus,
   boundedMessage,
@@ -8,6 +8,7 @@ import {
   isReportChange,
   lifecycleReport,
   sessionStartReason,
+  stateLabelFor,
   type LifecycleFacts,
 } from '@/herdr/state.ts'
 
@@ -98,6 +99,28 @@ describe('boundedMessage', () => {
 
   it('leaves a title that fits alone', () => {
     expect(boundedMessage('approval needed · Bash')).toBe('approval needed · Bash')
+  })
+})
+
+describe('stateLabelFor', () => {
+  it('names a wait in the words Herdr draws', () => {
+    expect(stateLabelFor({ state: HERDR_STATES.blocked, message: 'approval needed · Bash' })).toBe('approval needed · Bash')
+  })
+
+  it('has nothing to say about a row that owes no decision', () => {
+    expect(stateLabelFor({ state: HERDR_STATES.idle, message: undefined })).toBeUndefined()
+    expect(stateLabelFor({ state: HERDR_STATES.working, message: undefined })).toBeUndefined()
+  })
+
+  it('keeps the label inside the shorter limit Herdr holds it to', () => {
+    // A title that fits the message does not necessarily fit the label, and a
+    // label Herdr shortened itself would be a cut this surface never decided on.
+    const label = stateLabelFor({
+      state: HERDR_STATES.blocked,
+      message: boundedMessage('x'.repeat(MAX_BLOCKED_MESSAGE_CHARS)),
+    })
+    expect(label?.length).toBe(MAX_STATE_LABEL_CHARS)
+    expect(label?.endsWith('…')).toBe(true)
   })
 })
 

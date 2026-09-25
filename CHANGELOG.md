@@ -49,6 +49,28 @@ breaking change, and a patch carries only fixes.
   the single row each is read at, and the program's own rows stay behind the key
   that opens cards. `Ctrl+Y` still decides for all of them at once.
 
+- The title of a wait is also reported as Herdr's `blocked` display label, which
+  its sidebar draws through the `state_text` token. Herdr keeps the message that
+  accompanies the state without rendering it, so a pane waiting on a decision
+  showed a colour and nothing else; the default agent rows omit `state_text`, and
+  the README carries the row that names the tool.
+
+### Fixed
+
+- A picker no longer claims the pane's Herdr row as `blocked`. Herdr answers that
+  transition with a needs-attention notification and its sound, for the focused
+  pane as well as a background one, so opening the model, reasoning, preset,
+  theme, history, stash, session, or keymap menu rang once per menu for the
+  reader's own navigation. An approval or a question still claims the wait: the
+  agent asked for that one, and may have asked somebody who walked away.
+- A gate that takes the modal slot over from another one no longer leaves the row
+  blocked after it is answered. Waits are held per slot rather than counted, so a
+  slot taken over twice is given back once, and the wait still owed is the one
+  naming the row instead of a title that settled.
+- The row is released through the `herdr` on `PATH` when the binary Herdr exported
+  at startup cannot be spawned any more, which an upgrade under a running pane
+  does. A release that could not start left a row reading as a live agent forever.
+
 ## [0.7.0] - 2026-09-25
 
 ### Added

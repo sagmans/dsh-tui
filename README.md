@@ -769,15 +769,28 @@ The list the dock and `/todo` draw follows the same lifetime every other surface
 |---|---|
 | the screen is taken, before any session opens | `idle`, claiming the pane's agent row |
 | the agent's driver starts, including a run of turns chained through pending work | `working` |
-| an approval, a question, or a picker takes the keyboard | `blocked`, with that card's title sent along |
+| an approval or a question takes the keyboard | `blocked`, with that card's title sent along, and set as the `blocked` display label |
 | the decision settles | `working` if the driver is running, otherwise `idle` |
 | the agent's driver stops with nothing pending | `idle` |
 | a session opens, resumes, forks, or is switched to | its id and reason, plus the `dsh_session` / `dsh_cwd` pane tokens |
 | exit, signal, or boot failure | `herdr pane release-agent`, so no row is left waiting on a process that is gone |
 
+A picker is deliberately absent from that table. Herdr answers a transition into `blocked` with a needs-attention notification and its sound, and 0.9.1 plays it for the focused pane of the active tab as well as for a background one, so a menu the reader opened themselves would ring for their own navigation — once per menu, on the model picker and the reasoning picker behind it — and the row would read as an agent stuck on a decision it never asked for. A gate is the opposite case: the agent asked, and may have asked somebody who walked away.
+
 A wait outranks a running driver: an agent waiting on a human is not making progress, and the wait is the only thing worth acting on from a wall of panes. The pane reports the agent's driver rather than each turn: the harness chains turns through a pending inbox inside one driver run, and reporting each turn's end would read as done between two turns of an agent that is still working. Reports are sequenced per source, so a delivery that arrives late cannot undo the state the surface already moved past, and a state Herdr is already showing is not sent again. A report is only counted as made when Herdr acknowledges it: one that failed is tried again — soon after, then with a growing wait — and a session identity Herdr never confirmed travels with the next report of any kind. The retry cannot wait for another state change, because the pane may have nothing left to say: a driver that stopped while the socket was down produces no further event. States still waiting to be sent are collapsed into the newest one, so a socket that was down for a minute is told where the pane is rather than where it has been. The release carries the next number in that same sequence for the same reason: Herdr reads one that cannot beat the pane's last report as stale, and a stale release leaves the row waiting on a process that is gone. It also stops reporting first — a claim landing after the release would take the row back for a process that is leaving — and the report already on the wire is waited for before the row goes back, because Herdr ignores the release of a pane nothing has claimed yet and that late report would then claim it. What is still waiting behind it is dropped rather than sent.
 
-Herdr persists a session reference only for its own built-in integrations, so this pane's session identity travels as metadata tokens instead: a script or a companion plugin reads them back with `herdr pane get <id>` and resumes that exact conversation with `dsh --profile tui --resume=<id>`. Herdr holds a token value up to 80 characters and shortens anything longer, so a session id or directory that cannot be sent whole has its token cleared instead: a shortened path would read as a different directory, and a pane must not claim one. What Herdr cannot do is identify the process itself — its detection table and its screen rules both name built-in agents only — so a pane that has not reported yet reads as an ordinary pane, and is not yet a target: `herdr agent wait` on it fails with `agent_not_found` until the first report lands. Herdr 0.9.1 also keeps the title that accompanies a `blocked` state without showing it anywhere, so a reader sees the state and reads the card on screen.
+Herdr persists a session reference only for its own built-in integrations, so this pane's session identity travels as metadata tokens instead: a script or a companion plugin reads them back with `herdr pane get <id>` and resumes that exact conversation with `dsh --profile tui --resume=<id>`. Herdr holds a token value up to 80 characters and shortens anything longer, so a session id or directory that cannot be sent whole has its token cleared instead: a shortened path would read as a different directory, and a pane must not claim one. What Herdr cannot do is identify the process itself — its detection table and its screen rules both name built-in agents only — so a pane that has not reported yet reads as an ordinary pane, and is not yet a target: `herdr agent wait` on it fails with `agent_not_found` until the first report lands. Herdr 0.9.1 keeps the title that accompanies a `blocked` state without drawing it anywhere, so the same title is sent again as that state's display label — the one Herdr's sidebar renders through its `state_text` token. The complete default agent rows do not include it:
+
+```toml
+[ui.sidebar.agents]
+rows = [
+  ["state_icon", "machine", "workspace", "tab"],
+  ["state_text"],
+  ["agent"],
+]
+```
+
+With that row present, a pane waiting on a decision names the tool that asked instead of showing a colour alone. A label longer than the 80 characters Herdr holds whole is cut here rather than server-side, so the ellipsis lands where this surface put it; the message that rides the state report keeps its own, longer bound.
 
 ## Development
 
