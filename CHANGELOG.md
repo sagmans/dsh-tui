@@ -8,6 +8,15 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+### Added
+
+- A session that starts with an installed skill this build has moved past says
+  so in one line and names the command that replaces it. An agent loads a skill
+  from `~/.agents/skills/`, so a copy left behind by an upgrade keeps teaching
+  the old wiring after the bundle that shipped it changed; the comparison reads
+  the content this package ships, which leaves a helper's execute bit, a note
+  kept beside a skill, and a skill that was never installed unremarked.
+
 ### Changed
 
 - The `dsh-tui-update-models` skill teaches the catalog the current

@@ -1,13 +1,24 @@
-import { chmodSync, cpSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, renameSync, rmSync } from 'node:fs'
+import { chmodSync, cpSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const PACKAGE_ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const SKILLS_ROOT = join(PACKAGE_ROOT, '.agents', 'skills')
+/** The user skill root, spelled once: the installer writes it and the drift check reads it. */
+const AGENTS_DIRECTORY = '.agents'
+const SKILLS_DIRECTORY = 'skills'
 /** A bundled helper must keep its execute bit once the archive has stripped it. */
 const HELPER_EXTENSIONS = ['.sh', '.mjs']
 const EXECUTABLE_MODE = 0o755
+/** The command a drift notice names, so the line it prints is the line that runs. */
+export const SKILL_UPDATE_COMMAND = 'dsh --profile tui install-skills --update'
+/** Separator the surface's own notices use, so a drift line reads like the rest. */
+const NOTICE_SEPARATOR = ' · '
+
+function installedSkillsRoot(home: string): string {
+  return join(home, AGENTS_DIRECTORY, SKILLS_DIRECTORY)
+}
 
 export class SkillAlreadyExistsError extends Error {
   constructor(readonly destination: string) {
@@ -20,15 +31,79 @@ export class SkillAlreadyExistsError extends Error {
  * listed: a skill a reader can see here is one `install-skills` installs, and
  * adding another never means editing the installer.
  */
-export function bundledSkillNames(): string[] {
-  const root = lstatSync(SKILLS_ROOT)
-  if (!root.isDirectory() || root.isSymbolicLink()) throw new Error(`invalid bundled skills: ${SKILLS_ROOT}`)
-  const names = readdirSync(SKILLS_ROOT, { withFileTypes: true })
+export function bundledSkillNames(bundled: string = SKILLS_ROOT): string[] {
+  const root = lstatSync(bundled)
+  if (!root.isDirectory() || root.isSymbolicLink()) throw new Error(`invalid bundled skills: ${bundled}`)
+  const names = readdirSync(bundled, { withFileTypes: true })
     .filter(entry => entry.isDirectory() && !entry.isSymbolicLink())
     .map(entry => entry.name)
     .sort()
-  if (names.length === 0) throw new Error(`no bundled skills: ${SKILLS_ROOT}`)
+  if (names.length === 0) throw new Error(`no bundled skills: ${bundled}`)
   return names
+}
+
+/** Every regular file a skill directory carries, keyed by its relative path. */
+function skillFiles(root: string): Map<string, Buffer> {
+  const files = new Map<string, Buffer>()
+  const walk = (directory: string, prefix: string): void => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const relative = prefix === '' ? entry.name : prefix + '/' + entry.name
+      const path = join(directory, entry.name)
+      if (entry.isDirectory()) {
+        walk(path, relative)
+        continue
+      }
+      // A symlinked member is not content this package shipped, and following
+      // one would read whatever it happens to point at.
+      if (!entry.isFile()) continue
+      files.set(relative, readFileSync(path))
+    }
+  }
+  walk(root, '')
+  return files
+}
+
+/**
+ * The installed copies that no longer match what this package ships.
+ *
+ * Content only, over the bundled file set. The installer chmods its own
+ * helpers, so a mode difference is its doing rather than drift, and a file a
+ * reader added beside a skill is theirs: one startup line can explain neither,
+ * and a line that cries wolf gets read past when it matters.
+ */
+export function driftedSkillNames(home: string = homedir(), bundled: string = SKILLS_ROOT): string[] {
+  const skills = installedSkillsRoot(home)
+  return bundledSkillNames(bundled).filter(name => {
+    const destination = join(skills, name)
+    const entry = lstatSync(destination, { throwIfNoEntry: false })
+    // Never installed is not drift - a first install is that command's own
+    // prompt - and a symlinked copy is one the installer refuses to replace.
+    if (entry === undefined || entry.isSymbolicLink() || !entry.isDirectory()) return false
+    const installed = skillFiles(destination)
+    for (const [path, content] of skillFiles(join(bundled, name))) {
+      const current = installed.get(path)
+      if (current === undefined || !current.equals(content)) return true
+    }
+    return false
+  })
+}
+
+/**
+ * The one line a startup can spare for an installed skill this build has moved
+ * past, or `undefined` when every installed copy still matches.
+ *
+ * Silence on any failure: a notice is a courtesy, and an unreadable home must
+ * not cost a reader the session they launched.
+ */
+export function describeSkillDrift(home: string = homedir(), bundled: string = SKILLS_ROOT): string | undefined {
+  try {
+    const drifted = driftedSkillNames(home, bundled)
+    if (drifted.length === 0) return undefined
+    return `bundled skills changed since they were installed: ${drifted.join(NOTICE_SEPARATOR)}`
+      + `${NOTICE_SEPARATOR}run ${SKILL_UPDATE_COMMAND}`
+  } catch {
+    return undefined
+  }
 }
 
 /** Avoid writing through a pre-existing symlink into an unexpected directory. */
@@ -152,9 +227,8 @@ export function installBundledSkill(name: string, home: string = homedir(), upda
  */
 export function installBundledSkills(home: string = homedir(), update = false, names: readonly string[] = bundledSkillNames()): string[] {
   ensureDirectory(home)
-  const agents = join(home, '.agents')
-  ensureDirectory(agents)
-  const skills = join(agents, 'skills')
+  ensureDirectory(join(home, AGENTS_DIRECTORY))
+  const skills = installedSkillsRoot(home)
   ensureDirectory(skills)
   const destinations = names.map(name => join(skills, name))
   for (const destination of destinations) {

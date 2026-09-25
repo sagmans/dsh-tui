@@ -57,6 +57,20 @@ The command stages the new copy before replacement and restores the old
 copy if replacement fails. If cleanup fails after replacement, the new copy
 stays installed and the command reports the old backup path.
 
+A started session compares every installed copy with the skills this build
+ships and prints one line when they differ, because an agent loading a stale
+skill is told the old wiring:
+
+```text
+bundled skills changed since they were installed: dsh-tui-update-models · run dsh --profile tui install-skills --update
+```
+
+The comparison reads content only, over the files this package ships: a
+helper's execute bit is the installer's own doing, and a note kept beside a
+skill stays unremarked. A skill that was never installed is not drift — a first
+install is the prompt above — and a run that never opens the screen, like
+`list-models`, prints nothing.
+
 ### Confirm the plugin mounted
 
 The profile records its layers in `$DSH_HOME/profiles/tui/package.json` (`~/.dsh` by default). `@sagmans/dsh-tui` must appear in `dsh.profile.bundles`:
