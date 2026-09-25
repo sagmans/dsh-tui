@@ -19,6 +19,17 @@ breaking change, and a patch carries only fixes.
 
 ### Changed
 
+- The default theme is `violet-orbit`. A document that names no theme drew
+  `deepseek-blue`, which stays shipped and selectable by name; the port of pi's
+  theme is now what a fresh session meets. The default is still a file a reader
+  can read, list, and copy rather than a table compiled in.
+
+- `violet-orbit` draws a tool argument in a dark slate rather than the sage the
+  port introduced. The sage separated the argument from the periwinkle tool label
+  by family, and paid for it with the hue a diff card already reads as an added
+  line; the new shade separates the two halves of the row by value instead, so
+  the argument recedes under its label without borrowing a meaning.
+
 - The `dsh-tui-update-models` skill teaches the catalog the current
   `dsh-provider-extra` build accepts: a route that owns its membership through
   `filter`, a route that owns its endpoint through `api` and `baseURL`, the

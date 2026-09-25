@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { builtinThemesDir, loadThemes } from '@/theme-files.ts'
+import { DEFAULT_THEME, builtinThemesDir, loadThemes } from '@/theme-files.ts'
 import { DEFAULT_PALETTE, DEFAULT_TOKENS } from '@/theme-defaults.ts'
 import { resolveToken } from '@/theme-resolver.ts'
 import { TUI_TOKENS, type TuiToken } from '@/theme-tokens.ts'
@@ -111,8 +111,11 @@ describe('/theme', () => {
   })
 
   it('names the theme in force, so the reader knows what they are looking at', () => {
+    // An unnamed section is not a bare table: the package's own theme draws it,
+    // and the heading has to say which one rather than leave the reader guessing
+    // at a look nothing named.
     expect(renderThemeTable(toOverrides(parseSettings({ theme: 'violet-orbit' }), library), library)[0]).toContain('violet-orbit')
-    expect(renderThemeTable(toOverrides(parseSettings({}), library), library)[0]).not.toContain('violet-orbit')
+    expect(renderThemeTable(toOverrides(parseSettings({}), library), library)[0]).toContain(DEFAULT_THEME)
   })
 
   it('reports a themed element as the theme, not as the reader', () => {

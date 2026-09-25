@@ -156,15 +156,16 @@ describe('violet-orbit', () => {
     expect(theme.style('markdown.link', 'x')).toContain('38;2;147;197;253')
   })
 
-  it('draws a tool argument lighter than the label beside it', () => {
+  it('sinks a tool argument below the label beside it', () => {
     // The label and the argument share a row, and pi hands both jobs a mid-tone
     // blue from the same family; a reader scanning for the call cannot tell where
-    // the name stops. Lifting the argument out of that family is what makes one
-    // row readable as two facts.
+    // the name stops. Dropping the argument to a dark slate separates them on the
+    // one axis a diff card has not already spent: a hue here would read as an
+    // added line.
     const theme = themed(VIOLET)
     expect(theme.style('tool.title', 'x')).toContain('38;2;129;151;247')
-    expect(theme.style('tool.args', 'x')).toContain('38;2;174;214;154')
-    expect(theme.style('tool.subcall.args', 'x')).toContain('38;2;174;214;154')
+    expect(theme.style('tool.args', 'x')).toContain('38;2;75;86;128')
+    expect(theme.style('tool.subcall.args', 'x')).toContain('38;2;75;86;128')
   })
 
   it('merges a reader field over a themed element field by field', () => {
