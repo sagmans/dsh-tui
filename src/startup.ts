@@ -6,7 +6,7 @@ import { parseCmdline } from '@deepseek-ai/dsh-cmdline'
 import { CONFIGURED_AGENT_IDENTITIES_KEY, type LauncherAgentIdentity } from '@deepseek-ai/dsh-agent-loop'
 import type { TuiStartup } from './contracts.ts'
 import { LaunchUsageError, PROFILE_NAME, identityOf, resolveLaunchIntent, resumeHint } from './identity.ts'
-import { installBundledSkill, SkillAlreadyExistsError } from './install-skills.ts'
+import { installBundledSkills, SkillAlreadyExistsError } from './install-skills.ts'
 
 export const name = 'tui-startup'
 
@@ -107,7 +107,7 @@ export function apply(ctx: Context): void {
     .option('--no-bell', 'do not ring the terminal bell when a long turn finishes')
 
   program.command('install-skills')
-    .description('install or update the bundled dogfood skill in ~/.agents/skills/')
+    .description('install or update the bundled skills in ~/.agents/skills/')
     .option('--update', 'replace an existing skill without asking')
     .action((options: { update?: boolean }) => {
       const exit = ctx.get('appExit')
@@ -117,8 +117,9 @@ export function apply(ctx: Context): void {
         exit(1)
       }
       const install = (update: boolean): void => {
-        const destination = update ? installBundledSkill(undefined, true) : installBundledSkill()
-        process.stdout.write(`Installed ${destination}\n`)
+        for (const destination of installBundledSkills(undefined, update)) {
+          process.stdout.write(`Installed ${destination}\n`)
+        }
         exit(0)
       }
 

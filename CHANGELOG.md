@@ -8,6 +8,13 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+### Added
+
+- `install-skills` ships both bundled skills: the dogfood helper, and
+  `dsh-tui-update-models`, which names every place a provider or model is wired,
+  the catalog fields that carry price, context window, and reasoning effort, and
+  the checks that show an inherited value before it reaches a session.
+
 ### Fixed
 
 - Model discovery failures now report a safe diagnostic instead of silently hiding

@@ -34,6 +34,7 @@
   "files": [
     "lib",
     ".agents/skills/dsh-tui-dogfood",
+    ".agents/skills/dsh-tui-update-models",
     "themes",
     "cordis.patch.yml",
     "README.md"
