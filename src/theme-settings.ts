@@ -33,6 +33,15 @@ export type SubCallDisplay = 'collapsed' | 'inline'
 /** The values the `subcalls` key accepts, declared once for the schema and the refusal message. */
 const SUBCALL_DISPLAYS = ['collapsed', 'inline'] as const
 
+/**
+ * The shipped display: a program's calls stay behind its card until asked for.
+ *
+ * A program can dispatch hundreds of calls, and a reader who meets one for the
+ * first time met a wall of lines rather than the answer; the rows are one click
+ * on the card's header, or the nested-calls key, away.
+ */
+const DEFAULT_SUBCALL_DISPLAY: SubCallDisplay = 'collapsed'
+
 /** How a reply's mermaid fences draw: never, once settled, or as the reply streams. */
 export const MERMAID_MODES = ['off', 'final', 'streaming'] as const
 export type MermaidMode = (typeof MERMAID_MODES)[number]
@@ -75,7 +84,7 @@ const SECTION = z.object({
   theme: z.string(),
   palette: PaletteSchema.default({}),
   tokens: TokensSchema.default({}),
-  subcalls: z.union([...SUBCALL_DISPLAYS]).default('inline'),
+  subcalls: z.union([...SUBCALL_DISPLAYS]).default(DEFAULT_SUBCALL_DISPLAY),
   mermaid: z.union([...MERMAID_MODES]).default(DEFAULT_MERMAID_MODE),
   // A free string rather than an enumerated union: the keymap module owns which
   // keys exist, and its refusal is the message a reader can act on.
@@ -304,7 +313,7 @@ export function defaultSettings(): TuiSettings {
     theme: undefined,
     palette: {},
     tokens: {},
-    subcalls: 'inline',
+    subcalls: DEFAULT_SUBCALL_DISPLAY,
     tools: toolDisplayTable(),
     mermaid: DEFAULT_MERMAID_MODE,
     prefixes: [...DEFAULT_PREFIX_KEYS],

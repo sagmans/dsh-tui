@@ -32,6 +32,12 @@
  *
  * --approve N answers the approval gate N seconds after the prompt; without it
  * a turn that needs a gated tool waits for a decision the harness never makes.
+ *
+ * --click "SECONDS:ROW[:COL]" presses and releases the left button at a screen
+ * cell, in the SGR coordinates the surface asks the terminal to report. A row a
+ * reader reaches by pointing at it has no key, so the only way to prove the
+ * click is to send the bytes a terminal would.
+ *
  */
 import { spawnSync } from 'node:child_process'
 import { chmodSync, mkdirSync, statSync, writeFileSync } from 'node:fs'
@@ -187,6 +193,25 @@ const PASTE_PREFIX = 'paste:'
  */
 const submitName = option('submit', 'submit')
 const submit = NAMED_KEYS[submitName] ?? submitName
+/**
+ * Point-and-click gestures as "seconds:row[:col]" triples, 1-based like the
+ * coordinates a terminal reports.
+ *
+ * The press and the release are sent as one gesture a frame apart, because a
+ * surface that answers on the release would otherwise never see the pair a
+ * real mouse produces.
+ */
+const clicks = option('click', '')
+  .split(',')
+  .filter(entry => entry !== '')
+  .map(entry => {
+    const [seconds, row, col] = entry.split(':')
+    return {
+      at: Number.parseInt(seconds, 10),
+      row: Number.parseInt(row ?? '1', 10),
+      col: Number.parseInt(col ?? '1', 10),
+    }
+  })
 const answers = option('answer', '')
   .split(',')
   .filter(entry => entry !== '')
@@ -262,6 +287,8 @@ const strip = text => text
 
 const at = (ms, action) => setTimeout(action, ms)
 const PRELUDE_AT_MS = 6000
+/** The gap between a click's press and its release, short enough to be one gesture. */
+const CLICK_RELEASE_MS = 60
 const PRELUDE_LEAD_MS = 1500
 const promptAt = PRELUDE_AT_MS + (prelude === '' ? 0 : PRELUDE_LEAD_MS)
 if (prelude !== '') at(PRELUDE_AT_MS, () => child.write(`${prelude}${submit}`))
@@ -271,6 +298,14 @@ if (prelude !== '') at(PRELUDE_AT_MS, () => child.write(`${prelude}${submit}`))
 if (prompt !== '') at(promptAt, () => child.write(`${prompt}${submit}`))
 if (approve > 0) at(promptAt + approve * 1000, () => child.write('y'))
 for (const answer of answers) at(promptAt + answer.at * 1000, () => child.write(answer.value))
+for (const click of clicks) {
+  // The press and the release are one gesture a frame apart, as a real mouse
+  // sends them: a surface that answered on the release would never see a press
+  // alone.
+  const cell = `\u001b[<0;${click.col};${click.row}`
+  at(promptAt + click.at * 1000, () => child.write(`${cell}M`))
+  at(promptAt + click.at * 1000 + CLICK_RELEASE_MS, () => child.write(`${cell}m`))
+}
 /** Sequences a terminal must see before the shell is usable again. */
 const RESTORE_SEQUENCES = {
   'alt screen': '\u001b[?1049l',

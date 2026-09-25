@@ -96,6 +96,60 @@ describe('TranscriptView nested PTC calls', () => {
       const lines = viewOf(foldedProgram(calls), INLINE).render(60)
       expect(lines).toContain('  … 1 more calls')
     })
+  it('opens a program from one click on its row, and folds it back the same way', () => {
+      const model = foldedProgram([
+        { name: 'read', args: { file_path: 'src/x.ts' } },
+        { name: 'bash', args: { command: 'git status' } },
+      ])
+      // No state of its own: this is the shipped default a fresh session reads.
+      const view = viewOf(model)
+      expect(view.render(60)).toEqual(['search the tree'])
+      // The one row a folded card has is the program's target, so it answers for
+      // the program — one level down, which is the calls themselves. What the
+      // program returned is the level below them and stays folded: a click that
+      // drew both would spend rows the reader never asked for and leave nothing
+      // to click for less.
+      expect(view.handleMouse(mouse('click', 'left', 0))).toEqual({ handled: true, render: true })
+      expect(view.render(60)).toEqual(['search the tree', '  read src/x.ts', '  bash git status · exit 0'])
+      // The same row takes the program back to the one row it started as.
+      view.handleMouse(mouse('click', 'left', 0))
+      expect(view.render(60)).toEqual(['search the tree'])
+      // A program holds no state a click cannot undo, so the two rows are the
+      // whole of what one row toggles between.
+      view.handleMouse(mouse('click', 'left', 0))
+      expect(view.render(60)).toEqual(['search the tree', '  read src/x.ts', '  bash git status · exit 0'])
+    })
+  it('leaves the program’s own rows to the key that opens cards', () => {
+      const model = foldedProgram([{ name: 'read', args: { file_path: 'src/x.ts' } }])
+      // The key opens the card, not the calls: a reader who opened every card has
+      // asked for the programs' own rows, and the calls stay as that reader left
+      // them — which, by default, is folded.
+      const view = viewOf(model, { expandCards: true, expandReasoning: false, expandSubCalls: false })
+      expect(view.render(60)).toEqual(['search the tree', '    done'])
+      // The header is still the calls' own target on an open card, and the rows
+      // below it — what the program returned — fold the card.
+      view.handleMouse(mouse('click', 'left', 0))
+      expect(view.render(60)).toEqual(['search the tree', '  read src/x.ts', '    done'])
+      // Clicking the program's own rows folds it without taking the calls with it:
+      // the two levels answer to the row they were asked from.
+      view.handleMouse(mouse('click', 'left', 2))
+      expect(view.render(60)).toEqual(['search the tree', '  read src/x.ts'])
+      view.handleMouse(mouse('click', 'left', 0))
+      expect(view.render(60)).toEqual(['search the tree'])
+    })
+  it('leaves one program’s fold alone when another is clicked', () => {
+      const model = foldedProgram([{ name: 'read', args: { file_path: 'src/x.ts' } }])
+      // A second card, so the click on one has a neighbour to leave alone.
+      model.apply({ type: 'tool/call', data: { name: 'run_code', arguments: '{"description":"second"}', callId: 'root2' } })
+      model.apply({ type: 'tool/ptc-dispatch-start', data: { rootCallId: 'root2', parentCallId: 'root2', subCallId: 'root2:ptc:1', name: 'read', arguments: { file_path: 'src/z.ts' } } })
+      model.apply({ type: 'tool/result', data: { message: { content: [{ type: 'tool-result', toolCallId: 'root2', text: 'done' }], isError: false } } })
+      const view = viewOf(model)
+      expect(view.render(60)).toEqual(['search the tree', 'search the tree'])
+      view.handleMouse(mouse('click', 'left', 0))
+      expect(view.render(60)).toEqual(['search the tree', '  read src/x.ts', 'search the tree'])
+      view.handleMouse(mouse('click', 'left', 0))
+      expect(view.render(60)).toEqual(['search the tree', 'search the tree'])
+    })
   it('opens a dispatched shell call to the rows it printed', () => {
       const model = foldedProgram([
         { name: 'bash', args: { command: 'echo hi' }, content: 'hi\nthere' },

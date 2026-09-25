@@ -43,7 +43,7 @@ describe('the dsh-tui settings section', () => {
     expect(parseSettings({})).toEqual({
       palette: {},
       tokens: {},
-      subcalls: 'inline',
+      subcalls: 'collapsed',
       mermaid: 'streaming',
       prefixes: ['ctrl+x'],
       prefixWindow: 2,
@@ -53,9 +53,9 @@ describe('the dsh-tui settings section', () => {
     })
   })
 
-  it('draws nested PTC calls until the reader folds them', () => {
-    expect(parseSettings({}).subcalls).toBe('inline')
-    expect(parseSettings({ subcalls: 'collapsed' }).subcalls).toBe('collapsed')
+  it('keeps a program’s calls behind its card until the reader asks for them', () => {
+    expect(parseSettings({}).subcalls).toBe('collapsed')
+    expect(parseSettings({ subcalls: 'inline' }).subcalls).toBe('inline')
   })
 
   it('rejects a display value the surface does not have', () => {
@@ -132,7 +132,7 @@ describe('the dsh-tui settings section', () => {
     expect(settings).toEqual({
       palette: {},
       tokens: {},
-      subcalls: 'inline',
+      subcalls: 'collapsed',
       mermaid: 'streaming',
       prefixes: ['ctrl+x'],
       prefixWindow: 2,
