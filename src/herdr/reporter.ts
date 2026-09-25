@@ -12,6 +12,7 @@ import { spawnSync } from 'node:child_process'
 import { createHerdrClient, type HerdrClient, type HerdrEnvironment } from './client.ts'
 import {
   EXIT_RELEASE_TIMEOUT_MS,
+  FALLBACK_HERDR_BIN,
   HERDR_AGENT,
   HERDR_BIN_PATH_VAR,
   HERDR_ENV_FLAG,
@@ -58,10 +59,16 @@ export interface HerdrReporter {
    * read as done between two turns of an agent that is still working.
    */
   driver(status: DriverStatus): void
-  /** A decision is waiting on the reader; waits stack, so they are counted. */
-  block(message: string): void
-  /** One waiting decision was settled, answered, or abandoned. */
-  unblock(): void
+  /**
+   * A decision is waiting on the reader, under the key of the slot holding it.
+   *
+   * Reporting a wait is what makes Herdr raise a needs-attention notification,
+   * so only a decision the agent owes the reader is one: a menu the reader
+   * opened themselves is navigation, not a wait.
+   */
+  block(key: string, message: string): void
+  /** The wait held under that key was settled, answered, or abandoned. */
+  unblock(key: string): void
   /** The pane opened, resumed, forked, or switched to a session. */
   session(input: HerdrSessionInput): void
   /** Send the current facts, or resend them with `force`. */
@@ -82,8 +89,15 @@ export function createHerdrReporter(options: HerdrReporterOptions = {}): HerdrRe
   // drops a release that cannot beat the reports this pane already sent.
   const release = options.releaseSync ?? ((): void => releaseAgentSync(env, nextSeq()))
   const retryBaseMs = Math.max(1, options.retryBaseMs ?? RETRY_BASE_MS)
-  let blockedCount = 0
-  let blockedMessage: string | undefined
+  /**
+   * The waits still owed, oldest first.
+   *
+   * A map keyed by the slot that opened the wait, so a slot taken over twice
+   * holds one entry and gives it back once; the newest remaining wait is the one
+   * that names the row, because the older ones are behind it in the reader's
+   * queue rather than in front of it.
+   */
+  const waits = new Map<string, string>()
   let driverRunning = false
   let sessionId: string | undefined
   let wantedState: LifecycleReport | undefined
@@ -180,16 +194,14 @@ export function createHerdrReporter(options: HerdrReporterOptions = {}): HerdrRe
       driverRunning = status === 'running'
       reporter.publish()
     },
-    block(message) {
-      blockedCount += 1
-      blockedMessage = boundedMessage(message)
+    block(key, message) {
+      waits.set(key, boundedMessage(message))
       reporter.publish()
     },
-    unblock() {
-      blockedCount = Math.max(0, blockedCount - 1)
-      // The last wait settled, so the message it was named by is stale; a later
-      // wait brings its own.
-      if (blockedCount === 0) blockedMessage = undefined
+    unblock(key) {
+      // A key nothing holds is not a wait that ended: dropping it keeps a slot
+      // that was taken over from clearing the row the new owner still needs.
+      waits.delete(key)
       reporter.publish()
     },
     session(input) {
@@ -203,7 +215,7 @@ export function createHerdrReporter(options: HerdrReporterOptions = {}): HerdrRe
       reporter.publish(true)
     },
     publish(force = false) {
-      const next = lifecycleReport({ blockedCount, blockedMessage, driverRunning })
+      const next = lifecycleReport({ blockedCount: waits.size, blockedMessage: [...waits.values()].at(-1), driverRunning })
       if (force || isReportChange(wantedState, next)) {
         wantedState = next
         stateSent = false
@@ -259,14 +271,25 @@ export function createHerdrReporter(options: HerdrReporterOptions = {}): HerdrRe
  * `seq` is what makes the release land, so it is required rather than optional:
  * Herdr sequences reports per source and treats a release that cannot beat them
  * as stale, which would leave the row of a process that is already gone.
+ *
+ * The binary Herdr exported is tried first and the one on `PATH` second: the
+ * exported path names the release that started this pane, and a multiplexer
+ * upgraded while the pane ran can take that file away. A release that could not
+ * spawn is silent by design, so the fallback is the only thing standing between
+ * an exit and a row that reads as a live agent forever.
  */
 export function releaseAgentSync(env: HerdrEnvironment, seq: number): void {
   const paneId = env[HERDR_PANE_ID_VAR]
   if (env[HERDR_ENV_VAR] !== HERDR_ENV_FLAG || paneId === undefined || env[HERDR_SOCKET_PATH_VAR] === undefined) return
   const argv = ['pane', 'release-agent', paneId, '--source', HERDR_SOURCE, '--agent', HERDR_AGENT, '--seq', String(seq)]
-  spawnSync(env[HERDR_BIN_PATH_VAR] ?? 'herdr', argv, {
-    env: { ...process.env, ...env },
-    stdio: 'ignore',
-    timeout: EXIT_RELEASE_TIMEOUT_MS,
-  })
+  const exported = env[HERDR_BIN_PATH_VAR]
+  for (const bin of exported === undefined || exported === FALLBACK_HERDR_BIN ? [FALLBACK_HERDR_BIN] : [exported, FALLBACK_HERDR_BIN]) {
+    // Only a spawn that could not start the binary at all is worth a second try:
+    // a CLI that ran and refused the release would refuse it the same way again.
+    if (spawnSync(bin, argv, {
+      env: { ...process.env, ...env },
+      stdio: 'ignore',
+      timeout: EXIT_RELEASE_TIMEOUT_MS,
+    }).error === undefined) return
+  }
 }

@@ -5,6 +5,7 @@ import type { ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
 import type { AskUserQuestionAnswer } from '@deepseek-ai/dsh-user-questions'
 import { ApprovalGate, type GateAnswer, type GateCard } from '../gates.ts'
 import { QuestionGate, toGateQuestions } from '../gates/questions.ts'
+import { GATE_WAIT_KEY } from '../herdr/constants.ts'
 import type { HerdrReporter } from '../herdr/reporter.ts'
 import type { Keymap } from '../input/actions.ts'
 import type { TuiTheme } from '../theme.ts'
@@ -92,8 +93,9 @@ export interface ModalInput {
  *
  * Both take the keyboard and give it back the same way, and both can be
  * cancelled by something other than a press (an aborted request, a settled
- * list), so the focus, submission flag, blocked Herdr row and popup lifetime
- * belong to one owner rather than to every feature that opens a list.
+ * list), so the focus, submission flag and popup lifetime belong to one owner
+ * rather than to every feature that opens a list. The blocked Herdr row is the
+ * gate's alone: see `openPicker`.
  */
 export function createModalInput(ctx: Context, ports: ModalInputPorts): ModalInput {
   let pending: PendingGate | undefined
@@ -105,7 +107,7 @@ export function createModalInput(ctx: Context, ports: ModalInputPorts): ModalInp
     pending = next
     // The card's own title names the decision, which is what a reader glancing
     // at a wall of panes needs in order to know which one to open.
-    ports.herdr.block(next.gate.card().title)
+    ports.herdr.block(GATE_WAIT_KEY, next.gate.card().title)
     // A gate owns the keyboard: the editor must not collect the decision keys.
     ports.editor.disableSubmit = true
     ports.tui.setFocus(null)
@@ -118,7 +120,7 @@ export function createModalInput(ctx: Context, ports: ModalInputPorts): ModalInp
 
   const closeGate = (): void => {
     pending = undefined
-    ports.herdr.unblock()
+    ports.herdr.unblock(GATE_WAIT_KEY)
     ports.editor.disableSubmit = false
     // The question is answered or skipped, so the reader gets their prompt back
     // in the bar they left it in, with the menu the prompt bar offered.
@@ -135,7 +137,6 @@ export function createModalInput(ctx: Context, ports: ModalInputPorts): ModalInp
     // list would sit over the transcript until something else repainted.
     pendingPicker?.release?.()
     pendingPicker = undefined
-    ports.herdr.unblock()
     ports.editor.disableSubmit = false
     ports.tui.setFocus(ports.editor)
     settle?.(id)
@@ -180,9 +181,14 @@ export function createModalInput(ctx: Context, ports: ModalInputPorts): ModalInp
         card: overlay === undefined ? () => picker.card() : undefined,
         release: overlay === undefined ? undefined : () => overlay.hide(),
       }
-      // A picker owns the keyboard exactly as a gate does: nothing moves until
-      // the reader chooses, so it is the same kind of wait.
-      ports.herdr.block(picker.card().title)
+      // A picker is not reported as a wait, though it owns the keyboard exactly
+      // as a gate does: the reader opened this menu themselves and is looking at
+      // it, while Herdr answers a transition into `blocked` with a
+      // needs-attention notification and its sound — in the foreground pane too.
+      // Claiming a wait for every menu would ring for the reader's own
+      // navigation, and would read as an agent stuck on a decision it never asked
+      // for. A gate is the opposite case: the agent asked, and may have asked
+      // somebody who walked away.
       ports.editor.disableSubmit = true
       ports.tui.setFocus(null)
       ports.tui.requestRender()

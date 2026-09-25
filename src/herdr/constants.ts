@@ -58,6 +58,9 @@ export const DEFAULT_TIMEOUT_MS = 500
 /** A release on the way out cannot outlive the process that owes it. */
 export const EXIT_RELEASE_TIMEOUT_MS = 250
 
+/** The CLI to release through when the one Herdr exported cannot be spawned. */
+export const FALLBACK_HERDR_BIN = 'herdr'
+
 /** The first wait before a report Herdr did not acknowledge is sent again. */
 export const RETRY_BASE_MS = 250
 
@@ -85,6 +88,15 @@ export const MAX_METADATA_VALUE_CHARS = 80
  * whole.
  */
 export const MAX_BLOCKED_MESSAGE_CHARS = 120
+
+/**
+ * The key a gate's wait is held under.
+ *
+ * Waits are keyed rather than counted because one modal slot can be taken over
+ * while it is still open: a count would then be incremented twice and given back
+ * once, and a row left blocked names a decision nobody owes any more.
+ */
+export const GATE_WAIT_KEY = 'gate'
 
 /**
  * Reports are sequenced in microseconds.

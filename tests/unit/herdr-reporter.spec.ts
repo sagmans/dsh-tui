@@ -2,10 +2,14 @@ import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { HERDR_AGENT, HERDR_SOURCE, SESSION_START_REASONS } from '@/herdr/constants.ts'
+import { dirname } from 'node:path'
+import { GATE_WAIT_KEY, HERDR_AGENT, HERDR_SOURCE, SESSION_START_REASONS } from '@/herdr/constants.ts'
 import { createHerdrReporter, releaseAgentSync } from '@/herdr/reporter.ts'
 import type { HerdrClient, HerdrEnvironment } from '@/herdr/client.ts'
 import type { StateReport } from '@/herdr/client.ts'
+
+/** A second slot, so a stacked wait is not the gate's own key standing in for it. */
+const QUESTION_WAIT = 'question'
 
 interface Recorded {
   readonly kind: 'state' | 'session' | 'metadata'
@@ -111,8 +115,8 @@ describe('createHerdrReporter', () => {
     const reporter = createHerdrReporter({ client, now: () => 1 })
 
     reporter.driver('running')
-    reporter.block('approval needed · Bash')
-    reporter.unblock()
+    reporter.block(GATE_WAIT_KEY, 'approval needed · Bash')
+    reporter.unblock(GATE_WAIT_KEY)
 
     expect(states(calls)).toEqual([
       { state: 'working', message: undefined, seq: 1001, sessionId: undefined },
@@ -121,19 +125,34 @@ describe('createHerdrReporter', () => {
     ])
   })
 
-  it('counts stacked waits and keeps the newest one named', () => {
+  it('keeps the wait that is still owed named while waits stack', () => {
     const { calls, client } = recordingClient()
     const reporter = createHerdrReporter({ client, now: () => 1 })
 
-    reporter.block('approval needed · Bash')
-    reporter.block('question · continue?')
-    reporter.unblock()
+    reporter.block(GATE_WAIT_KEY, 'approval needed · Bash')
+    reporter.block(QUESTION_WAIT, 'question · continue?')
+    reporter.unblock(QUESTION_WAIT)
 
     const last = states(calls).at(-1) as StateReport
     expect(last.state).toBe('blocked')
-    expect(last.message).toBe('question · continue?')
+    // A settled decision must not keep naming the row: the reader would go
+    // looking for a question that is already answered.
+    expect(last.message).toBe('approval needed · Bash')
 
-    reporter.unblock()
+    reporter.unblock(GATE_WAIT_KEY)
+    expect((states(calls).at(-1) as StateReport).state).toBe('idle')
+  })
+
+  it('holds one wait for a slot taken over while it was open', () => {
+    const { calls, client } = recordingClient()
+    const reporter = createHerdrReporter({ client, now: () => 1 })
+
+    reporter.block(GATE_WAIT_KEY, 'approval needed · Bash')
+    reporter.block(GATE_WAIT_KEY, 'approval needed · Write')
+    reporter.unblock(GATE_WAIT_KEY)
+
+    // A counted wait would still be owed here, and the row would read as blocked
+    // for a decision nobody is waiting on any more.
     expect((states(calls).at(-1) as StateReport).state).toBe('idle')
   })
 
@@ -142,18 +161,18 @@ describe('createHerdrReporter', () => {
     const reporter = createHerdrReporter({ client, now: () => 1 })
 
     reporter.driver('idle')
-    reporter.block('approval needed · Bash')
-    reporter.unblock()
+    reporter.block(GATE_WAIT_KEY, 'approval needed · Bash')
+    reporter.unblock(GATE_WAIT_KEY)
 
     expect((states(calls).at(-1) as StateReport).state).toBe('idle')
   })
 
-  it('never counts below a settled wait', () => {
+  it('ignores the end of a wait it never saw', () => {
     const { calls, client } = recordingClient()
     const reporter = createHerdrReporter({ client, now: () => 1 })
 
-    reporter.unblock()
-    reporter.block('approval needed · Bash')
+    reporter.unblock(GATE_WAIT_KEY)
+    reporter.block(GATE_WAIT_KEY, 'approval needed · Bash')
 
     expect((states(calls).at(-1) as StateReport).state).toBe('blocked')
   })
@@ -323,7 +342,7 @@ describe('createHerdrReporter', () => {
     reporter.driver('running')
     reporter.releaseSync()
     reporter.driver('idle')
-    reporter.block('approval needed · Bash')
+    reporter.block(GATE_WAIT_KEY, 'approval needed · Bash')
     reporter.session({ id: 'tui-session-9', cwd: '/tmp/project', reason: SESSION_START_REASONS.resume })
     reporter.publish(true)
 
@@ -372,13 +391,29 @@ describe('releaseAgentSync', () => {
     const reporter = createHerdrReporter({ client, env: paneEnv(fake), now: () => 1 })
 
     reporter.driver('running')
-    reporter.block('approval needed · Bash')
+    reporter.block(GATE_WAIT_KEY, 'approval needed · Bash')
     reporter.releaseSync()
 
     const sent = states(calls).map(state => (state as StateReport).seq)
     const argv = fake.argv()
     expect(sent.length).toBe(2)
     expect(Number(argv[argv.indexOf('--seq') + 1])).toBeGreaterThan(Math.max(...sent))
+  })
+
+  it('releases through the CLI on PATH when the exported binary is gone', () => {
+    const fake = fakeHerdrBinary()
+
+    // Herdr exports the release that started this pane; an upgrade can take that
+    // file away while the pane is still open, and the row must still go back.
+    releaseAgentSync({
+      ...paneEnv(fake),
+      HERDR_BIN_PATH: join(dirname(fake.bin), 'herdr-that-was-removed'),
+      PATH: dirname(fake.bin),
+    }, 4242)
+
+    expect(fake.argv()).toEqual([
+      'pane', 'release-agent', 'w3:p1', '--source', HERDR_SOURCE, '--agent', HERDR_AGENT, '--seq', '4242',
+    ])
   })
 
   it('does nothing away from Herdr', () => {
