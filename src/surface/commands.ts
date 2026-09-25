@@ -80,6 +80,8 @@ export interface CommandsPorts {
   readonly presetRoster: PresetRoster | undefined
   /** A composition row that is missing, printed before the screen is taken. */
   readonly missingOptional: () => string | undefined
+  /** An installed skill this build moved past, printed once at startup. */
+  readonly skillDrift: () => string | undefined
   readonly session: SessionLifecycle
   readonly transcript: SessionView
   readonly route: ModelChoice
@@ -451,6 +453,11 @@ export function createCommands(ctx: Context, ports: CommandsPorts): Commands {
     // the shell's own output.
     const missing = ports.missingOptional()
     if (missing !== undefined) ports.transcript.notice(missing)
+    // A skill an agent loads from ~/.agents/skills is this package's own text,
+    // so a stale copy teaches the old wiring; naming it here is cheaper than
+    // debugging the profile it misdescribes.
+    const drift = ports.skillDrift()
+    if (drift !== undefined) ports.transcript.notice(drift)
     // A named mode that disagrees with the one this session recorded is refused
     // here as well as at the open, because the alternate screen closes over
     // whatever was painted on it: the reader would see the failure, not the

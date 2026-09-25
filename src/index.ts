@@ -8,6 +8,7 @@ import { createStatusFacts } from './agent/status.ts'
 import { describeMissingOptional, describeMissingRequired, probeComposition } from './compat/probe.ts'
 import { hasLiveRowSettings, readRowSettings, resolveConfig } from './config.ts'
 export { Config } from './config.ts'
+import { describeSkillDrift } from './install-skills.ts'
 import { windowTitle } from './terminal/title.ts'
 import { toolDisplayFor } from './tool-display.ts'
 import { runModelList } from './model-list.ts'
@@ -450,6 +451,9 @@ export function apply(ctx: Context, config: unknown): void {
     preset: resolved.preset,
     presetRoster: agentPresets,
     missingOptional: () => describeMissingOptional(probe),
+    // Read at start rather than at mount: the copy a reader installed can lag
+    // this build, and the surface is the only place left that can say so.
+    skillDrift: () => describeSkillDrift(),
     session: sessionLifecycle,
     transcript: sessionView,
     route: modelChoice,
