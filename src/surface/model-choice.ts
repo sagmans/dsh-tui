@@ -8,11 +8,17 @@ import {
   // module's own owner; the type arrives here as the route it describes.
   type ModelChoice as ChosenRoute,
   type ModelRoute,
+  type ProviderEntry,
 } from '../agent/model.ts'
 import type { Keymap } from '../input/actions.ts'
+import { stripControlCharacters } from '../text.ts'
 import { EffortPicker, ModelPicker, PROVIDER_DEFAULT_EFFORT_ID, effortChoices } from '../ui/picker.ts'
 import type { StatusFacts } from '../ui/status.ts'
 import type { Picker } from './modal-input.ts'
+
+// Adapter errors may contain credentials or request bodies, even in their messages.
+const MODEL_DISCOVERY_FAILURE = 'could not list models; check provider configuration and credentials, then retry /model'
+const PROVIDER_DISCOVERY_FAILURE = 'could not list providers; check provider configuration, then retry /model'
 
 /**
  * What the route owner needs from the surface that composes it.
@@ -73,12 +79,20 @@ export function createModelChoice(ctx: Context, ports: ModelChoicePorts): ModelC
       ports.render()
       return
     }
-    const command = parseModelArgument(argument, catalog.providers(), modelSwitch.current())
+    let providers: readonly ProviderEntry[]
+    try {
+      providers = catalog.providers()
+    } catch {
+      ports.notice(PROVIDER_DISCOVERY_FAILURE)
+      ports.render()
+      return
+    }
+    const command = parseModelArgument(argument, providers, modelSwitch.current())
     switch (command.kind) {
       case 'current':
         // Choosing by eye is the point of a terminal selector; the picker
         // heads itself with the route the next step will actually use.
-        void openModelPicker()
+        void openModelPicker(providers)
         return
       case 'list-models':
         void catalog.models(command.provider).then(entries => {
@@ -86,8 +100,8 @@ export function createModelChoice(ctx: Context, ports: ModelChoicePorts): ModelC
             ? `${command.provider} advertises no models; an id may still work`
             : `${command.provider}: ${entries.map(entry => entry.id).join(' ')}`)
           ports.render()
-        }).catch((error: unknown) => {
-          ports.notice(`could not list models: ${error instanceof Error ? error.message : String(error)}`)
+        }).catch(() => {
+          ports.notice(`${stripControlCharacters(command.provider)}: ${MODEL_DISCOVERY_FAILURE}`)
           ports.render()
         })
         return
@@ -255,15 +269,14 @@ export function createModelChoice(ctx: Context, ports: ModelChoicePorts): ModelC
    * deployment configured — and each provider's models join the open list as
    * its catalog resolves, so the picker is filterable before the slowest
    * adapter answers. A route whose catalog cannot be read stays reachable by
-   * name through the text form rather than by an explanation in the list.
+   * name through the text form; a notice explains why its rows are missing.
    */
-  const openModelPicker = async (): Promise<void> => {
+  const openModelPicker = async (providers: readonly ProviderEntry[]): Promise<void> => {
     if (catalog === undefined) {
       ports.notice('this profile has no llm service, so models cannot be listed or switched')
       ports.render()
       return
     }
-    const providers = catalog.providers()
     if (providers.length === 0) {
       ports.notice('no provider is configured; add one before choosing a model')
       ports.render()
@@ -279,7 +292,8 @@ export function createModelChoice(ctx: Context, ports: ModelChoicePorts): ModelC
           routes.push(...entries.map(entry => ({ provider: provider.id, model: entry.id, name: entry.name })))
           ports.render()
         }).catch(() => {
-          // One adapter's discovery failure is not the list's to explain.
+          ports.notice(`${stripControlCharacters(provider.id)}: ${MODEL_DISCOVERY_FAILURE}`)
+          ports.render()
         })
       }
       const picked = await ports.openPicker(new ModelPicker(() => routes, effectiveRoute, ports.keymap))

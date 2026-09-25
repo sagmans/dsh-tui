@@ -10,6 +10,8 @@ breaking change, and a patch carries only fixes.
 
 ### Fixed
 
+- Model discovery failures now report a safe diagnostic instead of silently hiding
+  a failed provider's catalog. Healthy routes remain selectable.
 - TUI preferences now expose a Config schema for source hosts while preserving
   released section APIs and standalone core provider discovery. Config-backed
   writes reject schema runtimes without native live references instead of
