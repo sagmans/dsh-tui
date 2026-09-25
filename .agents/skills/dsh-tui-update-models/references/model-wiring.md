@@ -117,7 +117,9 @@ A JSON entry is the whole truth for a `source`: `id`, `name`, `cost`,
 `contextWindow`, `maxTokens`, `input`, `reasoning`, `thinkingLevelMap`, `compat`.
 A model declared without `template` and without `metadata` is served exactly as
 this file describes it, so an id the vendor renamed or repriced shows stale
-numbers until the catalog declares them.
+numbers until the catalog declares them. An entry that carries its own complete
+`metadata` needs no installed entry at all, which is how a route the harness does
+not describe is wired.
 
 ## Credentials
 
