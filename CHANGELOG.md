@@ -8,6 +8,10 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+### Changed
+
+- Submitted prompts now have a `transcript.user.border` token independent of the editor and assistant frames. `violet-orbit` ships the current `#6f76c9` prompt/editor and `#a89771` assistant frame shades without per-user overrides.
+
 ### Fixed
 
 - PTY dogfood now rejects homes with escaping links and requires the installed `dsh 0.1.5-rc.3` launcher. The worktree helper rejects incompatible hosts before cloning. Previously, the PTY driver ran the Harness source checkout and could treat live `settings.yaml` as migration input.

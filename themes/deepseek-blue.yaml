@@ -44,6 +44,8 @@ palette:
 tokens:
   # A row of the conversation.
   transcript.user: { fg: default, bg: user }  # the product marks your own turn with a bubble, not a hue
+  # The sent prompt keeps the brand shade without inheriting editor overrides.
+  transcript.user.border: { fg: accent }
   # The reply's own frame. A border is a container rather than a fact, so it may
   # not take a signal shade; a warm neutral keeps the answer held without moving
   # it into the amber the surface reserves for state.

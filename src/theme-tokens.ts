@@ -50,14 +50,15 @@ export type CardRowClass = (typeof CARD_ROW_CLASSES)[number]
 export const TUI_TOKENS = [
   // Transcript rows
   'transcript.user',
+  'transcript.user.border',
   'transcript.assistant.border',
   'transcript.notice',
   'transcript.marker',
   'transcript.reasoning.summary',
   'transcript.reasoning.body',
   'transcript.reasoning.hint',
-  // A reply's text is markdown, so the markdown tokens are what address it; only
-  // the frame drawn around the reply has an element of its own.
+  // Reply text belongs to markdown; prompt text and both frames have separate
+  // addresses so adjusting a frame never recolours its contents or the editor.
   // Tool cards: the generic layer
   'tool.title',
   'tool.glyph',

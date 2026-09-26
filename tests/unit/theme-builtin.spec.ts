@@ -145,6 +145,13 @@ describe('violet-orbit', () => {
     expect(style).not.toContain('48;2;')
   })
 
+  it('ships the current prompt, reply, and editor frame colours without settings overrides', () => {
+    const theme = themed(VIOLET)
+    expect(theme.style('transcript.user.border', 'x')).toContain('38;2;111;118;201')
+    expect(theme.style('transcript.assistant.border', 'x')).toContain('38;2;168;151;113')
+    expect(theme.editor.borderColor('x')).toContain('38;2;111;118;201')
+  })
+
   it('draws a tool label periwinkle rather than the shipped amber', () => {
     expect(themed(VIOLET).style('tool.title', 'x')).toContain('38;2;129;151;247')
   })

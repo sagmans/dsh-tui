@@ -293,12 +293,34 @@ describe('TranscriptView theming', () => {
       expect(lines.join('\n')).not.toContain('\u001b[1;')
     })
   it('draws a prompt bare when the frame is hidden', () => {
-      const bare = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['editor.border', { hidden: true }]]) })
+      const bare = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['transcript.user.border', { hidden: true }]]) })
       const lines = new TranscriptView(userModel(), bare, new MarkdownRenderer(bare.markdown), { state: () => COLLAPSED }).render(40)
       expect(lines).toHaveLength(1)
       // No frame, but the text keeps the column the frame's own air gave it, so a
       // theme that hides the border does not move the prompt.
       expect(lines[0]?.trimEnd()).toBe(' \u001b[38;2;39;245;200mhello there\u001b[0m')
+    })
+  it('keeps a submitted prompt framed when the editor border is hidden', () => {
+      const colour = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['editor.border', { hidden: true }]]) })
+      expect(colour.editor.borderColor('x')).toBe('')
+      const lines = new TranscriptView(userModel(), colour, new MarkdownRenderer(colour.markdown), { state: () => COLLAPSED }).render(40)
+      expect(lines).toHaveLength(3)
+      expect(stripTerminalSequences(lines[0] ?? '')).toMatch(/^╭/)
+    })
+  it('styles the prompt, reply, and editor frames independently', () => {
+      const colour = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([
+        ['transcript.user.border', { fg: '#ff0000' }],
+        ['transcript.assistant.border', { fg: '#0000ff' }],
+        ['editor.border', { fg: '#00ff00' }],
+      ]) })
+      const prompt = new TranscriptView(userModel(), colour, new MarkdownRenderer(colour.markdown), { state: () => COLLAPSED }).render(40)
+      const model = new TranscriptModel()
+      model.apply({ type: 'assistant/message', data: { message: { content: [{ type: 'text', text: 'the answer' }] } } })
+      const reply = new TranscriptView(model, colour, new MarkdownRenderer(colour.markdown), { state: () => COLLAPSED }).render(40)
+      expect(prompt[0]).toContain('38;2;255;0;0')
+      expect(reply[0]).toContain('38;2;0;0;255')
+      expect(colour.editor.borderColor('x')).toContain('38;2;0;255;0')
+      expect(prompt.join('\n') + reply.join('\n')).not.toContain('38;2;0;255;0')
     })
   it("draws a reply's frame in the assistant border shade", () => {
       const model = new TranscriptModel()
