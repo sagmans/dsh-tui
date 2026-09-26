@@ -303,9 +303,8 @@ private pushPicker(lines: string[], picker: PickerCard, width: number): void {
         return
       case 'user': {
         if (!this.theme.visible('transcript.user')) return
-        // A prompt is boxed wherever it is read, so the row it left in the queue
-        // and the row it becomes here are recognisably the same object.
-        this.messages.pushFramed(lines, copy, entry.text, width, false, this.messages.userFace(), 'editor.border')
+        // A sent prompt keeps its frame without inheriting changes to the input bar.
+        this.messages.pushFramed(lines, copy, entry.text, width, false, this.messages.userFace(), 'transcript.user.border')
         return
       }
       case 'notice':

@@ -109,6 +109,7 @@ const plain: StyleSpec = {}
  */
 export const DEFAULT_TOKENS: Readonly<Record<TuiToken, StyleSpec>> = {
   'transcript.user': { fg: 'user' },
+  'transcript.user.border': muted,
   'transcript.assistant.border': { fg: ASSISTANT_FRAME_GOLD },
   'transcript.notice': muted,
   'transcript.marker': muted,
