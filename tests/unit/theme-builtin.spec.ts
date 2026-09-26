@@ -163,6 +163,12 @@ describe('violet-orbit', () => {
     expect(theme.style('markdown.link', 'x')).toContain('38;2;147;197;253')
   })
 
+  it('gives the skill name a violet the label does not wear', () => {
+    // The name rides in the label's own row, so it needs a shade that separates
+    // it from the periwinkle without dropping to the argument's dark slate.
+    expect(themed(VIOLET).style('tool.skill', 'x')).toContain('38;2;201;163;217')
+  })
+
   it('sinks a tool argument below the label beside it', () => {
     // The label and the argument share a row, and pi hands both jobs a mid-tone
     // blue from the same family; a reader scanning for the call cannot tell where

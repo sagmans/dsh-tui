@@ -75,7 +75,18 @@ describe('cardOfCall', () => {
 
   it('drops a presenter verb that only restates the call', () => {
     const card = cardOfCall({ card: 'generic', title: 'Load skill project-skill', kind: 'read', rawInput: 'project-skill' }, 'skill')
+    // The label and the name travel in separate fields so the name can carry its
+    // own colour, while the row still reads "skill project-skill".
+    expect(card.title).toBe('skill')
+    expect(card.skill).toBe('project-skill')
+  })
+
+  it('keeps another tool\'s declared title whole', () => {
+    // The split belongs to the skill card alone: a title another presenter
+    // wrote is its own wording and must not be cut at the first word.
+    const card = cardOfCall({ card: 'generic', title: 'Load skill project-skill', kind: 'read' }, 'read')
     expect(card.title).toBe('skill project-skill')
+    expect(card.skill).toBeUndefined()
   })
 })
 
@@ -140,6 +151,14 @@ describe('cardDetailRows', () => {
 })
 
 describe('cardOfResult', () => {
+  it('splits the skill the result side declares too', () => {
+    // A settled row may be the only side that answered, so the name has to be
+    // split there as well or a resumed fold would draw it in the label's colour.
+    const card = cardOfResult({ card: 'generic', title: 'Load skill project-skill', content: [] }, { name: 'skill', failed: false, contentLines: ['loaded'] })
+    expect(card.title).toBe('skill')
+    expect(card.skill).toBe('project-skill')
+  })
+
   it('renders a terminal result with its exit status kept out of the output rows', () => {
     const card = cardOfResult({ card: 'terminal', title: 'ls', output: 'a\nb', exitCode: 0 }, { name: 'bash', failed: false, contentLines: [] })
     // The header is the tool, the result title is the command fallback, and the
@@ -356,6 +375,14 @@ describe('mergeCards', () => {
     expect(merged.argument).toBe('a.ts')
   })
 
+  it('keeps the skill name the call header carried', () => {
+    // The result knows nothing about the skill, so the merged row would drop the
+    // name and fall back to a bare label unless it travels with the call.
+    const skillCall: ToolCard = { kind: 'generic', tool: 'skill', title: 'skill', skill: 'project-skill', detail: [], failed: false, totalLines: 0 }
+    const result: ToolCard = { kind: 'generic', tool: 'skill', title: 'skill', detail: [row('detail', 'ok')], failed: false, totalLines: 1 }
+    expect(mergeCards(skillCall, result).skill).toBe('project-skill')
+  })
+
   it('returns the single available card when only one side exists', () => {
     expect(mergeCards(undefined, call)).toBe(call)
     expect(mergeCards(call, undefined)).toBe(call)
@@ -393,6 +420,11 @@ describe('carriedFields', () => {
     expect(carriedFields(card)).toEqual({})
   })
 
+  it('carries the skill name a rebuild would otherwise lose', () => {
+    const card: ToolCard = { kind: 'generic', tool: 'skill', title: 'skill', skill: 'project-skill', detail: [], failed: false, totalLines: 0 }
+    expect(carriedFields(card)).toEqual({ skill: 'project-skill' })
+  })
+
   it('carries the nested calls a PTC program dispatched', () => {
     const card: ToolCard = {
       kind: 'generic',
@@ -422,6 +454,14 @@ describe('subCallRow', () => {
     const bare = { view: undefined, output: undefined, status: undefined, running: false, failed: false }
     expect(subCallRow('s2', 'mystery', '{"a":1}', bare)).toEqual({ id: 's2', title: 'mystery', argument: '{"a":1}', failed: false, running: false })
     expect(subCallRow('s3', 'mystery', '', bare)).toEqual({ id: 's3', title: 'mystery', failed: false, running: false })
+  })
+
+  it('keeps the skill name on a nested skill row', () => {
+    // A dispatched row is rebuilt from its view, so a name held only in the
+    // card's own title would leave the nested row naming the tool, not the skill.
+    const view: ToolCard = { kind: 'generic', tool: 'skill', title: 'skill', skill: 'project-skill', detail: [], failed: false, totalLines: 0 }
+    expect(subCallRow('s5', 'skill', '{"name":"project-skill"}', { view, output: undefined, status: undefined, running: false, failed: false }))
+      .toEqual({ id: 's5', title: 'skill', skill: 'project-skill', failed: false, running: false })
   })
 
   it('drops a whole grapheme rather than half of a joined emoji', () => {

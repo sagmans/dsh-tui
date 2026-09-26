@@ -9,6 +9,7 @@ import { stripTerminalSequences, visibleWidth } from '@earendil-works/pi-tui'
 import { cardOfCall, cardOfResult } from '@/cards/presenter.ts'
 import { contentLines, CARD_DETAIL_MAX, type ToolPresenter } from '@/cards.ts'
 import { createTheme } from '@/theme.ts'
+import type { StyleSpec, TuiToken } from '@/theme-tokens.ts'
 import { DEFAULT_PALETTE } from '@/theme-defaults.ts'
 import { TranscriptModel } from '@/transcript.ts'
 import { MarkdownRenderer } from '@/ui/markdown.ts'
@@ -167,6 +168,21 @@ describe('TranscriptView tool args and stats', () => {
       model.apply({ type: 'tool/result', data: { message: { content: [{ type: 'tool-result', toolCallId: 'c1', text: 'body' }], isError: false } } })
       return viewOf(model, state).render(width)
     }
+  it('reserves room for a skill name before clipping an argument', () => {
+    // A path can accompany a skill name; the path must yield room to the
+    // read's measured facts rather than pushing those facts off the edge.
+    const presenter: ToolPresenter = {
+      call: name => cardOfCall({ card: 'generic', title: 'Load skill project-skill', kind: 'read', locations: [{ path: 'src/long/path/name.md' }] }, name),
+      result: (name, input) => cardOfResult(
+        { card: 'read', path: 'src/long/path/name.md', offset: 1, lines: [{ number: 1, text: 'x' }], totalLines: 1 },
+        { name, failed: input.isError, contentLines: contentLines(input.content) },
+      ),
+    }
+    const line = folded('skill', presenter, 55)[0] ?? ''
+    expect(line).toContain('skill project-skill')
+    expect(line).toContain(' · 1 tok')
+    expect(visibleWidth(line)).toBeLessThanOrEqual(55)
+  })
   it('shows a read path with its range, size, and tokens on the folded line', () => {
       const presenter: ToolPresenter = {
         call: name => cardOfCall({ card: 'generic', title: 'Read a.ts (from line 5)', kind: 'read', locations: [{ path: 'a.ts', line: 5 }] }, name),
@@ -251,6 +267,40 @@ describe('TranscriptView tool args and stats', () => {
         result: () => undefined,
       }
       expect(folded('skill', presenter)).toEqual(['skill project-skill'])
+    })
+  it('paints the skill name with the token its own colour comes from', () => {
+      // The label and the name sit on one row, so sharing the label's colour
+      // would leave a reader unable to tell where the tool ends and the skill
+      // the tool was asked for begins.
+      const presenter: ToolPresenter = {
+        call: name => cardOfCall({ card: 'generic', title: 'Load skill project-skill', kind: 'read', rawInput: 'project-skill' }, name),
+        result: () => undefined,
+      }
+      const skillModel = (): TranscriptModel => {
+        const model = new TranscriptModel(presenter)
+        model.apply({ type: 'tool/call', data: { name: 'skill', arguments: '{}', callId: 'c1' } })
+        model.apply({ type: 'tool/result', data: { message: { content: [{ type: 'tool-result', toolCallId: 'c1', text: 'body' }], isError: false } } })
+        return model
+      }
+      const draw = (tokens: ReadonlyMap<TuiToken, StyleSpec>): string => {
+        const theme = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens })
+        return new TranscriptView(skillModel(), theme, new MarkdownRenderer(theme.markdown), { state: () => COLLAPSED }).render(80).join('\n')
+      }
+      expect(draw(new Map([['tool.skill', { fg: '#C9A3D9' }]]))).toContain('\u001b[38;2;201;163;217mproject-skill')
+    })
+  it('keeps the skill name on screen when its own colour is hidden', () => {
+      // A hidden colour retires the paint, not the subject: the row still has to
+      // say which skill was loaded, in the colour the label itself wears.
+      const presenter: ToolPresenter = {
+        call: name => cardOfCall({ card: 'generic', title: 'Load skill project-skill', kind: 'read', rawInput: 'project-skill' }, name),
+        result: () => undefined,
+      }
+      const model = new TranscriptModel(presenter)
+      model.apply({ type: 'tool/call', data: { name: 'skill', arguments: '{}', callId: 'c1' } })
+      model.apply({ type: 'tool/result', data: { message: { content: [{ type: 'tool-result', toolCallId: 'c1', text: 'body' }], isError: false } } })
+      const theme = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['tool.skill', { hidden: true }]]) })
+      const line = new TranscriptView(model, theme, new MarkdownRenderer(theme.markdown), { state: () => COLLAPSED }).render(80).join('\n')
+      expect(line).toContain(theme.style('tool.title', 'project-skill'))
     })
   it('measures a wrapped command by its visible width, not its escape bytes', () => {
       // A styled argument carries escapes through the wrap; if those count as

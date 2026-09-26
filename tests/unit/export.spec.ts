@@ -37,6 +37,18 @@ describe('transcriptToText', () => {
     expect(text).toContain('<!-- local line -->')
   })
 
+  it('keeps the skill name on the card header it dumps', () => {
+    // The dump is read as text, so a header split for the screen's colours has
+    // to still spell which skill the call loaded.
+    const model = new TranscriptModel({
+      call: name => ({ kind: 'generic', tool: name, title: 'skill', skill: 'project-skill', detail: [], failed: false, totalLines: 0 }),
+      result: () => undefined,
+    })
+    model.apply({ type: 'tool/call', data: { name: 'skill', arguments: '{}', callId: 'c1' } })
+    model.apply({ type: 'tool/result', data: { message: { content: [{ type: 'tool-result', toolCallId: 'c1', text: 'body' }], isError: false } } })
+    expect(transcriptToText(model.entries())).toContain('### tool: skill project-skill')
+  })
+
   it('quotes every line of a multi-line prompt', () => {
     const model = new TranscriptModel()
     model.apply({ type: 'user/message', data: { content: [{ type: 'text', text: 'first\nsecond' }], source: { kind: 'user' } } })

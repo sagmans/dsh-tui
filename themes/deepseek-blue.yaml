@@ -60,6 +60,7 @@ tokens:
   # the loudest thing on the row, so it carries the brand instead.
   tool.title: { fg: accent }
   tool.glyph: { fg: accent }  # follows the label it sits beside
+  tool.skill: { fg: accent }  # follows the label it sits beside
   tool.args: { fg: arg }
   tool.stat.added: { fg: added }
   tool.stat.changed: { fg: warn }

@@ -46,6 +46,7 @@ export interface SubCallFacts {
 export function subCallRow(id: string, name: string, argumentsJson: string, facts: SubCallFacts, existing?: ToolSubCall): ToolSubCall {
   const { view, output, status, running, failed } = facts
   const title = view?.title ?? existing?.title ?? name
+  const skill = view?.skill ?? existing?.skill
   const raw = view !== undefined || existing !== undefined ? undefined : clipLine(argumentsJson)
   const argument = view?.argument ?? existing?.argument ?? raw
   // A failed call keeps only what still holds: the change it declared never
@@ -59,6 +60,7 @@ export function subCallRow(id: string, name: string, argumentsJson: string, fact
   return {
     id,
     title,
+    ...(skill === undefined || skill === '' ? {} : { skill }),
     ...(argument === undefined || argument === '' ? {} : { argument }),
     ...(ended === undefined || ended === '' ? {} : { status: ended }),
     failed,
@@ -88,8 +90,9 @@ export function subCallRows(card: ToolCard | undefined): ToolSubCallRows | undef
  * travel with the rebuild: dropping the argument is how a shell card loses its
  * command the moment a presenter declines the result.
  */
-export function carriedFields(card: ToolCard): Pick<ToolCard, 'argument' | 'stats' | 'status' | 'subCalls' | 'subCallsTotal'> {
+export function carriedFields(card: ToolCard): Pick<ToolCard, 'skill' | 'argument' | 'stats' | 'status' | 'subCalls' | 'subCallsTotal'> {
   return {
+    ...(card.skill === undefined ? {} : { skill: card.skill }),
     ...(card.argument === undefined ? {} : { argument: card.argument }),
     ...(card.stats === undefined ? {} : { stats: card.stats }),
     ...(card.status === undefined ? {} : { status: card.status }),
@@ -113,6 +116,9 @@ export function mergeCards(call: ToolCard | undefined, result: ToolCard | undefi
   // The result, when it names one, knows the argument that was actually acted
   // on; a terminal result omits it, so the pending call's command is kept. The
   // result also owns the measured facts, because only it knows the outcome.
+  // The skill is the call's own subject, not the outcome's: a result that says
+  // nothing about it must not take the name off the row.
+  const skill = call.skill ?? result.skill
   const argument = result.argument ?? call.argument
   const stats = result.stats ?? call.stats
   const status = result.status ?? call.status
@@ -126,6 +132,7 @@ export function mergeCards(call: ToolCard | undefined, result: ToolCard | undefi
     // call, so it cannot rename the message a reader's clicks are remembered by.
     tool: call.tool,
     title: call.title,
+    ...(skill === undefined ? {} : { skill }),
     ...(argument === undefined ? {} : { argument }),
     ...(stats === undefined ? {} : { stats }),
     ...(status === undefined ? {} : { status }),
