@@ -8,27 +8,27 @@
  * actually see on screen.
  *
  * Usage:
- *   node tools/pty-drive.mjs --prompt "Reply with exactly: pong" [--home DIR] [--seconds 30]
- *   node tools/pty-drive.mjs --prompt "Run: echo hi" --approve 20 [--permission-mode danger-full-access]
- *   node tools/pty-drive.mjs --prelude "/permission workspace-write" --prompt "Run: echo hi" --approve 15
- *   node tools/pty-drive.mjs --prompt "Ask which colour" --answer "20:1,22:enter"
- *   node tools/pty-drive.mjs --prelude "/preset " --prompt "" --answer "2:down-press,3:down-release" \
+ *   node tools/pty-drive.mjs --home DIR --prompt "Reply with exactly: pong" [--seconds 30]
+ *   node tools/pty-drive.mjs --home DIR --prompt "Run: echo hi" --approve 20 [--permission-mode danger-full-access]
+ *   node tools/pty-drive.mjs --home DIR --prelude "/permission workspace-write" --prompt "Run: echo hi" --approve 15
+ *   node tools/pty-drive.mjs --home DIR --prompt "Ask which colour" --answer "20:1,22:enter"
+ *   node tools/pty-drive.mjs --home DIR --prelude "/preset " --prompt "" --answer "2:down-press,3:down-release" \
  *     --expect-last-pattern "❯ ([a-z]+)" --expect-last ptc
- *   node tools/pty-drive.mjs --args "--resume" --prompt "" --answer "4:enter"
- *   node tools/pty-drive.mjs --cols 40 --prompt "Ask which colour" --answer "20:0,22:teal,24:enter"
- *   node tools/pty-drive.mjs --prompt "" --answer "8:0,9:eu-central,11:left,12:left,13:X,15:enter" \
+ *   node tools/pty-drive.mjs --home DIR --args "--resume" --prompt "" --answer "4:enter"
+ *   node tools/pty-drive.mjs --home DIR --cols 40 --prompt "Ask which colour" --answer "20:0,22:teal,24:enter"
+ *   node tools/pty-drive.mjs --home DIR --prompt "" --answer "8:0,9:eu-central,11:left,12:left,13:X,15:enter" \
  *     --args "--patch /tmp/ask.patch.yml"   # edit a typed answer mid-text
- *   node tools/pty-drive.mjs --prompt "say hi" --signal TERM
- *   node tools/pty-drive.mjs --prompt "say hi" --submit ctrl+enter
- *   node tools/pty-drive.mjs --prompt "say hi" --submit alt-enter   # legacy ESC CR
- *   node tools/pty-drive.mjs --launcher /path/to/dsh/lib/bin.js --prompt "say hi"
+ *   node tools/pty-drive.mjs --home DIR --prompt "say hi" --signal TERM
+ *   node tools/pty-drive.mjs --home DIR --prompt "say hi" --submit ctrl+enter
+ *   node tools/pty-drive.mjs --home DIR --prompt "say hi" --submit alt-enter   # legacy ESC CR
+ *   node tools/pty-drive.mjs --home DIR --launcher /path/to/dsh/lib/bin.js --prompt "say hi"
  *
  * Every run ends by reporting the child's exit code and whether the terminal
  * was handed back, because a surface that exits cleanly but leaves the shell in
  * raw mode has failed the reader.
  *
- * --launcher runs that launcher binary instead of the checkout's own script, so
- * a report can be reproduced in the exact command that produced it.
+ * --launcher selects an installed release binary when PATH points elsewhere.
+ * The driver rejects source-host versions before it builds or opens a PTY.
  *
  * --approve N answers the approval gate N seconds after the prompt; without it
  * a turn that needs a gated tool waits for a decision the harness never makes.
@@ -46,6 +46,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import pty from 'node-pty'
+import { preparePtyLaunch } from './pty-launch.mjs'
 
 /**
  * Rebuild before driving.
@@ -62,8 +63,6 @@ function build() {
     process.exit(1)
   }
 }
-
-build()
 
 /**
  * node-pty ships its macOS spawn helper without the executable bit, and a PTY
@@ -83,9 +82,6 @@ function ensureSpawnHelper() {
   }
 }
 
-ensureSpawnHelper()
-
-const DSH_CHECKOUT = '/Users/dev/source/opensource/deepseek-harness/master'
 const args = process.argv.slice(2)
 const option = (name, fallback) => {
   const index = args.indexOf(`--${name}`)
@@ -95,7 +91,7 @@ const prompt = option('prompt', 'Reply with exactly: pong')
 /** Launcher arguments for the child, for reaching a mode the default run does not. */
 const extraArgs = option('args', '').split(' ').filter(argument => argument !== '')
 const home = option('home', undefined)
-/** A dsh launcher binary to drive instead of the checkout's own script. */
+/** An installed dsh binary to reproduce a specific released host. */
 const launcher = option('launcher', '')
 const seconds = Number.parseInt(option('seconds', '45'), 10)
 const approve = Number.parseInt(option('approve', '0'), 10)
@@ -249,29 +245,20 @@ const expectExit = Number.parseInt(option('expect-exit', '0'), 10)
 const expectLastPattern = option('expect-last-pattern', '')
 const expectLast = option('expect-last', '')
 
-/**
- * pnpm re-checks dependencies before it runs a script, and a checkout whose
- * postinstall declines to take over a user-owned hooks path fails that check:
- * the launch dies before the surface starts. This harness wants the surface,
- * not a second install, so the check is off for the child.
- */
-const DEPS_CHECK_OFF = { npm_config_verify_deps_before_run: 'false' }
-const command = launcher === '' ? 'pnpm' : process.execPath
-const launcherArgs = launcher === ''
-  ? ['dsh', '--profile', 'tui', ...extraArgs]
-  : [launcher, '--profile', 'tui', ...extraArgs]
+const launch = preparePtyLaunch({ home, launcher })
+build()
+ensureSpawnHelper()
 
-const child = pty.spawn(command, launcherArgs, {
+const child = pty.spawn(launch.command, [...launch.argsPrefix, '--profile', 'tui', ...extraArgs], {
   name: 'xterm-256color',
   cols,
   rows,
-  cwd: DSH_CHECKOUT,
+  cwd: launch.cwd,
   env: {
     ...process.env,
-    ...DEPS_CHECK_OFF,
     TERM: 'xterm-256color',
     DSH_PERMISSION_MODE: permissionMode,
-    ...(home === undefined ? {} : { DSH_HOME: home }),
+    DSH_HOME: launch.home,
   },
 })
 

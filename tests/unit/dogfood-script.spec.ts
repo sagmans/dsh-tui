@@ -1,6 +1,7 @@
 import { execFileSync, spawnSync } from 'node:child_process'
-import { lstatSync, mkdirSync, readFileSync, readlinkSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join, sep } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createDogfoodFixture, GENERIC_SCRIPT, REPO_ROOT, SCRIPT } from './dogfood-fixture.js'
 
@@ -41,6 +42,37 @@ describe('dogfood worktree plugin relink', () => {
       [SCRIPT, '--home', scratchHome, '--source-home', sourceHome, '--dsh', stubDsh, '--no-build', '--no-launch', checkout],
       { cwd: REPO_ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
     )
+
+  it('rejects an unsupported TUI host before seeding the clone', () => {
+    const trace = join(root, 'rejected-probe-home.txt')
+    writeFileSync(stubDsh, '#!/bin/sh\nprintf %s "$DSH_HOME" > ' + JSON.stringify(trace) + '\necho 0.1.7-alpha.2\n')
+    const result = generic(['--home', scratchHome])
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toContain('requires compatible installed dsh')
+    expect(existsSync(scratchHome)).toBe(false)
+    const probeHome = readFileSync(trace, 'utf8')
+    expect(probeHome).not.toBe('')
+    expect(existsSync(probeHome)).toBe(false)
+  })
+
+  it('probes the helper launcher without exposing the live home', () => {
+    const trace = join(root, 'probe-home.txt')
+    writeFileSync(stubDsh, '#!/bin/sh\nif [ "$1" = "--version" ]; then printf %s "$DSH_HOME" > ' + JSON.stringify(trace) + '; echo 0.1.5-rc.3; fi\n')
+    const result = generic(['--home', scratchHome])
+    expect(result.status, result.stderr).toBe(0)
+    const probeHome = readFileSync(trace, 'utf8')
+    expect(probeHome).not.toBe('')
+    expect(probeHome).not.toBe(sourceHome)
+    expect(probeHome).not.toBe(scratchHome)
+    expect(probeHome.startsWith(realpathSync(homedir()) + sep)).toBe(false)
+    expect(existsSync(probeHome)).toBe(false)
+  })
+
+  it.each(['0.1.5-rc.1', '0.1.5-rc.2'])('accepts compatible installed TUI host %s', (version) => {
+    writeFileSync(stubDsh, '#!/bin/sh\necho ' + version + '\n')
+    const result = generic(['--home', scratchHome])
+    expect(result.status, result.stderr).toBe(0)
+  })
 
   it('rebuilds every local link as an absolute path that resolves', () => {
     run()
@@ -162,6 +194,10 @@ describe('dogfood worktree plugin relink', () => {
   it('falls back to plugin add when dsh help did not create a profile', () => {
     rmSync(join(sourceHome, 'profiles', 'tui'), { recursive: true })
     writeFileSync(stubDsh, `#!/usr/bin/env bash
+if [[ "$1" == --version ]]; then
+  echo 0.1.5-rc.3
+  exit 0
+fi
 if [[ "$1" == plugin ]]; then
   mkdir -p "$DSH_HOME/profiles/tui"
   printf '%s\n' '{"dsh":{"profile":{"bundles":["@sagmans/dsh-tui"]}},"dependencies":{}}' > "$DSH_HOME/profiles/tui/package.json"

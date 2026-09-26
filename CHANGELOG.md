@@ -8,6 +8,10 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+### Fixed
+
+- PTY dogfood now rejects homes with escaping links and requires the installed `dsh 0.1.5-rc.3` launcher. The worktree helper rejects incompatible hosts before cloning. Previously, the PTY driver ran the Harness source checkout and could treat live `settings.yaml` as migration input.
+
 ## [0.8.0] - 2026-09-25
 
 ### Added

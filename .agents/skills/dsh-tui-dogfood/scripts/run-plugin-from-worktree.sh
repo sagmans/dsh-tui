@@ -3,6 +3,7 @@
 set -euo pipefail
 
 name="$(basename "${BASH_SOURCE[0]}")"
+TUI_PACKAGE_NAME='@sagmans/dsh-tui'
 # The link policy is shared with the validator, so both read one rule set.
 helper_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 default_repo="${DSH_DOGFOOD_DEFAULT_REPO:-$PWD}"
@@ -268,6 +269,17 @@ if [[ "$dry_run" == 1 ]]; then
 fi
 
 [[ -n "$dsh_bin" ]] || die "no dsh launcher found; put dsh on PATH or pass --dsh"
+# This plugin's daily host must not be replaced by a source checkout during setup or launch.
+if [[ "$package_name" == "$TUI_PACKAGE_NAME" ]]; then
+  # Keep launcher startup writes out of both the live home and the clone.
+  version_probe_home="$(mktemp -d /tmp/dsh-dogfood-version.XXXXXXXX)" || die "cannot create isolated version probe home"
+  trap 'rm -rf -- "$version_probe_home"' EXIT
+  trap 'exit 1' INT TERM
+  reported_version="$(HOME="$version_probe_home" DSH_HOME="$version_probe_home" "$dsh_bin" --version 2>/dev/null)" || die "TUI dogfood requires compatible installed dsh"
+  rm -rf -- "$version_probe_home"
+  trap - EXIT INT TERM
+  node -e "const p=require(process.argv[1]);process.exit(p.dsh?.compatibility?.dshReleases?.[process.argv[2]] === 'compatible' ? 0 : 1)" "$target_path/package.json" "$reported_version" || die "TUI dogfood requires compatible installed dsh (got ${reported_version:-<empty>})"
+fi
 
 # --- seed the scratch home ---------------------------------------------------
 
