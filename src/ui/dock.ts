@@ -17,8 +17,8 @@ const SUBAGENTS_COLLAPSED_MARK = '▸'
 const SUBAGENTS_EXPANDED_MARK = '▾'
 const JOBS_MARK = '⛭'
 
-/** The line that closes the conversation off from the boards drawn under it. */
-const PANEL_RULE_GLYPH = '─'
+/** The blank row that closes the conversation off from the boards drawn under it. */
+const PANEL_LEAD_ROW = ''
 
 /**
  * The dashed rule that opens a section, and the two dashes that lead its name.
@@ -87,8 +87,8 @@ export class WorkDock implements Component {
   private subagentSection: { start: number; end: number; toggleable: boolean } | undefined
   /** Text spans retain full child ids; the drawn ids may be shortened. */
   private readonly subagentTexts = new Map<number, { id: string; endX: number }>()
-  /** The rows the panel's own line takes above its sections, so a click lands on the row it was drawn on. */
-  private openRuleRows = 0
+  /** The row the panel's own break takes above its sections, so a click lands on the row it was drawn on. */
+  private openLeadRows = 0
 
   constructor(
     private readonly state: () => WorkState,
@@ -111,7 +111,7 @@ export class WorkDock implements Component {
   handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
     if (event.type !== 'click' || event.button !== 'left') return undefined
     if (event.x < 0 || event.x >= event.width || event.y < 0 || event.y >= event.height) return undefined
-    const row = event.y - this.openRuleRows
+    const row = event.y - this.openLeadRows
     const text = this.subagentTexts.get(row)
     if (text !== undefined && event.x >= visibleWidth(SUBAGENT_ROW_INDENT) && event.x < text.endX) {
       if (this.openSubagent === undefined) return undefined
@@ -268,13 +268,15 @@ export class WorkDock implements Component {
     const jobs = this.jobs()
     if (jobs.length > 0) this.pushJobs(lines, jobs, width)
     if (state.todos !== undefined) this.pushTodos(lines, state.todos, width)
-    // The line that opens the panel is decided last and drawn first: only the rows
-    // say whether the panel has anything to report, and the edge belongs above them.
-    // The rows below were recorded against the sections, so the line is remembered
-    // as the offset a click has to come back up before it names one.
-    const rows = lines.length > 0 && this.theme.visible('dock.rule') ? 1 : 0
-    this.openRuleRows = rows
+    // The break that opens the panel is decided last and drawn first: only the rows
+    // say whether the panel has anything to report, and the blank row belongs above
+    // them. It is blank rather than a drawn edge because the conversation above is
+    // already a shape of its own, and a ruled line read as one more border of it.
+    // The rows below were recorded against the sections, so the row is remembered as
+    // the offset a click has to come back up before it names one.
+    const rows = lines.length > 0 ? 1 : 0
+    this.openLeadRows = rows
     if (rows === 0) return lines
-    return [this.theme.style('dock.rule', PANEL_RULE_GLYPH.repeat(width)), ...lines]
+    return [PANEL_LEAD_ROW, ...lines]
   }
 }

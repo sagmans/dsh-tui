@@ -168,7 +168,6 @@ export const TUI_TOKENS = [
   // Dock
   'dock.goal',
   'dock.planMode',
-  'dock.rule',
   'dock.todos.border',
   'dock.todos.heading',
   'dock.todos.pending',

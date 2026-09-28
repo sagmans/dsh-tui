@@ -22,42 +22,35 @@ const rule = (heading: string, width: number): string => {
 }
 
 /**
- * The line the panel itself opens on, which every section is drawn below.
+ * The blank row the panel itself opens on, which every section is drawn below.
  *
- * It is the panel's edge rather than a section's: it carries no name and runs the
- * whole width, and it is the reason a section row sits one row lower than it would
- * on a dock drawn without one.
+ * It is the panel's break rather than a section's: it carries no name and no
+ * glyph, and it is the reason a section row sits one row lower than it would on a
+ * dock drawn without one.
  */
-const panel = (width: number): string => '─'.repeat(width)
+const LEAD = ''
 
 describe('WorkDock', () => {
   it('takes no rows when there is nothing to say', () => {
     expect(dockOf(EMPTY).render(60)).toEqual([])
   })
 
-  it('opens the work panel on a line under the conversation', () => {
+  it('opens the work panel on a blank row under the conversation', () => {
     const lines = dockOf({ ...EMPTY, planMode: true }).render(40)
-    expect(lines[0]).toBe(panel(40))
+    expect(lines[0]).toBe(LEAD)
     expect(lines.slice(1).join('\n')).toContain('plan mode')
-  })
-
-  it('leaves the panel as it stood when the line is hidden', () => {
-    const bare = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['dock.rule', { hidden: true }]]) })
-    const lines = new WorkDock(() => ({ ...EMPTY, planMode: true }), bare).render(40)
-    expect(lines.join('\n')).toContain('plan mode')
-    expect(lines.join('\n')).not.toContain(panel(40))
   })
 
   it('states the goal with its round budget', () => {
     const lines = dockOf({ ...EMPTY, goal: { objective: 'complete the plan', roundsStarted: 3, maxRounds: 256, phase: 'active' } }).render(80)
-    expect(lines).toEqual([panel(80), '◎ goal round 3/256 · complete the plan'])
+    expect(lines).toEqual([LEAD, '◎ goal round 3/256 · complete the plan'])
   })
 
   it('names a stalled goal so it never reads as running', () => {
     const paused = dockOf({ ...EMPTY, goal: { objective: 'complete the plan', roundsStarted: 3, maxRounds: 256, phase: 'paused' } }).render(80)
-    expect(paused).toEqual([panel(80), '◎ goal paused · round 3/256 · complete the plan'])
+    expect(paused).toEqual([LEAD, '◎ goal paused · round 3/256 · complete the plan'])
     const blocked = dockOf({ ...EMPTY, goal: { objective: 'complete the plan', roundsStarted: 3, maxRounds: 256, phase: 'blocked' } }).render(80)
-    expect(blocked).toEqual([panel(80), '◎ goal blocked · round 3/256 · complete the plan'])
+    expect(blocked).toEqual([LEAD, '◎ goal blocked · round 3/256 · complete the plan'])
   })
 
   it('marks where a goal was cut off', () => {
@@ -67,7 +60,7 @@ describe('WorkDock', () => {
   })
 
   it('announces plan mode', () => {
-    expect(dockOf({ ...EMPTY, planMode: true }).render(80)).toEqual([panel(80), '⏸ plan mode · answer the plan before edits happen'])
+    expect(dockOf({ ...EMPTY, planMode: true }).render(80)).toEqual([LEAD, '⏸ plan mode · answer the plan before edits happen'])
   })
 
   it('shows only the todos still to do, most urgent first', () => {
@@ -78,7 +71,7 @@ describe('WorkDock', () => {
     ]
     const lines = dockOf({ ...EMPTY, todos }).render(80)
     expect(lines).toEqual([
-      panel(80),
+      LEAD,
       rule('☰ todos · 2 left', 80),
       '  ▸ now thing',
       '  ☐ next thing',
@@ -132,14 +125,14 @@ describe('WorkDock', () => {
       runId: `r${index}`, provider: 'spawn', id: `child-${index}`, startedAt: 1_000, status: 'running' as const,
     }))
     const dock = new WorkDock(() => EMPTY, theme, () => [], () => runs, () => 2_000)
-    // The heading sits under the panel's own line, so a click on the section comes
-    // one row below the window's first.
+    // The heading sits under the panel's own blank row, so a click on the section
+    // comes one row below the window's first.
     const click: TuiMouseEvent = {
       type: 'click', button: 'left', x: 5, y: 1, screenX: 5, screenY: 1, width: 80, height: 6,
       shift: false, alt: false, ctrl: false,
     }
     expect(dock.render(80)).toEqual([
-      panel(80),
+      LEAD,
       rule('⚇ subagents ▸ · 5 running', 80),
       '  ▸ child-0 · spawn · running 1s',
       '  ▸ child-1 · spawn · running 1s',
@@ -148,7 +141,7 @@ describe('WorkDock', () => {
     ])
     expect(dock.handleMouse(click)).toEqual({ handled: true, render: true })
     expect(dock.render(80)).toEqual([
-      panel(80),
+      LEAD,
       rule('⚇ subagents ▾ · 5 running', 80),
       ...runs.map(run => `  ▸ ${run.id} · spawn · running 1s`),
     ])

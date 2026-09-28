@@ -21,10 +21,9 @@ breaking change, and a patch carries only fixes.
   one more card of the transcript. All three are read per frame, so an edit lands
   on the session already on screen.
 
-- The work board opens on a line of its own, in the new `dock.rule` colour, so the
-  conversation above it and the todos, jobs, and delegations below it read as two
-  regions rather than one stream. The line costs no row when the board has nothing
-  to report, and hiding the token leaves the board exactly as it was.
+- The work board opens on a blank row of its own, so the conversation above it and
+  the todos, jobs, and delegations below it read as two regions rather than one
+  stream. The row costs nothing when the board has nothing to report.
 
 - A skill card draws the skill it loaded as a name of its own, in the new
   `tool.skill` colour beside the label rather than inside it. The label and the
