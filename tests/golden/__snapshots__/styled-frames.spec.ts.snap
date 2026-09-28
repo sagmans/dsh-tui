@@ -2,6 +2,7 @@
 
 exports[`styled golden frames > renders the busy dock with its escapes 1`] = `
 [
+  "[38;2;138;138;138m────────────────────────────────────────────────────────────────────────────────[0m",
   "[1m◎ goal round 6/256 · complete the plan for this dsh-tui plugin[0m",
   "[1m⏸ plan mode · answer the plan before edits happen[0m",
   "[38;2;39;245;200m┄┄ [0m[1m⚇ subagents · 1 running[0m[38;2;39;245;200m ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄[0m",

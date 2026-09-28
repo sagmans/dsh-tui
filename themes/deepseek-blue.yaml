@@ -153,6 +153,7 @@ tokens:
   # The work panel above the editor.
   dock.goal: { bold: true }
   dock.planMode: { bold: true }
+  dock.rule: { fg: muted }
   dock.todos.border: { fg: accent }
   dock.todos.heading: { bold: true }
   dock.todos.pending: { fg: muted }

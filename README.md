@@ -405,7 +405,7 @@ dsh-tui:
   subcalls: inline            # draw the calls a PTC program dispatched (default collapsed)
   mermaid: streaming          # draw a reply's mermaid fences: off, final, or streaming (default streaming)
   spacing:
-    padding: 1                # columns of air inside each edge of the surface (0-3, default 1)
+    padding: 1                # columns that inset the conversation and the work board (0-3, default 1)
     messages: 1               # blank rows above and below a prompt or a reply card (0-3, default 1)
     steps: 1                  # blank rows where a step of a turn opens, grouping a thought with its calls (0-3, default 1)
   tools:
@@ -751,7 +751,9 @@ The package is a Cordis plugin bundle that stacks over `@deepseek-ai/dsh-base`:
 
 A question whose id ends in `:secret` declares its typed answer a credential: the bar hides everything but its first and last four characters, and the free-text row a question with options offers is labelled `API KEY`. Wording is not a declaration, because hiding every question that mentions a key would hide answers their authors meant to be read.
 
-Air follows the log's own boundaries rather than every row. A prompt and a reply are objects of the transcript, so each frame opens and closes on blank rows — `spacing.messages`, one by default — and two boundaries that meet keep the wider ask instead of the sum, so one break never reads as two. A step is the other boundary: the loop's `step/start` opens it, which is what keeps a thought and the calls it made in one group and puts the next step's work underneath it, `spacing.steps` rows down. Nothing else is spaced — a reply after a reply, a folded thought's signpost, and the cards under the message that asked for them all stay flush — and every count accepts 0, which draws the rows exactly as the surface drew them before the air existed. `spacing.padding` keeps a column at the window's edges instead of at a seam, and all three counts are read per frame, so an edit in `$DSH_HOME/settings.yaml` lands on the session already on screen.
+Air follows the log's own boundaries rather than every row. A prompt and a reply are objects of the transcript, so each frame opens and closes on blank rows — `spacing.messages`, one by default — and two boundaries that meet keep the wider ask instead of the sum, so one break never reads as two. A step is the other boundary: the loop's `step/start` opens it, which is what keeps a thought and the calls it made in one group and puts the next step's work underneath it, `spacing.steps` rows down. Nothing else is spaced — a reply after a reply, a folded thought's signpost, and the cards under the message that asked for them all stay flush — and every count accepts 0, which draws the rows exactly as the surface drew them before the air existed. `spacing.padding` insets the conversation and the work board under it instead of sitting at a seam, while the bar the reader types in, the prompts queued behind it, and the footer keep the window's full width; all three counts are read per frame, so an edit in `$DSH_HOME/settings.yaml` lands on the session already on screen.
+
+The work board opens on a line of its own, so the conversation above it and the todos, jobs, and delegations below it are two regions rather than one stream. The line takes no row when the board has nothing to report, and it travels in the `dock.rule` element: hiding that token leaves the board exactly as it was before it had an edge.
 
 The fold is durable-only: the live stream decorates the row that is still being written, and everything else — cards, reasoning, work state, compaction markers — comes from the log, so a resumed session renders what the live one did. Subagent start and finish are the exception: they arrive as service events, and the transcript shows them as decoration because the durable record of a delegation is the tool call that asked for it.
 
@@ -867,7 +869,10 @@ The automated checks drive a real PTY, but they run on this machine's terminal. 
 | that same turn, then `ctrl+y` | the rows draw under the folded card; `ctrl+y` again folds them away, and one click on the card's own header does the same for that card alone |
 | `dsh-tui: { subcalls: inline }` in `$DSH_HOME/settings.yaml`, then a PTC turn | the one-line calls draw under the card; deleting the key folds them away |
 | a turn whose step thinks and calls a tool before it answers | one blank row under the prompt, the thought and the calls it made as one group, and one blank row above the answer |
-| `dsh-tui: { spacing: { padding: 0, messages: 0, steps: 0 } }` in `$DSH_HOME/settings.yaml`, then that turn | the frames touch the window's edge and each other with no blank row anywhere; deleting the key draws the air again without a restart |
+| `dsh-tui: { spacing: { padding: 0, messages: 0, steps: 0 } }` in `$DSH_HOME/settings.yaml`, then that turn | the conversation and the work board touch the window's edge and each other with no blank row anywhere, while the input bar still spans the full width; deleting the key draws the air again without a restart |
+| `dsh-tui: { spacing: { padding: 4 } }` in `$DSH_HOME/settings.yaml`, then the same turn | the conversation and the work board move two columns further in on both sides, the input bar does not move, and the live session picks it up without a restart |
+| a turn that leaves a todo, a job, or a delegation on the board | one line under the conversation and above the board's first row; with no work on the board the line is gone and the bar sits directly under the transcript |
+| `dsh-tui: { tokens: { dock.rule: { hidden: true } } }` in `$DSH_HOME/settings.yaml`, then that turn | the line is gone and the board keeps the row it had |
 | `dsh-tui: { spacing: { messages: 3 } }` in `$DSH_HOME/settings.yaml`, then a prompt | three blank rows above and below it, and the reply's three rows meet them as three rather than six |
 | a thought, folded | a click on the row opens the thought under its summary; a click on the body folds it back, and the other thoughts keep their own state |
 | a bash card, then a click on it | the row opens to its command, its retained output, and its exit status; a click folds it back to one row |

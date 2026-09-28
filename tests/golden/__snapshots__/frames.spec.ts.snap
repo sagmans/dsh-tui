@@ -55,6 +55,7 @@ exports[`a mermaid reply > renders the diagram at 80 columns 1`] = `
 
 exports[`golden frames > renders a busy dock at 40 columns 1`] = `
 [
+  "────────────────────────────────────────",
   "◎ goal round 6/256 · complete the plan …",
   "⏸ plan mode · answer the plan before ed…",
   "┄┄ ⚇ subagents · 1 running ┄┄┄┄┄┄┄┄┄┄┄┄┄",
@@ -68,6 +69,7 @@ exports[`golden frames > renders a busy dock at 40 columns 1`] = `
 
 exports[`golden frames > renders a busy dock at 80 columns 1`] = `
 [
+  "────────────────────────────────────────────────────────────────────────────────",
   "◎ goal round 6/256 · complete the plan for this dsh-tui plugin",
   "⏸ plan mode · answer the plan before edits happen",
   "┄┄ ⚇ subagents · 1 running ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄",
@@ -195,6 +197,7 @@ exports[`golden frames > renders a question gate collecting a typed answer at 80
 
 exports[`golden frames > renders the dock at 40 columns 1`] = `
 [
+  "────────────────────────────────────────",
   "⏸ plan mode · answer the plan before ed…",
   "┄┄ ☰ todos · 2 left ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄",
   "  ▸ verify the dock",
@@ -204,6 +207,7 @@ exports[`golden frames > renders the dock at 40 columns 1`] = `
 
 exports[`golden frames > renders the dock at 80 columns 1`] = `
 [
+  "────────────────────────────────────────────────────────────────────────────────",
   "⏸ plan mode · answer the plan before edits happen",
   "┄┄ ☰ todos · 2 left ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄",
   "  ▸ verify the dock",

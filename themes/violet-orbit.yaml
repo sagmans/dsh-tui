@@ -148,6 +148,7 @@ tokens:
   gate.hint: { fg: muted }  # unchanged from the shipped table
   dock.goal: { fg: accent, bold: true }
   dock.planMode: { fg: '#a7a7ff', bold: true }  # customMessageLabel
+  dock.rule: { fg: muted }  # unchanged from the shipped table
   dock.todos.border: { fg: accent }  # accent
   dock.todos.heading: { fg: '#b5b5ff', bold: true }  # mdHeading
   dock.todos.pending: { fg: muted }  # unchanged from the shipped table

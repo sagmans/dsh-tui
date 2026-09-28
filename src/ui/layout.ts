@@ -32,25 +32,33 @@ export interface SurfaceParts {
  */
 export type MarginColumns = () => number
 
-/** The rows every part earns inside the margin. */
-function stackSurface(parts: SurfaceParts): VStack {
+/** The conversation and the work boards under it, which are what a margin insets. */
+function insetColumn(parts: SurfaceParts): VStack {
   return new VStack([
     { component: parts.transcript, basis: 0, grow: 1, minSize: 1 },
     // Work state earns rows only when there is some, and it gives them up first:
     // a job ticker is worth less than the input the reader is typing into.
     { component: parts.dock, basis: 'auto', shrink: 2, minSize: 0 },
-    // Queued input earns rows only while something is waiting, and it gives
-    // them up before the editor does: the bar being typed in outranks what is
-    // waiting behind it.
-    { component: parts.queue, basis: 'auto', shrink: 2, minSize: 0 },
-    { component: new VStack([{ component: parts.prompt, basis: 'auto', shrink: 1, minSize: 1 }]), basis: 'auto', shrink: 1, minSize: PROMPT_MIN_ROWS },
-    { component: parts.status, basis: 'auto', shrink: 0, minSize: 1 },
   ])
 }
 
 /**
- * Stack the surface inside the reader's margin, deciding who gives up rows when
- * the terminal is short.
+ * The conversation's rows, held between the margin's two leaves.
+ *
+ * A pair of leaves beside the column rather than a wrapper round it, so the
+ * transcript keeps the place in the layout it had without one — its scroll view
+ * among them — and the reader's columns come off the width of the rows inside.
+ */
+function inset(parts: SurfaceParts, margin: MarginColumns): HStack {
+  return new HStack([
+    { component: new Gutter(margin), basis: 'auto', minSize: 0 },
+    { component: insetColumn(parts), basis: 0, grow: 1, minSize: 1 },
+    { component: new Gutter(margin), basis: 'auto', minSize: 0 },
+  ])
+}
+
+/**
+ * Stack the surface, deciding who gives up rows when the terminal is short.
  *
  * The transcript grows into whatever is left; the dock, the queue, and the bar
  * shrink in that order of eagerness, and the bar keeps a floor no shrink can
@@ -58,15 +66,19 @@ function stackSurface(parts: SurfaceParts): VStack {
  * and pushed the draft, its frame, and the footer out of the frame entirely,
  * because a clipped leaf cannot restore rows the allocator never gave it.
  *
- * The margin is a pair of leaves beside the stack rather than a wrapper round it,
- * so every part keeps the place in the layout it had before — the transcript's
- * scroll view among them — and the reader's columns come off the width of the
- * rows inside them.
+ * The margin belongs to the conversation, so the rows the reader types in, the
+ * prompts waiting behind them, and the footer keep the full width they have on
+ * every other surface: a bar inset on both sides would read as one more card of
+ * the transcript rather than as the thing the reader writes into.
  */
-export function surfaceLayout(parts: SurfaceParts, margin: MarginColumns = () => 0): HStack {
-  return new HStack([
-    { component: new Gutter(margin), basis: 'auto', minSize: 0 },
-    { component: stackSurface(parts), basis: 0, grow: 1, minSize: 1 },
-    { component: new Gutter(margin), basis: 'auto', minSize: 0 },
+export function surfaceLayout(parts: SurfaceParts, margin: MarginColumns = () => 0): VStack {
+  return new VStack([
+    { component: inset(parts, margin), basis: 0, grow: 1, minSize: 1 },
+    // Queued input earns rows only while something is waiting, and it gives
+    // them up before the editor does: the bar being typed in outranks what is
+    // waiting behind it.
+    { component: parts.queue, basis: 'auto', shrink: 2, minSize: 0 },
+    { component: new VStack([{ component: parts.prompt, basis: 'auto', shrink: 1, minSize: 1 }]), basis: 'auto', shrink: 1, minSize: PROMPT_MIN_ROWS },
+    { component: parts.status, basis: 'auto', shrink: 0, minSize: 1 },
   ])
 }

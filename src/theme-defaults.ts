@@ -219,6 +219,10 @@ export const DEFAULT_TOKENS: Readonly<Record<TuiToken, StyleSpec>> = {
 
   'dock.goal': { bold: true },
   'dock.planMode': { bold: true },
+  // The row that separates the conversation from the boards under it: the boards
+  // report state the session never said, so the line is what makes that break
+  // readable without spending a heading on it.
+  'dock.rule': muted,
   // Each section's rule carries that section's own hue, so which list a row
   // belongs to is read off the edge of it rather than off the row itself: the
   // rows keep the muted family that lets a long command stay legible.

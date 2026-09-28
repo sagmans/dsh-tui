@@ -60,23 +60,28 @@ describe('the surface root layout', () => {
     expect(frame.lines.some(line => line.includes('the draft'))).toBe(true)
   })
 
-  it('moves every part inside the margin the reader asked for', () => {
+  it('insets the conversation and leaves the bars at the window\'s edges', () => {
     const { prompt } = promptOf('the draft')
     const root = surfaceLayout({
       transcript: rowsOf('row', 6),
-      dock: rowsOf('dock', 0),
+      dock: rowsOf('dock', 2),
       queue: rowsOf('queued', 0),
       prompt,
       status: rowsOf('status', 1),
     }, () => 1)
     const frame = renderLayoutFrame(root, 40, 12, () => {})
-    // Nothing is drawn in the window's first column, and the rows that were at
-    // the edge begin one column in.
-    expect(frame.lines.every(line => (stripTerminalSequences(line)[0] ?? ' ') === ' ')).toBe(true)
+    // The conversation and the work boards under it begin one column in, inside a
+    // margin that costs them two columns of width.
     const rowAt = frame.lines.findIndex(line => line.includes('row 0'))
-    const box = getLayoutBoxesAt(frame, 1, rowAt)[0]
-    expect(box?.rect.x).toBe(1)
-    expect(box?.rect.width).toBe(38)
+    const dockRow = frame.lines.findIndex(line => line.includes('dock 0'))
+    expect(stripTerminalSequences(frame.lines[rowAt]!)[0]).toBe(' ')
+    expect(getLayoutBoxesAt(frame, 1, rowAt)[0]?.rect).toMatchObject({ x: 1, width: 38 })
+    expect(getLayoutBoxesAt(frame, 1, dockRow)[0]?.rect).toMatchObject({ x: 1, width: 38 })
+    // The bar the reader types in keeps the full width: a bar inset on both sides
+    // would read as one more card of the conversation rather than as the input.
+    const draftRow = frame.lines.findIndex(line => line.includes('the draft'))
+    const promptBox = getLayoutBoxesAt(frame, 1, draftRow).find(box => box.component === prompt)
+    expect(promptBox?.rect).toMatchObject({ x: 0, width: 40 })
   })
 
   it('maps a prompt click to the editor hit box and cursor position', () => {

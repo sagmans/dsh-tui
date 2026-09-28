@@ -10,13 +10,21 @@ breaking change, and a patch carries only fixes.
 
 ### Added
 
-- The transcript keeps air. `spacing.padding` insets the whole surface by a
-  column, `spacing.messages` puts blank rows above and below a prompt and a
-  reply, and `spacing.steps` opens each step of a turn, so a thought and the
-  calls it made read as one group instead of one more paragraph of a wall. Two
-  boundaries that meet keep the wider ask rather than the sum, and every count
-  takes 0, which draws the rows exactly as the surface drew them before. All
-  three are read per frame, so an edit lands on the session already on screen.
+- The transcript keeps air. `spacing.padding` insets the conversation and the
+  work board by a column, `spacing.messages` puts blank rows above and below a
+  prompt and a reply, and `spacing.steps` opens each step of a turn, so a thought
+  and the calls it made read as one group instead of one more paragraph of a
+  wall. Two boundaries that meet keep the wider ask rather than the sum, and
+  every count takes 0, which draws the rows exactly as the surface drew them
+  before. The bar the reader types in, the prompts queued behind it, and the
+  footer keep the window's full width, because a bar inset on both sides reads as
+  one more card of the transcript. All three are read per frame, so an edit lands
+  on the session already on screen.
+
+- The work board opens on a line of its own, in the new `dock.rule` colour, so the
+  conversation above it and the todos, jobs, and delegations below it read as two
+  regions rather than one stream. The line costs no row when the board has nothing
+  to report, and hiding the token leaves the board exactly as it was.
 
 - A skill card draws the skill it loaded as a name of its own, in the new
   `tool.skill` colour beside the label rather than inside it. The label and the
