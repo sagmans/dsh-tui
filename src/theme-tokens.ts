@@ -62,6 +62,10 @@ export const TUI_TOKENS = [
   // Tool cards: the generic layer
   'tool.title',
   'tool.glyph',
+  // The skill name rides in the label's own row, so it needs a colour that
+  // separates it from the tool that asked for it rather than borrowing the
+  // argument's, which is chosen for a path or a command instead.
+  'tool.skill',
   'tool.args',
   'tool.stat.added',
   'tool.stat.changed',

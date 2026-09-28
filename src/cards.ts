@@ -76,6 +76,8 @@ export interface ToolSubCall {
    */
   readonly id: string
   readonly title: string
+  /** The skill a skill row loaded, kept beside the label so the row names both. */
+  readonly skill?: string
   readonly argument?: string
   readonly failed: boolean
   /**
@@ -140,6 +142,15 @@ export interface ToolCard {
    * title its presenter declared.
    */
   readonly title: string
+  /**
+   * The skill a skill card loaded, held apart from its label.
+   *
+   * It is a field rather than part of the title for the same reason an argument
+   * is: the name sits on the label's own row, and a reader who wants the name
+   * told apart from the tool that asked for it can only do that with a colour
+   * of its own.
+   */
+  readonly skill?: string
   /**
    * The salient argument the call was made with — a path or a command.
    *

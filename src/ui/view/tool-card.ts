@@ -208,6 +208,7 @@ export class ToolCards {
         const titleToken = this.titleToken(call, { running: 'tool.subcall.running', failed: 'tool.failed.title' })
         const column = visibleWidth(SUBCALL_INDENT)
         const title = this.context.theme.visible(titleToken) ? this.context.theme.rich(call.title, { token: titleToken, column }) : ''
+        const skill = call.skill === undefined || call.skill === '' ? '' : this.skillName(call.skill, titleToken, column)
         const argument = call.argument === undefined || !this.context.theme.visible('tool.subcall.args')
           ? ''
           : this.context.theme.rich(call.argument, { token: 'tool.subcall.args', column })
@@ -220,7 +221,7 @@ export class ToolCards {
         // Joined rather than concatenated: the name and the argument are one space
         // apart whether or not either of them is drawn at all, and the outcome joins
         // the row the way it joins every other one.
-        const label = [title, argument.trim()].filter(part => part !== '').join(' ')
+        const label = [title, skill, argument.trim()].filter(part => part !== '').join(' ')
         const drawn = [label, status].filter(part => part !== '').join(this.statSeparator())
         // A row whose every part is hidden draws nothing, and nothing must not
         // cost a line the card does not have.
@@ -296,10 +297,11 @@ export class ToolCards {
         if (count !== '') tail += `${separator}${count}`
       }
       if (elapsed !== '') tail += `${separator}${elapsed}`
-      const fixed = visibleWidth(lead) + visibleWidth(title) + visibleWidth(tail)
-      const room = Math.max(0, edge - fixed - (title === '' ? 0 : 1))
+      const skill = this.cardSkill(card, titleToken)
+      const fixed = visibleWidth(lead) + visibleWidth(title) + visibleWidth(skill) + visibleWidth(tail) + (title !== '' && skill !== '' ? 1 : 0)
+      const room = Math.max(0, edge - fixed - (title !== '' || skill !== '' ? 1 : 0))
       const argument = room > 0 ? this.cardArgument(card, room) : ''
-      const head = [title, argument].filter(part => part !== '').join(' ')
+      const head = [title, skill, argument].filter(part => part !== '').join(' ')
       // A row with no visible label or argument opens with the tail, and a line
       // that begins with a separator reads as a row that lost its first word.
       if (head === '' && tail.startsWith(separator)) tail = tail.slice(separator.length)
@@ -328,6 +330,20 @@ export class ToolCards {
     private cardTitle(card: ToolCard, titleToken: TuiToken): string {
       return this.context.theme.visible(titleToken) ? this.context.theme.rich(card.title, { token: titleToken }) : ''
     }
+  /** A skill's name, styled, in the colour that tells it apart from the label. */
+    private skillName(skill: string, titleToken: TuiToken, column?: number): string {
+      // A hidden colour retires the paint, not the subject: the row still has to
+      // say which skill was loaded, so the name falls back to the label's own
+      // colour rather than leaving "skill" naming nothing.
+      const token = this.context.theme.visible('tool.skill') ? 'tool.skill' : titleToken
+      return this.context.theme.visible(token)
+        ? this.context.theme.rich(skill, { token, ...(column === undefined ? {} : { column }) })
+        : ''
+    }
+  /** A card's skill name beside its label, or nothing when it carries none. */
+    private cardSkill(card: ToolCard, titleToken: TuiToken): string {
+      return card.skill === undefined || card.skill === '' ? '' : this.skillName(card.skill, titleToken)
+    }
   /** A card's argument, styled and flattened, clipped to `limit` when one is given. */
     private cardArgument(card: ToolCard, limit?: number): string {
       if (card.argument === undefined || card.argument === '' || !this.context.theme.visible('tool.args')) return ''
@@ -346,7 +362,7 @@ export class ToolCards {
       const lead = this.cardLead(titleToken, glyphToken)
       const title = this.cardTitle(card, titleToken)
       const argument = card.kind === 'terminal' ? '' : this.cardArgument(card)
-      const head = [title, argument].filter(part => part !== '').join(' ')
+      const head = [title, this.cardSkill(card, titleToken), argument].filter(part => part !== '').join(' ')
       const stats = this.renderStats(card.stats)
       const elapsed = this.elapsedStat(card)
       return { lead, body: `${head}${stats}${elapsed === '' ? '' : `${this.statSeparator()}${elapsed}`}` }

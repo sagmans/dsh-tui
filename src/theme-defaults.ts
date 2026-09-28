@@ -122,6 +122,9 @@ export const DEFAULT_TOKENS: Readonly<Record<TuiToken, StyleSpec>> = {
   // colour of its own.
   'tool.title': { fg: 'accent' },
   'tool.glyph': { fg: 'warn' },
+  // The base accent keeps the unthemed skill row aligned with tool.title;
+  // themes can override either token independently.
+  'tool.skill': { fg: 'accent' },
   'tool.args': { fg: 'arg' },
   'tool.stat.added': { fg: 'added' },
   'tool.stat.changed': { fg: 'warn' },

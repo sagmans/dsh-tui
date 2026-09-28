@@ -21,6 +21,9 @@ describe('TranscriptView nested PTC calls', () => {
       call: (name, argumentsJson) => {
         if (name === 'run_code') return cardOfCall({ card: 'generic', title: 'search the tree' }, name)
         const args = JSON.parse(argumentsJson) as Record<string, unknown>
+        if (name === 'skill' && typeof args.name === 'string') {
+          return cardOfCall({ card: 'generic', title: `Load skill ${args.name}`, kind: 'read', rawInput: args.name }, name)
+        }
         if (typeof args.command === 'string') return cardOfCall({ card: 'terminal', title: args.command }, name)
         // An edit declares the change it is about to make, which is the only place
         // its diff exists: the dispatch carries no result metadata to re-present.
@@ -70,6 +73,15 @@ describe('TranscriptView nested PTC calls', () => {
       // place and the names read down one column.
       expect(lines.slice(1)).toEqual(['  read src/x.ts', '  bash git status · exit 0'])
     })
+  it('colours a loaded skill name on its dispatched row', () => {
+    // This profile loads skills inside run_code, so the dispatched row must
+    // distinguish the name even when the parent card stays folded.
+    const model = foldedProgram([{ name: 'skill', args: { name: 'dsh-tui-dogfood' } }])
+    const colour = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['tool.skill', { fg: '#C9A3D9' }]]) })
+    const lines = new TranscriptView(model, colour, new MarkdownRenderer(colour.markdown), { state: () => FOLDED }).render(60)
+    expect(stripTerminalSequences(lines[1] ?? '')).toBe('  skill dsh-tui-dogfood')
+    expect(lines[1]).toContain('\u001b[38;2;201;163;217mdsh-tui-dogfood')
+  })
   it('keeps a dispatched command that carries a break on one row', () => {
       const model = foldedProgram([{ name: 'bash', args: { command: 'echo one\necho two' } }])
       expect(viewOf(model, FOLDED).render(60)).toEqual(['search the tree', '  bash echo one echo two · exit 0'])

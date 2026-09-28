@@ -53,6 +53,10 @@ tokens:
   # which is the single change that moves the card family into the theme.
   tool.title: { fg: '#8197f7' }  # toolTitle
   tool.glyph: { fg: '#8197f7' }  # toolTitle
+  # The skill name rides beside the label on the same row, so it needs a violet
+  # the periwinkle label can be read against — neither the label's own hue nor
+  # the argument's dark slate, which is chosen for a path rather than a name.
+  tool.skill: { fg: '#C9A3D9' }
   tool.args: { fg: arg }  # unchanged from the shipped table
   tool.stat.added: { fg: added }  # unchanged from the shipped table
   tool.stat.changed: { fg: warn }  # unchanged from the shipped table

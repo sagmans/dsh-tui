@@ -94,13 +94,14 @@ export function transcriptToText(entries: readonly TranscriptEntry[]): string {
         const more = entry.card.totalLines > entry.card.detail.length
           ? `… ${entry.card.totalLines - entry.card.detail.length} more lines`
           : undefined
-        const fence = fenceFor([documentText(entry.card.title), ...rows, more ?? ''].join('\n'))
-        lines.push('', `### ${mark}: ${documentText(entry.card.title)}`)
+        const head = [entry.card.title, entry.card.skill].filter(part => part !== undefined && part !== '').join(' ')
+        const fence = fenceFor([documentText(head), ...rows, more ?? ''].join('\n'))
+        lines.push('', `### ${mark}: ${documentText(head)}`)
         // The calls are what the reader saw under the card, so a dump that
         // dropped them would lose the only record of what the program reached.
         const subCalls = entry.card.subCalls ?? []
         for (const call of subCalls) {
-          const text = call.argument === undefined ? call.title : `${call.title} ${call.argument}`
+          const text = [call.title, call.skill, call.argument].filter(part => part !== undefined && part !== '').join(' ')
           lines.push(`- ${documentText(text)}${call.failed ? SUBCALL_FAILED_SUFFIX : ''}`)
         }
         const dropped = (entry.card.subCallsTotal ?? subCalls.length) - subCalls.length

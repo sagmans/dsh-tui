@@ -142,6 +142,35 @@ export function renderFileDiff(diff: FileDiff): CardRow[] {
  */
 const REDUNDANT_TITLE_LEADS = ['Load '] as const
 
+/**
+ * The one tool whose declared title is a label followed by a subject.
+ *
+ * Only this card is split: the skill name is what a reader scans for, and
+ * holding it apart is what lets the name carry its own colour without any
+ * other tool's presenter wording being cut at its first word.
+ */
+const SKILL_TOOL = 'skill'
+
+/** The skill field of a split card, absent when there was nothing to split. */
+function skillOf(skill: string | undefined): { skill?: string } {
+  return skill === undefined || skill === '' ? {} : { skill }
+}
+
+/**
+ * The label and the skill a declared title carries, for the one tool whose
+ * title is the pair.
+ *
+ * Only that card is split, so the name can be drawn in a colour of its own;
+ * every other tool's presenter wording passes through untouched, because
+ * cutting a title at its first word would misreport what the tool was asked.
+ */
+function skillHead(shown: string, name: string): { label: string; skill?: string } {
+  const skill = name === SKILL_TOOL && shown.startsWith(SKILL_TOOL + ' ')
+    ? shown.slice(SKILL_TOOL.length + 1).trim()
+    : undefined
+  return skill === undefined || skill === '' ? { label: shown } : { label: SKILL_TOOL, skill }
+}
+
 export function title(view: { title?: string }, fallback: string): string {
   const declared = view.title?.trim() ?? ''
   const lead = REDUNDANT_TITLE_LEADS.find(prefix => declared.startsWith(prefix))
@@ -215,14 +244,16 @@ export function cardOfCall(view: ToolCallView | undefined, name: string): ToolCa
       const bounded = bound(lines.map(line => cardRow('detail', line)))
       // A call that names a file has an argument worth its own colour; one that
       // does not keeps its declared title, which is already the label.
+      const head = skillHead(title(generic, name), name)
       const location = generic.locations?.[0]?.path
       if (location === undefined || location === '') {
-        return { kind: 'generic', tool: name, title: title(generic, name), detail: bounded.detail, failed: false, totalLines: bounded.totalLines }
+        return { kind: 'generic', tool: name, title: head.label, ...skillOf(head.skill), detail: bounded.detail, failed: false, totalLines: bounded.totalLines }
       }
       return {
         kind: 'generic',
         tool: name,
         title: name,
+        ...skillOf(head.skill),
         argument: location,
         detail: bounded.detail,
         failed: false,
@@ -374,10 +405,12 @@ export function cardOfResult(
       const lines = contentLines(generic.content)
       const chosen = lines.length > 0 ? lines : input.contentLines
       const bounded = bound(chosen.map(line => cardRow('detail', line)))
+      const head = skillHead(title(generic, input.name), input.name)
       return {
         kind: 'generic',
         tool: input.name,
-        title: title(generic, input.name),
+        title: head.label,
+        ...skillOf(head.skill),
         detail: bounded.detail,
         failed,
         totalLines: bounded.totalLines,

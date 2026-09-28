@@ -8,6 +8,16 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+### Added
+
+- A skill card draws the skill it loaded as a name of its own, in the new
+  `tool.skill` colour beside the label rather than inside it. The label and the
+  name shared one colour run, so the row said a skill was loaded but made the
+  reader parse the words to learn which; the name now travels in its own field,
+  `violet-orbit` paints it `#C9A3D9`, while the default and `deepseek-blue`
+  themes keep the label's accent. Hiding the token retires the paint and not the
+  name, and the export and a dispatched row spell it too.
+
 ### Changed
 
 - Submitted prompts now have a `transcript.user.border` token independent of the editor and assistant frames. `violet-orbit` ships the current `#6f76c9` prompt/editor and `#a89771` assistant frame shades without per-user overrides.
