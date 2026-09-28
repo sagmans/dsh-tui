@@ -633,7 +633,7 @@ describe('createAppearance display', () => {
     given.appearance.runThemeCommand('')
     await vi.waitFor(() => { expect(theme.style('tool.title', 'title')).toContain('38;2;129;151;247') })
     expect(theme.style('tool.title', 'title')).not.toBe(painted)
-    expect(theme.editor.borderColor('prompt')).toContain('38;2;138;138;255')
+    expect(theme.editor.borderColor('prompt')).toContain('38;2;111;118;201')
     expect(theme.editor.borderColor('prompt')).not.toBe(editorPainted)
     expect(theme.markdown.heading('title')).toContain('38;2;181;181;255')
     expect(theme.markdown.heading('title')).not.toBe(markdownPainted)

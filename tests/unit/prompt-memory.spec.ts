@@ -123,6 +123,9 @@ function harness(options: Options = {}) {
     },
     editorAvailable: options.editorAvailable ?? (() => true),
     activeSession: () => session,
+    // The bank this spec drives is the session-private one, which is the scope
+    // its session-switching assertions describe.
+    stashScope: 'session',
     openPicker: async picker => {
       pickers.push(picker)
       return picks.shift()

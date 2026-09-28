@@ -115,6 +115,7 @@ function fixture(options: FixtureOptions = {}) {
   const work = createBackgroundWork(ctx, {
     drivingAgent: () => agent,
     activeSession: () => active,
+    backgroundChanged: () => {},
     notice: text => {
       notices.push(text)
     },
