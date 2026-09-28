@@ -58,6 +58,12 @@ breaking change, and a patch carries only fixes.
 
 ### Fixed
 
+- A refused settings section is reported once per write instead of once per read.
+  One write is read more than once — the settings service reports the section and
+  the document it came from separately — so a broken file collected the same
+  refusal row until the transcript was mostly that sentence. A refusal that follows
+  a different one still prints, because that is a second thing found.
+
 - PTY dogfood now rejects homes with escaping links and requires the installed `dsh 0.1.5-rc.3` launcher. The worktree helper rejects incompatible hosts before cloning. Previously, the PTY driver ran the Harness source checkout and could treat live `settings.yaml` as migration input.
 - The message that stops activation when a profile lacks what the surface needs
   arrives with each missing capability on its own line. It interpolated an escaped
