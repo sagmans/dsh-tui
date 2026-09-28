@@ -43,8 +43,13 @@ const LOCK_FIELD_SEPARATOR = ' '
 /** Why the store refuses to write, which is a reason the reader can act on. */
 export type HistoryBlockReason = 'corrupt_history' | 'unsupported_schema' | 'unreadable_history'
 
-/** One phrase per refusal, so a notice reads the same wherever it is raised. */
-const BLOCK_DESCRIPTIONS: Record<HistoryBlockReason, string> = {
+/**
+ * One phrase per refusal, so a notice reads the same wherever it is raised.
+ *
+ * Exported as the one place these words live: the surface answers with them too,
+ * and a second copy is one condition the reader has to learn twice.
+ */
+export const BLOCK_DESCRIPTIONS: Record<HistoryBlockReason, string> = {
   corrupt_history: 'corrupt',
   unsupported_schema: 'a newer format',
   unreadable_history: 'unreadable',

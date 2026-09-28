@@ -1,5 +1,5 @@
 import type { SessionId } from '@deepseek-ai/dsh-session'
-import { createPromptHistory, type HistoryBlockReason } from '../agent/prompt-history.ts'
+import { BLOCK_DESCRIPTIONS, createPromptHistory } from '../agent/prompt-history.ts'
 import { ghostSuffix } from '../input/ghost.ts'
 import type { Keymap } from '../input/actions.ts'
 import { PromptStash } from '../stash.ts'
@@ -14,21 +14,6 @@ import { confirmedClear, StashConfirmPicker, StashPicker } from '../ui/stash-pic
 
 /** Reverse video for the cell the cursor occupies, so a ghost keeps the cursor visible. */
 const GHOST_CURSOR_PREFIX = '\u001b[7m'
-
-/**
- * The store's own words for each reason it refuses the file, so one condition
- * keeps one name wherever the reader meets it.
- *
- * The store's warning already answers in these words ("prompt history is
- * corrupt; …"), and its copy of the vocabulary is private, so the translation
- * happens at this boundary rather than leaking the machine reason into a
- * notice — two names for one condition is a condition nobody can report.
- */
-const BLOCKED_HISTORY_WORDS: Record<HistoryBlockReason, string> = {
-  corrupt_history: 'corrupt',
-  unsupported_schema: 'a newer format',
-  unreadable_history: 'unreadable',
-}
 
 /**
  * What a list has to answer to be driven by whoever owns the keyboard.
@@ -153,7 +138,7 @@ export function createPromptMemory(ports: PromptMemoryPorts): PromptMemory {
     }
     if (promptHistory.entries().length === 0) {
       const blocked = promptHistory.blockedReason()
-      ports.notice(blocked === undefined ? 'no prompt history yet' : 'prompt history is unavailable: ' + BLOCKED_HISTORY_WORDS[blocked])
+      ports.notice(blocked === undefined ? 'no prompt history yet' : 'prompt history is unavailable: ' + BLOCK_DESCRIPTIONS[blocked])
       ports.render()
       return
     }
@@ -177,7 +162,7 @@ export function createPromptMemory(ports: PromptMemoryPorts): PromptMemory {
         ports.notice([
           count + (count === 1 ? ' prompt recorded' : ' prompts recorded'),
           promptHistory.path(),
-          blocked === undefined ? undefined : 'writes disabled: ' + BLOCKED_HISTORY_WORDS[blocked],
+          blocked === undefined ? undefined : 'writes disabled: ' + BLOCK_DESCRIPTIONS[blocked],
         ].filter(part => part !== undefined).join(' · '))
         ports.render()
         return
@@ -191,7 +176,7 @@ export function createPromptMemory(ports: PromptMemoryPorts): PromptMemory {
       // would describe a successful clear the file never had.
       const blocked = promptHistory.blockedReason()
       if (blocked !== undefined) {
-        ports.notice('prompt history is unavailable: ' + BLOCKED_HISTORY_WORDS[blocked])
+        ports.notice('prompt history is unavailable: ' + BLOCK_DESCRIPTIONS[blocked])
         ports.render()
         return
       }
