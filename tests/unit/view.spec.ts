@@ -48,8 +48,17 @@ describe('TranscriptView theming', () => {
 })
 
 describe('TranscriptView copy', () => {
-  /** The rows of a frame as the terminal hands a copy back: styling gone, trailing blanks gone. */
-    const handedBack = (rows: readonly string[]): string => rows.map(row => stripTerminalSequences(row).trimEnd()).join('\n')
+  /**
+   * The rows a drag over a message hands back: styling gone, trailing blanks gone.
+   *
+   * The surface's own rows of air are left out, because a drag that starts on a
+   * box does not cover them; a selection that does cross one keeps it, which the
+   * case below pins.
+   */
+    const handedBack = (rows: readonly string[]): string => rows
+      .map(row => stripTerminalSequences(row).trimEnd())
+      .filter(row => row !== '')
+      .join('\n')
   it('reads a dragged copy back as the message, without the box it was drawn in', () => {
       const model = new TranscriptModel()
       model.apply({ type: 'assistant/message', data: { message: { content: [{ type: 'text', text: 'the answer' }] } } })
@@ -95,6 +104,15 @@ describe('TranscriptView copy', () => {
       expect(cleanCopied([beta, '│'].join('\n'), view.copyRows())).toBe('beta')
       // A copy of frame alone is handed back, not emptied, and not answered with a word.
       expect(cleanCopied('│', view.copyRows())).toBe('│')
+    })
+  it("hands back a selection that crossed the surface's own air", () => {
+      const model = new TranscriptModel()
+      model.apply({ type: 'assistant/message', data: { message: { content: [{ type: 'text', text: 'the answer' }] } } })
+      const view = viewOf(model)
+      // The air is the surface's row and no message's, so a selection that covered
+      // it reads the way the terminal handed it back rather than as a word from a
+      // neighbour that happened to sit beside it.
+      expect(cleanCopied('\nthe answer\n', view.copyRows())).toBe('\nthe answer\n')
     })
   it('takes nothing away from a row it never drew', () => {
       const model = new TranscriptModel()

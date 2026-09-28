@@ -7,11 +7,13 @@
  * that only decides which of them to rebuild.
  */
 import { type MarkdownTheme, visibleWidth } from '@earendil-works/pi-tui'
+import { type Spacing } from '../../spacing.ts'
 import { type TranscriptEntry } from '../../transcript.ts'
 import { type TuiToken } from '../../theme-tokens.ts'
 import { type TuiTheme } from '../../theme.ts'
 import { codeBlockLines } from '../diff.ts'
 import { canFrame, frameBlock, FRAME_COLUMNS, textWidth, type FrameRow } from '../frame.ts'
+import { gapRows } from '../gap.ts'
 import { ANSWER_FACE, type MarkdownFace, type MarkdownRenderer } from '../markdown.ts'
 import { type ClickSpan } from '../view.ts'
 
@@ -57,6 +59,8 @@ export interface MessagesContext {
   readonly reasoningOpen: (entry: Extract<TranscriptEntry, { kind: 'reasoning' }>) => boolean
   readonly reasoningFoldHint: () => string
   readonly reasoningKey: (id: string) => string | undefined
+  /** The air a framed message keeps around itself, read per render. */
+  readonly spacing: () => Spacing
   readonly pushWrapped: (lines: string[], text: string, width: number, prefix: string, token: TuiToken) => void
 }
 
@@ -118,7 +122,12 @@ export class Messages {
         border: rule => this.context.theme.style(borderToken, rule),
         framed,
       })
-      lines.push(...block.drawn)
+      // A card is an object of the transcript rather than a paragraph of it, so it
+      // opens and closes with air: the prompt and the reply of one exchange stop
+      // touching, and so do the rows of a turn after them. The rows are the
+      // frame's own and carry no text, so a copy of the message leaves them out.
+      const air = gapRows(this.context.spacing().messages)
+      lines.push(...air, ...block.drawn, ...air)
       copy.push(...block.copy)
     }
   /**

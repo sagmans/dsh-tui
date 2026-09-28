@@ -18,8 +18,12 @@ describe('TranscriptView text', () => {
       const model = new TranscriptModel()
       model.apply({ type: 'assistant/message', data: { message: { content: [{ type: 'text', text: '# Title\n\nplain **strong**' }] } } })
       const lines = viewOf(model).render(60)
-      expect(lines[0]?.startsWith('╭')).toBe(true)
-      expect(lines.at(-1)?.startsWith('╰')).toBe(true)
+      // A message is an object of the transcript rather than a paragraph of it, so
+      // its frame opens and closes on a row of air instead of against the row above.
+      expect(lines[0]).toBe('')
+      expect(lines[1]?.startsWith('╭')).toBe(true)
+      expect(lines.at(-2)?.startsWith('╰')).toBe(true)
+      expect(lines.at(-1)).toBe('')
       const body = stripTerminalSequences(lines.join('\n'))
       expect(body).toContain('Title')
       expect(body).toContain('strong')
@@ -32,8 +36,10 @@ describe('TranscriptView text', () => {
         data: { content: [{ type: 'text', text: '**bold** steps:\n\n- one\n- two' }], source: { kind: 'user' } },
       })
       const lines = viewOf(model).render(40)
-      expect(lines[0]?.startsWith('╭')).toBe(true)
-      expect(lines.at(-1)?.startsWith('╰')).toBe(true)
+      expect(lines[0]).toBe('')
+      expect(lines[1]?.startsWith('╭')).toBe(true)
+      expect(lines.at(-2)?.startsWith('╰')).toBe(true)
+      expect(lines.at(-1)).toBe('')
       const body = stripTerminalSequences(lines.join('\n'))
       expect(body).toContain('bold steps:')
       expect(body).not.toContain('**')
@@ -51,9 +57,11 @@ describe('TranscriptView text', () => {
       // exchange read as the thing that was typed into rather than as paragraphs of
       // the transcript.
       expect(viewOf(model).render(40)).toEqual([
+        '',
         `╭${'─'.repeat(38)}╮`,
         `│ hello there${' '.repeat(25)} │`,
         `╰${'─'.repeat(38)}╯`,
+        '',
       ])
     })
   it('leaves a surface notice outside the frame', () => {
@@ -85,17 +93,18 @@ describe('TranscriptView text', () => {
       expect(folded.some(line => line.includes('second thought'))).toBe(false)
   
       const opened = new TranscriptView(model, colour, markdown, { state: () => ({ expandCards: false, expandReasoning: true, expandSubCalls: false }) }).render(60)
-      // The signpost, the two thought rows, and the framed answer: a reply is an
-      // object of its own rather than one more row under the thought.
-      expect(opened).toHaveLength(6)
+      // The signpost, the two thought rows, and the framed answer with the air it
+      // keeps around itself: a reply is an object of its own rather than one more row
+      // under the thought.
+      expect(opened).toHaveLength(8)
       expect(opened[0]).toContain('\u001b[3;38;2;102;102;102m')
       // The thought shares the signpost's faint shade, not the muted family's.
       for (const line of opened.slice(1, 3)) expect(line).toContain('\u001b[38;2;102;102;102m')
       // The frame's own rows carry the border's shade, so the corners are found in
       // the row rather than at its start.
-      expect(opened[3]).toContain('╭')
-      expect(stripTerminalSequences(opened[4] ?? '')).toContain('the answer')
-      expect(opened[5]).toContain('╰')
+      expect(opened[4]).toContain('╭')
+      expect(stripTerminalSequences(opened[5] ?? '')).toContain('the answer')
+      expect(opened[6]).toContain('╰')
     })
   it('renders an opened thought as markdown in the thought shade', () => {
       const colour = createTheme('truecolor')
@@ -153,13 +162,14 @@ describe('TranscriptView text', () => {
       const model = new TranscriptModel()
       model.apply({ type: 'user/message', data: { content: [{ type: 'text', text: 'x'.repeat(50) }], source: { kind: 'user' } } })
       const lines = viewOf(model).render(40)
-      expect(lines).toHaveLength(4)
-      for (const line of lines) expect(visibleWidth(line)).toBe(40)
-      expect(lines[0]?.startsWith('╭')).toBe(true)
-      expect(lines[3]?.startsWith('╰')).toBe(true)
+      expect(lines).toHaveLength(6)
+      // The rows of air are empty by design; every row the frame drew is the full width.
+      for (const line of lines.filter(line => line !== '')) expect(visibleWidth(line)).toBe(40)
+      expect(lines[1]?.startsWith('╭')).toBe(true)
+      expect(lines[4]?.startsWith('╰')).toBe(true)
       // Every column of the prompt survives the fold: the frame costs the text
       // width, it never costs the reader a line.
-      const body = lines.slice(1, 3).map(line => line.slice(2, -2).trimEnd()).join('')
+      const body = lines.slice(2, 4).map(line => line.slice(2, -2).trimEnd()).join('')
       expect(body).toBe('x'.repeat(50))
     })
 })
@@ -175,8 +185,11 @@ describe('TranscriptView markers', () => {
       // read as something one of them said.
       const marker = lines.indexOf('compacted 12 events (≈3000 tokens)')
       expect(marker).toBeGreaterThan(0)
-      expect(lines[marker - 1]?.startsWith('╰')).toBe(true)
-      expect(lines[marker + 1]?.startsWith('╭')).toBe(true)
+      // The frame ends, then its own row of air, and the marker under it.
+      expect(lines[marker - 1]).toBe('')
+      expect(lines[marker - 2]?.startsWith('╰')).toBe(true)
+      expect(lines[marker + 1]).toBe('')
+      expect(lines[marker + 2]?.startsWith('╭')).toBe(true)
     })
 })
 
@@ -273,17 +286,20 @@ describe('TranscriptView theming', () => {
   it.each(hiddenFrames)('draws %s bare when its frame element is hidden', (_kind, token, model, expected) => {
       const bare = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([[token, { hidden: true }]]) })
       const lines = new TranscriptView(model(), bare, new MarkdownRenderer(bare.markdown), { state: () => COLLAPSED }).render(40)
-      expect(lines).toHaveLength(1)
+      // The frame is what the theme took away, not the message: the object keeps its
+      // own row, and the air around it stays air.
+      const drawn = lines.filter(line => line.trim() !== '')
+      expect(drawn).toHaveLength(1)
       // No frame, but the text keeps the column the frame's own air gave it, so a
       // theme that hides the border does not move what it framed.
-      expect(lines[0]?.trimEnd()).toBe(expected)
+      expect(drawn[0]?.trimEnd()).toBe(expected)
     })
   it('keeps a submitted prompt framed when the editor border is hidden', () => {
       const colour = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['editor.border', { hidden: true }]]) })
       expect(colour.editor.borderColor('x')).toBe('')
       const lines = new TranscriptView(userModel(), colour, new MarkdownRenderer(colour.markdown), { state: () => COLLAPSED }).render(40)
-      expect(lines).toHaveLength(3)
-      expect(stripTerminalSequences(lines[0] ?? '')).toMatch(/^╭/)
+      expect(lines).toHaveLength(5)
+      expect(stripTerminalSequences(lines[1] ?? '')).toMatch(/^╭/)
     })
   it('styles the prompt, reply, and editor frames independently', () => {
       const colour = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([
@@ -295,8 +311,9 @@ describe('TranscriptView theming', () => {
       const model = new TranscriptModel()
       model.apply({ type: 'assistant/message', data: { message: { content: [{ type: 'text', text: 'the answer' }] } } })
       const reply = new TranscriptView(model, colour, new MarkdownRenderer(colour.markdown), { state: () => COLLAPSED }).render(40)
-      expect(prompt[0]).toContain('38;2;255;0;0')
-      expect(reply[0]).toContain('38;2;0;0;255')
+      // The frame's own row rather than the air above it: the shade belongs to the box.
+      expect(prompt.find(row => row.includes('╭'))).toContain('38;2;255;0;0')
+      expect(reply.find(row => row.includes('╭'))).toContain('38;2;0;0;255')
       expect(colour.editor.borderColor('x')).toContain('38;2;0;255;0')
       expect(prompt.join('\n') + reply.join('\n')).not.toContain('38;2;0;255;0')
     })
@@ -306,8 +323,8 @@ describe('TranscriptView theming', () => {
       const colour = createTheme('truecolor')
       const lines = new TranscriptView(model, colour, new MarkdownRenderer(colour.markdown), { state: () => COLLAPSED }).render(40)
       // #d6c29a, the shade the shipped table gives the reply's own frame.
-      expect(lines[0]).toContain('38;2;214;194;154')
-      expect(lines.at(-1)).toContain('38;2;214;194;154')
+      expect(lines.find(row => row.includes('╭'))).toContain('38;2;214;194;154')
+      expect(lines.find(row => row.includes('╰'))).toContain('38;2;214;194;154')
     })
   it('draws nothing for a hidden element', () => {
       const hidden = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['transcript.user', { hidden: true }]]) })

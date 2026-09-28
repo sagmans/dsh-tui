@@ -50,7 +50,21 @@ describe('the dsh-tui settings section', () => {
       keymap: defaultKeymap(),
       history: { enabled: true, ghost: true, maxEntries: 2000 },
       tools: defaultSettings().tools,
+      spacing: { padding: 1, messages: 1, steps: 1 },
     })
+  })
+
+  it('keeps one column and one row of air until the reader says otherwise', () => {
+    expect(parseSettings({}).spacing).toEqual({ padding: 1, messages: 1, steps: 1 })
+    // Only what was written moves: a reader tuning one gap keeps the other two.
+    expect(parseSettings({ spacing: { messages: 0, steps: 2 } }).spacing).toEqual({ padding: 1, messages: 0, steps: 2 })
+  })
+
+  it('refuses a spacing count the surface will not draw', () => {
+    expect(() => parseSettings({ spacing: { padding: 9 } })).toThrow('spacing.padding must be an integer between 0 and 3')
+    expect(() => parseSettings({ spacing: { messages: -1 } })).toThrow('spacing.messages must be an integer between 0 and 3')
+    expect(() => parseSettings({ spacing: { gap: 1 } })).toThrow('unknown spacing field: gap')
+    expect(() => parseSettings({ spacing: 1 })).toThrow('spacing must be a mapping of counts')
   })
 
   it('keeps a program’s calls behind its card until the reader asks for them', () => {

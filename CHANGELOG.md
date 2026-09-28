@@ -10,6 +10,14 @@ breaking change, and a patch carries only fixes.
 
 ### Added
 
+- The transcript keeps air. `spacing.padding` insets the whole surface by a
+  column, `spacing.messages` puts blank rows above and below a prompt and a
+  reply, and `spacing.steps` opens each step of a turn, so a thought and the
+  calls it made read as one group instead of one more paragraph of a wall. Two
+  boundaries that meet keep the wider ask rather than the sum, and every count
+  takes 0, which draws the rows exactly as the surface drew them before. All
+  three are read per frame, so an edit lands on the session already on screen.
+
 - A skill card draws the skill it loaded as a name of its own, in the new
   `tool.skill` colour beside the label rather than inside it. The label and the
   name shared one colour run, so the row said a skill was loaded but made the

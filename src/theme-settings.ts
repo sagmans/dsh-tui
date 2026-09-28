@@ -21,6 +21,7 @@ import {
   TOKEN_NAME_SET,
   TokensSchema,
 } from './theme-schema.ts'
+import { DEFAULT_SPACING, parseSpacing, type Spacing } from './spacing.ts'
 import { DEFAULT_PALETTE } from './theme-defaults.ts'
 import type { PaletteName, StyleSpec, ThemedSpecs, TuiToken } from './theme-tokens.ts'
 
@@ -100,6 +101,9 @@ const SECTION = z.object({
   // but validated by hand below: its keys are tool names, which no closed shape
   // can enumerate, and schemastery's `dict` accepts every one of them.
   tools: z.any(),
+  // Declared for the same reason `tools` is, and validated by hand below: the block
+  // is a mapping of counts whose fields are spelled out where the refusal is.
+  spacing: z.any(),
 })
 
 /**
@@ -112,7 +116,7 @@ const SECTION = z.object({
 export const TuiSettingsSchema = SECTION
 
 /** The section's own keys: schemastery keeps what it does not declare, so a misspelling has to be refused here. */
-const SECTION_KEYS = new Set(['theme', 'palette', 'tokens', 'subcalls', 'mermaid', 'prefix', 'prefixWindow', 'keys', 'history', 'tools'])
+const SECTION_KEYS = new Set(['theme', 'palette', 'tokens', 'subcalls', 'mermaid', 'prefix', 'prefixWindow', 'keys', 'history', 'tools', 'spacing'])
 
 /** The fields one tool's row may carry, for the same reason the section's own keys are spelled out. */
 const TOOL_FIELDS = new Set(['collapsed', 'output', 'tail'])
@@ -263,6 +267,7 @@ export function parseSettings(raw: unknown): TuiSettings {
     tokens: tokens as Readonly<Partial<Record<TuiToken, StyleSpec>>>,
     subcalls: parsed.subcalls,
     tools: toolDisplayTable(parseTools(section.tools)),
+    spacing: parseSpacing(section.spacing),
     mermaid: parsed.mermaid,
     prefixes: keysFor(keymap, 'chord.prefix'),
     prefixWindow: parsed.prefixWindow,
@@ -305,6 +310,8 @@ export interface TuiSettings {
   readonly history: HistorySettings
   /** How each tool's cards draw: the block's own default, then the reader's per-tool rows. */
   readonly tools: ToolDisplayTable
+  /** How much air the surface keeps: its own edges, and the gaps between what it draws. */
+  readonly spacing: Spacing
 }
 
 /** The section as it reads when the reader has written nothing. */
@@ -315,6 +322,7 @@ export function defaultSettings(): TuiSettings {
     tokens: {},
     subcalls: DEFAULT_SUBCALL_DISPLAY,
     tools: toolDisplayTable(),
+    spacing: DEFAULT_SPACING,
     mermaid: DEFAULT_MERMAID_MODE,
     prefixes: [...DEFAULT_PREFIX_KEYS],
     prefixWindow: DEFAULT_PREFIX_WINDOW_S,

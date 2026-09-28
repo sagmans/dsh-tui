@@ -9,6 +9,7 @@ import { visibleWidth } from '@earendil-works/pi-tui'
 import { CUSTOM_ROW_NUMBER, type GateCard } from '../../gates.ts'
 import { type TuiToken } from '../../theme-tokens.ts'
 import { type TuiTheme } from '../../theme.ts'
+import { pushGap } from '../gap.ts'
 
 const OPTION_INDENT = '   '
 /** The mark a cursor falls back to when the reader has not set one, so no literal lives in a template. */
@@ -39,7 +40,9 @@ export class GateCards {
   constructor(private readonly context: GateCardsContext) {}
 
   pushGate(lines: string[], gate: GateCard, width: number): void {
-      lines.push('')
+      // The question opens under the transcript on one row of air, unless the row
+      // above is already air: the break belongs between the two, not to each.
+      pushGap(lines)
       if (this.context.theme.visible('gate.title')) {
         const glyphToken = gate.kind === 'approval' ? 'gate.glyphApproval' : 'gate.glyphQuestion'
         const glyph = this.context.theme.glyph(glyphToken) || (gate.kind === 'approval' ? APPROVAL_MARK : QUESTION_MARK)

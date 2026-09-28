@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Component, TUI, TuiMouseEvent } from '@earendil-works/pi-tui'
+import { stripTerminalSequences, type Component, type TUI, type TuiMouseEvent } from '@earendil-works/pi-tui'
 import { getLayoutBoxesAt, renderLayoutFrame } from '@earendil-works/pi-tui/dist/layout.js'
 import { dispatchMouseEvent } from '@earendil-works/pi-tui/dist/tui.js'
 import { createTheme } from '@/theme.ts'
@@ -58,6 +58,25 @@ describe('the surface root layout', () => {
     const frame = renderLayoutFrame(root, 80, 24, () => {})
     expect(frame.lines.filter(line => line.includes('dock'))).toHaveLength(16)
     expect(frame.lines.some(line => line.includes('the draft'))).toBe(true)
+  })
+
+  it('moves every part inside the margin the reader asked for', () => {
+    const { prompt } = promptOf('the draft')
+    const root = surfaceLayout({
+      transcript: rowsOf('row', 6),
+      dock: rowsOf('dock', 0),
+      queue: rowsOf('queued', 0),
+      prompt,
+      status: rowsOf('status', 1),
+    }, () => 1)
+    const frame = renderLayoutFrame(root, 40, 12, () => {})
+    // Nothing is drawn in the window's first column, and the rows that were at
+    // the edge begin one column in.
+    expect(frame.lines.every(line => (stripTerminalSequences(line)[0] ?? ' ') === ' ')).toBe(true)
+    const rowAt = frame.lines.findIndex(line => line.includes('row 0'))
+    const box = getLayoutBoxesAt(frame, 1, rowAt)[0]
+    expect(box?.rect.x).toBe(1)
+    expect(box?.rect.width).toBe(38)
   })
 
   it('maps a prompt click to the editor hit box and cursor position', () => {

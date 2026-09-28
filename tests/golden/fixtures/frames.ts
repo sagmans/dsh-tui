@@ -110,6 +110,9 @@ export function fixture(frameTheme = theme): { view: TranscriptView; dock: WorkD
   }
   model.apply({ type: 'user/message', data: { content: [{ type: 'text', text: 'add a dock above the editor' }], source: { kind: 'user' } } })
   feed({ type: 'user/message', data: { content: [{ type: 'text', text: '<system-reminder>\nfollow the plan\nkeep it short' }], source: { kind: 'plugin', plugin: 'dsh-agent-instructions' } } })
+  // The loop opened a step before it called the model, which is where the frame's
+  // air between the prompt and what answered it comes from.
+  feed({ type: 'step/start', data: { turn: 1, step: 1 } })
   // The thought arrives the way the provider records it — a block of the
   // message, not a live delta — which is the only path a resume can replay.
   model.apply({
@@ -207,6 +210,7 @@ export /**
 function markdownMessages(frameTheme = theme): TranscriptView {
   const model = new TranscriptModel()
   model.apply({ type: 'user/message', data: { content: [{ type: 'text', text: MARKDOWN_PROMPT }], source: { kind: 'user' } } })
+  model.apply({ type: 'step/start', data: { turn: 1, step: 1 } })
   model.apply({
     type: 'assistant/message',
     data: {

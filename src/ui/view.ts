@@ -3,9 +3,11 @@ import { type PickerCard } from './picker.ts'
 import { pickerCardLines } from './picker-card.ts'
 import { ANSWER_FACE, type MarkdownRenderer } from './markdown.ts'
 import { type FrameRow } from './frame.ts'
+import { gapRows, placeGap, pushGap } from './gap.ts'
 import { type TuiTheme } from '../theme.ts'
 import { type TuiToken } from '../theme-tokens.ts'
 import { DEFAULT_TOOL_DISPLAY, type ToolDisplaySpec } from '../tool-display.ts'
+import { DEFAULT_SPACING, type Spacing } from '../spacing.ts'
 import { SECOND_MS } from '../transcript/tool-calls.ts'
 import { type TranscriptEntry, type TranscriptModel } from '../transcript.ts'
 import { type GateCard } from '../gates.ts'
@@ -99,6 +101,13 @@ export interface TranscriptViewOptions {
    * folding a session under the policy it happened to start with.
    */
   readonly toolDisplay?: (tool: string) => ToolDisplaySpec
+  /**
+   * The air the surface keeps, read per render.
+   *
+   * The settings document is hot-reloaded, so captured counts would keep
+   * drawing the gaps the session happened to start with.
+   */
+  readonly spacing?: () => Spacing
 }
 
 export class TranscriptView implements Component {
@@ -143,7 +152,7 @@ constructor(
     private readonly options: TranscriptViewOptions = {},
   ) {
     this.cards = new ToolCards({ theme: this.theme, keymap: () => this.keymap(), toolDisplay: tool => this.toolDisplay(tool), expansionOf: entry => this.expansionOf(entry), subCallsOpen: entry => this.subCallsOpen(entry), liveCall: callId => this.model.liveCall(callId), cardOpenHint: () => hintKeys(this.keymap(), 'surface.toolDetail') || CARD_OPEN_FALLBACK, toolKey: id => toolClickKey(id), subCallsKey: id => nestedCallsClickKey(id), subCallKey: (parentId, id) => subCallClickKey(parentId, id), subCallOpen: (parentId, id) => this.subCallOpen(parentId, id) })
-    this.messages = new Messages({ theme: this.theme, markdown: this.markdown, reasoningOpen: entry => this.reasoningOpen(entry), reasoningFoldHint: () => this.reasoningFoldHint(), reasoningKey: id => reasoningClickKey(id), pushWrapped: (lines, text, width, prefix, token) => this.pushWrapped(lines, text, width, prefix, token) })
+    this.messages = new Messages({ theme: this.theme, markdown: this.markdown, reasoningOpen: entry => this.reasoningOpen(entry), reasoningFoldHint: () => this.reasoningFoldHint(), reasoningKey: id => reasoningClickKey(id), spacing: () => this.air(), pushWrapped: (lines, text, width, prefix, token) => this.pushWrapped(lines, text, width, prefix, token) })
     this.gates = new GateCards({ theme: this.theme, pushWrapped: (lines, text, width, prefix, token) => this.pushWrapped(lines, text, width, prefix, token) })
     this.rows = new RowCache<TranscriptEntry>()
   }
@@ -153,6 +162,10 @@ private get viewState(): ViewState {
 /** The display the reader configured for a tool, or the shipped one. */
   private toolDisplay(tool: string): ToolDisplaySpec {
     return this.options.toolDisplay?.(tool) ?? DEFAULT_TOOL_DISPLAY
+  }
+  /** The air in force, or the shipped spacing for a caller that lent none. */
+  private air(): Spacing {
+    return this.options.spacing?.() ?? DEFAULT_SPACING
   }
 /**
    * Whether one tool message draws open.
@@ -275,7 +288,9 @@ private reasoningFoldHint(): string {
     return this.model.liveCall(entry.id).running || (entry.card.subCalls ?? []).some(call => call.running)
   }
 private pushPicker(lines: string[], picker: PickerCard, width: number): void {
-    lines.push('')
+    // The overlay opens under the transcript on one row of air, unless the row
+    // above is already air: the break belongs between the two, not to each.
+    pushGap(lines)
     // The rows come from the renderer a popup also draws through, so a card
     // reads the same whether it sits at the end of the transcript or in a box
     // over it, and a field added to a card reaches both at once.
@@ -289,6 +304,12 @@ private pushPicker(lines: string[], picker: PickerCard, width: number): void {
         return
       case 'reasoning':
         this.messages.pushReasoning(lines, entry, width, spans)
+        return
+      case 'step':
+        // The log opened a step of the turn here, so the rows it costs are the air
+        // that keeps one step's thought and calls from reading as the next step's
+        // tail. Nothing else is drawn: the step is a boundary, not a thing said.
+        lines.push(...gapRows(this.air().steps))
         return
       case 'assistant':
         // The reply is boxed the way the prompt that asked for it is, so one
@@ -317,7 +338,10 @@ render(width: number): string[] {
     // The revision is part of the key: rows drawn under an older theme table
     // must miss, or a settings change would restyle only the rows that happened
     // to be redrawn for another reason.
-    const baseTag = `${width}|${state.expandCards ? 'c' : '-'}${state.expandReasoning ? 'r' : '-'}${state.expandSubCalls ? 'p' : '-'}|${this.theme.revision}`
+    // The air the reader asked for is part of the key for the same reason: the rows
+    // an entry holds are its own air plus its own body.
+    const gaps = this.air()
+    const baseTag = `${width}|${state.expandCards ? 'c' : '-'}${state.expandReasoning ? 'r' : '-'}${state.expandSubCalls ? 'p' : '-'}|${this.theme.revision}|${gaps.messages}${gaps.steps}`
     const lines: string[] = []
     const spans: ClickSpan[] = []
     const liveCopy: FrameRow[] = []
@@ -344,37 +368,36 @@ render(width: number): string[] {
       const tag = `${baseTag}|${marks}${this.isLive(entry) ? `|${Math.floor(this.model.now() / SECOND_MS)}` : ''}`
       const local: ClickSpan[] = []
       const copy: FrameRow[] = []
+      const rows: string[] = []
       // The in-flight rows change on every frame, so caching them would only
       // fill the cache with objects nobody will ask for again.
       if (index >= settled) {
-        this.renderEntry(entry, lines, width, true, local, copy)
+        this.renderEntry(entry, rows, width, true, local, copy)
         // A row still arriving is drawn every frame, so it is never cached: its
         // copy account goes to the frame rather than to an entry nobody can name.
         liveCopy.push(...copy)
-        // An in-flight entry draws straight into the transcript, so the spans it
-        // recorded already name transcript rows; offsetting them again would move
-        // every hit target as many rows down as the entry's own start.
-        spans.push(...local)
       } else {
         const cached = this.rows.lookup(entry, tag)
         const saved = this.entrySpans.get(entry)
         const savedCopy = this.entryCopy.get(entry)
         if (cached !== undefined && saved !== undefined && savedCopy !== undefined) {
-          lines.push(...cached)
+          rows.push(...cached)
           local.push(...saved)
         } else {
-          const rendered: string[] = []
-          this.renderEntry(entry, rendered, width, false, local, copy)
-          this.rows.store(entry, tag, rendered)
+          this.renderEntry(entry, rows, width, false, local, copy)
+          this.rows.store(entry, tag, rows)
           this.entrySpans.set(entry, local)
           this.entryCopy.set(entry, copy)
-          lines.push(...rendered)
         }
-        // A cached span is kept relative to its entry so the entry can hand it
-        // back; a click needs it in transcript rows.
-        for (const span of local) {
-          spans.push({ ...span, start: span.start + start, end: span.end + start })
-        }
+      }
+      // The entry goes in through the seam rather than straight onto the rows drawn
+      // so far: the air it opens with is given up when the row above is already air,
+      // so a break between two things stays one break however many asked for one.
+      const base = start - placeGap(lines, rows)
+      // A span is kept relative to its entry so a cached entry can still hand it
+      // back, and the row of air a seam dropped moves it with the rows that stayed.
+      for (const span of local) {
+        spans.push({ ...span, start: span.start + base, end: span.end + base })
       }
     }
     this.spans = spans

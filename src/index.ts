@@ -298,6 +298,9 @@ export function apply(ctx: Context, config: unknown): void {
     picker: () => modalInput.pickerCard(),
     keys: appearance.keymap,
     toolDisplay: tool => toolDisplayFor(appearance.toolDisplay(), tool),
+    // The gaps the reader tunes in the settings document, read per frame so an
+    // edit lands on the session already on screen.
+    spacing: appearance.spacing,
   })
   // The key map goes in before the bar exists, so no press can be read as the
   // send the library submits on by default. A settings document read after this
@@ -419,13 +422,16 @@ export function apply(ctx: Context, config: unknown): void {
   // the one teardown list gave the signal seam before the surface was split.
   disposers.push(terminalLifecycle.signalShutdown())
 
+  // The whole surface sits inside the reader's margin, so the frames it draws
+  // never touch the window's edge; the margin is read per frame, which is why an
+  // edit needs no rebuild of the tree it insets.
   tui.setLayoutRoot(surfaceLayout({
     transcript: new ScrollView(view, { follow: 'end', primary: true, overscroll: 'chain' }),
     dock,
     queue,
     prompt: promptBar,
     status: statusBar,
-  }))
+  }, () => appearance.spacing().padding))
   tui.setFocus(editor)
 
   disposers.push(promptInput.inputListener())
