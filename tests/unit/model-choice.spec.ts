@@ -299,6 +299,28 @@ describe('model choice without a directory', () => {
     expect(notices).toEqual(['this profile has no llm service, so reasoning efforts cannot be read'])
     expect(renders).toHaveLength(1)
   })
+
+  it('names the mounted service, not a missing one, when it cannot list providers', () => {
+    const { route, notices, renders } = recordingHarness({ listModels: async () => [] })
+
+    route.runModelCommand('')
+
+    expect(notices).toEqual([
+      'the llm service this profile mounts cannot list providers, so models cannot be listed or switched',
+    ])
+    expect(renders).toHaveLength(1)
+  })
+
+  it('names that same service when the reasoning efforts cannot be read', () => {
+    const { route, notices, renders } = recordingHarness({ listModels: async () => [] })
+
+    route.openEffortPicker()
+
+    expect(notices).toEqual([
+      'the llm service this profile mounts cannot list providers, so reasoning efforts cannot be read',
+    ])
+    expect(renders).toHaveLength(1)
+  })
 })
 
 describe('model command text forms', () => {

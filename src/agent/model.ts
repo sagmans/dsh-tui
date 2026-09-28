@@ -205,6 +205,19 @@ export interface ModelCatalog {
  */
 export type ModelCatalogGap = 'no_llm_service' | 'llm_without_provider_listing'
 
+/**
+ * The cause half of every refusal a gap is reported with.
+ *
+ * One owner for these words, because more than one command answers the same two
+ * causes: the model list, the effort picker and `list-models` each add their own
+ * verb, and a second copy of a cause is how a reader ends up told to install a
+ * service they already run.
+ */
+export const MODEL_CATALOG_GAP_CAUSE: Record<ModelCatalogGap, string> = {
+  no_llm_service: 'this profile has no llm service',
+  llm_without_provider_listing: 'the llm service this profile mounts cannot list providers',
+}
+
 /** Either the catalog or the reason there is none, never both. */
 export type ModelCatalogReading =
   | { readonly kind: 'ready'; readonly catalog: ModelCatalog }
