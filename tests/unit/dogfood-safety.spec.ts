@@ -303,6 +303,45 @@ node -e 'const fs = require("node:fs"); fs.writeFileSync(process.env.DSH_TEST_SN
     expect(readFileSync(external, 'utf8')).toBe(original)
   })
 
+  // The marker lands before the copy, so a clone that stopped halfway is still a
+  // directory --clean and --reseed own, which is what makes an interrupted seed
+  // recoverable instead of a husk no action will touch.
+  it('writes its ownership marker before the copy and marks the home ready at the end', () => {
+    expect(generic(['--home', scratchHome]).status).toBe(0)
+    const marker = readFileSync(join(scratchHome, '.dsh-dogfood'), 'utf8')
+    expect(marker).toContain(`home=${scratchHome}\n`)
+    expect(marker).toContain('ready=1\n')
+  })
+
+  it('refuses a clone that stopped halfway and re-seeds it when asked', () => {
+    mkdirSync(scratchHome)
+    writeFileSync(join(scratchHome, '.dsh-dogfood'), `home=${scratchHome}\nsource=${sourceHome}\ntarget=${checkout}\nprofile=tui\nready=0\n`)
+    writeFileSync(join(scratchHome, 'half-copy'), 'partial')
+    const refused = generic(['--home', scratchHome])
+    expect(refused.status).not.toBe(0)
+    expect(refused.stderr).toContain('half-seeded clone; pass --reseed')
+    expect(readFileSync(join(scratchHome, 'half-copy'), 'utf8')).toBe('partial')
+    const reseeded = generic(['--home', scratchHome, '--reseed'])
+    expect(reseeded.status, reseeded.stderr).toBe(0)
+    expect(readFileSync(join(scratchHome, '.dsh-dogfood'), 'utf8')).toContain('ready=1\n')
+  })
+
+  it('still takes back a clone that stopped halfway', () => {
+    mkdirSync(scratchHome)
+    writeFileSync(join(scratchHome, '.dsh-dogfood'), `home=${scratchHome}\nsource=${sourceHome}\ntarget=${checkout}\nprofile=tui\nready=0\n`)
+    expect(generic(['--home', scratchHome, '--clean']).status).toBe(0)
+    expect(existsSync(scratchHome)).toBe(false)
+  })
+
+  it('reuses a clone whose marker predates the readiness line', () => {
+    expect(generic(['--home', scratchHome]).status).toBe(0)
+    const marker = join(scratchHome, '.dsh-dogfood')
+    writeFileSync(marker, readFileSync(marker, 'utf8').replace('ready=1\n', ''))
+    const again = generic(['--home', scratchHome])
+    expect(again.status, again.stderr).toBe(0)
+    expect(readFileSync(marker, 'utf8')).toContain('ready=1\n')
+  })
+
   it('refuses orphan cleanup when the source differs from its marker', () => {
     expect(generic(['--home', scratchHome]).status).toBe(0)
     rmSync(checkout, { recursive: true })

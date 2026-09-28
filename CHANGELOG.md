@@ -58,6 +58,10 @@ breaking change, and a patch carries only fixes.
 
 ### Fixed
 
+- The dogfood helper marks a scratch home before it copies anything into it and
+  takes that home back when the run does not finish, so an interrupted clone no
+  longer leaves a directory that `--clean` and `--reseed` both refuse.
+
 - A refused settings section is reported once per write instead of once per read.
   One write is read more than once — the settings service reports the section and
   the document it came from separately — so a broken file collected the same
