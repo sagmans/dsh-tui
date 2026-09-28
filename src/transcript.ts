@@ -13,6 +13,7 @@ export type TranscriptEntry =
   | { readonly kind: 'marker'; readonly text: string }
   | { readonly kind: 'tool'; readonly card: ToolCard; readonly id: string }
   | { readonly kind: 'reasoning'; readonly id: string; readonly summary: string; readonly body: string; readonly live: boolean }
+  | { readonly kind: 'step' }
 
 /** Reasoning kept per settled block, so one runaway thought cannot grow the transcript without bound. */
 export const REASONING_CHAR_LIMIT = 20_000
@@ -275,6 +276,15 @@ export class TranscriptModel {
   apply(event: FoldableEvent): void {
     const data = asRecord(event.data) ?? {}
     switch (event.type) {
+      case 'step/start': {
+        // One model call and the tools it asked for, opened where the loop opened
+        // it: the row the view draws for this is the air that keeps one step's
+        // work apart from the next one's. Reading the loop's own event rather than
+        // inferring a break from the rows is what makes a step that says nothing
+        // and only calls tools still read as a step of its own.
+        this.settled.push({ kind: 'step' })
+        return
+      }
       case 'user/message': {
         const text = textOfContent(data.content)
         if (text === '') return

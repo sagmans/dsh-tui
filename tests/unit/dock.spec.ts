@@ -21,31 +21,46 @@ const rule = (heading: string, width: number): string => {
   return `${head}${'┄'.repeat(width - visibleWidth(head))}`
 }
 
+/**
+ * The blank row the panel itself opens on, which every section is drawn below.
+ *
+ * It is the panel's break rather than a section's: it carries no name and no
+ * glyph, and it is the reason a section row sits one row lower than it would on a
+ * dock drawn without one.
+ */
+const LEAD = ''
+
 describe('WorkDock', () => {
   it('takes no rows when there is nothing to say', () => {
     expect(dockOf(EMPTY).render(60)).toEqual([])
   })
 
+  it('opens the work panel on a blank row under the conversation', () => {
+    const lines = dockOf({ ...EMPTY, planMode: true }).render(40)
+    expect(lines[0]).toBe(LEAD)
+    expect(lines.slice(1).join('\n')).toContain('plan mode')
+  })
+
   it('states the goal with its round budget', () => {
     const lines = dockOf({ ...EMPTY, goal: { objective: 'complete the plan', roundsStarted: 3, maxRounds: 256, phase: 'active' } }).render(80)
-    expect(lines).toEqual(['◎ goal round 3/256 · complete the plan'])
+    expect(lines).toEqual([LEAD, '◎ goal round 3/256 · complete the plan'])
   })
 
   it('names a stalled goal so it never reads as running', () => {
     const paused = dockOf({ ...EMPTY, goal: { objective: 'complete the plan', roundsStarted: 3, maxRounds: 256, phase: 'paused' } }).render(80)
-    expect(paused).toEqual(['◎ goal paused · round 3/256 · complete the plan'])
+    expect(paused).toEqual([LEAD, '◎ goal paused · round 3/256 · complete the plan'])
     const blocked = dockOf({ ...EMPTY, goal: { objective: 'complete the plan', roundsStarted: 3, maxRounds: 256, phase: 'blocked' } }).render(80)
-    expect(blocked).toEqual(['◎ goal blocked · round 3/256 · complete the plan'])
+    expect(blocked).toEqual([LEAD, '◎ goal blocked · round 3/256 · complete the plan'])
   })
 
   it('marks where a goal was cut off', () => {
     const lines = dockOf({ ...EMPTY, goal: { objective: 'x'.repeat(400), roundsStarted: 1, maxRounds: undefined, phase: 'active' } }).render(80)
-    expect(visibleWidth(lines[0] ?? '')).toBeLessThanOrEqual(80)
-    expect(lines[0]).toContain('…')
+    expect(visibleWidth(lines[1] ?? '')).toBeLessThanOrEqual(80)
+    expect(lines[1]).toContain('…')
   })
 
   it('announces plan mode', () => {
-    expect(dockOf({ ...EMPTY, planMode: true }).render(80)).toEqual(['⏸ plan mode · answer the plan before edits happen'])
+    expect(dockOf({ ...EMPTY, planMode: true }).render(80)).toEqual([LEAD, '⏸ plan mode · answer the plan before edits happen'])
   })
 
   it('shows only the todos still to do, most urgent first', () => {
@@ -56,6 +71,7 @@ describe('WorkDock', () => {
     ]
     const lines = dockOf({ ...EMPTY, todos }).render(80)
     expect(lines).toEqual([
+      LEAD,
       rule('☰ todos · 2 left', 80),
       '  ▸ now thing',
       '  ☐ next thing',
@@ -70,7 +86,7 @@ describe('WorkDock', () => {
   it('bounds a long list and counts what it left out', () => {
     const todos = Array.from({ length: DOCK_TODO_LIMIT + 3 }, (_, index) => ({ content: `task ${index}`, status: 'pending' as const }))
     const lines = dockOf({ ...EMPTY, todos }).render(80)
-    expect(lines).toHaveLength(DOCK_TODO_LIMIT + 2)
+    expect(lines).toHaveLength(DOCK_TODO_LIMIT + 3)
     expect(lines.at(-1)).toBe('  … 3 more')
   })
 
@@ -80,9 +96,9 @@ describe('WorkDock', () => {
       { id: 'bash-2', kind: 'bash', label: 'test', status: 'running' as const, startedAt: Date.now(), finishedAt: undefined },
     ]
     const lines = new WorkDock(() => EMPTY, theme, () => jobs).render(80)
-    expect(lines).toHaveLength(2)
-    expect(lines[0]).toBe(rule('⛭ jobs · 1 running', 80))
-    expect(lines[1]).toContain('▸ bash-2 · running')
+    expect(lines).toHaveLength(3)
+    expect(lines[1]).toBe(rule('⛭ jobs · 1 running', 80))
+    expect(lines[2]).toContain('▸ bash-2 · running')
   })
 
   it('drops the job board once every job has settled', () => {
@@ -99,9 +115,9 @@ describe('WorkDock', () => {
       { runId: 'r2', provider: 'fork', id: 'child-2', startedAt: 1_000, status: 'failed' as const, finishedAt: 2_000 },
     ]
     const lines = new WorkDock(() => EMPTY, theme, () => [], () => runs).render(80)
-    expect(lines).toHaveLength(2)
-    expect(lines[0]).toBe(rule('⚇ subagents · 1 running', 80))
-    expect(lines[1]).toContain('▸ child-ab · spawn · running')
+    expect(lines).toHaveLength(3)
+    expect(lines[1]).toBe(rule('⚇ subagents · 1 running', 80))
+    expect(lines[2]).toContain('▸ child-ab · spawn · running')
   })
 
   it('previews three running children and reveals the rest on a heading click', () => {
@@ -109,11 +125,14 @@ describe('WorkDock', () => {
       runId: `r${index}`, provider: 'spawn', id: `child-${index}`, startedAt: 1_000, status: 'running' as const,
     }))
     const dock = new WorkDock(() => EMPTY, theme, () => [], () => runs, () => 2_000)
+    // The heading sits under the panel's own blank row, so a click on the section
+    // comes one row below the window's first.
     const click: TuiMouseEvent = {
-      type: 'click', button: 'left', x: 5, y: 0, screenX: 5, screenY: 0, width: 80, height: 5,
+      type: 'click', button: 'left', x: 5, y: 1, screenX: 5, screenY: 1, width: 80, height: 6,
       shift: false, alt: false, ctrl: false,
     }
     expect(dock.render(80)).toEqual([
+      LEAD,
       rule('⚇ subagents ▸ · 5 running', 80),
       '  ▸ child-0 · spawn · running 1s',
       '  ▸ child-1 · spawn · running 1s',
@@ -122,15 +141,16 @@ describe('WorkDock', () => {
     ])
     expect(dock.handleMouse(click)).toEqual({ handled: true, render: true })
     expect(dock.render(80)).toEqual([
+      LEAD,
       rule('⚇ subagents ▾ · 5 running', 80),
       ...runs.map(run => `  ▸ ${run.id} · spawn · running 1s`),
     ])
     expect(dock.handleMouse(click)).toEqual({ handled: true, render: true })
-    expect(dock.render(80)).toHaveLength(5)
+    expect(dock.render(80)).toHaveLength(6)
     // The blank columns before a child's own row are inside the section too, so a
     // click there has to do what the same click on the heading did.
-    expect(dock.handleMouse({ ...click, x: 0, y: 1 })).toEqual({ handled: true, render: true })
-    expect(dock.render(80)[0]).toBe(rule('⚇ subagents ▾ · 5 running', 80))
+    expect(dock.handleMouse({ ...click, x: 0, y: 2 })).toEqual({ handled: true, render: true })
+    expect(dock.render(80)[1]).toBe(rule('⚇ subagents ▾ · 5 running', 80))
   })
 
   it('toggles from a child row’s empty cells, but not from goal or job rows', () => {
@@ -140,19 +160,19 @@ describe('WorkDock', () => {
     const jobs = [{ id: 'bash-1', kind: 'bash', label: 'build', status: 'running' as const, startedAt: 1_000, finishedAt: undefined }]
     const dock = new WorkDock(() => ({ ...EMPTY, goal: { objective: 'Inspect dock', roundsStarted: 1, maxRounds: 2, phase: 'active' } }), theme, () => jobs, () => runs)
     const click: TuiMouseEvent = {
-      type: 'click', button: 'left', x: 5, y: 1, screenX: 5, screenY: 1, width: 80, height: 8,
+      type: 'click', button: 'left', x: 5, y: 2, screenX: 5, screenY: 2, width: 80, height: 9,
       shift: false, alt: false, ctrl: false,
     }
-    expect(dock.render(80)[1]).toBe(rule('⚇ subagents ▸ · 4 running', 80))
-    expect(dock.handleMouse({ ...click, y: 0 })).toBeUndefined()
-    expect(dock.handleMouse({ ...click, y: 2, x: 70 })).toEqual({ handled: true, render: true })
-    expect(dock.render(80)[1]).toBe(rule('⚇ subagents ▾ · 4 running', 80))
-    expect(dock.handleMouse({ ...click, y: 6 })).toBeUndefined()
+    expect(dock.render(80)[2]).toBe(rule('⚇ subagents ▸ · 4 running', 80))
+    expect(dock.handleMouse({ ...click, y: 1 })).toBeUndefined()
+    expect(dock.handleMouse({ ...click, y: 3, x: 70 })).toEqual({ handled: true, render: true })
+    expect(dock.render(80)[2]).toBe(rule('⚇ subagents ▾ · 4 running', 80))
+    expect(dock.handleMouse({ ...click, y: 7 })).toBeUndefined()
     expect(dock.handleMouse({ ...click, button: 'right' })).toBeUndefined()
     expect(dock.handleMouse({ ...click, type: 'press' })).toBeUndefined()
-    expect(dock.render(80)[1]).toBe(rule('⚇ subagents ▾ · 4 running', 80))
+    expect(dock.render(80)[2]).toBe(rule('⚇ subagents ▾ · 4 running', 80))
     expect(dock.handleMouse(click)).toEqual({ handled: true, render: true })
-    expect(dock.render(80)[1]).toBe(rule('⚇ subagents ▸ · 4 running', 80))
+    expect(dock.render(80)[2]).toBe(rule('⚇ subagents ▸ · 4 running', 80))
   })
 
   it('opens a child by its full id only from its visible text', () => {
@@ -164,14 +184,14 @@ describe('WorkDock', () => {
     const dock = new WorkDock(() => EMPTY, theme, () => [], () => runs, () => 2_000, childId => { opened = childId })
     const lines = dock.render(80)
     const click: TuiMouseEvent = {
-      type: 'click', button: 'left', x: visibleWidth(lines[1]!) - 1, y: 1, screenX: 5, screenY: 1, width: 80, height: 5,
+      type: 'click', button: 'left', x: visibleWidth(lines[2]!) - 1, y: 2, screenX: 5, screenY: 2, width: 80, height: 6,
       shift: false, alt: false, ctrl: false,
     }
     expect(dock.handleMouse(click)).toEqual({ handled: true, render: true })
     expect(opened).toBe(id)
-    expect(dock.render(80)[0]).toBe(rule('⚇ subagents ▸ · 4 running', 80))
-    expect(dock.handleMouse({ ...click, x: visibleWidth(lines[1]!) })).toEqual({ handled: true, render: true })
-    expect(dock.render(80)[0]).toBe(rule('⚇ subagents ▾ · 4 running', 80))
+    expect(dock.render(80)[1]).toBe(rule('⚇ subagents ▸ · 4 running', 80))
+    expect(dock.handleMouse({ ...click, x: visibleWidth(lines[2]!) })).toEqual({ handled: true, render: true })
+    expect(dock.render(80)[1]).toBe(rule('⚇ subagents ▾ · 4 running', 80))
     expect(opened).toBe(id)
   })
 
@@ -187,8 +207,8 @@ describe('WorkDock', () => {
     // the dock as tall and as wide as it was before the sections were edged.
     const todos = [{ content: 'write the dock', status: 'pending' as const }]
     const lines = dockOf({ ...EMPTY, todos }).render(40)
-    expect(lines).toHaveLength(2)
-    expect(lines[0]).toBe(rule('☰ todos · 1 left', 40))
+    expect(lines).toHaveLength(3)
+    expect(lines[1]).toBe(rule('☰ todos · 1 left', 40))
     expect(lines.every(line => visibleWidth(line) <= 40)).toBe(true)
   })
 
@@ -196,7 +216,7 @@ describe('WorkDock', () => {
     // An edge a reader cannot tell from a name is not an edge, so a row with no
     // room left for a dash after the name is the heading it would have been.
     const todos = [{ content: 'write the dock', status: 'pending' as const }]
-    expect(dockOf({ ...EMPTY, todos }).render(8)[0]).toBe('☰ todo…')
+    expect(dockOf({ ...EMPTY, todos }).render(8)[1]).toBe('☰ todo…')
   })
 
   it('never overflows its row', () => {
@@ -210,7 +230,7 @@ describe('WorkDock', () => {
     // over the row below it instead of wrapping.
     const jobs = [{ id: 'bash-1', kind: 'bash', label: 'line one\nline two', status: 'running' as const, startedAt: Date.now(), finishedAt: undefined }]
     const lines = new WorkDock(() => EMPTY, theme, () => jobs).render(80)
-    expect(lines).toHaveLength(2)
+    expect(lines).toHaveLength(3)
     for (const line of lines) expect(line).not.toContain('\n')
   })
 })
@@ -228,8 +248,8 @@ describe('WorkDock theming', () => {
     // The name is what spends the section's heading row: with the name hidden the
     // section keeps the rows it had before the sections were edged, and no rule
     // without a name stands where the heading was.
-    expect(lines).toHaveLength(1)
-    expect(lines[0]).toContain('▸ bash-1')
+    expect(lines).toHaveLength(2)
+    expect(lines[1]).toContain('▸ bash-1')
   })
 
   it("draws each section's rule in that section's own hue", () => {
@@ -238,13 +258,13 @@ describe('WorkDock theming', () => {
     const lines = new WorkDock(() => ({ ...EMPTY, todos: [{ content: 'x', status: 'pending' }] }), styled, () => job('running'), () => runs).render(80)
     // accent, user and warn: the three shades the shipped table gives the rules,
     // so a reader tells the boards apart without reading a row of either.
-    expect(lines[0]).toContain('38;2;39;245;200m')
-    expect(lines[2]).toContain('38;2;215;175;95m')
-    expect(lines[4]).toContain('38;2;95;175;215m')
+    expect(lines[1]).toContain('38;2;39;245;200m')
+    expect(lines[3]).toContain('38;2;215;175;95m')
+    expect(lines[5]).toContain('38;2;95;175;215m')
     // A section rule is not the only element a row answers to: the job row carries
     // the running element's own colour wherever the row is drawn.
     const red = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['dock.jobs.running', { fg: '#ff0000' }]]) })
-    expect(new WorkDock(() => EMPTY, red, () => job('running')).render(80)[1]).toContain('38;2;255;0;0')
+    expect(new WorkDock(() => EMPTY, red, () => job('running')).render(80)[2]).toContain('38;2;255;0;0')
   })
 
   it('falls back to the heading row when the rule is hidden', () => {
@@ -252,7 +272,7 @@ describe('WorkDock theming', () => {
     // by hiding the one element that draws the edge.
     const bare = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['dock.jobs.border', { hidden: true }]]) })
     const lines = new WorkDock(() => EMPTY, bare, () => job('running')).render(80)
-    expect(stripTerminalSequences(lines[0] ?? '')).toBe('⛭ jobs · 1 running')
-    expect(lines[1]).toContain('▸ bash-1 · running')
+    expect(stripTerminalSequences(lines[1] ?? '')).toBe('⛭ jobs · 1 running')
+    expect(lines[2]).toContain('▸ bash-1 · running')
   })
 })

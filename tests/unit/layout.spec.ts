@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Component, TUI, TuiMouseEvent } from '@earendil-works/pi-tui'
+import { stripTerminalSequences, type Component, type TUI, type TuiMouseEvent } from '@earendil-works/pi-tui'
 import { getLayoutBoxesAt, renderLayoutFrame } from '@earendil-works/pi-tui/dist/layout.js'
 import { dispatchMouseEvent } from '@earendil-works/pi-tui/dist/tui.js'
 import { createTheme } from '@/theme.ts'
@@ -58,6 +58,30 @@ describe('the surface root layout', () => {
     const frame = renderLayoutFrame(root, 80, 24, () => {})
     expect(frame.lines.filter(line => line.includes('dock'))).toHaveLength(16)
     expect(frame.lines.some(line => line.includes('the draft'))).toBe(true)
+  })
+
+  it('insets the conversation and leaves the bars at the window\'s edges', () => {
+    const { prompt } = promptOf('the draft')
+    const root = surfaceLayout({
+      transcript: rowsOf('row', 6),
+      dock: rowsOf('dock', 2),
+      queue: rowsOf('queued', 0),
+      prompt,
+      status: rowsOf('status', 1),
+    }, () => 1)
+    const frame = renderLayoutFrame(root, 40, 12, () => {})
+    // The conversation and the work boards under it begin one column in, inside a
+    // margin that costs them two columns of width.
+    const rowAt = frame.lines.findIndex(line => line.includes('row 0'))
+    const dockRow = frame.lines.findIndex(line => line.includes('dock 0'))
+    expect(stripTerminalSequences(frame.lines[rowAt]!)[0]).toBe(' ')
+    expect(getLayoutBoxesAt(frame, 1, rowAt)[0]?.rect).toMatchObject({ x: 1, width: 38 })
+    expect(getLayoutBoxesAt(frame, 1, dockRow)[0]?.rect).toMatchObject({ x: 1, width: 38 })
+    // The bar the reader types in keeps the full width: a bar inset on both sides
+    // would read as one more card of the conversation rather than as the input.
+    const draftRow = frame.lines.findIndex(line => line.includes('the draft'))
+    const promptBox = getLayoutBoxesAt(frame, 1, draftRow).find(box => box.component === prompt)
+    expect(promptBox?.rect).toMatchObject({ x: 0, width: 40 })
   })
 
   it('maps a prompt click to the editor hit box and cursor position', () => {

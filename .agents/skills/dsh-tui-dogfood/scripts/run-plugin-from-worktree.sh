@@ -285,6 +285,10 @@ fi
 
 if [[ -d "$home" && "$action" != "clean" && "$dry_run" != 1 ]]; then
   validate_marker
+  # A marker that still reads 0 belongs to a run the kernel killed before it could
+  # clean up: the identity matches, so --reseed takes it, but nothing may reuse a
+  # home whose copy stopped halfway. A marker without the line predates this.
+  [[ "$reseed" == 1 ]] || [[ "$(marker_value ready)" != 0 ]] || die "$home is a half-seeded clone; pass --reseed to clone it again"
   check_credentials
   chmod 700 "$home"
   if [[ -f "$home/.credentials.yaml" ]]; then chmod 600 "$home/.credentials.yaml"; fi
@@ -305,6 +309,11 @@ if [[ ! -d "$home" ]]; then
   step "seeding $home from $source_home"
   mkdir -p "$home"
   chmod 700 "$home"
+  # Written before the copy, so whatever the copy does this directory is one that
+  # --clean and --reseed already own: an interrupted clone is recoverable rather
+  # than a husk neither action will touch. The copy marks it ready when it lands.
+  printf 'home=%s\nsource=%s\ntarget=%s\nprofile=%s\nready=0\n' "$home" "$source_home" "$target_path" "$profile" > "$marker"
+  chmod 600 "$marker"
   if [[ "$fresh" == 1 ]]; then
     for seed in .credentials.yaml settings.yaml; do
       if [[ -f "$source_home/$seed" ]]; then cp -p "$source_home/$seed" "$home/$seed"; fi
@@ -328,8 +337,6 @@ if [[ ! -d "$home" ]]; then
   fi
 fi
 
-printf 'home=%s\nsource=%s\ntarget=%s\nprofile=%s\n' "$home" "$source_home" "$target_path" "$profile" > "$marker"
-chmod 600 "$marker"
 materialize_cloned_links
 check_clone_links
 
@@ -409,6 +416,11 @@ bundles="$(describe_bundles)"
 if ! node -e "process.exit(require(process.argv[1]).dsh.profile.bundles.includes(process.argv[2]) ? 0 : 1)" "$profile_json" "$package_name"; then
   die "profile '$profile' does not list $package_name after relink (bundles: $bundles)"
 fi
+
+# The home is finished: it points at the target and its bundles answer, so it is
+# ready to be reused rather than re-seeded.
+printf 'home=%s\nsource=%s\ntarget=%s\nprofile=%s\nready=1\n' "$home" "$source_home" "$target_path" "$profile" > "$marker"
+chmod 600 "$marker"
 
 printf '\n' >&2
 printf 'home:    %s\n' "$home" >&2

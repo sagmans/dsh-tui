@@ -2,6 +2,7 @@ import type { KeyId } from '@earendil-works/pi-tui'
 import type { Context } from '@deepseek-ai/cordis'
 import { defaultKeymap, type Keymap } from '../input/actions.ts'
 import { DEFAULT_PREFIX_KEYS, DEFAULT_PREFIX_WINDOW_S } from '../input/keymap.ts'
+import { DEFAULT_SPACING, type Spacing } from '../spacing.ts'
 import { createDeferredNotice, type NoticeSink } from '../settings-notice.ts'
 import { createTheme, forwardEditorTheme, forwardMarkdownTheme, type TuiTheme } from '../theme.ts'
 import { detectColourMode, type ColourMode } from '../theme-capability.ts'
@@ -68,6 +69,8 @@ export interface Appearance {
   readonly toggleReasoning: () => void
   readonly mermaidMode: () => MermaidMode
   readonly toolDisplay: () => ToolDisplayTable
+  /** The air the surface keeps at its edges and between what it draws. */
+  readonly spacing: () => Spacing
   readonly keymap: () => Keymap
   readonly prefixKeys: () => readonly KeyId[]
   readonly prefixWindowMs: () => number
@@ -210,6 +213,8 @@ export function createAppearance(ctx: Context, ports: AppearancePorts): Appearan
   let mermaidMode: MermaidMode = defaultSettings().mermaid
   /** How each tool's cards draw; the settings document owns it and the view reads it live. */
   let toolDisplay: ToolDisplayTable = defaultSettings().tools
+  /** The air the surface keeps; read per frame, so an edit lands on the session already on screen. */
+  let spacing: Spacing = DEFAULT_SPACING
   /** The keys that start a chord, and how long one waits; the settings document owns all of it. */
   let prefixKeys: readonly KeyId[] = DEFAULT_PREFIX_KEYS
   let prefixWindowMs = DEFAULT_PREFIX_WINDOW_S * MS_PER_SECOND
@@ -232,6 +237,7 @@ export function createAppearance(ctx: Context, ports: AppearancePorts): Appearan
     viewState.expandSubCalls = section.subcalls === 'inline'
     mermaidMode = section.mermaid
     toolDisplay = section.tools
+    spacing = section.spacing
     prefixKeys = section.prefixes
     prefixWindowMs = section.prefixWindow * MS_PER_SECOND
     keymap = section.keymap
@@ -408,6 +414,7 @@ export function createAppearance(ctx: Context, ports: AppearancePorts): Appearan
     toggleReasoning,
     mermaidMode: () => mermaidMode,
     toolDisplay: () => toolDisplay,
+    spacing: () => spacing,
     keymap: () => keymap,
     prefixKeys: () => prefixKeys,
     prefixWindowMs: () => prefixWindowMs,
