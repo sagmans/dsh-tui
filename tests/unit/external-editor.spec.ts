@@ -1,8 +1,9 @@
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  EDITOR_TIMEOUT_MS,
   ExternalEditor,
   MAX_DRAFT_BYTES,
   parseEditorCommand,
@@ -12,15 +13,6 @@ import {
   type EditorSpawnOptions,
   type EditorTerminalHost,
 } from '@/terminal/external-editor.ts'
-
-/**
- * What a spec gives the surface instead of the real budget.
- *
- * Short enough to wait out, and a hung fake answers nothing on its own, so only
- * the timeout can end that wait — the case fails loudly rather than slowly if
- * the bound ever goes missing again.
- */
-const TEST_EDITOR_TIMEOUT_MS = 50
 
 /** What the fake child may tell its parent. */
 interface ChildSignals {
@@ -42,15 +34,22 @@ interface FakeSpawn {
   draft(): string
   /** What the child does before it answers; the default edits the file and exits clean. */
   respond: (draft: string, signals: ChildSignals) => void
+  /** Resolves once a child has started, so a case can act before it answers. */
+  readonly spawned: Promise<void>
   readonly spawn: EditorSpawn
 }
 
 function fakeSpawn(): FakeSpawn {
   const calls: SpawnedCall[] = []
   const kills: string[] = []
+  let started: (() => void) | undefined
+  const spawned = new Promise<void>(resolve => {
+    started = resolve
+  })
   const state: FakeSpawn = {
     calls,
     kills,
+    spawned,
     draft: () => calls.at(-1)?.args.at(-1) as string,
     respond: (draft, signals) => {
       writeFileSync(draft, 'edited in the child')
@@ -58,6 +57,7 @@ function fakeSpawn(): FakeSpawn {
     },
     spawn: ((file: string, args: readonly string[], options: EditorSpawnOptions) => {
       calls.push({ file, args, options })
+      started?.()
       const errors: ((error: Error) => void)[] = []
       const exits: ((code: number | null, signal: string | null) => void)[] = []
       const signals: ChildSignals = {
@@ -123,6 +123,8 @@ function scratch(): string {
 }
 
 afterEach(() => {
+  // A case that faked the timer leaves the real one for every other case.
+  vi.useRealTimers()
   for (const directory of scratchDirs.splice(0)) {
     // The case that watches a removal fail leaves its tree unreadable on
     // purpose, so the permission comes back before the retry that sweeps it.
@@ -138,7 +140,7 @@ afterEach(() => {
 })
 
 /** One handoff's collaborators: the surface seam, the fake child, and the draft root. */
-function handoff(env: NodeJS.ProcessEnv = { EDITOR: 'nvim' }, timeoutMs?: number): {
+function handoff(env: NodeJS.ProcessEnv = { EDITOR: 'nvim' }): {
   readonly host: FakeHost
   readonly spawn: FakeSpawn
   readonly root: string
@@ -147,7 +149,7 @@ function handoff(env: NodeJS.ProcessEnv = { EDITOR: 'nvim' }, timeoutMs?: number
   const host = new FakeHost()
   const spawn = fakeSpawn()
   const root = scratch()
-  return { host, spawn, root, editor: new ExternalEditor(host, { env, tempRoot: root, spawn: spawn.spawn, timeoutMs }) }
+  return { host, spawn, root, editor: new ExternalEditor(host, { env, tempRoot: root, spawn: spawn.spawn }) }
 }
 
 describe('parseEditorCommand', () => {
@@ -239,13 +241,23 @@ describe('the external editor handoff', () => {
     expect(host.notices).toEqual([])
   })
 
-  it('stops an editor that never exits and takes the screen back', async () => {
-    const { host, spawn, editor, root } = handoff({ EDITOR: 'nvim' }, TEST_EDITOR_TIMEOUT_MS)
+  it('stops an editor that never exits at the shipped budget and takes the screen back', async () => {
+    // Only the clock is faked, so the budget that ends this wait is the one the
+    // surface ships: a spec's own shorter one would prove nothing about the bound
+    // the reader gets, and the child still answers as a real one would.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const { host, spawn, editor, root } = handoff({ EDITOR: 'nvim' })
     // The child never answers at all: without the bound the screen would stay
     // given up with no way back to the surface.
     spawn.respond = () => undefined
 
-    await expect(editor.edit('the draft so far')).resolves.toBe('the draft so far')
+    const edited = editor.edit('the draft so far')
+    // The wait for the child is what arms the timer, so the budget can only be
+    // advanced after it has started.
+    await spawn.spawned
+    await vi.advanceTimersByTimeAsync(EDITOR_TIMEOUT_MS)
+
+    await expect(edited).resolves.toBe('the draft so far')
     expect(spawn.kills).toEqual(['SIGKILL'])
     expect(host.events).toEqual(['suspend', 'resume'])
     expect(host.last()).toContain('held the terminal past the editor timeout')
@@ -255,7 +267,8 @@ describe('the external editor handoff', () => {
   })
 
   it('leaves an editor that exits inside the budget alone', async () => {
-    const { host, spawn, editor } = handoff({ EDITOR: 'nvim' }, TEST_EDITOR_TIMEOUT_MS)
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const { host, spawn, editor } = handoff({ EDITOR: 'nvim' })
     spawn.respond = (draft, signals) => {
       writeFileSync(draft, 'saved in time')
       signals.exit(0)
@@ -263,7 +276,9 @@ describe('the external editor handoff', () => {
 
     await expect(editor.edit('draft')).resolves.toBe('saved in time')
     // The budget bounds the wait only: a child that answers first is never
-    // signalled, and its exit is the only thing the reader hears about.
+    // signalled, and its exit is the only thing the reader hears about even when
+    // the whole budget passes afterwards.
+    await vi.advanceTimersByTimeAsync(EDITOR_TIMEOUT_MS)
     expect(spawn.kills).toEqual([])
     expect(host.notices).toEqual([])
   })

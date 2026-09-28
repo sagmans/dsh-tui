@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SessionId } from '@deepseek-ai/dsh-session'
-import { DEFAULT_MAX_ENTRIES, HISTORY_FILE_NAME, HISTORY_SCHEMA_VERSION, type PromptEntry } from '@/agent/prompt-history.ts'
+import { BLOCK_DESCRIPTIONS, DEFAULT_MAX_ENTRIES, HISTORY_FILE_NAME, HISTORY_SCHEMA_VERSION, type PromptEntry } from '@/agent/prompt-history.ts'
 import { defaultKeymap } from '@/input/actions.ts'
 import { createPromptMemory, type MemoryPicker, type PromptMemory } from '@/surface/prompt-memory.ts'
 import { PromptStash } from '@/stash.ts'
@@ -278,20 +278,20 @@ describe('reverse search over recorded prompts', () => {
     const given = harness()
     given.memory.runHistoryCommand('')
     await vi.waitFor(() => {
-      if (!given.notices.some(text => text.includes('writes disabled: corrupt'))) {
+      if (!given.notices.some(text => text.includes('writes disabled: ' + BLOCK_DESCRIPTIONS.corrupt_history))) {
         throw new Error('the store has not refused the file')
       }
     })
     // The first read refused the file; the search has to say so rather than
     // open a list the reader would read as "I never wrote anything".
     expect(given.notices).toEqual([
-      'prompt history is corrupt; writes are disabled and the file is left untouched',
-      `0 prompts recorded · ${historyFile()} · writes disabled: corrupt`,
+      'prompt history is ' + BLOCK_DESCRIPTIONS.corrupt_history + '; writes are disabled and the file is left untouched',
+      `0 prompts recorded · ${historyFile()} · writes disabled: ${BLOCK_DESCRIPTIONS.corrupt_history}`,
     ])
 
     await given.memory.openHistoryPicker()
 
-    expect(given.notices.at(-1)).toBe('prompt history is unavailable: corrupt')
+    expect(given.notices.at(-1)).toBe('prompt history is unavailable: ' + BLOCK_DESCRIPTIONS.corrupt_history)
     expect(given.pickers).toEqual([])
   })
 
@@ -300,18 +300,18 @@ describe('reverse search over recorded prompts', () => {
     const given = harness()
     given.memory.runHistoryCommand('')
     await vi.waitFor(() => {
-      if (!given.notices.some(text => text.includes('writes disabled: a newer format'))) {
+      if (!given.notices.some(text => text.includes('writes disabled: ' + BLOCK_DESCRIPTIONS.unsupported_schema))) {
         throw new Error('the store has not refused the file')
       }
     })
     // One condition, one name: the store's load warning already said "a newer
     // format", so the status line and the refusal answer in those words rather
     // than teaching the reader a second name for the same refusal.
-    expect(given.notices.at(-1)).toBe(`0 prompts recorded · ${historyFile()} · writes disabled: a newer format`)
+    expect(given.notices.at(-1)).toBe(`0 prompts recorded · ${historyFile()} · writes disabled: ${BLOCK_DESCRIPTIONS.unsupported_schema}`)
 
     await given.memory.openHistoryPicker()
 
-    expect(given.notices.at(-1)).toBe('prompt history is unavailable: a newer format')
+    expect(given.notices.at(-1)).toBe('prompt history is unavailable: ' + BLOCK_DESCRIPTIONS.unsupported_schema)
     expect(given.pickers).toEqual([])
   })
 
@@ -410,7 +410,7 @@ describe('the history command', () => {
     })
     // Saying "forgot 0 prompts" would describe a successful clear the reader
     // would meet again on the next start.
-    expect(given.notices.at(-1)).toBe('prompt history is unavailable: corrupt')
+    expect(given.notices.at(-1)).toBe('prompt history is unavailable: ' + BLOCK_DESCRIPTIONS.corrupt_history)
   })
 
   it('reports a clear that failed instead of a count that never landed', async () => {
@@ -427,7 +427,7 @@ describe('the history command', () => {
     await vi.waitFor(() => {
       if (!given.notices.some(text => text.startsWith('could not clear'))) throw new Error('no failure was reported')
     })
-    expect(given.notices.at(-1)).toBe('could not clear prompt history: the file is unreadable')
+    expect(given.notices.at(-1)).toBe('could not clear prompt history: the file is ' + BLOCK_DESCRIPTIONS.unreadable_history)
   })
 })
 

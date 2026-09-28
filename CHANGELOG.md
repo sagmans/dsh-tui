@@ -95,9 +95,12 @@ breaking change, and a patch carries only fixes.
   The picker and the /history line printed the machine's reason where the
   store's own warning had already chosen the reader's words, so one condition
   answered to two names.
-- An export with no argument lands in the reader's theme directory instead of
-  the process's working directory. The command wrote wherever the reader happened
-  to be, which is usually a repository; the notice still names the path it took.
+- An export with no argument gets a directory of its own under the harness home
+  instead of the process's working directory or the reader's theme directory. The
+  command wrote wherever the reader happened to be, which is usually a repository,
+  and the themes directory belongs to `/theme export` and is watched for theme
+  edits, so a transcript left there sat among the reader's themes; the notice still
+  names the path it took.
 - A background-jobs listing that fails is said, and the command keeps running.
   A registry that threw escaped both /jobs and the watcher, so the reader got no
   notice and the command died in place.

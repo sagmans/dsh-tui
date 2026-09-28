@@ -1,11 +1,11 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import { defaultExportFile, transcriptToText } from '@/export.ts'
+import { defaultExportFile, EXPORTS_DIR_NAME, transcriptToText } from '@/export.ts'
 import { defaultKeymap } from '@/input/actions.ts'
 import type { RegisteredCommand } from '@/input/completion.ts'
 import { chordKeysLine, surfaceKeysLine } from '@/input/keymap.ts'
@@ -16,7 +16,6 @@ import type { Picker } from '@/surface/modal-input.ts'
 import type { PromptStash } from '@/stash.ts'
 import { clipboardSequence } from '@/terminal/clipboard.ts'
 import { windowTitle } from '@/terminal/title.ts'
-import { THEMES_DIR_NAME } from '@/theme-files.ts'
 import { formatTokens } from '@/tokens.ts'
 import type { TranscriptEntry } from '@/transcript.ts'
 import type { StatusFacts } from '@/ui/status.ts'
@@ -705,7 +704,7 @@ describe('createCommands export', () => {
     expect(given.renders).toBe(1)
   })
 
-  it('writes a dump with no destination into the themes home, never the working directory', () => {
+  it('writes a dump with no destination into the exports home, never the themes one', () => {
     const given = fixture()
     given.entries = [{ kind: 'user', text: 'ask' }]
     const home = scratch()
@@ -713,13 +712,33 @@ describe('createCommands export', () => {
 
     createCommands(given.ctx, given.ports).runSubmission({ kind: 'export', path: '' })
 
-    // The themes home is the one directory this surface creates under the
-    // harness home, so the dump lands beside files the reader already knows —
-    // and the directory the terminal was started in stays clean.
-    const path = join(home, THEMES_DIR_NAME, defaultExportFile(SESSION))
+    // The dump gets a directory of its own rather than the theme one: that
+    // directory belongs to `/theme export` and the surface watches it for edits,
+    // so a transcript left there would sit among the reader's themes. The
+    // directory the terminal was started in stays clean either way.
+    const path = join(home, EXPORTS_DIR_NAME, defaultExportFile(SESSION))
     expect(readFileSync(path, 'utf8')).toBe(transcriptToText(given.entries))
     expect(given.notices).toEqual(['transcript written to ' + path])
+    expect(existsSync(join(home, 'themes'))).toBe(false)
     expect(existsSync(join(process.cwd(), defaultExportFile(SESSION)))).toBe(false)
+  })
+
+  it('keeps a dump whose directory cannot be created a notice rather than a failure', () => {
+    const given = fixture()
+    given.entries = [{ kind: 'user', text: 'ask' }]
+    const home = scratch()
+    vi.stubEnv('DSH_HOME', home)
+    // A file where the directory belongs, the same crude case the themes home
+    // answers: the surface promises a path, so a directory it could not make is
+    // said rather than thrown at a key press.
+    const refused = join(home, EXPORTS_DIR_NAME)
+    writeFileSync(refused, 'not a directory')
+
+    createCommands(given.ctx, given.ports).runSubmission({ kind: 'export', path: '' })
+
+    expect(given.notices).toHaveLength(1)
+    expect(given.notices[0]).toContain(`exports: cannot create ${refused}`)
+    expect(given.renders).toBe(1)
   })
 
   it('keeps an unwritable dump a notice rather than a failure', () => {

@@ -217,7 +217,7 @@ force, and the `keys:` section moves any of them — see [Keys](#keys).
 | `/undo` | hide the newest prompt's turn and put that prompt back in the bar (`ctrl+x` then `u`) |
 | `/redo` | step forward again after an undo (`ctrl+x` then `r`) |
 | `/rename <title>` | title this session; the picker shows it instead of the session id |
-| `/export [path]` | write the visible transcript as markdown (default `dsh-session-<id>.md`) |
+| `/export [path]` | write the visible transcript as markdown; with no path, `$DSH_HOME/exports/dsh-session-<id>.md` |
 | `/resume` | open another stored session without leaving the terminal |
 | `/clear` | clear the visible transcript |
 | `/history` | show how many prompts are recorded and where the file is |

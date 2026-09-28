@@ -176,8 +176,6 @@ export interface ExternalEditorOptions {
   /** Where the scratch directory is made; tests keep theirs out of the real tmpdir. */
   readonly tempRoot?: string | undefined
   readonly spawn?: EditorSpawn | undefined
-  /** The wait before the child is stopped; a test can shorten it. */
-  readonly timeoutMs?: number | undefined
 }
 
 /**
@@ -191,7 +189,6 @@ export class ExternalEditor {
   private readonly env: NodeJS.ProcessEnv
   private readonly tempRoot: string
   private readonly spawn: EditorSpawn
-  private readonly timeoutMs: number
   /** Whether a child holds the terminal; a second handoff would stop it twice. */
   private running = false
 
@@ -202,7 +199,6 @@ export class ExternalEditor {
     this.env = options.env ?? process.env
     this.tempRoot = options.tempRoot ?? tmpdir()
     this.spawn = options.spawn ?? SPAWN
-    this.timeoutMs = options.timeoutMs ?? EDITOR_TIMEOUT_MS
   }
 
   /** Edit `text` in the reader's editor, and return what was saved, or undefined to keep the bar. */
@@ -336,7 +332,7 @@ export class ExternalEditor {
         // exit this promise still waits on is what keeps the terminal from
         // being restored while a child could still be drawing on it.
         child.kill('SIGKILL')
-      }, this.timeoutMs)
+      }, EDITOR_TIMEOUT_MS)
       let settled = false
       const settle = (error: Error | undefined): void => {
         if (settled) return

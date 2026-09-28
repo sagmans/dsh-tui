@@ -13,9 +13,13 @@ import { createPromptInput, type PromptInputPorts } from '@/surface/prompt-input
 import { PromptBar } from '@/ui/prompt.ts'
 import { answerBar, gateOver, answerText, answerRows, ESC, ENTER, UP, LEFT, DOWN, CTRL_P, providerGate } from './fixtures/gate.ts'
 
+/** A bracketed paste as the terminal sends it. */
+const paste = (text: string): string => `\x1b[200~${text}\x1b[201~`
+/** Reverse video the base editor draws the cursor cell with, which masking must not hide. */
+const CURSOR = '\u001b[7m'
+
 
 describe('QuestionGate paste', () => {
-  const paste = (text: string): string => `\x1b[200~${text}\x1b[201~`
   it('takes a pasted key as the whole answer instead of dropping it', () => {
       const gate = gateOver(toGateQuestions({ questions: [{ id: 'q1', question: 'key?' }] }))
       expect(gate.handleKey(paste('sk-ant-api03-abcDEF123\r\n'))).toBeUndefined()
@@ -23,22 +27,6 @@ describe('QuestionGate paste', () => {
       // its content, so the bar holds it and confirm trims it.
       expect(answerText(gate)?.trim()).toBe('sk-ant-api03-abcDEF123')
       expect(gate.handleKey(ENTER)).toEqual([{ id: 'q1', selected: [], custom: 'sk-ant-api03-abcDEF123' }])
-    })
-  it('shows an answer no question declared a credential, even when its wording says key', () => {
-      // Wording is not a declaration: a question that merely mentions a key would
-      // otherwise hide an answer its author meant the reader to check.
-      const gate = gateOver(toGateQuestions({ questions: [{ id: 'q1', question: 'Enter the Anthropic API key' }] }))
-      gate.handleKey(paste('sk-ant-api03-FAKE998877665544332211'))
-      expect(answerText(gate)).toBe('sk-ant-api03-FAKE998877665544332211')
-      expect(answerRows(gate)).toContain('FAKE9988')
-    })
-  it('hides the middle of an answer the question declares a credential', () => {
-      const gate = gateOver(toGateQuestions({ questions: [{ id: 'prompt:secret', question: 'Enter the value' }] }))
-      gate.handleKey(paste('sk-ant-api03-FAKE998877665544332211'))
-      expect(answerText(gate)).toBe('sk-ant-api03-FAKE998877665544332211')
-      expect(answerRows(gate)).toContain('sk-a')
-      expect(answerRows(gate)).toContain('2211')
-      expect(answerRows(gate)).not.toContain('FAKE9988')
     })
   it('names the free-text row after what a declared answer is', () => {
       const gate = gateOver(toGateQuestions({
@@ -68,8 +56,70 @@ describe('QuestionGate paste', () => {
     })
 })
 
+/**
+ * What a declared credential hides in the row the reader types into.
+ *
+ * Every case drives the gate the surface builds, because the declaration is the
+ * question id's: the bar's mode is the gate's own answer to it, never something
+ * a caller sets by hand.
+ */
+describe('the row a declared credential is drawn in', () => {
+  const declared = (): QuestionGate => gateOver(toGateQuestions({ questions: [{ id: 'prompt:secret', question: 'Enter the value' }] }))
+  const plain = (): QuestionGate => gateOver(toGateQuestions({ questions: [{ id: 'q1', question: 'Enter the value' }] }))
+
+  it('shows an answer no question declared a credential, even when its wording says key', () => {
+      // Wording is not a declaration: a question that merely mentions a key would
+      // otherwise hide an answer its author meant the reader to check.
+      const gate = gateOver(toGateQuestions({ questions: [{ id: 'q1', question: 'Enter the Anthropic API key' }] }))
+      gate.handleKey(paste('sk-ant-api03-FAKE998877665544332211'))
+      expect(answerText(gate)).toBe('sk-ant-api03-FAKE998877665544332211')
+      expect(answerRows(gate)).toContain('FAKE9988')
+    })
+  it('hides everything between the first and last readable character', () => {
+      const gate = declared()
+      gate.handleKey(paste('sk-ant-api03-FAKE998877665544332211'))
+      // The mask is a drawing, not the answer: what confirm sends is the text.
+      expect(answerText(gate)).toBe('sk-ant-api03-FAKE998877665544332211')
+      expect(answerRows(gate)).toContain('sk-a***************************2211')
+    })
+  it('shows a credential both readable ends cover rather than masking it whole', () => {
+      const short = declared()
+      const shown = plain()
+      short.handleKey(paste('abcd1234'))
+      shown.handleKey(paste('abcd1234'))
+      // Every character is an end at this length; hiding the middle would hide
+      // the whole answer and leave the reader checking a row of asterisks.
+      expect(answerRows(short)).toBe(answerRows(shown))
+      const longer = declared()
+      longer.handleKey(paste('abcd12345'))
+      expect(answerRows(longer)).toContain('abcd*2345')
+    })
+  it('masks a wide character by the columns it takes, so the row does not reflow', () => {
+      const gate = declared()
+      gate.handleKey(paste('head密钥密钥tail'))
+      // Four wide characters take eight columns: one asterisk each would shorten
+      // the row and move the text under the cursor.
+      expect(answerRows(gate)).toContain('head********tail')
+    })
+  it('leaves the spacing of a credential alone while hiding its characters', () => {
+      const gate = declared()
+      gate.handleKey(paste('abcd efgh ijkl mnop'))
+      // Whitespace is the editor's own layout, not part of the secret: masking
+      // it would move the text under the cursor instead of hiding a character.
+      expect(answerRows(gate)).toContain('abcd **** **** mnop')
+    })
+  it('keeps the cursor mark the terminal reads, which masking must not hide', () => {
+      const gate = declared()
+      gate.handleKey(paste('sk-ant-api03-FAKE998877665544332211'))
+      const row = answerRows(gate)
+      // The cursor is an escape around a cell, not text: replacing that cell
+      // would lose the position the terminal was told to place the cursor at.
+      expect(row).toContain(CURSOR)
+      expect(row.indexOf(CURSOR)).toBeGreaterThan(row.indexOf('2211'))
+    })
+})
+
 describe('QuestionGate free-text row', () => {
-  const paste = (text: string): string => `\x1b[200~${text}\x1b[201~`
   const withOptionsQuestion = (): readonly GateQuestion[] => toGateQuestions({
       questions: [{ id: 'q1', question: 'deploy?', options: [{ label: 'yes' }, { label: 'no' }] }],
     })
