@@ -4,8 +4,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import type { PresetRoster } from '../agent/presets.ts'
-import { defaultExportFile, transcriptToText } from '../export.ts'
-import { ensureThemesHome, themesHomeDir } from '../theme-files.ts'
+import { defaultExportFile, ensureExportsHome, exportsHomeDir, transcriptToText } from '../export.ts'
 import type { ActionLayer } from '../input/action-catalog.ts'
 import type { RegisteredCommand } from '../input/completion.ts'
 import { chordKeysLine, surfaceKeysLine } from '../input/keymap.ts'
@@ -156,13 +155,13 @@ export function createCommands(ctx: Context, ports: CommandsPorts): Commands {
   const runExportCommand = (argument: string): void => {
     let path: string
     if (argument === '') {
-      // No destination named: the dump follows the session's other files into
-      // the reader's themes home — the one directory under the harness home
-      // this surface already owns and creates — because resolving a bare file
-      // name against the working directory drops a session file into whatever
-      // checkout the reader happened to start from.
-      const home = themesHomeDir()
-      const problems = ensureThemesHome(home)
+      // No destination named: the dump gets a directory of its own under the
+      // harness home, because resolving a bare file name against the working
+      // directory drops a session file into whatever checkout the reader
+      // happened to start from, and the shared theme directory belongs to
+      // `/theme export` and is watched for theme edits.
+      const home = exportsHomeDir()
+      const problems = ensureExportsHome(home)
       if (problems.length > 0) {
         for (const problem of problems) ports.transcript.notice(problem)
         ports.render()

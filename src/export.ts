@@ -1,4 +1,8 @@
+import { mkdirSync } from 'node:fs'
+import { homedir } from 'node:os'
+import path from 'node:path'
 import { rowText } from './cards.ts'
+import { dshHomeDir } from './stash/paths.ts'
 import { renderTerminalText } from './terminal-text.ts'
 import type { TranscriptEntry } from './transcript.ts'
 
@@ -11,6 +15,35 @@ import type { TranscriptEntry } from './transcript.ts'
  */
 function documentText(raw: string): string {
   return renderTerminalText(raw, { color: 'none' })
+}
+
+/** The directory under the harness home a dump with no destination lands in. */
+export const EXPORTS_DIR_NAME = 'exports'
+
+/**
+ * Where a dump with no destination is written.
+ *
+ * A directory of its own rather than the theme one beside it: `$DSH_HOME/themes`
+ * belongs to `/theme export` and the surface watches it for edits, so a
+ * dump written there would sit among the reader's themes and be re-read as one.
+ */
+export function exportsHomeDir(env: NodeJS.ProcessEnv = process.env, home: string = homedir()): string {
+  return path.join(dshHomeDir(env, home), EXPORTS_DIR_NAME)
+}
+
+/** Create the exports directory if it is missing; empty when it is there. */
+export function ensureExportsHome(dir: string): readonly string[] {
+  try {
+    mkdirSync(dir, { recursive: true })
+    return []
+  } catch (error) {
+    return [`exports: cannot create ${dir}: ${message(error)}`]
+  }
+}
+
+/** One sentence out of an error, for a notice that has one line. */
+function message(error: unknown): string {
+  return error instanceof Error ? error.message.split('\n')[0] ?? String(error) : String(error)
 }
 
 /** Directory-relative default the reader can find without being told. */
