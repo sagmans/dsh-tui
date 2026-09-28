@@ -135,8 +135,10 @@ describe('the interactive row', () => {
   it('accepts a real terminal on both streams', () => {
     setTTY(true)
     const ctx = contextFor({ appExit: vi.fn(), [LIST_MODELS_SERVICE]: false })
-    // Passing the gate means failing later, in composition, never on the TTY check.
-    expect(() => apply(ctx, { sessionId: 'interactive' })).not.toThrow(/must be TTYs/)
+    // The stage, not merely the absence of the gate's own refusal: the stub
+    // answers any read the gate let through, so reaching it is what a passed
+    // gate means, and a surface that failed for another reason would be caught.
+    expect(() => apply(ctx, { sessionId: 'interactive' })).toThrow(/^unexpected service read: /)
   })
 
   it('refuses a piped stream instead of degrading to line mode', () => {
