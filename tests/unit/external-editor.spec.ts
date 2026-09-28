@@ -1,6 +1,6 @@
-import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { basename, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   ExternalEditor,
@@ -281,7 +281,30 @@ describe('the external editor handoff', () => {
     await expect(editor.edit('draft')).resolves.toBe('the edited draft')
     const kept = readdirSync(root)
     expect(kept).toHaveLength(1)
-    expect(host.last()).toBe(`could not remove the scratch directory; the draft is still at ${join(root, kept[0] as string)}`)
+    expect(readFileSync(spawn.draft(), 'utf8')).toBe('the edited draft')
+    expect(host.last()).toBe(`could not remove the scratch directory; the draft is still at ${spawn.draft()}`)
+  })
+
+  it('does not claim a draft remains after partial cleanup removed it', async () => {
+    const { host, spawn, editor } = handoff()
+    let protectedDirectory: string | undefined
+    spawn.respond = (draft, signals) => {
+      writeFileSync(draft, 'edited draft')
+      // An undeletable sibling lets cleanup remove the draft but not the scratch tree.
+      protectedDirectory = join(dirname(draft), 'z-protected')
+      mkdirSync(protectedDirectory)
+      writeFileSync(join(protectedDirectory, 'occupied'), 'keep')
+      chmodSync(protectedDirectory, 0o500)
+      signals.exit(0)
+    }
+
+    try {
+      await expect(editor.edit('draft')).resolves.toBe('edited draft')
+      expect(existsSync(spawn.draft())).toBe(false)
+      expect(host.last()).toBe(`could not remove the scratch directory; check ${dirname(spawn.draft())} for anything left behind`)
+    } finally {
+      if (protectedDirectory !== undefined) chmodSync(protectedDirectory, 0o700)
+    }
   })
 
   it('refuses to hand the screen over when no editor is configured', async () => {

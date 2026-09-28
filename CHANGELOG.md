@@ -59,6 +59,10 @@ breaking change, and a patch carries only fixes.
   waited on the child forever, so a hung `$VISUAL` held the alternate screen down
   with no key able to bring it back; a ceiling kills it, the screen resumes, and a
   draft the reader saved is still taken back.
+- A scratch directory the external editor could not remove is reported as what it
+  left. Recursive cleanup can take the edited draft and then fail on a child
+  beside it, so the notice keeps the draft's path only while that file exists,
+  and otherwise names the directory to check.
 - The window title drops the invisible controls and the bidi overrides before it
   is written. The title travels in the terminal's own escape sequence, so a
   control that survived it could reorder what the reader sees in the title bar

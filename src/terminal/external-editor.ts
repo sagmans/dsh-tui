@@ -12,7 +12,7 @@
 
 import { spawn } from 'node:child_process'
 import { constants } from 'node:fs'
-import { chmod, mkdtemp, open, rm, writeFile } from 'node:fs/promises'
+import { chmod, lstat, mkdtemp, open, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { stripControlCharacters } from '../text.ts'
@@ -60,8 +60,10 @@ const useFailureMessage = (error: unknown): string =>
 const tooLargeMessage = (file: string): string =>
   `the edited draft is larger than ${MAX_DRAFT_LABEL}; it was left at ${file}`
 const NOT_A_FILE_MESSAGE = 'the edited draft is no longer a plain file; nothing was taken back'
-const retainedMessage = (directory: string): string =>
-  `could not remove the scratch directory; the draft is still at ${directory}`
+const retainedMessage = (file: string): string =>
+  `could not remove the scratch directory; the draft is still at ${file}`
+const uncertainCleanupMessage = (directory: string): string =>
+  `could not remove the scratch directory; check ${directory} for anything left behind`
 const resumeFailureMessage = (error: unknown): string =>
   `the screen did not come back cleanly: ${error instanceof Error ? error.message : 'unknown error'}`
 const timeoutMessage = (command: string): string =>
@@ -257,10 +259,12 @@ export class ExternalEditor {
     } finally {
       const scratch = directory
       if (scratch !== undefined && !keepDirectory) {
-        // Best effort, but not silent: a directory the reader believes was swept
-        // still holds what they typed, and only they can decide what to do with it.
-        await rm(scratch, { recursive: true, force: true }).catch(() => {
-          this.host.notice(retainedMessage(scratch))
+        // Recursive removal may delete the draft before failing on another child,
+        // so only promise a recovery path when that plain file still exists.
+        await rm(scratch, { recursive: true, force: true }).catch(async () => {
+          const file = join(scratch, DRAFT_FILE_NAME)
+          const retained = await lstat(file).then(info => info.isFile()).catch(() => false)
+          this.host.notice(retained ? retainedMessage(file) : uncertainCleanupMessage(scratch))
         })
       }
       // Cleared before the screen comes back, so a `resume` that throws cannot
