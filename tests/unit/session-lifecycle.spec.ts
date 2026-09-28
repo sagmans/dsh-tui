@@ -16,12 +16,14 @@ import {
   type SessionLifecycle,
   type SessionLifecyclePorts,
 } from '@/surface/session-lifecycle.ts'
-import { BELL, BELL_AFTER_MS } from '@/terminal/bell.ts'
+import { BELL } from '@/terminal/bell.ts'
 import { windowTitle } from '@/terminal/title.ts'
 
 const SESSION_A = 'tui-session-a' as SessionId
 const SESSION_B = 'tui-session-b' as SessionId
 const CHILD = 'tui-session-child' as SessionId
+/** README promises a bell at the ten-second turn boundary. */
+const BELL_DOCUMENTED_THRESHOLD_MS = 10_000
 
 /** The prefix every session this surface creates carries, so a reader can tell it apart. */
 const NEW_SESSION_PREFIX = 'tui-session-'
@@ -811,10 +813,10 @@ describe('createSessionLifecycle', () => {
   })
 
   it.each([
-    { name: 'a turn that ran long', bell: true, exiting: false, ranFor: BELL_AFTER_MS, rings: true },
-    { name: 'a turn that ran too short', bell: true, exiting: false, ranFor: BELL_AFTER_MS - 1, rings: false },
-    { name: 'a turn with the bell turned off', bell: false, exiting: false, ranFor: BELL_AFTER_MS, rings: false },
-    { name: 'a turn that ended on the way out', bell: true, exiting: true, ranFor: BELL_AFTER_MS, rings: false },
+    { name: 'a turn that ran long', bell: true, exiting: false, ranFor: BELL_DOCUMENTED_THRESHOLD_MS, rings: true },
+    { name: 'a turn that ran too short', bell: true, exiting: false, ranFor: BELL_DOCUMENTED_THRESHOLD_MS - 1, rings: false },
+    { name: 'a turn with the bell turned off', bell: false, exiting: false, ranFor: BELL_DOCUMENTED_THRESHOLD_MS, rings: false },
+    { name: 'a turn that ended on the way out', bell: true, exiting: true, ranFor: BELL_DOCUMENTED_THRESHOLD_MS, rings: false },
   ])('rings for $name', ({ bell, exiting, ranFor, rings }) => {
     const given = fixture()
     given.setBell(bell)

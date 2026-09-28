@@ -7,7 +7,6 @@ import {
   builtinNames,
   builtinThemesDir,
   DEFAULT_THEME,
-  ensureThemesHome,
   exportTheme,
   loadThemes,
   MAX_THEME_FILE_BYTES,
@@ -181,12 +180,6 @@ describe('export', () => {
 })
 
 describe('the reader\'s directory', () => {
-  it('is created when it is missing, so an export has somewhere to land', () => {
-    const missing = join(dirOf(), 'themes')
-    expect(ensureThemesHome(missing)).toEqual([])
-    expect(loadThemes(missing, dirOf()).names()).toEqual([])
-  })
-
   it('sits under the harness home the environment names', () => {
     expect(themesHomeDir({ DSH_HOME: '/scratch/dsh' }, '/home/me')).toBe('/scratch/dsh/themes')
     expect(themesHomeDir({}, '/home/me')).toBe('/home/me/.dsh/themes')

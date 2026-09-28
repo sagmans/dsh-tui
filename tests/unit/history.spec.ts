@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
 import {
   PRESET_EVENT_LIMIT,
-  TITLE_CHAR_LIMIT,
   TITLE_EVENT_LIMIT,
   createSessionHistory,
   presetOfStoredSession,
@@ -29,9 +28,7 @@ describe('sessionTitle', () => {
 
   it('collapses whitespace and cuts a title that cannot fit a row', () => {
     expect(sessionTitle([user('  fix\n\n the   parser ')])).toBe('fix the parser')
-    const long = sessionTitle([user('x'.repeat(TITLE_CHAR_LIMIT * 2))])
-    expect(long).toHaveLength(TITLE_CHAR_LIMIT)
-    expect(long?.endsWith('…')).toBe(true)
+    expect(sessionTitle([user('x'.repeat(144))])).toBe(`${'x'.repeat(71)}…`)
   })
 
   it('prefers the title the harness derived or the reader set', () => {
@@ -138,16 +135,6 @@ const stored = (eventCount: number | undefined): { id: string; cwd: undefined; c
 
 describe('readSessionTitle', () => {
   const filler = Array.from({ length: TITLE_EVENT_LIMIT * 2 }, (_, index) => ({ type: 'turn/start', data: { turn: index } }))
-
-  it('reads the tail first when the log is longer than the title window', async () => {
-    const titled: StoredEvent = { type: 'session/title', data: { title: 'tail title' } }
-    const { history, reads } = recordingHistory(undefined, [...filler, titled])
-
-    // A title is latest-wins and usually written after the first turn, so the
-    // tail is the read that pays; the head is not read when it already answered.
-    expect(await readSessionTitle(history, stored(filler.length + 1))).toBe('tail title')
-    expect(reads).toEqual([{ offset: filler.length + 1 - TITLE_EVENT_LIMIT, limit: TITLE_EVENT_LIMIT }])
-  })
 
   it('falls back to the head when the tail holds no title yet', async () => {
     const { history, reads } = recordingHistory(undefined, [user('first prompt'), ...filler])

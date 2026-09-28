@@ -7,7 +7,7 @@ import { builtinLibrary } from '../support/themes.ts'
 const library = builtinLibrary()
 import { parseSettings, toOverrides } from '@/theme-settings.ts'
 import { BoxedEditor } from '@/ui/editor.ts'
-import { QUEUE_LIMIT, QUEUE_TEXT_ROWS, QueueBar } from '@/ui/queue.ts'
+import { QueueBar } from '@/ui/queue.ts'
 
 /** The width every frame assertion is drawn at, so one row is one readable string. */
 const WIDTH = 30
@@ -64,7 +64,7 @@ describe('QueueBar', () => {
 
   it('keeps a long prompt to its first rows and counts the rest', () => {
     const lines = bar([['one', 'two', 'three', 'four', 'five'].join('\n')]).render(WIDTH)
-    expect(lines).toHaveLength(QUEUE_TEXT_ROWS + 2)
+    expect(lines).toHaveLength(5)
     expect(lines.slice(1, -1).map(inner)).toEqual(['one', 'two', 'three'])
     // The count rides the closing rule, exactly where the editor names its own
     // hidden lines, so the frame costs no row to say what it left out.
@@ -79,7 +79,7 @@ describe('QueueBar', () => {
 
   it('keeps the newest prompts and counts the ones it left out', () => {
     const lines = bar(['one', 'two', 'three', 'four', 'five']).render(WIDTH)
-    expect(lines).toHaveLength(1 + QUEUE_LIMIT * 3)
+    expect(lines).toHaveLength(10)
     expect(lines[0]).toBe('… 2 queued earlier')
     // The reader typed the newest one last, so that is the row that must stay
     // reachable; the ones above it are the ones the harness is about to take.

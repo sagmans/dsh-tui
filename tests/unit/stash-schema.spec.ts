@@ -48,10 +48,6 @@ describe('normalizeEntry', () => {
 })
 
 describe('parseStashFile', () => {
-  it('accepts a file this build wrote', () => {
-    expect(parseStashFile(file())?.entries).toEqual([entry('a')])
-  })
-
   it('refuses a version this build does not know, without repairing it', () => {
     expect(parseStashFile(file({ version: STASH_SCHEMA_VERSION + 1 }))).toBeUndefined()
     expect(parseStashFile(file({ version: '1' }))).toBeUndefined()

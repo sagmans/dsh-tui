@@ -86,24 +86,12 @@ describe('withStashFileLock', () => {
     await expect(withStashFileLock(file, async () => 'ran')).resolves.toBe('ran')
   })
 
-  it('times out rather than breaking a lock a live owner still holds', async () => {
-    const file = scratchFile()
-    await holdLock(`${file}.lock`, { pid: process.pid, host: hostname() })
-    await expect(withStashFileLock(file, async () => 'ran')).rejects.toThrow(/timed out waiting for the stash lock/)
-  })
-
-  /**
-   * A contender never removes a lock it does not hold: a publisher that lost the
-   * name to a successor has to walk away from it, because the successor's lock is
-   * the one keeping two writers out of the bank.
-   */
-  it('leaves a live lock alone when publishing loses the name', async () => {
+  it('times out without removing a lock a live owner still holds', async () => {
     const file = scratchFile()
     const lockDir = `${file}.lock`
-    // The name is already taken by a live successor when the owner write runs.
     await holdLock(lockDir, { pid: process.pid, host: hostname() })
     const before = readFileSync(join(lockDir, 'owner.json'), 'utf8')
-    await expect(withStashFileLock(file, async () => 'ran')).rejects.toThrow(/timed out waiting/)
+    await expect(withStashFileLock(file, async () => 'ran')).rejects.toThrow(/timed out waiting for the stash lock/)
     expect(readFileSync(join(lockDir, 'owner.json'), 'utf8')).toBe(before)
     expect(existsSync(lockDir)).toBe(true)
     expect(readdirSync(lockDir)).toEqual(['owner.json'])

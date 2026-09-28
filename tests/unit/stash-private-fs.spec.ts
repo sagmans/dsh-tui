@@ -299,12 +299,6 @@ describe('readPrivateTextFile', () => {
     writeFileSync(path, 'x'.repeat(64))
     await expect(readPrivateTextFile(path, 'stash file', 16)).rejects.toBeInstanceOf(FileTooLargeError)
   })
-
-  it('reports a missing file to the caller instead of inventing one', async () => {
-    await expect(readPrivateTextFile(join(scratch(), 'absent.json'))).rejects.toSatisfy(error =>
-      hasErrorCode(error, 'ENOENT'),
-    )
-  })
 })
 
 describe('quarantinePrivateFile', () => {

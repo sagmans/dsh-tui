@@ -3,11 +3,13 @@ import { createServer, type Server, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { acceptedTokens, createHerdrClient } from '@/herdr/client.ts'
-import { HERDR_AGENT, HERDR_SOURCE, MAX_METADATA_VALUE_CHARS, METADATA_TOKENS } from '@/herdr/constants.ts'
+import { createHerdrClient } from '@/herdr/client.ts'
+import { HERDR_AGENT, HERDR_SOURCE, METADATA_TOKENS } from '@/herdr/constants.ts'
 import type { HerdrEnvironment } from '@/herdr/client.ts'
 
 const PANE_ID = 'w1:p2'
+/** Herdr truncates token values beyond this wire limit, which would misidentify a directory. */
+const HERDR_TOKEN_VALUE_LIMIT = 80
 
 type Request = { id?: string; method?: string; params?: Record<string, unknown> }
 
@@ -130,6 +132,32 @@ describe('createHerdrClient', () => {
       applies_to_source: HERDR_SOURCE,
       tokens: { dsh_session: 'tui-session-3', dsh_cwd: '/tmp/project' },
     })
+  })
+
+  it.each([
+    {
+      name: 'clears an absent token value',
+      tokens: { dsh_session: 'x', dsh_cwd: undefined },
+      accepted: { dsh_session: 'x', dsh_cwd: null },
+    },
+    {
+      // A truncated directory names a different directory, so the token must be cleared.
+      name: 'clears a token value longer than Herdr can hold',
+      tokens: { dsh_session: 'x', dsh_cwd: 'y'.repeat(HERDR_TOKEN_VALUE_LIMIT + 1) },
+      accepted: { dsh_session: 'x', dsh_cwd: null },
+    },
+    {
+      name: 'keeps a token value at the limit',
+      tokens: { dsh_cwd: 'y'.repeat(HERDR_TOKEN_VALUE_LIMIT) },
+      accepted: { dsh_cwd: 'y'.repeat(HERDR_TOKEN_VALUE_LIMIT) },
+    },
+  ])('$name in pane.report_metadata', async ({ tokens, accepted }) => {
+    const herdr = await listen(ok)
+    const client = createHerdrClient(env(herdr.path))
+
+    expect(await client.reportMetadata(tokens)).toBe(true)
+    expect(herdr.requests[0]?.method).toBe('pane.report_metadata')
+    expect(herdr.requests[0]?.params?.tokens).toEqual(accepted)
   })
 
   it('offers a wait as the label Herdr renders for a blocked row', async () => {
@@ -337,29 +365,5 @@ describe('createHerdrClient', () => {
 
     expect(await report).toBe(false)
     expect(Date.now() - started).toBeLessThan(1_000)
-  })
-})
-
-describe('acceptedTokens', () => {
-  it.each([
-    {
-      name: 'clears a token whose value is absent',
-      tokens: { dsh_session: 'x', dsh_cwd: undefined },
-      accepted: { dsh_session: 'x', dsh_cwd: null },
-    },
-    {
-      // Herdr shortens what it cannot hold, and a shortened path reads as a
-      // different directory; clearing the token is the only honest answer.
-      name: 'clears a value too long to be held whole',
-      tokens: { dsh_session: 'x', dsh_cwd: 'y'.repeat(MAX_METADATA_VALUE_CHARS + 1) },
-      accepted: { dsh_session: 'x', dsh_cwd: null },
-    },
-    {
-      name: 'keeps a value at the limit',
-      tokens: { dsh_cwd: 'y'.repeat(MAX_METADATA_VALUE_CHARS) },
-      accepted: { dsh_cwd: 'y'.repeat(MAX_METADATA_VALUE_CHARS) },
-    },
-  ])('$name', ({ tokens, accepted }) => {
-    expect(acceptedTokens(tokens)).toEqual(accepted)
   })
 })

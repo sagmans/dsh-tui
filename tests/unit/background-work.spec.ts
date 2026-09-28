@@ -162,11 +162,8 @@ function fixture(options: FixtureOptions = {}) {
 }
 
 describe('the job board', () => {
-  it.each([
-    { shape: 'no registry', options: { noRegistry: true } },
-    { shape: 'a registry service', options: {} },
-  ])('says a profile without a job registry cannot list ($shape)', ({ options }) => {
-    const given = fixture(options)
+  it('says a profile without a job registry cannot list', () => {
+    const given = fixture({ noRegistry: true })
 
     // Jobs are live process state, so a composition without a registry can run
     // but cannot show a board; naming that is better than an empty list the

@@ -20,7 +20,7 @@ import { THEMES_DIR_NAME } from '@/theme-files.ts'
 import { formatTokens } from '@/tokens.ts'
 import type { TranscriptEntry } from '@/transcript.ts'
 import type { StatusFacts } from '@/ui/status.ts'
-import { describeTodos, type TodoEntry } from '@/work.ts'
+import type { TodoEntry } from '@/work.ts'
 
 const SESSION = 'tui-session-1' as SessionId
 const VIEWED = 'stored-2' as SessionId
@@ -566,8 +566,10 @@ describe('createCommands help', () => {
 
 describe('createCommands plan', () => {
   it.each([
-    ['the controller reports it active', { active: true }, false, '/plan off'],
+    ['the controller overrides an inactive fold', { active: true }, false, '/plan off'],
+    ['the controller overrides an active fold', { active: false }, true, '/plan'],
     ['a selection waits for the turn boundary', { active: false, pending: true }, false, '/plan off'],
+    ['a pending off selection overrides the active controller and fold', { active: true, pending: false }, true, '/plan'],
     ['no controller answers and the fold says on', undefined, true, '/plan off'],
     ['no controller answers and the fold says off', undefined, false, '/plan'],
   ] as const)('asks for the other state when %s', (_label, controller, fold, line) => {
@@ -687,7 +689,7 @@ describe('createCommands todo', () => {
     ]
     createCommands(given.ctx, given.ports).runSubmission({ kind: 'todo' })
 
-    expect(given.notices).toEqual([describeTodos(given.todos)])
+    expect(given.notices).toEqual(['todos · 1/2 done\n  ▸ being written\n  ☑ done already'])
   })
 })
 

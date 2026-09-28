@@ -16,6 +16,7 @@ const BEFORE = 'warning-before-screen'
 const DURING = 'warning-during-screen'
 const AFTER = 'warning-after-screen'
 const DIRECT_ERROR = 'ordinary-stderr-still-visible'
+const RETAINED_FRAME = 'last good frame'
 const TIMEOUT_MS = 10_000
 
 function run(flags: string[] = [], mode = ''): string {
@@ -228,10 +229,15 @@ describe('WarningSafeTui warning hold', () => {
   })
 
   it('reports the first frame that cannot draw and stays quiet about the next', () => {
-    const tui = new WarningSafeTui(fakeTerminal())
+    const writes: string[] = []
+    const tui = new WarningSafeTui(fakeTerminal(writes))
     const errors: unknown[] = []
+    tui.addChild({ render: () => [RETAINED_FRAME], invalidate: () => {} })
     tui.start()
     try {
+      tui.doRender()
+      expect(writes.join('')).toContain(RETAINED_FRAME)
+      const goodWrites = [...writes]
       tui.onFrameError = error => {
         errors.push(error)
       }
@@ -246,6 +252,7 @@ describe('WarningSafeTui warning hold', () => {
       // repeating it would only loop on the timer that asked for the frame.
       expect(() => tui.doRender()).not.toThrow()
       expect(() => tui.doRender()).not.toThrow()
+      expect(writes).toEqual(goodWrites)
     } finally {
       tui.stop({ preserveScreen: true })
     }

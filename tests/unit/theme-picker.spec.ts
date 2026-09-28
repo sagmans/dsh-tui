@@ -91,8 +91,10 @@ describe('ThemePicker preview', () => {
     const seen: (string | undefined)[] = []
     const moving = picker(library(), undefined, theme => seen.push(theme?.name))
     moving.handleKey('\u001b[B')
+    moving.handleKey('z')
+    expect(moving.card().rows).toHaveLength(0)
     moving.handleKey('\u007f')
-    expect(seen).toEqual(['one', DEFAULT_THEME])
+    expect(seen).toEqual(['one', undefined, DEFAULT_THEME])
   })
 
   it('narrows to the name being typed and previews what is left', () => {

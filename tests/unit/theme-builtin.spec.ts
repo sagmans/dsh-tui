@@ -46,19 +46,27 @@ describe('the shipped themes', () => {
     }
   })
 
-  it('draws on every terminal the surface can meet', () => {
-    // A shipped file is data a reader can edit into any shape, so the layer each one
-    // compiles to has to hold on every budget: an element the merged table gives a
-    // field is drawn, and one it leaves bare stays the text it wraps.
+  it('renders each shipped theme across terminal colour budgets', () => {
+    const expected = {
+      truecolor: /^\u001b\[38;2;\d+;\d+;\d+mx\u001b\[0m$/,
+      '256': /^\u001b\[38;5;\d+mx\u001b\[0m$/,
+      '16': /^\u001b\[(?:3[0-7]|9[0-7])mx\u001b\[0m$/,
+      none: /^x$/,
+    }
     for (const name of library.names()) {
+      const overrides = toOverrides(parseSettings({ theme: name }), library)
       for (const mode of MODES) {
-        const overrides = toOverrides(parseSettings({ theme: name }), library)
         const theme = createTheme(mode, overrides)
         for (const token of TUI_TOKENS) {
+          expect(theme.visible(token), `${name} hides ${token} in ${mode}`).toBe(true)
+          expect(theme.glyph(token), `${name} changes ${token} glyph in ${mode}`).toBe('')
+          const styled = theme.style(token, 'x')
+          expect(styled, `${name} cannot render ${token} in ${mode}`).toContain('x')
+          // A configured element must reach the renderer, even when this theme inherits its shade.
           const spec = mergeTokenSpec(token, overrides.tokens, themeLayer(overrides))
-          const drawn = theme.style(token, 'x') !== 'x'
-          expect(drawn, `${name} in ${mode} draws ${token}`).toBe(mode !== 'none' && Object.keys(spec).length > 0)
+          expect(styled !== 'x', `${name} loses ${token} styling in ${mode}`).toBe(mode !== 'none' && Object.keys(spec).length > 0)
         }
+        expect(theme.style('tool.title', 'x'), `${name} in ${mode}`).toMatch(expected[mode])
       }
     }
   })

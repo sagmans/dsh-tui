@@ -3,9 +3,9 @@ import type { TuiTheme } from '../theme.ts'
 import { canFrame, frameText } from './frame.ts'
 
 /** Queued prompts the bar draws; everything older becomes one count above them. */
-export const QUEUE_LIMIT = 3
+const QUEUE_LIMIT = 3
 /** Text rows one queued prompt keeps before its own count takes over. */
-export const QUEUE_TEXT_ROWS = 3
+const QUEUE_TEXT_ROWS = 3
 
 /**
  * The prompts the agent has not taken yet, drawn above the editor.

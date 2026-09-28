@@ -287,7 +287,7 @@ describe('model catalog dump', () => {
     expect(result.stdout).toContain('aliases ghost-six,g6')
   })
 
-  it('reads a route that declares its own protocol and endpoint', () => {
+  it('reads a route with its own protocol and endpoint', () => {
     const home = scratchHome(patchWith({
       version: 1,
       default: { provider: 'local', model: 'local-model' },

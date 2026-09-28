@@ -156,11 +156,6 @@ export class TranscriptModel {
     return this.calls.liveCall(callId)
   }
 
-  /** Whether any row exists, so a caller can decide to clear or redraw. */
-  isEmpty(): boolean {
-    return this.settled.length === 0 && this.live === '' && this.liveReasoning === ''
-  }
-
   reset(): void {
     this.settled.length = 0
     // The call fold's records name rows of the transcript being dropped, so the

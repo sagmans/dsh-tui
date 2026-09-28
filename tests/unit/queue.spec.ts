@@ -71,8 +71,16 @@ describe('the prompt queue', () => {
 
   it('reads the inbox projection of the session it is given', () => {
     const state = { 'next-turn': [message('waiting')], 'next-step': [] }
-    const ctx = { get: (name: string) => (name === 'sessionProjections' ? { stateOf: () => state } : undefined) } as unknown as Context
+    const other = { 'next-turn': [message('another session')], 'next-step': [] }
+    const ctx = {
+      get: (name: string) => name === 'sessionProjections'
+        ? { stateOf: (selected: { id: string }, key: string) => key === 'inbox'
+          ? (selected.id === 'session' ? state : other)
+          : undefined }
+        : undefined,
+    } as unknown as Context
     expect(pendingPrompts(ctx, { id: 'session' })).toEqual(['waiting'])
+    expect(pendingPrompts(ctx, { id: 'other' })).toEqual(['another session'])
   })
 
   it('reads nothing when the composition has no projection registry', () => {

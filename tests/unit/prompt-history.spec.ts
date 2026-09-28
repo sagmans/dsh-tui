@@ -1,7 +1,7 @@
 import { chmod, mkdtemp, readFile, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   DEFAULT_MAX_ENTRIES,
   HISTORY_FILE_NAME,
@@ -11,7 +11,6 @@ import {
   upsertEntry,
   type PromptEntry,
 } from '@/agent/prompt-history.ts'
-import { dshHomeDir } from '@/stash/paths.ts'
 
 const AT = (seconds: number): string => new Date(Date.UTC(2026, 0, 1, 0, 0, seconds)).toISOString()
 
@@ -28,31 +27,29 @@ async function scratchHome(): Promise<string> {
   return await mkdtemp(join(tmpdir(), 'dsh-tui-history-'))
 }
 
-/** A stand-in OS home, so the resolution is driven without touching the process. */
-const TEST_HOME = '/home/tester'
-
-/**
- * The stash bank and the theme files resolve the harness home through the same
- * function, so the history cannot spell a leading `~` on its own: a scratch home
- * of `~/harness` would then keep the prompts where neither of them looks.
- */
+/** The default store must honor harness-home overrides without writing the real home. */
 describe('the home the history is written under', () => {
   it.each([
-    ['~', TEST_HOME],
-    ['~/harness', `${TEST_HOME}/harness`],
-    ['/tmp/custom', '/tmp/custom'],
-    ['   ', `${TEST_HOME}/.dsh`],
-  ])('lands inside the home the rest of the surface resolves: %s', (configured, resolved) => {
-    const history = createPromptHistory({
-      home: dshHomeDir({ DSH_HOME: configured }, TEST_HOME),
-      cap: () => DEFAULT_MAX_ENTRIES,
-    })
-    expect(history.path()).toBe(join(resolved, HISTORY_FILE_NAME))
-  })
+    { configured: 'absolute', directory: '' },
+    { configured: '~', directory: '' },
+    { configured: '~/harness', directory: 'harness' },
+    { configured: '   ', directory: '.dsh' },
+  ])('persists under the resolved home for $configured', async ({ configured, directory }) => {
+    const home = await scratchHome()
+    vi.stubEnv('HOME', home)
+    vi.stubEnv('USERPROFILE', home)
+    vi.stubEnv('DSH_HOME', configured === 'absolute' ? home : configured)
+    try {
+      const history = createPromptHistory({ cap: () => DEFAULT_MAX_ENTRIES, now: () => new Date(AT(1)) })
+      history.record('from the scratch home')
+      await history.flush()
 
-  it('keeps the value as written when the environment names no home to expand', () => {
-    const history = createPromptHistory({ home: dshHomeDir({ DSH_HOME: '~' }, ''), cap: () => DEFAULT_MAX_ENTRIES })
-    expect(history.path()).toBe(join('~', HISTORY_FILE_NAME))
+      const path = join(home, directory, HISTORY_FILE_NAME)
+      expect(history.path()).toBe(path)
+      expect(JSON.parse(await readFile(path, 'utf8')).entries[0].text).toBe('from the scratch home')
+    } finally {
+      vi.unstubAllEnvs()
+    }
   })
 })
 

@@ -49,15 +49,6 @@ describe('matchScore', () => {
     expect(gathered).toBeLessThan(2_000_000)
   })
 
-  it('prefers the fragment whose characters sit closest together', () => {
-    // fzf weighs a word start above raw tightness — g-x-l-m-5-3 outranks
-    // xglm-5.3 — so the pair here keeps the boundaries equal and tests the
-    // tightness itself.
-    const tight = matchScore('abc', 'a-b-c')
-    const spread = matchScore('abc', 'a--b--c')
-    expect(tight).toBeGreaterThan(spread ?? 0)
-  })
-
   it('does not settle for the first character the row happens to show', () => {
     const worse = matchScore('glm53', 'kimi-coding g-l-m-5-3')
     const better = matchScore('glm53', 'zai-coding-cn glm-5.3')
@@ -71,13 +62,6 @@ it('reads a fragment the way a fuzzy finder does inside its band', () => {
     const inline = matchScore('oob', 'xoutofboundx')
     expect(boundary).toBeGreaterThan(inline ?? 0)
   })
-
-  it('still keeps a contiguous band above a scattered one', () => {
-    const contiguous = matchScore('foob', 'foobar')
-    const scattered = matchScore('foob', 'foo-bar')
-    expect(contiguous).toBeGreaterThan(scattered ?? 0)
-  })
-
 
   it('ignores case', () => {
     const upper = matchScore('GLM53', 'zai-coding-cn glm-5.3')

@@ -83,7 +83,7 @@ export function detectColourMode(env: Record<string, string | undefined>): Colou
 }
 
 /** Parse a colour specification, or `undefined` when it is not one. */
-export function parseColour(spec: string | number): ParsedColour | undefined {
+function parseColour(spec: string | number): ParsedColour | undefined {
   if (typeof spec === 'number') {
     return Number.isInteger(spec) && spec >= 0 && spec <= MAX_INDEX ? spec : undefined
   }

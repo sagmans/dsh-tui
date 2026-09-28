@@ -127,11 +127,16 @@ describe('popping a draft', () => {
       const host = new FakeHost()
       const baseDir = scratchBase()
       await (await loadStashStore(resolveStashPaths(SESSION, baseDir))).add({ id: 'a', text: 'one' })
-      const committed: StashWriter = async () => ({ committed: true, phase: 'lock-release', error: new Error('busy') })
+      const committed: StashWriter = async (file, contents) => {
+        await writeStashFile(file, contents)
+        return { committed: true, phase: 'lock-release', error: new Error('busy') }
+      }
       const stash = bank(host, { baseDir, write: committed })
       await stash.pop(undefined)
       expect(host.editorText).toBe('one')
       expect(host.last()).toBe('Popped [0], but the lock-release step failed')
+      const reloaded = await loadStashStore(resolveStashPaths(SESSION, baseDir))
+      expect(reloaded.entries).toEqual([])
     })
 })
 

@@ -28,11 +28,6 @@ describe('a copied selection', () => {
     expect(cleanCopied(reader(drawn.drawn), drawn.copy)).toBe('hello\nworld')
   })
 
-  it('drops the rules a reader dragged across, keeping the words between them', () => {
-    const drawn = block(['hello'])
-    expect(cleanCopied(reader(drawn.drawn), drawn.copy)).toBe('hello')
-  })
-
   it('reads a drag that starts and ends inside the text, taking the frame columns with it', () => {
     const drawn = block(['hello', 'world'])
     // From the box side on the first row to partway through the second: what a

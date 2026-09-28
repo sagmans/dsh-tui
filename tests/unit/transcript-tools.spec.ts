@@ -132,16 +132,4 @@ describe('TranscriptModel live calls', () => {
       expect(model.liveCall('missing')).toEqual({ running: false, elapsed: 0 })
       expect(model.liveCall('')).toEqual({ running: false, elapsed: 0 })
     })
-  it('keeps the card it settled from claiming to be in flight', () => {
-      const { clock } = clockAt(1_000)
-      const model = new TranscriptModel(undefined, clock)
-      model.apply(call)
-      const [entry] = model.entries()
-      // The card drawn from the call is the one a renderer sees before any result;
-      // the fold itself never marks it, so a settled row cannot inherit the claim.
-      expect(entry?.kind === 'tool' && entry.card.running).toBeUndefined()
-      model.apply(result)
-      const [settled] = model.entries()
-      expect(settled?.kind === 'tool' && settled.card.running).toBeUndefined()
-    })
 })

@@ -42,26 +42,26 @@ describe('token coverage', () => {
     }
   })
 
-  it('ships no hidden element and no glyph', () => {
-    for (const token of TUI_TOKENS) {
-      expect(DEFAULT_TOKENS[token].hidden ?? false, `${token} ships hidden`).toBe(false)
-      expect(DEFAULT_TOKENS[token].glyph ?? '', `${token} ships a glyph`).toBe('')
+  it('paints shipped accents at each terminal colour budget without styling plain code', () => {
+    const expected = {
+      truecolor: /^\u001b\[38;2;95;175;215mx\u001b\[0m$/,
+      '256': /^\u001b\[38;5;\d+mx\u001b\[0m$/,
+      '16': /^\u001b\[(?:3[0-7]|9[0-7])mx\u001b\[0m$/,
+      none: /^x$/,
     }
-  })
-
-  it('reaches every token through the theme the renderers hold', () => {
-    // The shipped table is what a renderer draws with when nothing overrides it,
-    // so an element is drawn exactly when the table gives it something to draw
-    // with: a plain element stays the text it wraps, and colour off draws none.
     for (const mode of MODES) {
       const theme = createTheme(mode)
       for (const token of TUI_TOKENS) {
         expect(DEFAULT_TOKENS[token], `${token} has no shipped default`).toBeDefined()
         expect(theme.visible(token), `${token} is invisible in ${mode}`).toBe(true)
         expect(theme.glyph(token), `${token} ships a glyph in ${mode}`).toBe('')
-        const drawn = theme.style(token, 'x') !== 'x'
-        expect(drawn, `${token} in ${mode}`).toBe(mode !== 'none' && Object.keys(DEFAULT_TOKENS[token]).length > 0)
+        // Every styled default must survive the compiled theme, not only the pinned accent.
+        expect(theme.style(token, 'x') !== 'x', `${token} loses styling in ${mode}`).toBe(
+          mode !== 'none' && Object.keys(DEFAULT_TOKENS[token]).length > 0,
+        )
       }
+      expect(theme.style('tool.title', 'x')).toMatch(expected[mode])
+      expect(theme.style('markdown.codeBlock', 'x')).toBe('x')
     }
   })
 
@@ -89,10 +89,9 @@ describe('/theme', () => {
   it('lists every element with the value in force and where it came from', () => {
     const overrides = toOverrides(parseSettings({ tokens: { 'transcript.user': { fg: '#ff0000' } } }), library)
     const lines = renderThemeTable(overrides, library)
-    for (const token of TUI_TOKENS) {
-      expect(lines.some(line => line.includes(token)), `${token} missing from /theme`).toBe(true)
-    }
-    expect(lines.some(line => line.includes('transcript.user') && line.includes('#ff0000') && line.includes('override'))).toBe(true)
+    const rows = lines.filter(line => line.startsWith('  ') && line.includes(' = '))
+    expect(rows.map(line => line.slice(2, line.indexOf(' = ')))).toEqual(TUI_TOKENS)
+    expect(rows).toContain('  transcript.user = #ff0000 (override)')
   })
 
   it('tells an element a theme wrote from one only the palette reaches', () => {

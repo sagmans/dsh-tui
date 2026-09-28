@@ -1,5 +1,5 @@
 import { getKeybindings, type KeyId } from '@earendil-works/pi-tui'
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defaultKeymap, keysFor, resolveKeymap } from '@/input/actions.ts'
 import { ACTION_CATALOG } from '@/input/action-catalog.ts'
 import {
@@ -11,50 +11,15 @@ import {
   chordKeysLine,
   installKeybindings,
   surfaceKeysLine,
-  type ChordTimers,
 } from '@/input/keymap.ts'
-
-/** A clock the test owns, so a window is proven without waiting for one. */
-interface FakeClock extends ChordTimers {
-  fire(): void
-  scheduled(): number | undefined
-  readonly cancelled: number
-}
-
-function fakeClock(): FakeClock {
-  let pending: (() => void) | undefined
-  let delay: number | undefined
-  let cancelled = 0
-  return {
-    schedule: (run, delayMs) => {
-      pending = run
-      delay = delayMs
-      return 1
-    },
-    cancel: () => {
-      cancelled += 1
-      pending = undefined
-      delay = undefined
-    },
-    fire: () => {
-      pending?.()
-    },
-    scheduled: () => delay,
-    get cancelled() {
-      return cancelled
-    },
-  }
-}
 
 let expired = 0
 
-function reader(prefixes: readonly KeyId[] = DEFAULT_PREFIX_KEYS, windowMs = DEFAULT_PREFIX_WINDOW_S * 1000, map = defaultKeymap()): { chord: ChordReader; clock: FakeClock } {
-  const clock = fakeClock()
+function reader(prefixes: readonly KeyId[] = DEFAULT_PREFIX_KEYS, windowMs = DEFAULT_PREFIX_WINDOW_S * 1000, map = defaultKeymap()): { chord: ChordReader } {
   return {
     chord: new ChordReader(() => prefixes, () => chordBindings(map), () => windowMs, () => {
       expired += 1
-    }, clock),
-    clock,
+    }),
   }
 }
 
@@ -187,6 +152,9 @@ describe('installKeybindings', () => {
 })
 
 describe('ChordReader', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
   it('arms on the prefix, says so, and dispatches the bound key', () => {
     const { chord } = reader()
     expect(chord.pending).toBe(false)
@@ -230,32 +198,43 @@ describe('ChordReader', () => {
 
   it('lets the chord lapse when the window passes', () => {
     expired = 0
-    const { chord, clock } = reader()
+    const { chord } = reader()
     chord.handle('\u0018')
-    expect(clock.scheduled()).toBe(2000)
-    clock.fire()
+    expect(vi.getTimerCount()).toBe(1)
+    vi.advanceTimersByTime(DEFAULT_PREFIX_WINDOW_S * 1000 - 1)
+    expect(chord.pending).toBe(true)
+    vi.advanceTimersByTime(1)
     expect(chord.pending).toBe(false)
+    expect(vi.getTimerCount()).toBe(0)
     expect(expired).toBe(1)
     // The key after a lapsed chord is an ordinary key again.
     expect(chord.handle('m')).toBeUndefined()
   })
 
   it('cancels the window when the chord finishes first, and on disarm', () => {
-    const { chord, clock } = reader()
+    expired = 0
+    const { chord } = reader()
     chord.handle('\u0018')
+    expect(vi.getTimerCount()).toBe(1)
     chord.handle('m')
-    expect(clock.cancelled).toBe(1)
+    expect(vi.getTimerCount()).toBe(0)
     chord.handle('\u0018')
+    expect(vi.getTimerCount()).toBe(1)
     chord.disarm()
-    expect(clock.cancelled).toBe(2)
+    expect(vi.getTimerCount()).toBe(0)
     expect(chord.pending).toBe(false)
+    vi.advanceTimersByTime(DEFAULT_PREFIX_WINDOW_S * 1000)
+    expect(expired).toBe(0)
   })
 
   it('schedules nothing when the reader asks for a sticky chord', () => {
-    const { chord, clock } = reader([DEFAULT_PREFIX_KEY], 0)
+    expired = 0
+    const { chord } = reader([DEFAULT_PREFIX_KEY], 0)
     chord.handle('\u0018')
-    expect(clock.scheduled()).toBeUndefined()
+    expect(vi.getTimerCount()).toBe(0)
+    vi.advanceTimersByTime(DEFAULT_PREFIX_WINDOW_S * 1000)
     expect(chord.pending).toBe(true)
+    expect(expired).toBe(0)
   })
 
   it('passes an ordinary key through while unarmed', () => {

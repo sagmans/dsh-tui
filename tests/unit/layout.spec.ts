@@ -60,7 +60,7 @@ describe('the surface root layout', () => {
     expect(frame.lines.some(line => line.includes('the draft'))).toBe(true)
   })
 
-  it('delivers a click in the bar to the editor through the mounted layout', () => {
+  it('maps a prompt click to the editor hit box and cursor position', () => {
     const { prompt, editor } = promptOf('abcdef')
     const root = surfaceLayout({
       transcript: rowsOf('row', 40),
@@ -72,9 +72,7 @@ describe('the surface root layout', () => {
     const frame = renderLayoutFrame(root, 80, 24, () => {})
     const textRow = frame.lines.findIndex(line => line.includes('abcdef'))
     const boxes = getLayoutBoxesAt(frame, 1, textRow)
-    // The deepest box is the editor itself, which is what makes the click focus
-    // the component that can take the keyboard; a wrapper box would be focused
-    // instead and every key after the click would be swallowed.
+    // A wrapper hit would not establish that the editor received this cursor click.
     const box = boxes[0]
     expect(box?.component).toBe(editor)
     // The transform the renderer applies before it calls the component.

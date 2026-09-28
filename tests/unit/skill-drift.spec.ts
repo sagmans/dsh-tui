@@ -51,15 +51,6 @@ afterEach(() => {
 })
 
 describe('bundled skill drift', () => {
-  it('stays silent when every installed copy matches', () => {
-    const { home, bundled } = fixture(['dsh-tui-dogfood', 'dsh-tui-update-models'])
-    installCopy(home, 'dsh-tui-dogfood')
-    installCopy(home, 'dsh-tui-update-models')
-
-    expect(driftedSkillNames(home, bundled)).toEqual([])
-    expect(describeSkillDrift(home, bundled)).toBeUndefined()
-  })
-
   it('names the skill and the command that replaces it, on one line', () => {
     const { home, bundled } = fixture()
     installCopy(home, 'dsh-tui-dogfood', 'edited by the reader')

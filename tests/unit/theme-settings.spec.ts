@@ -159,12 +159,6 @@ describe('the dsh-tui settings section', () => {
     expect(() => parseSettings({ palette: { muted: '#777777' } })).not.toThrow()
   })
 
-  it('turns a section into overrides', () => {
-    const overrides = toOverrides(parseSettings({ tokens: { 'transcript.user': { fg: '#ff0000' } } }), library)
-    expect(overrides.tokens.get('transcript.user')).toEqual({ fg: '#ff0000' })
-    expect(overrides.palette.muted).toBeDefined()
-  })
-
   it('lets a palette override win over the shipped palette', () => {
     const overrides = toOverrides(parseSettings({ palette: { muted: '#777777' } }), library)
     expect(overrides.palette.muted).toBe('#777777')

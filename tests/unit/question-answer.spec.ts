@@ -120,10 +120,10 @@ describe('QuestionGate free-text row', () => {
   it('answers with what was typed on row 0 instead of filtering by it', () => {
       const gate = withOptions()
       gate.handleKey('0')
-      for (const character of 'ship it') gate.handleKey(character)
+      for (const character of 'ship 2 it') gate.handleKey(character)
       expect(gate.card().options.map(option => option.label)).toEqual(['yes', 'no'])
-      expect(answerText(gate)).toBe('ship it')
-      expect(gate.handleKey(ENTER)).toEqual([{ id: 'q1', selected: [], custom: 'ship it' }])
+      expect(answerText(gate)).toBe('ship 2 it')
+      expect(gate.handleKey(ENTER)).toEqual([{ id: 'q1', selected: [], custom: 'ship 2 it' }])
     })
   it('reaches row 0 past the last option and keeps the text when the cursor walks back', () => {
       const gate = withOptions()
@@ -159,12 +159,6 @@ describe('QuestionGate free-text row', () => {
       gate.handleKey('2')
       gate.handleKey('0')
       expect(gate.handleKey(ENTER)).toEqual([{ id: 'q1', selected: ['no'] }])
-    })
-  it('types a space and a digit on row 0 instead of acting on the list', () => {
-      const gate = withOptions()
-      gate.handleKey('0')
-      for (const character of 'v2 two') gate.handleKey(character)
-      expect(gate.handleKey(ENTER)).toEqual([{ id: 'q1', selected: [], custom: 'v2 two' }])
     })
   it('draws row 0 even when the filter leaves no option to show', () => {
       const gate = withOptions()

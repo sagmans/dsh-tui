@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -15,6 +15,7 @@ const SESSION = 'tui-session-1' as SessionId
 const SIGTERM_STATUS = 143
 /** What the bar holds when the reader asks for their own editor. */
 const DRAFT = 'a draft from the bar'
+const EDITOR_GATE_POLL_MS = 10
 /** The one sentence a run with no editor answers, so the reader is not left with a dead key. */
 const NO_EDITOR = 'no editor configured: set $VISUAL or $EDITOR to open the draft in one'
 
@@ -35,11 +36,16 @@ afterEach(() => {
  * exits: nothing about the surface's own editor plumbing is stubbed, only the
  * program behind $VISUAL.
  */
-function fakeEditor(write: string): string {
+function fakeEditor(write: string, gate?: { started: string; release: string }): string {
   const dir = mkdtempSync(join(tmpdir(), 'dsh-lifecycle-editor-'))
   created.push(dir)
   const script = join(dir, 'editor.mjs')
-  writeFileSync(script, `import { appendFileSync } from 'node:fs'\nappendFileSync(process.argv[2], ${JSON.stringify(write)})\n`)
+  const wait = gate === undefined ? '' : `writeFileSync(${JSON.stringify(gate.started)}, '')
+while (!existsSync(${JSON.stringify(gate.release)})) await new Promise(resolve => setTimeout(resolve, ${EDITOR_GATE_POLL_MS}))
+`
+  writeFileSync(script, `import { appendFileSync, existsSync, writeFileSync } from 'node:fs'
+${wait}appendFileSync(process.argv[2], ${JSON.stringify(write)})
+`)
   return `${process.execPath} ${script}`
 }
 
@@ -321,12 +327,20 @@ describe('createTerminalLifecycle teardown', () => {
   })
 
   it('does not restart a screen the host unloaded while the editor was open', async () => {
-    vi.stubEnv('VISUAL', fakeEditor(' edited'))
+    const directory = mkdtempSync(join(tmpdir(), 'dsh-lifecycle-gate-'))
+    created.push(directory)
+    const started = join(directory, 'started')
+    const release = join(directory, 'release')
+    vi.stubEnv('VISUAL', fakeEditor(' edited', { started, release }))
     vi.stubEnv('EDITOR', '')
     const given = fixture()
-    given.unload()
-
     given.lifecycle.editDraft()
+    try {
+      await vi.waitFor(() => { expect(existsSync(started)).toBe(true) })
+      given.unload()
+    } finally {
+      writeFileSync(release, '')
+    }
     await vi.waitFor(() => { expect(given.written).toEqual([`${DRAFT} edited`]) })
 
     // Starting again would paint on a terminal this process is done with, into

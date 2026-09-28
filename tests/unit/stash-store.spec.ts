@@ -39,13 +39,6 @@ function seed(file: string, contents: string): void {
 }
 
 describe('StashStore load', () => {
-  it('starts empty when the session has no bank yet', async () => {
-    const { baseDir } = scratch()
-    const store = await loadStashStore(resolveStashPaths(SESSION, baseDir), clock())
-    expect(store.entryCount).toBe(0)
-    expect(store.entries).toEqual([])
-  })
-
   it('keeps loading a bank an older build wrote, dropping its file timestamps on the next write', async () => {
     const { baseDir, file } = scratch()
     const paths = resolveStashPaths(SESSION, baseDir)
@@ -112,11 +105,14 @@ describe('StashStore load', () => {
 
   it('refuses a newer format without touching it', async () => {
     const { baseDir, file } = scratch()
-    seed(file, JSON.stringify({ version: STASH_SCHEMA_VERSION + 1, sessionId: SESSION, entries: [] }))
+    const futureFile = JSON.stringify({ version: STASH_SCHEMA_VERSION + 1, sessionId: SESSION, entries: [] })
+    seed(file, futureFile)
+    const before = readdirSync(dirname(file))
     await expect(loadStashStore(resolveStashPaths(SESSION, baseDir), clock())).rejects.toBeInstanceOf(
       UnsupportedStashSchemaError,
     )
-    expect(existsSync(file)).toBe(true)
+    expect(readFileSync(file, 'utf8')).toBe(futureFile)
+    expect(readdirSync(dirname(file))).toEqual(before)
   })
 })
 

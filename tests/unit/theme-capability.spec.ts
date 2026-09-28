@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { detectColourMode, parseColour, sgrBackgroundPrefix, sgrPrefix } from '@/theme-capability.ts'
+import { detectColourMode, sgrBackgroundPrefix, sgrPrefix } from '@/theme-capability.ts'
 
 describe('detectColourMode', () => {
   it('prefers truecolor when COLORTERM says so', () => {
@@ -27,26 +27,16 @@ describe('detectColourMode', () => {
   })
 })
 
-describe('parseColour', () => {
-  it('reads hex', () => {
-    expect(parseColour('#808080')).toEqual({ r: 128, g: 128, b: 128 })
-  })
-
-  it('reads an ansi index', () => {
-    expect(parseColour(8)).toBe(8)
-  })
-
-  it('rejects nonsense', () => {
-    expect(parseColour('#gggggg')).toBeUndefined()
-    expect(parseColour('nope')).toBeUndefined()
-    expect(parseColour(-1)).toBeUndefined()
-    expect(parseColour(999)).toBeUndefined()
-  })
-})
-
 describe('sgrPrefix', () => {
   it('emits 24-bit colour as truecolor', () => {
     expect(sgrPrefix('#808080', 'truecolor')).toBe('\u001B[38;2;128;128;128m')
+  })
+
+  it('rejects invalid hex and out-of-range or noninteger indices', () => {
+    for (const invalid of ['#gggggg', 'nope', -1, 999, 1.5]) {
+      expect(sgrPrefix(invalid, 'truecolor')).toBe('')
+      expect(sgrBackgroundPrefix(invalid, '256')).toBe('')
+    }
   })
 
   it('emits ansi indices on 16-colour terminals', () => {

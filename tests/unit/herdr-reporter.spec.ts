@@ -134,6 +134,9 @@ describe('createHerdrReporter', () => {
 
     reporter.block(GATE_WAIT_KEY, 'approval needed · Bash')
     reporter.block(QUESTION_WAIT, 'question · continue?')
+    expect(states(calls).at(-1)).toMatchObject({ state: 'blocked', message: 'question · continue?' })
+    expect(labels(calls).at(-1)).toBe('question · continue?')
+
     reporter.unblock(QUESTION_WAIT)
 
     const last = states(calls).at(-1) as StateReport

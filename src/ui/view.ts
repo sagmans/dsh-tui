@@ -84,8 +84,6 @@ export interface TranscriptViewOptions {
   readonly state?: () => ViewState
   readonly gate?: () => GateCard | undefined
   readonly picker?: () => PickerCard | undefined
-  /** Injectable so a test can see that a repaint reused the rows it had. */
-  readonly rows?: RowCache<TranscriptEntry>
   /**
    * The keys in force, read live.
    *
@@ -147,7 +145,7 @@ constructor(
     this.cards = new ToolCards({ theme: this.theme, keymap: () => this.keymap(), toolDisplay: tool => this.toolDisplay(tool), expansionOf: entry => this.expansionOf(entry), subCallsOpen: entry => this.subCallsOpen(entry), liveCall: callId => this.model.liveCall(callId), cardOpenHint: () => hintKeys(this.keymap(), 'surface.toolDetail') || CARD_OPEN_FALLBACK, toolKey: id => toolClickKey(id), subCallsKey: id => nestedCallsClickKey(id), subCallKey: (parentId, id) => subCallClickKey(parentId, id), subCallOpen: (parentId, id) => this.subCallOpen(parentId, id) })
     this.messages = new Messages({ theme: this.theme, markdown: this.markdown, reasoningOpen: entry => this.reasoningOpen(entry), reasoningFoldHint: () => this.reasoningFoldHint(), reasoningKey: id => reasoningClickKey(id), pushWrapped: (lines, text, width, prefix, token) => this.pushWrapped(lines, text, width, prefix, token) })
     this.gates = new GateCards({ theme: this.theme, pushWrapped: (lines, text, width, prefix, token) => this.pushWrapped(lines, text, width, prefix, token) })
-    this.rows = options.rows ?? new RowCache<TranscriptEntry>()
+    this.rows = new RowCache<TranscriptEntry>()
   }
 private get viewState(): ViewState {
     return this.options.state?.() ?? DEFAULT_VIEW_STATE

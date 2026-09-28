@@ -8,10 +8,9 @@ import { cardOfCall } from '@/cards/presenter.ts'
 import { type ToolPresenter } from '@/cards.ts'
 import { createTheme } from '@/theme.ts'
 import { DEFAULT_PALETTE } from '@/theme-defaults.ts'
-import { TranscriptModel, type TranscriptEntry } from '@/transcript.ts'
+import { TranscriptModel } from '@/transcript.ts'
 import { SECOND_MS } from '@/transcript/tool-calls.ts'
 import { MarkdownRenderer } from '@/ui/markdown.ts'
-import { RowCache } from '@/ui/rows.ts'
 import { TranscriptView, type ViewState } from '@/ui/view.ts'
 import { theme, bashPresenter, painted, COLLAPSED, OPEN, viewOf } from './fixtures/transcript-view.ts'
 
@@ -125,7 +124,6 @@ describe('TranscriptView running cards', () => {
       ])
     })
   it('keeps the total a program took after it answers, and stops counting', () => {
-      const rows = new RowCache<TranscriptEntry>()
       const { state: clockState, clock } = clockAt(1_000)
       const model = new TranscriptModel(undefined, clock)
       model.apply({ type: 'tool/call', data: { name: 'run_code', arguments: '{"code":"x"}', callId: 'root' } })
@@ -134,7 +132,7 @@ describe('TranscriptView running cards', () => {
         data: { rootCallId: 'root', parentCallId: 'root', subCallId: 'root:ptc:1', name: 'bash', arguments: { command: 'echo hi' } },
       })
       const inline: ViewState = { expandCards: false, expandReasoning: false, expandSubCalls: true }
-      const view = new TranscriptView(model, theme, new MarkdownRenderer(theme.markdown), { rows, state: () => inline })
+      const view = new TranscriptView(model, theme, new MarkdownRenderer(theme.markdown), { state: () => inline })
       clockState.now += 10 * SECOND_MS
       expect(view.render(60)[0]).toBe('run_code · ~10s')
   

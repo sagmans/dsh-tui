@@ -95,9 +95,8 @@ describe('resolveStashPaths', () => {
     expect(pathBank.key).toMatch(/^v3--/u)
   })
 
-  it('gives two sessions two files and one session one file', () => {
+  it('keeps distinct session IDs and punctuation-distinct IDs in separate files', () => {
     expect(resolveStashPaths('a', '/base').file).not.toBe(resolveStashPaths('b', '/base').file)
-    expect(resolveStashPaths('a', '/base').file).toBe(resolveStashPaths('a', '/base').file)
     expect(resolveStashPaths('a-/b', '/base').file).not.toBe(resolveStashPaths('a/-b', '/base').file)
   })
 })

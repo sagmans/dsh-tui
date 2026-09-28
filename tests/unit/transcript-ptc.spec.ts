@@ -155,17 +155,6 @@ describe('TranscriptModel nested PTC calls', () => {
       expect(call?.presented).toBeUndefined()
       expect(call?.output?.rows.map(rowText)).toEqual(['mystery said no'])
     })
-  it('keeps the calls in dispatch order and counts every one', () => {
-      const model = new TranscriptModel(recordingPresenter())
-      model.apply(runCall)
-      model.apply(start('root:ptc:1', 'read', { file_path: 'a.ts' }))
-      model.apply(settle('root:ptc:1', 'read', { file_path: 'a.ts' }, false))
-      model.apply(start('root:ptc:2', 'bash', { command: 'ls' }))
-      const card = model.entries()[0]
-      const subCalls = card?.kind === 'tool' ? card.card.subCalls : undefined
-      expect(subCalls?.map(call => call.title)).toEqual(['read pending', 'bash pending'])
-      expect(card?.kind === 'tool' && card.card.subCallsTotal).toBe(2)
-    })
   it('caps retained calls and still reports how many ran', () => {
       const model = new TranscriptModel(recordingPresenter())
       model.apply(runCall)

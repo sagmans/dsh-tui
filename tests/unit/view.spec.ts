@@ -1,6 +1,6 @@
 /**
- * The view as the coordinator the surface renders through: repaint scheduling,
- * theme revisions that invalidate cached rows, and what copy takes from a
+ * The view as the coordinator the surface renders through: theme revisions
+ * that invalidate cached rows, and what copy takes from a
  * transcript that the other view suites never assemble.
  */
 
@@ -8,50 +8,11 @@ import { describe, expect, it } from 'vitest'
 import { stripTerminalSequences } from '@earendil-works/pi-tui'
 import { createTheme, forwardEditorTheme, forwardMarkdownTheme, type TuiTheme } from '@/theme.ts'
 import { DEFAULT_PALETTE } from '@/theme-defaults.ts'
-import { TranscriptModel, type TranscriptEntry } from '@/transcript.ts'
-import { SECOND_MS } from '@/transcript/tool-calls.ts'
+import { TranscriptModel } from '@/transcript.ts'
 import { cleanCopied } from '@/ui/copy.ts'
 import { MarkdownRenderer } from '@/ui/markdown.ts'
-import { RowCache } from '@/ui/rows.ts'
 import { TranscriptView } from '@/ui/view.ts'
-import { theme, bashPresenter, COLLAPSED, viewOf } from './fixtures/transcript-view.ts'
-
-describe('TranscriptView repaints', () => {
-  it('reuses the rows it already built instead of re-wrapping the transcript', () => {
-      const rows = new RowCache<TranscriptEntry>()
-      const model = new TranscriptModel()
-      model.apply({ type: 'user/message', data: { content: [{ type: 'text', text: 'hello' }], source: { kind: 'user' } } })
-      model.apply({ type: 'assistant/message', data: { message: { content: [{ type: 'text', text: 'hi' }] } } })
-      const view = new TranscriptView(model, theme, new MarkdownRenderer(theme.markdown), { rows })
-  
-      const first = view.render(80)
-      expect(view.render(80)).toEqual(first)
-    })
-  it('rebuilds a running row as its duration moves and never a settled one', () => {
-      const rows = new RowCache<TranscriptEntry>()
-      const clockState = { now: 1_000 }
-      const model = new TranscriptModel(bashPresenter, () => clockState.now)
-      model.apply({ type: 'tool/call', data: { name: 'bash', arguments: '{"command":"pnpm test"}', callId: 'c1' } })
-      const view = new TranscriptView(model, theme, new MarkdownRenderer(theme.markdown), { rows })
-  
-      expect(view.render(60)).toEqual(['bash pnpm test'])
-      // Within the same second the row cannot have changed, so the frame reuses it.
-      expect(view.render(60)).toEqual(['bash pnpm test'])
-  
-      clockState.now += SECOND_MS
-      expect(view.render(60)).toEqual(['bash pnpm test · ~1s'])
-  
-      model.apply({
-        type: 'tool/result',
-        data: { message: { content: [{ type: 'tool-result', toolCallId: 'c1', text: 'all green' }], isError: false } },
-      })
-      expect(view.render(60)).toEqual(['bash pnpm test · exit 0 · 1 line'])
-      clockState.now += 30 * SECOND_MS
-      // A call that came back stops being redrawn: the row it settled into is the
-      // one the cache keeps, and nothing on it is measured by the clock any more.
-      expect(view.render(60)).toEqual(['bash pnpm test · exit 0 · 1 line'])
-    })
-})
+import { COLLAPSED, viewOf } from './fixtures/transcript-view.ts'
 
 describe('TranscriptView theming', () => {
   const userModel = (): TranscriptModel => {

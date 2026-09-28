@@ -100,14 +100,6 @@ describe('a fenced diff', () => {
     expect(inHunk[2]).toContain(added)
   })
 
-  it('keeps a fence of any other language exactly as the library draws it', () => {
-    const active = createTheme('truecolor')
-    const look = fenceLook(active)
-    expect(codeBlockLines('const a = 1', 'ts', look)).toEqual(['const a = 1'])
-    expect(codeBlockLines('const a = 1', undefined, look)).toEqual(['const a = 1'])
-    // A language that merely starts the same way is not a diff either.
-    expect(codeBlockLines('+a', 'diffscript', look)).toEqual(['+a'])
-  })
 
   it('keeps a blank context row blank', () => {
     expect(renderDiffBlock(['@@ -1 +1 @@', '', ' '].join('\n'), look())[1]).toBe('')

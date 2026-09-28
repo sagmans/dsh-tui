@@ -362,6 +362,14 @@ describe('prompt-history ghost completion', () => {
     expect(instance.getText()).toBe('fix the')
   })
 
+  it('accepts successive ghost words across line breaks', () => {
+    const instance = ghosted(brush({ suggestion: input => input.text === 'fix ' ? '\nthe\nparser' : input.text === 'fix \nthe' ? '\nparser' : undefined }))
+    instance.handleInput('\u001bf')
+    expect(instance.getText()).toBe('fix \nthe')
+    instance.handleInput('\u001bf')
+    expect(instance.getText()).toBe('fix \nthe\nparser')
+  })
+
   it('leaves Ctrl+E its line-end meaning when there is no ghost', () => {
     const instance = editor()
     instance.setText('hello')

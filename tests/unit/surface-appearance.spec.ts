@@ -613,7 +613,8 @@ describe('createAppearance display', () => {
     given.appearance.registerSection()
     const theme = given.appearance.theme
     const revision = theme.revision
-    const painted = theme.style('status.cwd', 'cwd')
+    const painted = theme.style('tool.title', 'title')
+    expect(painted).toContain('38;2;103;158;254')
 
     expect(theme.color).toBe(true)
     expect(theme.cut('a row long enough to be cut', 4).length).toBeLessThan('a row long enough to be cut'.length)
@@ -622,13 +623,20 @@ describe('createAppearance display', () => {
     expect(theme.rich('plain text')).toContain('plain text')
     // The editor and the markdown view keep the theme they were built with, so
     // every part of the delegate has to answer for the theme in force.
-    expect(theme.editor.borderColor('prompt')).toContain('prompt')
+    const editorPainted = theme.editor.borderColor('prompt')
+    const markdownPainted = theme.markdown.heading('title')
+    expect(editorPainted).toContain('38;2;103;158;254')
     expect(theme.editor.selectList.selectedPrefix('prompt')).toContain('prompt')
-    expect(theme.markdown.heading('title')).toContain('title')
+    expect(markdownPainted).toContain('38;2;103;158;254')
 
     given.pick.value = DEFAULT_THEME
     given.appearance.runThemeCommand('')
-    await vi.waitFor(() => { expect(theme.style('status.cwd', 'cwd')).not.toBe(painted) })
+    await vi.waitFor(() => { expect(theme.style('tool.title', 'title')).toContain('38;2;129;151;247') })
+    expect(theme.style('tool.title', 'title')).not.toBe(painted)
+    expect(theme.editor.borderColor('prompt')).toContain('38;2;138;138;255')
+    expect(theme.editor.borderColor('prompt')).not.toBe(editorPainted)
+    expect(theme.markdown.heading('title')).toContain('38;2;181;181;255')
+    expect(theme.markdown.heading('title')).not.toBe(markdownPainted)
 
     // A renderer holds this object for the whole session, so a theme change has to
     // reach it rather than replace it.
