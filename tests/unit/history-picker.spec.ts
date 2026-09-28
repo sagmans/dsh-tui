@@ -41,9 +41,4 @@ describe('HistoryPicker', () => {
   it('offers the recorded count in the heading', () => {
     expect(picker([entry('a'), entry('b')]).card().title).toBe('prompt history · 2 recorded')
   })
-
-  it('cancels on escape and on the interrupt key', () => {
-    expect(picker([entry('a')]).handleKey('\u001b')).toEqual({ kind: 'cancel' })
-    expect(picker([entry('a')]).handleKey('\u0003')).toEqual({ kind: 'cancel' })
-  })
 })

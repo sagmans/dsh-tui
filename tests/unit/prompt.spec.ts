@@ -4,7 +4,7 @@ import { createTheme } from '@/theme.ts'
 import { BoxedEditor } from '@/ui/editor.ts'
 import { PromptBar } from '@/ui/prompt.ts'
 
-const STUB_TUI = { requestRender: () => {}, terminal: { rows: 24, cols: 60 } } as unknown as TUI
+const STUB_TUI = { requestRender: () => {}, terminal: { rows: 24, columns: 60 } } as unknown as TUI
 
 function barOf(text = ''): { bar: PromptBar; editor: BoxedEditor } {
   const editor = new BoxedEditor(STUB_TUI, createTheme('none').editor)
@@ -31,6 +31,12 @@ describe('the prompt bar a question borrows', () => {
     bar.giveBack()
     expect(editor.getText()).toBe('ask me later')
     expect(bar.render(60).join('\n')).toContain('ask me later')
+    // An empty bar holds nothing, so the answer the gate collected has to be
+    // cleared with the rest of it rather than left as the reader's draft.
+    const empty = barOf()
+    empty.bar.borrow(() => empty.editor.setText('an answer'))
+    empty.bar.giveBack()
+    expect(empty.editor.getText()).toBe('')
   })
 
   it('holds the prompt aside before the gate that empties the bar is built', () => {
@@ -40,13 +46,6 @@ describe('the prompt bar a question borrows', () => {
     bar.borrow(() => editor.setText(''))
     bar.giveBack()
     expect(editor.getText()).toBe('ask me later')
-  })
-
-  it('returns an empty bar when the prompt itself was empty', () => {
-    const { bar, editor } = barOf()
-    bar.borrow(() => editor.setText('an answer'))
-    bar.giveBack()
-    expect(editor.getText()).toBe('')
   })
 
   it('carries a pasted prompt back as the text it stands for', () => {

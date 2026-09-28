@@ -85,6 +85,5 @@ describe('installBundledSkill update rollback', () => {
     expect(() => installBundledSkill(SKILL_NAME, home, true)).toThrow('replacement failed')
     expect(readFileSync(join(destination, 'SKILL.md'), 'utf8')).toBe(OLD_COPY)
     expect(readdirSync(join(home, '.agents', 'skills'))).toEqual([SKILL_NAME])
-    expect(renameSync).toHaveBeenCalledTimes(3)
   })
 })

@@ -98,9 +98,12 @@ describe('createFileIndex reachability', () => {
       writeFileSync(join(root, 'src', 'app.ts'), '')
       writeFileSync(join(outside, 'secret.env'), '')
       symlinkSync(join(outside, 'secret.env'), join(root, 'leak.env'))
+      const index = createFileIndex(root)
+      const listed = await index.candidates(signal)
+      expect(listed).toContainEqual({ path: 'src/app.ts', isDirectory: false })
       rmSync(join(root, 'src'), { recursive: true })
       symlinkSync(outside, join(root, 'src'))
-      const index = createFileIndex(root)
+      expect(await index.candidates(signal)).toBe(listed)
       await expect(index.reachable('safe.ts', signal)).resolves.toBe(true)
       await expect(index.reachable('leak.env', signal)).resolves.toBe(false)
       await expect(index.reachable('src/app.ts', signal)).resolves.toBe(false)
@@ -150,12 +153,23 @@ describe('createFileIndex reachability', () => {
       const proof = index.reachable('a.ts', gone.signal)
       gone.abort()
       await expect(proof).resolves.toBe(false)
-    })
-  it('proves nothing for a caller that already looked away', async () => {
-      const root = scratchDir()
-      writeFileSync(join(root, 'safe.ts'), '')
-      const gone = new AbortController()
-      gone.abort()
-      await expect(createFileIndex(root).reachable('safe.ts', gone.signal)).resolves.toBe(false)
+      // A caller that arrives already gone is the same rule one step earlier,
+      // and counting the resolutions is what tells the two apart: an answer of
+      // false is also what an aborted proof that ran anyway reports.
+      const early = new AbortController()
+      early.abort()
+      // The file is really there, so a proof that ran anyway would answer true
+      // rather than failing on a missing path: the count is what says the caller
+      // was never consulted.
+      writeFileSync(join(root, 'a.ts'), '')
+      let resolved = 0
+      const counted = createFileIndex(root, {
+        resolve: async () => {
+          resolved += 1
+          return root
+        },
+      })
+      await expect(counted.reachable('a.ts', early.signal)).resolves.toBe(false)
+      expect(resolved).toBe(0)
     })
 })

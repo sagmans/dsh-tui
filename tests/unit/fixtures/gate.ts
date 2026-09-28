@@ -14,7 +14,7 @@ export /**
  * The terminal the bar renders against. Nothing in these tests reads the screen
  * size or repaints, so the bar under test is the real component over a stub.
  */
-const STUB_TUI = { requestRender: () => {}, terminal: { rows: 24, cols: 80 } } as unknown as TUI
+const STUB_TUI = { requestRender: () => {}, terminal: { rows: 24, columns: 80 } } as unknown as TUI
 export /** The bar a gate collects its answers with, which the surface lends it. */
 const answerBar = (): GateInputBar => new GateInputBar(STUB_TUI, createTheme('none').editor)
 export /** A question gate over a fresh bar, which is how the surface builds one. */

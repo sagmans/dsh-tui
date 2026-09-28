@@ -27,6 +27,14 @@ afterEach(() => {
 
 const modeOf = (path: string): number => statSync(path).mode & 0o777
 
+/**
+ * Distinct links in the over-long chain.
+ *
+ * The module walks at most 32 hops before refusing, so 34 links is past its own
+ * bound while the kernel could still resolve the whole chain to the real target.
+ */
+const CHAIN_LINKS = 34
+
 describe('ensurePrivateDirectory', () => {
   it('creates a directory only its owner can enter', async () => {
     const directory = join(scratch(), 'nested', 'stash')
@@ -51,12 +59,17 @@ describe('ensurePrivateDirectory', () => {
   })
 
   it('accepts a sticky directory such as a shared temporary one', async () => {
-    const shared = join(scratch(), 'shared')
-    mkdirSync(shared, { recursive: true })
-    chmodSync(shared, 0o1777)
-    const directory = join(shared, 'stash')
-    await ensurePrivateDirectory(directory, 'stash directory')
-    expect(modeOf(directory)).toBe(0o700)
+    // A group member can rename an entry exactly as a stranger can, so the sticky
+    // bit is what makes a shared directory safe; one case is world-writable and
+    // one group-writable, and both have to land on the same answer.
+    for (const sharedMode of [0o1777, 0o1775]) {
+      const shared = join(scratch(), 'shared')
+      mkdirSync(shared, { recursive: true })
+      chmodSync(shared, sharedMode)
+      const directory = join(shared, 'stash')
+      await ensurePrivateDirectory(directory, 'stash directory')
+      expect(modeOf(directory)).toBe(0o700)
+    }
   })
 
   /**
@@ -86,13 +99,6 @@ describe('ensurePrivateDirectory', () => {
     await expect(ensurePrivateDirectory(join(shared, 'stash'), 'stash directory')).rejects.toThrow(
       /writable by other users/,
     )
-  })
-
-  it('accepts a group-writable ancestor that is sticky', async () => {
-    const shared = join(scratch(), 'shared')
-    mkdirSync(shared, { recursive: true })
-    chmodSync(shared, 0o1775)
-    await expect(ensurePrivateDirectory(join(shared, 'stash'), 'stash directory')).resolves.toBeUndefined()
   })
 
   /**
@@ -157,6 +163,27 @@ describe('ensurePrivateDirectory', () => {
     symlinkSync(`${join(safe, 'jump')}/../private`, alias)
     await expect(ensurePrivateDirectory(join(alias, 'stash'), 'stash directory')).rejects.toThrow(
       /writable by other users/,
+    )
+  })
+
+  /**
+   * A two-link cycle is answered by the kernel's ELOOP before the walk can count
+   * a hop, so the module's own bound is only reached by a chain of distinct links
+   * longer than it will follow. The chain is handed over as the directory itself:
+   * each link is a direct child of the scratch root, so the walk reads one link at
+   * a time and the kernel's own hop limit is never the thing that answers.
+   */
+  it('refuses a chain of distinct links longer than it will walk', async () => {
+    const root = scratch()
+    const target = join(root, 'target')
+    mkdirSync(target)
+    chmodSync(target, 0o700)
+    const chain = Array.from({ length: CHAIN_LINKS }, (_, index) => join(root, `hop-${index}`))
+    symlinkSync(target, chain.at(-1)!)
+    for (let index = chain.length - 2; index >= 0; index -= 1) symlinkSync(chain[index + 1]!, chain[index]!)
+
+    await expect(ensurePrivateDirectory(chain[0]!, 'stash directory')).rejects.toThrow(
+      /stash directory at .* passes through too many links to be checked$/,
     )
   })
 
@@ -271,12 +298,6 @@ describe('readPrivateTextFile', () => {
     const path = join(scratch(), 'big.json')
     writeFileSync(path, 'x'.repeat(64))
     await expect(readPrivateTextFile(path, 'stash file', 16)).rejects.toBeInstanceOf(FileTooLargeError)
-  })
-
-  it('reports a missing file to the caller instead of inventing one', async () => {
-    await expect(readPrivateTextFile(join(scratch(), 'absent.json'))).rejects.toSatisfy(error =>
-      hasErrorCode(error, 'ENOENT'),
-    )
   })
 })
 

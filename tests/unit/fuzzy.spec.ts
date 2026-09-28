@@ -8,8 +8,10 @@ import { fuzzyScore } from '@/input/fuzzy.ts'
  */
 describe('fuzzyScore', () => {
   it('takes an empty filter as no narrowing at all', () => {
-    expect(fuzzyScore('', 'anything')).toBeDefined()
-    expect(fuzzyScore('   ', 'anything')).toBeDefined()
+    // A fragment that asks for nothing ranks nothing: zero is the reading every
+    // row gets, so a caller's own order is what the reader sees.
+    expect(fuzzyScore('', 'anything')).toBe(0)
+    expect(fuzzyScore('   ', 'anything')).toBe(0)
   })
 
   it('refuses a fragment whose characters are not all there in order', () => {
@@ -19,7 +21,9 @@ describe('fuzzyScore', () => {
   })
 
   it('ignores case', () => {
-    expect(fuzzyScore('EDTR', 'src/ui/editor.ts')).toBeDefined()
+    const upper = fuzzyScore('EDTR', 'src/ui/editor.ts')
+    expect(upper).toBe(fuzzyScore('edtr', 'src/ui/editor.ts'))
+    expect(upper).toBeGreaterThan(0)
   })
 
   it('prefers a run over a gap that splits it', () => {
@@ -72,16 +76,22 @@ describe('fuzzyScore', () => {
  */
 describe('fuzzyScore outside ASCII', () => {
   it('matches a letter whose lowercase depends on where it sits', () => {
-    expect(fuzzyScore('Σ', 'ΟΣ')).toBeDefined()
-    expect(fuzzyScore('σ', 'ΟΣ')).toBeDefined()
+    // Σ lowercases to σ at the end of a word and to ς in the middle of one; a
+    // fold taken one rune at a time is what lets either spelling find the row.
+    expect(fuzzyScore('Σ', 'ΟΣ')).toBe(fuzzyScore('σ', 'ΟΣ'))
+    expect(fuzzyScore('Σ', 'ΟΣ')).toBe(16)
   })
 
   it('keeps its place when a lowercase would expand to two code points', () => {
-    expect(fuzzyScore('a', 'İa')).toBeGreaterThan(0)
+    // İ lowercases to i plus a combining dot in whole-string form, which would
+    // insert a code point and hand the a after it a word-break bonus.
+    expect(fuzzyScore('a', 'İa')).toBe(16)
   })
 
   it('folds a dotted capital into the letter a reader would type', () => {
-    expect(fuzzyScore('i', 'İ')).toBeGreaterThan(0)
+    // The dotted capital folds to i, so typing i reads the same row a plain i
+    // would have earned, down to the word-start bonus it keeps as a letter.
+    expect(fuzzyScore('i', 'İ')).toBe(36)
   })
 
   it('reads a space outside ASCII as a space rather than a word break', () => {

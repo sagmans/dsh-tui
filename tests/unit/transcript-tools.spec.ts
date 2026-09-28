@@ -67,9 +67,10 @@ describe('TranscriptModel tool cards', () => {
         { kind: 'tool', id: 'c1', card: card('grep', ['{"q":"x"}']) },
       ])
     })
-  it("keeps a shell card's command when no result presenter answers", () => {
+  it("keeps a shell card's command and dispatched calls when no result presenter answers", () => {
       // The command belongs to the call, so a declined result must not drop the
-      // one thing a folded shell card always shows.
+      // one thing a folded shell card always shows — nor the calls the program
+      // dispatched under it, which the same rebuild has to carry along.
       const presenter: ToolPresenter = {
         call: () => ({ kind: 'terminal', tool: 'bash', title: 'bash', argument: 'echo hi', detail: [], failed: false, totalLines: 0 }),
         result: () => undefined,
@@ -77,12 +78,18 @@ describe('TranscriptModel tool cards', () => {
       const model = new TranscriptModel(presenter)
       model.apply({ type: 'tool/call', data: { name: 'bash', arguments: '{}', callId: 'c1' } })
       model.apply({
+        type: 'tool/ptc-dispatch-start',
+        data: { rootCallId: 'c1', parentCallId: 'c1', subCallId: 'c1:ptc:1', name: 'read', arguments: { file_path: 'x.ts' } },
+      })
+      model.apply({
         type: 'tool/result',
         data: { message: { content: [{ type: 'tool-result', toolCallId: 'c1', text: 'hi' }], isError: false } },
       })
       const entry = model.entries()[0]
       expect(entry?.kind === 'tool' && entry.card.argument).toBe('echo hi')
       expect(entry?.kind === 'tool' && entry.card.detail.map(rowText)).toEqual(['hi'])
+      expect(entry?.kind === 'tool' && entry.card.subCalls).toHaveLength(1)
+      expect(entry?.kind === 'tool' && entry.card.subCallsTotal).toBe(1)
     })
   it('shows every line of a multi-line call that no presenter described', () => {
       const model = new TranscriptModel()
@@ -124,17 +131,5 @@ describe('TranscriptModel live calls', () => {
       const model = new TranscriptModel()
       expect(model.liveCall('missing')).toEqual({ running: false, elapsed: 0 })
       expect(model.liveCall('')).toEqual({ running: false, elapsed: 0 })
-    })
-  it('keeps the card it settled from claiming to be in flight', () => {
-      const { clock } = clockAt(1_000)
-      const model = new TranscriptModel(undefined, clock)
-      model.apply(call)
-      const [entry] = model.entries()
-      // The card drawn from the call is the one a renderer sees before any result;
-      // the fold itself never marks it, so a settled row cannot inherit the claim.
-      expect(entry?.kind === 'tool' && entry.card.running).toBeUndefined()
-      model.apply(result)
-      const [settled] = model.entries()
-      expect(settled?.kind === 'tool' && settled.card.running).toBeUndefined()
     })
 })

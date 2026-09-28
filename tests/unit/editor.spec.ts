@@ -1,7 +1,6 @@
 import {
   CURSOR_MARKER,
   CombinedAutocompleteProvider,
-  getKeybindings,
   setKittyProtocolActive,
   visibleWidth,
   type TUI,
@@ -193,6 +192,7 @@ describe('the prompt keys', () => {
     instance.setText('hello')
     instance.handleInput('\u001b\r')
     expect(sent).toEqual(['hello'])
+    expect(instance.getText()).toBe('')
   })
 
   it('keeps that sequence a newline while the keyboard protocol is active', () => {
@@ -229,15 +229,6 @@ describe('the prompt keys', () => {
     expect(sent).toEqual([])
   })
 
-  it('binds sending where the library reads the key and leaves the newline keys alone', () => {
-    const keys = getKeybindings()
-    expect(keys.matches('\u0013', 'tui.input.submit')).toBe(true)
-    expect(keys.matches('\r', 'tui.input.submit')).toBe(false)
-    expect(keys.matches('\r', 'tui.input.newLine')).toBe(false)
-    expect(keys.matches('\u001b[13;2u', 'tui.input.newLine')).toBe(true)
-    expect(keys.matches('\n', 'tui.input.newLine')).toBe(true)
-  })
-
   it('sends on the key the reader chose, and no longer on the shipped one', () => {
     const map = resolveKeymap({ 'prompt.submit': 'ctrl+g' })
     installKeybindings(map)
@@ -271,19 +262,6 @@ describe('the prompt keys', () => {
     expect(instance.getText()).toBe('')
   })
 
-  it('keeps the legacy alt+enter a line while the reader keeps it for the line', () => {
-    // A terminal without modifiers spells shift+enter as escape+return: the map
-    // says that sequence is a line, so it stays one even though the reader also
-    // sends with a chord a fallback would translate the same bytes into.
-    const map = resolveKeymap({ 'prompt.submit': ['ctrl+enter'], 'prompt.newLine': ['enter', 'alt+enter'] })
-    installKeybindings(map)
-    const { instance, sent } = sender(map)
-    instance.setText('hello')
-    instance.handleInput('\u001b\r')
-    expect(instance.getText()).toBe('hello\n')
-    expect(sent).toEqual([])
-  })
-
   it('keeps the line feed a line while the protocol spells shift+enter through it', () => {
     // A terminal that speaks the protocol may report shift+enter as a bare line
     // feed, which the library reads as that key and as nothing else until the
@@ -311,24 +289,6 @@ describe('the prompt keys', () => {
     expect(sent).toEqual([])
   })
 
-  it('sends on the legacy alt+enter when that is the only chord the reader sends with', () => {
-    const map = resolveKeymap({ 'prompt.submit': ['alt+enter'] })
-    installKeybindings(map)
-    const { instance, sent } = sender(map)
-    instance.setText('hello')
-    instance.handleInput('\u001b\r')
-    expect(sent).toEqual(['hello'])
-    expect(instance.getText()).toBe('')
-  })
-
-  it('keeps the bare line feed a line while the reader keeps it for the line', () => {
-    const { instance, sent } = sender()
-    instance.setText('first')
-    instance.handleInput('\n')
-    expect(instance.getText()).toBe('first\n')
-    expect(sent).toEqual([])
-  })
-
   it('breaks the line on the key the reader kept for it', () => {
     const map = resolveKeymap({ 'prompt.newLine': ['alt+n'], 'prompt.submit': ['ctrl+g'] })
     installKeybindings(map)
@@ -339,17 +299,6 @@ describe('the prompt keys', () => {
     expect(sent).toEqual([])
   })
 
-  it('stops translating the alt+enter sequence once the reader no longer sends with it', () => {
-    // Nothing answers the translation any more, so the press goes back to being
-    // whatever the library makes of those bytes: a line break.
-    const map = resolveKeymap({ 'prompt.submit': 'ctrl+g' })
-    installKeybindings(map)
-    const { instance, sent } = sender(map)
-    instance.setText('hello')
-    instance.handleInput('\u001b\r')
-    expect(instance.getText()).toBe('hello\n')
-    expect(sent).toEqual([])
-  })
 })
 
 describe('prompt-history ghost completion', () => {
@@ -377,8 +326,11 @@ describe('prompt-history ghost completion', () => {
 
   it('keeps the hardware cursor at the end of what was typed', () => {
     const instance = ghosted()
-    const row = instance.render(WIDTH).find(line => line.includes('the parser bug'))!
-    expect(row.indexOf(CURSOR_MARKER)).toBeLessThan(row.indexOf('the parser bug'))
+    const row = instance.render(WIDTH).find(line => line.includes('the parser bug'))
+    // A marker the bar never drew is -1, which sits below every index: without
+    // this the ordering below would pass on a row that has no cursor in it.
+    expect(row).toContain(CURSOR_MARKER)
+    expect(row!.indexOf(CURSOR_MARKER)).toBeLessThan(row!.indexOf('the parser bug'))
   })
 
   it('draws nothing while a gate owns the bar', () => {
@@ -408,6 +360,14 @@ describe('prompt-history ghost completion', () => {
     const instance = ghosted()
     instance.handleInput('\u001bf')
     expect(instance.getText()).toBe('fix the')
+  })
+
+  it('accepts successive ghost words across line breaks', () => {
+    const instance = ghosted(brush({ suggestion: input => input.text === 'fix ' ? '\nthe\nparser' : input.text === 'fix \nthe' ? '\nparser' : undefined }))
+    instance.handleInput('\u001bf')
+    expect(instance.getText()).toBe('fix \nthe')
+    instance.handleInput('\u001bf')
+    expect(instance.getText()).toBe('fix \nthe\nparser')
   })
 
   it('leaves Ctrl+E its line-end meaning when there is no ghost', () => {

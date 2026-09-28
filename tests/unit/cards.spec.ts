@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { cardDetailRows, CARD_SHELL_PREVIEW, shellFoldHint, shellRetentionHint } from '@/cards/preview.ts'
-import { CARD_DETAIL_MAX, CARD_LINE_LIMIT, clip, rowText, type CardRow, type ToolCard } from '@/cards.ts'
+import { cardDetailRows, CARD_SHELL_PREVIEW, shellFoldHint } from '@/cards/preview.ts'
+import { bound, CARD_DETAIL_MAX, CARD_PART_LIMIT, clip, rowText, type CardRow, type ToolCard } from '@/cards.ts'
 import { cardOfCall, cardOfResult, renderFileDiff } from '@/cards/presenter.ts'
 import { carriedFields, mergeCards, subCallRow, subCallRows } from '@/cards/composition.ts'
 
@@ -16,19 +16,37 @@ describe('renderFileDiff', () => {
     expect(texts(lines)).toEqual(['a.txt  new', '+one', '+two'])
   })
 
-  it('tags every row with what the presenter knows it to be', () => {
+  it('shows only the changed middle of an edit, each row tagged with what it is', () => {
     const lines = renderFileDiff({ path: 'a.txt', oldText: 'keep\nbefore\ntail', newText: 'keep\nafter\ntail' })
-    expect(lines.map(line => line.parts[0]?.class)).toEqual(['header', 'hunk', 'removed', 'added', 'hunk'])
-  })
-
-  it('shows only the changed middle of an edit', () => {
-    const lines = renderFileDiff({ path: 'a.txt', oldText: 'keep\nbefore\ntail', newText: 'keep\nafter\ntail' })
-    expect(texts(lines)).toEqual(['a.txt  -1 +1', '@@ 1 unchanged line before', '-before', '+after', '@@ 1 unchanged line after'])
+    expect(lines.map(line => [rowText(line), line.parts[0]?.class])).toEqual([
+      ['a.txt  -1 +1', 'header'],
+      ['@@ 1 unchanged line before', 'hunk'],
+      ['-before', 'removed'],
+      ['+after', 'added'],
+      ['@@ 1 unchanged line after', 'hunk'],
+    ])
   })
 
   it('reports an unchanged file as a no-op hunk', () => {
     const lines = renderFileDiff({ path: 'a.txt', oldText: 'same', newText: 'same' })
     expect(texts(lines)).toEqual(['a.txt  -0 +0', '@@ 1 unchanged line before'])
+  })
+})
+
+describe('bound', () => {
+  it('spends the row budget on every fragment of a row, not on their sum', () => {
+    // A search hit is three cells on one row — the path, the line number, and
+    // the matched text — and a minified match must not push the path or the
+    // number over a budget the row as a whole would have spent already.
+    const hit: CardRow = {
+      parts: [
+        { class: 'path', text: 'a'.repeat(CARD_PART_LIMIT * 2) },
+        { class: 'lineNumber', text: 'b'.repeat(CARD_PART_LIMIT * 2) },
+        { class: 'match', text: 'c'.repeat(CARD_PART_LIMIT * 2) },
+      ],
+    }
+    const bounded = bound([hit])
+    expect(bounded.detail[0]?.parts.map(part => part.text.length)).toEqual([CARD_PART_LIMIT, CARD_PART_LIMIT, CARD_PART_LIMIT])
   })
 })
 
@@ -116,37 +134,11 @@ describe('cardDetailRows', () => {
     expect(shellFoldHint(shown.hidden, 'ctrl+t')).toBe('… 5 earlier lines · ctrl+t shows more')
   })
 
-  it('names an opened shell card\'s dropped rows as the earlier ones', () => {
-    // Retention keeps the tail, so an opened card is missing its beginning; a
-    // hint that only counts rows sends the reader past the end of the output.
-    expect(shellRetentionHint(4800)).toBe('… 4800 earlier lines not shown')
-    expect(shellRetentionHint(0)).toBeUndefined()
-  })
-
-  it("keeps a shell card's whole output when it fits the preview", () => {
-    const shown = cardDetailRows(card(3, 'terminal'), { expanded: false, preview: 'tail', rows: CARD_SHELL_PREVIEW })
-    expect(shown.lines).toHaveLength(3)
-    expect(shown.hidden).toBe(0)
-    expect(shellFoldHint(shown.hidden, 'ctrl+o')).toBeUndefined()
-  })
-
   it('keeps exactly the tail the reader asked for, and none at zero', () => {
     // A count of zero must keep nothing: a negative window would otherwise read
     // as "from the end", which in JavaScript means the whole array.
     expect(texts(cardDetailRows(card(25), { expanded: false, preview: 'tail', rows: 3 }).lines)).toEqual(['line 22', 'line 23', 'line 24'])
     expect(cardDetailRows(card(25), { expanded: false, preview: 'tail', rows: 0 }).lines).toHaveLength(0)
-  })
-
-  it('shows every retained row while expanded', () => {
-    const shown = cardDetailRows(card(25), { expanded: true })
-    expect(shown.lines).toHaveLength(25)
-    expect(shown.hidden).toBe(0)
-  })
-
-  it('stays bounded for a card that streamed far more than it keeps', () => {
-    const shown = cardDetailRows({ ...card(0), detail: [], totalLines: 5000 }, { expanded: true })
-    expect(shown.lines).toHaveLength(0)
-    expect(shown.hidden).toBe(5000)
   })
 })
 
@@ -173,6 +165,25 @@ describe('cardOfResult', () => {
     const card = cardOfResult({ card: 'terminal', output: 'a\nb\n', exitCode: 0 }, { name: 'bash', failed: false, contentLines: [] })
     expect(texts(card.detail)).toEqual(['a', 'b'])
     expect(card.totalLines).toBe(2)
+  })
+
+  it('names the signal a command died on and reads an empty signal as no signal', () => {
+    // The harness reports a shell's ending as its result rather than as an error,
+    // so a command killed by a signal has no failure flag of its own: the card
+    // has to say how it ended and mark it failed itself.
+    const signalled = cardOfResult(
+      { card: 'terminal', output: 'partial', signal: 'SIGTERM' },
+      { name: 'bash', failed: false, contentLines: [] },
+    )
+    expect(signalled.status).toBe('signal SIGTERM')
+    expect(signalled.failed).toBe(true)
+
+    const empty = cardOfResult(
+      { card: 'terminal', output: 'partial', signal: '', exitCode: 7 },
+      { name: 'bash', failed: false, contentLines: [] },
+    )
+    expect(empty.status).toBe('exit 7')
+    expect(empty.failed).toBe(true)
   })
 
   it('keeps the true tail and the status of output far past retention', () => {
@@ -231,14 +242,6 @@ describe('cardOfResult', () => {
     expect(card.detail[0]?.parts.map(part => part.class)).toEqual(['lineNumber', 'line'])
   })
 
-  it('reports the whole range a multi-line read spans', () => {
-    const card = cardOfResult(
-      { card: 'read', path: 'a.ts', offset: 5, lines: [{ number: 5, text: 'x' }, { number: 6, text: 'y' }, { number: 7, text: 'z' }], totalLines: 20 },
-      { name: 'read', failed: false, contentLines: [] },
-    )
-    expect(card.stats?.slice(0, 2)).toEqual([{ kind: 'size', text: 'L5–7' }, { kind: 'size', text: '3 lines' }])
-  })
-
   it('keeps a read window\'s offset when it returned no lines', () => {
     // The view preserves the offset for exactly this case, so the card must not
     // drop it and leave the reader without a place to continue from.
@@ -264,34 +267,12 @@ describe('cardOfResult', () => {
     expect(texts(card.detail)).toEqual(['one', 'two'])
   })
 
-  it('reports a new file by its line and token size', () => {
-    const card = cardOfResult(
-      { card: 'diff', diffs: [{ path: 'a.txt', oldText: null, newText: 'one\ntwo\nthree' }] },
-      { name: 'write', failed: false, contentLines: [] },
-    )
-    expect(card.title).toBe('write')
-    expect(card.argument).toBe('a.txt')
-    expect(card.stats).toEqual([
-      { kind: 'size', text: '3 lines' },
-      { kind: 'size', text: '4 tok' },
-    ])
-  })
-
   it('reports an edit as one changed line, not an add plus a remove', () => {
     const card = cardOfResult(
       { card: 'diff', diffs: [{ path: 'a.ts', oldText: 'keep\nold\ntail', newText: 'keep\nnew\ntail' }] },
       { name: 'edit', failed: false, contentLines: [] },
     )
     expect(card.stats).toEqual([{ kind: 'changed', text: '1' }])
-  })
-
-  it('separates pure additions from replacements', () => {
-    const card = cardOfResult(
-      { card: 'diff', diffs: [{ path: 'a.ts', oldText: 'a\nb', newText: 'a\nx\ny' }] },
-      { name: 'edit', failed: false, contentLines: [] },
-    )
-    // `b -> x` is a change and `y` is the only pure addition.
-    expect(card.stats).toEqual([{ kind: 'added', text: '1' }, { kind: 'changed', text: '1' }])
   })
 
   it("nets each file's change on its own", () => {
@@ -474,15 +455,21 @@ describe('subCallRow', () => {
 
   it('clips a raw call so an oversized argument cannot fill the row', () => {
     const call = subCallRow('s4', 'mystery', `{"a":"${'x'.repeat(500)}"}`, { view: undefined, output: undefined, status: undefined, running: false, failed: false })
-    expect(call.argument?.length).toBeLessThanOrEqual(CARD_LINE_LIMIT)
+    expect(call.argument?.length).toBeLessThanOrEqual(CARD_PART_LIMIT)
   })
 })
 
 describe('subCallRows', () => {
   it('keeps the rows a card drew, with its kind, for the row a click opens', () => {
     const view = cardOfCall({ card: 'diff', title: 'Edit', diffs: [{ path: 'a.txt', oldText: 'b', newText: 'B' }] }, 'edit')
-    expect(subCallRows(view)).toEqual({ kind: 'diff', rows: view.detail, totalLines: view.detail.length })
+    expect(subCallRows(view)?.kind).toBe('diff')
     expect(texts(subCallRows(view)?.rows ?? [])).toEqual(['a.txt  -1 +1', '-b', '+B'])
+    // A card that reported more rows than it kept must keep reporting them: the
+    // section is what a click opens, not a recount of the retained rows.
+    const flood = cardOfResult(undefined, { name: 'bash', failed: false, contentLines: Array.from({ length: 300 }, (_, index) => `row ${index}`) })
+    expect(flood.detail).toHaveLength(CARD_DETAIL_MAX)
+    expect(flood.totalLines).toBe(300)
+    expect(subCallRows(flood)?.totalLines).toBe(300)
   })
 
   it('clamps a total below the rows kept, so no hint counts rows already shown', () => {

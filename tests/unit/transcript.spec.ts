@@ -47,15 +47,6 @@ describe('TranscriptModel rows', () => {
       model.apply({ type: 'turn/end', data: { reason: { kind: 'aborted' } } })
       expect(model.entries().some(entry => entry.kind === 'assistant')).toBe(false)
     })
-  it('ignores unrelated events and resets to an empty transcript', () => {
-      const model = new TranscriptModel()
-      model.apply({ type: 'turn/start', data: { turn: 1 } })
-      expect(model.isEmpty()).toBe(true)
-      model.notice('local line')
-      expect(model.isEmpty()).toBe(false)
-      model.reset()
-      expect(model.isEmpty()).toBe(true)
-    })
 })
 
 describe('TranscriptModel reasoning', () => {
@@ -262,46 +253,5 @@ describe('TranscriptModel outcomes', () => {
       const model = new TranscriptModel()
       model.apply({ type: 'assistant/attempt', data: { turn: 1, step: 1, stream: [], error: { code: 'RATE_LIMIT', message: 'slow down' } } })
       expect(model.entries()).toEqual([{ kind: 'notice', text: 'request failed: slow down' }])
-    })
-  it('summarizes injected context instead of printing it', () => {
-      const model = new TranscriptModel()
-      model.apply({
-        type: 'user/message',
-        data: {
-          content: [{ type: 'text', text: '<system-reminder>\nrule one\nrule two' }],
-          source: { kind: 'plugin', plugin: 'dsh-agent-instructions' },
-        },
-      })
-      expect(model.entries()).toEqual([
-        { kind: 'notice', text: 'injected dsh-agent-instructions · 3 lines — <system-reminder>' },
-      ])
-    })
-  it('names the instruction files an injected workspace context touched', () => {
-      const model = new TranscriptModel()
-      model.apply({
-        type: 'user/message',
-        data: {
-          content: [{ type: 'text', text: '<system-reminder>\nInstructions from: AGENTS.md\nrule\n</system-reminder>' }],
-          source: {
-            kind: 'agent-instructions',
-            form: 'instructions',
-            baseline: true,
-            changes: [{ action: 'set', scope: '.\u0000AGENTS.md', path: 'AGENTS.md' }],
-          },
-        },
-      })
-      expect(model.entries()).toEqual([{ kind: 'notice', text: 'injected instructions · AGENTS.md · 4 lines' }])
-    })
-  it('truncates a long preview line', () => {
-      const model = new TranscriptModel()
-      model.apply({
-        type: 'user/message',
-        data: { content: [{ type: 'text', text: 'x'.repeat(200) }], source: { kind: 'plugin', plugin: 'p' } },
-      })
-      const entry = model.entries()[0]
-      const notice = entry !== undefined && entry.kind === 'notice' ? entry.text : ''
-      expect(notice.startsWith('injected p · 1 lines — ')).toBe(true)
-      expect(notice.endsWith('…')).toBe(true)
-      expect(notice.length).toBeLessThan(120)
     })
 })

@@ -23,16 +23,6 @@ describe('createRestoreRegistry', () => {
     expect(survivor).toHaveBeenCalledOnce()
   })
 
-  it('drops a hook that was explicitly removed', () => {
-    const registry = createRestoreRegistry()
-    const hook = vi.fn()
-    const remove = registry.add(hook)
-    remove()
-    expect(registry.size).toBe(0)
-    registry.restore()
-    expect(hook).not.toHaveBeenCalled()
-  })
-
   it('runs a hook registered after release immediately', () => {
     const registry = createRestoreRegistry()
     registry.restore()

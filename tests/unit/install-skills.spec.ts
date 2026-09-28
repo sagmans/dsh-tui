@@ -42,7 +42,7 @@ describe('installBundledSkill', () => {
     expect(readFileSync(join(destination, 'SKILL.md'), 'utf8')).toBe('keep me')
   })
 
-  it('replaces an existing skill only when update is explicit', () => {
+  it('replaces an existing skill only when update is explicit, and installs an absent one', () => {
     const home = scratchHome()
     const destination = installBundledSkill(SKILL_NAME, home)
     writeFileSync(join(destination, 'SKILL.md'), 'custom copy')
@@ -53,12 +53,10 @@ describe('installBundledSkill', () => {
     expect(() => readFileSync(join(destination, 'stale.txt'), 'utf8')).toThrow()
     expect(lstatSync(join(destination, 'scripts', 'run-plugin-from-worktree.sh')).mode & 0o111).not.toBe(0)
     expect(readdirSync(join(home, '.agents', 'skills'))).toEqual([SKILL_NAME])
-  })
-
-  it('installs normally with update when no copy exists', () => {
-    const home = scratchHome()
-    const destination = installBundledSkill(SKILL_NAME, home, true)
-    expect(readFileSync(join(destination, 'SKILL.md'), 'utf8')).toContain(SKILL_HEADER)
+    // An explicit update of a skill whose copy does not exist yet must install
+    // normally: the flag names a skill, not a state.
+    const absent = installBundledSkill(MODEL_SKILL, home, true)
+    expect(readFileSync(join(absent, 'SKILL.md'), 'utf8')).toContain('name: dsh-tui-update-models')
   })
 
   it('rejects a non-directory copy even with update', () => {
@@ -79,7 +77,7 @@ describe('installBundledSkill', () => {
     symlinkSync(target, join(home, '.agents', 'skills', SKILL_NAME))
 
     expect(() => installBundledSkill(SKILL_NAME, home)).toThrow(/already exists/)
-    expect(() => installBundledSkill(SKILL_NAME, home, true)).toThrow()
+    expect(() => installBundledSkill(SKILL_NAME, home, true)).toThrow(/refusing symbolic link/)
     expect(lstatSync(target).isDirectory()).toBe(true)
   })
 

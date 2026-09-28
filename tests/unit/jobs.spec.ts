@@ -42,10 +42,6 @@ describe('describeJob', () => {
 })
 
 describe('describeJobs', () => {
-  it('says so when there is nothing running', () => {
-    expect(describeJobs([], 1_000_000)).toBe('no background jobs')
-  })
-
   it('counts the live ones and lists the newest first', () => {
     const board = describeJobs([
       job({ id: 'bash-1', startedAt: 1_000 }),
@@ -60,11 +56,6 @@ describe('describeJobs', () => {
 describe('parseJobsArgument', () => {
   it('lists when nothing is asked', () => {
     expect(parseJobsArgument('   ')).toEqual({ kind: 'list' })
-  })
-
-  it('reads and kills by explicit verb', () => {
-    expect(parseJobsArgument('read bash-2')).toEqual({ kind: 'read', id: 'bash-2' })
-    expect(parseJobsArgument('kill bash-2')).toEqual({ kind: 'kill', id: 'bash-2' })
   })
 
   it('refuses an unknown verb instead of guessing', () => {

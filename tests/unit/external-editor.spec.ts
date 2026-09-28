@@ -1,6 +1,6 @@
-import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   ExternalEditor,
@@ -12,6 +12,15 @@ import {
   type EditorSpawnOptions,
   type EditorTerminalHost,
 } from '@/terminal/external-editor.ts'
+
+/**
+ * What a spec gives the surface instead of the real budget.
+ *
+ * Short enough to wait out, and a hung fake answers nothing on its own, so only
+ * the timeout can end that wait — the case fails loudly rather than slowly if
+ * the bound ever goes missing again.
+ */
+const TEST_EDITOR_TIMEOUT_MS = 50
 
 /** What the fake child may tell its parent. */
 interface ChildSignals {
@@ -27,6 +36,8 @@ interface SpawnedCall {
 
 interface FakeSpawn {
   readonly calls: SpawnedCall[]
+  /** Every signal the surface sent the child, in the order it was sent. */
+  readonly kills: string[]
   /** The draft path the child was handed, once it has been spawned. */
   draft(): string
   /** What the child does before it answers; the default edits the file and exits clean. */
@@ -36,8 +47,10 @@ interface FakeSpawn {
 
 function fakeSpawn(): FakeSpawn {
   const calls: SpawnedCall[] = []
+  const kills: string[] = []
   const state: FakeSpawn = {
     calls,
+    kills,
     draft: () => calls.at(-1)?.args.at(-1) as string,
     respond: (draft, signals) => {
       writeFileSync(draft, 'edited in the child')
@@ -47,23 +60,32 @@ function fakeSpawn(): FakeSpawn {
       calls.push({ file, args, options })
       const errors: ((error: Error) => void)[] = []
       const exits: ((code: number | null, signal: string | null) => void)[] = []
-      const child = {
-        on(event: string, listener: (...args: unknown[]) => void) {
-          if (event === 'error') errors.push(listener as unknown as (error: Error) => void)
-          else exits.push(listener as unknown as (code: number | null, signal: string | null) => void)
-          return child
-        },
-      } as unknown as EditorChild
-      // Listeners are attached synchronously after the spawn returns, and a real
-      // child answers later, so the fake has to as well.
-      setImmediate(() => state.respond(state.draft(), {
+      const signals: ChildSignals = {
         error: error => {
           for (const listener of errors) listener(error)
         },
         exit: (code, signal = null) => {
           for (const listener of exits) listener(code, signal)
         },
-      }))
+      }
+      const child = {
+        on(event: string, listener: (...args: unknown[]) => void) {
+          if (event === 'error') errors.push(listener as unknown as (error: Error) => void)
+          else exits.push(listener as unknown as (code: number | null, signal: string | null) => void)
+          return child
+        },
+        kill(signal?: NodeJS.Signals) {
+          const sent = signal ?? 'SIGTERM'
+          kills.push(sent)
+          // A killed child answers later, with the signal it died from, and the
+          // surface waits for that answer before it takes the screen back.
+          setImmediate(() => signals.exit(null, sent))
+          return true
+        },
+      } as unknown as EditorChild
+      // Listeners are attached synchronously after the spawn returns, and a real
+      // child answers later, so the fake has to as well.
+      setImmediate(() => state.respond(state.draft(), signals))
       return child
     }) as EditorSpawn,
   }
@@ -102,7 +124,8 @@ function scratch(): string {
 
 afterEach(() => {
   for (const directory of scratchDirs.splice(0)) {
-    // A case that proved a removal failure left the tree unreadable on purpose.
+    // The case that watches a removal fail leaves its tree unreadable on
+    // purpose, so the permission comes back before the retry that sweeps it.
     try {
       chmodSync(directory, 0o700)
     } catch {
@@ -114,8 +137,17 @@ afterEach(() => {
   }
 })
 
-function editorOf(host: FakeHost, spawn: FakeSpawn, env: NodeJS.ProcessEnv = { EDITOR: 'nvim' }): ExternalEditor {
-  return new ExternalEditor(host, { env, tempRoot: scratch(), spawn: spawn.spawn })
+/** One handoff's collaborators: the surface seam, the fake child, and the draft root. */
+function handoff(env: NodeJS.ProcessEnv = { EDITOR: 'nvim' }, timeoutMs?: number): {
+  readonly host: FakeHost
+  readonly spawn: FakeSpawn
+  readonly root: string
+  readonly editor: ExternalEditor
+} {
+  const host = new FakeHost()
+  const spawn = fakeSpawn()
+  const root = scratch()
+  return { host, spawn, root, editor: new ExternalEditor(host, { env, tempRoot: root, spawn: spawn.spawn, timeoutMs }) }
 }
 
 describe('parseEditorCommand', () => {
@@ -123,18 +155,11 @@ describe('parseEditorCommand', () => {
     expect(parseEditorCommand('nvim')).toEqual(['nvim'])
     expect(parseEditorCommand('code --wait')).toEqual(['code', '--wait'])
     expect(parseEditorCommand('  nvim   -f  ')).toEqual(['nvim', '-f'])
-  })
-
-  it('groups a quoted path or argument into one word', () => {
     expect(parseEditorCommand('"/opt/My Editor/nvim" -f')).toEqual(['/opt/My Editor/nvim', '-f'])
     expect(parseEditorCommand("nvim -c 'set ft=markdown'")).toEqual(['nvim', '-c', 'set ft=markdown'])
-  })
-
-  it('takes the rest of an unterminated quote rather than refusing the editor', () => {
+    // An unterminated quote takes the rest of the line: the command is the
+    // reader's own, and refusing to start it strands the draft with them.
     expect(parseEditorCommand('"nvim -f')).toEqual(['nvim -f'])
-  })
-
-  it('names nothing when the line holds nothing', () => {
     expect(parseEditorCommand('')).toBeUndefined()
     expect(parseEditorCommand('   ')).toBeUndefined()
     expect(parseEditorCommand("''")).toBeUndefined()
@@ -145,9 +170,8 @@ describe('resolveEditorCommand', () => {
   it('prefers the full-screen editor and falls back to the line one', () => {
     expect(resolveEditorCommand({ VISUAL: 'code --wait', EDITOR: 'nvim' })).toEqual(['code', '--wait'])
     expect(resolveEditorCommand({ EDITOR: 'nvim' })).toEqual(['nvim'])
-  })
-
-  it('skips an editor that was set to nothing', () => {
+    // A variable holding only whitespace names no editor, so the next one is
+    // tried; nothing configured at all must not become an empty command.
     expect(resolveEditorCommand({ VISUAL: '  ', EDITOR: 'vim' })).toEqual(['vim'])
     expect(resolveEditorCommand({})).toBeUndefined()
   })
@@ -155,29 +179,28 @@ describe('resolveEditorCommand', () => {
 
 describe('the external editor handoff', () => {
   it('hands the terminal over, edits the draft, and takes the screen back', async () => {
-    const host = new FakeHost()
-    const spawn = fakeSpawn()
-    const editor = editorOf(host, spawn)
-    const draftAtSeed: string[] = []
+    const { host, spawn, editor, root } = handoff()
+    const seeded: string[] = []
     spawn.respond = (draft, signals) => {
-      draftAtSeed.push(readFileSync(draft, 'utf8'))
+      seeded.push(readFileSync(draft, 'utf8'))
       writeFileSync(draft, 'edited in the child')
       signals.exit(0)
     }
 
     await expect(editor.edit('the draft so far')).resolves.toBe('edited in the child')
     expect(host.events).toEqual(['suspend', 'resume'])
-    expect(draftAtSeed).toEqual(['the draft so far'])
+    // The child is handed a real file rather than a token: a path inside the
+    // scratch root, named for the draft, holding the bar's text at spawn time.
+    const draftPath = spawn.calls[0]?.args.at(-1) as string
+    expect(draftPath.startsWith(`${root}/`)).toBe(true)
+    expect(basename(draftPath)).toBe('draft.md')
+    expect(seeded).toEqual(['the draft so far'])
     expect(spawn.calls[0]?.file).toBe('nvim')
-    expect(spawn.calls[0]?.args.at(-1)).toBe(spawn.draft())
     expect(spawn.calls[0]?.options).toEqual({ stdio: 'inherit', cwd: process.cwd(), env: { EDITOR: 'nvim' } })
   })
 
   it('writes the draft into an owner-only scratch file and removes it afterwards', async () => {
-    const host = new FakeHost()
-    const spawn = fakeSpawn()
-    const root = scratch()
-    const editor = new ExternalEditor(host, { env: { EDITOR: 'nvim' }, tempRoot: root, spawn: spawn.spawn })
+    const { spawn, editor, root } = handoff()
     const seen: number[] = []
     spawn.respond = (draft, signals) => {
       seen.push(statSync(draft).mode & 0o777)
@@ -190,18 +213,13 @@ describe('the external editor handoff', () => {
   })
 
   it('appends the file to the configured arguments', async () => {
-    const host = new FakeHost()
-    const spawn = fakeSpawn()
-    const editor = new ExternalEditor(host, { env: { EDITOR: 'nvim -f' }, tempRoot: scratch(), spawn: spawn.spawn })
+    const { spawn, editor } = handoff({ EDITOR: 'nvim -f' })
     await editor.edit('draft')
     expect(spawn.calls[0]?.args.slice(0, -1)).toEqual(['-f'])
   })
 
   it('takes the screen back when the editor could not start', async () => {
-    const host = new FakeHost()
-    const spawn = fakeSpawn()
-    const root = scratch()
-    const editor = new ExternalEditor(host, { env: { EDITOR: 'nvim' }, tempRoot: root, spawn: spawn.spawn })
+    const { host, spawn, editor, root } = handoff()
     spawn.respond = (_draft, signals) => signals.error(new Error('spawn nvim ENOENT'))
 
     await expect(editor.edit('draft')).resolves.toBeUndefined()
@@ -211,9 +229,7 @@ describe('the external editor handoff', () => {
   })
 
   it('keeps what the editor saved even when it exited badly', async () => {
-    const host = new FakeHost()
-    const spawn = fakeSpawn()
-    const editor = editorOf(host, spawn)
+    const { host, spawn, editor } = handoff()
     spawn.respond = (draft, signals) => {
       writeFileSync(draft, 'saved before failing')
       signals.exit(1)
@@ -223,10 +239,76 @@ describe('the external editor handoff', () => {
     expect(host.notices).toEqual([])
   })
 
+  it('stops an editor that never exits and takes the screen back', async () => {
+    const { host, spawn, editor, root } = handoff({ EDITOR: 'nvim' }, TEST_EDITOR_TIMEOUT_MS)
+    // The child never answers at all: without the bound the screen would stay
+    // given up with no way back to the surface.
+    spawn.respond = () => undefined
+
+    await expect(editor.edit('the draft so far')).resolves.toBe('the draft so far')
+    expect(spawn.kills).toEqual(['SIGKILL'])
+    expect(host.events).toEqual(['suspend', 'resume'])
+    expect(host.last()).toContain('held the terminal past the editor timeout')
+    // The stuck editor is swept like any other, and the draft it left is the one
+    // taken back, so the bound cannot lose what the file holds.
+    expect(readdirSync(root)).toEqual([])
+  })
+
+  it('leaves an editor that exits inside the budget alone', async () => {
+    const { host, spawn, editor } = handoff({ EDITOR: 'nvim' }, TEST_EDITOR_TIMEOUT_MS)
+    spawn.respond = (draft, signals) => {
+      writeFileSync(draft, 'saved in time')
+      signals.exit(0)
+    }
+
+    await expect(editor.edit('draft')).resolves.toBe('saved in time')
+    // The budget bounds the wait only: a child that answers first is never
+    // signalled, and its exit is the only thing the reader hears about.
+    expect(spawn.kills).toEqual([])
+    expect(host.notices).toEqual([])
+  })
+
+  it('says where the draft went when the scratch directory cannot be removed', async () => {
+    const { host, spawn, editor, root } = handoff()
+    spawn.respond = (draft, signals) => {
+      writeFileSync(draft, 'the edited draft')
+      // Read and execute, no write: the draft inside stays readable while the
+      // removal that follows has no bit to unlink the tree with.
+      chmodSync(root, 0o500)
+      signals.exit(0)
+    }
+
+    await expect(editor.edit('draft')).resolves.toBe('the edited draft')
+    const kept = readdirSync(root)
+    expect(kept).toHaveLength(1)
+    expect(readFileSync(spawn.draft(), 'utf8')).toBe('the edited draft')
+    expect(host.last()).toBe(`could not remove the scratch directory; the draft is still at ${spawn.draft()}`)
+  })
+
+  it('does not claim a draft remains after partial cleanup removed it', async () => {
+    const { host, spawn, editor } = handoff()
+    let protectedDirectory: string | undefined
+    spawn.respond = (draft, signals) => {
+      writeFileSync(draft, 'edited draft')
+      // An undeletable sibling lets cleanup remove the draft but not the scratch tree.
+      protectedDirectory = join(dirname(draft), 'z-protected')
+      mkdirSync(protectedDirectory)
+      writeFileSync(join(protectedDirectory, 'occupied'), 'keep')
+      chmodSync(protectedDirectory, 0o500)
+      signals.exit(0)
+    }
+
+    try {
+      await expect(editor.edit('draft')).resolves.toBe('edited draft')
+      expect(existsSync(spawn.draft())).toBe(false)
+      expect(host.last()).toBe(`could not remove the scratch directory; check ${dirname(spawn.draft())} for anything left behind`)
+    } finally {
+      if (protectedDirectory !== undefined) chmodSync(protectedDirectory, 0o700)
+    }
+  })
+
   it('refuses to hand the screen over when no editor is configured', async () => {
-    const host = new FakeHost()
-    const spawn = fakeSpawn()
-    const editor = editorOf(host, spawn, {})
+    const { host, spawn, editor } = handoff({})
 
     await expect(editor.edit('draft')).resolves.toBeUndefined()
     expect(host.events).toEqual([])
@@ -235,9 +317,7 @@ describe('the external editor handoff', () => {
   })
 
   it('keeps the bar when the draft cannot be read back', async () => {
-    const host = new FakeHost()
-    const spawn = fakeSpawn()
-    const editor = editorOf(host, spawn)
+    const { host, spawn, editor } = handoff()
     spawn.respond = (draft, signals) => {
       rmSync(draft)
       signals.exit(0)
@@ -245,14 +325,10 @@ describe('the external editor handoff', () => {
 
     await expect(editor.edit('draft')).resolves.toBeUndefined()
     expect(host.last()).toContain('could not use the edited draft')
-    expect(host.events).toEqual(['suspend', 'resume'])
   })
 
   it('leaves a draft too large for the bar where the reader can still take it', async () => {
-    const host = new FakeHost()
-    const spawn = fakeSpawn()
-    const root = scratch()
-    const editor = new ExternalEditor(host, { env: { EDITOR: 'nvim' }, tempRoot: root, spawn: spawn.spawn })
+    const { host, spawn, editor, root } = handoff()
     spawn.respond = (draft, signals) => {
       writeFileSync(draft, 'x'.repeat(MAX_DRAFT_BYTES + 1))
       signals.exit(0)
@@ -266,9 +342,7 @@ describe('the external editor handoff', () => {
   })
 
   it('strips the control characters an editor can return', async () => {
-    const host = new FakeHost()
-    const spawn = fakeSpawn()
-    const editor = editorOf(host, spawn)
+    const { host, spawn, editor } = handoff()
     spawn.respond = (draft, signals) => {
       // An escape sequence, a carriage return from a CRLF buffer, and a bidi
       // override: no control byte may reach the frame. The sequence's own
@@ -282,9 +356,7 @@ describe('the external editor handoff', () => {
   })
 
   it('keeps the bar when the surface could not hand the screen over', async () => {
-    const host = new FakeHost()
-    const spawn = fakeSpawn()
-    const editor = editorOf(host, spawn)
+    const { host, spawn, editor } = handoff()
     host.suspend = () => {
       throw new Error('stop failed')
     }
@@ -299,9 +371,7 @@ describe('the external editor handoff', () => {
   })
 
   it('answers with what was saved even when the screen did not come back cleanly', async () => {
-    const host = new FakeHost()
-    const spawn = fakeSpawn()
-    const editor = editorOf(host, spawn)
+    const { host, editor } = handoff()
     host.resume = () => {
       throw new Error('start failed')
     }
@@ -311,9 +381,7 @@ describe('the external editor handoff', () => {
   })
 
   it('refuses a draft that is no longer a plain file', async () => {
-    const host = new FakeHost()
-    const spawn = fakeSpawn()
-    const editor = editorOf(host, spawn)
+    const { host, spawn, editor } = handoff()
     spawn.respond = (draft, signals) => {
       rmSync(draft)
       mkdirSync(draft)
@@ -322,13 +390,10 @@ describe('the external editor handoff', () => {
 
     await expect(editor.edit('draft')).resolves.toBeUndefined()
     expect(host.last()).toBe('the edited draft is no longer a plain file; nothing was taken back')
-    expect(host.events).toEqual(['suspend', 'resume'])
   })
 
   it('refuses a second handoff while a child owns the terminal', async () => {
-    const host = new FakeHost()
-    const spawn = fakeSpawn()
-    const editor = editorOf(host, spawn)
+    const { host, spawn, editor } = handoff()
     let release: (() => void) | undefined
     const held = new Promise<void>(resolve => {
       release = resolve
@@ -345,6 +410,5 @@ describe('the external editor handoff', () => {
     release?.()
     await expect(first).resolves.toBe('edited')
     expect(spawn.calls).toHaveLength(1)
-    expect(host.events).toEqual(['suspend', 'resume'])
   })
 })

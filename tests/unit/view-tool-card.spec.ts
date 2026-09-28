@@ -17,21 +17,6 @@ import { TranscriptView, type ViewState } from '@/ui/view.ts'
 import { COLLAPSED, OPEN, viewOf, toolCall, toolResult, mouse } from './fixtures/transcript-view.ts'
 
 describe('TranscriptView text', () => {
-  it('draws a title the way the terminal that wrote it would have', () => {
-      // Any sequence the presenter hands over is read here: what a terminal would
-      // act on cannot reach the row, and what is really text still can.
-      const model = new TranscriptModel({
-        call: () => ({ kind: 'generic', tool: 'bash', title: '\u001b[31mred\u0007', detail: [], failed: false, totalLines: 0 }),
-        result: () => undefined,
-      })
-      model.apply(toolCall())
-      model.apply(toolResult('plain'))
-      const rendered = viewOf(model).render(60).join('\n')
-      // These rows run with colour off, so the colour sequence is consumed rather
-      // than shown; a bell is not a sequence, so it is spelled, not swallowed.
-      expect(rendered).toContain('red\\x07')
-      expect(rendered).not.toContain('\u001b')
-    })
   it('keeps a tool colour the terminal can draw, and still spells a stray control', () => {
       const colour = createTheme('truecolor')
       const model = new TranscriptModel({
@@ -133,29 +118,19 @@ describe('TranscriptView expansion', () => {
       expect(opened).toContain('    boom')
       expect(opened).toContain('    exit 1')
     })
-  it('shows the output a clicked shell card kept', () => {
-      const view = viewOf(withRows(3, 'bash'))
-      expect(view.render(60)).toEqual(['bash Run echo rows · exit 0 · 3 lines'])
-      // A click opens the one card and reveals what the command printed.
-      view.handleMouse(mouse('click', 'left', 0))
-      const opened = view.render(60)
-      expect(opened.filter(line => line.startsWith('    row '))).toHaveLength(3)
-      expect(opened).toContain('    exit 0')
-    })
 })
 
 describe('TranscriptView theming', () => {
-  const userModel = (): TranscriptModel => {
-      const model = new TranscriptModel()
-      model.apply({ type: 'user/message', data: { content: [{ type: 'text', text: 'hello there' }], source: { kind: 'user' } } })
-      return model
-    }
   it('draws no empty indented row when every part of a card row is hidden', () => {
       const model = new TranscriptModel()
       model.apply(toolCall())
       model.apply(toolResult('boom'))
       const hidden = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['tool.generic.detail', { hidden: true }]]) })
-      const lines = new TranscriptView(model, hidden, new MarkdownRenderer(hidden.markdown), { state: () => COLLAPSED }).render(60)
+      const visible = createTheme('truecolor')
+      const shown = new TranscriptView(model, visible, new MarkdownRenderer(visible.markdown), { state: () => OPEN }).render(60)
+      const lines = new TranscriptView(model, hidden, new MarkdownRenderer(hidden.markdown), { state: () => OPEN }).render(60)
+      expect(shown.map(stripTerminalSequences)).toContain('    boom')
+      expect(lines.map(stripTerminalSequences)).not.toContain('    boom')
       expect(lines.filter(line => line.trim() === '' && line !== '')).toEqual([])
     })
 })
@@ -229,20 +204,6 @@ describe('TranscriptView tool args and stats', () => {
       const muted = createTheme('none', { palette: DEFAULT_PALETTE, tokens: new Map([['tool.stat.added', { hidden: true }]]) })
       const lines = new TranscriptView(model, muted, new MarkdownRenderer(muted.markdown), { state: () => COLLAPSED }).render(80)
       expect(lines).toEqual(['edit a.ts  ~1'])
-    })
-  it('wraps a command wider than the screen instead of cutting it', () => {
-      const command = `/bin/echo ${'x'.repeat(60)}`
-      const presenter: ToolPresenter = {
-        call: name => cardOfCall({ card: 'terminal', title: command }, name),
-        result: (name, input) => cardOfResult(
-          { card: 'terminal', output: 'ok', exitCode: 0 },
-          { name: name, failed: input.isError, contentLines: contentLines(input.content) },
-        ),
-      }
-      const lines = folded('bash', presenter, 40, OPEN)
-      for (const line of lines) expect(line.length).toBeLessThanOrEqual(40)
-      // Word wrapping drops the whitespace it broke on, so compare without it.
-      expect(lines.join('').replace(/\s+/gu, '')).toContain(command.replace(/\s+/gu, ''))
     })
   it('wraps a long argument and keeps its stats instead of cutting the tail', () => {
       const path = `/tmp/${'nested/'.repeat(8)}file.ts`

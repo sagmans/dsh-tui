@@ -44,10 +44,9 @@ describe('keymapRows', () => {
   })
 
   it('names a layer only when the reader spelled one', () => {
-    for (const layer of KEYMAP_LAYERS) {
-      expect(keymapLayer(layer)).toBe(layer)
-      expect(layerNote(layer)).not.toBe('')
-    }
+    // The lookup is a membership test, so the miss is the whole contract; a note
+    // is what a narrowed list says it is showing, pinned here once.
     expect(keymapLayer('libary')).toBeUndefined()
+    expect(layerNote('gate')).toBe('an approval')
   })
 })

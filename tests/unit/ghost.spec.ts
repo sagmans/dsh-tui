@@ -65,12 +65,6 @@ describe('nextGhostWord', () => {
     expect(nextGhostWord('\nthe parser')).toBe('\nthe')
   })
 
-  it('keeps crossing lines on repeated acceptance', () => {
-    const suffix = '\nthe\nparser'
-    const first = nextGhostWord(suffix)
-    expect(first).toBe('\nthe')
-    expect(nextGhostWord(suffix.slice(first!.length))).toBe('\nparser')
-  })
 })
 
 describe('ghostDisplayLine', () => {

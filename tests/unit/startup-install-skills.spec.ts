@@ -8,13 +8,11 @@ const DESTINATION = '/tmp/installed-skill'
 const inputTTY = Object.getOwnPropertyDescriptor(process.stdin, 'isTTY')
 const outputTTY = Object.getOwnPropertyDescriptor(process.stdout, 'isTTY')
 
-vi.mock('@/install-skills.ts', () => {
-  class SkillAlreadyExistsError extends Error {
-    constructor(readonly destination: string) {
-      super(`skill already exists: ${destination}`)
-    }
-  }
-  return { installBundledSkills: vi.fn(), SkillAlreadyExistsError }
+// Only the installer is stubbed: the real `SkillAlreadyExistsError` has to reach
+// startup, which catches that class by identity rather than by name.
+vi.mock('@/install-skills.ts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/install-skills.ts')>()
+  return { ...actual, installBundledSkills: vi.fn() }
 })
 vi.mock('node:readline/promises', () => ({ createInterface: vi.fn() }))
 

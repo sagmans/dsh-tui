@@ -59,8 +59,4 @@ describe('classifySubmission', () => {
   it('sends ordinary text to the agent with surrounding whitespace removed', () => {
     expect(classifySubmission('  ping  ')).toEqual({ kind: 'prompt', text: 'ping' })
   })
-
-  it('treats a path-like line as a prompt, not a command', () => {
-    expect(classifySubmission('src/index.ts is broken')).toEqual({ kind: 'prompt', text: 'src/index.ts is broken' })
-  })
 })

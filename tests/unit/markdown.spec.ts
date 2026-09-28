@@ -28,10 +28,21 @@ describe('MarkdownRenderer', () => {
   })
 
   it('keeps a bounded number of parsed messages', () => {
-    const markdown = renderer()
+    // The transform is what a parse costs, so counting its calls is what shows the
+    // cache let the oldest message go instead of holding every one ever drawn.
+    let parses = 0
+    const markdown = new MarkdownRenderer(theme.markdown, () => {
+      parses += 1
+      return 'drawing'
+    })
     for (let index = 0; index <= MARKDOWN_CACHE_LIMIT; index += 1) markdown.render(`message ${index}`, 40)
-    // The oldest was evicted, so rendering it again still produces rows.
-    expect(markdown.render('message 0', 40).join('')).toContain('message 0')
+    const warm = parses
+    // One message more than the limit went by, so the oldest is gone and asking for
+    // it parses again, while one still inside the window costs nothing.
+    markdown.render('message 0', 40)
+    expect(parses).toBe(warm + 1)
+    markdown.render(`message ${MARKDOWN_CACHE_LIMIT}`, 40)
+    expect(parses).toBe(warm + 1)
   })
 
   it('keeps the live and the settled rendering of one message apart', () => {

@@ -110,7 +110,12 @@ export interface SessionLifecycle {
   readonly disposeOutgoing: () => Promise<void>
   /** Start the agent for a session, which is what a replacement joins. */
   readonly openAgent: (id: SessionId, resume: boolean, fork?: ForkInheritance) => Promise<TuiAgent>
-  /** Move the surface to another stored session without leaving the terminal. */
+  /**
+   * Move the surface to another stored session without leaving the terminal.
+   *
+   * The new session settles before the outgoing agent is let go, so a refused
+   * switch leaves the session the reader was driving untouched.
+   */
   readonly switchSession: (id: SessionId) => Promise<void>
   /** Start a fresh session without leaving the terminal. */
   readonly runNewCommand: (title: string) => void
@@ -184,6 +189,12 @@ export function createSessionLifecycle(ctx: Context, ports: SessionLifecyclePort
     // Settled before the transcript is touched, so a refusal leaves neither a
     // half-replayed session nor a half-composed agent behind.
     const preset = await ports.presetFor(id, resume, fork)
+    // A session already in service still owns its write handle, and the host refuses
+    // a second one: reopening the very session the reader is driving — a reload, or a
+    // pick of the session already on screen — has to let that agent go before its
+    // replacement is asked for. Every other open settles first, which is what keeps a
+    // refusal from taking the reader's agent away with it.
+    if (agent !== undefined && agent.sessionId === id) await disposeOutgoing()
     const handle = await startAgent(ctx, {
       sessionId: id,
       resume,
@@ -197,6 +208,12 @@ export function createSessionLifecycle(ctx: Context, ports: SessionLifecyclePort
       },
       ...(fork === undefined ? {} : { fork }),
     })
+    // The new session's agent is accepted before the outgoing one is let go:
+    // the settled questions above are where an open is refused, and a refusal
+    // has to find the reader's own agent still driving an untouched screen.
+    // The paths that already let it go — /new, /fork, a staged branch — arrive
+    // with none installed.
+    if (agent !== undefined) await disposeOutgoing()
     sessionOpened = true
     activeSession = id
     ports.setViewed(id)
@@ -245,7 +262,8 @@ export function createSessionLifecycle(ctx: Context, ports: SessionLifecyclePort
   }
 
   const switchSession = async (id: SessionId): Promise<void> => {
-    await disposeOutgoing()
+    // The open owns the handover: settling the new session first is what keeps
+    // a refused switch from taking the reader's agent away with it.
     await openAgent(id, true)
   }
 
@@ -256,8 +274,10 @@ export function createSessionLifecycle(ctx: Context, ports: SessionLifecyclePort
       return
     }
     void (async () => {
-      const previous = letGoOfOutgoing(false)
-      if (previous !== undefined) await previous.dispose()
+      // The `agent === undefined` return above is the only way in without a
+      // handle, so the one this transition lets go of is always there to stop.
+      const previous = letGoOfOutgoing(false)!
+      await previous.dispose()
       await openAgent(SessionId(`tui-session-${randomUUID()}`), false)
       if (title !== '') runRenameCommand(title)
       ports.notice('started a new session')
@@ -275,9 +295,11 @@ export function createSessionLifecycle(ctx: Context, ports: SessionLifecyclePort
    * the reader keeps the conversation they were reading.
    */
   const runReloadCommand = (): void => {
-    // A failed reload leaves no agent behind, so the command has to be usable
-    // again: the retry is what makes a broken composition file recoverable,
-    // while a surface that has opened no session yet is still starting.
+    // A failed reload keeps the outgoing agent driving, and a failed /new or
+    // /fork is the case that leaves none: the command has to stay usable in
+    // both, because the retry is what makes a broken composition file
+    // recoverable, while a surface that has opened no session yet is still
+    // starting.
     if (agent === undefined && !sessionOpened) {
       ports.notice('the agent is still starting; try again in a moment')
       ports.render()
@@ -327,8 +349,10 @@ export function createSessionLifecycle(ctx: Context, ports: SessionLifecyclePort
         return
       }
       const childId = SessionId(`tui-session-${randomUUID()}`)
-      const previous = letGoOfOutgoing(false)
-      if (previous !== undefined) await previous.dispose()
+      // The driven session's log is read from memory, so no other command can
+      // have let the outgoing agent go since the guard that refused an absent one.
+      const previous = letGoOfOutgoing(false)!
+      await previous.dispose()
       await openAgent(childId, false, { from: source, events: events.slice(0, point.inheritedEvents) })
       if (title !== '') runRenameCommand(title)
       ports.notice(`forked from ${source} at event ${point.boundarySeq} — ${point.inheritedEvents} inherited`)

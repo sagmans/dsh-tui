@@ -68,6 +68,15 @@ describe('injectionSummary', () => {
     )
   })
 
+  it('truncates a long preview line', () => {
+    // The notice has to stay one row: a body long enough to be a paragraph is
+    // summarized by its head and an ellipsis rather than quoted into the frame.
+    const text = injectionSummary({ source: { kind: 'plugin', plugin: 'p' } }, 'x'.repeat(200))
+    expect(text.startsWith('injected p · 1 lines — ')).toBe(true)
+    expect(text.endsWith('…')).toBe(true)
+    expect(text.length).toBeLessThan(120)
+  })
+
   it('falls back to plugin or kind when nothing identifies the producer', () => {
     expect(injectionSummary({}, 'a\nb')).toBe('injected plugin · 2 lines — a')
     expect(injectionSummary({ source: { kind: 'future-kind' } }, 'a\nb')).toBe('injected future-kind · 2 lines — a')

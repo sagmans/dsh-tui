@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { chmod, link, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
-import { homedir } from 'node:os'
-import { dirname, join, resolve as resolvePath } from 'node:path'
+import { dirname, join } from 'node:path'
+import { dshHomeDir } from '../stash/paths.ts'
 import { displayText } from '../text.ts'
 
 /**
@@ -14,10 +14,6 @@ import { displayText } from '../text.ts'
  * theirs to keep.
  */
 
-/** Environment variable that overrides the harness home, matching the launcher. */
-export const DSH_HOME_ENV = 'DSH_HOME'
-/** Directory name of the default harness home under the OS home. */
-export const DSH_HOME_DIR_NAME = '.dsh'
 /** File name the history is stored under, inside the harness home. */
 export const HISTORY_FILE_NAME = 'prompt-history.json'
 /** Schema this build writes; a file that names another positive version is left alone. */
@@ -243,28 +239,6 @@ function isPositiveInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
 }
 
-/** Expand a tilde the way the launcher does, so both spell the home the same. */
-function expandHome(path: string): string {
-  if (path === '~') return homedir()
-  if (path.startsWith('~/') || path.startsWith('~\\')) return join(homedir(), path.slice(2))
-  return path
-}
-
-/**
- * Resolve the harness home.
- *
- * Precedence is the launcher's own: $DSH_HOME, then ~/.dsh. A blank override is
- * treated as unset, because resolving to the working directory would scatter
- * private history into whatever tree the reader happened to start from.
- */
-export function resolveDshHome(env: NodeJS.ProcessEnv = process.env): string {
-  const configured = env[DSH_HOME_ENV]
-  const chosen = configured !== undefined && configured.trim() !== ''
-    ? expandHome(configured)
-    : join(homedir(), DSH_HOME_DIR_NAME)
-  return resolvePath(chosen)
-}
-
 /** Read one persisted document, refusing anything this build cannot safely rewrite. */
 export function parseHistoryFile(text: string): ParsedHistoryFile {
   let raw: unknown
@@ -335,7 +309,7 @@ function laterTimestamp(left: string, right: string): string {
 export function createPromptHistory(options: PromptHistoryOptions): PromptHistory {
   const now = options.now ?? (() => new Date())
   const warn = options.warn ?? (() => {})
-  const filePath = join(options.home ?? resolveDshHome(), HISTORY_FILE_NAME)
+  const filePath = join(options.home ?? dshHomeDir(), HISTORY_FILE_NAME)
   const lockPath = filePath + LOCK_SUFFIX
   let entries: readonly PromptEntry[] = []
   let blocked: HistoryBlockReason | undefined

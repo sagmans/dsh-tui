@@ -1,12 +1,12 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { PALETTE_NAMES, TUI_TOKENS } from '@/theme-tokens.ts'
 import {
+  builtinNames,
   builtinThemesDir,
   DEFAULT_THEME,
-  ensureThemesHome,
   exportTheme,
   loadThemes,
   MAX_THEME_FILE_BYTES,
@@ -113,18 +113,17 @@ describe('the built-ins the package ships', () => {
   /** Every built-in, as the surface reads it, so a drift fails here and not on a screen. */
   const builtins = loadThemes(dirOf(), builtinThemesDir())
 
-  it('draws violet-orbit with the shades the port brought over', () => {
-    const violet = builtins.get('violet-orbit')
-    expect(violet?.builtin).toBe(true)
-    expect(violet?.tokens['tool.title']).toEqual({ fg: '#8197f7' })
-    expect(violet?.palette.default).toBe('#e8e9ff')
-  })
-
   it('names every element and every palette entry, so a copy is a full reference', () => {
     for (const theme of builtins.list()) {
       expect(Object.keys(theme.tokens).sort(), `${theme.name} elements`).toEqual([...TUI_TOKENS].sort())
       expect(Object.keys(theme.palette).sort(), `${theme.name} palette`).toEqual([...PALETTE_NAMES].sort())
     }
+  })
+
+  it('offers the export picker every built-in that ships with a file', () => {
+    // The picker offers these by name and then copies the file behind one, so a
+    // theme counted here without a path would be offered and then refused.
+    expect(builtinNames(builtins).sort()).toEqual(['deepseek-blue', 'violet-orbit'])
   })
 
   it('ships the theme the surface draws until a reader names another', () => {
@@ -181,12 +180,6 @@ describe('export', () => {
 })
 
 describe('the reader\'s directory', () => {
-  it('is created when it is missing, so an export has somewhere to land', () => {
-    const missing = join(dirOf(), 'themes')
-    expect(ensureThemesHome(missing)).toEqual([])
-    expect(loadThemes(missing, dirOf()).names()).toEqual([])
-  })
-
   it('sits under the harness home the environment names', () => {
     expect(themesHomeDir({ DSH_HOME: '/scratch/dsh' }, '/home/me')).toBe('/scratch/dsh/themes')
     expect(themesHomeDir({}, '/home/me')).toBe('/home/me/.dsh/themes')

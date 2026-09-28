@@ -1,9 +1,17 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { Marked } from '@earendil-works/pi-tui'
+import { render } from 'lovely-mermaid'
 import { createTheme } from '@/theme.ts'
 import { DEFAULT_PALETTE } from '@/theme-defaults.ts'
 import { createMermaidTransform, MERMAID_CACHE_LIMIT, MERMAID_MAX_SOURCE, type MermaidTransform } from '@/ui/mermaid.ts'
 import type { MermaidMode } from '@/theme-settings.ts'
+
+// Laying a source out once is the half a cache exists for, so a spec has to be able
+// to count the layouts; the wrapper answers exactly as the library does.
+vi.mock('lovely-mermaid', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('lovely-mermaid')>()
+  return { ...actual, render: vi.fn(actual.render) }
+})
 
 /** The renderer is handed text the view already escaped, so fixtures carry no controls. */
 const SIMPLE = ['```mermaid', 'flowchart LR', '  A[Start] --> B[Done]', '```'].join('\n')
@@ -170,10 +178,17 @@ describe('a drawn diagram', () => {
   })
 
   it('still draws once more diagrams than the cache holds have gone by', () => {
+    // A streaming reply asks for the same fence on every delta, so the cache is what
+    // keeps the layout cost off the repaint; it must release the sources a long reply
+    // has gone past rather than hold every one it has ever drawn.
     const draw = transform()
-    for (let index = 0; index <= MERMAID_CACHE_LIMIT; index += 1) {
-      draw(['```mermaid', 'flowchart LR', `  N${index} --> M${index}`, '```'].join('\n'), 80, false)
-    }
-    expect(draw(SIMPLE, 80, false)).toContain('│ Start ├───▶│ Done │')
+    const source = (index: number): string => ['```mermaid', 'flowchart LR', `  N${index} --> M${index}`, '```'].join('\n')
+    for (let index = 0; index <= MERMAID_CACHE_LIMIT; index += 1) draw(source(index), 80, false)
+    const layouts = vi.mocked(render).mock.calls.length
+    // Both ends of the window: the oldest has been let go, the newest is still held.
+    draw(source(0), 80, false)
+    expect(vi.mocked(render).mock.calls.length).toBe(layouts + 1)
+    draw(source(MERMAID_CACHE_LIMIT), 80, false)
+    expect(vi.mocked(render).mock.calls.length).toBe(layouts + 1)
   })
 })

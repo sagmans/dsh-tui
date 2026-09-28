@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CLEAR_TITLE, TITLE_DIR_LIMIT, titleSequence, windowTitle } from '@/terminal/title.ts'
+import { CLEAR_TITLE, titleSequence, windowTitle } from '@/terminal/title.ts'
 
 const BEL = '\u0007'
 const ESC = '\u001b'
@@ -14,6 +14,21 @@ describe('titleSequence', () => {
     expect(hostile).toBe(`${ESC}]0;a]0;pwned${BEL}`)
     expect(hostile.indexOf(BEL)).toBe(hostile.length - 1)
   })
+
+  it('strips the bidi overrides that would reorder the title', () => {
+    // A title reaches the terminal's own escape sequence: an override that
+    // survived would reorder the tab bar and the reader's scrollback, and it
+    // draws nothing, so nothing about it can be seen or undone by hand.
+    const hostile = 'a\u061Cb\u200Ec\u200Fd\u202Ae\u202Bf\u202Cg\u202Dh\u202Ei\u2066j\u2067k\u2068l\u2069m'
+    expect(titleSequence(hostile)).toBe(`${ESC}]0;abcdefghijklm${BEL}`)
+  })
+
+  it('keeps the label on one row', () => {
+    // The shared strip keeps the tab and line feed an editor lays text out
+    // with, and drops the carriage return rather than turning it into a break;
+    // a title has one row, so none of the three may survive.
+    expect(titleSequence('a\tb\nc\rd')).toBe(`${ESC}]0;abcd${BEL}`)
+  })
 })
 
 describe('windowTitle', () => {
@@ -23,9 +38,9 @@ describe('windowTitle', () => {
 
   it('keeps a long path inside the tab', () => {
     const long = `/a/${'x'.repeat(80)}/end`
-    const title = windowTitle(long, 'ready')
-    expect(title.length).toBeLessThan(TITLE_DIR_LIMIT + 30)
-    expect(title).toContain('…')
+    // The cut keeps the deepest segment whole, so a tab bar still says which
+    // checkout the session runs in after the path is shortened.
+    expect(windowTitle(long, 'ready')).toBe(`${ESC}]0;dsh-tui · …${'x'.repeat(35)}/end · ready${BEL}`)
   })
 
   it('clears rather than guesses when asked to hand the title back', () => {

@@ -1,8 +1,11 @@
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { builtinNames, DEFAULT_THEME } from '@/theme-files.ts'
+import { builtinThemesDir, exportTheme, loadThemes } from '@/theme-files.ts'
 import { parseSettings, themeLayer, toOverrides } from '@/theme-settings.ts'
 import { mergeTokenSpec } from '@/theme-resolver.ts'
-import { PALETTE_NAMES, TUI_TOKENS, type PaletteName, type StyleSpec } from '@/theme-tokens.ts'
+import { TUI_TOKENS } from '@/theme-tokens.ts'
 import { createTheme } from '@/theme.ts'
 import { builtinLibrary } from '../support/themes.ts'
 
@@ -26,62 +29,44 @@ const themed = (name: string, mode: (typeof MODES)[number] = 'truecolor') =>
 
 describe('the shipped themes', () => {
   it('ships a file for every name it offers', () => {
-    // Sorted on both sides: which files exist is the claim, and the order a
-    // library offers names in is the loader's business rather than this one's.
-    expect([...builtinNames(library)].sort()).toEqual([VIOLET, BLUE].sort())
-  })
-
-  it("draws the package's own theme when the document names none", () => {
-    // The surface always draws a theme, so an unnamed section is not a bare table:
-    // it is this file, which is why the file has to be in the package at all.
-    expect(toOverrides(parseSettings({}), library).theme?.name).toBe(DEFAULT_THEME)
-  })
-
-  it('names only elements and palette entries the surface has', () => {
-    // A theme file is data and js-yaml accepts any key, so a name that drifted
-    // out of the token list has to fail here rather than paint nothing.
-    const palette = new Set<string>(PALETTE_NAMES)
-    const tokens = new Set<string>(TUI_TOKENS)
-    for (const theme of library.list()) {
-      for (const entry of Object.keys(theme.palette)) {
-        expect(palette.has(entry), `${theme.name} names palette entry ${entry}`).toBe(true)
+    // The names are the loader's business; what the package promises is that every
+    // one it offers is backed by a file a reader can copy and edit, so losing one
+    // fails here rather than in `/theme export`.
+    const home = mkdtempSync(join(tmpdir(), 'dsh-theme-builtin-'))
+    try {
+      const shipped = loadThemes(home, builtinThemesDir())
+      expect(shipped.names().length).toBeGreaterThan(0)
+      for (const name of shipped.names()) {
+        expect(shipped.get(name)?.builtin, `${name} is not shipped`).toBe(true)
+        expect(shipped.get(name)?.path, `${name} has no file`).not.toBe('')
+        expect(exportTheme(shipped, name).ok, `${name} cannot be exported`).toBe(true)
       }
-      for (const token of Object.keys(theme.tokens)) {
-        expect(tokens.has(token), `${theme.name} names element ${token}`).toBe(true)
-      }
+    } finally {
+      rmSync(home, { recursive: true, force: true })
     }
   })
 
-  it('names every element and palette entry, so a copy is a complete theme', () => {
-    // A reference that leaves entries out is a diff against something the reader
-    // cannot see, and it lets a new element ship with no theme answering for it.
-    for (const theme of library.list()) {
-      expect(Object.keys(theme.tokens).sort(), `${theme.name} elements`).toEqual([...TUI_TOKENS].sort())
-      expect(Object.keys(theme.palette).sort(), `${theme.name} palette`).toEqual([...PALETTE_NAMES].sort())
+  it('renders each shipped theme across terminal colour budgets', () => {
+    const expected = {
+      truecolor: /^\u001b\[38;2;\d+;\d+;\d+mx\u001b\[0m$/,
+      '256': /^\u001b\[38;5;\d+mx\u001b\[0m$/,
+      '16': /^\u001b\[(?:3[0-7]|9[0-7])mx\u001b\[0m$/,
+      none: /^x$/,
     }
-  })
-
-  it('names only colours the surface can draw', () => {
-    // A misspelled hex survives js-yaml, so it is refused here instead.
-    const hex = /^#[0-9a-f]{6}$/iu
-    const palette = new Set<string>(PALETTE_NAMES)
-    for (const theme of library.list()) {
-      const specs = Object.values(theme.tokens).filter((spec): spec is StyleSpec => spec !== undefined)
-      const colours = [
-        ...Object.values(theme.palette),
-        ...specs.flatMap(spec => [spec.fg, spec.bg]),
-      ].filter((value): value is string => typeof value === 'string')
-      for (const colour of colours) {
-        const drawable = hex.test(colour) || palette.has(colour as PaletteName)
-        expect(drawable, `${theme.name} cannot draw ${colour}`).toBe(true)
-      }
-    }
-  })
-
-  it('draws on every terminal the surface can meet', () => {
     for (const name of library.names()) {
+      const overrides = toOverrides(parseSettings({ theme: name }), library)
       for (const mode of MODES) {
-        expect(() => themed(name, mode), `${name} in ${mode}`).not.toThrow()
+        const theme = createTheme(mode, overrides)
+        for (const token of TUI_TOKENS) {
+          expect(theme.visible(token), `${name} hides ${token} in ${mode}`).toBe(true)
+          expect(theme.glyph(token), `${name} changes ${token} glyph in ${mode}`).toBe('')
+          const styled = theme.style(token, 'x')
+          expect(styled, `${name} cannot render ${token} in ${mode}`).toContain('x')
+          // A configured element must reach the renderer, even when this theme inherits its shade.
+          const spec = mergeTokenSpec(token, overrides.tokens, themeLayer(overrides))
+          expect(styled !== 'x', `${name} loses ${token} styling in ${mode}`).toBe(mode !== 'none' && Object.keys(spec).length > 0)
+        }
+        expect(theme.style('tool.title', 'x'), `${name} in ${mode}`).toMatch(expected[mode])
       }
     }
   })
@@ -134,6 +119,9 @@ describe('violet-orbit', () => {
     // palette half of the theme landed, not just the per-element half.
     expect(theme.style('status.prefix', 'x')).toContain('38;2;128;128;255')
     expect(theme.style('picker.border', 'x')).toContain('38;2;52;54;82')
+    // The palette half is a file rather than a table in code, so the port's own
+    // default shade is what a copy of this theme carries with it.
+    expect(library.get(VIOLET)?.palette.default).toBe('#e8e9ff')
   })
 
   it('leaves a reader turn on the prompt shade alone, with no band behind it', () => {
@@ -176,7 +164,6 @@ describe('violet-orbit', () => {
     // one axis a diff card has not already spent: a hue here would read as an
     // added line.
     const theme = themed(VIOLET)
-    expect(theme.style('tool.title', 'x')).toContain('38;2;129;151;247')
     expect(theme.style('tool.args', 'x')).toContain('38;2;75;86;128')
     expect(theme.style('tool.subcall.args', 'x')).toContain('38;2;75;86;128')
   })
@@ -184,9 +171,8 @@ describe('violet-orbit', () => {
   it('merges a reader field over a themed element field by field', () => {
     // The two layers meet on one element: the reader naming one attribute must
     // not discard the shade the theme gave that same element.
-    const overrides = toOverrides(parseSettings({ theme: VIOLET, tokens: { 'tool.title': { bold: true } } }), library)
-    expect(mergeTokenSpec('tool.title', overrides.tokens, themeLayer(overrides)))
-      .toEqual({ fg: '#8197f7', bold: true })
+    const theme = createTheme('truecolor', toOverrides(parseSettings({ theme: VIOLET, tokens: { 'tool.title': { bold: true } } }), library))
+    expect(theme.style('tool.title', 'x')).toBe('\u001B[1;38;2;129;151;247mx\u001B[0m')
   })
 
   it('still lets the reader win on any element it set', () => {

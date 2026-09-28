@@ -20,25 +20,13 @@ interface CachedRows {
   readonly lines: readonly string[]
 }
 
-/** What the cache has done, so a test can assert the work was actually avoided. */
-export interface RowCacheStats {
-  readonly hits: number
-  readonly misses: number
-}
-
 export class RowCache<K extends object = object> {
   private rows = new WeakMap<K, CachedRows>()
-  private hits = 0
-  private misses = 0
 
   /** The rows for a key and tag, or nothing when they have to be rebuilt. */
   lookup(key: K, tag: string): readonly string[] | undefined {
     const cached = this.rows.get(key)
-    if (cached === undefined || cached.tag !== tag) {
-      this.misses += 1
-      return undefined
-    }
-    this.hits += 1
+    if (cached === undefined || cached.tag !== tag) return undefined
     return cached.lines
   }
 
@@ -48,9 +36,5 @@ export class RowCache<K extends object = object> {
 
   clear(): void {
     this.rows = new WeakMap()
-  }
-
-  stats(): RowCacheStats {
-    return { hits: this.hits, misses: this.misses }
   }
 }

@@ -26,14 +26,13 @@ const SIGNAL_EXIT: Record<TerminatingSignal, number> = { SIGINT: 130, SIGTERM: 1
  */
 export function installSignalRestore(options: {
   shutdown(code: number, signal: TerminatingSignal): void
-  signals?: readonly TerminatingSignal[]
 }): () => void {
   const handlers = new Map<TerminatingSignal, () => void>()
   const remove = (): void => {
     for (const [signal, handler] of handlers) process.removeListener(signal, handler)
     handlers.clear()
   }
-  for (const signal of options.signals ?? TERMINATING_SIGNALS) {
+  for (const signal of TERMINATING_SIGNALS) {
     const handler = (): void => {
       remove()
       options.shutdown(SIGNAL_EXIT[signal], signal)

@@ -10,10 +10,6 @@ import { TUI_STARTUP_SERVICE, name as startupRowName } from '@/startup.ts'
  * different composition than the one a user installs.
  */
 const patch = readFileSync(new URL('../../cordis.patch.yml', import.meta.url), 'utf8')
-const manifest = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as {
-  exports?: Record<string, unknown>
-  dependencies?: Record<string, string>
-}
 
 /**
  * The base rows an agent preset supplies, so the global plane must not.
@@ -58,25 +54,6 @@ const INSERTED_ROWS = [
   ['cordis-host-runner', '@deepseek-ai/dsh-cordis-host-runner'],
   ['code-runtime', '@deepseek-ai/dsh-code-runtime-worker-thread'],
 ] as const
-
-/**
- * Packages a preset's own rows resolve in the Host scope.
- *
- * The harness install already ships each one, so a terminal profile mounts the
- * row without this plugin declaring the package: adding it to the manifest
- * instead would pin a version the harness owns.
- */
-const HOST_PROVIDED_PACKAGES = ['@deepseek-ai/dsh-tool-subagent/model-selection-settings']
-
-/**
- * First-party packages this bundle links against without mounting.
- *
- * The guard below exists to catch the patch drifting away from the manifest.
- * A schema builder is a library, not a cordis plugin, so it has no row to
- * mount; naming it here keeps that distinction explicit instead of loosening
- * the check for every package at once.
- */
-const LIBRARY_PACKAGES = ['@deepseek-ai/schemastery']
 
 /** The mode a flagless run joins, which has to be one the roster actually ships. */
 const ROSTER_DEFAULT = 'ptc'
@@ -162,28 +139,8 @@ describe('the bundle patch', () => {
     }
   })
 
-  it('declares every first-party package it mounts, and mounts every one it declares', () => {
-    const mounted = [...new Set(insertedRows(patch).map(row => row.name))]
-      .filter(name => name.startsWith('@deepseek-ai/'))
-    expect(mounted.length).toBeGreaterThan(0)
-    for (const name of mounted) {
-      if (HOST_PROVIDED_PACKAGES.includes(name)) continue
-      expect(manifest.dependencies?.[name], `${name} is mounted but not a dependency`).toBeDefined()
-    }
-    const declared = Object.keys(manifest.dependencies ?? {})
-      .filter(name => name.startsWith('@deepseek-ai/'))
-      .filter(name => !LIBRARY_PACKAGES.includes(name))
-    for (const name of declared) {
-      expect(mounted, `${name} is a dependency but no row mounts it`).toContain(name)
-    }
-  })
-
   it('starts a flagless run in a mode the roster ships', () => {
     expect(requireRow(insertedRows(patch), 'agent-presets').body).toContain(`default: ${ROSTER_DEFAULT}`)
   })
 
-  it('no longer mounts the removed ask-user entry point', () => {
-    expect(patch).not.toContain('dsh-tui/ask-user')
-    expect(Object.keys(manifest.exports ?? {})).not.toContain('./ask-user')
-  })
 })

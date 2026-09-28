@@ -3,11 +3,13 @@ import { createServer, type Server, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { acceptedTokens, createHerdrClient, socketEndpoint } from '@/herdr/client.ts'
-import { HERDR_AGENT, HERDR_SOURCE, MAX_METADATA_VALUE_CHARS, METADATA_TOKENS } from '@/herdr/constants.ts'
+import { createHerdrClient } from '@/herdr/client.ts'
+import { HERDR_AGENT, HERDR_SOURCE, METADATA_TOKENS } from '@/herdr/constants.ts'
 import type { HerdrEnvironment } from '@/herdr/client.ts'
 
 const PANE_ID = 'w1:p2'
+/** Herdr truncates token values beyond this wire limit, which would misidentify a directory. */
+const HERDR_TOKEN_VALUE_LIMIT = 80
 
 type Request = { id?: string; method?: string; params?: Record<string, unknown> }
 
@@ -132,6 +134,32 @@ describe('createHerdrClient', () => {
     })
   })
 
+  it.each([
+    {
+      name: 'clears an absent token value',
+      tokens: { dsh_session: 'x', dsh_cwd: undefined },
+      accepted: { dsh_session: 'x', dsh_cwd: null },
+    },
+    {
+      // A truncated directory names a different directory, so the token must be cleared.
+      name: 'clears a token value longer than Herdr can hold',
+      tokens: { dsh_session: 'x', dsh_cwd: 'y'.repeat(HERDR_TOKEN_VALUE_LIMIT + 1) },
+      accepted: { dsh_session: 'x', dsh_cwd: null },
+    },
+    {
+      name: 'keeps a token value at the limit',
+      tokens: { dsh_cwd: 'y'.repeat(HERDR_TOKEN_VALUE_LIMIT) },
+      accepted: { dsh_cwd: 'y'.repeat(HERDR_TOKEN_VALUE_LIMIT) },
+    },
+  ])('$name in pane.report_metadata', async ({ tokens, accepted }) => {
+    const herdr = await listen(ok)
+    const client = createHerdrClient(env(herdr.path))
+
+    expect(await client.reportMetadata(tokens)).toBe(true)
+    expect(herdr.requests[0]?.method).toBe('pane.report_metadata')
+    expect(herdr.requests[0]?.params?.tokens).toEqual(accepted)
+  })
+
   it('offers a wait as the label Herdr renders for a blocked row', async () => {
     const herdr = await listen(ok)
     const client = createHerdrClient(env(herdr.path))
@@ -170,12 +198,15 @@ describe('createHerdrClient', () => {
   })
 
   it('is inert away from Herdr and never dials', async () => {
-    const started = Date.now()
-    const client = createHerdrClient({ HERDR_ENV: '1', HERDR_SOCKET_PATH: '/nonexistent.sock' }, { timeoutMs: 5000 })
+    // A listener standing where the transport would dial is what makes "never
+    // dials" falsifiable: a connection attempt lands in its request log even
+    // though the report itself resolves without one.
+    const herdr = await listen(ok)
+    const client = createHerdrClient({ HERDR_ENV: '1', HERDR_SOCKET_PATH: herdr.path })
 
     expect(client.enabled).toBe(false)
     expect(await client.reportState({ state: 'idle', message: undefined, seq: 1, sessionId: undefined })).toBe(true)
-    expect(Date.now() - started).toBeLessThan(200)
+    expect(herdr.requests).toEqual([])
   })
 
   it('retries a report the server answered with an error', async () => {
@@ -320,37 +351,19 @@ describe('createHerdrClient', () => {
   })
 
   it('settles at once when the transport owes nothing', async () => {
-    const herdr = await listen(ok)
-    const client = createHerdrClient(env(herdr.path), { attempts: 1, timeoutMs: 60 })
+    // A listener that hangs up ends the attempt long before the report's 5s
+    // budget: a settle that waited on that budget rather than on the work still
+    // owed would be held here for seconds, which the bound below refuses.
+    const herdr = await listen(() => HANGUP)
+    const client = createHerdrClient(env(herdr.path), { attempts: 1, timeoutMs: 5_000 })
     const started = Date.now()
 
+    const report = client.reportState({ state: 'working', message: undefined, seq: 1, sessionId: undefined })
+    await new Promise(resolve => setTimeout(resolve, HANGUP_DELAY_MS + 20))
+    client.stop()
     await client.settle()
 
+    expect(await report).toBe(false)
     expect(Date.now() - started).toBeLessThan(1_000)
-  })
-})
-
-describe('acceptedTokens', () => {
-  it('clears a token whose value is absent', () => {
-    expect(acceptedTokens({ dsh_session: 'x', dsh_cwd: undefined })).toEqual({ dsh_session: 'x', dsh_cwd: null })
-  })
-
-  it('clears a value too long to be held whole', () => {
-    // Herdr shortens what it cannot hold, and a shortened path reads as a
-    // different directory; clearing the token is the only honest answer.
-    const long = 'y'.repeat(MAX_METADATA_VALUE_CHARS + 1)
-    expect(acceptedTokens({ dsh_cwd: long, dsh_session: 'x' })).toEqual({ dsh_cwd: null, dsh_session: 'x' })
-  })
-
-  it('keeps a value at the limit', () => {
-    const exact = 'y'.repeat(MAX_METADATA_VALUE_CHARS)
-    expect(acceptedTokens({ dsh_cwd: exact })).toEqual({ dsh_cwd: exact })
-  })
-})
-
-describe('socketEndpoint', () => {
-  it('is the path itself where sockets are files', () => {
-    if (process.platform === 'win32') return
-    expect(socketEndpoint('/tmp/herdr.sock')).toBe('/tmp/herdr.sock')
   })
 })

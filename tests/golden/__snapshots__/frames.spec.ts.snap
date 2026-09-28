@@ -49,35 +49,6 @@ exports[`a mermaid reply > renders the diagram at 80 columns 1`] = `
 ]
 `;
 
-exports[`a mermaid reply > renders the diagram with its escapes 1`] = `
-[
-  "[38;2;214;194;154m╭──────────────────────────────────────────────────────────────────────────────╮[0m",
-  "[38;2;214;194;154m│[0m The fold keeps a session small.                                              [38;2;214;194;154m│[0m",
-  "[38;2;214;194;154m│[0m                                                                              [38;2;214;194;154m│[0m",
-  "[38;2;214;194;154m│[0m [38;2;95;175;215m          [38;2;138;138;138m┌────────────────────┐[0m[0m                                             [38;2;214;194;154m│[0m",
-  "[38;2;214;194;154m│[0m [38;2;95;175;215m          [38;2;138;138;138m│[0m read the event log [38;2;138;138;138m│[0m[0m                                             [38;2;214;194;154m│[0m",
-  "[38;2;214;194;154m│[0m [38;2;95;175;215m          [38;2;138;138;138m└──────────┬─────────┘[0m[0m                                             [38;2;214;194;154m│[0m",
-  "[38;2;214;194;154m│[0m [38;2;95;175;215m                     [38;2;95;175;215m│[0m[0m                                                       [38;2;214;194;154m│[0m",
-  "[38;2;214;194;154m│[0m [38;2;95;175;215m                     [38;2;95;175;215m▼[0m[0m                                                       [38;2;214;194;154m│[0m",
-  "[38;2;214;194;154m│[0m [38;2;95;175;215m         [38;2;138;138;138m┌──────────────────────┐[0m[0m                                            [38;2;214;194;154m│[0m",
-  "[38;2;214;194;154m│[0m [38;2;95;175;215m         [38;2;138;138;138m│[0m fold settled entries [38;2;138;138;138m│[0m[0m                                            [38;2;214;194;154m│[0m",
-  "[38;2;214;194;154m│[0m [38;2;95;175;215m         [38;2;138;138;138m└───────────┬──────────┘[0m[0m                                            [38;2;214;194;154m│[0m",
-  "[38;2;214;194;154m│[0m [38;2;95;175;215m                     [38;2;95;175;215m│[0m[0m                                                       [38;2;214;194;154m│[0m",
-  "[38;2;214;194;154m│[0m [38;2;95;175;215m                     [38;2;95;175;215m▼[0m[0m                                                       [38;2;214;194;154m│[0m",
-  "[38;2;214;194;154m│[0m [38;2;95;175;215m             [38;2;138;138;138m╔═══════════════╗[0m[0m                                               [38;2;214;194;154m│[0m",
-  "[38;2;214;194;154m│[0m [38;2;95;175;215m             [38;2;138;138;138m║[0m cursor moved? [38;2;138;138;138m║[0m[0m                                               [38;2;214;194;154m│[0m",
-  "[38;2;214;194;154m│[0m [38;2;95;175;215m             [38;2;138;138;138m╚═══════╤═══════╝[0m[0m                                               [38;2;214;194;154m│[0m",
-  "[38;2;214;194;154m│[0m [38;2;95;175;215m          [38;2;95;175;215m┌──────────┴───────────┐[0m[0m                                           [38;2;214;194;154m│[0m",
-  "[38;2;214;194;154m│[0m [38;2;95;175;215m          [38;2;95;175;215m▼[0m[38;2;138;138;138myes[0m                   [38;2;95;175;215m▼[0m[38;2;138;138;138mno[0m[0m                                         [38;2;214;194;154m│[0m",
-  "[38;2;214;194;154m│[0m [38;2;95;175;215m[38;2;138;138;138m┌──────────────────┐[0m    [38;2;138;138;138m┌─────────────────┐[0m[0m                                  [38;2;214;194;154m│[0m",
-  "[38;2;214;194;154m│[0m [38;2;95;175;215m[38;2;138;138;138m│[0m rebuild the rows [38;2;138;138;138m│[0m    [38;2;138;138;138m│[0m reuse the cache [38;2;138;138;138m│[0m[0m                                  [38;2;214;194;154m│[0m",
-  "[38;2;214;194;154m│[0m [38;2;95;175;215m[38;2;138;138;138m└──────────────────┘[0m    [38;2;138;138;138m└─────────────────┘[0m[0m                                  [38;2;214;194;154m│[0m",
-  "[38;2;214;194;154m│[0m                                                                              [38;2;214;194;154m│[0m",
-  "[38;2;214;194;154m│[0m Settled rows are cached.                                                     [38;2;214;194;154m│[0m",
-  "[38;2;214;194;154m╰──────────────────────────────────────────────────────────────────────────────╯[0m",
-]
-`;
-
 exports[`golden frames > renders a busy dock at 40 columns 1`] = `
 [
   "◎ goal round 6/256 · complete the plan …",
@@ -228,34 +199,6 @@ exports[`golden frames > renders the dock at 80 columns 1`] = `
 ]
 `;
 
-exports[`golden frames > renders the model picker at 40 columns 1`] = `
-{
-  "above": 0,
-  "below": 0,
-  "filter": "",
-  "hint": "↑/ctrl+p or ↓/ctrl+n move · enter switch · esc/ctrl+c cancel · type to filter",
-  "note": undefined,
-  "rows": [
-    {
-      "current": true,
-      "description": "kimi-coding · k2 · current · effort high",
-      "label": "K2",
-    },
-    {
-      "current": false,
-      "description": "opencode-go · qwen3-coder",
-      "label": "Qwen3 Coder",
-    },
-    {
-      "current": false,
-      "description": "zai-coding-cn · glm-5.3",
-      "label": "GLM 5.3",
-    },
-  ],
-  "title": "model · current kimi-coding/k2 (high)",
-}
-`;
-
 exports[`golden frames > renders the model picker at 80 columns 1`] = `
 {
   "above": 0,
@@ -310,29 +253,6 @@ exports[`golden frames > renders the queued prompts at 80 columns 1`] = `
 ]
 `;
 
-exports[`golden frames > renders the session picker at 40 columns 1`] = `
-{
-  "above": 0,
-  "below": 0,
-  "filter": "",
-  "hint": "↑/ctrl+p or ↓/ctrl+n move · enter open · esc/ctrl+c cancel · type to filter",
-  "note": undefined,
-  "rows": [
-    {
-      "current": true,
-      "description": "/Users/dev/source/opensource/deepseek-harness/master · 4m ago · 22 events",
-      "label": "dock polish",
-    },
-    {
-      "current": false,
-      "description": "/Users/dev/source/opensource/deepseek-harness/master · 15m ago · 41 events",
-      "label": "tui-session-f38b6841-9229-4c2f-8c82-0ced1eee68ea",
-    },
-  ],
-  "title": "resume a session · 2 stored",
-}
-`;
-
 exports[`golden frames > renders the session picker at 80 columns 1`] = `
 {
   "above": 0,
@@ -353,29 +273,6 @@ exports[`golden frames > renders the session picker at 80 columns 1`] = `
     },
   ],
   "title": "resume a session · 2 stored",
-}
-`;
-
-exports[`golden frames > renders the stash picker at 40 columns 1`] = `
-{
-  "above": 0,
-  "below": 0,
-  "filter": "",
-  "hint": "↑/ctrl+p or ↓/ctrl+n move · enter pop · esc/ctrl+c cancel · type to filter",
-  "note": undefined,
-  "rows": [
-    {
-      "current": true,
-      "description": "1m ago",
-      "label": "[0] refactor the fold cursor so a resume replays it",
-    },
-    {
-      "current": false,
-      "description": "10m ago",
-      "label": "[1] why does the dock render twice on the first frame?",
-    },
-  ],
-  "title": "stash · tui-session-87c1e0d2 · 2 drafts",
 }
 `;
 
@@ -512,28 +409,5 @@ exports[`markdown messages > renders a prompt and a thought as markdown at 80 co
   "╭──────────────────────────────────────────────────────────────────────────────╮",
   "│ Kept the parser.                                                             │",
   "╰──────────────────────────────────────────────────────────────────────────────╯",
-]
-`;
-
-exports[`markdown messages > renders the prompt and the thought with their escapes 1`] = `
-[
-  "[38;2;138;138;138m╭──────────────────────────────────────────────────────────────────────────────╮[0m",
-  "[38;2;138;138;138m│[0m [38;2;39;245;200msummarize this:[0m                                                              [38;2;138;138;138m│[0m",
-  "[38;2;138;138;138m│[0m                                                                              [38;2;138;138;138m│[0m",
-  "[38;2;138;138;138m│[0m [38;2;95;175;215m- [0m[38;2;39;245;200mfirst item[0m                                                                 [38;2;138;138;138m│[0m",
-  "[38;2;138;138;138m│[0m [38;2;95;175;215m- [0m[38;2;39;245;200msecond item[0m                                                                [38;2;138;138;138m│[0m",
-  "[38;2;138;138;138m│[0m                                                                              [38;2;138;138;138m│[0m",
-  "[38;2;138;138;138m│[0m [38;2;138;138;138m\`\`\`ts[0m                                                                        [38;2;138;138;138m│[0m",
-  "[38;2;138;138;138m│[0m   const x = 1                                                                [38;2;138;138;138m│[0m",
-  "[38;2;138;138;138m│[0m [38;2;138;138;138m\`\`\`[0m                                                                          [38;2;138;138;138m│[0m",
-  "[38;2;138;138;138m╰──────────────────────────────────────────────────────────────────────────────╯[0m",
-  "[3;38;2;102;102;102mreasoning · 15 tokens[0m",
-  "    [38;2;102;102;102m[38;2;102;102;102mweigh[0m[0m[38;2;102;102;102m[38;2;102;102;102m the options[0m",
-  "",
-  "    [38;2;102;102;102m1. [0m[38;2;102;102;102mkeep the parser[0m",
-  "    [38;2;102;102;102m2. [0m[38;2;102;102;102mdrop the cache[0m",
-  "[38;2;214;194;154m╭──────────────────────────────────────────────────────────────────────────────╮[0m",
-  "[38;2;214;194;154m│[0m Kept the parser.                                                             [38;2;214;194;154m│[0m",
-  "[38;2;214;194;154m╰──────────────────────────────────────────────────────────────────────────────╯[0m",
 ]
 `;

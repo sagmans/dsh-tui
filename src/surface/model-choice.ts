@@ -1,11 +1,13 @@
 import type { Context } from '@deepseek-ai/cordis'
 import {
   ModelSwitch,
-  createModelCatalog,
+  MODEL_CATALOG_GAP_CAUSE,
   parseModelArgument,
+  readModelCatalog,
   readModelRouteKey,
   // agent/model.ts names the reader's choice `ModelChoice`, which is this
   // module's own owner; the type arrives here as the route it describes.
+  type ModelCatalog,
   type ModelChoice as ChosenRoute,
   type ModelRoute,
   type ProviderEntry,
@@ -71,14 +73,18 @@ export interface ModelChoice {
  */
 export function createModelChoice(ctx: Context, ports: ModelChoicePorts): ModelChoice {
   const modelSwitch = new ModelSwitch()
-  const catalog = createModelCatalog(ctx)
+  // One read per composition, kept whole: both gaps leave no catalog and ask for
+  // opposite fixes, so a refusal names the cause it met rather than reading the
+  // absence as a service that was never mounted.
+  const reading = readModelCatalog(ctx)
 
   const runModelCommand = (argument: string): void => {
-    if (catalog === undefined) {
-      ports.notice('this profile has no llm service, so models cannot be listed or switched')
+    if (reading.kind === 'gap') {
+      ports.notice(`${MODEL_CATALOG_GAP_CAUSE[reading.gap]}, so models cannot be listed or switched`)
       ports.render()
       return
     }
+    const catalog = reading.catalog
     let providers: readonly ProviderEntry[]
     try {
       providers = catalog.providers()
@@ -92,7 +98,7 @@ export function createModelChoice(ctx: Context, ports: ModelChoicePorts): ModelC
       case 'current':
         // Choosing by eye is the point of a terminal selector; the picker
         // heads itself with the route the next step will actually use.
-        void openModelPicker(providers)
+        void openModelPicker(catalog, providers)
         return
       case 'list-models':
         void catalog.models(command.provider).then(entries => {
@@ -203,9 +209,9 @@ export function createModelChoice(ctx: Context, ports: ModelChoicePorts): ModelC
    */
   const carriedEffort = async (provider: string, modelId: string): Promise<{ effort?: string; dropped?: string }> => {
     const inForce = effectiveRoute()?.reasoningEffort
-    if (inForce === undefined || catalog === undefined) return {}
+    if (inForce === undefined || reading.kind === 'gap') return {}
     try {
-      const efforts = (await catalog.efforts(provider, modelId))?.efforts ?? []
+      const efforts = (await reading.catalog.efforts(provider, modelId))?.efforts ?? []
       return efforts.some(effort => effort.id === inForce) ? { effort: inForce } : { dropped: inForce }
     } catch {
       // The directory is advisory here: a switch the reader asked for must not
@@ -241,9 +247,9 @@ export function createModelChoice(ctx: Context, ports: ModelChoicePorts): ModelC
    * request would then be refused for.
    */
   const offerRouteEfforts = async (route: PickedRoute): Promise<void> => {
-    if (catalog === undefined) return
+    if (reading.kind === 'gap') return
     try {
-      const info = await catalog.efforts(route.provider, route.model)
+      const info = await reading.catalog.efforts(route.provider, route.model)
       const efforts = info?.efforts ?? []
       if (efforts.length === 0) return
       const current = effectiveRoute()
@@ -271,12 +277,7 @@ export function createModelChoice(ctx: Context, ports: ModelChoicePorts): ModelC
    * adapter answers. A route whose catalog cannot be read stays reachable by
    * name through the text form; a notice explains why its rows are missing.
    */
-  const openModelPicker = async (providers: readonly ProviderEntry[]): Promise<void> => {
-    if (catalog === undefined) {
-      ports.notice('this profile has no llm service, so models cannot be listed or switched')
-      ports.render()
-      return
-    }
+  const openModelPicker = async (directory: ModelCatalog, providers: readonly ProviderEntry[]): Promise<void> => {
     if (providers.length === 0) {
       ports.notice('no provider is configured; add one before choosing a model')
       ports.render()
@@ -287,7 +288,7 @@ export function createModelChoice(ctx: Context, ports: ModelChoicePorts): ModelC
     try {
       const routes: ModelRoute[] = []
       for (const provider of providers) {
-        void catalog.models(provider.id).then(entries => {
+        void directory.models(provider.id).then(entries => {
           if (entries.length === 0) return
           routes.push(...entries.map(entry => ({ provider: provider.id, model: entry.id, name: entry.name })))
           ports.render()
@@ -316,11 +317,12 @@ export function createModelChoice(ctx: Context, ports: ModelChoicePorts): ModelC
    * request would then be refused for.
    */
   const openEffortPicker = async (): Promise<void> => {
-    if (catalog === undefined) {
-      ports.notice('this profile has no llm service, so reasoning efforts cannot be read')
+    if (reading.kind === 'gap') {
+      ports.notice(`${MODEL_CATALOG_GAP_CAUSE[reading.gap]}, so reasoning efforts cannot be read`)
       ports.render()
       return
     }
+    const catalog = reading.catalog
     const facts = ports.statusFacts()
     if (facts.provider === undefined || facts.model === undefined) {
       ports.notice('no model route is in use; /model <provider>/<model> picks one first')

@@ -14,6 +14,13 @@ import { Buffer } from 'node:buffer'
  *
  * The surface's own drawing goes through the terminal object, which is wrapped
  * here: a write made inside that call passes through, and everything else waits.
+ *
+ * What waits is bounded in whole writes, not in bytes: once a stream holds more
+ * than its budget the oldest writes are dropped, and the newest write is never
+ * cut or given up, so the hold ends at whichever is larger — the budget, or that
+ * one write. A write larger than the budget is therefore held whole, because
+ * this is the reader's own program's output and half a line is corruption where
+ * a bigger hold is only memory.
  */
 
 /** One stream a host may write to without asking the surface. */
@@ -21,7 +28,13 @@ export interface HostWritable {
   write(...args: unknown[]): unknown
 }
 
-/** How much host text one stream may hold before the oldest is dropped. */
+/**
+ * The hold budget one stream trims back to.
+ *
+ * Trimming counts whole writes, so this is the point the oldest write is given
+ * up at rather than a ceiling on the bytes a stream holds; the header says what
+ * the newest write does to it.
+ */
 export const HOST_WRITE_LIMIT = 64 * 1024
 
 /** What a reader is told when the held text had to be trimmed. */
@@ -40,7 +53,7 @@ export interface HostWriteOptions {
   terminal: HostWritable
   /** The streams the host writes to directly. */
   targets: readonly HostWritable[]
-  /** Per-stream hold budget; the oldest text is dropped past it. */
+  /** Per-stream hold budget; the oldest whole write is dropped past it. */
   limit?: number
 }
 
@@ -77,6 +90,9 @@ function holdStream(target: HostWritable, held: HeldWrites, isSurfaceWrite: () =
         : String(chunk)
     held.chunks.push(text)
     held.length += text.length
+    // Whole writes only, and never the newest: dropping the oldest is what a
+    // hold is for, while a write cut in half would corrupt the diagnostic
+    // instead of losing it, so one oversized write stays entire.
     while (held.length > limit && held.chunks.length > 1) {
       held.length -= held.chunks.shift()?.length ?? 0
       held.dropped += 1

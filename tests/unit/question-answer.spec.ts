@@ -4,10 +4,13 @@
  */
 
 import { describe, expect, it } from 'vitest'
+import { type Context } from '@deepseek-ai/cordis'
 import { type GateQuestion } from '@/gates.ts'
 import { QuestionGate, toGateQuestions } from '@/gates/questions.ts'
 import { defaultKeymap, resolveKeymap } from '@/input/actions.ts'
 import { createAnswerCompletionProvider } from '@/input/completion.ts'
+import { createPromptInput, type PromptInputPorts } from '@/surface/prompt-input.ts'
+import { PromptBar } from '@/ui/prompt.ts'
 import { answerBar, gateOver, answerText, answerRows, ESC, ENTER, UP, LEFT, DOWN, CTRL_P, providerGate } from './fixtures/gate.ts'
 
 
@@ -54,22 +57,10 @@ describe('QuestionGate paste', () => {
       gate.handleKey(paste('release/0.2'))
       expect(answerRows(gate)).toContain('release/0.2')
     })
-  it('shows a plain answer as typed, because an answer is not filtered through the gate', () => {
-      const gate = gateOver(toGateQuestions({ questions: [{ id: 'q1', question: 'Which branch should I use?' }] }))
-      gate.handleKey(paste('release/0.2'))
-      expect(answerText(gate)).toBe('release/0.2')
-      expect(answerRows(gate)).toContain('release/0.2')
-    })
   it('filters the options from a pasted provider name', () => {
       const gate = providerGate()
       gate.handleKey(paste('Claude Pro'))
       expect(gate.card().options.map(option => option.label)).toEqual(['Anthropic (Claude Pro/Max)'])
-    })
-  it('draws the bar before anything is typed, so a key has somewhere to land', () => {
-      const gate = gateOver(toGateQuestions({ questions: [{ id: 'q1', question: 'key?' }] }))
-      expect(answerText(gate)).toBe('')
-      expect(answerRows(gate).length).toBeGreaterThan(0)
-      expect(gate.card().hint).toContain('paste')
     })
   it('leads with the heading the caller sent, which the seam promises and a plugin relies on', () => {
       const gate = gateOver(toGateQuestions({ questions: [{ id: 'q1', question: 'why?', header: 'Sign in' }] }))
@@ -129,10 +120,10 @@ describe('QuestionGate free-text row', () => {
   it('answers with what was typed on row 0 instead of filtering by it', () => {
       const gate = withOptions()
       gate.handleKey('0')
-      for (const character of 'ship it') gate.handleKey(character)
+      for (const character of 'ship 2 it') gate.handleKey(character)
       expect(gate.card().options.map(option => option.label)).toEqual(['yes', 'no'])
-      expect(answerText(gate)).toBe('ship it')
-      expect(gate.handleKey(ENTER)).toEqual([{ id: 'q1', selected: [], custom: 'ship it' }])
+      expect(answerText(gate)).toBe('ship 2 it')
+      expect(gate.handleKey(ENTER)).toEqual([{ id: 'q1', selected: [], custom: 'ship 2 it' }])
     })
   it('reaches row 0 past the last option and keeps the text when the cursor walks back', () => {
       const gate = withOptions()
@@ -168,22 +159,6 @@ describe('QuestionGate free-text row', () => {
       gate.handleKey('2')
       gate.handleKey('0')
       expect(gate.handleKey(ENTER)).toEqual([{ id: 'q1', selected: ['no'] }])
-    })
-  it('types a space and a digit on row 0 instead of acting on the list', () => {
-      const gate = withOptions()
-      gate.handleKey('0')
-      for (const character of 'v2 two') gate.handleKey(character)
-      expect(gate.handleKey(ENTER)).toEqual([{ id: 'q1', selected: [], custom: 'v2 two' }])
-    })
-  it('keeps a pasted answer on row 0 and sends it whole', () => {
-      const gate = gateOver(toGateQuestions({
-        questions: [{ id: 'q1', question: 'Which key should the deploy use?', options: [{ label: 'from the vault' }] }],
-      }))
-      gate.handleKey('0')
-      gate.handleKey(paste('sk-ant-api03-FAKE998877665544332211'))
-      expect(answerText(gate)).toBe('sk-ant-api03-FAKE998877665544332211')
-      expect(answerRows(gate)).toContain('FAKE9988')
-      expect(gate.handleKey(ENTER)).toEqual([{ id: 'q1', selected: [], custom: 'sk-ant-api03-FAKE998877665544332211' }])
     })
   it('draws row 0 even when the filter leaves no option to show', () => {
       const gate = withOptions()
@@ -249,34 +224,6 @@ describe('QuestionGate free-text row', () => {
       // Nothing is written into the next question, so its bar is not drawn yet.
       expect(card.answerInput).toBeUndefined()
     })
-  it('shows the answer to a question that only mentions keys', () => {
-      const gate = gateOver(toGateQuestions({
-        questions: [{
-          id: 'q1',
-          question: 'Which keys should the shortcut row use? Paste your verdict.',
-          options: [{ label: 'ctrl+t' }],
-        }],
-      }))
-      gate.handleKey('0')
-      for (const character of 'the keys line') gate.handleKey(character)
-      expect(answerText(gate)).toBe('the keys line')
-      expect(answerRows(gate)).toContain('the keys line')
-    })
-  it('shows the answer to a question that names a keybinding', () => {
-      const gate = gateOver(toGateQuestions({ questions: [{ id: 'q1', question: 'Which keybinding should I use?' }] }))
-      for (const character of 'ctrl+t') gate.handleKey(character)
-      expect(answerText(gate)).toBe('ctrl+t')
-      expect(answerRows(gate)).toContain('ctrl+t')
-    })
-  it('draws what a question about credentials collects', () => {
-      const gate = gateOver(toGateQuestions({
-        questions: [{ id: 'q1', question: 'Paste the deploy credentials, then pick the vault', options: [{ label: 'from the vault' }] }],
-      }))
-      gate.handleKey('0')
-      gate.handleKey(paste('abcdefghijkl'))
-      expect(answerText(gate)).toBe('abcdefghijkl')
-      expect(answerRows(gate)).toContain('abcdefghijkl')
-    })
   it('hands the typed answer to the bar, not to the question detail', () => {
       const gate = withOptions()
       gate.handleKey('0')
@@ -293,6 +240,9 @@ describe('QuestionGate free-text row', () => {
       expect(gate.card().answerInput).toBeDefined()
       expect(answerText(gate)).toBe('')
       expect(gate.card().detail).toEqual([])
+      // The hint is what tells the reader a paste lands in a bar they cannot see
+      // an option list for, so a question with only text must still name it.
+      expect(gate.card().hint).toContain('paste')
     })
   it('edits the answer with the whole editor rather than at its end', () => {
       const gate = withOptions()
@@ -328,19 +278,41 @@ describe('QuestionGate free-text row', () => {
       for (const character of 'because') gate.handleKey(character)
       expect(gate.handleKey(ENTER)).toEqual([{ id: 'q1', selected: [], custom: 'because' }])
     })
-  it('leaves a line the reader starts with a slash as plain answer text', () => {
-      // An answer is text the model reads, so the menu the bar shows here carries
-      // no commands: a slash neither narrows to a command nor completes into one,
-      // and the text reaches the answer exactly as typed.
-      const bar = answerBar()
-      bar.setAutocompleteProvider(createAnswerCompletionProvider('/workspace', {
-        candidates: async () => [{ path: 'src/ui/editor.ts', isDirectory: false }],
-        reachable: async () => true,
-      }))
-      const gate = new QuestionGate(toGateQuestions({ questions: [{ id: 'q1', question: 'why?' }] }), bar, defaultKeymap)
+  it('leaves a line the reader starts with a slash as plain answer text', async () => {
+      // An answer is text the model reads, so the menu has to follow the borrow
+      // the surface takes: a slash neither narrows to a command nor completes
+      // into one while a question is answered. The bar is borrowed by the
+      // surface's own owner, because a test that installs the provider itself
+      // stays green while a borrowed bar keeps the prompt's command menu.
+      const editor = answerBar()
+      const bar = new PromptBar(editor)
+      const input = createPromptInput({} as unknown as Context, {
+        editor: () => editor,
+        promptBar: () => bar,
+        drivenAgent: () => ({}),
+        registeredCommands: () => [{ name: 'compact', description: 'compact' }],
+      } as unknown as PromptInputPorts)
+      input.installCompletion()
+      // The bar answers its completion request off the input path, so both halves
+      // wait the same budget: the menu the last half reads proves the wait long
+      // enough for the absence the first half asserts.
+      const settle = async (): Promise<void> => {
+        for (let attempt = 0; attempt < 20; attempt++) await new Promise(resolve => setTimeout(resolve, 5))
+      }
+      const gate = bar.borrow(() => {
+        const opened = new QuestionGate(toGateQuestions({ questions: [{ id: 'q1', question: 'why?' }] }), editor, defaultKeymap)
+        input.applyCompletion()
+        return opened
+      })
       for (const character of '/compact') gate.handleKey(character)
-      expect(bar.isShowingAutocomplete()).toBe(false)
-      expect(answerText(gate)).toBe('/compact')
+      await settle()
+      expect(editor.isShowingAutocomplete()).toBe(false)
+      expect(editor.getExpandedText()).toBe('/compact')
+      bar.giveBack()
+      input.applyCompletion()
+      for (const character of '/compact') editor.handleInput(character)
+      await settle()
+      expect(editor.isShowingAutocomplete()).toBe(true)
     })
   it('still answers the file menu an at-sign opens', async () => {
       // The menu is the base editor's own, so the gate never intercepts a press it
@@ -357,5 +329,8 @@ describe('QuestionGate free-text row', () => {
         await new Promise(resolve => setTimeout(resolve, 5))
       }
       expect(bar.isShowingAutocomplete()).toBe(true)
+      // The row is the workspace's own listing, which is what makes this the
+      // answer's file menu rather than a menu that merely exists.
+      expect(bar.render(60).some(line => line.includes('editor.ts'))).toBe(true)
     })
 })

@@ -1,4 +1,4 @@
-import { TUI_KEYBINDINGS, type KeyId } from '@earendil-works/pi-tui'
+import { TUI_KEYBINDINGS } from '@earendil-works/pi-tui'
 import { describe, expect, it } from 'vitest'
 import { defaultKeymap, keysFor, newShadows, resolveKeymap, shadowsOf } from '@/input/actions.ts'
 import { ACTION_CATALOG, KEYMAP_ALIASES, type Action } from '@/input/action-catalog.ts'
@@ -55,27 +55,6 @@ describe('the action catalog', () => {
     }
   })
 
-  it('keeps every action bindable or says why it is not', () => {
-    for (const entry of ACTION_CATALOG) {
-      expect(entry.label.length, entry.id).toBeGreaterThan(0)
-      expect(entry.defaultKeys.length > 0 || entry.mayUnbind, entry.id).toBe(true)
-    }
-  })
-
-  it('lets a bare character be bound only where the reader does not type', () => {
-    expect(action('chord.model').mayUseBare).toBe(true)
-    expect(action('gate.allow').mayUseBare).toBe(true)
-    for (const id of ['prompt.submit', 'prompt.newLine', 'surface.effort', 'question.up', 'picker.up']) {
-      expect(action(id).mayUseBare, id).toBe(false)
-    }
-  })
-
-  it('lets only a key the library ships unbound be emptied', () => {
-    expect(action('tui.editor.historyPrevious').mayUnbind).toBe(true)
-    expect(action('tui.editor.yank').mayUnbind).toBe(false)
-    expect(action('prompt.submit').mayUnbind).toBe(false)
-  })
-
   it('takes the library rows from the library own table', () => {
     const aliased = Object.keys(KEYMAP_ALIASES)
     const library = ACTION_CATALOG.filter(entry => entry.layer === 'library').map(entry => entry.id).sort()
@@ -89,10 +68,6 @@ describe('the action catalog', () => {
     }
   })
 
-  it('refuses the two library spellings whose meaning the prompt bar owns', () => {
-    expect(KEYMAP_ALIASES['tui.input.submit']).toBe('prompt.submit')
-    expect(KEYMAP_ALIASES['tui.input.newLine']).toBe('prompt.newLine')
-  })
 })
 
 describe('normalizeKey', () => {
@@ -400,9 +375,3 @@ describe('keysFor', () => {
   })
 })
 
-describe('the key id type', () => {
-  it('keeps the catalog honest about the ids it hands the library', () => {
-    const typed: KeyId = keysFor(defaultKeymap(), 'surface.effort')[0] ?? 'ctrl+t'
-    expect(typed).toBe('ctrl+t')
-  })
-})

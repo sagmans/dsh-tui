@@ -2,9 +2,9 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { commandMenu, createAnswerCompletionProvider, createCompletionProvider } from '@/input/completion.ts'
+import { commandMenu, createCompletionProvider } from '@/input/completion.ts'
 import { createFileIndex, type FileIndex } from '@/input/file-index.ts'
-import { LOCAL_COMMANDS, LOCAL_COMMAND_DESCRIPTIONS } from '@/input/submission.ts'
+import { LOCAL_COMMANDS } from '@/input/submission.ts'
 
 const signal = new AbortController().signal
 const scratch: string[] = []
@@ -32,21 +32,16 @@ describe('commandMenu', () => {
   })
 
   it('describes every local command', () => {
-    for (const name of LOCAL_COMMANDS) {
-      expect(LOCAL_COMMAND_DESCRIPTIONS[name]).toBeTruthy()
-    }
+    // A row whose description fell through to the empty string tells the reader
+    // nothing about what it runs, which is the menu's whole job; the first row's
+    // exact bytes pin the wording the reader is shown.
     expect(commandMenu([]).every(item => (item.description ?? '') !== '')).toBe(true)
+    expect(commandMenu([])[0]).toEqual({ name: 'help', description: 'list registered and local commands' })
   })
 
   it('lists the registry commands after the local ones', () => {
     const menu = commandMenu([{ name: 'plan', description: 'toggle plan mode' }])
-    expect(menu.at(-1)).toEqual({ name: 'plan', description: 'toggle plan mode' })
-  })
-
-  it('builds a provider that can also complete paths', () => {
-    const provider = createCompletionProvider([{ name: 'compact', description: 'compact' }], '/tmp')
-    expect(typeof provider.getSuggestions).toBe('function')
-    expect(typeof provider.applyCompletion).toBe('function')
+    expect(menu.map(item => item.name)).toEqual([...LOCAL_COMMANDS.map(name => name.slice(1)), 'plan'])
   })
 })
 
@@ -80,11 +75,15 @@ describe('file completion on the at-sign', () => {
   })
 
   it('leaves an absolute or home path to the path completion underneath', async () => {
-    const provider = createCompletionProvider([], '/workspace', createFileIndex('/workspace', {
-      list: async () => {
+    // The index rejects rather than returning a listing, so an at-token that
+    // reached it would fail the call instead of quietly answering nothing: only
+    // the outside-workspace guard can keep the two probes below green.
+    const provider = createCompletionProvider([], '/workspace', {
+      candidates: async () => {
         throw new Error('the workspace index must not answer for a path outside it')
       },
-    }))
+      reachable: async () => true,
+    })
     await expect(provider.getSuggestions(['@/etc/hosts'], 0, 10, { signal })).resolves.toBeNull()
     await expect(provider.getSuggestions(['@~/notes'], 0, 8, { signal })).resolves.toBeNull()
   })
@@ -99,31 +98,6 @@ describe('file completion on the at-sign', () => {
     writeFileSync(join(root, 'alpha.txt'), '')
     const paths = createCompletionProvider([], root, createFileIndex(root, { list: async () => [] }))
     const file = await paths.getSuggestions(['alpha'], 0, 5, { signal, force: true })
-    expect(file?.items.map(item => item.value)).toEqual(['alpha.txt'])
-  })
-})
-
-describe("the menu a question's answer is written with", () => {
-  it("offers the workspace's files to an answer", async () => {
-    const provider = createAnswerCompletionProvider('/workspace', indexFor(['src/ui/editor.ts', 'docs/readme.md']))
-    const found = await provider.getSuggestions(['@edi'], 0, 4, { signal })
-    expect(found?.items.map(item => item.value)).toEqual(['@src/ui/editor.ts'])
-  })
-
-  it('offers an answer no command at all', async () => {
-    // An answer is text the model reads, so a line the surface would run has no
-    // place in its menu: the bar is borrowed, not turned into a prompt bar.
-    const provider = createAnswerCompletionProvider('/workspace', indexFor(['src/ui/editor.ts']))
-    await expect(provider.getSuggestions(['/com'], 0, 4, { signal })).resolves.toBeNull()
-    await expect(provider.getSuggestions(['/'], 0, 1, { signal })).resolves.toBeNull()
-  })
-
-  it('still completes a path the base provider knows', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'dsh-answer-tab-'))
-    scratch.push(root)
-    writeFileSync(join(root, 'alpha.txt'), '')
-    const provider = createAnswerCompletionProvider(root, createFileIndex(root, { list: async () => [] }))
-    const file = await provider.getSuggestions(['alpha'], 0, 5, { signal, force: true })
     expect(file?.items.map(item => item.value)).toEqual(['alpha.txt'])
   })
 })

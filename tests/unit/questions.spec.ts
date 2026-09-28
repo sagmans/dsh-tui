@@ -16,15 +16,14 @@ describe('QuestionGate', () => {
   const multi = toGateQuestions({
       questions: [{ id: 'q1', question: 'pick', options: [{ label: 'a' }, { label: 'b' }], multiSelect: true }],
     })
-  it('selects with a digit and confirms with enter', () => {
-      const gate = gateOver(single)
-      expect(gate.handleKey('2')).toBeUndefined()
-      expect(gate.handleKey(ENTER)).toEqual([{ id: 'q1', selected: ['no'] }])
-    })
   it('moves the cursor and selects with space', () => {
       const gate = gateOver(single)
       gate.handleKey(DOWN)
       gate.handleKey(' ')
+      // The row the cursor walked to is the row the space has to mark: without
+      // that, enter would still answer it from the cursor and a dead toggle
+      // would read as a working one.
+      expect(gate.card().options[1]).toMatchObject({ label: 'no', current: true, selected: true })
       expect(gate.handleKey(ENTER)).toEqual([{ id: 'q1', selected: ['no'] }])
     })
   it('moves on the Ctrl+P and Ctrl+N aliases as well as the arrows', () => {
@@ -167,7 +166,9 @@ describe('QuestionGate filtering', () => {
     })
   it('answers with the typed text when the filter holds nothing, so a pasted id still names a row', () => {
       const gate = providerGate()
-      for (const character of 'zzz') gate.handleKey(character)
+      // A filter takes the text inside the paste rather than the sequence, which
+      // is the path a reader pasting an id the list does not hold takes.
+      gate.handleKey('\u001b[200~zzz\u001b[201~')
       expect(gate.card().options).toEqual([])
       expect(gate.handleKey(ENTER)).toEqual([{ id: 'q1', selected: [], custom: 'zzz' }])
     })
@@ -175,20 +176,6 @@ describe('QuestionGate filtering', () => {
       const gate = gateOver(toGateQuestions({ questions: [{ id: 'q1', question: 'key?' }] }))
       for (const character of 'sk-2') gate.handleKey(character)
       expect(gate.handleKey(ENTER)).toEqual([{ id: 'q1', selected: [], custom: 'sk-2' }])
-    })
-  it('shows a window of a list longer than the screen, and says which part it shows', () => {
-      const many = toGateQuestions({
-        questions: [{
-          id: 'q1',
-          question: 'pick',
-          options: Array.from({ length: 30 }, (_, index) => ({ label: `option ${index + 1}` })),
-        }],
-      })
-      const gate = gateOver(many)
-      expect(gate.card().options.length).toBe(12)
-      expect(gate.card().detail.join('\n')).toContain('showing 1–12 of 30')
-      gate.handleKey('1')
-      expect(gate.handleKey(ENTER)).toEqual([{ id: 'q1', selected: ['option 1'] }])
     })
   it('counts through the window, so a drawn number still names the option a digit picks', () => {
       const many = toGateQuestions({
@@ -199,6 +186,10 @@ describe('QuestionGate filtering', () => {
         }],
       })
       const gate = gateOver(many)
+      // Forty options do not fit a card, so the window is what the reader sees:
+      // twelve rows, and the part of the list they are drawn from.
+      expect(gate.card().options).toHaveLength(12)
+      expect(gate.card().detail.join('\n')).toContain('showing 1–12 of 30')
       expect(gate.card().optionOffset).toBe(0)
       for (let step = 0; step < 20; step += 1) gate.handleKey(DOWN)
       const scrolled = gate.card()
@@ -208,3 +199,34 @@ describe('QuestionGate filtering', () => {
       expect(gate.handleKey(ENTER)).toEqual([{ id: 'q1', selected: ['option 1'] }])
     })
 })
+
+/**
+ * The untrusted seam: the payload a harness asks with is decoded here, so the
+ * gate only ever sees rows it can draw and answer.
+ */
+describe('toGateQuestions', () => {
+  it('reads questions, options, multi-select flags, and the caller heading', () => {
+      const questions = toGateQuestions({
+        questions: [{
+          id: 'q1',
+          question: 'which?',
+          header: 'Sign in',
+          detail: 'pick one',
+          options: [{ label: 'a', description: 'first' }],
+          multiSelect: true,
+        }],
+      })
+      expect(questions).toEqual([
+        { id: 'q1', question: 'which?', header: 'Sign in', detail: 'pick one', options: [{ label: 'a', description: 'first' }], multiSelect: true },
+      ])
+    })
+  it('skips malformed entries and keeps option-less questions answerable by typing', () => {
+      const questions = toGateQuestions({ questions: [{ question: 'no id' }, { id: 'q2', question: 'free form' }] })
+      expect(questions).toEqual([{ id: 'q2', question: 'free form', header: undefined, detail: undefined, options: [], multiSelect: false }])
+    })
+  it('returns nothing for a request with no question list', () => {
+      expect(toGateQuestions({})).toEqual([])
+      expect(toGateQuestions(undefined)).toEqual([])
+    })
+})
+

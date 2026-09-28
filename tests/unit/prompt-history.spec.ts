@@ -1,14 +1,13 @@
 import { chmod, mkdtemp, readFile, stat, writeFile } from 'node:fs/promises'
-import { homedir, tmpdir } from 'node:os'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   DEFAULT_MAX_ENTRIES,
   HISTORY_FILE_NAME,
   HISTORY_SCHEMA_VERSION,
   createPromptHistory,
   parseHistoryFile,
-  resolveDshHome,
   upsertEntry,
   type PromptEntry,
 } from '@/agent/prompt-history.ts'
@@ -28,19 +27,29 @@ async function scratchHome(): Promise<string> {
   return await mkdtemp(join(tmpdir(), 'dsh-tui-history-'))
 }
 
-describe('resolveDshHome', () => {
-  it('takes a non-blank DSH_HOME', () => {
-    expect(resolveDshHome({ DSH_HOME: '/tmp/custom' })).toBe('/tmp/custom')
-  })
+/** The default store must honor harness-home overrides without writing the real home. */
+describe('the home the history is written under', () => {
+  it.each([
+    { configured: 'absolute', directory: '' },
+    { configured: '~', directory: '' },
+    { configured: '~/harness', directory: 'harness' },
+    { configured: '   ', directory: '.dsh' },
+  ])('persists under the resolved home for $configured', async ({ configured, directory }) => {
+    const home = await scratchHome()
+    vi.stubEnv('HOME', home)
+    vi.stubEnv('USERPROFILE', home)
+    vi.stubEnv('DSH_HOME', configured === 'absolute' ? home : configured)
+    try {
+      const history = createPromptHistory({ cap: () => DEFAULT_MAX_ENTRIES, now: () => new Date(AT(1)) })
+      history.record('from the scratch home')
+      await history.flush()
 
-  it('falls back to ~/.dsh for an absent or blank DSH_HOME', () => {
-    const fallback = join(homedir(), '.dsh')
-    expect(resolveDshHome({})).toBe(fallback)
-    expect(resolveDshHome({ DSH_HOME: '   ' })).toBe(fallback)
-  })
-
-  it('expands a tilde prefix rather than resolving it against the cwd', () => {
-    expect(resolveDshHome({ DSH_HOME: '~/harness' })).toBe(join(homedir(), 'harness'))
+      const path = join(home, directory, HISTORY_FILE_NAME)
+      expect(history.path()).toBe(path)
+      expect(JSON.parse(await readFile(path, 'utf8')).entries[0].text).toBe('from the scratch home')
+    } finally {
+      vi.unstubAllEnvs()
+    }
   })
 })
 
@@ -54,11 +63,6 @@ describe('upsertEntry', () => {
   it('adds a new prompt at the front', () => {
     const next = upsertEntry([entry('older', 1)], 'newer', AT(2), 10)
     expect(next.map(item => item.text)).toEqual(['newer', 'older'])
-  })
-
-  it('caps the list at maxEntries', () => {
-    const next = upsertEntry([entry('a', 1), entry('b', 2)], 'c', AT(3), 2)
-    expect(next.map(item => item.text)).toEqual(['c', 'a'])
   })
 
   it('never moves a timestamp backwards', () => {
@@ -303,6 +307,9 @@ describe('createPromptHistory', () => {
     history.record('c')
     await history.flush()
     expect(history.entries().map(item => item.text)).toEqual(['c', 'b'])
+    // The cap is the store's promise about the file it owns, not just about the
+    // list it hands back.
+    expect(JSON.parse(await readFile(history.path(), 'utf8')).entries.map((item: PromptEntry) => item.text)).toEqual(['c', 'b'])
   })
 
   it('never records a control sequence a brush could draw or insert', async () => {

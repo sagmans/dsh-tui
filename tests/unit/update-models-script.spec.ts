@@ -81,6 +81,55 @@ afterEach(() => {
   for (const home of HOMES.splice(0)) rmSync(home, { recursive: true, force: true })
 })
 
+/**
+ * Catalogs the dump has to refuse, and the line each one owes the reader.
+ *
+ * A refusal is a reading too: it travels on the same stdout a resolved catalog
+ * would use, and the status marks it as a failure rather than an empty answer.
+ */
+const REFUSALS: { name: string; catalog: unknown; expected: string }[] = [
+  {
+    name: 'an entry that names neither a template nor metadata',
+    catalog: { version: 1, default: null, providers: [{ id: 'route', name: 'Route', source: 'openai', models: [{ id: 'nowhere-1' }] }] },
+    expected: 'UNRESOLVED: no source entry for nowhere-1; declare a template or metadata',
+  },
+  {
+    name: 'a filter route whose installed catalog it cannot read',
+    catalog: { version: 1, default: null, providers: [{ id: 'route', name: 'Route', source: 'fake-source', filter: { include: ['*'] } }] },
+    expected: 'UNRESOLVED: filter expands the installed catalog of source "fake-source"; no harness install found',
+  },
+  {
+    name: 'a route that declares both membership styles',
+    catalog: { version: 1, default: null, providers: [{ id: 'route', name: 'Route', source: 'fake-source', filter: { include: ['*'] }, models: [{ id: 'ghost-4', name: 'Ghost 4', metadata: declaredMetadata() }] }] },
+    expected: 'UNRESOLVED: declare exactly one of models or filter',
+  },
+  {
+    name: 'a request default above the model capacity',
+    catalog: { version: 1, default: null, providers: [{ id: 'route', name: 'Route', source: 'no-such-provider', models: [{ id: 'ghost-5', name: 'Ghost 5', defaultMaxTokens: 400, metadata: declaredMetadata({ maxTokens: 100 }) }] }] },
+    expected: 'UNRESOLVED: defaultMaxTokens 400 exceeds model maxTokens 100',
+  },
+  {
+    name: 'a default the served selection does not contain',
+    catalog: { version: 1, default: { provider: 'route', model: 'ghost-typo' }, providers: [{ id: 'route', name: 'Route', source: 'no-such-provider', models: [{ id: 'ghost-7', name: 'Ghost 7', metadata: declaredMetadata() }] }] },
+    expected: 'UNRESOLVED: provider/model is outside the managed selection: route/ghost-typo',
+  },
+  {
+    name: 'an effort the selected model does not offer',
+    catalog: { version: 1, default: { provider: 'route', model: 'ghost-9', reasoningEffort: 'max' }, providers: [{ id: 'route', name: 'Route', source: 'no-such-provider', models: [{ id: 'ghost-9', name: 'Ghost 9', metadata: declaredMetadata() }] }] },
+    expected: 'UNRESOLVED: effort is not supported by the selected model: max',
+  },
+  {
+    name: 'a default on a catalog that serves nothing',
+    catalog: { version: 1, default: { provider: 'route', model: 'ghost-10' }, providers: [{ id: 'route', name: 'Route', source: 'no-such-provider', models: [] }] },
+    expected: 'UNRESOLVED: an empty catalog requires default null',
+  },
+  {
+    name: 'a served catalog that selects no default',
+    catalog: { version: 1, default: null, providers: [{ id: 'route', name: 'Route', source: 'no-such-provider', models: [{ id: 'ghost-11', name: 'Ghost 11', metadata: declaredMetadata() }] }] },
+    expected: 'UNRESOLVED: a served catalog requires a default selection',
+  },
+]
+
 describe('model catalog dump', () => {
   it('reads a model the catalog describes entirely in metadata', () => {
     const home = scratchHome(patchWith({
@@ -115,16 +164,11 @@ describe('model catalog dump', () => {
     expect(result.stdout).toContain('contextWindow=metadata maxTokens=metadata')
   })
 
-  it('refuses an entry that names neither a template nor metadata', () => {
-    const home = scratchHome(patchWith({
-      version: 1,
-      default: null,
-      providers: [{ id: 'route', name: 'Route', source: 'openai', models: [{ id: 'nowhere-1' }] }],
-    }))
-
+  it.each(REFUSALS)('refuses $name', ({ catalog, expected }) => {
+    const home = scratchHome(patchWith(catalog))
     const result = run(home)
     expect(result.status).toBe(1)
-    expect(result.stdout).toContain('UNRESOLVED: no source entry for nowhere-1; declare a template or metadata')
+    expect(result.stdout).toContain(expected)
   })
 
   it('reports a profile that wires models another way', () => {
@@ -202,36 +246,6 @@ describe('model catalog dump', () => {
     expect(result.stdout).not.toContain('other-model')
   })
 
-  it('refuses a filter route whose installed catalog it cannot read', () => {
-    const home = scratchHome(patchWith({
-      version: 1,
-      default: null,
-      providers: [{ id: 'route', name: 'Route', source: 'fake-source', filter: { include: ['*'] } }],
-    }))
-
-    const result = run(home)
-    expect(result.status).toBe(1)
-    expect(result.stdout).toContain('UNRESOLVED: filter expands the installed catalog of source "fake-source"; no harness install found')
-  })
-
-  it('refuses a route that declares both membership styles', () => {
-    const home = scratchHome(patchWith({
-      version: 1,
-      default: null,
-      providers: [{
-        id: 'route',
-        name: 'Route',
-        source: 'fake-source',
-        filter: { include: ['*'] },
-        models: [{ id: 'ghost-4', name: 'Ghost 4', metadata: declaredMetadata() }],
-      }],
-    }))
-
-    const result = run(home)
-    expect(result.status).toBe(1)
-    expect(result.stdout).toContain('UNRESOLVED: declare exactly one of models or filter')
-  })
-
   it('keeps model capacity apart from the request default', () => {
     const data = scratchData('fake-source', { 'sibling-1': installed({ maxTokens: 100 }) })
     const home = scratchHome(patchWith({
@@ -256,23 +270,6 @@ describe('model catalog dump', () => {
     expect(result.stdout).toContain('maxTokens=metadata')
   })
 
-  it('refuses a request default above the model capacity', () => {
-    const home = scratchHome(patchWith({
-      version: 1,
-      default: null,
-      providers: [{
-        id: 'route',
-        name: 'Route',
-        source: 'no-such-provider',
-        models: [{ id: 'ghost-5', name: 'Ghost 5', defaultMaxTokens: 400, metadata: declaredMetadata({ maxTokens: 100 }) }],
-      }],
-    }))
-
-    const result = run(home)
-    expect(result.status).toBe(1)
-    expect(result.stdout).toContain('UNRESOLVED: defaultMaxTokens 400 exceeds model maxTokens 100')
-  })
-
   it('prints the aliases a selection may name', () => {
     const home = scratchHome(patchWith({
       version: 1,
@@ -290,7 +287,7 @@ describe('model catalog dump', () => {
     expect(result.stdout).toContain('aliases ghost-six,g6')
   })
 
-  it('reads a route that declares its own protocol and endpoint', () => {
+  it('reads a route with its own protocol and endpoint', () => {
     const home = scratchHome(patchWith({
       version: 1,
       default: { provider: 'local', model: 'local-model' },
@@ -313,23 +310,6 @@ describe('model catalog dump', () => {
     expect(result.stdout).toContain('api=route')
   })
 
-  it('refuses a default the served selection does not contain', () => {
-    const home = scratchHome(patchWith({
-      version: 1,
-      default: { provider: 'route', model: 'ghost-typo' },
-      providers: [{
-        id: 'route',
-        name: 'Route',
-        source: 'no-such-provider',
-        models: [{ id: 'ghost-7', name: 'Ghost 7', metadata: declaredMetadata() }],
-      }],
-    }))
-
-    const result = run(home)
-    expect(result.status).toBe(1)
-    expect(result.stdout).toContain('UNRESOLVED: provider/model is outside the managed selection: route/ghost-typo')
-  })
-
   it('resolves a default named by an alias', () => {
     const home = scratchHome(patchWith({
       version: 1,
@@ -345,51 +325,5 @@ describe('model catalog dump', () => {
     const result = run(home)
     expect(result.status).toBe(0)
     expect(result.stdout).toContain('default: {"provider":"route","model":"g8"}')
-  })
-
-  it('refuses an effort the selected model does not offer', () => {
-    const home = scratchHome(patchWith({
-      version: 1,
-      default: { provider: 'route', model: 'ghost-9', reasoningEffort: 'max' },
-      providers: [{
-        id: 'route',
-        name: 'Route',
-        source: 'no-such-provider',
-        models: [{ id: 'ghost-9', name: 'Ghost 9', metadata: declaredMetadata() }],
-      }],
-    }))
-
-    const result = run(home)
-    expect(result.status).toBe(1)
-    expect(result.stdout).toContain('UNRESOLVED: effort is not supported by the selected model: max')
-  })
-
-  it('refuses a default on a catalog that serves nothing', () => {
-    const home = scratchHome(patchWith({
-      version: 1,
-      default: { provider: 'route', model: 'ghost-10' },
-      providers: [{ id: 'route', name: 'Route', source: 'no-such-provider', models: [] }],
-    }))
-
-    const result = run(home)
-    expect(result.status).toBe(1)
-    expect(result.stdout).toContain('UNRESOLVED: an empty catalog requires default null')
-  })
-
-  it('refuses a served catalog that selects no default', () => {
-    const home = scratchHome(patchWith({
-      version: 1,
-      default: null,
-      providers: [{
-        id: 'route',
-        name: 'Route',
-        source: 'no-such-provider',
-        models: [{ id: 'ghost-11', name: 'Ghost 11', metadata: declaredMetadata() }],
-      }],
-    }))
-
-    const result = run(home)
-    expect(result.status).toBe(1)
-    expect(result.stdout).toContain('UNRESOLVED: a served catalog requires a default selection')
   })
 })

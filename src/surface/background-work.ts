@@ -90,7 +90,22 @@ export function createBackgroundWork(ctx: Context, ports: BackgroundWorkPorts): 
   /** Re-read the job board; it is live state, so nothing else can fold it. */
   const refresh = (): void => {
     const agent = ports.drivingAgent()
-    jobs = agent === undefined || jobDirectory === undefined ? [] : jobDirectory.list(agent.agent)
+    if (agent === undefined || jobDirectory === undefined) {
+      jobs = []
+      reportBackground()
+      ports.render()
+      return
+    }
+    try {
+      jobs = jobDirectory.list(agent.agent)
+    } catch (error) {
+      // A registry that cannot be asked must not take the command or the watch
+      // down with it: the board keeps its last known shape — nothing, on a
+      // first read — and the reader is told why, in the reason the registry
+      // gave, rather than the surface dying where they cannot see it.
+      jobs = []
+      ports.notice(`could not list background jobs: ${error instanceof Error ? error.message : String(error)}`)
+    }
     reportBackground()
     ports.render()
   }

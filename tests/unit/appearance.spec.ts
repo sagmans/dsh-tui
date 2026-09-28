@@ -1,8 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createTheme } from '@/theme.ts'
-import { parseSettings, toOverrides } from '@/theme-settings.ts'
-import { loadThemes, builtinThemesDir } from '@/theme-files.ts'
 import { createAppearance } from '@/surface/appearance.ts'
 import type { Picker } from '@/surface/modal-input.ts'
 
@@ -137,18 +134,25 @@ describe('appearance preference startup', () => {
   })
 
   it('applies Config theme and false history switches before rendering or history construction', () => {
-    const value = { theme: THEME, history: { enabled: false, ghost: false }, mermaid: 'off' }
-    const forms = { describe: () => [{ ns: 'terminal-custom', value, revision: 0 }], update: vi.fn() }
-    const { appearance, notices } = fixture(forms, value)
-    appearance.registerSection()
-    expect(appearance.historyEnabled()).toBe(false)
-    expect(appearance.historyGhost()).toBe(false)
-    expect(appearance.mermaidMode()).toBe('off')
-    const library = loadThemes('/nonexistent-dsh-tui-test-home', builtinThemesDir())
-    const expected = createTheme('truecolor', toOverrides(parseSettings(value), library))
-    expect(appearance.theme.style('status.cwd', 'cwd')).toBe(expected.style('status.cwd', 'cwd'))
-    appearance.runThemeCommand('tokens')
-    expect(notices.join('\n')).toContain(THEME)
+    // The named theme's own shade rather than a table rebuilt through the same
+    // pipeline: a theme that never reached the painter would still match itself.
+    vi.stubEnv('COLORTERM', 'truecolor')
+    vi.stubEnv('NO_COLOR', '')
+    vi.stubEnv('TERM', 'xterm-256color')
+    try {
+      const value = { theme: THEME, history: { enabled: false, ghost: false }, mermaid: 'off' }
+      const forms = { describe: () => [{ ns: 'terminal-custom', value, revision: 0 }], update: vi.fn() }
+      const { appearance, notices } = fixture(forms, value)
+      appearance.registerSection()
+      expect(appearance.historyEnabled()).toBe(false)
+      expect(appearance.historyGhost()).toBe(false)
+      expect(appearance.mermaidMode()).toBe('off')
+      expect(appearance.theme.style('tool.title', 'x')).toBe('\u001B[38;2;129;151;247mx\u001B[0m')
+      appearance.runThemeCommand('tokens')
+      expect(notices.join('\n')).toContain(THEME)
+    } finally {
+      vi.unstubAllEnvs()
+    }
   })
 
   it.each([undefined, {}])('cannot silently save a theme or record unread history: %s', async service => {

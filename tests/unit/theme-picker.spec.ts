@@ -91,8 +91,10 @@ describe('ThemePicker preview', () => {
     const seen: (string | undefined)[] = []
     const moving = picker(library(), undefined, theme => seen.push(theme?.name))
     moving.handleKey('\u001b[B')
+    moving.handleKey('z')
+    expect(moving.card().rows).toHaveLength(0)
     moving.handleKey('\u007f')
-    expect(seen).toEqual(['one', DEFAULT_THEME])
+    expect(seen).toEqual(['one', undefined, DEFAULT_THEME])
   })
 
   it('narrows to the name being typed and previews what is left', () => {
@@ -117,7 +119,12 @@ describe('ThemePicker preview', () => {
     expect(seen).toEqual([undefined])
   })
 
-  it('settles on the name of the row it is on', () => {
-    expect(picker(library(), 'mine').handleKey('\r')).toEqual({ kind: 'pick', id: 'mine' })
+  it('settles on the name of the row it is on, announcing nothing more', () => {
+    const seen: (string | undefined)[] = []
+    const settling = picker(library(), 'mine', theme => seen.push(theme?.name))
+    expect(settling.handleKey('\r')).toEqual({ kind: 'pick', id: 'mine' })
+    // A press that settles the list is not a move: the row was announced
+    // already, so the caller's preview is not spoken twice.
+    expect(seen).toEqual([])
   })
 })

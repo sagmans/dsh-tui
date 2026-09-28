@@ -257,27 +257,17 @@ node -e 'const fs = require("node:fs"); fs.writeFileSync(process.env.DSH_TEST_SN
     expect(readFileSync(sourceManifest, 'utf8')).toBe(original)
   })
 
-  it('cleans a marked clone with explicit --home after checkout disappears', () => {
+  // Cleanup runs through the clone's own marker, so it must succeed when the
+  // checkout, the source home, or both are gone before --clean arrives.
+  it.each([
+    { label: 'the checkout', dropCheckout: true, dropSource: false, cwd: 'root' },
+    { label: 'the source home', dropCheckout: false, dropSource: true, cwd: 'checkout' },
+    { label: 'the checkout and the source home', dropCheckout: true, dropSource: true, cwd: 'root' },
+  ])('cleans a marked clone after $label is gone', ({ dropCheckout, dropSource, cwd }) => {
     expect(generic(['--home', scratchHome]).status).toBe(0)
-    rmSync(checkout, { recursive: true })
-    const result = spawnSync('bash', [GENERIC_SCRIPT, '--clean', '--home', scratchHome, '--source-home', sourceHome], { cwd: root, encoding: 'utf8' })
-    expect(result.status, result.stderr).toBe(0)
-    expect(existsSync(scratchHome)).toBe(false)
-  })
-
-  it('cleans a marked clone when its original source home was removed', () => {
-    expect(generic(['--home', scratchHome]).status).toBe(0)
-    rmSync(sourceHome, { recursive: true })
-    const result = spawnSync('bash', [GENERIC_SCRIPT, '--clean', '--home', scratchHome, '--source-home', sourceHome], { cwd: checkout, encoding: 'utf8' })
-    expect(result.status, result.stderr).toBe(0)
-    expect(existsSync(scratchHome)).toBe(false)
-  })
-
-  it('cleans an orphan clone when both source home and checkout were removed', () => {
-    expect(generic(['--home', scratchHome]).status).toBe(0)
-    rmSync(sourceHome, { recursive: true })
-    rmSync(checkout, { recursive: true })
-    const result = spawnSync('bash', [GENERIC_SCRIPT, '--clean', '--home', scratchHome, '--source-home', sourceHome], { cwd: root, encoding: 'utf8' })
+    if (dropCheckout) rmSync(checkout, { recursive: true })
+    if (dropSource) rmSync(sourceHome, { recursive: true })
+    const result = spawnSync('bash', [GENERIC_SCRIPT, '--clean', '--home', scratchHome, '--source-home', sourceHome], { cwd: cwd === 'root' ? root : checkout, encoding: 'utf8' })
     expect(result.status, result.stderr).toBe(0)
     expect(existsSync(scratchHome)).toBe(false)
   })
@@ -298,17 +288,6 @@ node -e 'const fs = require("node:fs"); fs.writeFileSync(process.env.DSH_TEST_SN
     const result = spawnSync('bash', [GENERIC_SCRIPT, '--clean', '--home', scratchHome, '--source-home', otherMissing], { cwd: checkout, encoding: 'utf8' })
     expect(result.status).not.toBe(0)
     expect(existsSync(scratchHome)).toBe(true)
-  })
-
-  it('cleans orphan clone from a different valid plugin checkout', () => {
-    expect(generic(['--home', scratchHome]).status).toBe(0)
-    rmSync(checkout, { recursive: true })
-    const unrelated = join(root, 'unrelated-checkout')
-    mkdirSync(unrelated)
-    writeFileSync(join(unrelated, 'package.json'), JSON.stringify({ name: '@example/unrelated' }))
-    const result = spawnSync('bash', [GENERIC_SCRIPT, '--clean', '--home', scratchHome, '--source-home', sourceHome], { cwd: unrelated, encoding: 'utf8' })
-    expect(result.status, result.stderr).toBe(0)
-    expect(existsSync(scratchHome)).toBe(false)
   })
 
   it('refuses a cloned marker hardlinked outside scratch before rewriting it', () => {

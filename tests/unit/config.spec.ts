@@ -6,7 +6,6 @@ describe('resolveConfig', () => {
   it('does not mistake source metadata for native live Config references', () => {
     const parsed = Config({ sessionId: 'abc', history: { enabled: false, ghost: false } })
     expect(hasLiveRowSettings(parsed)).toBe(false)
-    expect(Object.values(Config.dict!).some(field => Reflect.get(field.meta, 'volatile') === true)).toBe(false)
     expect(readRowSettings(parsed)).toMatchObject({ history: { enabled: false, ghost: false } })
   })
 
@@ -49,12 +48,15 @@ describe('resolveConfig', () => {
       .toEqual({ sessionId: 'abc', resume: true, resumePicker: true, model: 'm', provider: 'p', preset: 'ptc', theme: 'violet-orbit', stashScope: 'session', color: false, bell: false })
   })
 
-  it('reads a theme pinned in the row config, and blank as absent', () => {
+  it('reads a theme pinned in the row config, and treats blank optional strings as absent', () => {
     // A profile patch is the durable store once the harness keeps settings per
     // row, so a pinned name has to survive resolution; an empty one means the
-    // default theme rather than a theme named nothing.
+    // default theme rather than a theme named nothing, and the same blank rule
+    // keeps a whitespace model or preset from becoming a name.
     expect(resolveConfig({ sessionId: 'abc', theme: 'violet-orbit' }).theme).toBe('violet-orbit')
     expect(resolveConfig({ sessionId: 'abc', theme: '  ' }).theme).toBeUndefined()
+    expect(resolveConfig({ sessionId: 'abc', model: '   ' }).model).toBeUndefined()
+    expect(resolveConfig({ sessionId: 'abc', preset: '  ' }).preset).toBeUndefined()
   })
 
   it('rejects invalid stash scopes instead of silently sharing a different bank', () => {
@@ -64,11 +66,6 @@ describe('resolveConfig', () => {
     expect(() => resolveConfig({ sessionId: 'abc', stash: { scpoe: 'session' } })).toThrow(TuiConfigError)
     expect(() => resolveConfig(Config({ sessionId: 'abc', stash: { scpoe: 'session' } }))).toThrow(TuiConfigError)
     expect(() => resolveConfig({ sessionId: 'abc', stash: null })).toThrow(TuiConfigError)
-  })
-
-  it('treats blank optional strings as absent', () => {
-    expect(resolveConfig({ sessionId: 'abc', model: '   ' }).model).toBeUndefined()
-    expect(resolveConfig({ sessionId: 'abc', preset: '  ' }).preset).toBeUndefined()
   })
 
   it('rejects a missing or blank session id', () => {

@@ -131,7 +131,7 @@ export class StashStore {
     this.paths = paths
     this.now = now
     this.write = write
-    this.file = loaded.kind === 'ready' ? loaded.file : createEmptyStashFile(paths.sessionId, now())
+    this.file = loaded.kind === 'ready' ? loaded.file : createEmptyStashFile(paths.sessionId)
     this.corruptRecovery =
       loaded.kind === 'corrupt' && loaded.quarantinedTo !== undefined
         ? { path: loaded.quarantinedTo, syncFailed: loaded.quarantineSyncFailed }
@@ -174,11 +174,7 @@ export class StashStore {
       await this.reloadFresh()
       if (this.file.entries.some(entry => entry.id === id)) throw new Error(DUPLICATE_STASH_ID_MESSAGE)
       const entry: StashEntry = { id, text, createdAt: input.createdAt ?? this.now() }
-      const next: StashFile = {
-        ...this.file,
-        updatedAt: entry.createdAt,
-        entries: [entry, ...this.file.entries],
-      }
+      const next: StashFile = { ...this.file, entries: [entry, ...this.file.entries] }
       return this.persistMutation(next, { entry, index: 0 })
     })
   }
@@ -200,7 +196,6 @@ export class StashStore {
       if (resolved === undefined) return { didPersist: false, result: undefined }
       const next: StashFile = {
         ...this.file,
-        updatedAt: this.now(),
         entries: this.file.entries.filter((_, index) => index !== resolved.index),
       }
       return this.persistMutation(next, resolved)
@@ -221,11 +216,7 @@ export class StashStore {
       const kept = confirmed === undefined ? [] : this.file.entries.filter(entry => !confirmed.has(entry.id))
       const removed = this.file.entries.length - kept.length
       if (removed === 0) return { didPersist: false, result: 0 }
-      const next: StashFile = {
-        ...createEmptyStashFile(this.paths.sessionId, this.now()),
-        updatedAt: this.now(),
-        entries: kept,
-      }
+      const next: StashFile = { ...createEmptyStashFile(this.paths.sessionId), entries: kept }
       return this.persistMutation(next, removed)
     })
   }
@@ -236,7 +227,6 @@ export class StashStore {
     if (found === undefined) return { didPersist: false, result: undefined }
     const next: StashFile = {
       ...this.file,
-      updatedAt: this.now(),
       entries: this.file.entries.filter((_, position) => position !== index),
     }
     return this.persistMutation(next, { entry: found, index })
@@ -252,7 +242,7 @@ export class StashStore {
   }
 
   private async reloadFresh(): Promise<void> {
-    const loaded = await readCurrentStashFile(this.filePath, this.paths.sessionId, this.now())
+    const loaded = await readCurrentStashFile(this.filePath, this.paths.sessionId)
     if (loaded.kind === 'ready') {
       this.file = loaded.file
       return
@@ -260,7 +250,7 @@ export class StashStore {
     if (loaded.kind === 'unsupported') throw new UnsupportedStashSchemaError(loaded.version)
     // Corrupt input is quarantined and replaced in memory, so later writes
     // cannot resurrect entries from the invalidated snapshot.
-    this.file = createEmptyStashFile(this.paths.sessionId, this.now())
+    this.file = createEmptyStashFile(this.paths.sessionId)
     this.corruptRecovery =
       loaded.quarantinedTo === undefined
         ? undefined
@@ -273,19 +263,19 @@ export async function loadStashStore(
   now: Clock = Date.now,
   write: StashWriter = writeStashFile,
 ): Promise<StashStore> {
-  const loaded = await withStashFileLock(paths.file, () => readCurrentStashFile(paths.file, paths.sessionId, now()))
+  const loaded = await withStashFileLock(paths.file, () => readCurrentStashFile(paths.file, paths.sessionId))
   if (loaded.kind === 'unsupported') throw new UnsupportedStashSchemaError(loaded.version)
   return new StashStore(paths, loaded, now, write)
 }
 
-async function readCurrentStashFile(filePath: string, sessionId: string, now: number): Promise<LoadResult> {
+async function readCurrentStashFile(filePath: string, sessionId: string): Promise<LoadResult> {
   let source: PrivateTextFile
   try {
     source = await readPrivateTextFile(filePath, 'stash file', MAX_STASH_FILE_BYTES)
   } catch (error) {
     // A missing bank is an empty one; an oversized or unreadable bank is a real
     // failure the caller must report rather than silently start over from.
-    if (hasErrorCode(error, 'ENOENT')) return { kind: 'ready', file: createEmptyStashFile(sessionId, now) }
+    if (hasErrorCode(error, 'ENOENT')) return { kind: 'ready', file: createEmptyStashFile(sessionId) }
     throw error
   }
 

@@ -18,7 +18,7 @@ import { toolDisplayFor, type ToolDisplayTable } from '@/tool-display.ts'
 
 export const theme = createTheme('none')
 export /** The terminal the bar under test renders against; these tests read its rows only. */
-const STUB_TUI = { requestRender: () => {}, terminal: { rows: 24, cols: 80 } } as unknown as TUI
+const STUB_TUI = { requestRender: () => {}, terminal: { rows: 24, columns: 80 } } as unknown as TUI
 export /** How the real bash tool declares itself: a terminal card whose title is the command. */
 const bashPresenter: ToolPresenter = {
   call: (name, argumentsJson) => cardOfCall(

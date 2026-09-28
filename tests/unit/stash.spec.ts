@@ -28,12 +28,19 @@ describe('stashing the editor draft', () => {
       expect(host.renders).toBeGreaterThan(0)
     })
   it('says so rather than writing an empty draft', async () => {
-      const host = new FakeHost()
-      const stash = bank(host)
-      host.editorText = '   \n  '
-      await stash.stashEditor()
-      expect(host.last()).toBe('nothing to stash')
-      expect(stash.entryCount).toBe(0)
+      // A blank argument names nothing, so the command falls back to the bar;
+      // whichever of the two is blank, nothing may be written.
+      for (const { bar, typed } of [
+        { bar: '   \n  ', typed: undefined },
+        { bar: '', typed: '   ' },
+      ] as const) {
+        const host = new FakeHost()
+        const stash = bank(host)
+        host.editorText = bar
+        await stash.stashEditor(typed)
+        expect(host.last()).toBe('nothing to stash')
+        expect(stash.entryCount).toBe(0)
+      }
     })
   it('stores a draft given on the command line and leaves the bar clear', async () => {
       const host = new FakeHost()
@@ -63,19 +70,6 @@ describe('stashing the editor draft', () => {
       expect(stash.entryCount).toBe(0)
     })
   /**
-     * The chord arrives as this same command with no argument, and it is pressed
-     * while the reader is looking at the draft they want parked.
-     */
-    it('parks the bar when the command names no draft', async () => {
-      const host = new FakeHost()
-      host.editorText = 'still writing this'
-      const stash = bank(host)
-      await stash.stashEditor('')
-      expect(host.last()).toBe('Stashed [0]')
-      expect(host.editorText).toBe('')
-      expect(stash.entryCount).toBe(1)
-    })
-  /**
      * The bank is opened before the draft is written, so a storage path that
      * cannot even be opened is a failure the reader still has to be able to retry
      * from the bar.
@@ -89,13 +83,6 @@ describe('stashing the editor draft', () => {
       await stash.stashEditor('the only copy')
       expect(host.editorText).toBe('the only copy')
       expect(host.last()).toContain('stash failed')
-    })
-  it('says nothing to stash when neither the command nor the bar holds one', async () => {
-      const host = new FakeHost()
-      const stash = bank(host)
-      await stash.stashEditor('   ')
-      expect(host.last()).toBe('nothing to stash')
-      expect(stash.entryCount).toBe(0)
     })
   /**
      * The draft is on disk, so reporting a failure would invite a retry that
@@ -116,19 +103,23 @@ describe('stashing the editor draft', () => {
       const reloaded = await loadStashStore(resolveStashPaths(SESSION, baseDir))
       expect(reloaded.entries.map(entry => entry.text)).toEqual(['parked'])
     })
-  it('names both failed steps when the lock could not be released either', async () => {
+  it('names both failed steps after the draft was committed', async () => {
       const host = new FakeHost()
-      const both: StashWriter = async () => {
+      const baseDir = scratchBase()
+      const both: StashWriter = async (file, contents) => {
+        await writeStashFile(file, contents)
         throw new StashCommittedError(
-          { entry: { id: 'a', text: 'parked', createdAt: 1 }, index: 0 },
+          { entry: contents.entries[0]!, index: 0 },
           { phase: 'directory-sync', error: new Error('fsync failed') },
           { phase: 'lock-release', error: new Error('busy') },
         )
       }
-      const stash = bank(host, { write: both })
+      const stash = bank(host, { baseDir, write: both })
       await stash.stashEditor('parked')
       expect(host.last()).toBe('Stashed [0], but the directory-sync and lock-release steps failed')
       expect(host.editorText).toBe('')
+      const reloaded = await loadStashStore(resolveStashPaths(SESSION, baseDir))
+      expect(reloaded.entries.map(entry => entry.text)).toEqual(['parked'])
     })
   it('never writes a draft into a bar that is answering a question', async () => {
       const host = new FakeHost()

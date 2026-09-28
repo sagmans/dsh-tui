@@ -86,26 +86,15 @@ describe('withStashFileLock', () => {
     await expect(withStashFileLock(file, async () => 'ran')).resolves.toBe('ran')
   })
 
-  it('times out rather than breaking a lock a live owner still holds', async () => {
-    const file = scratchFile()
-    await holdLock(`${file}.lock`, { pid: process.pid, host: hostname() })
-    await expect(withStashFileLock(file, async () => 'ran')).rejects.toThrow(/timed out waiting for the stash lock/)
-  })
-
-  /**
-   * A contender never removes a lock it does not hold: a publisher that lost the
-   * name to a successor has to walk away from it, because the successor's lock is
-   * the one keeping two writers out of the bank.
-   */
-  it('leaves a live lock alone when publishing loses the name', async () => {
+  it('times out without removing a lock a live owner still holds', async () => {
     const file = scratchFile()
     const lockDir = `${file}.lock`
-    // The name is already taken by a live successor when the owner write runs.
     await holdLock(lockDir, { pid: process.pid, host: hostname() })
     const before = readFileSync(join(lockDir, 'owner.json'), 'utf8')
-    await expect(withStashFileLock(file, async () => 'ran')).rejects.toThrow(/timed out waiting/)
+    await expect(withStashFileLock(file, async () => 'ran')).rejects.toThrow(/timed out waiting for the stash lock/)
     expect(readFileSync(join(lockDir, 'owner.json'), 'utf8')).toBe(before)
     expect(existsSync(lockDir)).toBe(true)
+    expect(readdirSync(lockDir)).toEqual(['owner.json'])
   })
 
   /**
@@ -121,16 +110,6 @@ describe('withStashFileLock', () => {
         return 'read'
       }),
     ).resolves.toBe('read')
-  })
-
-  it('reports a lock that cannot be released as a committed mutation, not a lost one', async () => {
-    const file = scratchFile()
-    await expect(
-      withStashMutationLock(file, async () => {
-        await stealLock(`${file}.lock`)
-        return { didPersist: true, result: 'written' }
-      }),
-    ).rejects.toThrow(/mutation committed but lock-release failed/)
   })
 
   /**
@@ -235,16 +214,6 @@ describe('withStashFileLock', () => {
     expect(readdirSync(join(file, '..')).filter(name => name.startsWith('.claim-'))).toEqual([])
   })
 
-  it('leaves a live lock exactly where it is while looking at it', async () => {
-    const file = scratchFile()
-    const lockDir = `${file}.lock`
-    await holdLock(lockDir, { pid: process.pid, host: hostname() })
-    const before = readFileSync(join(lockDir, 'owner.json'), 'utf8')
-    await expect(withStashFileLock(file, async () => 'ran')).rejects.toThrow(/timed out waiting/)
-    expect(readFileSync(join(lockDir, 'owner.json'), 'utf8')).toBe(before)
-    expect(readdirSync(lockDir)).toEqual(['owner.json'])
-  })
-
   /**
    * A reclaimer killed between winning the claim and clearing it is the one
    * state a reader has to resolve by hand, so the contender has to stop and say
@@ -280,13 +249,6 @@ describe('withStashFileLock', () => {
 })
 
 describe('withStashMutationLock', () => {
-  it('unwraps the mutation result', async () => {
-    const file = scratchFile()
-    await expect(
-      withStashMutationLock(file, async () => ({ didPersist: true, result: 'saved' })),
-    ).resolves.toBe('saved')
-  })
-
   it('reports a persisted mutation whose release failed as committed, never as lost', async () => {
     const file = scratchFile()
     const failure = withStashMutationLock(file, async () => {

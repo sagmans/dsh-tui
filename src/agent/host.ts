@@ -60,7 +60,7 @@ export interface StartAgentOptions {
  * travel with the route here because an absent one is what the reader sees in
  * the status line but never reaches a request.
  */
-export function agentRoute(
+function agentRoute(
   ctx: Context,
   options: Pick<StartAgentOptions, 'model' | 'provider'>,
 ): { provider?: string; model?: string; reasoningEffort?: ReasoningEffortId } {
@@ -92,7 +92,7 @@ export function agentRoute(
  * surface as itself, because falling back to a create hides it behind the
  * identity collision of a session that does exist.
  */
-export function absentSession(error: unknown): boolean {
+function absentSession(error: unknown): boolean {
   return error instanceof Error && error.name === 'SessionPersistenceNotFoundError'
 }
 

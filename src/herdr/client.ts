@@ -223,7 +223,7 @@ export function createHerdrClient(env: HerdrEnvironment = process.env, options: 
  * is the one value that tells Herdr to forget the token, which is the honest
  * answer for a fact that cannot be represented.
  */
-export function acceptedTokens(tokens: Readonly<Record<string, string | undefined>>): Record<string, string | null> {
+function acceptedTokens(tokens: Readonly<Record<string, string | undefined>>): Record<string, string | null> {
   const accepted: Record<string, string | null> = {}
   for (const [key, value] of Object.entries(tokens)) {
     accepted[key] = value === undefined || value.length > MAX_METADATA_VALUE_CHARS ? null : value

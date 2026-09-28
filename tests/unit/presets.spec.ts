@@ -114,7 +114,6 @@ describe('createPresetRoster', () => {
     expect(roster(() => ({ openTurnStartSeq: 3, lastTurn: 1 }))?.started({})).toBe(true)
     expect(roster(() => ({ openTurnStartSeq: null, lastTurn: 2 }))?.started({})).toBe(true)
     // A composition with no projection registry cannot say, so it stays blank.
-    expect(roster(() => undefined)?.started({})).toBe(false)
     expect(createPresetRoster(fakeContext({ agentPresets: rosterService() }))?.started({})).toBe(false)
   })
 

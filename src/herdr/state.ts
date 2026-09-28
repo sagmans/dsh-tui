@@ -40,7 +40,7 @@ export type DriverStatus = 'idle' | 'running'
  * vocabulary is decided here rather than at the call site so an unknown
  * future status is dropped instead of guessed at.
  */
-export function asDriverStatus(value: unknown): DriverStatus | undefined {
+function asDriverStatus(value: unknown): DriverStatus | undefined {
   return value === 'idle' || value === 'running' ? value : undefined
 }
 

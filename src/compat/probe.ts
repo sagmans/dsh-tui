@@ -83,7 +83,7 @@ export function probeComposition(has: (service: string) => boolean): ProbeReport
 export function describeMissingRequired(report: ProbeReport): string {
   const lines = report.missingRequired.map(capability =>
     `  ${capability.service}: needed for ${capability.use} — ${capability.fix}`)
-  return `dsh-tui: this profile is missing what the terminal surface needs\\n${lines.join('\\n')}`
+  return `dsh-tui: this profile is missing what the terminal surface needs\n${lines.join('\n')}`
 }
 
 /** One line for the reader when the surface runs with something switched off. */

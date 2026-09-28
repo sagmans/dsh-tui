@@ -3,6 +3,9 @@ import { dshHomeDir, resolveStashPaths, sanitizeSessionId, stashBaseDir } from '
 
 const LONG_ID = 'x'.repeat(300)
 const DIGEST_PATTERN = /--[0-9a-f]{16}$/u
+/** A stand-in OS home, so the resolver is driven without touching the process. */
+const TEST_HOME = '/home/me'
+const FALLBACK_HOME = `${TEST_HOME}/.dsh`
 
 describe('sanitizeSessionId', () => {
   it('flattens a session id into a readable, versioned key', () => {
@@ -31,40 +34,47 @@ describe('sanitizeSessionId', () => {
   it('keeps two long ids apart when only their tails differ', () => {
     const one = sanitizeSessionId(`tui-session-${LONG_ID}-one`)
     const two = sanitizeSessionId(`tui-session-${LONG_ID}-two`)
-    expect(Buffer.byteLength(one)).toBeLessThanOrEqual(200)
-    expect(Buffer.byteLength(two)).toBeLessThanOrEqual(200)
+    // An id made of many segments has to fit the same filename budget as one long
+    // segment, so the key stays openable however the id is shaped.
+    const segmented = sanitizeSessionId(
+      `tui-session-${Array.from({ length: 60 }, (_, index) => `part-${index}`).join('/')}`,
+    )
+    for (const key of [one, two, segmented]) expect(Buffer.byteLength(key)).toBeLessThanOrEqual(200)
     expect(one).not.toBe(two)
     expect(one).toMatch(DIGEST_PATTERN)
-  })
-
-  it('keeps a truncated label from taking a name a shorter id could own', () => {
-    const long = `tui-session-${LONG_ID}`
-    const truncated = sanitizeSessionId(long)
-    // A session whose own id is the truncated label is a different session, and
-    // must not find the long id's bank.
-    expect(sanitizeSessionId(truncated.replace(/^v2--/u, '').replaceAll('--', '/'))).not.toBe(truncated)
-  })
-
-  it('stays within a filename for an id far past the limit', () => {
-    const long = `tui-session-${Array.from({ length: 60 }, (_, index) => `part-${index}`).join('/')}`
-    expect(Buffer.byteLength(sanitizeSessionId(long))).toBeLessThanOrEqual(200)
-  })
-
-  it('is stable for the same session, so a resume finds the same bank', () => {
-    expect(sanitizeSessionId('tui-session-abc')).toBe(sanitizeSessionId('tui-session-abc'))
   })
 })
 
 describe('DSH_HOME resolution', () => {
   it('uses the configured home, and only falls back when it names nothing', () => {
-    expect(dshHomeDir({ DSH_HOME: '/scratch/dsh' }, '/home/me')).toBe('/scratch/dsh')
-    expect(dshHomeDir({ DSH_HOME: '  /scratch/dsh  ' }, '/home/me')).toBe('/scratch/dsh')
-    expect(dshHomeDir({}, '/home/me')).toBe('/home/me/.dsh')
-    expect(dshHomeDir({ DSH_HOME: '   ' }, '/home/me')).toBe('/home/me/.dsh')
+    expect(dshHomeDir({ DSH_HOME: '/scratch/dsh' }, TEST_HOME)).toBe('/scratch/dsh')
+    expect(dshHomeDir({ DSH_HOME: '  /scratch/dsh  ' }, TEST_HOME)).toBe('/scratch/dsh')
+    expect(dshHomeDir({}, TEST_HOME)).toBe(FALLBACK_HOME)
+    expect(dshHomeDir({ DSH_HOME: '   ' }, TEST_HOME)).toBe(FALLBACK_HOME)
+  })
+
+  /**
+   * The stash bank, the theme files, and the prompt history all read the harness
+   * home from here, so one spelling of `~` has to name one directory for all
+   * three. `~user` and an interior `~` are ordinary path text everywhere but a
+   * shell, and rewriting them would move a directory the reader named exactly.
+   */
+  it.each([
+    ['~', TEST_HOME],
+    ['~/harness', `${TEST_HOME}/harness`],
+    ['~root/harness', '~root/harness'],
+    ['/scratch/~/keep', '/scratch/~/keep'],
+  ])('expands only the spellings that name the OS home: %s', (configured, expected) => {
+    expect(dshHomeDir({ DSH_HOME: configured }, TEST_HOME)).toBe(expected)
+  })
+
+  it('keeps the value as written when the environment names no home to expand', () => {
+    expect(dshHomeDir({ DSH_HOME: '~' }, '')).toBe('~')
   })
 
   it('keeps the stash under a directory this surface owns', () => {
-    expect(stashBaseDir({ DSH_HOME: '/scratch/dsh' }, '/home/me')).toBe('/scratch/dsh/tui-stash')
+    expect(stashBaseDir({ DSH_HOME: '/scratch/dsh' }, TEST_HOME)).toBe('/scratch/dsh/tui-stash')
+    expect(stashBaseDir({ DSH_HOME: '~/harness' }, TEST_HOME)).toBe(`${TEST_HOME}/harness/tui-stash`)
   })
 })
 
@@ -85,9 +95,8 @@ describe('resolveStashPaths', () => {
     expect(pathBank.key).toMatch(/^v3--/u)
   })
 
-  it('gives two sessions two files and one session one file', () => {
+  it('keeps distinct session IDs and punctuation-distinct IDs in separate files', () => {
     expect(resolveStashPaths('a', '/base').file).not.toBe(resolveStashPaths('b', '/base').file)
-    expect(resolveStashPaths('a', '/base').file).toBe(resolveStashPaths('a', '/base').file)
     expect(resolveStashPaths('a-/b', '/base').file).not.toBe(resolveStashPaths('a/-b', '/base').file)
   })
 })

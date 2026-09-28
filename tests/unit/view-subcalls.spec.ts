@@ -72,6 +72,9 @@ describe('TranscriptView nested PTC calls', () => {
       // Only the call still in flight is marked, so a settled row takes the mark's
       // place and the names read down one column.
       expect(lines.slice(1)).toEqual(['  read src/x.ts', '  bash git status · exit 0'])
+      // Opening the card adds its own rows under the calls, and the dispatches keep
+      // one indented line each, so the fold is the only thing the click changed.
+      expect(viewOf(model, INLINE).render(60)).toEqual(['search the tree', '  read src/x.ts', '  bash git status · exit 0', '    done'])
     })
   it('colours a loaded skill name on its dispatched row', () => {
     // This profile loads skills inside run_code, so the dispatched row must
@@ -85,13 +88,6 @@ describe('TranscriptView nested PTC calls', () => {
   it('keeps a dispatched command that carries a break on one row', () => {
       const model = foldedProgram([{ name: 'bash', args: { command: 'echo one\necho two' } }])
       expect(viewOf(model, FOLDED).render(60)).toEqual(['search the tree', '  bash echo one echo two · exit 0'])
-    })
-  it('draws each call on one two-space-indented line under the header', () => {
-      const model = foldedProgram([
-        { name: 'read', args: { file_path: 'src/x.ts' } },
-        { name: 'bash', args: { command: 'git status' } },
-      ])
-      expect(viewOf(model, INLINE).render(60)).toEqual(['search the tree', '  read src/x.ts', '  bash git status · exit 0', '    done'])
     })
   it('marks a failed call in the failed colour without hiding it', () => {
       const colour = createTheme('truecolor')

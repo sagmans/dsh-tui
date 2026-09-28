@@ -32,9 +32,10 @@ function readiness(): { service: { onReady: (listener: () => void) => () => void
   }
 }
 
-function setTTY(value: boolean): void {
-  Object.defineProperty(process.stdin, 'isTTY', { configurable: true, value })
-  Object.defineProperty(process.stdout, 'isTTY', { configurable: true, value })
+/** The gate reads each stream on its own, so a case can pipe only one of them. */
+function setTTY(stdinIsTTY: boolean, stdoutIsTTY = stdinIsTTY): void {
+  Object.defineProperty(process.stdin, 'isTTY', { configurable: true, value: stdinIsTTY })
+  Object.defineProperty(process.stdout, 'isTTY', { configurable: true, value: stdoutIsTTY })
 }
 
 beforeEach(() => {
@@ -73,7 +74,9 @@ describe('list-models in the tui row', () => {
     expect(process.stderr.write).not.toHaveBeenCalled()
   })
 
-  it('exits 1 with a stderr message when the profile has no llm service', async () => {
+  // The two causes of an absent catalog ask for opposite fixes, so the refusal
+  // names the one this composition met instead of always naming a missing service.
+  it('exits 1 asking to mount an llm service when the profile has none', async () => {
     setTTY(false)
     const exit = vi.fn()
     const ready = readiness()
@@ -85,7 +88,7 @@ describe('list-models in the tui row', () => {
     expect(process.stdout.write).not.toHaveBeenCalled()
   })
 
-  it('exits 1 when the llm service cannot list providers', async () => {
+  it('exits 1 naming the mounted service, not a missing one, when it cannot list providers', async () => {
     setTTY(false)
     const exit = vi.fn()
     const ready = readiness()
@@ -93,7 +96,9 @@ describe('list-models in the tui row', () => {
     apply(ctx, undefined)
     ready.commit()
     await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(1))
-    expect(process.stderr.write).toHaveBeenCalledWith(expect.stringContaining('no llm service'))
+    expect(process.stderr.write).toHaveBeenCalledWith(expect.stringContaining('cannot list providers'))
+    // Nothing is absent from this profile, so the line must not read as an install.
+    expect(process.stderr.write).not.toHaveBeenCalledWith(expect.stringContaining('no llm service'))
     expect(process.stdout.write).not.toHaveBeenCalled()
   })
 
@@ -104,10 +109,13 @@ describe('list-models in the tui row', () => {
     expect(process.stdout.write).not.toHaveBeenCalled()
   })
 
-  it('exits 1 when no provider advertises a model', async () => {
+  it.each([
+    { label: 'no provider advertises a model', providers: [{ id: 'alpha', name: 'Alpha' }] },
+    { label: 'the deployment declares no providers at all', providers: [] },
+  ])('exits 1 when $label', async ({ providers }) => {
     setTTY(false)
     const exit = vi.fn()
-    const llm = { listProviders: () => [{ id: 'alpha', name: 'Alpha' }], listModels: async () => [] }
+    const llm = { listProviders: () => providers, listModels: async () => [] }
     const ready = readiness()
     const ctx = contextFor({ appExit: exit, appReady: ready.service, [LIST_MODELS_SERVICE]: true, llm })
     apply(ctx, undefined)
@@ -115,5 +123,27 @@ describe('list-models in the tui row', () => {
     await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(1))
     expect(process.stderr.write).toHaveBeenCalledWith(expect.stringContaining('no configured provider advertises a model'))
     expect(process.stdout.write).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * The TTY gate belongs to the interactive row, not to the listing: a listing is a
+ * pipeable dump that answers without a terminal, while an interactive launch that
+ * cannot read a real one fails loud instead of degrading to line mode.
+ */
+describe('the interactive row', () => {
+  it('accepts a real terminal on both streams', () => {
+    setTTY(true)
+    const ctx = contextFor({ appExit: vi.fn(), [LIST_MODELS_SERVICE]: false })
+    // Passing the gate means failing later, in composition, never on the TTY check.
+    expect(() => apply(ctx, { sessionId: 'interactive' })).not.toThrow(/must be TTYs/)
+  })
+
+  it('refuses a piped stream instead of degrading to line mode', () => {
+    const ctx = contextFor({ appExit: vi.fn(), [LIST_MODELS_SERVICE]: false })
+    setTTY(false, true)
+    expect(() => apply(ctx, { sessionId: 'interactive' })).toThrow(/must be TTYs/)
+    setTTY(true, false)
+    expect(() => apply(ctx, { sessionId: 'interactive' })).toThrow(/must be TTYs/)
   })
 })

@@ -131,19 +131,6 @@ export type ChordResult =
   | { readonly kind: 'armed' }
   | { readonly kind: 'action'; readonly binding: ChordBinding }
 
-/** The timer a chord schedules, injected so a test can run the window itself. */
-export interface ChordTimers {
-  schedule(run: () => void, delayMs: number): unknown
-  cancel(handle: unknown): void
-}
-
-const SYSTEM_TIMERS: ChordTimers = {
-  schedule: (run, delayMs) => setTimeout(run, delayMs),
-  cancel: handle => {
-    clearTimeout(handle as ReturnType<typeof setTimeout>)
-  },
-}
-
 /**
  * The two keys between a prefix and an action.
  *
@@ -153,14 +140,13 @@ const SYSTEM_TIMERS: ChordTimers = {
  */
 export class ChordReader {
   private armed: KeyId | undefined
-  private expiry: unknown
+  private expiry: ReturnType<typeof setTimeout> | undefined
 
   constructor(
     private readonly prefixes: () => readonly KeyId[],
     private readonly bindings: () => readonly ChordBinding[],
     private readonly windowMs: () => number,
     private readonly onExpire: () => void,
-    private readonly timers: ChordTimers = SYSTEM_TIMERS,
   ) {}
 
   /** Whether a chord is waiting for its next key, which is what the footer says. */
@@ -183,7 +169,7 @@ export class ChordReader {
   disarm(): void {
     this.armed = undefined
     if (this.expiry === undefined) return
-    this.timers.cancel(this.expiry)
+    clearTimeout(this.expiry)
     this.expiry = undefined
   }
 
@@ -199,7 +185,7 @@ export class ChordReader {
       // A window of zero is the reader asking for a sticky chord: nothing but
       // the next key ends it.
       if (windowMs > 0) {
-        this.expiry = this.timers.schedule(() => {
+        this.expiry = setTimeout(() => {
           this.armed = undefined
           this.expiry = undefined
           this.onExpire()

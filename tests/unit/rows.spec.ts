@@ -8,7 +8,6 @@ describe('RowCache', () => {
     expect(cache.lookup(key, '80')).toBeUndefined()
     cache.store(key, '80', ['row'])
     expect(cache.lookup(key, '80')).toEqual(['row'])
-    expect(cache.stats()).toEqual({ hits: 1, misses: 1 })
   })
 
   it('rebuilds when the tag changes, because the rows would differ', () => {
@@ -16,7 +15,6 @@ describe('RowCache', () => {
     const key = {}
     cache.store(key, '80|c-r', ['row'])
     expect(cache.lookup(key, '40|c-r')).toBeUndefined()
-    expect(cache.stats().misses).toBe(1)
   })
 
   it('keys by entry identity, so two equal rows are still two entries', () => {
@@ -33,7 +31,6 @@ describe('RowCache', () => {
     const entries = Array.from({ length: 5_000 }, () => ({}))
     for (const entry of entries) cache.store(entry, '80', ['row'])
     for (const entry of entries) expect(cache.lookup(entry, '80')).toEqual(['row'])
-    expect(cache.stats()).toEqual({ hits: 5_000, misses: 0 })
   })
 
   it('forgets everything when the transcript is cleared', () => {

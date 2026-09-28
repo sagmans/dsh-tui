@@ -1,10 +1,11 @@
 import { writeFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import type { PresetRoster } from '../agent/presets.ts'
 import { defaultExportFile, transcriptToText } from '../export.ts'
+import { ensureThemesHome, themesHomeDir } from '../theme-files.ts'
 import type { ActionLayer } from '../input/action-catalog.ts'
 import type { RegisteredCommand } from '../input/completion.ts'
 import { chordKeysLine, surfaceKeysLine } from '../input/keymap.ts'
@@ -153,7 +154,24 @@ export function createCommands(ctx: Context, ports: CommandsPorts): Commands {
    * looking at — the thing worth pasting into a message.
    */
   const runExportCommand = (argument: string): void => {
-    const path = resolve(argument === '' ? defaultExportFile(String(ports.session.activeSession())) : argument)
+    let path: string
+    if (argument === '') {
+      // No destination named: the dump follows the session's other files into
+      // the reader's themes home — the one directory under the harness home
+      // this surface already owns and creates — because resolving a bare file
+      // name against the working directory drops a session file into whatever
+      // checkout the reader happened to start from.
+      const home = themesHomeDir()
+      const problems = ensureThemesHome(home)
+      if (problems.length > 0) {
+        for (const problem of problems) ports.transcript.notice(problem)
+        ports.render()
+        return
+      }
+      path = join(home, defaultExportFile(String(ports.session.activeSession())))
+    } else {
+      path = resolve(argument)
+    }
     try {
       writeFileSync(path, transcriptToText(ports.transcript.model.entries()), 'utf8')
       ports.transcript.notice(`transcript written to ${path}`)
@@ -189,9 +207,10 @@ export function createCommands(ctx: Context, ports: CommandsPorts): Commands {
 
   const helpText = (): string => {
     const current = ports.session.drivingAgent()?.agent
-    const registered = current === undefined || registry() === undefined
-      ? []
-      : registry()?.list(current).map(command => `/${command.name}`) ?? []
+    // Read once: the registry is the surface's own lookup, and asking it twice
+    // for one line would let a changing roster answer the two halves differently.
+    const roster = registry()
+    const registered = current === undefined || roster === undefined ? [] : roster.list(current).map(command => `/${command.name}`)
     const commands = registered.length === 0 ? 'none registered yet' : registered.join(' ')
     return `commands: ${commands} · surface: ${LOCAL_COMMANDS.join(' ')} · keys: ${surfaceKeysLine(ports.appearance.keymap())} · ${chordKeysLine(ports.appearance.keymap())}`
   }

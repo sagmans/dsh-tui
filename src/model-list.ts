@@ -1,5 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis'
-import { createModelCatalog } from './agent/model.ts'
+import { MODEL_CATALOG_GAP_CAUSE, readModelCatalog, type ModelCatalogGap } from './agent/model.ts'
 
 /**
  * Column separator between the route and the display name.
@@ -11,6 +11,19 @@ const FIELD_SEPARATOR = '\t'
 
 /** Prefix every refusal carries, so a piped run names the command that failed. */
 const FAILURE_PREFIX = 'dsh --profile tui list-models: '
+
+/**
+ * One refusal per cause of an absent catalog.
+ *
+ * The reader acts on this line, and the two causes ask for opposite things: an
+ * absent service is a plugin to mount, while one that cannot list providers is
+ * already mounted and only older than the model directory this command reads.
+ */
+const CATALOG_GAP_MESSAGES: Record<ModelCatalogGap, string> = {
+  no_llm_service: `${MODEL_CATALOG_GAP_CAUSE.no_llm_service}, so models cannot be listed`,
+  llm_without_provider_listing: `${MODEL_CATALOG_GAP_CAUSE.llm_without_provider_listing}, so models cannot be listed; `
+    + 'it predates the model directory this command reads',
+}
 
 /**
  * The directory slice a listing reads.
@@ -55,14 +68,14 @@ export async function runModelList(ctx: Context, exit: (code: number) => void): 
     process.stderr.write(`${FAILURE_PREFIX}${message}\n`)
     exit(1)
   }
-  const catalog = createModelCatalog(ctx)
-  if (catalog === undefined) {
-    fail('this profile has no llm service, so models cannot be listed')
+  const reading = readModelCatalog(ctx)
+  if (reading.kind === 'gap') {
+    fail(CATALOG_GAP_MESSAGES[reading.gap])
     return
   }
   let lines: string[]
   try {
-    lines = await modelListLines(catalog)
+    lines = await modelListLines(reading.catalog)
   } catch (error) {
     fail(`could not list models: ${error instanceof Error ? error.message : String(error)}`)
     return

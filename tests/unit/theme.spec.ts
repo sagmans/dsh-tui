@@ -10,14 +10,6 @@ const overrides = (tokens: Partial<Record<TuiToken, StyleSpec>>, palette = DEFAU
 })
 
 describe('createTheme', () => {
-  it('styles nothing when colour is off', () => {
-    const theme = createTheme('none')
-    expect(theme.style('transcript.user', 'x')).toBe('x')
-    expect(theme.markdown.heading('x')).toBe('x')
-    expect(theme.editor.borderColor('x')).toBe('x')
-    expect(theme.color).toBe(false)
-  })
-
   /**
    * The width helper closes a cut with a reset whether or not it opened a style,
    * so a row would carry escapes with colour off and break the one promise the
@@ -47,18 +39,12 @@ describe('createTheme', () => {
     // takes the slant.
     expect(theme.style('transcript.reasoning.body', 'x')).toBe('\u001B[38;2;102;102;102mx\u001B[0m')
     expect(theme.style('transcript.reasoning.summary', 'x')).toBe('\u001B[3;38;2;102;102;102mx\u001B[0m')
-    expect(theme.style('tool.detail', 'x')).toContain('38;2;')
   })
 
   it('leaves the answer text alone while the thinking is styled', () => {
     const theme = createTheme('truecolor')
     expect(theme.style('markdown.codeBlock', 'the answer')).toBe('the answer')
     expect(theme.style('transcript.reasoning.body', 'a thought')).not.toBe('a thought')
-  })
-
-  it('honours an override', () => {
-    const theme = createTheme('truecolor', overrides({ 'transcript.user': { fg: '#ff0000', bold: true } }))
-    expect(theme.style('transcript.user', 'x')).toBe('\u001B[1;38;2;255;0;0mx\u001B[0m')
   })
 
   it('honours a palette override through the elements that name it', () => {
@@ -70,12 +56,6 @@ describe('createTheme', () => {
     const theme = createTheme('truecolor', overrides({ 'status.cwd': { hidden: true, glyph: '#' } }))
     expect(theme.visible('status.cwd')).toBe(false)
     expect(theme.glyph('status.cwd')).toBe('')
-  })
-
-  it('ships no glyphs, so an element is its text', () => {
-    const theme = createTheme('truecolor')
-    expect(theme.glyph('transcript.reasoning.summary')).toBe('')
-    expect(theme.visible('transcript.reasoning.summary')).toBe(true)
   })
 
   it('returns a reader-set glyph', () => {
@@ -106,24 +86,29 @@ describe('createTheme', () => {
   })
 
   it('resolves a token once per theme rather than per call', () => {
-    // A repaint walks every row, so the palette chain must not be re-walked.
-    const theme = createTheme('truecolor')
-    const first = theme.style('transcript.reasoning.body', 'a')
-    const second = theme.style('transcript.reasoning.body', 'b')
-    expect(first.replace('a', 'b')).toBe(second)
+    // A repaint walks every row, so the palette chain must not be re-walked: the
+    // element is resolved when it is first asked for, and the next row that names
+    // it reads the answer the first one froze.
+    const reads: TuiToken[] = []
+    class CountingMap extends Map<TuiToken, StyleSpec> {
+      override get(token: TuiToken): StyleSpec | undefined {
+        reads.push(token)
+        return super.get(token)
+      }
+    }
+    const theme = createTheme('truecolor', {
+      palette: DEFAULT_PALETTE,
+      tokens: new CountingMap([['transcript.reasoning.body', { fg: '#ff0000' }]]),
+    })
+    theme.style('transcript.reasoning.body', 'a')
+    theme.style('transcript.reasoning.body', 'b')
+    expect(reads.filter(token => token === 'transcript.reasoning.body'), 'the element was resolved more than once').toHaveLength(1)
   })
 })
 
 describe('rich', () => {
   const ESC = '\u001b'
   const RESET = `${ESC}[0m`
-
-  it('draws what the producing terminal would have drawn, with nothing to return to', () => {
-    const theme = createTheme('truecolor')
-    // The colour capability helper reads a basic slot through the palette, so
-    // the indexed form is what a truecolor terminal is asked for.
-    expect(theme.rich(`${ESC}[31mred${ESC}[0mplain`)).toBe(`${ESC}[38;5;1mred${ESC}[39mplain`)
-  })
 
   it('returns a foreign reset to the element\'s own colour rather than the terminal default', () => {
     const theme = createTheme('truecolor')

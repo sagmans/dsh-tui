@@ -1,11 +1,11 @@
 /**
- * The approval gate and request decoding: the keys that decide, the keys that
- * cancel, and the card the caller reads back.
+ * The approval gate: the keys that decide, the keys that cancel, and the card
+ * the caller reads back. The payload decode lives with the question gate, which
+ * owns the rows it produces.
  */
 
 import { describe, expect, it } from 'vitest'
 import { ApprovalGate } from '@/gates.ts'
-import { toGateQuestions } from '@/gates/questions.ts'
 import { defaultKeymap, resolveKeymap } from '@/input/actions.ts'
 import { ESC, CTRL_C } from './fixtures/gate.ts'
 
@@ -51,31 +51,5 @@ describe('ApprovalGate', () => {
       expect(card.title).toBe('approval needed · bash')
       expect(card.detail).toEqual(['write outside the workspace'])
       expect(card.hint).toContain('y allow once')
-    })
-})
-
-describe('toGateQuestions', () => {
-  it('reads questions, options, multi-select flags, and the caller heading', () => {
-      const questions = toGateQuestions({
-        questions: [{
-          id: 'q1',
-          question: 'which?',
-          header: 'Sign in',
-          detail: 'pick one',
-          options: [{ label: 'a', description: 'first' }],
-          multiSelect: true,
-        }],
-      })
-      expect(questions).toEqual([
-        { id: 'q1', question: 'which?', header: 'Sign in', detail: 'pick one', options: [{ label: 'a', description: 'first' }], multiSelect: true },
-      ])
-    })
-  it('skips malformed entries and keeps option-less questions answerable by typing', () => {
-      const questions = toGateQuestions({ questions: [{ question: 'no id' }, { id: 'q2', question: 'free form' }] })
-      expect(questions).toEqual([{ id: 'q2', question: 'free form', header: undefined, detail: undefined, options: [], multiSelect: false }])
-    })
-  it('returns nothing for a request with no question list', () => {
-      expect(toGateQuestions({})).toEqual([])
-      expect(toGateQuestions(undefined)).toEqual([])
     })
 })

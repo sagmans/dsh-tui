@@ -10,8 +10,6 @@ export interface LaunchIntent {
   readonly resumeId: string
   /** Whether to open the history picker instead of starting a turn immediately. */
   readonly resumePicker: boolean
-  /** Whether the user explicitly asked for a new session. */
-  readonly fresh: boolean
 }
 
 /**
@@ -48,7 +46,6 @@ export function resolveLaunchIntent(input: {
     resumeId,
     // An empty --resume (bare flag) asks for the picker rather than a fresh session.
     resumePicker: resumeId === '' && (mode === 'resume' || input.resumeFlag !== undefined),
-    fresh: input.newSession === true,
   }
 }
 

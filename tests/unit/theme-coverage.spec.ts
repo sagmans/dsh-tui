@@ -32,14 +32,6 @@ afterEach(() => {
 const MODES = ['truecolor', '256', '16', 'none'] as const
 
 describe('token coverage', () => {
-  it('resolves every token in every capability without throwing', () => {
-    for (const mode of MODES) {
-      for (const token of TUI_TOKENS) {
-        expect(() => resolveToken(token, new Map(), DEFAULT_PALETTE, mode), `${token} in ${mode}`).not.toThrow()
-      }
-    }
-  })
-
   it('emits nothing at all when colour is off, for every token', () => {
     // The NO_COLOR contract is all-or-nothing: one token emitting an attribute
     // would mean a reader who asked for no styling still got some.
@@ -50,22 +42,30 @@ describe('token coverage', () => {
     }
   })
 
-  it('ships no hidden element and no glyph', () => {
-    for (const token of TUI_TOKENS) {
-      expect(DEFAULT_TOKENS[token].hidden ?? false, `${token} ships hidden`).toBe(false)
-      expect(DEFAULT_TOKENS[token].glyph ?? '', `${token} ships a glyph`).toBe('')
+  it('paints shipped accents at each terminal colour budget without styling plain code', () => {
+    const expected = {
+      truecolor: /^\u001b\[38;2;95;175;215mx\u001b\[0m$/,
+      '256': /^\u001b\[38;5;\d+mx\u001b\[0m$/,
+      '16': /^\u001b\[(?:3[0-7]|9[0-7])mx\u001b\[0m$/,
+      none: /^x$/,
+    }
+    for (const mode of MODES) {
+      const theme = createTheme(mode)
+      for (const token of TUI_TOKENS) {
+        expect(DEFAULT_TOKENS[token], `${token} has no shipped default`).toBeDefined()
+        expect(theme.visible(token), `${token} is invisible in ${mode}`).toBe(true)
+        expect(theme.glyph(token), `${token} ships a glyph in ${mode}`).toBe('')
+        // Every styled default must survive the compiled theme, not only the pinned accent.
+        expect(theme.style(token, 'x') !== 'x', `${token} loses styling in ${mode}`).toBe(
+          mode !== 'none' && Object.keys(DEFAULT_TOKENS[token]).length > 0,
+        )
+      }
+      expect(theme.style('tool.title', 'x')).toMatch(expected[mode])
+      expect(theme.style('markdown.codeBlock', 'x')).toBe('x')
     }
   })
 
-  it('reaches every token through the theme the renderers hold', () => {
-    const theme = createTheme('truecolor')
-    for (const token of TUI_TOKENS) {
-      expect(theme.visible(token), `${token} is invisible by default`).toBe(true)
-      expect(() => theme.style(token, 'x'), `${token} cannot be styled`).not.toThrow()
-    }
-  })
-
-  it('lets every token be overridden, which is what customizable means', () => {
+  it('applies an override to every token', () => {
     // A token a reader cannot change is not customizable, whatever the table
     // says; this drives each one through an override and requires an effect.
     for (const token of TUI_TOKENS) {
@@ -89,10 +89,9 @@ describe('/theme', () => {
   it('lists every element with the value in force and where it came from', () => {
     const overrides = toOverrides(parseSettings({ tokens: { 'transcript.user': { fg: '#ff0000' } } }), library)
     const lines = renderThemeTable(overrides, library)
-    for (const token of TUI_TOKENS) {
-      expect(lines.some(line => line.includes(token)), `${token} missing from /theme`).toBe(true)
-    }
-    expect(lines.some(line => line.includes('transcript.user') && line.includes('#ff0000') && line.includes('override'))).toBe(true)
+    const rows = lines.filter(line => line.startsWith('  ') && line.includes(' = '))
+    expect(rows.map(line => line.slice(2, line.indexOf(' = ')))).toEqual(TUI_TOKENS)
+    expect(rows).toContain('  transcript.user = #ff0000 (override)')
   })
 
   it('tells an element a theme wrote from one only the palette reaches', () => {
@@ -118,16 +117,6 @@ describe('/theme', () => {
     expect(renderThemeTable(toOverrides(parseSettings({}), library), library)[0]).toContain(DEFAULT_THEME)
   })
 
-  it('reports a themed element as the theme, not as the reader', () => {
-    // The whole point of the table is telling the reader which layer won, and
-    // the file to edit differs: a theme row is not something they wrote.
-    const lines = renderThemeTable(toOverrides(parseSettings({ theme: 'violet-orbit' }), library), library)
-    const title = lines.filter(line => line.includes('tool.title'))
-    expect(title).toHaveLength(1)
-    expect(title[0]).toContain('#8197f7')
-    expect(title[0]).toContain('(theme)')
-  })
-
   it('tells the reader which of the two files a row came from', () => {
     // A complete theme names every element, so the origin column is what says
     // which file to open: the theme's copy, or the line the reader wrote. An
@@ -139,5 +128,10 @@ describe('/theme', () => {
     }), library), library)
     expect(lines.some(line => line.includes('transcript.reasoning.body') && line.includes('(theme)'))).toBe(true)
     expect(lines.some(line => line.includes('status.cwd') && line.includes('(override)'))).toBe(true)
+    // One row per element, carrying the shade the theme gave it: a second row
+    // would read as a second answer to which layer won.
+    const title = lines.filter(line => line.includes('tool.title'))
+    expect(title).toHaveLength(1)
+    expect(title[0]).toContain('#8197f7')
   })
 })

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
 import { modelRouteKey } from '@/agent/model.ts'
 import { defaultKeymap } from '@/input/actions.ts'
+import { PROVIDER_DEFAULT_EFFORT_ID } from '@/ui/picker.ts'
 import { createModelChoice } from '@/surface/model-choice.ts'
 import type { Picker } from '@/surface/modal-input.ts'
 import type { StatusFacts } from '@/ui/status.ts'
@@ -31,6 +32,36 @@ const facts = (overrides: Partial<StatusFacts> = {}): StatusFacts => ({
 const catalogCtx = (llm: unknown): Context => ({ get: () => llm } as unknown as Context)
 
 const settle = (): Promise<void> => new Promise(resolve => setTimeout(resolve, 0))
+
+/**
+ * The route owner with every port recorded.
+ *
+ * The status facts are read per call, so a case can move the route the surface
+ * reports the way a settings edit does between two presses.
+ */
+const recordingHarness = (
+  llm: unknown,
+  options: { readonly statusFacts?: () => Partial<StatusFacts> } = {},
+) => {
+  const notices: string[] = []
+  const renders: number[] = []
+  const openPicker = vi.fn<(picker: Picker) => Promise<string | undefined>>().mockResolvedValue(undefined)
+  const route = createModelChoice(catalogCtx(llm), {
+    statusFacts: () => facts(options.statusFacts?.()),
+    keymap: defaultKeymap,
+    openPicker,
+    notice: message => notices.push(message),
+    render: () => renders.push(1),
+  })
+  return { route, notices, renders, openPicker }
+}
+
+/** A deployment with one provider, and whichever catalogue the case scripts. */
+const llmWith = (resolveModelInfo: (provider: string, model: string) => Promise<unknown>): unknown => ({
+  listProviders: () => [{ id: 'lab', name: 'Lab' }],
+  listModels: async () => [],
+  resolveModelInfo,
+})
 
 const harness = (
   resolveModelInfo: (provider: string, model: string) => Promise<unknown>,
@@ -249,3 +280,316 @@ describe('model switch effort fallback', () => {
     expect(notices.at(-1)).toBe('model set to opencode-go-session/space-bunny-free for the next step')
   })
 })
+
+describe('model choice without a directory', () => {
+  it('says a profile with no llm service cannot list or switch models', () => {
+    const { route, notices, renders } = recordingHarness(undefined)
+
+    route.runModelCommand('')
+
+    expect(notices).toEqual(['this profile has no llm service, so models cannot be listed or switched'])
+    expect(renders).toHaveLength(1)
+  })
+
+  it('says a profile with no llm service cannot read reasoning efforts', () => {
+    const { route, notices, renders } = recordingHarness(undefined)
+
+    route.openEffortPicker()
+
+    expect(notices).toEqual(['this profile has no llm service, so reasoning efforts cannot be read'])
+    expect(renders).toHaveLength(1)
+  })
+
+  it('names the mounted service, not a missing one, when it cannot list providers', () => {
+    const { route, notices, renders } = recordingHarness({ listModels: async () => [] })
+
+    route.runModelCommand('')
+
+    expect(notices).toEqual([
+      'the llm service this profile mounts cannot list providers, so models cannot be listed or switched',
+    ])
+    expect(renders).toHaveLength(1)
+  })
+
+  it('names that same service when the reasoning efforts cannot be read', () => {
+    const { route, notices, renders } = recordingHarness({ listModels: async () => [] })
+
+    route.openEffortPicker()
+
+    expect(notices).toEqual([
+      'the llm service this profile mounts cannot list providers, so reasoning efforts cannot be read',
+    ])
+    expect(renders).toHaveLength(1)
+  })
+})
+
+describe('model command text forms', () => {
+  const listing = (models: readonly { id: string }[]): unknown => ({
+    listProviders: () => [{ id: 'lab', name: 'Lab' }],
+    listModels: async () => models,
+  })
+
+  const listings: [string, { id: string }[], string][] = [
+    ['names every model the provider advertises', [{ id: 'a' }, { id: 'b' }], 'lab: a b'],
+    ['says an id may still work when the provider advertises none', [], 'lab advertises no models; an id may still work'],
+  ]
+
+  it.each(listings)('lists a provider by name and %s', async (_name, models, expected) => {
+    const { route, notices, renders } = recordingHarness(listing(models))
+
+    route.runModelCommand('lab')
+    await settle()
+
+    expect(notices).toEqual([expected])
+    expect(renders).toHaveLength(1)
+  })
+
+  it('refuses a bare model id when the session has no route in use', () => {
+    const { route, notices, renders } = recordingHarness(llmWith(NO_LEVELS))
+
+    // A reader switching between two models of one provider should not have to
+    // repeat it, but with no route in use there is no provider to read the id in.
+    route.runModelCommand('mystery')
+
+    expect(notices).toEqual(['/model: no route in use; say /model <provider>/mystery — providers: lab'])
+    expect(renders).toHaveLength(1)
+  })
+
+  it('puts an explicitly requested level in force when the route offers it', async () => {
+    const { route, notices } = recordingHarness(llmWith(LEVELS_WITH_MAX))
+
+    route.runModelCommand('lab/m/high')
+    await settle()
+
+    expect(route.current()).toEqual({ provider: 'lab', model: 'm', reasoningEffort: 'high' })
+    expect(notices).toEqual(['model set to lab/m (high) for the next step'])
+  })
+
+  const refusals: [string, () => Promise<unknown>, string][] = [
+    ['names the levels it does offer', async () => efforts('low', 'high'), '/model: lab/m does not offer reasoning effort "max" — offers: low high'],
+    ['says the route advertises none', NO_LEVELS, '/model: lab/m advertises no reasoning efforts'],
+    ['reports a failure to read the levels', () => {
+      throw new Error('boom')
+    }, '/model: could not read reasoning efforts: boom'],
+  ]
+
+  it.each(refusals)('refuses an explicitly requested level and %s', async (_name, resolveModelInfo, expected) => {
+    const { route, notices, renders } = recordingHarness(llmWith(resolveModelInfo))
+
+    route.runModelCommand('lab/m/max')
+    await settle()
+
+    expect(notices).toEqual([expected])
+    expect(route.current()).toBeUndefined()
+    expect(renders).toHaveLength(1)
+  })
+})
+
+describe('model picker discovery', () => {
+  it('offers a rowless list for a provider advertising no models and refuses an id it never minted', async () => {
+    const { route, notices, renders, openPicker } = recordingHarness(llmWith(LEVELS_WITH_MAX))
+    openPicker.mockResolvedValueOnce('not-a-route-key')
+
+    route.runModelCommand('')
+    await settle()
+
+    expect(openPicker).toHaveBeenCalledTimes(1)
+    expect(openPicker.mock.calls[0]![0].card().rows).toEqual([])
+    expect(route.current()).toBeUndefined()
+    expect(notices).toEqual([])
+    expect(renders).toHaveLength(1)
+  })
+
+  it('answers a second command from behind the picker the first one already opened', async () => {
+    const { route, notices, openPicker } = recordingHarness(llmWith(LEVELS_WITH_MAX))
+    let pick!: (id: string | undefined) => void
+    openPicker.mockImplementationOnce(() => new Promise(resolve => {
+      pick = resolve
+    }))
+
+    route.runModelCommand('')
+    await settle()
+    route.runModelCommand('')
+    await settle()
+    expect(openPicker).toHaveBeenCalledTimes(1)
+    expect(notices).toEqual([])
+
+    // Once the list is settled the keyboard is free for the next command.
+    pick(undefined)
+    await settle()
+    route.runModelCommand('')
+    await settle()
+    expect(openPicker).toHaveBeenCalledTimes(2)
+  })
+
+  it('reads the picked route levels and applies the level the reader chose', async () => {
+    const { route, notices, openPicker } = recordingHarness(llmWith(LEVELS_WITH_MAX))
+    openPicker.mockResolvedValueOnce(modelRouteKey({ provider: 'lab', model: 'm' }))
+    openPicker.mockResolvedValueOnce('high')
+
+    route.runModelCommand('')
+    await settle()
+    await settle()
+
+    // The second picker is the route's own levels, so the rows it would draw are
+    // the contract between the catalogue and the reader.
+    expect(openPicker.mock.calls[1]![0].card().rows.map(row => row.label)).toEqual([
+      'provider default',
+      'low',
+      'high',
+      'max',
+    ])
+    expect(route.current()).toEqual({ provider: 'lab', model: 'm', reasoningEffort: 'high' })
+    expect(notices).toEqual([
+      'model set to lab/m for the next step',
+      'reasoning effort for lab/m set to high for the next step',
+    ])
+  })
+
+  it('keeps the model that was already switched when its levels cannot be read', async () => {
+    let reads = 0
+    const resolveModelInfo = async (): Promise<unknown> => {
+      reads += 1
+      if (reads === 1) return efforts('low', 'max')
+      throw new Error('adapter is down')
+    }
+    const { route, notices, openPicker } = recordingHarness(llmWith(resolveModelInfo), {
+      statusFacts: () => ({ provider: 'lab', model: 'old', effort: 'max' }),
+    })
+    route.adoptDefault()
+    openPicker.mockResolvedValueOnce(modelRouteKey({ provider: 'lab', model: 'm' }))
+
+    route.runModelCommand('')
+    await settle()
+    await settle()
+
+    // The directory is advisory when the route is switched by the reader: the
+    // switch lands and the failed level list is a notice, not a refusal.
+    expect(route.current()).toEqual({ provider: 'lab', model: 'm', reasoningEffort: 'max' })
+    expect(notices).toEqual([
+      'model set to lab/m for the next step',
+      'could not read reasoning efforts: adapter is down',
+    ])
+  })
+})
+
+describe('reasoning effort picker', () => {
+  it('asks for a model first when no route is in use', () => {
+    const { route, notices, renders, openPicker } = recordingHarness(llmWith(LEVELS_WITH_MAX))
+
+    route.openEffortPicker()
+
+    expect(notices).toEqual(['no model route is in use; /model <provider>/<model> picks one first'])
+    expect(renders).toHaveLength(1)
+    expect(openPicker).not.toHaveBeenCalled()
+  })
+
+  it('says a route advertises no levels instead of opening an empty list', async () => {
+    const { route, notices, openPicker } = recordingHarness(llmWith(NO_LEVELS), {
+      statusFacts: () => ({ provider: 'lab', model: 'm' }),
+    })
+
+    route.openEffortPicker()
+    await settle()
+
+    expect(notices).toEqual(['lab/m advertises no reasoning efforts'])
+    expect(openPicker).not.toHaveBeenCalled()
+  })
+
+  it('reports a failure to read the levels', async () => {
+    const { route, notices, renders } = recordingHarness(llmWith(async () => {
+      throw new Error('boom')
+    }), { statusFacts: () => ({ provider: 'lab', model: 'm' }) })
+
+    route.openEffortPicker()
+    await settle()
+
+    expect(notices).toEqual(['could not read reasoning efforts: boom'])
+    expect(renders).toHaveLength(1)
+  })
+
+  const levels: [string, string, Record<string, string>, string][] = [
+    ['an advertised level', 'high', { provider: 'lab', model: 'm', reasoningEffort: 'high' }, 'reasoning effort for lab/m set to high for the next step'],
+    ['the provider default', PROVIDER_DEFAULT_EFFORT_ID, { provider: 'lab', model: 'm' }, 'reasoning effort for lab/m set to provider default for the next step'],
+  ]
+
+  it.each(levels)('puts %s in force for the next step', async (_name, picked, expectedRoute, expectedNotice) => {
+    const { route, notices, openPicker } = recordingHarness(llmWith(LEVELS_WITH_MAX), {
+      statusFacts: () => ({ provider: 'lab', model: 'm' }),
+    })
+    openPicker.mockResolvedValueOnce(picked)
+
+    route.openEffortPicker()
+    await settle()
+
+    expect(openPicker.mock.calls[0]![0].card().rows.map(row => row.label)).toEqual([
+      'provider default',
+      'low',
+      'high',
+      'max',
+    ])
+    expect(route.current()).toEqual(expectedRoute)
+    expect(notices).toEqual([expectedNotice])
+  })
+
+  it('reads one route levels for one key only', async () => {
+    let resolveInfo!: (info: unknown) => void
+    const resolveModelInfo = vi.fn(() => new Promise<unknown>(resolve => {
+      resolveInfo = resolve
+    }))
+    const { route, notices, openPicker } = recordingHarness(llmWith(resolveModelInfo), {
+      statusFacts: () => ({ provider: 'lab', model: 'm' }),
+    })
+
+    route.openEffortPicker()
+    route.openEffortPicker()
+    expect(resolveModelInfo).toHaveBeenCalledTimes(1)
+
+    resolveInfo(efforts('high'))
+    await settle()
+
+    // Cancelling keeps the provider default: the reader stays on a real route.
+    expect(notices).toEqual([])
+    expect(openPicker).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('agent scope', () => {
+  it('composes the choice into the agent so the next assemble carries the route', async () => {
+    type Assembled = { readonly variables: Record<string, string> }
+    type Assemble = (assembly: unknown, context: unknown, next: () => Promise<Assembled>) => Promise<Assembled>
+    const handlers = new Map<string, unknown>()
+    const agentCtx = {
+      on: (event: string, handler: unknown) => {
+        handlers.set(event, handler)
+        return () => {}
+      },
+    } as unknown as Context
+    const { route } = recordingHarness(llmWith(LEVELS_WITH_MAX))
+
+    route.setup(agentCtx)
+    route.runModelCommand('lab/m')
+    await settle()
+
+    const assemble = handlers.get('system-prompt/assemble') as Assemble
+    const assembled = await assemble({}, undefined, async () => ({ variables: {} }))
+    expect(assembled.variables).toEqual({ provider: 'lab', model: 'm' })
+  })
+})
+
+describe('deployment default', () => {
+  it('adopts nothing without a route and never overwrites the reader', async () => {
+    let status: Partial<StatusFacts> = {}
+    const { route } = recordingHarness(llmWith(LEVELS_WITH_MAX), { statusFacts: () => status })
+
+    route.adoptDefault()
+    expect(route.current()).toBeUndefined()
+
+    route.runModelCommand('lab/m')
+    await settle()
+    status = { provider: 'default-lab', model: 'default-model', effort: 'max' }
+    route.adoptDefault()
+    expect(route.current()).toEqual({ provider: 'lab', model: 'm' })
+  })
+})
+

@@ -39,11 +39,6 @@ describe('StashPicker', () => {
     expect(picker([row('a', 'one'), row('b', 'two')]).card().title).toBe('stash · tui-session-abc · 2 drafts')
   })
 
-  it('describes each draft by its label and its age', () => {
-    const card = picker([row('a', 'send the report', 1_000)]).card()
-    expect(card.rows[0]).toMatchObject({ label: '[0] send the report', description: '5m ago', current: true })
-  })
-
   it('picks the draft under the cursor by its id, not its index', () => {
     const list = picker([row('a', 'one'), row('b', 'two')])
     expect(list.handleKey('\u001b[B')).toBeUndefined()
@@ -79,11 +74,8 @@ describe('StashConfirmPicker', () => {
     expect(card.title).toBe('clear stash · 3 drafts in this session')
     expect(card.rows[0]).toMatchObject({ label: 'cancel', current: true })
     expect(card.rows[1]).toMatchObject({ label: 'delete 3 drafts' })
-  })
-
-  it('reads a single draft in the singular', () => {
-    const card = new StashConfirmPicker(1, defaultKeymap).card()
-    expect(card.rows[1]).toMatchObject({ label: 'delete 1 draft' })
+    // The singular has to read right too, so the count is never printed bare.
+    expect(new StashConfirmPicker(1, defaultKeymap).card().rows[1]).toMatchObject({ label: 'delete 1 draft' })
   })
 
   it('answers with the destructive choice only when it is chosen', () => {

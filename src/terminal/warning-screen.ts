@@ -100,10 +100,19 @@ export class WarningSafeTui extends TuiAltScreen {
       // all out behind the exit sequence this call already wrote.
       const release = this.releaseWarnings
       this.releaseWarnings = undefined
-      release?.()
+      let warningFailure: { readonly error: unknown } | undefined
+      try {
+        release?.()
+      } catch (error) {
+        // A listener that throws must not strand the host's own writing: the
+        // hold below is the terminal's, and it goes back on every path out of
+        // stop() — only then is the listener's failure surfaced again.
+        warningFailure = { error }
+      }
       const writes = this.hostWrites
       this.hostWrites = undefined
       writes?.release()
+      if (warningFailure !== undefined) throw warningFailure.error
     }
   }
 }

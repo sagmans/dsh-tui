@@ -39,7 +39,7 @@ export const PICKER_LIMIT = 30
 export const TITLE_EVENT_LIMIT = 40
 
 /** Longest session title the picker shows, before the row can no longer hold it. */
-export const TITLE_CHAR_LIMIT = 72
+const TITLE_CHAR_LIMIT = 72
 
 /** Events read to resolve a session's preset: a selection sits in its blank prefix. */
 export const PRESET_EVENT_LIMIT = 40

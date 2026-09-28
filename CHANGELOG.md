@@ -18,13 +18,89 @@ breaking change, and a patch carries only fixes.
   themes keep the label's accent. Hiding the token retires the paint and not the
   name, and the export and a dispatched row spell it too.
 
+- `pnpm coverage` reports the statements, branches, functions and lines the unit
+  suite reaches, per source file. Nothing else could: V8's own coverage sees the
+  modules Vite serves from virtual URLs, so it attributes no line back to `src/`.
+
 ### Changed
 
 - Submitted prompts now have a `transcript.user.border` token independent of the editor and assistant frames. `violet-orbit` ships the current `#6f76c9` prompt/editor and `#a89771` assistant frame shades without per-user overrides.
 
+- The unit suite holds one spec per contract instead of one per seam. Many specs
+  proved the same promise at the weaker boundary — a private helper's answer
+  where the fold was already asserted, a hand-built fixture where the real model
+  was already driven — and the options, exports and fields that existed only so a
+  spec could watch a private decision are gone with them.
+
+- `CARD_PART_LIMIT` is named for what it bounds. `CARD_LINE_LIMIT` read as a
+  card's whole budget, but the clip is applied per fragment of a row, so a row of
+  three cells carried three times the number; a row is now documented, and
+  tested, as one budget per cell.
+
+- A stash file no longer carries the `createdAt` and `updatedAt` it wrote on
+  every save and no reader ever read. A bank an older version wrote still loads:
+  the fields are extra keys rather than a shape the parser demands.
+
 ### Fixed
 
 - PTY dogfood now rejects homes with escaping links and requires the installed `dsh 0.1.5-rc.3` launcher. The worktree helper rejects incompatible hosts before cloning. Previously, the PTY driver ran the Harness source checkout and could treat live `settings.yaml` as migration input.
+- The message that stops activation when a profile lacks what the surface needs
+  arrives with each missing capability on its own line. It interpolated an escaped
+  newline, so the reader saw one line of literal backslashes and could not tell
+  two requirements apart.
+- `DSH_HOME` means the same directory everywhere. A value beginning with `~` was
+  expanded for prompt history but taken literally by the stash bank and the theme
+  directory, so `DSH_HOME=~/harness` split one home in two: the history under the
+  reader's home, and a directory named `~` beside the process's working directory.
+- A host whose `llm` service cannot list providers says so, instead of reporting
+  that the profile has no `llm` service at all. Two different states were answered
+  by one undefined, and the reader was sent to install a service they already had.
+- An editor that never exits no longer leaves the surface suspended. The handoff
+  waited on the child forever, so a hung `$VISUAL` held the alternate screen down
+  with no key able to bring it back; a ceiling kills it, the screen resumes, and a
+  draft the reader saved is still taken back.
+- A scratch directory the external editor could not remove is reported as what it
+  left. Recursive cleanup can take the edited draft and then fail on a child
+  beside it, so the notice keeps the draft's path only while that file exists,
+  and otherwise names the directory to check.
+- The window title drops the invisible controls and the bidi overrides before it
+  is written. The title travels in the terminal's own escape sequence, so a
+  control that survived it could reorder what the reader sees in the title bar
+  and in their scrollback.
+- A switch the new session refuses leaves the session exactly as it was. The
+  outgoing agent was let go before the new one was asked for, so a refused
+  switch ended with nothing driving the surface — no agent, a cleared transcript,
+  and nothing to type into until a reload succeeded; the new session now settles
+  first and the old one goes only once it is accepted.
+- A preset whose mode landed but whose return to the driven session failed says
+  both halves. The notice blamed the switch for a failure that happened after
+  it, sending the reader to redo a change that had already been made.
+- An undo parks the queued prompts before it interrupts the running turn, as its
+  own contract claims. The interrupt cancelled the queue on its way out, so a
+  park that failed afterwards lost the queued words; parking first means a
+  refused park refuses the undo with the queue untouched.
+- A redo arriving while an undo is still settling is ignored, like a second
+  undo. It stepped a cursor the undo was about to replace, leaving the hidden
+  count and the draft wrong for the session it was answered in.
+- An undo abandoned mid-flight when the driven session changes underneath it.
+  It wrote the old session's step into the new session's cursor, cut and draft,
+  quietly corrupting the history the new session was reading.
+- A picker whose check crashes settles as a refusal instead of an unhandled
+  rejection. Node treats the rejection as fatal by default, so a vetting port
+  that threw took the whole surface down with the picker still open.
+- The terminal's streams are released even when a warning listener throws on the
+  way out. The throwing listener skipped the release beside it, leaving stdout
+  and stderr held until some later stop ran.
+- A history the store cannot read is named the same way wherever it is named.
+  The picker and the /history line printed the machine's reason where the
+  store's own warning had already chosen the reader's words, so one condition
+  answered to two names.
+- An export with no argument lands in the reader's theme directory instead of
+  the process's working directory. The command wrote wherever the reader happened
+  to be, which is usually a repository; the notice still names the path it took.
+- A background-jobs listing that fails is said, and the command keeps running.
+  A registry that threw escaped both /jobs and the watcher, so the reader got no
+  notice and the command died in place.
 
 ## [0.8.0] - 2026-09-25
 

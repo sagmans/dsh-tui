@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { WorkFold, planSelectedActive, planToggleLine, readPlanState, type ServiceLookup } from '@/work.ts'
+import { WorkFold, readPlanState, type ServiceLookup } from '@/work.ts'
 
 const foldWith = (...events: Array<{ type: string; data?: unknown }>): WorkFold => {
   const fold = new WorkFold()
@@ -92,33 +92,18 @@ describe('WorkFold', () => {
   })
 
   it('ignores events that are not work state', () => {
-    const fold = foldWith({ type: 'turn/start', data: { turn: 1 } }, { type: 'todo/write', data: {} })
-    expect(fold.state().todos).toBeUndefined()
+    const fold = foldWith(
+      { type: 'todo/write', data: { todos: [{ content: 'one', status: 'pending' }] } },
+      { type: 'goal/change', data: { operation: 'create', roundsStarted: 2, goal: { objective: 'ship it', phase: 'active', maxGoalRounds: 256 } } },
+    )
+    const before = fold.state()
+    fold.apply({ type: 'message/delta', data: {} })
+    // An unhandled type has to leave the whole state alone, not just the list.
+    expect(fold.state()).toEqual(before)
   })
 })
 
 describe('the plan toggle', () => {
-  it('asks for the other state, one command each way', () => {
-    // /plan only enters: the exit is a different command, so the surface names
-    // the state it wants rather than toggling a flag of its own.
-    expect(planToggleLine(false)).toBe('/plan')
-    expect(planToggleLine(true)).toBe('/plan off')
-  })
-
-  it('reads a waiting selection as the state the agent is about to be in', () => {
-    // Inside a turn the selection sits pending until the next pre-step; asking
-    // for the logged state again is a no-op the reader would read as a dead key.
-    expect(planSelectedActive({ active: false, pending: true }, false)).toBe(true)
-    expect(planSelectedActive({ active: true, pending: false }, true)).toBe(false)
-    expect(planSelectedActive({ active: true }, false)).toBe(true)
-    expect(planSelectedActive({ active: false }, true)).toBe(false)
-  })
-
-  it('falls back to the fold when the composition has no plan controller', () => {
-    expect(planSelectedActive(undefined, true)).toBe(true)
-    expect(planSelectedActive(undefined, false)).toBe(false)
-  })
-
   it('asks the composition that owns the agent before the container', () => {
     // A preset mounts the package behind isolate, which the container cannot
     // see: the agent's registry is asked first, and the container is the

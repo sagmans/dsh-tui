@@ -3,12 +3,20 @@ import { matchScore } from '@/input/match.ts'
 
 describe('matchScore', () => {
   it('takes an empty filter as no narrowing at all', () => {
-    expect(matchScore('', 'GLM-5.3')).toBeDefined()
-    expect(matchScore('   ', 'GLM-5.3')).toBeDefined()
+    // Nothing typed is the top reading for every row, so it cannot reorder the
+    // caller's list: the same number for two different rows says exactly that.
+    expect(matchScore('', 'GLM-5.3')).toBe(4_000_000)
+    expect(matchScore('   ', 'GLM-5.3')).toBe(4_000_000)
+    expect(matchScore('', 'zai-coding-cn glm-5.3')).toBe(4_000_000)
   })
 
   it('matches a fragment the reader types without the punctuation', () => {
-    expect(matchScore('glm53', 'zai-coding-cn glm-5.3 GLM-5.3')).toBeDefined()
+    const found = matchScore('glm53', 'zai-coding-cn glm-5.3 GLM-5.3')
+    // The dots and the dash are drawn for the reader, so the fragment has to
+    // reach the row: it lands in the gathered band, which stays under any row
+    // that holds what was typed whole.
+    expect(found).toBeGreaterThan(1_000_000)
+    expect(found).toBeLessThan(2_000_000)
   })
 
   it('refuses a fragment whose characters are not all there in order', () => {
@@ -34,16 +42,11 @@ describe('matchScore', () => {
 
   it('needs a long enough fragment before it gathers scattered characters', () => {
     expect(matchScore('gz', 'zai-coding-cn glm-5.3')).toBeUndefined()
-    expect(matchScore('gm5', 'zai-coding-cn glm-5.3')).toBeDefined()
-  })
-
-  it('prefers the fragment whose characters sit closest together', () => {
-    // fzf weighs a word start above raw tightness — g-x-l-m-5-3 outranks
-    // xglm-5.3 — so the pair here keeps the boundaries equal and tests the
-    // tightness itself.
-    const tight = matchScore('abc', 'a-b-c')
-    const spread = matchScore('abc', 'a--b--c')
-    expect(tight).toBeGreaterThan(spread ?? 0)
+    const gathered = matchScore('gm5', 'zai-coding-cn glm-5.3')
+    // Three characters is where gathering starts, and what it gathers is the
+    // band below a row that holds the fragment whole.
+    expect(gathered).toBeGreaterThan(1_000_000)
+    expect(gathered).toBeLessThan(2_000_000)
   })
 
   it('does not settle for the first character the row happens to show', () => {
@@ -60,15 +63,12 @@ it('reads a fragment the way a fuzzy finder does inside its band', () => {
     expect(boundary).toBeGreaterThan(inline ?? 0)
   })
 
-  it('still keeps a contiguous band above a scattered one', () => {
-    const contiguous = matchScore('foob', 'foobar')
-    const scattered = matchScore('foob', 'foo-bar')
-    expect(contiguous).toBeGreaterThan(scattered ?? 0)
-  })
-
-
   it('ignores case', () => {
-    expect(matchScore('GLM53', 'zai-coding-cn glm-5.3')).toBeDefined()
+    const upper = matchScore('GLM53', 'zai-coding-cn glm-5.3')
+    // The two spellings read the same row, and the reading is a real one rather
+    // than two fragments that matched nothing alike.
+    expect(upper).toBe(matchScore('glm53', 'zai-coding-cn glm-5.3'))
+    expect(upper).toBeGreaterThan(1_000_000)
   })
 
   it('keeps a camel hump above the same letters without one', () => {
@@ -76,6 +76,10 @@ it('reads a fragment the way a fuzzy finder does inside its band', () => {
   })
 
   it('matches letters that fold to one code point apiece', () => {
-    expect(matchScore('Σ', 'ΟΣ')).toBeGreaterThan(0)
+    const greek = matchScore('Σ', 'ΟΣ')
+    // Σ folds to σ one code point at a time, so the row reads exactly as it does
+    // when it is written in the letters the reader would have typed.
+    expect(greek).toBe(matchScore('σ', 'οσ'))
+    expect(greek).toBeGreaterThan(1_000_000)
   })
 })
