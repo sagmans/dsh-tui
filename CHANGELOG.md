@@ -8,6 +8,8 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-09-28
+
 ### Added
 
 - The transcript keeps air. `spacing.padding` insets the conversation and the
@@ -826,7 +828,8 @@ breaking change, and a patch carries only fixes.
 - Publication through npm OIDC trusted publishing, with the first version
   bootstrapped by hand ([#5](https://github.com/sagmans/dsh-tui/pull/5)).
 
-[Unreleased]: https://github.com/sagmans/dsh-tui/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/sagmans/dsh-tui/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/sagmans/dsh-tui/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/sagmans/dsh-tui/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/sagmans/dsh-tui/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/sagmans/dsh-tui/compare/v0.5.2...v0.6.0
