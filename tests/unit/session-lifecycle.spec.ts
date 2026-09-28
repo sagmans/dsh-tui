@@ -88,13 +88,20 @@ function fixture(): Fixture {
   // The agent scope a preset mounts into: the host hands it to the module's own
   // setup callback, which is where the route and the preset are installed.
   const agentCtx = {} as Context
-  const handleFor = (id: SessionId) => ({
-    sessionId: id,
-    agent: { id, status: 'idle' },
-    dispose: async () => {
-      disposed += 1
-    },
-  })
+  // The session a handle in service owns. The host refuses a second write handle on
+  // it, which is the constraint a reload and a re-pick of the driven session meet.
+  let liveSession: SessionId | undefined
+  const handleFor = (id: SessionId) => {
+    liveSession = id
+    return {
+      sessionId: id,
+      agent: { id, status: 'idle' },
+      dispose: async () => {
+        disposed += 1
+        if (liveSession === id) liveSession = undefined
+      },
+    }
+  }
   const agents = {
     create: async (options: Record<string, unknown>) => {
       created.push(options)
@@ -103,8 +110,10 @@ function fixture(): Fixture {
     },
     resume: async (options: Record<string, unknown>) => {
       resumed.push(options)
+      const id = options.resumeSessionId as SessionId
+      if (id === liveSession) throw new Error(`session "${id}" is already owned by an active write handle`)
       await (options.setup as ((ctx: Context) => void) | undefined)?.(agentCtx)
-      return handleFor(options.resumeSessionId as SessionId)
+      return handleFor(id)
     },
   }
   const ctx = {
@@ -632,14 +641,16 @@ describe('createSessionLifecycle', () => {
 
     // Reopening the same session is the switch a reader was already able to
     // make, so the preset generation is composed again and the log is replayed
-    // into the screen the outgoing agent only now lets go of.
+    // into the screen the outgoing agent only now lets go of. Its own handle goes
+    // first, because this session is the one still holding the write handle the
+    // reopened agent is refused without.
     expect(given.trace).toEqual([
       `presetFor:${SESSION_A}:true:false`,
-      'installModelChoice',
-      `mountPreset:${PRESET}`,
       'clearPresentScope',
       'resetTranscript',
       'resetRoster',
+      'installModelChoice',
+      `mountPreset:${PRESET}`,
       `setViewed:${SESSION_A}`,
       'refreshJobs',
       `stagedSessionOpened:${SESSION_A}`,

@@ -189,6 +189,12 @@ export function createSessionLifecycle(ctx: Context, ports: SessionLifecyclePort
     // Settled before the transcript is touched, so a refusal leaves neither a
     // half-replayed session nor a half-composed agent behind.
     const preset = await ports.presetFor(id, resume, fork)
+    // A session already in service still owns its write handle, and the host refuses
+    // a second one: reopening the very session the reader is driving — a reload, or a
+    // pick of the session already on screen — has to let that agent go before its
+    // replacement is asked for. Every other open settles first, which is what keeps a
+    // refusal from taking the reader's agent away with it.
+    if (agent !== undefined && agent.sessionId === id) await disposeOutgoing()
     const handle = await startAgent(ctx, {
       sessionId: id,
       resume,
