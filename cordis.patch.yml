@@ -106,9 +106,9 @@
 
     # PTC mode runs its programs against a code runtime. The Web bundle mounts
     # this at host level for the same reason: the runtime is machinery, while
-    # the preset decides whether an agent uses it. The 0.1.7 line moved the
-    # runtime into the base, so on that line this row mounts nothing — and that
-    # base row is what tells the two lines apart.
+    # the preset decides whether an agent uses it. The lines from 0.1.7 on moved
+    # the runtime into the base, so there this row mounts nothing — which of the
+    # lines is hosting is read from the installed base release instead.
     - id: code-runtime
       name: '@sagmans/dsh-tui/host/code-runtime'
 
