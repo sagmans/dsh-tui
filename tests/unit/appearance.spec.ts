@@ -62,7 +62,7 @@ describe('appearance preference startup', () => {
     expect(notices.join('\n')).toContain(OTHER_THEME)
   })
 
-  it('filters unrelated changes and disposes both settings event listeners', () => {
+  it('filters unrelated changes and disposes the settings event listener', () => {
     let value = { theme: THEME }
     const describe = vi.fn(() => [{ ns: 'terminal-custom', value, revision: 0 }])
     const { appearance, listeners } = fixture({ describe, update: vi.fn() }, value)
@@ -77,7 +77,6 @@ describe('appearance preference startup', () => {
     expect(describe).toHaveBeenCalled()
     expect(appearance.theme.style('status.cwd', 'cwd')).not.toBe(previous)
     dispose()
-    expect(listeners.has('settings/updated')).toBe(false)
     expect(listeners.has('settings/document-updated')).toBe(false)
   })
 

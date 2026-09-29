@@ -47,7 +47,7 @@ describe('dogfood worktree plugin relink', () => {
     // A surface that inherited them claims this pane's agent row for the run and
     // hands it back released, which hides the agent really running in the pane.
     const trace = join(root, 'child-env.txt')
-    writeFileSync(stubDsh, '#!/bin/sh\nif [ "$1" = "--version" ]; then echo 0.1.5-rc.3; exit 0; fi\nenv > ' + JSON.stringify(trace) + '\n')
+    writeFileSync(stubDsh, '#!/bin/sh\nif [ "$1" = "--version" ]; then echo 0.1.7-rc.2; exit 0; fi\nenv > ' + JSON.stringify(trace) + '\n')
     const result = spawnSync('bash', [GENERIC_SCRIPT, '--source-home', sourceHome, '--dsh', stubDsh, '--no-build', '--home', scratchHome], {
       cwd: checkout,
       encoding: 'utf8',
@@ -74,7 +74,7 @@ describe('dogfood worktree plugin relink', () => {
 
   it('probes the helper launcher without exposing the live home', () => {
     const trace = join(root, 'probe-home.txt')
-    writeFileSync(stubDsh, '#!/bin/sh\nif [ "$1" = "--version" ]; then printf %s "$DSH_HOME" > ' + JSON.stringify(trace) + '; echo 0.1.5-rc.3; fi\n')
+    writeFileSync(stubDsh, '#!/bin/sh\nif [ "$1" = "--version" ]; then printf %s "$DSH_HOME" > ' + JSON.stringify(trace) + '; echo 0.1.7-rc.2; fi\n')
     const result = generic(['--home', scratchHome])
     expect(result.status, result.stderr).toBe(0)
     const probeHome = readFileSync(trace, 'utf8')
@@ -212,7 +212,7 @@ describe('dogfood worktree plugin relink', () => {
     rmSync(join(sourceHome, 'profiles', 'tui'), { recursive: true })
     writeFileSync(stubDsh, `#!/usr/bin/env bash
 if [[ "$1" == --version ]]; then
-  echo 0.1.5-rc.3
+  echo 0.1.7-rc.2
   exit 0
 fi
 if [[ "$1" == plugin ]]; then

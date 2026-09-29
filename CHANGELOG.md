@@ -29,6 +29,34 @@ breaking change, and a patch carries only fixes.
   relative ladder as the shipped table, so this theme is dimmer in absolute terms
   and identical in structure to the others.
 
+- A fourth theme ships: `pine-slope`. Its anchor is `#173802`, a fill weight
+  rather than a text weight at 1.41:1 on a dark terminal, so the anchor paints the
+  band under a selected row while the accent is that hue lifted to where text
+  reads. Green is the family here and green also means an added line, so the accent
+  stays a lime while the semantic green is pushed toward grass: a reader never has
+  to ask whether a green row is the theme or the change. Every shade holds the
+  shipped table's own share of the theme's text luminance, so this theme is dimmer
+  in absolute terms and identical in structure to the others rather than a ladder
+  of its own. The tuning `polar-drift` settled — selected row on a band, a painted
+  working state, a quiet argument, a reply frame at container weight — is drawn the
+  same way here.
+
+### Changed
+
+- The harness matrix now accepts the whole `>=0.1.5-rc.1 <0.2.0` line and verifies
+  `0.1.7-rc.2`, the release npm serves as `latest`. The former `<0.1.6` ceiling left
+  a profile running the installed launcher resolving a harness copy of its own beside
+  the host's, which is the shape that broke the 0.5.0 npm install; the mounted packages
+  and peers already carried the wider range, so the ceiling was the one side out of
+  step with them.
+
+- The surface compiles against `0.1.7-rc.2`. A reminder now declares its own
+  message-source kind, because that release gives every producer a kind of its own and
+  removed the shared `plugin` kind; appearance listens on `settings/document-updated`
+  alone, the one document event left after a section's committed values were folded
+  into it. Preferences already reached the surface as a Config row, so the read and
+  write path itself needed no change.
+
 ## [0.10.0] - 2026-09-29
 
 ### Added
@@ -43,18 +71,6 @@ breaking change, and a patch carries only fixes.
   container weight so the prompt keeps the shade that means "what you typed", and
   a tool argument sits below the reasoning shade so it recedes under the label it
   belongs to.
-
-- A fourth theme ships: `pine-slope`. Its anchor is `#173802`, a fill weight
-  rather than a text weight at 1.41:1 on a dark terminal, so the anchor paints the
-  band under a selected row while the accent is that hue lifted to where text
-  reads. Green is the family here and green also means an added line, so the accent
-  stays a lime while the semantic green is pushed toward grass: a reader never has
-  to ask whether a green row is the theme or the change. Every shade holds the
-  shipped table's own share of the theme's text luminance, so this theme is dimmer
-  in absolute terms and identical in structure to the others rather than a ladder
-  of its own. The tuning `polar-drift` settled — selected row on a band, a painted
-  working state, a quiet argument, a reply frame at container weight — is drawn the
-  same way here.
 
 ### Changed
 

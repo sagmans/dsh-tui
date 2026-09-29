@@ -5,7 +5,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 const PROJECT_ROOT = dirname(dirname(dirname(fileURLToPath(import.meta.url))))
-const RELEASE_VERSION = '0.1.5-rc.3'
+const RELEASE_VERSION = '0.1.7-rc.2'
 const SOURCE_VERSION = '0.1.7-alpha.2'
 const POLICY_URL = pathToFileURL(join(PROJECT_ROOT, 'tools', 'pty-launch.mjs')).href
 const ORIGINAL_PATH = process.env.PATH
@@ -110,7 +110,10 @@ describe('PTY launcher safety', () => {
   })
 
   it('refuses a source-host launcher even with an isolated home', () => {
+    // The refusal has to name both sides, and the supported release moves with the
+    // matrix, so the expectation quotes the constants rather than a version literal.
+    const literal = (version: string): string => version.replace(/\./g, '\\.')
     expect(() => preparePtyLaunch({ home: scratch, launcher: launcher(SOURCE_VERSION) }))
-      .toThrow(/launcher.*0\.1\.5-rc\.3.*0\.1\.7-alpha\.2/)
+      .toThrow(new RegExp(`launcher.*${literal(RELEASE_VERSION)}.*${literal(SOURCE_VERSION)}`))
   })
 })

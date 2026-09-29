@@ -155,13 +155,13 @@ describe('TodoGuard', () => {
 describe('foldReminder', () => {
   const reminder = createUserMessage({
     content: [{ type: 'text', text: 'refresh the list' }],
-    source: { kind: 'plugin', plugin: 'tui-todo-guard' },
+    source: { kind: 'tui-todo-guard', plugin: 'tui-todo-guard' },
   })
 
   it('prepends to an accepted result and keeps downstream context', () => {
     const other = createUserMessage({
       content: [{ type: 'text', text: 'other' }],
-      source: { kind: 'plugin', plugin: 'test' },
+      source: { kind: 'tui-todo-guard', plugin: 'test' },
     })
     const folded = foldReminder(reminder, { kind: 'accept', additionalContexts: [other] })
     expect(folded.kind).toBe('accept')

@@ -661,7 +661,7 @@ describe('createAppearance settings attachment', () => {
     const given = fixture(settings.service)
     given.appearance.registerSection()
     const remove = given.appearance.settingsListener()
-    expect([...given.listeners.keys()].sort()).toEqual(['settings/document-updated', 'settings/updated'])
+    expect([...given.listeners.keys()].sort()).toEqual(['settings/document-updated'])
 
     remove()
 

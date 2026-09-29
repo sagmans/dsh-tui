@@ -5,7 +5,7 @@ import { dirname, isAbsolute, join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { problems } from '../.agents/skills/dsh-tui-dogfood/scripts/clone-links.mjs'
 
-const RELEASE_VERSION = '0.1.5-rc.3'
+const RELEASE_VERSION = '0.1.7-rc.2'
 const PROJECT_ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 
 function contains(parent, path) {

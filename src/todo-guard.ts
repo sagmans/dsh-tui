@@ -2,7 +2,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import type { MessageSource } from '@deepseek-ai/dsh-llm'
+import type { ContextFormed, MessageSource } from '@deepseek-ai/dsh-llm'
 import type { UserMessage } from '@deepseek-ai/dsh-session'
 import type { PostToolDecision, ToolExecution, ToolExecutionResult } from '@deepseek-ai/dsh-tools'
 import { projectionRead } from './agent/projections.ts'
@@ -38,8 +38,25 @@ const TODO_WRITE_EVENT = 'todo/write'
 const TODOS_KEY = 'todos'
 const PLAN_KEY = 'plan'
 
+/**
+ * The reminder's own message-source kind.
+ *
+ * The harness dropped its shared \`plugin\` kind, because a source that cannot name
+ * its producer leaves derived history unreadable: every producer declares the kind
+ * it can be recognized by. Declaring it here is what registers the kind with the
+ * compiler, and the constant keeps the object and the declaration in step.
+ */
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    'tui-todo-guard': { kind: 'tui-todo-guard'; plugin: string } & ContextFormed
+  }
+}
+
+/** The kind this guard's reminders carry, named rather than borrowed. */
+const REMINDER_KIND = 'tui-todo-guard'
+
 /** The reminder source; unlabeled context would read as a user prompt in derived history. */
-const PLUGIN_SOURCE: MessageSource = { kind: 'plugin', plugin: 'tui-todo-guard' }
+const PLUGIN_SOURCE: MessageSource = { kind: REMINDER_KIND, plugin: name }
 
 /** Defaults every deployment inherits; the bundle patch states them again for readers. */
 export const TODO_GUARD_DEFAULTS = {

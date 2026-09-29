@@ -108,7 +108,7 @@ The profile then keeps `@deepseek-ai/dsh-base` and no application, so `dsh --pro
 
 ### Use the installed Harness launcher
 
-Run `dsh --version` and confirm `0.1.5-rc.3` before launching this plugin. `pnpm dsh` from a Harness source checkout runs its development host, not the installed release. That host can migrate `settings.yaml` and is outside this plugin's supported range; do not use it for TUI dogfooding.
+Run `dsh --version` and confirm `0.1.7-rc.2` before launching this plugin. `pnpm dsh` from a Harness source checkout runs its development host, not the installed release. That host can migrate `settings.yaml` and is outside this plugin's supported range; do not use it for TUI dogfooding.
 
 ## Troubleshooting
 
@@ -127,7 +127,7 @@ Two facts explain most failures.
 | `dsh-tui: both stdin and stdout must be TTYs` | stdin or stdout is a pipe, a file, or a CI runner | run the command from a terminal |
 | Node warnings, such as `ExperimentalWarning: stripTypeScriptTypes …`, appear after exit | the TUI holds runtime warnings until it returns the terminal to your shell; startup warnings remain visible before the TUI starts | read the warnings in your shell after exit; no warning-suppression flag is needed |
 | Changes under `src/` have no effect | a linked profile loads `lib/`, not `src/` | `pnpm run build` in the plugin checkout |
-| TUI preferences disappear after launching a Harness source checkout | that host treats `settings.yaml` as migration input, not live preferences | use installed `dsh 0.1.5-rc.3` with a cloned home; preserve the original settings file |
+| TUI preferences disappear after launching a Harness source checkout | that host treats `settings.yaml` as migration input, not live preferences | use installed `dsh 0.1.7-rc.2` with a cloned home; preserve the original settings file |
 | `--preset <id>` is refused, because the session's agent preset is fixed | a session keeps the mode that composed it, and this session already took a turn | `/preset <id>` before the first turn, or resume without `--preset` |
 | `--resume <id>` starts a new session | the id is a bare UUID | pass the stored id, `tui-session-…` included; a bare `--resume` opens the picker |
 | `dsh: profile "tui" does not exist` | the profile is not created yet | the `add` command creates it |
@@ -840,7 +840,7 @@ pnpm test
 pnpm run build
 ```
 
-**A linked profile loads the built entry point**, so edits under `src/` are invisible to `dsh --profile tui` until `pnpm run build` runs. The PTY driver rebuilds, checks nested links in the isolated `--home`, and rejects launchers other than `dsh 0.1.5-rc.3`.
+**A linked profile loads the built entry point**, so edits under `src/` are invisible to `dsh --profile tui` until `pnpm run build` runs. The PTY driver rebuilds, checks nested links in the isolated `--home`, and rejects launchers other than `dsh 0.1.7-rc.2`.
 
 Clone your configured home with the dogfood helper for realistic runs. A minimal throwaway home can also expose startup failures without touching your real state:
 

@@ -19,7 +19,7 @@ node tools/pack-smoke.mjs
 
 The gate does not prove terminal behaviour. Run `node tools/pty-drive.mjs --home <clone>`
 and follow the manual acceptance table in the README: the driver verifies the
-installed `dsh 0.1.5-rc.3`, rebuilds, allocates a PTY, and prints the screen.
+installed `dsh 0.1.7-rc.2`, rebuilds, allocates a PTY, and prints the screen.
 
 A linked profile loads `lib/`, never `src/`, so a run against a stale build
 tests the previous release. `tools/pty-drive.mjs` rebuilds on every run for that
@@ -146,7 +146,7 @@ A session's preset mounts that row. Thus, `--profile tui` scans the roots above.
 | a source edit has no effect | the profile loads `lib/` | `pnpm run build`, or use the dogfood script |
 | `error: Insufficient Balance` on every turn | the provider account behind the copied credentials has no credit | top up or point `--model`/provider elsewhere |
 | `pty-drive: --home must name an existing isolated directory` | the PTY driver refuses to use the live home | clone the profile first, then pass its directory with `--home` |
-| `pty-drive: launcher must report 0.1.5-rc.3, got ...` | the selected launcher is not the supported installed release | run `dsh --version` and select installed `dsh 0.1.5-rc.3`, not a Harness source checkout |
+| `pty-drive: launcher must report 0.1.7-rc.2, got ...` | the selected launcher is not the supported installed release | run `dsh --version` and select installed `dsh 0.1.5-rc.3`, not a Harness source checkout |
 
 A broken link is silent: `dsh plugin install` and `dsh plugin add` drop a bundle
 they cannot resolve and still exit 0, so a missing row is worth checking against
