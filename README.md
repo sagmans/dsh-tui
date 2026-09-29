@@ -729,16 +729,18 @@ alone.
 
 ## Modes
 
-A mode is an **agent preset**: the plugin composition an agent's own scope joins. It decides that agent's tools, prompt sections, skills, and planning rows, which is why a mode is fixed once a session has produced a turn — it is what composed the agent that answered.
+A mode is an **agent preset**: the seat an agent's own scope takes in this profile's roster. The rows that make up that agent — its tools, prompt sections, skills, and planning — belong to the bundle shipping each of them, and the profile's own layers compose them, so a mode names a composition rather than assembling one. A mode is fixed once a session has produced a turn, because the log records the seat the agent that answered ran in.
 
 Four ship, under the ids a session log records:
 
-| `--preset` | Mode | What the agent gets |
+| `--preset` | Mode | What this bundle makes of the id |
 |---|---|---|
-| `ptc` | PTC (default) | the same agent, reaching its tools through one TypeScript program |
-| `standard` | standard | full agent: editing, shell, search, skills, planning, goals, subagents, workflows |
-| `minimal` | minimal | one tool: a persistent shell |
-| `cordis` | creator | harness authoring: runtime inspection and composition guidance |
+| `ptc` | PTC (default) | the agent this profile composes, with its tools reached through one TypeScript program |
+| `standard` | standard | the same agent, its tools called directly |
+| `minimal` | minimal | the same agent, as this profile composes it |
+| `cordis` | creator | the same agent, for authoring the composition itself |
+
+Only PTC declares anything of its own: the presentation its tools take. The other three ids are the harness's own mode names, kept so a session log reads the same here as in the browser profile, and what each of them runs is the profile's composition — a profile that wants a smaller `minimal` declares that composition in its own layers.
 
 A session takes its mode from the first of these that applies:
 

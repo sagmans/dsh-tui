@@ -43,6 +43,13 @@ breaking change, and a patch carries only fixes.
 
 ### Fixed
 
+- The mode table and the picker's glosses say what each id does here. They still
+  described the compositions the modes carried before the agent plane moved back to
+  the bundle shipping it — `minimal` promised "one tool: a persistent shell" while
+  the mode composed nothing of the sort — so the copy now reads a mode as the seat
+  an agent takes in the profile's own composition, and names PTC as the one id whose
+  tools are presented differently.
+
 - A tool call's answer settles the row it answers again. The `0.2.0` line names the
   answered call on the tool message itself and leaves that message's content as the
   tool's own output, where the `0.1.x` line nested the id inside a single

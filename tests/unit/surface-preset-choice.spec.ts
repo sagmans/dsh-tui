@@ -19,9 +19,9 @@ const ROSTER_DEFAULT = 'minimal'
  * whose description changed would read as a mode the reader cannot recognise.
  */
 const GLOSS: Readonly<Record<string, string>> = {
-  standard: 'full agent: editing, shell, search, skills, planning, goals, subagents, workflows',
+  standard: 'the agent this profile composes, its tools called directly',
   [PARENT_MODE]: 'the same agent, with its tools reached through one TypeScript program',
-  [ROSTER_DEFAULT]: 'one tool: a persistent shell',
+  [ROSTER_DEFAULT]: 'the same agent, as this profile composes it',
 }
 
 const MODES: readonly PresetSummary[] = [
