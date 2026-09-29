@@ -1,82 +1,12 @@
 # dsh-tui — the terminal agent plane, over dsh-base.
 #
-# Every row this bundle INSERTS is owned by the plugin: no row names a package
-# the plugin does not depend on. The rows it DISABLES are the base's global
-# agent rows, because from here on an agent's tools, prompt sections, skills,
-# and planning rows come from the agent preset its own session mounts — the
-# composition the Web bundle composes for the same reason. Leaving them mounted
-# would register the same tool names in two layers, double every prompt section
-# and command they own, and provide the same services twice, which fails.
-#
-# The ids are exactly the base rows the shipped presets supply: standard, ptc,
-# and cordis provide every one of them, while minimal supplies its own
-# persistent-terminal set instead, which is the point of that mode.
-- id: agent-instructions
-  disabled: true
-
-- id: command-compact
-  disabled: true
-
-- id: command-goal
-  disabled: true
-
-- id: compaction-basic
-  disabled: true
-
-- id: plan-mode
-  disabled: true
-
-- id: skill-filesystem
-  disabled: true
-
-- id: tool-bash
-  disabled: true
-
-- id: tool-fs
-  disabled: true
-
-- id: tool-fs-search
-  disabled: true
-
-- id: tool-goal
-  disabled: true
-
-- id: tool-jobs
-  disabled: true
-
-- id: tool-pwsh
-  disabled: true
-
-- id: tool-ralph
-  disabled: true
-
-- id: tool-result-pruner
-  disabled: true
-
-- id: tool-skill
-  disabled: true
-
-- id: tool-subagent
-  disabled: true
-
-- id: tool-subagent-control
-  disabled: true
-
-- id: tool-subagent-fork
-  disabled: true
-
-- id: tool-subagent-list-agents
-  disabled: true
-
-- id: tool-todo
-  disabled: true
-
-- id: tool-web
-  disabled: true
-
-- id: tool-workflow
-  disabled: true
-
+# This layer inserts only rows that mount this plugin's own entry points, and it
+# disables no base row. The agent plane itself — the tools, prompt sections,
+# skills, commands, and planning rows a session runs on — belongs to the bundle
+# that ships each of those plugins, and the profile's own bundle layers compose
+# it. A row mounted from here would register what the profile already
+# registered, which is the "already registered" wall this file used to produce
+# once the profile's own layer supplied the same plugins.
 - insert:
     # The two rows below sit ahead of the surface on purpose: a row applies as
     # soon as its own dependencies are up, the surface builds as soon as the
@@ -127,6 +57,6 @@
 
     # A preset's subagent tool samples its delegation model from this host-owned
     # settings row. It is host machinery rather than agent plane, which is why
-    # the Web bundle inserts it too instead of leaving it to the preset.
+    # the Web bundle inserts it too instead of leaving it to a preset.
     - id: subagent-model-selection-settings
       name: '@deepseek-ai/dsh-tool-subagent/model-selection-settings'

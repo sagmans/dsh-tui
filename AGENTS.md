@@ -31,7 +31,8 @@ proven by that gate — use the cloned-home PTY command above and read its scree
   `src/todo-guard.ts` is the one advisory agent-plane row, nudging a stale plan
   from the harness's own projections.
 - `src/host/` holds the rows the bundle patch cannot mount itself: the roster shim
-  publishes the mode registry plus one row per mode, and the runner shim mounts the
+  publishes the mode registry plus one row per mode — a mode names a selection and
+  mounts no plugin of another bundle — and the runner shim mounts the
   dynamic-plugin host creator mode needs, both after the services they wait on.
 - `src/agent/` composes, projects, and resumes the agent. `src/cards.ts`,
   `src/transcript.ts`, and `src/work.ts` fold `session/event` into what is drawn;
@@ -88,11 +89,13 @@ nothing about the plugin under test.
 `tests/golden/__snapshots__/frames.spec.ts.snap` in the diff before accepting it
 with `pnpm vitest run -u`.
 
-**`cordis.patch.yml` disables the base's global agent rows on purpose**: a
-session's own preset supplies its tools, prompt sections, skills, and planning
-rows. A row added there registers the same tool in two layers and fails
-composition. Host-plane insert rows are the exception: the todo guard registers
-no tool, so it cannot double a preset's.
+**`cordis.patch.yml` mounts only this bundle's own rows, and disables none.** The
+agent plane — tools, prompt sections, skills, commands, and planning — belongs to
+the bundle that ships each of those plugins, and the profile's own layers compose
+it. The shipped modes are selections rather than compositions, so they list no
+plugin either. A row mounted here registers a plugin the profile already
+registered, and composition fails with "already registered" for every one of
+them; a row disabled here is the same mistake from the other side.
 
 **The harness matrix names one supported line.** The `devDependencies`,
 `dsh.compatibility.dshReleases`, and every harness package this bundle mounts name

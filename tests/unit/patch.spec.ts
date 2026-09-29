@@ -13,38 +13,6 @@ import { TUI_STARTUP_SERVICE, name as startupRowName } from '@/startup.ts'
  */
 const patch = readFileSync(new URL('../../cordis.patch.yml', import.meta.url), 'utf8')
 
-/**
- * The base rows an agent preset supplies, so the global plane must not.
- *
- * Mirrors the list the packaging gate checks: the same file is read by both, and
- * a row dropped from either one fails the other. A missing entry registers the
- * same tool names in two layers, which the composition refuses outright.
- */
-const PRESET_SUPPLIED_ROWS = [
-  'agent-instructions',
-  'command-compact',
-  'command-goal',
-  'compaction-basic',
-  'plan-mode',
-  'skill-filesystem',
-  'tool-bash',
-  'tool-fs',
-  'tool-fs-search',
-  'tool-goal',
-  'tool-jobs',
-  'tool-pwsh',
-  'tool-ralph',
-  'tool-result-pruner',
-  'tool-skill',
-  'tool-subagent',
-  'tool-subagent-control',
-  'tool-subagent-fork',
-  'tool-subagent-list-agents',
-  'tool-todo',
-  'tool-web',
-  'tool-workflow',
-]
-
 /** Rows this bundle inserts, in patch order, and the package each one mounts. */
 const INSERTED_ROWS = [
   ['agent-presets', '@sagmans/dsh-tui/host/roster'],
@@ -78,19 +46,6 @@ const ROSTER_DEFAULT = 'ptc'
  */
 const ROW_ONLY_OPTIONS = ['theme', 'stashScope']
 
-/** The row list before the patch's single `insert:` block. */
-function patchHead(text: string): { id: string; disabled: boolean }[] {
-  const end = text.indexOf('\n- insert:')
-  const head = end === -1 ? text : text.slice(0, end)
-  return head
-    .split(/^- /mu)
-    .slice(1)
-    .map(chunk => ({
-      id: /^id: (\S+)/u.exec(chunk)?.[1] ?? '',
-      disabled: /^ {2}disabled: true$/mu.test(chunk),
-    }))
-}
-
 interface InsertedRow {
   readonly id: string
   readonly name: string
@@ -121,13 +76,13 @@ function configKeys(row: InsertedRow): string[] {
 }
 
 describe('the bundle patch', () => {
-  it('takes the whole global agent plane out, and nothing else', () => {
-    const head = patchHead(patch)
-    expect(head.filter(entry => !entry.disabled)).toEqual([])
-    // Set equality, not membership: taking out a row no preset supplies leaves
-    // the mode that needed it silently short of a tool.
-    expect(head.map(entry => entry.id).sort()).toEqual([...PRESET_SUPPLIED_ROWS].sort())
-    expect(new Set(head.map(entry => entry.id)).size).toBe(head.length)
+  it('leaves the agent plane the profile composes alone', () => {
+    // This bundle serves the surface. Every agent-plane row belongs to the
+    // bundle shipping that plugin, so the patch neither mounts nor disables one:
+    // touching a row here is what registered a plugin the profile already had.
+    expect(patch).not.toMatch(/^- id: /mu)
+    expect(patch).not.toContain('disabled: true')
+    expect(patch.indexOf('- insert:')).toBeGreaterThan(-1)
   })
 
   it('inserts the rows this bundle owns, each mounting its own package', () => {

@@ -86,14 +86,11 @@ describe('the shipped modes', () => {
     expect(definitions.map(definition => definition.order)).toEqual([1, 2, 3, 4])
   })
 
-  it('keeps a loader expression as the marker the loader evaluates', () => {
-    expect(JSON.stringify(loadPresetDefinitions())).toContain('"__jsExpr"')
-  })
-
-  it('names every row package plainly, so a profile resolves one copy', () => {
-    // A mode's rows are the agent plane of a session, and the harness reads the
-    // version of the packages it mounts: an alias here would install a second
-    // build of a package the base already has.
-    expect(JSON.stringify(loadPresetDefinitions())).not.toContain('@sagmans/')
+  it('mounts no plugin of another bundle', () => {
+    // A mode that listed the agent plane would register a package this bundle
+    // does not own, on top of the copy the profile's own layers composed.
+    for (const definition of loadPresetDefinitions()) {
+      expect(definition.plugins).toEqual([])
+    }
   })
 })
