@@ -8,6 +8,20 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+### Added
+
+- A fifth theme ships: `wine-thicket`. Its anchor is `#240413`, a fill weight
+  rather than a text weight at 1.03:1 on a dark terminal — almost exactly the weight
+  of the background itself — so the anchor marks the band under a selected row by
+  its hue alone, the whole table is drawn on that one hue with the accent lifted to
+  where text reads, and the level starts a step lower than the other themes' to
+  match how little the anchor can add. That hue sits 25 degrees from the red the
+  surface already means by removed, so the two part by weight rather than by hue:
+  the accent is nearly twice the red's luminance and is the only one that frames
+  text. The shades hold the same
+  relative ladder as the shipped table, so this theme is dimmer in absolute terms
+  and identical in structure to the others.
+
 ## [0.10.0] - 2026-09-29
 
 ### Added

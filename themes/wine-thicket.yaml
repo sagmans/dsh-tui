@@ -1,0 +1,205 @@
+# wine-thicket — the shipped table, anchored on the plum #240413.
+#
+# The anchor is a fill weight rather than a text weight, and at 1.03:1 against a
+# dark terminal it is almost exactly the weight of the background itself: it marks
+# the row a picker has selected by its hue rather than by any contrast it could
+# add, which is why the level starts a step lower than the other themes' — the
+# chroma is all this family offers, and the quiet has to come from the neutrals.
+# The whole table is drawn on that one hue, the accent included. Every
+# neutral is the anchor's hue at a low saturation, so the surface reads as one
+# family rather than as grey rows with a pink link on them.
+#
+# The shades hold the shipped table's own ladder — each role takes the same share
+# of the theme's text luminance (muted 0.63, faint 0.42, arg 0.25, accent 0.57,
+# warn 0.61, added 0.56, removed 0.25) — so this theme is dimmer in absolute terms
+# and identical in structure to any other, and a reader who knows one knows this
+# one. Only the level and the chroma are its own.
+#
+# A rose accent sits 25 degrees from the red the surface already means by removed.
+# The two are told apart by weight instead of by hue: the accent is nearly twice
+# that red's luminance and is the only one of them that ever frames text, which is
+# what keeps a diff from reading as chrome. Green and amber sit far from the family
+# and stay where every surface keeps them.
+#
+# Every element below names a palette entry rather than a shade of its own, so
+# the anchor and the accent it lifts to are one line each to move. The three that
+# name a literal say why there.
+#
+# This file is a reference and a layer, not a workspace: it ships inside the
+# package and a new version replaces it. /theme export wine-thicket writes a full copy
+# into your own themes directory to edit.
+
+palette:
+  default: '#beb0b6'  # the anchor's hue at 10% saturation: the level every other shade is a share of
+  muted: '#a38b96'  # 0.63 of the text's luminance: labels and scaffolding
+  faint: '#926f7f'  # 0.42: reasoning, which is meant to recede
+  accent: '#d56398'  # 0.56: the anchor's hue lifted to text weight for headings, links, code, frames
+  arg: '#844e67'  # 0.25: an argument recedes under the label of the call it belongs to
+  warn: '#ba861e'  # 0.61, in amber: a call that has not answered
+  added: '#399a67'  # 0.55, in green: something that arrived
+  removed: '#ab3037'  # 0.24, in red: something taken away
+  user: '#240413'  # the anchor itself: the band under a selected row, and one panel border
+  assistant: '#beb0b6'  # the reply's text stays plain, so the frame is what marks it
+
+tokens:
+  # A row of the conversation. The reader's own turn keeps its frame and carries
+  # no band: a filled row inside that frame reads as a selected row, and the
+  # anchor's own weight would swallow the text it is meant to hold.
+  transcript.user: { fg: default }
+  # A sent prompt keeps the accent shade without inheriting the editor's setting.
+  transcript.user.border: { fg: accent }
+  # The reply's own frame. It holds the family's hue at container weight rather
+  # than the accent the prompt is framed in: the two frames then differ by how
+  # loud they are instead of by hue, and a long answer never wears the shade that
+  # means "this is what you typed".
+  transcript.assistant.border: { fg: '#784c61' }
+  transcript.notice: { fg: muted }
+  transcript.marker: { fg: muted }
+  transcript.reasoning.summary: { fg: faint, italic: true }
+  transcript.reasoning.body: { fg: faint }
+  transcript.reasoning.hint: { fg: faint, italic: true }
+  # A tool card, drawn in layers: every card, then one kind of card.
+  # A call is not a warning, so the label takes the accent rather than the amber
+  # the surface reserves for a call that has not answered — the label is the
+  # loudest thing on the row, and loudness is what the accent is for.
+  tool.title: { fg: accent }
+  tool.glyph: { fg: accent }  # follows the label it sits beside
+  tool.skill: { fg: accent }  # follows the label it sits beside
+  tool.args: { fg: arg }  # below the reasoning shade: an argument is quieter than what the call is doing
+  tool.stat.added: { fg: added }
+  tool.stat.changed: { fg: warn }
+  tool.stat.removed: { fg: removed }
+  tool.stat.size: { fg: muted }
+  tool.stat.separator: { fg: muted }
+  tool.detail: { fg: muted }
+  tool.hint: { fg: muted }
+  tool.failed.title: { fg: removed }
+  tool.failed.glyph: { fg: removed }
+  # A call still in flight is state, which is amber's job here; the failed row
+  # stays red so the two can never be read as each other.
+  tool.running.title: { fg: warn }
+  tool.running.elapsed: { fg: warn }
+  tool.elapsed.done: { fg: muted, italic: true }
+  tool.subcall.title: { fg: muted }
+  tool.subcall.running: { fg: warn }
+  tool.subcall.args: { fg: arg }
+  tool.diff.header: { fg: muted }
+  tool.diff.hunk: { fg: muted }
+  tool.diff.added: { fg: added }
+  tool.diff.removed: { fg: removed }
+  tool.read.header: { fg: muted }
+  tool.read.lineNumber: { fg: muted }
+  tool.read.line: { fg: muted }
+  tool.search.path: { fg: muted }
+  tool.search.lineNumber: { fg: muted }
+  tool.search.match: { fg: muted }
+  tool.search.truncated: { fg: muted }
+  tool.terminal.cwd: { fg: muted }
+  tool.terminal.status: { fg: muted }
+  tool.terminal.output: { fg: muted }
+  tool.web.url: { fg: muted }
+  tool.web.source: { fg: muted }
+  tool.web.truncated: { fg: muted }
+  tool.generic.detail: { fg: muted }
+  # A reply, which is markdown, and the diagrams in it.
+  markdown.heading: { fg: accent, bold: true }
+  markdown.link: { fg: accent, underline: true }
+  markdown.linkUrl: { fg: muted }
+  markdown.code: { fg: accent }
+  markdown.codeBlock: {}
+  markdown.codeBlockBorder: { fg: muted }
+  markdown.quote: { fg: muted }
+  markdown.quoteBorder: { fg: muted }
+  markdown.hr: { fg: muted }
+  markdown.listBullet: { fg: accent }
+  markdown.bold: { bold: true }
+  markdown.italic: { italic: true }
+  markdown.strikethrough: { strike: true }
+  markdown.underline: { underline: true }
+  # A fenced diff: the scaffolding recedes, the rows carry the semantic shades,
+  # and the characters that changed sit on a band of the row's own colour. The
+  # band is a shade derived from that colour rather than a palette entry, so it
+  # stays a literal, and the foreground inherits so a palette move carries both.
+  markdown.diff.header: { fg: muted }
+  markdown.diff.hunk: { fg: muted }
+  markdown.diff.context: {}
+  markdown.diff.added: { fg: added }
+  markdown.diff.removed: { fg: removed }
+  markdown.diff.addedEmphasis: { inherit: markdown.diff.added, bg: '#10261b' }
+  markdown.diff.removedEmphasis: { inherit: markdown.diff.removed, bg: '#2e1314' }
+  markdown.diagram.border: { fg: muted }
+  markdown.diagram.text: {}
+  markdown.diagram.edge: { fg: accent }
+  markdown.diagram.edgeLabel: { fg: muted }
+  markdown.diagram.title: { fg: accent, bold: true }
+  markdown.diagram.warning: { fg: warn }
+  # A list drawn over the transcript.
+  picker.title: { bold: true }
+  picker.glyph: { bold: true }
+  picker.note: { bold: true }
+  picker.filter: { fg: muted }
+  # A list is read by moving one row, so the rows the cursor is not on recede:
+  # the selected row is then found by its own shade rather than by hunting for
+  # the mark in front of it, which is what a bold row alone leaves a reader doing.
+  picker.row: { fg: muted }
+  picker.rowCurrent: { fg: accent, bold: true, bg: user }
+  picker.scrollNewer: { fg: muted }
+  picker.scrollOlder: { fg: muted }
+  picker.hint: { fg: muted }
+  picker.cursor: {}
+  picker.border: { fg: muted }
+  # A question or an approval, which stops the turn until it is answered.
+  gate.title: { bold: true }
+  gate.glyphApproval: { bold: true }
+  gate.glyphQuestion: { bold: true }
+  gate.detail: { fg: muted }
+  gate.option: {}
+  gate.optionCurrent: { bold: true }
+  gate.cursor: {}
+  gate.hint: { fg: muted }
+  # The work panel above the editor. Each panel is a bordered box, so the border
+  # is what says which panel a row belongs to and the rows themselves stay quiet.
+  dock.goal: { bold: true }
+  dock.planMode: { bold: true }
+  dock.todos.border: { fg: accent }
+  dock.todos.heading: { bold: true }
+  dock.todos.pending: { fg: muted }
+  dock.todos.inProgress: { fg: muted }
+  dock.todos.overflow: { fg: muted }
+  dock.subagents.border: { fg: user }
+  dock.subagents.heading: { bold: true }
+  dock.subagents.running: { fg: muted }
+  dock.subagents.overflow: { fg: muted }
+  dock.jobs.border: { fg: warn }
+  dock.jobs.heading: { bold: true }
+  dock.jobs.running: { fg: muted }
+  dock.jobs.overflow: { fg: muted }
+  # The footer.
+  status.prefix: { fg: accent }
+  status.back: { fg: accent }
+  # A turn in flight is the one state a reader waits on, so it takes the accent
+  # and the weight; ready stays quiet because it is where the surface rests.
+  status.activity.working: { fg: accent, bold: true }
+  status.activity.ready: { fg: muted }
+  status.elapsed: { fg: muted }
+  status.agentPreset: { fg: muted }
+  status.model: { fg: muted }
+  status.effort: { fg: muted }
+  status.permission: { fg: muted }
+  status.context: { fg: muted }
+  status.cache: { fg: muted }
+  status.stash: { fg: accent }
+  status.cwd: { fg: muted }
+  status.separator: { fg: muted }
+  # The prompt bar.
+  # The one border in the surface that is not a divider: it holds what the reader
+  # is writing, which is where the brand belongs on a send affordance.
+  editor.border: { fg: accent }
+  editor.queued: { dim: true, italic: true }
+  editor.queued.more: { fg: muted }
+  editor.ghost: { dim: true }
+  editor.selectList.selectedPrefix: { fg: accent }
+  editor.selectList.selectedText: { bold: true }
+  editor.selectList.description: { fg: muted }
+  editor.selectList.scrollInfo: { fg: muted }
+  editor.selectList.noMatch: { fg: muted }
