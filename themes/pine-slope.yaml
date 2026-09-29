@@ -4,9 +4,14 @@
 # terminal it paints the band under a selected row and the one panel border that
 # names it, and the accent is that same hue lifted to where text reads. Every
 # neutral is the anchor's hue at a low saturation, so the surface reads as one
-# family rather than as grey rows with a green link on them. Every shade sits a
-# step below the shipped table's own, so the family stays dark and soft beside a
-# bright terminal rather than competing with it.
+# family rather than as grey rows with a green link on them.
+#
+# The shades hold the shipped table's own ladder — each role takes the same share
+# of the theme's text luminance (muted 0.63, faint 0.42, arg 0.25, accent 0.57,
+# warn 0.61, added 0.56, removed 0.25) — so this theme is dimmer in absolute terms
+# and identical in structure to any other, and a reader who knows one knows this
+# one. Only the level and the chroma are its own, which is what keeps it soft
+# beside a bright terminal instead of competing with it.
 #
 # Green is the family here, and green is also what an added line means. The
 # accent therefore stays a lime while the semantic green is pushed toward grass:
@@ -23,16 +28,16 @@
 # copy into your own themes directory to edit.
 
 palette:
-  default: '#cad0c5'  # the anchor's hue at 7% saturation, a step below the shipped table's text
-  muted: '#a0aa97'  # the same hue, one step down: labels and scaffolding
-  faint: '#6f8365'  # the same hue again: reasoning, which is meant to recede
-  accent: '#6daa3d'  # the anchor's hue lifted to text weight, held well back from the lime it could be
-  arg: '#435c32'  # the anchor's hue below the reasoning shade: an argument recedes under its label
-  warn: '#dba027'  # state-warn, left in amber: a call still in flight
-  added: '#327e5b'  # state-success, pushed toward grass: a change is not the theme's own green
-  removed: '#c03d3b'  # state-error, left in red
+  default: '#bac1b3'  # the anchor's hue at 7% saturation: the level every other shade is a share of
+  muted: '#939f89'  # 0.63 of the text's luminance: labels and scaffolding
+  faint: '#738768'  # 0.42: reasoning, which is meant to recede
+  accent: '#69a33a'  # 0.57: the anchor's hue lifted to text weight for headings, links, code, frames
+  arg: '#506d3c'  # 0.25: an argument recedes under the label of the call it belongs to
+  warn: '#c59021'  # 0.61, in amber: a call that has not answered
+  added: '#41a477'  # 0.56, pushed toward grass: a change is not the theme's own green
+  removed: '#b43937'  # 0.25, in red: something taken away
   user: '#173802'  # the anchor itself: the band under a selected row, and one panel border
-  assistant: '#cad0c5'  # the reply's text stays plain, so the frame is what marks it
+  assistant: '#bac1b3'  # the reply's text stays plain, so the frame is what marks it
 
 tokens:
   # A row of the conversation. The reader's own turn keeps its frame and carries
@@ -45,7 +50,7 @@ tokens:
   # than the accent the prompt is framed in: the two frames then differ by how
   # loud they are instead of by hue, and a long answer never wears the shade that
   # means "this is what you typed".
-  transcript.assistant.border: { fg: '#4c5e41' }
+  transcript.assistant.border: { fg: '#526646' }
   transcript.notice: { fg: muted }
   transcript.marker: { fg: muted }
   transcript.reasoning.summary: { fg: faint, italic: true }
@@ -118,8 +123,8 @@ tokens:
   markdown.diff.context: {}
   markdown.diff.added: { fg: added }
   markdown.diff.removed: { fg: removed }
-  markdown.diff.addedEmphasis: { inherit: markdown.diff.added, bg: '#122b1f' }
-  markdown.diff.removedEmphasis: { inherit: markdown.diff.removed, bg: '#2b1312' }
+  markdown.diff.addedEmphasis: { inherit: markdown.diff.added, bg: '#112a1f' }
+  markdown.diff.removedEmphasis: { inherit: markdown.diff.removed, bg: '#381211' }
   markdown.diagram.border: { fg: muted }
   markdown.diagram.text: {}
   markdown.diagram.edge: { fg: accent }
