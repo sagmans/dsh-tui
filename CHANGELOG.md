@@ -16,6 +16,12 @@ breaking change, and a patch carries only fixes.
   twice: something added stays green, something removed stays red, and a call still
   in flight stays amber. `/theme polar-drift` applies it.
 
+### Changed
+
+- `deepseek-blue` and `polar-drift` no longer fill the row behind a submitted
+  prompt. The prompt's own frame already separates it from the reply, and a band
+  inside that frame read as a selected row rather than as what the reader typed.
+
 ### Fixed
 
 - A pane that stays up keeps its row in Herdr. Report numbers are anchored at the

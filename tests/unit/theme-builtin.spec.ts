@@ -107,11 +107,12 @@ describe('deepseek-blue', () => {
     expect(themed(BLUE).style('editor.border', 'x')).toContain('38;2;103;158;254')
   })
 
-  it("sits the reader's own turn on the product's bubble fill", () => {
-    // The product marks that turn with a background rather than a hue of its own,
-    // so this is the one element the theme gives a band to.
-    expect(themed(BLUE).style('transcript.user', 'x')).toContain('48;2;44;44;46')
-    expect(untinted().style('transcript.user', 'x')).not.toContain('48;')
+  it("leaves the reader's own turn on a plain row inside its frame", () => {
+    // The product fills that row, and this surface frames it already: a band
+    // inside the frame says one fact twice and reads as a selected row.
+    const style = themed(BLUE).style('transcript.user', 'x')
+    expect(style).toContain('38;2;249;250;251')
+    expect(style).not.toContain('48;2;')
   })
 })
 
@@ -215,7 +216,11 @@ describe('polar-drift', () => {
     expect(theme.style('markdown.diagram.warning', 'x')).toContain('38;2;250;186;66')
   })
 
-  it('sits the reader turn on a band of the anchor hue rather than a grey', () => {
-    expect(themed(DRIFT).style('transcript.user', 'x')).toContain('48;2;28;49;54')
+  it('keeps the reader turn a plain row rather than a band of the anchor hue', () => {
+    // A filled row inside the prompt's own frame reads as a selected row, which
+    // is the one thing that row must not look like.
+    const style = themed(DRIFT).style('transcript.user', 'x')
+    expect(style).toContain('38;2;244;245;246')
+    expect(style).not.toContain('48;2;')
   })
 })

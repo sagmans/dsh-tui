@@ -27,12 +27,14 @@ palette:
   warn: '#faba42'  # state-warn, left in amber: a call still in flight
   added: '#29d96a'  # state-success, left in green
   removed: '#e35048'  # state-error, left in red
-  user: '#1c3136'  # the anchor's hue at its darkest: the band behind a reader's own turn
+  user: '#1c3136'  # the anchor's hue at its darkest, for the one panel border that names it
   assistant: '#f4f5f6'  # the reply's text stays plain, so the frame is what marks it
 
 tokens:
-  # A row of the conversation.
-  transcript.user: { fg: default, bg: user }  # the band, not a hue, is what marks the reader's own turn
+  # A row of the conversation. The reader's own turn keeps its frame and carries
+  # no band: a filled row inside that frame reads as a selected row, and a band
+  # here would send the anchor's family a second, quieter meaning than the accent.
+  transcript.user: { fg: default }
   # A sent prompt keeps the anchor shade without inheriting the editor's setting.
   transcript.user.border: { fg: accent }
   # The reply's own frame. A border is a container rather than a fact, so it may

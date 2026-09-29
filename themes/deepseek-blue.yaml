@@ -13,7 +13,7 @@
 #   warn                 state-warn        amber-500           #f59e0b
 #   added                state-success     green-500           #22c55e
 #   removed              state-error       red-400             #f25a5a
-#   user                 bubble            neutral-bluish-850  #2c2c2e
+#   user                 bubble            neutral-bluish-850  #2c2c2e  (a panel border, not a fill)
 #
 # The brand itself is deepseek-500 #3964fe, drawn as deepseek-450 #5686fe on a
 # dark surface. The accent is one step lighter than either because what it paints
@@ -38,12 +38,14 @@ palette:
   warn: '#f59e0b'  # state-warn, amber-500
   added: '#22c55e'  # state-success, green-500
   removed: '#f25a5a'  # state-error on a dark surface, red-400
-  user: '#2c2c2e'  # the bubble fill, neutral-bluish-850
+  user: '#2c2c2e'  # the product's bubble fill, neutral-bluish-850: only a panel border names it now
   assistant: '#f9fafb'  # label-primary, neutral-bluish-50
 
 tokens:
-  # A row of the conversation.
-  transcript.user: { fg: default, bg: user }  # the product marks your own turn with a bubble, not a hue
+  # A row of the conversation. The product fills this one, but this surface
+  # already frames it, and a band inside the frame treats one fact twice: it reads
+  # as a selected row rather than as what the reader typed.
+  transcript.user: { fg: default }
   # The sent prompt keeps the brand shade without inheriting editor overrides.
   transcript.user.border: { fg: accent }
   # The reply's own frame. A border is a container rather than a fact, so it may
