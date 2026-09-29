@@ -21,6 +21,7 @@ import {
   HERDR_SOCKET_PATH_VAR,
   HERDR_SOURCE,
   METADATA_TOKENS,
+  RECLAIM_INTERVAL_MS,
   RETRY_BASE_MS,
   RETRY_MAX_MS,
   type SessionStartReason,
@@ -48,6 +49,14 @@ export interface HerdrReporterOptions {
   readonly releaseSync?: () => void
   /** The first retry wait; a test cannot wait a socket out. */
   readonly retryBaseMs?: number | undefined
+  /**
+   * How often the pane checks that it still owns its row; zero stops checking.
+   *
+   * The wait only has to be short enough that a reader who looks at the picker
+   * after a multiplexer restart sees the pane rather than nothing, and long
+   * enough that an idle pane is not talking to itself.
+   */
+  readonly reclaimIntervalMs?: number | undefined
 }
 
 export interface HerdrReporter {
@@ -125,6 +134,9 @@ export function createHerdrReporter(options: HerdrReporterOptions = {}): HerdrRe
   let retryTimer: ReturnType<typeof setTimeout> | undefined
   let retryAttempt = 0
   let releasing: Promise<void> | undefined
+  let reclaimTimer: ReturnType<typeof setInterval> | undefined
+  /** One check at a time: a slow answer must not stack reads behind it. */
+  let reclaiming = false
 
   const owed = (): boolean =>
     (wantedState !== undefined && !stateSent) ||
@@ -214,6 +226,53 @@ export function createHerdrReporter(options: HerdrReporterOptions = {}): HerdrRe
     }
   }
 
+  /**
+   * Claim the pane again when Herdr no longer shows the row.
+   *
+   * A row can go away without a single report failing: the multiplexer
+   * restarted and lost every claim it held, or a process that borrowed this pane
+   * claimed the row and released it on its way out with a number that beats
+   * every report this surface already made. Nothing announces either, so the
+   * pane is asked instead, and only a pane that really has no row is written to
+   * — a write for nothing would raise the reader's attention again.
+   */
+  const reclaim = async (): Promise<void> => {
+    if (released || reclaiming || !client.enabled) return
+    reclaiming = true
+    try {
+      const row = await client.readRow()
+      // `unknown` is a server that did not answer, which is not evidence of a
+      // lost row, and `other` is a claim another source owns and can clear.
+      if (row !== 'none') return
+      stateSent = false
+      sessionSent = false
+      metadataSent = false
+      // Only a label Herdr is meant to be showing is owed again: a row that is
+      // gone holds no label, and a surface with no label to offer has nothing
+      // to clear.
+      labelSent = wantedLabel === undefined
+      flush()
+    } finally {
+      reclaiming = false
+    }
+  }
+
+  const startReclaim = (): void => {
+    if (reclaimTimer !== undefined || released || !client.enabled) return
+    const interval = options.reclaimIntervalMs ?? RECLAIM_INTERVAL_MS
+    if (interval <= 0) return
+    reclaimTimer = setInterval(() => void reclaim(), interval)
+    // Never a reason for the process to stay alive: the pane's exit is what
+    // hands the row back.
+    reclaimTimer.unref()
+  }
+
+  const stopReclaim = (): void => {
+    if (reclaimTimer === undefined) return
+    clearInterval(reclaimTimer)
+    reclaimTimer = undefined
+  }
+
   const reporter: HerdrReporter = {
     enabled: client.enabled,
     driver(status) {
@@ -243,6 +302,9 @@ export function createHerdrReporter(options: HerdrReporterOptions = {}): HerdrRe
       // Forced: a switch can land on the state Herdr already shows, and the
       // session identity is part of what the pane means.
       reporter.publish(true)
+      // A pane that has a session is one a reader can be sent back to, so it is
+      // worth the read that proves the row is still there.
+      startReclaim()
     },
     publish(force = false) {
       const next = lifecycleReport({ blockedCount: waits.size, blockedMessage: [...waits.values()].at(-1), driverRunning, backgroundRunning })
@@ -266,6 +328,7 @@ export function createHerdrReporter(options: HerdrReporterOptions = {}): HerdrRe
       if (released) return
       released = true
       cancelRetry()
+      stopReclaim()
       // Nothing may be reported after this: the pane is no longer an agent, and
       // a report that landed later would claim the row back for a process that
       // is on its way out.

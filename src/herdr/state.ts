@@ -138,16 +138,20 @@ export function isReportChange(last: LifecycleReport | undefined, next: Lifecycl
 }
 
 /**
- * Monotonic report sequence numbers.
+ * Monotonic report sequence numbers, anchored at the moment each one goes out.
  *
- * The clock is the base rather than zero because a restarted surface must not
- * replay numbers this pane already used: Herdr would read them as stale and
- * keep showing the state from before the restart.
+ * Herdr keeps the newest number filed per source and drops anything older, so a
+ * number tied to the moment this process started loses to every report a later
+ * process made: a surface that stays up across a multiplexer restart, or across
+ * another process claiming and releasing the same pane, would never win its own
+ * row back. Reading the clock at each call fixes that, and the running maximum
+ * keeps numbers moving forward anyway — a clock that steps backwards must not
+ * hand Herdr a number it has already seen.
  */
 export function createReportSequence(now: () => number): () => number {
-  let sequence = now() * SEQ_TIME_SCALE
+  let sequence = 0
   return () => {
-    sequence += 1
+    sequence = Math.max(sequence + 1, now() * SEQ_TIME_SCALE)
     return sequence
   }
 }

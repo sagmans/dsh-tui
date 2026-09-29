@@ -43,6 +43,23 @@ describe('dogfood worktree plugin relink', () => {
       { cwd: REPO_ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
     )
 
+  it('starts the cloned surface without the pane coordinates Herdr exported', () => {
+    // A surface that inherited them claims this pane's agent row for the run and
+    // hands it back released, which hides the agent really running in the pane.
+    const trace = join(root, 'child-env.txt')
+    writeFileSync(stubDsh, '#!/bin/sh\nif [ "$1" = "--version" ]; then echo 0.1.5-rc.3; exit 0; fi\nenv > ' + JSON.stringify(trace) + '\n')
+    const result = spawnSync('bash', [GENERIC_SCRIPT, '--source-home', sourceHome, '--dsh', stubDsh, '--no-build', '--home', scratchHome], {
+      cwd: checkout,
+      encoding: 'utf8',
+      env: { ...process.env, HERDR_ENV: '1', HERDR_PANE_ID: 'w1:p2', HERDR_SOCKET_PATH: join(root, 'herdr.sock') },
+    })
+
+    expect(result.status, result.stderr).toBe(0)
+    const child = readFileSync(trace, 'utf8')
+    expect(child).not.toContain('HERDR_')
+    expect(child).toContain('DSH_HOME=')
+  })
+
   it('rejects an unsupported TUI host before seeding the clone', () => {
     const trace = join(root, 'rejected-probe-home.txt')
     writeFileSync(stubDsh, '#!/bin/sh\nprintf %s "$DSH_HOME" > ' + JSON.stringify(trace) + '\necho 0.1.7-alpha.2\n')

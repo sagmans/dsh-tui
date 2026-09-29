@@ -350,6 +350,54 @@ describe('createHerdrClient', () => {
     expect(Date.now() - started).toBeLessThan(1_000)
   })
 
+  it('reads the pane row this surface reported', async () => {
+    const herdr = await listen(request => ({ id: request.id, result: { pane: { pane_id: PANE_ID, agent: HERDR_AGENT } } }))
+    const client = createHerdrClient(env(herdr.path))
+
+    expect(await client.readRow()).toBe('ours')
+    expect(herdr.requests[0]?.method).toBe('pane.get')
+    expect(herdr.requests[0]?.params).toEqual({ pane_id: PANE_ID })
+  })
+
+  it('reads a pane holding no row as one to claim again', async () => {
+    // Herdr drops the field rather than sending a null, so the answer a released
+    // pane gives carries no agent at all.
+    const herdr = await listen(request => ({ id: request.id, result: { pane: { pane_id: PANE_ID, agent_status: 'unknown' } } }))
+    const client = createHerdrClient(env(herdr.path))
+
+    expect(await client.readRow()).toBe('none')
+  })
+
+  it('reads a row that was explicitly cleared as one to claim again', async () => {
+    const herdr = await listen(request => ({ id: request.id, result: { pane: { pane_id: PANE_ID, agent: null } } }))
+    const client = createHerdrClient(env(herdr.path))
+
+    expect(await client.readRow()).toBe('none')
+  })
+
+  it('leaves a row another source holds alone', async () => {
+    const herdr = await listen(request => ({ id: request.id, result: { pane: { pane_id: PANE_ID, agent: 'pi' } } }))
+    const client = createHerdrClient(env(herdr.path))
+
+    expect(await client.readRow()).toBe('other')
+  })
+
+  it('does not read an answer without a pane as an empty pane', async () => {
+    // A server answering something unexpected and a pane with no row lead to
+    // opposite decisions: one waits, the other writes.
+    const herdr = await listen(request => ({ id: request.id, result: {} }))
+    const client = createHerdrClient(env(herdr.path))
+
+    expect(await client.readRow()).toBe('unknown')
+  })
+
+  it('does not read a pane when the server never answered', async () => {
+    const herdr = await listen(() => HANGUP)
+    const client = createHerdrClient(env(herdr.path), { attempts: 2, timeoutMs: 200 })
+
+    expect(await client.readRow()).toBe('unknown')
+  })
+
   it('settles at once when the transport owes nothing', async () => {
     // A listener that hangs up ends the attempt long before the report's 5s
     // budget: a settle that waited on that budget rather than on the work still
