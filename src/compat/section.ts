@@ -10,7 +10,14 @@ export interface SectionScope {
   readonly kind: 'installSection' | 'register' | 'config' | 'unsupported'
   get(): unknown
   update(patch: object): Promise<void>
-  /** Raw opt-outs can precede a valid commit and therefore never reach get() or notifications. */
+  /**
+   * Raw opt-outs can precede a valid commit and therefore never reach get() or notifications.
+   *
+   * A row the document holds no section for reads as `undefined`, the same as a
+   * row whose section is empty: neither is an opt-out, and the switches a Config
+   * patch or the entry itself declares stand. Only a section the service cannot
+   * describe at all is unreadable, which is a refusal rather than an absence.
+   */
   readUser(): { readonly value: unknown; readonly revision: number } | undefined
 }
 
@@ -54,9 +61,8 @@ export function openSection<T>(service: unknown, request: SectionRequest<T>): Se
   const readUser = (ns: string | undefined): ReturnType<SectionScope['readUser']> => {
     if (typeof settings.describe !== 'function') return undefined
     const descriptor = settings.describe().find(row => row.ns === ns)
-    if (descriptor === undefined || !Number.isSafeInteger(descriptor.revision) || descriptor.revision < 0) {
-      throw new Error(READ_UNSUPPORTED)
-    }
+    if (descriptor === undefined) return undefined
+    if (!Number.isSafeInteger(descriptor.revision) || descriptor.revision < 0) throw new Error(READ_UNSUPPORTED)
     return { value: descriptor.user, revision: descriptor.revision }
   }
   if (typeof settings.installSection === 'function') {

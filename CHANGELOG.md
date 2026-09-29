@@ -43,6 +43,15 @@ breaking change, and a patch carries only fixes.
 
 ### Fixed
 
+- Prompt history records and offers prompts again on a profile that turns it on in
+  its own patch. The privacy guard read a row the settings document holds no section
+  for as a layer it could not read, and an unreadable layer is an opt-out it must not
+  override: `history.enabled: true` in a Config-backed row was applied and then
+  refused, so every submitted line went unrecorded, `ctrl+r` had nothing to show, and
+  the dimmed completion never drew. A row with no section of its own now reads as one
+  with an empty section — nothing to observe rather than something removed — while a
+  section the service cannot describe at all still refuses.
+
 - `--preset <id>` no longer refuses a mode this profile ships. A mode registers
   itself from its own row's apply, which the composition schedules beside the
   surface rather than before it, and the launch check read the roster as one of its

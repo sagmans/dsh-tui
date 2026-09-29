@@ -136,6 +136,32 @@ describe('the settings section seam', () => {
     expect(update).not.toHaveBeenCalled()
   })
 
+  it('reads no user section for a row the document holds none for', () => {
+    // A Config-backed row is configured by the profile patch, and an installing
+    // row's section may not be in the document yet: reporting either as
+    // unreadable made the surface treat a switch the patch had turned on as one
+    // the reader had removed, and every prompt went unrecorded.
+    const forms = { describe: () => [{ ns: 'dsh-tui', value: {}, revision: 0 }] }
+    const fromConfig = openSection(forms, {
+      ...requestWith(() => {}), config: { ns: 'terminal', get: () => ({}), live: true },
+    })!
+    expect(fromConfig.readUser()).toBeUndefined()
+    const registering = {
+      describe: () => [{ ns: 'other', value: {}, revision: 0 }],
+      register: () => ({ get: () => ({}), update: async () => {} }),
+    }
+    const fromEntry = openSection(registering, requestWith(() => {}))!
+    expect(fromEntry.readUser()).toBeUndefined()
+  })
+
+  it('refuses a section whose revision the service cannot state', () => {
+    // A descriptor the service cannot date is one this seam cannot read: a
+    // caller that trusted it would report an opt-out it never saw.
+    const forms = { describe: () => [{ ns: 'terminal', value: {}, revision: Number.NaN }] }
+    const opened = openSection(forms, requestWith(() => {}))!
+    expect(() => opened.readUser()).toThrow(/cannot read the section/)
+  })
+
   it('rejects a read-only Config service even when it exposes update', async () => {
     const update = vi.fn(async () => {})
     const forms = { writable: false, describe: () => [{ ns: 'terminal', value: {}, revision: 0 }], update }
