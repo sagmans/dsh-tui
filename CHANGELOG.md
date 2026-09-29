@@ -21,6 +21,15 @@ breaking change, and a patch carries only fixes.
   a tool argument sits below the reasoning shade so it recedes under the label it
   belongs to.
 
+- A fourth theme ships: `pine-slope`. Its anchor is `#173802`, a fill weight
+  rather than a text weight at 1.41:1 on a dark terminal, so the anchor paints the
+  band under a selected row while the accent is that hue lifted to where text
+  reads. Green is the family here and green also means an added line, so the accent
+  stays a lime while the semantic green is pushed toward grass: a reader never has
+  to ask whether a green row is the theme or the change. The tuning `polar-drift`
+  settled — selected row on a band, a painted working state, a quiet argument, a
+  reply frame at container weight — is drawn the same way here.
+
 ### Changed
 
 - `deepseek-blue` and `polar-drift` no longer fill the row behind a submitted
