@@ -19,7 +19,10 @@ const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const IMAGE = 'node:24-alpine'
 
 const manifest = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
-const bundled = Object.keys(manifest.dependencies ?? {}).filter(name => name.startsWith('@deepseek-ai/dsh-'))
+// A mounted package is an alias of its own, one build per line, so the mounted set
+// is read from the alias targets as well as from the plain names.
+const bundled = Object.entries(manifest.dependencies ?? {}).filter(([name, spec]) =>
+  name.startsWith('@deepseek-ai/dsh-') || String(spec).startsWith('npm:@deepseek-ai/dsh-'))
 const releases = Object.keys(manifest.dsh?.compatibility?.dshReleases ?? {})
 // Numeric collation keeps rc.10 after rc.9, which plain string order does not.
 const harness = releases.sort((left, right) => left.localeCompare(right, 'en', { numeric: true })).at(-1)
@@ -43,7 +46,9 @@ try {
   const script = template
     .replaceAll('@HARNESS@', harness)
     .replaceAll('@VERSION@', manifest.version)
-    .replaceAll('@BUNDLED@', bundled.join(' '))
+    // The container counts one copy per mounted name, and a mounted name is the
+    // alias the profile resolves, not the release it points at.
+    .replaceAll('@BUNDLED@', bundled.map(([name]) => name).join(' '))
     .replaceAll('@TARBALL@', tarball)
 
   execFileSync('docker', ['run', '--rm', '-i', '-v', out + ':/pkg:ro', IMAGE, 'sh', '-s'], {
