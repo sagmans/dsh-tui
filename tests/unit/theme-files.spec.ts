@@ -123,7 +123,7 @@ describe('the built-ins the package ships', () => {
   it('offers the export picker every built-in that ships with a file', () => {
     // The picker offers these by name and then copies the file behind one, so a
     // theme counted here without a path would be offered and then refused.
-    expect(builtinNames(builtins).sort()).toEqual(['deepseek-blue', 'pine-slope', 'polar-drift', 'violet-orbit'])
+    expect(builtinNames(builtins).sort()).toEqual(['deepseek-blue', 'pine-slope', 'polar-drift', 'violet-orbit', 'wine-thicket'])
   })
 
   it('ships the theme the surface draws until a reader names another', () => {

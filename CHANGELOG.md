@@ -8,6 +8,17 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+### Added
+
+- A fifth theme ships: `wine-thicket`. Its anchor is `#3B092E`, a fill weight
+  rather than a text weight at 1.11:1 on a dark terminal, so the anchor paints the
+  band under a selected row while the accent is that hue lifted to where text
+  reads. A plum accent sits next to red, which the surface already means by
+  something removed, so the accent leans violet and the semantic red stays a true
+  red: the two are never told apart by brightness alone. The shades hold the same
+  relative ladder as the shipped table, so this theme is dimmer in absolute terms
+  and identical in structure to the others.
+
 ## [0.10.0] - 2026-09-29
 
 ### Added
