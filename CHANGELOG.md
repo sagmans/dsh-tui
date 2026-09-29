@@ -14,7 +14,10 @@ breaking change, and a patch carries only fixes.
   cyan `#27CFF5` — the accent, and the hue every neutral is tinted through — so a
   surface can answer to one colour without a reader learning green, red, and amber
   twice: something added stays green, something removed stays red, and a call still
-  in flight stays amber. `/theme polar-drift` applies it.
+  in flight stays amber. `/theme polar-drift` applies it. The picker's selected
+  row carries the anchor on a band while every other row recedes, a turn in flight
+  is painted rather than greyed, and the reply's frame holds the family's hue at
+  container weight so the prompt keeps the shade that means "what you typed".
 
 ### Changed
 

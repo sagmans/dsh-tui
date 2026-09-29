@@ -216,6 +216,32 @@ describe('polar-drift', () => {
     expect(theme.style('markdown.diagram.warning', 'x')).toContain('38;2;250;186;66')
   })
 
+  it('mutes the rows the picker cursor is not on and paints the one it is', () => {
+    // A list is read by moving one row; with every row at one weight a reader
+    // hunts for the mark instead of seeing where they are.
+    const theme = themed(DRIFT)
+    const current = theme.style('picker.rowCurrent', 'x')
+    expect(current).toContain('1;38;2;39;207;245')
+    expect(current).toContain('48;2;28;49;54')
+    const other = theme.style('picker.row', 'x')
+    expect(other).toContain('38;2;191;201;204')
+    expect(other).not.toContain('48;2;')
+  })
+
+  it('marks a turn in flight with the anchor rather than leaving it grey', () => {
+    const theme = themed(DRIFT)
+    expect(theme.style('status.activity.working', 'x')).toContain('1;38;2;39;207;245')
+    expect(theme.style('status.activity.ready', 'x')).toContain('38;2;191;201;204')
+  })
+
+  it('holds the reply frame in the family at container weight', () => {
+    // The reply is long, so its frame may not wear the shade that means "what
+    // you typed"; holding the anchor's hue back is what keeps it a container.
+    const theme = themed(DRIFT)
+    expect(theme.style('transcript.assistant.border', 'x')).toContain('38;2;79;133;147')
+    expect(theme.style('transcript.user.border', 'x')).toContain('38;2;39;207;245')
+  })
+
   it('keeps the reader turn a plain row rather than a band of the anchor hue', () => {
     // A filled row inside the prompt's own frame reads as a selected row, which
     // is the one thing that row must not look like.

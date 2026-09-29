@@ -27,7 +27,7 @@ palette:
   warn: '#faba42'  # state-warn, left in amber: a call still in flight
   added: '#29d96a'  # state-success, left in green
   removed: '#e35048'  # state-error, left in red
-  user: '#1c3136'  # the anchor's hue at its darkest, for the one panel border that names it
+  user: '#1c3136'  # the anchor's hue at its darkest: the band behind a selected row, and one panel border
   assistant: '#f4f5f6'  # the reply's text stays plain, so the frame is what marks it
 
 tokens:
@@ -37,10 +37,11 @@ tokens:
   transcript.user: { fg: default }
   # A sent prompt keeps the anchor shade without inheriting the editor's setting.
   transcript.user.border: { fg: accent }
-  # The reply's own frame. A border is a container rather than a fact, so it may
-  # not take a signal shade, and the anchor the rest of the family rides would
-  # read as part of the answer it holds: a warm neutral keeps the frame a frame.
-  transcript.assistant.border: { fg: '#c3b18b' }
+  # The reply's own frame. It holds the family's hue at container weight rather
+  # than the accent the prompt is framed in: the two frames then differ by how
+  # loud they are instead of by hue, and a long answer never wears the shade that
+  # means "this is what you typed".
+  transcript.assistant.border: { fg: '#4f8593' }
   transcript.notice: { fg: muted }
   transcript.marker: { fg: muted }
   transcript.reasoning.summary: { fg: faint, italic: true }
@@ -126,8 +127,11 @@ tokens:
   picker.glyph: { bold: true }
   picker.note: { bold: true }
   picker.filter: { fg: muted }
-  picker.row: {}
-  picker.rowCurrent: { bold: true }
+  # A list is read by moving one row, so the rows the cursor is not on recede:
+  # the selected row is then found by its own shade rather than by hunting for
+  # the mark in front of it, which is what a bold row alone leaves a reader doing.
+  picker.row: { fg: muted }
+  picker.rowCurrent: { fg: accent, bold: true, bg: user }
   picker.scrollNewer: { fg: muted }
   picker.scrollOlder: { fg: muted }
   picker.hint: { fg: muted }
@@ -162,7 +166,9 @@ tokens:
   # The footer.
   status.prefix: { fg: accent }
   status.back: { fg: accent }
-  status.activity.working: { fg: muted }
+  # A turn in flight is the one state a reader waits on, so it takes the anchor
+  # and the weight; ready stays quiet because it is where the surface rests.
+  status.activity.working: { fg: accent, bold: true }
   status.activity.ready: { fg: muted }
   status.elapsed: { fg: muted }
   status.agentPreset: { fg: muted }
