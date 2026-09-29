@@ -70,6 +70,21 @@ export interface PresetChoice {
 }
 
 /**
+ * How long a launch waits for the roster to hold its first mode.
+ *
+ * A mode registers from its own row's apply, and the composition schedules those
+ * rows beside this surface rather than before it: the launcher can reach its
+ * `--preset NAME` check while the registry it reads is still empty, and a mode
+ * this profile really offers must not be refused for that. The wait ends the
+ * moment the roster holds anything, so a name that is genuinely unknown is still
+ * refused at once, and a profile whose roster is composed elsewhere never waits.
+ */
+const MODE_ARRIVAL_MS = 2_000
+
+/** How often that wait re-reads the roster; short enough to be invisible. */
+const MODE_ARRIVAL_STEP_MS = 10
+
+/**
  * Which mode a session runs — its seat in the roster — and the two ways it
  * changes.
  *
@@ -81,6 +96,14 @@ export interface PresetChoice {
  */
 export function createPresetChoice(ports: PresetChoicePorts): PresetChoice {
   const requestedPreset = ports.requestedPreset
+
+  /** Wait for the first mode to land, so a name is read against a settled roster. */
+  const whenRosterHasModes = async (roster: PresetRoster): Promise<void> => {
+    const deadline = Date.now() + MODE_ARRIVAL_MS
+    while ((await roster.list()).length === 0 && Date.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, MODE_ARRIVAL_STEP_MS))
+    }
+  }
 
   /**
    * The mode a session the reader starts from here on joins.
@@ -136,6 +159,10 @@ export function createPresetChoice(ports: PresetChoicePorts): PresetChoice {
     if (!resume) return seatMode()
     const stored = await ports.storedPreset(id)
     if (stored === undefined) return seatMode()
+    // Read against a settled roster: a mode's own row registers it beside this
+    // surface, so a resume that ran first would read its own composition as one
+    // this profile no longer offers.
+    await whenRosterHasModes(roster)
     const resolvedStored = await resolveStored(id, stored)
     if (resolvedStored === undefined) {
       // The composition this session recorded is gone. Naming one explicitly is
@@ -226,12 +253,25 @@ export function createPresetChoice(ports: PresetChoicePorts): PresetChoice {
    *
    * Raised while the launcher still owns the terminal, because the alternate
    * screen closes over whatever was painted on it: a mode this roster does not
-   * offer has to be answered here rather than as a blank screen.
+   * offer has to be answered here rather than as a blank screen. The refusal names
+   * the modes that do exist, because the roster is the only place a reader can
+   * learn them before the surface is up.
    */
   const validateLaunch = async (launch: PresetLaunch): Promise<void> => {
     const roster = ports.agentPresets
     if (requestedPreset !== undefined && roster !== undefined) {
-      seat = (await roster.resolve(requestedPreset)).id
+      // A named mode arrives with its own row, which this surface can outrun: the
+      // wait is what keeps `--preset NAME` from refusing a mode the picker offers
+      // a moment later.
+      await whenRosterHasModes(roster)
+      try {
+        seat = (await roster.resolve(requestedPreset)).id
+      } catch {
+        const offered = (await roster.list()).map(row => row.id)
+        throw new Error(
+          `mode "${requestedPreset}" is not one this profile offers · modes: ${offered.length === 0 ? 'none' : offered.join(' · ')}`,
+        )
+      }
     }
     if (!launch.resumePicker) await presetFor(launch.sessionId, launch.resume, undefined)
   }

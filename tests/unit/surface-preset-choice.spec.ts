@@ -19,9 +19,9 @@ const ROSTER_DEFAULT = 'minimal'
  * whose description changed would read as a mode the reader cannot recognise.
  */
 const GLOSS: Readonly<Record<string, string>> = {
-  standard: 'full agent: editing, shell, search, skills, planning, goals, subagents, workflows',
+  standard: 'the agent this profile composes, its tools called directly',
   [PARENT_MODE]: 'the same agent, with its tools reached through one TypeScript program',
-  [ROSTER_DEFAULT]: 'one tool: a persistent shell',
+  [ROSTER_DEFAULT]: 'the same agent, as this profile composes it',
 }
 
 const MODES: readonly PresetSummary[] = [
@@ -45,6 +45,14 @@ interface FakeRoster extends PresetRoster {
   failSelect: Error | undefined
   /** What the switch answers, which is the id the seat keeps. */
   answer: string | undefined
+  /**
+   * How many reads the roster answers with nothing before it holds a mode.
+   *
+   * A mode registers from its own row's apply, which the composition schedules
+   * beside the surface: this is the window a launch reads the roster in, and what
+   * a launch has to wait out rather than mistake for a profile without modes.
+   */
+  emptyReads: number
 }
 
 function fakeRoster(): FakeRoster {
@@ -59,12 +67,20 @@ function fakeRoster(): FakeRoster {
     hasStarted: false,
     failSelect: undefined,
     answer: undefined,
+    emptyReads: 0,
     async list() {
       listCalls += 1
+      if (listCalls <= roster.emptyReads) return []
       return MODES.filter(mode => !roster.gone.has(mode.id))
     },
     async resolve(id) {
       roster.resolved.push(String(id))
+      // A mode is registered when its own row applies, so a roster that has not
+      // listed anything yet cannot resolve anything either: this is the read that
+      // makes a launch's wait observable rather than incidental.
+      if (listCalls <= roster.emptyReads) {
+        throw new Error(`agentPresets: the roster resolved "${id}" to nothing usable`)
+      }
       const summary = MODES.find(mode => mode.id === id)
       if (summary === undefined || roster.gone.has(summary.id)) {
         throw new Error(`agentPresets: the roster resolved "${id}" to nothing usable`)
@@ -246,9 +262,10 @@ describe('createPresetChoice validateLaunch', () => {
     const given = fixture(fakeRoster(), 'nope')
 
     // The alternate screen closes over whatever was painted on it, so a launch
-    // that cannot run has to be answered while the launcher still owns the tty.
+    // that cannot run has to be answered while the launcher still owns the tty,
+    // and the reader has to be told which modes they could have named instead.
     await expect(given.choice.validateLaunch({ sessionId: SESSION, resume: false, resumePicker: false }))
-      .rejects.toThrow('agentPresets: the roster resolved "nope" to nothing usable')
+      .rejects.toThrow('mode "nope" is not one this profile offers · modes: standard · ptc · minimal')
   })
 
   it('seats a launch nobody named a mode for', async () => {
@@ -259,6 +276,49 @@ describe('createPresetChoice validateLaunch', () => {
 
     expect(roster.resolved).toEqual([])
     expect(given.choice.currentSeat()).toBe(ROSTER_DEFAULT)
+  })
+
+  it('waits out a roster whose modes are still registering', async () => {
+    vi.useFakeTimers()
+    try {
+      const roster = fakeRoster()
+      // Two reads see nothing: a launch that resolved the name on the first would
+      // refuse a mode this profile offers, which is the launch a mode row's own
+      // apply races the surface for.
+      roster.emptyReads = 2
+      const given = fixture(roster, PARENT_MODE)
+
+      const validated = given.choice.validateLaunch({ sessionId: SESSION, resume: false, resumePicker: false })
+      await vi.advanceTimersByTimeAsync(100)
+      await expect(validated).resolves.toBeUndefined()
+      expect(given.choice.currentSeat()).toBe(PARENT_MODE)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('refuses a name no mode arrives for, rather than waiting forever', async () => {
+    vi.useFakeTimers()
+    try {
+      const roster = fakeRoster()
+      // A profile that really has no modes must still answer the reader, so the
+      // wait is a window and not a promise that a mode is on its way.
+      roster.emptyReads = Number.MAX_SAFE_INTEGER
+      const given = fixture(roster, 'nope')
+
+      let answered = false
+      const validated = given.choice.validateLaunch({ sessionId: SESSION, resume: false, resumePicker: false })
+        .catch((error: Error) => { answered = true; throw error })
+      const settled = expect(validated).rejects.toThrow('mode "nope" is not one this profile offers · modes: none')
+      // A reader waiting on modes that never arrive still holds its window before
+      // it answers, so a launch that races the roster is not refused by a moment.
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(answered).toBe(false)
+      await vi.advanceTimersByTimeAsync(2_000)
+      await settled
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('waits for the session picker before judging a stored mode', async () => {

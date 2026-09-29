@@ -43,7 +43,7 @@ describe('describePreset', () => {
     const row = describePreset(summary(), 'standard')
     expect(row.label).toBe('standard')
     expect(row.current).toBe(true)
-    expect(row.description).toContain('full agent')
+    expect(row.description).toContain('its tools called directly')
   })
 
   it('lets a preset this deployment does not ship describe itself', () => {

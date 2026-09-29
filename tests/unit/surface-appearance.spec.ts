@@ -452,6 +452,21 @@ describe('createAppearance settings changes', () => {
     expect(given.appearance.historyGhost()).toBe(false)
   })
 
+  it('lets the patch govern history for a row the document has no section for', () => {
+    // A Config-backed row is configured by the profile patch, so the document
+    // holds no section for it: reading that absence as an unreadable layer turned
+    // a switch the patch had turned on into an opt-out, and every prompt went
+    // unrecorded while the reader believed history was enabled.
+    const service = { describe: () => [], update: async () => {} }
+    const given = fixture(service)
+    given.rowSettings.value = { history: { enabled: true, ghost: true } }
+
+    given.appearance.registerSection()
+
+    expect(given.appearance.historyEnabled()).toBe(true)
+    expect(given.appearance.historyGhost()).toBe(true)
+  })
+
   it('keeps prompt history off when the user layer cannot be read at all', () => {
     const service = {
       describe: () => { throw new Error('no descriptor for this namespace') },

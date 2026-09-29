@@ -45,12 +45,17 @@ export function parsePresetArgument(argument: string): PresetCommand {
  * The Web app translates the same four ids from its own locale bundle; a
  * terminal has no such bundle, so the copy lives here. A preset this table does
  * not name is not ours to describe: it speaks for itself through its metadata.
+ *
+ * A gloss says what this bundle makes of an id, not what the harness's own
+ * bundles once composed for it: the agent plane belongs to the profile's own
+ * layers, so `standard`, `minimal`, and `cordis` are seats in one composition
+ * rather than three, and PTC is the one id whose tools are presented differently.
  */
 const SHIPPED_GLOSS: Readonly<Record<string, string>> = {
-  standard: 'full agent: editing, shell, search, skills, planning, goals, subagents, workflows',
+  standard: 'the agent this profile composes, its tools called directly',
   ptc: 'the same agent, with its tools reached through one TypeScript program',
-  minimal: 'one tool: a persistent shell',
-  cordis: 'harness authoring: runtime inspection and composition guidance',
+  minimal: 'the same agent, as this profile composes it',
+  cordis: 'the same agent, for authoring the composition itself',
 }
 
 /** How one preset appears in the picker. */

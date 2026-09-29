@@ -233,8 +233,7 @@ export class ToolCallFold {
   /** The row a call's result settles into: the card it drew, restated with what answered it. */
   private settleResult(data: Record<string, unknown>): ToolCallOutcome {
     const message = asRecord(data.message)
-    const firstBlock = Array.isArray(message?.content) ? asRecord(message.content[0]) : undefined
-    const callId = typeof firstBlock?.toolCallId === 'string' ? firstBlock.toolCallId : ''
+    const callId = toolCallIdOf(message)
     const pending = callId === '' ? undefined : this.pending.get(callId)
     if (callId !== '') this.pending.delete(callId)
     // The length of the run is readable here and nowhere else: the surface saw
@@ -282,6 +281,21 @@ export class ToolCallFold {
     const settledCard = mergeCards(call, { ...result, failed: result.failed || isError })
     return { appends: [], replacements: [{ index: pending.index, entry: { kind: 'tool', id: callId, card: finished(settledCard) } }] }
   }
+}
+
+/**
+ * The call a tool result answers.
+ *
+ * The supported harness line names it on the tool message itself, beside the
+ * content that is the tool's own output. A log written by the 0.1.x line nests
+ * the id one level down, inside the single block that carries that output, and a
+ * resumed transcript still arrives that way: reading only the nested field drew
+ * every 0.2.0 answer as an orphan row and left the call it answered running.
+ */
+function toolCallIdOf(message: Record<string, unknown> | undefined): string {
+  if (typeof message?.toolCallId === 'string') return message.toolCallId
+  const firstBlock = Array.isArray(message?.content) ? asRecord(message.content[0]) : undefined
+  return typeof firstBlock?.toolCallId === 'string' ? firstBlock.toolCallId : ''
 }
 
 /** The arguments a nested call was made with, as the shape a presenter is asked with. */

@@ -27,6 +27,28 @@ describe('TranscriptModel tool cards', () => {
       expect(presenter.calls).toEqual(['bash:{"command":"ls"}'])
       expect(presenter.results).toEqual(['bash:{"command":"ls"}:ok'])
     })
+  it('settles a result the 0.2.0 line addresses on the message itself', () => {
+      // 0.2.0 keeps the answered call's id on the tool message and leaves the
+      // content as the tool's own output. A fold that reads only the block nested
+      // in that content draws every answer as an orphan row and leaves the call it
+      // answered running forever, so the id has to be read from the message first.
+      const presenter = recordingPresenter()
+      const model = new TranscriptModel(presenter, () => 1_000)
+      model.apply({ type: 'tool/call', data: { name: 'bash', arguments: '{"command":"ls"}', callId: 'c1' } })
+      model.apply({
+        type: 'tool/result',
+        data: {
+          message: {
+            role: 'tool',
+            source: { kind: 'tool', callId: 'c1' },
+            toolCallId: 'c1',
+            content: [{ type: 'text', text: 'out' }],
+            isError: false,
+          },
+        },
+      })
+      expect(model.entries()).toEqual([{ kind: 'tool', id: 'c1', card: { ...card('bash pending', ['result line'], 'bash'), elapsed: 0 } }])
+    })
   it('marks the row failed when the tool result is an error', () => {
       const presenter = recordingPresenter()
       const model = new TranscriptModel(presenter)

@@ -43,6 +43,49 @@ breaking change, and a patch carries only fixes.
 
 ### Fixed
 
+- Prompt history records and offers prompts again on a profile that turns it on in
+  its own patch. The privacy guard read a row the settings document holds no section
+  for as a layer it could not read, and an unreadable layer is an opt-out it must not
+  override: `history.enabled: true` in a Config-backed row was applied and then
+  refused, so every submitted line went unrecorded, `ctrl+r` had nothing to show, and
+  the dimmed completion never drew. A row with no section of its own now reads as one
+  with an empty section — nothing to observe rather than something removed — while a
+  section the service cannot describe at all still refuses.
+
+- `--preset <id>` no longer refuses a mode this profile ships. A mode registers
+  itself from its own row's apply, which the composition schedules beside the
+  surface rather than before it, and the launch check read the roster as one of its
+  own first acts: every one of the four ids was answered with
+  `Unknown agent preset: <id>` and exit 1, while the same id worked from `/preset`
+  a moment later. The check now waits for the roster to hold its first mode, the
+  wait ends the moment it does, and a name no mode ever arrives for is still refused
+  after that window rather than hanging. The refusal also names the modes that do
+  exist, which is what the README already promised.
+
+- The mode table and the picker's glosses say what each id does here. They still
+  described the compositions the modes carried before the agent plane moved back to
+  the bundle shipping it — `minimal` promised "one tool: a persistent shell" while
+  the mode composed nothing of the sort — so the copy now reads a mode as the seat
+  an agent takes in the profile's own composition, and names PTC as the one id whose
+  tools are presented differently.
+
+- A tool call's answer settles the row it answers again. The `0.2.0` line names the
+  answered call on the tool message itself and leaves that message's content as the
+  tool's own output, where the `0.1.x` line nested the id inside a single
+  `tool-result` block; the fold read only the nested field, so every result drew a
+  second, nameless `tool` row below the call's own card and left that card running —
+  the duration on it grew for as long as the session kept drawing it, and the output
+  the call produced never reached the row. Both shapes are read now, because a
+  resumed transcript still carries a log this surface wrote earlier.
+
+- `ptc` reaches its tools through a program again. The mode states the form its
+  tools take in a row it mounts itself, `@deepseek-ai/dsh-agent-tool-presentation`
+  with `mode: ptc`, and dropping that row along with the rest of the agent plane left
+  the mode presenting natively: no `run_code` card, so no card for the calls a
+  program dispatched, and every call a session made arrived as a direct row of its
+  own. A presentation is declared per agent rather than per session, which is why it
+  is the one row a mode owns; the other three modes still mount none.
+
 - The shipped agent modes no longer mount another bundle's plugins. Each mode listed
   the tools, prompt sections, skills, and commands an agent runs on — persona,
   bash, filesystem, jobs, planning, compaction, delegation, web, todo, present —

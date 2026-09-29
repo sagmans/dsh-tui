@@ -729,16 +729,18 @@ alone.
 
 ## Modes
 
-A mode is an **agent preset**: the plugin composition an agent's own scope joins. It decides that agent's tools, prompt sections, skills, and planning rows, which is why a mode is fixed once a session has produced a turn — it is what composed the agent that answered.
+A mode is an **agent preset**: the seat an agent's own scope takes in this profile's roster. The rows that make up that agent — its tools, prompt sections, skills, and planning — belong to the bundle shipping each of them, and the profile's own layers compose them, so a mode names a composition rather than assembling one. A mode is fixed once a session has produced a turn, because the log records the seat the agent that answered ran in.
 
 Four ship, under the ids a session log records:
 
-| `--preset` | Mode | What the agent gets |
+| `--preset` | Mode | What this bundle makes of the id |
 |---|---|---|
-| `ptc` | PTC (default) | the same agent, reaching its tools through one TypeScript program |
-| `standard` | standard | full agent: editing, shell, search, skills, planning, goals, subagents, workflows |
-| `minimal` | minimal | one tool: a persistent shell |
-| `cordis` | creator | harness authoring: runtime inspection and composition guidance |
+| `ptc` | PTC (default) | the agent this profile composes, with its tools reached through one TypeScript program |
+| `standard` | standard | the same agent, its tools called directly |
+| `minimal` | minimal | the same agent, as this profile composes it |
+| `cordis` | creator | the same agent, for authoring the composition itself |
+
+Only PTC declares anything of its own: the presentation its tools take. The other three ids are the harness's own mode names, kept so a session log reads the same here as in the browser profile, and what each of them runs is the profile's composition — a profile that wants a smaller `minimal` declares that composition in its own layers.
 
 A session takes its mode from the first of these that applies:
 
@@ -753,7 +755,7 @@ The mode is re-read rather than remembered: resuming mounts what that session's 
 The package is a Cordis plugin bundle that stacks over `@deepseek-ai/dsh-base`:
 
 - `@sagmans/dsh-tui/startup` parses this app's own flags and publishes the launch identity.
-- The roster of modes holds the id a session starts in when nobody names one: `@deepseek-ai/dsh-agent-preset-registry` owns that service on the supported line, and each mode arrives as a row of `@deepseek-ai/dsh-agent-preset`, so this bundle declares the four modes itself. Both are mounted through this bundle's own `host/roster` entry point, because a patch row is applied before any service exists and the registry and the modes arrive with the harness's own agent services — after the surface that needs the roster. A mode names a selection rather than a composition: the plugins an agent runs on belong to the bundle shipping each of them, and the profile's own layers compose them, so a mode here declares no plugin row and the patch disables none.
+- The roster of modes holds the id a session starts in when nobody names one: `@deepseek-ai/dsh-agent-preset-registry` owns that service on the supported line, and each mode arrives as a row of `@deepseek-ai/dsh-agent-preset`, so this bundle declares the four modes itself. Both are mounted through this bundle's own `host/roster` entry point, because a patch row is applied before any service exists and the registry and the modes arrive with the harness's own agent services — after the surface that needs the roster. A mode names a selection rather than a composition: the plugins an agent runs on belong to the bundle shipping each of them, and the profile's own layers compose them, so a mode here declares no plugin row and the patch disables none. The one row a mode does own is its presentation: `ptc` mounts `@deepseek-ai/dsh-agent-tool-presentation` with `mode: ptc`, because the form an agent's tools take is declared per agent — a session's own row cannot say it, and a mode without the row presents natively whatever its id says.
 - `@deepseek-ai/dsh-cordis-host-runner` is the host machinery creator mode needs, and the base mounts no such row, so a terminal profile mounts it through this bundle's own `host/runner` entry point. The code runtime PTC mode runs programs against is a base row of its own (`ptc-runtime`) on the supported line, so this bundle mounts none of its own. Both packages are plain dependencies: a profile resolves exactly one copy of each, and the harness reads its runtime version off the runner it mounts.
 - `@sagmans/dsh-tui` owns the terminal: it creates or resumes one agent through `ctx.agents`, folds `session/event` into transcript rows and work state, renders them with `@earendil-works/pi-tui`, and releases the terminal on exit, on a boot failure, and on a signal.
 - `@sagmans/dsh-tui/todo-guard` is the one advisory row this bundle adds to the agent plane: it watches the harness's own `todos` and `plan` projections and rides the next tool result with a reminder when a plan ages. See [Todo discipline](#todo-discipline).
