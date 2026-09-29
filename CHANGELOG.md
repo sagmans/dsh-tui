@@ -51,6 +51,11 @@ breaking change, and a patch carries only fixes.
 
 ### Changed
 
+- A dogfood run names its route in the clone's own layer, through an
+  `agent-default-model` patch entry: the app's `--provider` and `--model` flags are
+  ignored when a session resumes, and the release-age exclusion now covers the
+  `cordis` release the `0.2.0` line resolves.
+
 - The harness matrix now accepts the whole `>=0.1.5-rc.1 <0.3.0` window and verifies
   `0.2.0-rc.2`, the release npm serves as `latest`. Which line is hosting the process is
   read from the installed base release rather than from the composed tree: the `0.1.7`
