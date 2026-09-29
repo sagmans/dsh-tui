@@ -66,15 +66,20 @@ history, storages, the stash, and themes. When a run needs the developer's own
 bundles and patch overlay, clone the home with
 `./scripts/dogfood/run-tui-from-worktree.sh` rather than pointing at it.
 
-**A dogfood run uses the active model in the current session.** Name the route in
-the clone's own layer — an `agent-default-model` patch entry carrying the
-`provider`, `model`, and `reasoningEffort` — because the app's `--provider` and
-`--model` flags are ignored when a session resumes and a resumed session keeps the
-route it stored. Naming it keeps a scratch profile from billing a route the
-developer did not choose; a route with no credit stops at
-`error: Insufficient Balance` once the surface is ready, which says nothing about
-the plugin under test. A patch entry replaces a row's config wholesale, so an
-additive provider declaration belongs in the clone's `settings.yaml` instead.
+**A dogfood run uses the active model in the current session.** Declare it in the
+clone's profile patch, in two entries: the adapter under the `llm-pi-ai` row's own
+config, as `providers: { zai: { apiKeyEnv: ZAI_API_KEY } }`, and the route under
+`agent-default-model`, as `provider`, `model`, and `reasoningEffort`. The
+adapter belongs there because a catalog route is only the picker's directory — a
+route declaring `source` with `auth.apiKeyRef` never registers one, and the turn
+then stops at `no adapter registered for provider "zai"`. The route belongs there
+because the app's `--provider` and `--model` flags are ignored when a session
+resumes, and `$DSH_HOME/settings.yaml` is legacy on this line: the launcher renames
+it to `settings.yaml.imported` and never folds its sections into the profile patch,
+so a route declared only there is silently absent. Naming the route keeps a scratch
+profile from billing a route the developer did not choose; a route with no credit
+stops at `error: Insufficient Balance` once the surface is ready, which says
+nothing about the plugin under test.
 
 **A rendered-frame change usually changes the golden snapshot.** Read
 `tests/golden/__snapshots__/frames.spec.ts.snap` in the diff before accepting it

@@ -77,6 +77,9 @@
 - id: tool-workflow
   disabled: true
 
+# The 0.1.5 line's worker-thread row. The lines from 0.1.7 on retire the package,
+# so this entry reports "patch: entry ... not found" on those hosts — expected
+# noise, and it stays because the oldest line still needs the row disabled.
 - id: workflow-worker-thread
   disabled: true
 
