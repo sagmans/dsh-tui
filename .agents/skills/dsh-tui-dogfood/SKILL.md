@@ -63,6 +63,11 @@ state through a package link.
 The old dsh-tui entry point still requires a prelisted bundle. Do not use
 `dsh plugin add` on a cloned profile with other bundles; it can drop them.
 
+Use the active model in current session for dogfooding: pass `--model` and
+`--provider` through to the run, because a fixed route either has no credit and
+stops at `error: Insufficient Balance` after the surface is ready, or bills work
+only the plugin under test needed.
+
 Use `--status` to verify the existing bundles and the checkout `link:`
 dependency. In dsh-tui, drive a cloned profile with:
 
