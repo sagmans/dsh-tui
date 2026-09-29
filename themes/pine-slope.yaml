@@ -23,16 +23,16 @@
 # copy into your own themes directory to edit.
 
 palette:
-  default: '#d4d9d0'  # the anchor's hue at 7% saturation, a step below the shipped table's text
-  muted: '#aab4a2'  # the same hue, one step down: labels and scaffolding
-  faint: '#798f6d'  # the same hue again: reasoning, which is meant to recede
-  accent: '#80c64a'  # the anchor's hue lifted to text weight, held back from the lime it could be
-  arg: '#486435'  # the anchor's hue below the reasoning shade: an argument recedes under its label
-  warn: '#e2a934'  # state-warn, left in amber: a call still in flight
-  added: '#368f66'  # state-success, pushed toward grass: a change is not the theme's own green
-  removed: '#ca4745'  # state-error, left in red
+  default: '#cad0c5'  # the anchor's hue at 7% saturation, a step below the shipped table's text
+  muted: '#a0aa97'  # the same hue, one step down: labels and scaffolding
+  faint: '#6f8365'  # the same hue again: reasoning, which is meant to recede
+  accent: '#6daa3d'  # the anchor's hue lifted to text weight, held well back from the lime it could be
+  arg: '#435c32'  # the anchor's hue below the reasoning shade: an argument recedes under its label
+  warn: '#dba027'  # state-warn, left in amber: a call still in flight
+  added: '#327e5b'  # state-success, pushed toward grass: a change is not the theme's own green
+  removed: '#c03d3b'  # state-error, left in red
   user: '#173802'  # the anchor itself: the band under a selected row, and one panel border
-  assistant: '#d4d9d0'  # the reply's text stays plain, so the frame is what marks it
+  assistant: '#cad0c5'  # the reply's text stays plain, so the frame is what marks it
 
 tokens:
   # A row of the conversation. The reader's own turn keeps its frame and carries
@@ -45,7 +45,7 @@ tokens:
   # than the accent the prompt is framed in: the two frames then differ by how
   # loud they are instead of by hue, and a long answer never wears the shade that
   # means "this is what you typed".
-  transcript.assistant.border: { fg: '#566b49' }
+  transcript.assistant.border: { fg: '#4c5e41' }
   transcript.notice: { fg: muted }
   transcript.marker: { fg: muted }
   transcript.reasoning.summary: { fg: faint, italic: true }
