@@ -5,10 +5,20 @@
 # tools, prompt sections, skills and planning live in the bundle each of them
 # belongs to, so listing them here would register a plugin this bundle does not
 # own a second time and fail composition in a profile that already has it.
+#
+# The presentation is the one row a mode does own: it declares which form of its
+# tools this agent's model sees, for the mounting scope rather than for a
+# session, so it belongs to the preset and nowhere else. Without it `ptc` names a
+# mode that presents exactly like `standard` — every tool called directly, none
+# of them reached through a program.
 - insert:
     - id: preset-ptc
       name: '@deepseek-ai/dsh-agent-preset'
       config:
         id: ptc
         order: 2
-        plugins: []
+        plugins:
+          - id: tool-presentation
+            name: '@deepseek-ai/dsh-agent-tool-presentation'
+            config:
+              mode: ptc

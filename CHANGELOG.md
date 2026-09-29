@@ -52,6 +52,14 @@ breaking change, and a patch carries only fixes.
   the call produced never reached the row. Both shapes are read now, because a
   resumed transcript still carries a log this surface wrote earlier.
 
+- `ptc` reaches its tools through a program again. The mode states the form its
+  tools take in a row it mounts itself, `@deepseek-ai/dsh-agent-tool-presentation`
+  with `mode: ptc`, and dropping that row along with the rest of the agent plane left
+  the mode presenting natively: no `run_code` card, so no card for the calls a
+  program dispatched, and every call a session made arrived as a direct row of its
+  own. A presentation is declared per agent rather than per session, which is why it
+  is the one row a mode owns; the other three modes still mount none.
+
 - The shipped agent modes no longer mount another bundle's plugins. Each mode listed
   the tools, prompt sections, skills, and commands an agent runs on — persona,
   bash, filesystem, jobs, planning, compaction, delegation, web, todo, present —

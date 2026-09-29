@@ -86,11 +86,18 @@ describe('the shipped modes', () => {
     expect(definitions.map(definition => definition.order)).toEqual([1, 2, 3, 4])
   })
 
-  it('mounts no plugin of another bundle', () => {
+  it('mounts no plugin of another bundle, and the one presentation a mode owns', () => {
     // A mode that listed the agent plane would register a package this bundle
-    // does not own, on top of the copy the profile's own layers composed.
-    for (const definition of loadPresetDefinitions()) {
-      expect(definition.plugins).toEqual([])
+    // does not own, on top of the copy the profile's own layers composed. The
+    // presentation is the exception that proves it: it declares the form this
+    // agent's tools take, which no bundle can declare on a mode's behalf, so
+    // `ptc` mounts it and no other mode mounts anything.
+    const byId = new Map(loadPresetDefinitions().map(definition => [definition.id, definition]))
+    expect(byId.get('ptc')?.plugins).toEqual([
+      { id: 'tool-presentation', name: '@deepseek-ai/dsh-agent-tool-presentation', config: { mode: 'ptc' } },
+    ])
+    for (const id of ['standard', 'minimal', 'cordis']) {
+      expect(byId.get(id)?.plugins).toEqual([])
     }
   })
 })
