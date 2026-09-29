@@ -1,11 +1,11 @@
-# wine-thicket — the shipped table, anchored on the plum #29061F.
+# wine-thicket — the shipped table, anchored on the plum #240413.
 #
-# The anchor is a fill weight rather than a text weight, and at 1.00:1 against a
-# dark terminal it is barely even that: it marks the row a picker has selected by
-# its hue rather than by any contrast it could add, which is why the level below
-# starts a step lower than the other themes' — the chroma is all this family
-# offers, and the quiet has to come from the neutrals. The accent is that same hue
-# lifted to where text reads. Every
+# The anchor is a fill weight rather than a text weight, and at 1.03:1 against a
+# dark terminal it is almost exactly the weight of the background itself: it marks
+# the row a picker has selected by its hue rather than by any contrast it could
+# add, which is why the level starts a step lower than the other themes' — the
+# chroma is all this family offers, and the quiet has to come from the neutrals.
+# The whole table is drawn on that one hue, the accent included. Every
 # neutral is the anchor's hue at a low saturation, so the surface reads as one
 # family rather than as grey rows with a pink link on them.
 #
@@ -15,10 +15,11 @@
 # and identical in structure to any other, and a reader who knows one knows this
 # one. Only the level and the chroma are its own.
 #
-# A plum accent sits next to red, and red is what the surface already means by
-# something removed. The accent therefore leans violet while the semantic red stays
-# a true red, and the two never have to be told apart by brightness alone; green
-# and amber sit far from the family and stay where every surface keeps them.
+# A rose accent sits 25 degrees from the red the surface already means by removed.
+# The two are told apart by weight instead of by hue: the accent is nearly twice
+# that red's luminance and is the only one of them that ever frames text, which is
+# what keeps a diff from reading as chrome. Green and amber sit far from the family
+# and stay where every surface keeps them.
 #
 # Every element below names a palette entry rather than a shade of its own, so
 # the anchor and the accent it lifts to are one line each to move. The three that
@@ -29,16 +30,16 @@
 # into your own themes directory to edit.
 
 palette:
-  default: '#beafb8'  # the anchor's hue at 10% saturation: the level every other shade is a share of
-  muted: '#a38a99'  # 0.63 of the text's luminance: labels and scaffolding
-  faint: '#926e84'  # 0.42: reasoning, which is meant to recede
-  accent: '#d45eb7'  # 0.56: the anchor's hue lifted to text weight for headings, links, code, frames
-  arg: '#834d71'  # 0.25: an argument recedes under the label of the call it belongs to
+  default: '#beb0b6'  # the anchor's hue at 10% saturation: the level every other shade is a share of
+  muted: '#a38b96'  # 0.63 of the text's luminance: labels and scaffolding
+  faint: '#926f7f'  # 0.42: reasoning, which is meant to recede
+  accent: '#d56398'  # 0.56: the anchor's hue lifted to text weight for headings, links, code, frames
+  arg: '#844e67'  # 0.25: an argument recedes under the label of the call it belongs to
   warn: '#ba861e'  # 0.61, in amber: a call that has not answered
   added: '#399a67'  # 0.55, in green: something that arrived
-  removed: '#ab3037'  # 0.25, in red: something taken away
-  user: '#29061f'  # the anchor itself: the band under a selected row, and one panel border
-  assistant: '#beafb8'  # the reply's text stays plain, so the frame is what marks it
+  removed: '#ab3037'  # 0.24, in red: something taken away
+  user: '#240413'  # the anchor itself: the band under a selected row, and one panel border
+  assistant: '#beb0b6'  # the reply's text stays plain, so the frame is what marks it
 
 tokens:
   # A row of the conversation. The reader's own turn keeps its frame and carries
@@ -51,7 +52,7 @@ tokens:
   # than the accent the prompt is framed in: the two frames then differ by how
   # loud they are instead of by hue, and a long answer never wears the shade that
   # means "this is what you typed".
-  transcript.assistant.border: { fg: '#784c68' }
+  transcript.assistant.border: { fg: '#784c61' }
   transcript.notice: { fg: muted }
   transcript.marker: { fg: muted }
   transcript.reasoning.summary: { fg: faint, italic: true }
