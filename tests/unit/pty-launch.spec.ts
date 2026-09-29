@@ -12,7 +12,8 @@ const RELEASE_VERSIONS = Object.keys(
   }).dsh.compatibility.dshReleases,
 )
 const RELEASE_VERSION = RELEASE_VERSIONS[RELEASE_VERSIONS.length - 1] ?? ''
-const SOURCE_VERSION = '0.1.7-alpha.2'
+/** A release the manifest does not verify, which is what a source checkout reports. */
+const SOURCE_VERSION = '0.3.0-alpha.2'
 const POLICY_URL = pathToFileURL(join(PROJECT_ROOT, 'tools', 'pty-launch.mjs')).href
 const ORIGINAL_PATH = process.env.PATH
 

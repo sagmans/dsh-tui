@@ -5,7 +5,7 @@ import { join } from 'node:path'
 export const REPO_ROOT = join(__dirname, '..', '..')
 export const SCRIPT = join(REPO_ROOT, 'scripts', 'dogfood', 'run-tui-from-worktree.sh')
 export const GENERIC_SCRIPT = join(REPO_ROOT, '.agents', 'skills', 'dsh-tui-dogfood', 'scripts', 'run-plugin-from-worktree.sh')
-const COMPATIBLE_DSH_RELEASES = { '0.1.5-rc.1': 'compatible', '0.1.5-rc.2': 'compatible', '0.1.5-rc.3': 'compatible', '0.1.7-rc.2': 'compatible' }
+const COMPATIBLE_DSH_RELEASES = { '0.2.0-rc.2': 'compatible' }
 
 export function createDogfoodFixture() {
   // macOS resolves /tmp to /private/tmp; the script uses 'pwd -P', so compare
@@ -28,7 +28,7 @@ export function createDogfoodFixture() {
   // A stub launcher: the script insists a dsh exists even when the profile is
   // present and no dsh command is run, and CI has none on PATH.
   const stubDsh = join(root, 'stub-dsh')
-  writeFileSync(stubDsh, '#!/bin/sh\nif [ "$1" = "--version" ]; then echo 0.1.7-rc.2; fi\nexit 0\n')
+  writeFileSync(stubDsh, '#!/bin/sh\nif [ "$1" = "--version" ]; then echo 0.2.0-rc.2; fi\nexit 0\n')
   chmodSync(stubDsh, 0o755)
 
   // The source home's profile declares absolute 'link:' specs, exactly as a
@@ -54,7 +54,7 @@ export function createDogfoodFixture() {
           },
         },
         dependencies: {
-          '@deepseek-ai/dsh-base': '0.1.7-rc.2',
+          '@deepseek-ai/dsh-base': '0.2.0-rc.2',
           '@sagmans/dsh-tui': 'link:' + checkout,
           '@sagmans/dsh-bundle-a': 'link:' + join(root, 'bundle-a'),
           '@sagmans/dsh-bundle-b': 'link:' + join(root, 'bundle-b'),

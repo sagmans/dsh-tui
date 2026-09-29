@@ -8,7 +8,7 @@ const OTHER_THEME = 'pine-slope'
 const ENABLED = { theme: THEME, history: { enabled: true, ghost: true } }
 
 /**
- * The profile-entry settings generation a dsh 0.1.7 profile mounts: one Config row
+ * The profile-entry settings generation a dsh profile mounts: one Config row
  * per entry, read through `describe()` and written through `update()` against the
  * revision the reader last saw. `user` is the section the reader owns; `value` is
  * what the composition resolved from it.

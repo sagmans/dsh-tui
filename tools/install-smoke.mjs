@@ -19,10 +19,11 @@ const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const IMAGE = 'node:24-alpine'
 
 const manifest = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
-// A mounted package is an alias of its own, one build per line, so the mounted set
-// is read from the alias targets as well as from the plain names.
-const bundled = Object.entries(manifest.dependencies ?? {}).filter(([name, spec]) =>
-  name.startsWith('@deepseek-ai/dsh-') || String(spec).startsWith('npm:@deepseek-ai/dsh-'))
+// The mounted set is the plain harness packages the manifest depends on. Each one
+// is a package the host also installs, so a second copy in a profile is exactly
+// the duplicate the container counts.
+const bundled = Object.entries(manifest.dependencies ?? {}).filter(([name]) =>
+  name.startsWith('@deepseek-ai/dsh-'))
 const releases = Object.keys(manifest.dsh?.compatibility?.dshReleases ?? {})
 // Numeric collation keeps rc.10 after rc.9, which plain string order does not.
 const harness = releases.sort((left, right) => left.localeCompare(right, 'en', { numeric: true })).at(-1)
@@ -46,8 +47,7 @@ try {
   const script = template
     .replaceAll('@HARNESS@', harness)
     .replaceAll('@VERSION@', manifest.version)
-    // The container counts one copy per mounted name, and a mounted name is the
-    // alias the profile resolves, not the release it points at.
+    // The container counts one copy per mounted name.
     .replaceAll('@BUNDLED@', bundled.map(([name]) => name).join(' '))
     .replaceAll('@TARBALL@', tarball)
 
