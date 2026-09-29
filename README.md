@@ -559,16 +559,17 @@ leaving a gap, and `NO_COLOR` draws the fence as plain text. `/export` and the
 session file still keep the fence exactly as the model wrote it.
 
 A theme restyles the whole surface by name, and a theme is a file. The package
-ships five: `violet-orbit`, a port of pi's theme of that name — its palette,
+ships six: `violet-orbit`, a port of pi's theme of that name — its palette,
 plus the elements it draws its own way — `deepseek-blue`, the table written out
 in full in the colours the project answers to, `polar-drift`, that table anchored
 on the cyan `#27CFF5`, `pine-slope`, the same table around the pine `#173802`,
-and `wine-thicket`, the same table around the plum `#3B092E`. The pine and the
-plum are dark enough that they paint the band under a selected row while the
-accent is lifted out of their own hue to where text reads. Each of them tints its
-neutrals through that hue, holds the same relative ladder of shades, and leaves
-the semantic shades where a reader already reads them. `violet-orbit` is also
-what a
+`wine-thicket`, the same table around the plum `#240413`, and `marine-static`,
+the same table around the deep teal `#041F21`. The pine, the plum, and the teal
+are dark enough that they mark the band under a selected row by hue alone, while
+the accent is lifted out of their own hue to where text reads. Each of them tints
+its neutrals through that hue, holds the same relative ladder of shades, and
+leaves the semantic shades where a reader already reads them. `violet-orbit` is
+also what a
 document naming no theme draws, so the default look is a file you can read, list,
 and copy rather than a table compiled in. Your own themes live in
 `$DSH_HOME/themes/`, which the surface creates at start-up and watches, so saving

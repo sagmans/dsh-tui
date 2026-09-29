@@ -30,6 +30,9 @@ const PINE = 'pine-slope'
 /** The shipped table around a plum that could only be a fill too. */
 const WINE = 'wine-thicket'
 
+/** The shipped table around a deep teal, in the same water as the drift. */
+const MARINE = 'marine-static'
+
 const library = builtinLibrary()
 
 /** The theme as a renderer holds it, which is what a reader actually sees. */
@@ -333,5 +336,44 @@ describe('wine-thicket', () => {
     expect(theme.style('transcript.assistant.border', 'x')).toContain('38;2;120;76;97')
     expect(theme.style('status.activity.working', 'x')).toContain('1;38;2;213;99;152')
     expect(theme.style('status.activity.ready', 'x')).toContain('38;2;163;139;150')
+  })
+})
+
+describe('marine-static', () => {
+  it('paints the anchor as a band rather than as text', () => {
+    // #041F21 sits at 1.08:1 on a dark terminal, so the band under a selected row
+    // is the one place that weight shows; the accent is what text can wear.
+    const theme = themed(MARINE)
+    const current = theme.style('picker.rowCurrent', 'x')
+    expect(current).toContain('1;38;2;46;156;164')
+    expect(current).toContain('48;2;4;31;33')
+    expect(theme.style('markdown.heading', 'x')).toContain('38;2;46;156;164')
+    expect(theme.editor.borderColor('x')).toContain('38;2;46;156;164')
+  })
+
+  it('holds the accent back from the neon of the cyan theme', () => {
+    // Same water as polar-drift: the accent is the same hue with less chroma, so
+    // the two themes are told apart by weight rather than by hue alone.
+    const theme = themed(MARINE)
+    expect(theme.style('markdown.heading', 'x')).not.toContain('38;2;39;207;245')
+    expect(theme.style('markdown.diff.added', 'x')).toContain('38;2;59;159;101')
+    expect(theme.style('markdown.diff.removed', 'x')).toContain('38;2;176;50;54')
+    expect(theme.style('markdown.diagram.warning', 'x')).toContain('38;2;191;138;31')
+  })
+
+  it('holds the reader turn plain and its argument below the reasoning shade', () => {
+    const theme = themed(MARINE)
+    const prompt = theme.style('transcript.user', 'x')
+    expect(prompt).toContain('38;2;173;187;188')
+    expect(prompt).not.toContain('48;2;')
+    expect(theme.style('transcript.reasoning.body', 'x')).toContain('38;2;99;129;132')
+    expect(theme.style('tool.args', 'x')).toContain('38;2;63;104;106')
+  })
+
+  it('frames the reply at container weight and paints a turn in flight', () => {
+    const theme = themed(MARINE)
+    expect(theme.style('transcript.assistant.border', 'x')).toContain('38;2;65;98;101')
+    expect(theme.style('status.activity.working', 'x')).toContain('1;38;2;46;156;164')
+    expect(theme.style('status.activity.ready', 'x')).toContain('38;2;128;154;155')
   })
 })
