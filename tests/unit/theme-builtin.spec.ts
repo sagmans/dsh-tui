@@ -21,6 +21,9 @@ const VIOLET = 'violet-orbit'
 /** The surface's own theme: the shipped table, in the blue the project answers to. */
 const BLUE = 'deepseek-blue'
 
+/** The shipped table again, anchored on the cyan its accent is. */
+const DRIFT = 'polar-drift'
+
 const library = builtinLibrary()
 
 /** The theme as a renderer holds it, which is what a reader actually sees. */
@@ -181,5 +184,38 @@ describe('violet-orbit', () => {
       tokens: { 'tool.title': { fg: '#ff0000' } },
     }), library))
     expect(theme.style('tool.title', 'x')).toContain('38;2;255;0;0')
+  })
+})
+
+describe('polar-drift', () => {
+  it('paints the anchor on the elements that carry the accent', () => {
+    // The anchor is the whole point of the theme, so it has to land on what a
+    // reader looks at rather than sit in the file as a shade nothing names.
+    const theme = themed(DRIFT)
+    expect(theme.style('markdown.heading', 'x')).toContain('38;2;39;207;245')
+    expect(theme.style('markdown.link', 'x')).toContain('38;2;39;207;245')
+    expect(theme.editor.borderColor('x')).toContain('38;2;39;207;245')
+  })
+
+  it('tints the neutrals through the anchor rather than shipping them grey', () => {
+    // An element naming no literal still follows the tint, and the argument is
+    // where a reader compares two shades side by side on one row.
+    const theme = themed(DRIFT)
+    expect(theme.style('transcript.reasoning.body', 'x')).toContain('38;2;142;172;177')
+    expect(theme.style('tool.args', 'x')).toContain('38;2;185;221;229')
+    expect(library.get(DRIFT)?.palette.accent).toBe('#27CFF5')
+  })
+
+  it('leaves the semantic shades in the hues a reader already reads them in', () => {
+    // Randomising these would cost a reader the one thing the surface cannot
+    // draw twice: a second reading of what changed.
+    const theme = themed(DRIFT)
+    expect(theme.style('markdown.diff.added', 'x')).toContain('38;2;41;217;106')
+    expect(theme.style('markdown.diff.removed', 'x')).toContain('38;2;227;80;72')
+    expect(theme.style('markdown.diagram.warning', 'x')).toContain('38;2;250;186;66')
+  })
+
+  it('sits the reader turn on a band of the anchor hue rather than a grey', () => {
+    expect(themed(DRIFT).style('transcript.user', 'x')).toContain('48;2;28;49;54')
   })
 })

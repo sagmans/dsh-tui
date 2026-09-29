@@ -8,6 +8,14 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+### Added
+
+- A third theme ships: `polar-drift`. It is the shipped table anchored on the
+  cyan `#27CFF5` — the accent, and the hue every neutral is tinted through — so a
+  surface can answer to one colour without a reader learning green, red, and amber
+  twice: something added stays green, something removed stays red, and a call still
+  in flight stays amber. `/theme polar-drift` applies it.
+
 ### Fixed
 
 - A pane that stays up keeps its row in Herdr. Report numbers are anchored at the
