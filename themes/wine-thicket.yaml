@@ -1,8 +1,11 @@
-# wine-thicket — the shipped table, anchored on the plum #3B092E.
+# wine-thicket — the shipped table, anchored on the plum #29061F.
 #
-# The anchor is a fill weight rather than a text weight: at 1.11:1 against a dark
-# terminal it paints the band under a selected row and the one panel border that
-# names it, and the accent is that same hue lifted to where text reads. Every
+# The anchor is a fill weight rather than a text weight, and at 1.00:1 against a
+# dark terminal it is barely even that: it marks the row a picker has selected by
+# its hue rather than by any contrast it could add, which is why the level below
+# starts a step lower than the other themes' — the chroma is all this family
+# offers, and the quiet has to come from the neutrals. The accent is that same hue
+# lifted to where text reads. Every
 # neutral is the anchor's hue at a low saturation, so the surface reads as one
 # family rather than as grey rows with a pink link on them.
 #
@@ -26,16 +29,16 @@
 # into your own themes directory to edit.
 
 palette:
-  default: '#ccc1c8'  # the anchor's hue at 10% saturation: the level every other shade is a share of
-  muted: '#ae98a6'  # 0.63 of the text's luminance: labels and scaffolding
-  faint: '#9b7b90'  # 0.42: reasoning, which is meant to recede
-  accent: '#dc72c2'  # 0.57: the anchor's hue lifted to text weight for headings, links, code, frames
-  arg: '#90547c'  # 0.25: an argument recedes under the label of the call it belongs to
-  warn: '#cb9221'  # 0.61, in amber: a call that has not answered
-  added: '#3faa71'  # 0.56, in green: something that arrived
-  removed: '#bc353c'  # 0.25, in red: something taken away
-  user: '#3b092e'  # the anchor itself: the band under a selected row, and one panel border
-  assistant: '#ccc1c8'  # the reply's text stays plain, so the frame is what marks it
+  default: '#beafb8'  # the anchor's hue at 10% saturation: the level every other shade is a share of
+  muted: '#a38a99'  # 0.63 of the text's luminance: labels and scaffolding
+  faint: '#926e84'  # 0.42: reasoning, which is meant to recede
+  accent: '#d45eb7'  # 0.56: the anchor's hue lifted to text weight for headings, links, code, frames
+  arg: '#834d71'  # 0.25: an argument recedes under the label of the call it belongs to
+  warn: '#ba861e'  # 0.61, in amber: a call that has not answered
+  added: '#399a67'  # 0.55, in green: something that arrived
+  removed: '#ab3037'  # 0.25, in red: something taken away
+  user: '#29061f'  # the anchor itself: the band under a selected row, and one panel border
+  assistant: '#beafb8'  # the reply's text stays plain, so the frame is what marks it
 
 tokens:
   # A row of the conversation. The reader's own turn keeps its frame and carries
@@ -48,7 +51,7 @@ tokens:
   # than the accent the prompt is framed in: the two frames then differ by how
   # loud they are instead of by hue, and a long answer never wears the shade that
   # means "this is what you typed".
-  transcript.assistant.border: { fg: '#835471' }
+  transcript.assistant.border: { fg: '#784c68' }
   transcript.notice: { fg: muted }
   transcript.marker: { fg: muted }
   transcript.reasoning.summary: { fg: faint, italic: true }
@@ -121,8 +124,8 @@ tokens:
   markdown.diff.context: {}
   markdown.diff.added: { fg: added }
   markdown.diff.removed: { fg: removed }
-  markdown.diff.addedEmphasis: { inherit: markdown.diff.added, bg: '#132c1e' }
-  markdown.diff.removedEmphasis: { inherit: markdown.diff.removed, bg: '#351617' }
+  markdown.diff.addedEmphasis: { inherit: markdown.diff.added, bg: '#10261b' }
+  markdown.diff.removedEmphasis: { inherit: markdown.diff.removed, bg: '#2e1314' }
   markdown.diagram.border: { fg: muted }
   markdown.diagram.text: {}
   markdown.diagram.edge: { fg: accent }

@@ -299,39 +299,39 @@ describe('pine-slope', () => {
 
 describe('wine-thicket', () => {
   it('paints the anchor as a band rather than as text', () => {
-    // #3B092E sits at 1.11:1 on a dark terminal: the band under a selected row is
+    // #29061F sits at 1.00:1 on a dark terminal: the band under a selected row is
     // the one place that weight shows, and the accent is what text can wear.
     const theme = themed(WINE)
     const current = theme.style('picker.rowCurrent', 'x')
-    expect(current).toContain('1;38;2;220;114;194')
-    expect(current).toContain('48;2;59;9;46')
-    expect(theme.style('markdown.heading', 'x')).toContain('38;2;220;114;194')
-    expect(theme.editor.borderColor('x')).toContain('38;2;220;114;194')
+    expect(current).toContain('1;38;2;212;94;183')
+    expect(current).toContain('48;2;41;6;31')
+    expect(theme.style('markdown.heading', 'x')).toContain('38;2;212;94;183')
+    expect(theme.editor.borderColor('x')).toContain('38;2;212;94;183')
   })
 
   it('keeps the accent and the shade that means removed apart', () => {
     // A plum accent borders red, and red already means something taken away: the
     // accent leans violet and the semantic red stays a true red.
     const theme = themed(WINE)
-    expect(theme.style('markdown.diff.removed', 'x')).toContain('38;2;188;53;60')
-    expect(theme.style('markdown.diff.added', 'x')).toContain('38;2;63;170;113')
-    expect(theme.style('markdown.diagram.warning', 'x')).toContain('38;2;203;146;33')
-    expect(theme.style('picker.rowCurrent', 'x')).not.toContain('38;2;188;53;60')
+    expect(theme.style('markdown.diff.removed', 'x')).toContain('38;2;171;48;55')
+    expect(theme.style('markdown.diff.added', 'x')).toContain('38;2;57;154;103')
+    expect(theme.style('markdown.diagram.warning', 'x')).toContain('38;2;186;134;30')
+    expect(theme.style('picker.rowCurrent', 'x')).not.toContain('38;2;171;48;55')
   })
 
   it('holds the reader turn plain and its argument below the reasoning shade', () => {
     const theme = themed(WINE)
     const prompt = theme.style('transcript.user', 'x')
-    expect(prompt).toContain('38;2;204;193;200')
+    expect(prompt).toContain('38;2;190;175;184')
     expect(prompt).not.toContain('48;2;')
-    expect(theme.style('transcript.reasoning.body', 'x')).toContain('38;2;155;123;144')
-    expect(theme.style('tool.args', 'x')).toContain('38;2;144;84;124')
+    expect(theme.style('transcript.reasoning.body', 'x')).toContain('38;2;146;110;132')
+    expect(theme.style('tool.args', 'x')).toContain('38;2;131;77;113')
   })
 
   it('frames the reply at container weight and paints a turn in flight', () => {
     const theme = themed(WINE)
-    expect(theme.style('transcript.assistant.border', 'x')).toContain('38;2;131;84;113')
-    expect(theme.style('status.activity.working', 'x')).toContain('1;38;2;220;114;194')
-    expect(theme.style('status.activity.ready', 'x')).toContain('38;2;174;152;166')
+    expect(theme.style('transcript.assistant.border', 'x')).toContain('38;2;120;76;104')
+    expect(theme.style('status.activity.working', 'x')).toContain('1;38;2;212;94;183')
+    expect(theme.style('status.activity.ready', 'x')).toContain('38;2;163;138;153')
   })
 })

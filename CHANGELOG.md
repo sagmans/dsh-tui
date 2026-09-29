@@ -10,10 +10,11 @@ breaking change, and a patch carries only fixes.
 
 ### Added
 
-- A fifth theme ships: `wine-thicket`. Its anchor is `#3B092E`, a fill weight
-  rather than a text weight at 1.11:1 on a dark terminal, so the anchor paints the
-  band under a selected row while the accent is that hue lifted to where text
-  reads. A plum accent sits next to red, which the surface already means by
+- A fifth theme ships: `wine-thicket`. Its anchor is `#29061F`, a fill weight
+  rather than a text weight at 1.00:1 on a dark terminal, so the anchor marks the
+  band under a selected row by its hue alone while the accent is that same hue
+  lifted to where text reads, and the level starts a step lower than the other
+  themes' to match how little the anchor can add. A plum accent sits next to red, which the surface already means by
   something removed, so the accent leans violet and the semantic red stays a true
   red: the two are never told apart by brightness alone. The shades hold the same
   relative ladder as the shipped table, so this theme is dimmer in absolute terms
