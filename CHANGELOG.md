@@ -43,6 +43,17 @@ breaking change, and a patch carries only fixes.
 
 ### Fixed
 
+- The shipped agent modes no longer mount another bundle's plugins. Each mode listed
+  the tools, prompt sections, skills, and commands an agent runs on — persona,
+  bash, filesystem, jobs, planning, compaction, delegation, web, todo, present —
+  so a profile whose own layers already composed those rows registered every one of
+  them a second time and stopped at a wall of `already registered` errors. A mode
+  now names a selection and no plugin, and the bundle patch disables no base row:
+  the agent plane belongs to the bundle shipping each of its plugins. The rows this
+  bundle does own — the mode registry and the dynamic-plugin host creator — are
+  unchanged, and the harness packages that only the deleted rows named are gone
+  from the manifest.
+
 - The harness peer rows keep an open range. A peer range over harness modules can
   only name the one prerelease tuple it reaches, so the range that admitted the
   `0.1.5` line pulled a consumer's npm install back to it and collided with the

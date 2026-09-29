@@ -97,39 +97,6 @@ const MOUNT_SOURCES = [
 ]
 
 /**
- * Base rows this bundle takes out of the global agent plane.
- *
- * The list is derived rather than chosen: it is exactly the set of base rows
- * the shipped agent presets supply, so every one of them must be owned per
- * session instead of globally. A missing entry silently double-registers what
- * the preset mounts.
- */
-const DISABLED_ROWS = [
-  'agent-instructions',
-  'command-compact',
-  'command-goal',
-  'compaction-basic',
-  'plan-mode',
-  'skill-filesystem',
-  'tool-bash',
-  'tool-fs',
-  'tool-fs-search',
-  'tool-goal',
-  'tool-jobs',
-  'tool-pwsh',
-  'tool-ralph',
-  'tool-result-pruner',
-  'tool-skill',
-  'tool-subagent',
-  'tool-subagent-control',
-  'tool-subagent-fork',
-  'tool-subagent-list-agents',
-  'tool-todo',
-  'tool-web',
-  'tool-workflow',
-]
-
-/**
  * First-party packages the inserted rows mount, directly or through a shim.
  *
  * A bundle owns the rows it inserts, so naming anything here makes the profile
@@ -239,11 +206,6 @@ try {
   for (const row of PATCH_ROWS) {
     if (!patch.includes(row)) problems.push(`the bundle patch no longer names ${row}`)
   }
-  for (const id of DISABLED_ROWS) {
-    if (!patch.includes(`- id: ${id}\n  disabled: true`)) {
-      problems.push(`the bundle patch no longer disables ${id}, which a preset supplies`)
-    }
-  }
   const mounts = MOUNT_SOURCES.map(source => readFileSync(join(ROOT, source), 'utf8')).join('\n')
   // A subpath entry point belongs to its package, which is the name a profile
   // has to resolve and the name the manifest declares.
@@ -266,8 +228,11 @@ try {
     if (name === OPTIONAL_PROVIDER_PACKAGE) problems.push('the standalone package must not depend on ' + name)
   }
   if (patch.includes(OPTIONAL_PROVIDER_PACKAGE)) problems.push('the bundle patch must not require ' + OPTIONAL_PROVIDER_PACKAGE)
+  // The agent plane belongs to the bundle shipping each of those plugins: a row
+  // disabled here is one this bundle never owned, and the presets that used to
+  // justify it mount no row at all.
   for (const [, id] of patch.matchAll(/- id: ([^\n]+)\n  disabled: true/gu)) {
-    if (!DISABLED_ROWS.includes(id)) problems.push('the bundle must not disable additional host rows: ' + id)
+    problems.push('the bundle must not disable host rows: ' + id)
   }
   for (const script of INSTALL_LIFECYCLE_SCRIPTS) {
     if (manifest.scripts?.[script] !== undefined) {
