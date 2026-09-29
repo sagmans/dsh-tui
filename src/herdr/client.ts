@@ -45,9 +45,26 @@ export interface SessionReport {
   readonly reason: SessionStartReason
 }
 
+/**
+ * What a pane's agent row reads as, from the outside.
+ *
+ * `none` and `unknown` are the distinction the reclaim loop rests on: a pane
+ * with no row is one this surface has to claim again, while a pane Herdr could
+ * not be asked about is one it has to leave alone.
+ */
+export type PaneRow = 'ours' | 'other' | 'none' | 'unknown'
+
 export interface HerdrClient {
   /** Whether Herdr started this process and asked to be told about it. */
   readonly enabled: boolean
+  /**
+   * Whether Herdr still shows this pane's row.
+   *
+   * Herdr accepts a stale report the same way it accepts a fresh one, so the
+   * pane is the only proof a claim survived: this is the read that turns a
+   * silent loss of the row into something the surface can answer.
+   */
+  readRow(): Promise<PaneRow>
   reportState(report: StateReport): Promise<boolean>
   reportSession(report: SessionReport): Promise<boolean>
   reportMetadata(tokens: Readonly<Record<string, string | undefined>>): Promise<boolean>
@@ -157,6 +174,19 @@ export function createHerdrClient(env: HerdrEnvironment = process.env, options: 
 
   return {
     enabled,
+    async readRow() {
+      if (closed || !enabled || paneId === undefined || socketPath === undefined) return 'unknown'
+      const answer = await requestWithRetry(socketPath, {
+        id: `${HERDR_SOURCE}:${String(process.pid)}:${String(++requestNumber)}`,
+        method: 'pane.get',
+        params: { pane_id: paneId },
+      }, attempts, timeoutMs, () => closed)
+      if (!answer.ok) return 'unknown'
+      const agent = paneAgent(answer.result)
+      if (agent === undefined) return 'unknown'
+      if (agent === null) return 'none'
+      return agent === HERDR_AGENT ? 'ours' : 'other'
+    },
     reportState(report) {
       return enqueue('pane.report_agent', {
         state: report.state,
@@ -237,9 +267,23 @@ export function socketEndpoint(path: string): string {
 }
 
 /**
- * Spend one report's budget, not one per attempt.
+ * What the socket answered.
  *
- * The deadline covers the whole report: a server that accepts a connection and
+ * A report only has to be accepted, while a read has to be read: both are the
+ * same exchange, so the answer carries the value and the callers that file
+ * reports look at nothing but `ok`.
+ */
+interface WireAnswer {
+  readonly ok: boolean
+  readonly result: unknown
+}
+
+const NO_ANSWER: WireAnswer = { ok: false, result: undefined }
+
+/**
+ * Spend one request's budget, not one per attempt.
+ *
+ * The deadline covers the whole request: a server that accepts a connection and
  * answers slowly, but always within the idle timeout, would otherwise hold the
  * queue open packet by packet for as long as it liked.
  */
@@ -250,44 +294,55 @@ async function sendWithRetry(
   timeoutMs: number,
   stopped: () => boolean,
 ): Promise<boolean> {
+  return (await requestWithRetry(path, request, attempts, timeoutMs, stopped)).ok
+}
+
+async function requestWithRetry(
+  path: string,
+  request: WireRequest,
+  attempts: number,
+  timeoutMs: number,
+  stopped: () => boolean,
+): Promise<WireAnswer> {
   const deadline = Date.now() + timeoutMs
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     // A stopped transport does not try again: the pane is no longer an agent,
     // and an attempt that landed after the release would claim the row back.
-    if (stopped()) return false
+    if (stopped()) return NO_ANSWER
     const remaining = deadline - Date.now()
-    if (remaining <= 0) return false
-    if (await sendAttempt(path, request, remaining)) return true
+    if (remaining <= 0) return NO_ANSWER
+    const answer = await requestAttempt(path, request, remaining)
+    if (answer.ok) return answer
   }
-  return false
+  return NO_ANSWER
 }
 
-function sendAttempt(path: string, request: WireRequest, timeoutMs: number): Promise<boolean> {
-  return new Promise<boolean>(resolve => {
+function requestAttempt(path: string, request: WireRequest, timeoutMs: number): Promise<WireAnswer> {
+  return new Promise<WireAnswer>(resolve => {
     const socket = createConnection(socketEndpoint(path))
     const chunks: Buffer[] = []
     let received = 0
     let settled = false
 
-    const finish = (delivered: boolean): void => {
+    const finish = (answer: WireAnswer): void => {
       if (settled) return
       settled = true
       clearTimeout(expiry)
       socket.destroy()
-      resolve(delivered)
+      resolve(answer)
     }
 
     // Idle time is the fast signal; the hard deadline is what a peer that keeps
     // the socket busy cannot postpone.
-    const expiry = setTimeout(() => finish(false), timeoutMs)
-    socket.setTimeout(timeoutMs, () => finish(false))
-    socket.once('error', () => finish(false))
-    socket.once('end', () => finish(false))
+    const expiry = setTimeout(() => finish(NO_ANSWER), timeoutMs)
+    socket.setTimeout(timeoutMs, () => finish(NO_ANSWER))
+    socket.once('error', () => finish(NO_ANSWER))
+    socket.once('end', () => finish(NO_ANSWER))
     socket.once('connect', () => socket.write(`${JSON.stringify(request)}${RESPONSE_DELIMITER}`))
     socket.on('data', (chunk: Buffer) => {
       received += chunk.byteLength
       if (received > MAX_RESPONSE_BYTES) {
-        finish(false)
+        finish(NO_ANSWER)
         return
       }
       chunks.push(chunk)
@@ -295,18 +350,35 @@ function sendAttempt(path: string, request: WireRequest, timeoutMs: number): Pro
       const end = response.indexOf(RESPONSE_DELIMITER)
       // A report is only delivered when Herdr says so: a write into a socket
       // that closed on the far side would otherwise look like success.
-      if (end >= 0) finish(isSuccess(response.slice(0, end), request.id))
+      if (end >= 0) finish(answerFor(response.slice(0, end), request.id))
     })
   })
 }
 
-function isSuccess(response: string, requestId: string): boolean {
+function answerFor(response: string, requestId: string): WireAnswer {
   try {
     const parsed = JSON.parse(response) as unknown
-    return isRecord(parsed) && parsed.id === requestId && 'result' in parsed && !('error' in parsed)
+    if (!isRecord(parsed) || parsed.id !== requestId || 'error' in parsed) return NO_ANSWER
+    return 'result' in parsed ? { ok: true, result: parsed.result } : NO_ANSWER
   } catch {
-    return false
+    return NO_ANSWER
   }
+}
+
+/**
+ * The agent label a `pane.get` answer carries.
+ *
+ * Herdr drops the field entirely once the row is gone rather than sending a
+ * null, so a pane object that names no agent is the answer the reclaim loop
+ * acts on. An answer without a pane object at all is one this code cannot read,
+ * and a read that cannot be read must never be the reason for a write.
+ */
+function paneAgent(result: unknown): string | null | undefined {
+  if (!isRecord(result)) return undefined
+  const pane = result.pane
+  if (!isRecord(pane)) return undefined
+  const agent = pane.agent
+  return typeof agent === 'string' ? agent : null
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

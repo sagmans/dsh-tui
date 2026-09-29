@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MAX_BLOCKED_MESSAGE_CHARS, SESSION_START_REASONS } from '@/herdr/constants.ts'
+import { MAX_BLOCKED_MESSAGE_CHARS, SESSION_START_REASONS, SEQ_TIME_SCALE } from '@/herdr/constants.ts'
 import { boundedMessage, createReportSequence, driverReportFor, sessionStartReason } from '@/herdr/state.ts'
 
 describe('driverReportFor', () => {
@@ -68,5 +68,17 @@ describe('createReportSequence', () => {
     const first = next()
     now = 1
     expect(next()).toBeGreaterThan(first)
+  })
+
+  it('anchors each number at the moment its report goes out', () => {
+    // A number tied to the moment the process started loses the row to every
+    // report a later process made, which is how a pane that stayed up across a
+    // multiplexer restart goes missing for good.
+    let now = 5
+    const next = createReportSequence(() => now)
+    next()
+
+    now = 9
+    expect(next()).toBe(9 * SEQ_TIME_SCALE)
   })
 })

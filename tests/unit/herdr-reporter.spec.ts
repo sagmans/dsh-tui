@@ -1,19 +1,60 @@
 import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { dirname } from 'node:path'
-import { GATE_WAIT_KEY, HERDR_AGENT, HERDR_SOURCE, MAX_STATE_LABEL_CHARS, SESSION_START_REASONS } from '@/herdr/constants.ts'
+import {
+  GATE_WAIT_KEY,
+  HERDR_AGENT,
+  HERDR_SOURCE,
+  MAX_STATE_LABEL_CHARS,
+  RECLAIM_INTERVAL_MS,
+  SESSION_START_REASONS,
+} from '@/herdr/constants.ts'
 import { createHerdrReporter, releaseAgentSync } from '@/herdr/reporter.ts'
-import type { HerdrClient, HerdrEnvironment } from '@/herdr/client.ts'
+import type { HerdrClient, HerdrEnvironment, PaneRow } from '@/herdr/client.ts'
 import type { StateReport } from '@/herdr/client.ts'
 
 /** A second slot, so a stacked wait is not the gate's own key standing in for it. */
 const QUESTION_WAIT = 'question'
 
 interface Recorded {
-  readonly kind: 'state' | 'session' | 'metadata' | 'label'
+  readonly kind: 'state' | 'session' | 'metadata' | 'label' | 'read'
   readonly value: unknown
+}
+
+/**
+ * A client whose pane row the test decides.
+ *
+ * The row is the whole reason the reclaim loop exists, so it is the one answer
+ * a test varies; everything else only has to be recorded and answered.
+ */
+function reclaimableClient(initial: PaneRow): {
+  readonly calls: Recorded[]
+  readonly client: HerdrClient
+  readonly row: (next: PaneRow) => void
+} {
+  const calls: Recorded[] = []
+  let show: PaneRow = initial
+  return {
+    calls,
+    row: next => {
+      show = next
+    },
+    client: {
+      enabled: true,
+      readRow: async () => {
+        calls.push({ kind: 'read', value: show })
+        return show
+      },
+      reportState: async report => (calls.push({ kind: 'state', value: report }), true),
+      reportSession: async report => (calls.push({ kind: 'session', value: report }), true),
+      reportMetadata: async tokens => (calls.push({ kind: 'metadata', value: tokens }), true),
+      reportStateLabel: async label => (calls.push({ kind: 'label', value: label }), true),
+      stop: () => {},
+      settle: async () => {},
+    },
+  }
 }
 
 /** A client that records instead of dialling: these tests are about decisions. */
@@ -29,6 +70,7 @@ function recordingClient(): {
     transport,
     client: {
       enabled: true,
+      readRow: async (): Promise<PaneRow> => 'ours',
       reportState: async (report: StateReport) => (calls.push({ kind: 'state', value: report }), true),
       reportSession: async report => (calls.push({ kind: 'session', value: report }), true),
       reportMetadata: async tokens => (calls.push({ kind: 'metadata', value: tokens }), true),
@@ -76,7 +118,7 @@ describe('createHerdrReporter', () => {
 
     reporter.publish()
 
-    expect(states(calls)).toEqual([{ state: 'idle', message: undefined, seq: 1001, sessionId: undefined }])
+    expect(states(calls)).toEqual([{ state: 'idle', message: undefined, seq: 1000, sessionId: undefined }])
   })
 
   it('does not repeat a state Herdr is already showing', () => {
@@ -122,9 +164,9 @@ describe('createHerdrReporter', () => {
     reporter.unblock(GATE_WAIT_KEY)
 
     expect(states(calls)).toEqual([
-      { state: 'working', message: undefined, seq: 1001, sessionId: undefined },
-      { state: 'blocked', message: 'approval needed · Bash', seq: 1002, sessionId: undefined },
-      { state: 'working', message: undefined, seq: 1003, sessionId: undefined },
+      { state: 'working', message: undefined, seq: 1000, sessionId: undefined },
+      { state: 'blocked', message: 'approval needed · Bash', seq: 1001, sessionId: undefined },
+      { state: 'working', message: undefined, seq: 1002, sessionId: undefined },
     ])
   })
 
@@ -184,7 +226,7 @@ describe('createHerdrReporter', () => {
     // The gate's wait is still owed, and an end for a key nobody took must not
     // mint a wait Herdr would then be told about: one state, still blocked.
     expect(states(calls)).toEqual([
-      { state: 'blocked', message: 'approval needed · Bash', seq: 1001, sessionId: undefined },
+      { state: 'blocked', message: 'approval needed · Bash', seq: 1000, sessionId: undefined },
     ])
   })
 
@@ -234,7 +276,7 @@ describe('createHerdrReporter', () => {
 
     expect(calls.find(call => call.kind === 'session')?.value).toEqual({
       sessionId: 'tui-session-9',
-      seq: 1001,
+      seq: 1000,
       reason: 'fork',
     })
     expect(calls.find(call => call.kind === 'metadata')?.value).toEqual({ dsh_session: 'tui-session-9', dsh_cwd: '/tmp/project' })
@@ -270,6 +312,7 @@ describe('createHerdrReporter', () => {
     const calls: Recorded[] = []
     const client: HerdrClient = {
       enabled: true,
+      readRow: async (): Promise<PaneRow> => 'ours',
       reportState: async report => (calls.push({ kind: 'state', value: report }), reachable),
       reportSession: async () => true,
       reportMetadata: async () => true,
@@ -295,6 +338,7 @@ describe('createHerdrReporter', () => {
     const calls: Recorded[] = []
     const client: HerdrClient = {
       enabled: true,
+      readRow: async (): Promise<PaneRow> => 'ours',
       reportState: async report => (calls.push({ kind: 'state', value: report }), false),
       reportSession: async () => true,
       reportMetadata: async () => true,
@@ -322,6 +366,7 @@ describe('createHerdrReporter', () => {
     let finishSettling: (() => void) | undefined
     const client: HerdrClient = {
       enabled: true,
+      readRow: async (): Promise<PaneRow> => 'ours',
       reportState: () => new Promise<boolean>(resolve => {
         complete = resolve
       }),
@@ -362,6 +407,7 @@ describe('createHerdrReporter', () => {
     const calls: Recorded[] = []
     const client: HerdrClient = {
       enabled: true,
+      readRow: async (): Promise<PaneRow> => 'ours',
       reportState: async report => (calls.push({ kind: 'state', value: report }), true),
       reportSession: async report => (calls.push({ kind: 'session', value: report }), reachable),
       reportMetadata: async tokens => (calls.push({ kind: 'metadata', value: tokens }), reachable),
@@ -404,6 +450,75 @@ describe('createHerdrReporter', () => {
     expect(released).toBe(1)
     expect(states(calls).length).toBe(1)
     expect(calls.filter(call => call.kind !== 'state')).toEqual([])
+  })
+
+  describe('claiming the pane back', () => {
+    beforeEach(() => {
+      vi.useFakeTimers()
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('claims the pane again after something else took the row away', async () => {
+      // A restarted multiplexer forgets every claim it held, and a process that
+      // borrowed the pane leaves it released: neither reports anything, so the
+      // pane itself has to be asked.
+      const { calls, client } = reclaimableClient('none')
+      const reporter = createHerdrReporter({ client, now: () => 1, reclaimIntervalMs: RECLAIM_INTERVAL_MS })
+
+      reporter.session({ id: 'tui-session-9', cwd: '/tmp/project', reason: SESSION_START_REASONS.startup })
+      await vi.advanceTimersByTimeAsync(0)
+      const before = states(calls).length
+      await vi.advanceTimersByTimeAsync(RECLAIM_INTERVAL_MS + 1)
+
+      expect(states(calls).length).toBe(before + 1)
+      expect(calls.filter(call => call.kind === 'session').length).toBe(2)
+    })
+
+    it('leaves a row it still owns alone', async () => {
+      const { calls, client } = reclaimableClient('ours')
+      const reporter = createHerdrReporter({ client, now: () => 1, reclaimIntervalMs: RECLAIM_INTERVAL_MS })
+
+      reporter.session({ id: 'tui-session-9', cwd: '/tmp/project', reason: SESSION_START_REASONS.startup })
+      await vi.advanceTimersByTimeAsync(0)
+      const before = calls.length
+      await vi.advanceTimersByTimeAsync(RECLAIM_INTERVAL_MS * 3)
+
+      // The check itself is the only traffic an owned row costs.
+      expect(calls.slice(before).every(call => call.kind === 'read')).toBe(true)
+    })
+
+    it('does not claim a pane Herdr never answered about', async () => {
+      const { calls, client } = reclaimableClient('unknown')
+      const reporter = createHerdrReporter({ client, now: () => 1, reclaimIntervalMs: RECLAIM_INTERVAL_MS })
+
+      reporter.session({ id: 'tui-session-9', cwd: '/tmp/project', reason: SESSION_START_REASONS.startup })
+      await vi.advanceTimersByTimeAsync(0)
+      const before = calls.length
+      await vi.advanceTimersByTimeAsync(RECLAIM_INTERVAL_MS * 2)
+
+      expect(calls.slice(before).every(call => call.kind === 'read')).toBe(true)
+    })
+
+    it('stops checking once the pane has been handed back', async () => {
+      const { calls, client } = reclaimableClient('none')
+      const reporter = createHerdrReporter({
+        client,
+        now: () => 1,
+        reclaimIntervalMs: RECLAIM_INTERVAL_MS,
+        releaseSync: () => {},
+      })
+
+      reporter.session({ id: 'tui-session-9', cwd: '/tmp/project', reason: SESSION_START_REASONS.startup })
+      await vi.advanceTimersByTimeAsync(0)
+      reporter.releaseSync()
+      const released = calls.length
+      await vi.advanceTimersByTimeAsync(RECLAIM_INTERVAL_MS * 3)
+
+      expect(calls.length).toBe(released)
+    })
   })
 
   it('registers its exit release and gives the registration back', () => {

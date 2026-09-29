@@ -67,6 +67,18 @@ export const RETRY_BASE_MS = 250
 /** The longest that wait can grow to, so a down socket is still noticed. */
 export const RETRY_MAX_MS = 8_000
 
+/**
+ * How often a pane that believes it owns its row asks Herdr whether it still does.
+ *
+ * Herdr holds a claim in its own memory, keyed by source and agent, and any
+ * process filing a newer number takes the row over — including one that claims
+ * the pane and releases it again on the way out. Nothing arrives as an event
+ * when a row is cleared, so a surface that only reported on its own transitions
+ * would stay invisible for the rest of its life. The check is a read; only a
+ * pane that has lost its row is written to.
+ */
+export const RECLAIM_INTERVAL_MS = 15_000
+
 /** Beyond this a response is a surprise, not an answer. */
 export const MAX_RESPONSE_BYTES = 64 * 1024
 export const RESPONSE_DELIMITER = '\n'

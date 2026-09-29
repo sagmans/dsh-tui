@@ -2,7 +2,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { describe, expect, it } from 'vitest'
 import type { TuiAgent } from '@/agent/host.ts'
-import type { HerdrClient } from '@/herdr/client.ts'
+import type { HerdrClient, PaneRow } from '@/herdr/client.ts'
 import { HERDR_STATES } from '@/herdr/constants.ts'
 import { createHerdrReporter } from '@/herdr/reporter.ts'
 import { createBackgroundWork, type BackgroundWorkPorts } from '@/surface/background-work.ts'
@@ -34,6 +34,7 @@ function fixture() {
   let jobsChanged: (owner?: unknown) => void = () => {}
   const client: HerdrClient = {
     enabled: true,
+    readRow: async (): Promise<PaneRow> => 'ours',
     reportState: async report => (states.push(report.state), true),
     reportSession: async () => true,
     reportMetadata: async () => true,
