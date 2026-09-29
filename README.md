@@ -559,9 +559,12 @@ leaving a gap, and `NO_COLOR` draws the fence as plain text. `/export` and the
 session file still keep the fence exactly as the model wrote it.
 
 A theme restyles the whole surface by name, and a theme is a file. The package
-ships two: `violet-orbit`, a port of pi's theme of that name — its palette, plus
-the elements it draws its own way — and `deepseek-blue`, the table written out
-in full in the colours the project answers to. `violet-orbit` is also what a
+ships three: `violet-orbit`, a port of pi's theme of that name — its palette,
+plus the elements it draws its own way — `deepseek-blue`, the table written out
+in full in the colours the project answers to, and `polar-drift`, that table
+anchored on the cyan `#27CFF5`, with every neutral tinted through it and the
+semantic shades left where a reader already reads them. `violet-orbit` is also
+what a
 document naming no theme draws, so the default look is a file you can read, list,
 and copy rather than a table compiled in. Your own themes live in
 `$DSH_HOME/themes/`, which the surface creates at start-up and watches, so saving
@@ -572,11 +575,12 @@ is written until one is taken, so leaving the list puts back the theme that was 
 force. `theme: violet-orbit` applies one from the document, and a name nothing
 answers to is reported with the names that do, drawing the default while you fix it.
 
-Both files name every element and every palette entry, so a copy of one is a
-complete theme rather than a diff against something you cannot see.
-`deepseek-blue` is the one to copy to move a single shade, because every element
-follows one of its ten palette entries, each taken from DeepSeek's own design
-tokens with the token named beside it — and the accent is one line.
+Every shipped file names every element and every palette entry, so a copy of one
+is a complete theme rather than a diff against something you cannot see. Copying
+`deepseek-blue` is how to move a single shade, because every element follows one
+of its ten palette entries, each taken from DeepSeek's own design tokens with the
+token named beside it — and the accent is one line. `polar-drift` reads the same
+way, with the anchor as its own one line.
 `/theme export <built-in>` writes that copy into your own directory as
 `<built-in>_export_<n>.yaml`, adding one comment naming the release it came from:
 the package's own file is replaced whenever the package updates, so the copy is the

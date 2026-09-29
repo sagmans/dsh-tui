@@ -1,69 +1,60 @@
-# deepseek-blue — the table the surface ships, in the colours DeepSeek draws.
+# polar-drift — the shipped table, anchored on the cyan #27CFF5.
 #
-# Every shade here is a step of the product's own design system rather than a
-# colour picked for this file, and each palette line names the token it came
-# from, so the surface can be re-derived from the product instead of guessed at.
-# The steps are the product's dark-theme ones, because a terminal is dark:
+# The anchor is the accent, and its hue is where every other shade comes from:
+# the neutrals are that hue at a low saturation, and the argument sits light
+# enough to recede under the label beside it. A surface tinted this way reads as
+# one family, where literal greys under a cyan link read as two.
 #
-#   default, assistant   label-primary     neutral-bluish-50   #f9fafb
-#   muted                label-secondary   neutral-bluish-300  #cfd3d6
-#   faint                label-tertiary    neutral-bluish-400  #adb2b8
-#   accent               brand-text        deepseek-400        #679efe
-#   arg                  —                 deepseek-300        #b7c8fe
-#   warn                 state-warn        amber-500           #f59e0b
-#   added                state-success     green-500           #22c55e
-#   removed              state-error       red-400             #f25a5a
-#   user                 bubble            neutral-bluish-850  #2c2c2e  (a panel border, not a fill)
+# The semantic shades are the deliberate exception. Something added is green and
+# something removed is red on every surface a reader already uses, and amber is
+# what says a call has not answered yet; a theme that moved them would make a
+# reader learn each fact again per theme, on the screen where misreading them
+# costs the most.
 #
-# The brand itself is deepseek-500 #3964fe, drawn as deepseek-450 #5686fe on a
-# dark surface. The accent is one step lighter than either because what it paints
-# is text — links, code, headings — and the product keeps its own step for the
-# brand as text. That single line is where a reader moves the brand.
+# Every element below names a palette entry rather than a shade of its own, so
+# the anchor is one line to move. The three that name a literal say why there.
 #
-# Ten palette entries carry the whole theme: every element below names one rather
-# than a shade of its own. Three elements name a different entry than the shipped
-# table names, and say why where they do.
-#
-# The semantic shades stay the product's green, red, and amber. Something added
-# is green and something removed is red on every surface a reader already uses,
-# and a hue that moved with the theme would have to be learned again with each
-# one.
+# This file is a reference and a layer, not a workspace: it ships inside the
+# package and a new version replaces it. /theme export polar-drift writes a full
+# copy into your own themes directory to edit.
 
 palette:
-  default: '#f9fafb'  # label-primary, neutral-bluish-50
-  muted: '#cfd3d6'  # label-secondary, neutral-bluish-300
-  faint: '#adb2b8'  # label-tertiary, neutral-bluish-400
-  accent: '#679efe'  # brand-text, deepseek-400
-  arg: '#b7c8fe'  # deepseek-300
-  warn: '#f59e0b'  # state-warn, amber-500
-  added: '#22c55e'  # state-success, green-500
-  removed: '#f25a5a'  # state-error on a dark surface, red-400
-  user: '#2c2c2e'  # the product's bubble fill, neutral-bluish-850: only a panel border names it now
-  assistant: '#f9fafb'  # label-primary, neutral-bluish-50
+  default: '#f4f5f6'  # #27CFF5's hue at 5% saturation: text that carries a trace of the anchor
+  muted: '#bfc9cc'  # the same hue, one step down: labels and scaffolding
+  faint: '#8eacb1'  # the same hue again: reasoning, which is meant to recede
+  accent: '#27CFF5'  # the anchor: headings, links, code, and the frames that hold a turn
+  arg: '#5f8a95'  # the anchor's hue a step below the reasoning shade: an argument recedes under the label
+  warn: '#faba42'  # state-warn, left in amber: a call still in flight
+  added: '#29d96a'  # state-success, left in green
+  removed: '#e35048'  # state-error, left in red
+  user: '#1c3136'  # the anchor's hue at its darkest: the band behind a selected row, and one panel border
+  assistant: '#f4f5f6'  # the reply's text stays plain, so the frame is what marks it
 
 tokens:
-  # A row of the conversation. The product fills this one, but this surface
-  # already frames it, and a band inside the frame treats one fact twice: it reads
-  # as a selected row rather than as what the reader typed.
+  # A row of the conversation. The reader's own turn keeps its frame and carries
+  # no band: a filled row inside that frame reads as a selected row, and a band
+  # here would send the anchor's family a second, quieter meaning than the accent.
   transcript.user: { fg: default }
-  # The sent prompt keeps the brand shade without inheriting editor overrides.
+  # A sent prompt keeps the anchor shade without inheriting the editor's setting.
   transcript.user.border: { fg: accent }
-  # The reply's own frame. A border is a container rather than a fact, so it may
-  # not take a signal shade; a warm neutral keeps the answer held without moving
-  # it into the amber the surface reserves for state.
-  transcript.assistant.border: { fg: '#d6c29a' }
+  # The reply's own frame. It holds the family's hue at container weight rather
+  # than the accent the prompt is framed in: the two frames then differ by how
+  # loud they are instead of by hue, and a long answer never wears the shade that
+  # means "this is what you typed".
+  transcript.assistant.border: { fg: '#4f8593' }
   transcript.notice: { fg: muted }
   transcript.marker: { fg: muted }
   transcript.reasoning.summary: { fg: faint, italic: true }
   transcript.reasoning.body: { fg: faint }
   transcript.reasoning.hint: { fg: faint, italic: true }
   # A tool card, drawn in layers: every card, then one kind of card.
-  # A call is not a warning: the product keeps amber for state, and this label is
-  # the loudest thing on the row, so it carries the brand instead.
+  # A call is not a warning, so the label takes the anchor rather than the amber
+  # the surface reserves for a call that has not answered — the label is the
+  # loudest thing on the row, and loudness is what the anchor is for.
   tool.title: { fg: accent }
   tool.glyph: { fg: accent }  # follows the label it sits beside
   tool.skill: { fg: accent }  # follows the label it sits beside
-  tool.args: { fg: arg }
+  tool.args: { fg: arg }  # below the reasoning shade: an argument is quieter than what the call is doing
   tool.stat.added: { fg: added }
   tool.stat.changed: { fg: warn }
   tool.stat.removed: { fg: removed }
@@ -73,8 +64,8 @@ tokens:
   tool.hint: { fg: muted }
   tool.failed.title: { fg: removed }
   tool.failed.glyph: { fg: removed }
-  # A call still in flight is state, which is what amber is for here; the failed
-  # row stays red so the two can never be read as each other.
+  # A call still in flight is state, which is amber's job here; the failed row
+  # stays red so the two can never be read as each other.
   tool.running.title: { fg: warn }
   tool.running.elapsed: { fg: warn }
   tool.elapsed.done: { fg: muted, italic: true }
@@ -116,15 +107,15 @@ tokens:
   markdown.underline: { underline: true }
   # A fenced diff: the scaffolding recedes, the rows carry the semantic shades,
   # and the characters that changed sit on a band of the row's own colour. The
-  # band is a shade derived from that colour rather than a product token, so it
+  # band is a shade derived from that colour rather than a palette entry, so it
   # stays a literal, and the foreground inherits so a palette move carries both.
   markdown.diff.header: { fg: muted }
   markdown.diff.hunk: { fg: muted }
   markdown.diff.context: {}
   markdown.diff.added: { fg: added }
   markdown.diff.removed: { fg: removed }
-  markdown.diff.addedEmphasis: { inherit: markdown.diff.added, bg: '#1e3d24' }
-  markdown.diff.removedEmphasis: { inherit: markdown.diff.removed, bg: '#472424' }
+  markdown.diff.addedEmphasis: { inherit: markdown.diff.added, bg: '#183a24' }
+  markdown.diff.removedEmphasis: { inherit: markdown.diff.removed, bg: '#461d1b' }
   markdown.diagram.border: { fg: muted }
   markdown.diagram.text: {}
   markdown.diagram.edge: { fg: accent }
@@ -136,8 +127,11 @@ tokens:
   picker.glyph: { bold: true }
   picker.note: { bold: true }
   picker.filter: { fg: muted }
-  picker.row: {}
-  picker.rowCurrent: { bold: true }
+  # A list is read by moving one row, so the rows the cursor is not on recede:
+  # the selected row is then found by its own shade rather than by hunting for
+  # the mark in front of it, which is what a bold row alone leaves a reader doing.
+  picker.row: { fg: muted }
+  picker.rowCurrent: { fg: accent, bold: true, bg: user }
   picker.scrollNewer: { fg: muted }
   picker.scrollOlder: { fg: muted }
   picker.hint: { fg: muted }
@@ -152,7 +146,8 @@ tokens:
   gate.optionCurrent: { bold: true }
   gate.cursor: {}
   gate.hint: { fg: muted }
-  # The work panel above the editor.
+  # The work panel above the editor. Each panel is a bordered box, so the border
+  # is what says which panel a row belongs to and the rows themselves stay quiet.
   dock.goal: { bold: true }
   dock.planMode: { bold: true }
   dock.todos.border: { fg: accent }
@@ -171,7 +166,9 @@ tokens:
   # The footer.
   status.prefix: { fg: accent }
   status.back: { fg: accent }
-  status.activity.working: { fg: muted }
+  # A turn in flight is the one state a reader waits on, so it takes the anchor
+  # and the weight; ready stays quiet because it is where the surface rests.
+  status.activity.working: { fg: accent, bold: true }
   status.activity.ready: { fg: muted }
   status.elapsed: { fg: muted }
   status.agentPreset: { fg: muted }
@@ -185,7 +182,7 @@ tokens:
   status.separator: { fg: muted }
   # The prompt bar.
   # The one border in the surface that is not a divider: it holds what the reader
-  # is writing, which is where the product puts the brand on its send button.
+  # is writing, which is where the brand belongs on a send affordance.
   editor.border: { fg: accent }
   editor.queued: { dim: true, italic: true }
   editor.queued.more: { fg: muted }

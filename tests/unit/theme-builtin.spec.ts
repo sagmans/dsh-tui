@@ -21,6 +21,9 @@ const VIOLET = 'violet-orbit'
 /** The surface's own theme: the shipped table, in the blue the project answers to. */
 const BLUE = 'deepseek-blue'
 
+/** The shipped table again, anchored on the cyan its accent is. */
+const DRIFT = 'polar-drift'
+
 const library = builtinLibrary()
 
 /** The theme as a renderer holds it, which is what a reader actually sees. */
@@ -104,11 +107,12 @@ describe('deepseek-blue', () => {
     expect(themed(BLUE).style('editor.border', 'x')).toContain('38;2;103;158;254')
   })
 
-  it("sits the reader's own turn on the product's bubble fill", () => {
-    // The product marks that turn with a background rather than a hue of its own,
-    // so this is the one element the theme gives a band to.
-    expect(themed(BLUE).style('transcript.user', 'x')).toContain('48;2;44;44;46')
-    expect(untinted().style('transcript.user', 'x')).not.toContain('48;')
+  it("leaves the reader's own turn on a plain row inside its frame", () => {
+    // The product fills that row, and this surface frames it already: a band
+    // inside the frame says one fact twice and reads as a selected row.
+    const style = themed(BLUE).style('transcript.user', 'x')
+    expect(style).toContain('38;2;249;250;251')
+    expect(style).not.toContain('48;2;')
   })
 })
 
@@ -181,5 +185,70 @@ describe('violet-orbit', () => {
       tokens: { 'tool.title': { fg: '#ff0000' } },
     }), library))
     expect(theme.style('tool.title', 'x')).toContain('38;2;255;0;0')
+  })
+})
+
+describe('polar-drift', () => {
+  it('paints the anchor on the elements that carry the accent', () => {
+    // The anchor is the whole point of the theme, so it has to land on what a
+    // reader looks at rather than sit in the file as a shade nothing names.
+    const theme = themed(DRIFT)
+    expect(theme.style('markdown.heading', 'x')).toContain('38;2;39;207;245')
+    expect(theme.style('markdown.link', 'x')).toContain('38;2;39;207;245')
+    expect(theme.editor.borderColor('x')).toContain('38;2;39;207;245')
+  })
+
+  it('tints the neutrals through the anchor rather than shipping them grey', () => {
+    // An element naming no literal still follows the tint, and the argument is
+    // where a reader compares two shades side by side on one row.
+    const theme = themed(DRIFT)
+    expect(theme.style('transcript.reasoning.body', 'x')).toContain('38;2;142;172;177')
+    // An argument rides the same family below the reasoning shade, so the label
+    // it belongs to stays the brightest thing on the row.
+    expect(theme.style('tool.args', 'x')).toContain('38;2;95;138;149')
+    expect(library.get(DRIFT)?.palette.accent).toBe('#27CFF5')
+  })
+
+  it('leaves the semantic shades in the hues a reader already reads them in', () => {
+    // Randomising these would cost a reader the one thing the surface cannot
+    // draw twice: a second reading of what changed.
+    const theme = themed(DRIFT)
+    expect(theme.style('markdown.diff.added', 'x')).toContain('38;2;41;217;106')
+    expect(theme.style('markdown.diff.removed', 'x')).toContain('38;2;227;80;72')
+    expect(theme.style('markdown.diagram.warning', 'x')).toContain('38;2;250;186;66')
+  })
+
+  it('mutes the rows the picker cursor is not on and paints the one it is', () => {
+    // A list is read by moving one row; with every row at one weight a reader
+    // hunts for the mark instead of seeing where they are.
+    const theme = themed(DRIFT)
+    const current = theme.style('picker.rowCurrent', 'x')
+    expect(current).toContain('1;38;2;39;207;245')
+    expect(current).toContain('48;2;28;49;54')
+    const other = theme.style('picker.row', 'x')
+    expect(other).toContain('38;2;191;201;204')
+    expect(other).not.toContain('48;2;')
+  })
+
+  it('marks a turn in flight with the anchor rather than leaving it grey', () => {
+    const theme = themed(DRIFT)
+    expect(theme.style('status.activity.working', 'x')).toContain('1;38;2;39;207;245')
+    expect(theme.style('status.activity.ready', 'x')).toContain('38;2;191;201;204')
+  })
+
+  it('holds the reply frame in the family at container weight', () => {
+    // The reply is long, so its frame may not wear the shade that means "what
+    // you typed"; holding the anchor's hue back is what keeps it a container.
+    const theme = themed(DRIFT)
+    expect(theme.style('transcript.assistant.border', 'x')).toContain('38;2;79;133;147')
+    expect(theme.style('transcript.user.border', 'x')).toContain('38;2;39;207;245')
+  })
+
+  it('keeps the reader turn a plain row rather than a band of the anchor hue', () => {
+    // A filled row inside the prompt's own frame reads as a selected row, which
+    // is the one thing that row must not look like.
+    const style = themed(DRIFT).style('transcript.user', 'x')
+    expect(style).toContain('38;2;244;245;246')
+    expect(style).not.toContain('48;2;')
   })
 })
