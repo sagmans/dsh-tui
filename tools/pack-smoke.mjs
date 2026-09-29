@@ -138,16 +138,16 @@ const DISABLED_ROWS = [
  *
  * A bundle owns the rows it inserts, so naming anything here makes the profile
  * depend on a package that nothing would install unless this manifest declares
- * it — which the check below enforces. Both harness lines are listed on purpose:
- * one build serves each line, and the shim picks by generation.
+ * it — which the check below enforces. Every harness line is listed on purpose,
+ * and every line's build is an alias: a plain dependency on any one of them
+ * would be what a profile resolves the base's own runner row to, and the host
+ * reads its runtime version off that runner.
  */
 const NAMED_PACKAGES = [
   '@deepseek-ai/dsh-agent-presets',
   '@deepseek-ai/dsh-agent-preset',
   '@deepseek-ai/dsh-agent-preset-registry',
   '@deepseek-ai/dsh-code-runtime-worker-thread',
-  '@deepseek-ai/dsh-cordis-host-runner',
-  '@sagmans/dsh-cordis-host-runner-017',
 ]
 
 /**
@@ -167,10 +167,16 @@ const HOST_ROWS = [
  *
  * They are imported by this plugin's own code, so nothing mounts them as a row;
  * the declared-against-mounted check below has to know them by name or it would
- * demand a patch row for a package that has no plugin to mount.
+ * demand a patch row for a package that has no plugin to mount. The runner
+ * builds belong here for a second reason: one line's build is chosen by a table
+ * at run time, so no `import('…')` literal in the shim names them the way the
+ * mount scan reads.
  */
 const LIBRARY_PACKAGES = [
   '@deepseek-ai/schemastery',
+  '@sagmans/dsh-cordis-host-runner-015',
+  '@sagmans/dsh-cordis-host-runner-017',
+  '@sagmans/dsh-cordis-host-runner-020',
 ]
 
 function walk(directory) {
@@ -259,12 +265,20 @@ try {
   const mounted = new Set(
     [...mounts.matchAll(/(?:name: |import\()'(@[^']+)'/gu)].map(match => match[1].split('/').slice(0, 2).join('/')),
   )
+  // A mounted package may be provided as an alias of its own, one build per line:
+  // that is how a row keeps serving a line the plain name's release cannot reach.
+  // The manifest is read here rather than reused below, because the mount check
+  // runs before that one is initialised.
+  const aliasTargets = Object.values(
+    JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).dependencies ?? {},
+  ).map(spec => String(spec))
+  const providedByAlias = name => aliasTargets.some(spec => spec.startsWith('npm:' + name + '@'))
   const allowed = [...NAMED_PACKAGES, ...HOST_ROWS]
   for (const name of [...patch.matchAll(/name: '(@deepseek-ai\/[^']+)'/gu)].map(match => match[1])) {
     if (!allowed.includes(name)) problems.push(`the bundle patch mounts ${name}, which this plugin neither provides nor is documented as host machinery`)
   }
   for (const name of NAMED_PACKAGES) {
-    if (!mounted.has(name)) problems.push(`no inserted row or shipped mode mounts ${name}`)
+    if (!mounted.has(name) && !providedByAlias(name)) problems.push(`no inserted row or shipped mode mounts ${name}`)
   }
   if (patch.includes('dsh-tui/ask-user')) {
     problems.push('the bundle patch still mounts the removed ask-user entry point')
@@ -288,7 +302,7 @@ try {
     problems.push('the manifest does not point at a patch file that ships')
   }
   for (const name of NAMED_PACKAGES) {
-    if (manifest.dependencies?.[name] === undefined) {
+    if (manifest.dependencies?.[name] === undefined && !providedByAlias(name)) {
       problems.push(`the patch mounts ${name} but the manifest does not depend on it`)
     }
   }

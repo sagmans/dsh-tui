@@ -152,7 +152,7 @@ describe('the bundle patch', () => {
 
   it('starts a flagless run in a mode the roster ships', () => {
     expect(DEFAULT_PRESET).toBe(ROSTER_DEFAULT)
-    expect(loadPresetDefinitions().map(definition => definition.id)).toContain(ROSTER_DEFAULT)
+    expect(loadPresetDefinitions('0.1.7').map(definition => definition.id)).toContain(ROSTER_DEFAULT)
   })
 
   it('leaves every line-bound row to the shim that can tell the lines apart', () => {

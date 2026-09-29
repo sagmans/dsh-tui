@@ -56,27 +56,32 @@ if (range !== null) {
   }
 }
 
-const mounted = Object.entries(manifest.dependencies ?? {})
-  .filter(([name]) => name.startsWith('@deepseek-ai/dsh-'))
-const compiled = Object.entries(manifest.devDependencies ?? {})
-  .filter(([name]) => name.startsWith('@deepseek-ai/dsh-'))
+// A mounted package is an alias of its own, one build per line, so the check
+// reads the alias target as well as the plain name.
+const harnessPackages = ([name, spec]) =>
+  name.startsWith('@deepseek-ai/dsh-') || String(spec).startsWith('npm:@deepseek-ai/dsh-')
+const mounted = Object.entries(manifest.dependencies ?? {}).filter(harnessPackages)
+const compiled = Object.entries(manifest.devDependencies ?? {}).filter(harnessPackages)
 if (mounted.length === 0) problems.push('the manifest mounts no harness package')
 if (compiled.length === 0) problems.push('the manifest compiles against no harness package')
 
 // A mounted package either accepts the whole compatible line or names one
 // verified release. The range is the one the 0.1.5 line resolves; a row that
 // serves a newer line cannot use it, because a range admits a prerelease only
-// through a comparator naming that exact X.Y.Z tuple, so ">=0.1.5-rc.1 <0.2.0"
-// resolves 0.1.5-rc.3 and never 0.1.7-rc.2. Those rows therefore mount the
+// through a comparator naming that exact X.Y.Z tuple, so ">=0.1.5-rc.1 <0.3.0"
+// still resolves 0.1.5-rc.3 and never 0.2.0-rc.2. Those rows therefore mount the
 // release this tree is verified against, the way the harness's own bundles pin.
 for (const [name, declared] of mounted) {
+  // An alias names one release per line, and the alias rule below is the one that
+  // can judge it: the target is a plain package name, not a range.
+  if (String(declared).startsWith('npm:')) continue
   if (declared !== compatibility && !releases.includes(declared)) {
     problems.push('mounted package ' + name + ' declares ' + declared
       + ', which is neither the compatible range ' + String(compatibility) + ' nor a verified release')
   }
 }
 
-// A peer cannot span the two lines for the same reason, and npm resolves a peer
+// A peer cannot span the lines for the same reason, and npm resolves a peer
 // against the consumer's own tree: a range there pulls the harness back to the
 // tuple it names and collides with the newer line, which is exactly how the
 // consumer install smoke broke. Peers stay open, dsh.compatibility carries the
