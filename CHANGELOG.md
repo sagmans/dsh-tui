@@ -10,6 +10,13 @@ breaking change, and a patch carries only fixes.
 
 ### Added
 
+- A sixth theme ships: `marine-static`. Its anchor is `#041F21`, a fill weight
+  rather than a text weight at 1.08:1 on a dark terminal, so the band under a
+  selected row takes its cue from the hue and the accent is that same hue lifted to
+  where text reads. This family stands in the same water as `polar-drift`'s cyan,
+  so the accent is held well back from the neon: the same hue with far less chroma
+  at a lower level. The shades hold the same relative ladder as the shipped table.
+
 - A fifth theme ships: `wine-thicket`. Its anchor is `#240413`, a fill weight
   rather than a text weight at 1.03:1 on a dark terminal — almost exactly the weight
   of the background itself — so the anchor marks the band under a selected row by
