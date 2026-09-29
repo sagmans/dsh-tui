@@ -23,7 +23,7 @@ palette:
   muted: '#bfc9cc'  # the same hue, one step down: labels and scaffolding
   faint: '#8eacb1'  # the same hue again: reasoning, which is meant to recede
   accent: '#27CFF5'  # the anchor: headings, links, code, and the frames that hold a turn
-  arg: '#b9dde5'  # the anchor's hue, lightened: a path or a command reads as text, not as a fact
+  arg: '#5f8a95'  # the anchor's hue a step below the reasoning shade: an argument recedes under the label
   warn: '#faba42'  # state-warn, left in amber: a call still in flight
   added: '#29d96a'  # state-success, left in green
   removed: '#e35048'  # state-error, left in red
@@ -54,7 +54,7 @@ tokens:
   tool.title: { fg: accent }
   tool.glyph: { fg: accent }  # follows the label it sits beside
   tool.skill: { fg: accent }  # follows the label it sits beside
-  tool.args: { fg: arg }
+  tool.args: { fg: arg }  # below the reasoning shade: an argument is quieter than what the call is doing
   tool.stat.added: { fg: added }
   tool.stat.changed: { fg: warn }
   tool.stat.removed: { fg: removed }

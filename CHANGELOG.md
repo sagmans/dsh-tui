@@ -17,7 +17,9 @@ breaking change, and a patch carries only fixes.
   in flight stays amber. `/theme polar-drift` applies it. The picker's selected
   row carries the anchor on a band while every other row recedes, a turn in flight
   is painted rather than greyed, and the reply's frame holds the family's hue at
-  container weight so the prompt keeps the shade that means "what you typed".
+  container weight so the prompt keeps the shade that means "what you typed", and
+  a tool argument sits below the reasoning shade so it recedes under the label it
+  belongs to.
 
 ### Changed
 

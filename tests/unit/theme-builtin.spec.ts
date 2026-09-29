@@ -203,7 +203,9 @@ describe('polar-drift', () => {
     // where a reader compares two shades side by side on one row.
     const theme = themed(DRIFT)
     expect(theme.style('transcript.reasoning.body', 'x')).toContain('38;2;142;172;177')
-    expect(theme.style('tool.args', 'x')).toContain('38;2;185;221;229')
+    // An argument rides the same family below the reasoning shade, so the label
+    // it belongs to stays the brightest thing on the row.
+    expect(theme.style('tool.args', 'x')).toContain('38;2;95;138;149')
     expect(library.get(DRIFT)?.palette.accent).toBe('#27CFF5')
   })
 
