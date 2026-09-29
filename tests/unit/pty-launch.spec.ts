@@ -131,7 +131,7 @@ describe('PTY launcher safety', () => {
   it('refuses a source-host launcher even with an isolated home', () => {
     // The refusal has to name both sides, and the supported release moves with the
     // matrix, so the expectation quotes the constants rather than a version literal.
-    const literal = (version: string): string => version.replace(/\./g, '\\.')
+    const literal = (version: string): string => version.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     expect(() => preparePtyLaunch({ home: scratch, launcher: launcher(SOURCE_VERSION) }))
       .toThrow(new RegExp(`launcher.*${literal(RELEASE_VERSION)}.*${literal(SOURCE_VERSION)}`))
   })
