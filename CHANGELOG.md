@@ -43,6 +43,15 @@ breaking change, and a patch carries only fixes.
 
 ### Fixed
 
+- A tool call's answer settles the row it answers again. The `0.2.0` line names the
+  answered call on the tool message itself and leaves that message's content as the
+  tool's own output, where the `0.1.x` line nested the id inside a single
+  `tool-result` block; the fold read only the nested field, so every result drew a
+  second, nameless `tool` row below the call's own card and left that card running —
+  the duration on it grew for as long as the session kept drawing it, and the output
+  the call produced never reached the row. Both shapes are read now, because a
+  resumed transcript still carries a log this surface wrote earlier.
+
 - The shipped agent modes no longer mount another bundle's plugins. Each mode listed
   the tools, prompt sections, skills, and commands an agent runs on — persona,
   bash, filesystem, jobs, planning, compaction, delegation, web, todo, present —
