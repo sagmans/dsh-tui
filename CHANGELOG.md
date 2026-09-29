@@ -29,6 +29,11 @@ breaking change, and a patch carries only fixes.
 
 ### Fixed
 
+- Running tests inside Herdr no longer removes the invoking agent from the picker.
+  Vitest drops inherited pane identity before workers start, so lifecycle fixture
+  cleanup cannot release the live pane. Explicit fake environments remain available
+  to the integration specs.
+
 - A pane that stays up keeps its row in Herdr. Report numbers are anchored at the
   moment each report goes out rather than at the moment the surface started, so a
   surface that outlives a multiplexer restart — or a process that borrowed the

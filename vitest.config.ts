@@ -1,6 +1,15 @@
 import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitest/config'
 
+const HERDR_ENV_PREFIX = 'HERDR_'
+
+// Workers must never borrow the invoking pane's authority: lifecycle fixture
+// teardown can release its real agent row. Clearing before workers start also
+// keeps unstubAllEnvs from restoring live coordinates after a fake-env test.
+for (const key of Object.keys(process.env)) {
+  if (key.startsWith(HERDR_ENV_PREFIX)) delete process.env[key]
+}
+
 export default defineConfig({
   resolve: {
     alias: {
