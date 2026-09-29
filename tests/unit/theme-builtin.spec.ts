@@ -24,6 +24,9 @@ const BLUE = 'deepseek-blue'
 /** The shipped table again, anchored on the cyan its accent is. */
 const DRIFT = 'polar-drift'
 
+/** The shipped table around a pine so dark it can only be a fill. */
+const PINE = 'pine-slope'
+
 const library = builtinLibrary()
 
 /** The theme as a renderer holds it, which is what a reader actually sees. */
@@ -250,5 +253,43 @@ describe('polar-drift', () => {
     const style = themed(DRIFT).style('transcript.user', 'x')
     expect(style).toContain('38;2;244;245;246')
     expect(style).not.toContain('48;2;')
+  })
+})
+
+describe('pine-slope', () => {
+  it('paints the anchor as a band rather than as text', () => {
+    // #173802 sits at 1.41:1 on a dark terminal, so it can hold the row a picker
+    // has selected while the accent lifted out of its hue is what text wears.
+    const theme = themed(PINE)
+    const current = theme.style('picker.rowCurrent', 'x')
+    expect(current).toContain('1;38;2;105;163;58')
+    expect(current).toContain('48;2;23;56;2')
+    expect(theme.style('markdown.heading', 'x')).toContain('38;2;105;163;58')
+    expect(theme.editor.borderColor('x')).toContain('38;2;105;163;58')
+  })
+
+  it('keeps a change out of the family the accent is drawn in', () => {
+    // Green is the theme here and green also marks an added line: the semantic
+    // green is pushed toward grass so the two can never be read as each other.
+    const theme = themed(PINE)
+    expect(theme.style('markdown.diff.added', 'x')).toContain('38;2;65;164;119')
+    expect(theme.style('markdown.diff.removed', 'x')).toContain('38;2;180;57;55')
+    expect(theme.style('markdown.diagram.warning', 'x')).toContain('38;2;197;144;33')
+  })
+
+  it('holds the reader turn plain and its argument below the reasoning shade', () => {
+    const theme = themed(PINE)
+    const prompt = theme.style('transcript.user', 'x')
+    expect(prompt).toContain('38;2;186;193;179')
+    expect(prompt).not.toContain('48;2;')
+    expect(theme.style('transcript.reasoning.body', 'x')).toContain('38;2;115;135;104')
+    expect(theme.style('tool.args', 'x')).toContain('38;2;80;109;60')
+  })
+
+  it('frames the reply at container weight and paints a turn in flight', () => {
+    const theme = themed(PINE)
+    expect(theme.style('transcript.assistant.border', 'x')).toContain('38;2;82;102;70')
+    expect(theme.style('status.activity.working', 'x')).toContain('1;38;2;105;163;58')
+    expect(theme.style('status.activity.ready', 'x')).toContain('38;2;147;159;137')
   })
 })
