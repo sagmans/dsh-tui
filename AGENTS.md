@@ -30,6 +30,9 @@ proven by that gate — use the cloned-home PTY command above and read its scree
 - `src/index.ts` mounts the surface; `src/startup.ts` parses this app's flags;
   `src/todo-guard.ts` is the one advisory agent-plane row, nudging a stale plan
   from the harness's own projections.
+- `src/host/` holds the rows the bundle patch cannot mount itself: the roster shim
+  publishes the mode registry plus one row per mode, and the runner shim mounts the
+  dynamic-plugin host creator mode needs, both after the services they wait on.
 - `src/agent/` composes, projects, and resumes the agent. `src/cards.ts`,
   `src/transcript.ts`, and `src/work.ts` fold `session/event` into what is drawn;
   `src/ui/` draws the dock, editor, gates, pickers, markdown, and mermaid;
@@ -91,18 +94,15 @@ rows. A row added there registers the same tool in two layers and fails
 composition. Host-plane insert rows are the exception: the todo guard registers
 no tool, so it cannot double a preset's.
 
-**The harness matrix names releases, and mounts each line's build under an alias.**
-The `devDependencies` and `dsh.compatibility.dshReleases` name the releases that
-passed the gates, and every harness package this bundle mounts — the runner, the
-roster rows, and the row packages the shipped modes name — is a dependency alias
-naming one verified release, one alias per line. A plain dependency would resolve to
-the lowest release a profile can satisfy, and the harness reads its own runtime
-version off whatever build that resolution landed. The harness peers stay `*` so npm
-resolves them against the consumer's own harness: npm resolves a prerelease only
-through a comparator naming its own `X.Y.Z` tuple, so `>=0.1.5-rc.1 <0.2.0` reaches
-`0.1.5-rc.3` and never a `0.1.7` prerelease. **Which line hosts a process is read
-from the installed base release**, because `0.1.7` and `0.2.0` compose the same base
-rows; `node tools/harness-matrix.mjs` guards the matrix and
+**The harness matrix names one supported line.** The `devDependencies`,
+`dsh.compatibility.dshReleases`, and every harness package this bundle mounts name
+the same verified release, and `dsh.compatibility.dsh` is the range a profile
+resolves it through. One line means one copy: an alias of this bundle's own beside
+the base's own row is what made a consumer tree hold two copies of a mounted package
+and disable the host's rows, which `tools/install-smoke.mjs` counts. The harness
+peers stay `*` so npm resolves them against the consumer's own harness, because npm
+reaches a prerelease only through a comparator naming its own `X.Y.Z` tuple.
+`node tools/harness-matrix.mjs` guards the matrix and
 [RELEASE.md](RELEASE.md#harness-matrix) owns the bump.
 
 **Comments state why a choice was made**, not what the code does; the reason a

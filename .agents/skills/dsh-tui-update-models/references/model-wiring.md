@@ -188,8 +188,8 @@ host ignores its `reasoningEffort`, so effort is chosen in the surface.
 `saveSelection(next)` validates first, then writes through the host's
 `configEditor.edit(entry, updater)` so only `catalog.default` changes and
 membership is re-checked inside the editor's lock. A host with no addressable
-entry or no such editor rejects with `CONFIG_PERSISTENCE_UNAVAILABLE` - the
-released `0.1.5-rc.2` host does - and nothing falls back to legacy
+entry or no such editor rejects with `CONFIG_PERSISTENCE_UNAVAILABLE` - a host older
+than the supported line does - and nothing falls back to legacy
 `agent-default-model` settings. Edit the profile patch there.
 
 `compileCatalog(config)` and `buildCatalogProfile(provider)` are public: the

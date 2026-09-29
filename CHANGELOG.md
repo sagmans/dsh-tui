@@ -57,39 +57,23 @@ breaking change, and a patch carries only fixes.
   `settings.yaml.imported` without its sections reaching the profile. The release-age
   exclusion now covers the `cordis` release the `0.2.0` line resolves.
 
-- The harness matrix now accepts the whole `>=0.1.5-rc.1 <0.3.0` window and verifies
-  `0.2.0-rc.2`, the release npm serves as `latest`. Which line is hosting the process is
-  read from the installed base release rather than from the composed tree: the `0.1.7`
-  and `0.2.0` base patches differ by a single row, so nothing in the tree separates
-  them. Every harness package this bundle mounts — the runner, the roster's registry
-  and preset rows, and the row packages the shipped modes name — is installed under an
-  alias of its own, one build per line, because a plain dependency resolves to the
-  lowest release a profile can satisfy and the harness reports its own version as the
-  runtime version: the `0.1.7` `dsh-app-boot` that resolution pulled beside a `0.2.0`
-  base made the host disable every row of its own line as incompatible with
-  `dsh 0.1.7-rc.2`. The four shipped modes needed no change at all:
-  they are byte-identical across `0.1.7-rc.2` and `0.2.0-rc.2`.
+- The harness matrix names one line: `dsh.compatibility.dsh` is
+  `>=0.2.0-rc.2 <0.3.0`, `dsh.compatibility.dshReleases` verifies `0.2.0-rc.2` alone,
+  and every harness package this bundle mounts is a plain dependency on that release.
+  Support for the `0.1.5` and `0.1.7` lines is dropped. Mounting the rows of three
+  lines in one artefact is what made a consumer tree on `dsh@0.2.0-rc.2` hold two
+  copies of `@deepseek-ai/dsh-agent`, which the consumer install smoke refuses; one
+  line mounted leaves one copy of each mounted package, because nothing in a profile
+  resolves an alias of this bundle's own any more.
 
-- The harness matrix used to accept the whole `>=0.1.5-rc.1 <0.2.0` line and verify
-  `0.1.7-rc.2`, the release npm serves as `latest`. The former `<0.1.6` ceiling left
-  a profile running the installed launcher resolving a harness copy of its own beside
-  the host's, which is the shape that broke the 0.5.0 npm install.
+- The bundle mounts the preset plane of the supported line. The roster package was
+  dissolved into a registry row plus one row per mode, so a terminal profile declares
+  its four modes the way the Web bundle declares them for the browser. Both are
+  mounted through this bundle's own `host/` entry points: a patch row is applied
+  before any service exists, and the registry and the modes arrive with the harness's
+  own agent services — after the surface that needs the roster would have been built.
 
-- The bundle mounts the preset plane of both lines. `0.1.7` dissolved the roster
-  package into a registry row plus one row per mode, so a terminal profile now declares
-  its four modes the way the Web bundle declares them for the browser. The rows only
-  one line can take are mounted through this bundle's own `host/` entry points, which
-  read the harness line from the composed composition: a patch row is mounted before
-  any service exists, and one that waits for a service is mounted after the surface
-  that needs the roster. A mounted package therefore either accepts the compatible range or names
-  the verified release, because npm reaches a prerelease only through a range
-  comparator naming its own `X.Y.Z` tuple: `>=0.1.5-rc.1 <0.2.0` resolves
-  `0.1.5-rc.3` and never `0.1.7-rc.2`, which is how a profile ended up mounting the
-  older line's roster beside the host's loader. The dynamic-plugin runner is installed
-  under an alias for the same reason, its two copies speaking the typert protocol of
-  the line they were built for.
-
-- The surface compiles against `0.1.7-rc.2`. A reminder now declares its own
+- The surface compiles against `0.2.0-rc.2`. A reminder now declares its own
   message-source kind, because that release gives every producer a kind of its own and
   removed the shared `plugin` kind; appearance listens on `settings/document-updated`
   alone, the one document event left after a section's committed values were folded
