@@ -108,7 +108,7 @@ The profile then keeps `@deepseek-ai/dsh-base` and no application, so `dsh --pro
 
 ### Use the installed Harness launcher
 
-Run `dsh --version` and confirm `0.1.5-rc.3` before launching this plugin. `pnpm dsh` from a Harness source checkout runs its development host, not the installed release. That host can migrate `settings.yaml` and is outside this plugin's supported range; do not use it for TUI dogfooding.
+Run `dsh --version` and confirm the release is inside the supported window (`>=0.2.0-rc.2 <0.3.0`) before launching this plugin. `pnpm dsh` from a Harness source checkout runs its development host, not the installed release. That host can migrate `settings.yaml` and is outside this plugin's supported range; do not use it for TUI dogfooding.
 
 ## Troubleshooting
 
@@ -127,7 +127,7 @@ Two facts explain most failures.
 | `dsh-tui: both stdin and stdout must be TTYs` | stdin or stdout is a pipe, a file, or a CI runner | run the command from a terminal |
 | Node warnings, such as `ExperimentalWarning: stripTypeScriptTypes …`, appear after exit | the TUI holds runtime warnings until it returns the terminal to your shell; startup warnings remain visible before the TUI starts | read the warnings in your shell after exit; no warning-suppression flag is needed |
 | Changes under `src/` have no effect | a linked profile loads `lib/`, not `src/` | `pnpm run build` in the plugin checkout |
-| TUI preferences disappear after launching a Harness source checkout | that host treats `settings.yaml` as migration input, not live preferences | use installed `dsh 0.1.5-rc.3` with a cloned home; preserve the original settings file |
+| TUI preferences disappear after launching a Harness source checkout | that host treats `settings.yaml` as migration input, not live preferences | use an installed release inside the supported window with a cloned home; preserve the original settings file |
 | `--preset <id>` is refused, because the session's agent preset is fixed | a session keeps the mode that composed it, and this session already took a turn | `/preset <id>` before the first turn, or resume without `--preset` |
 | `--resume <id>` starts a new session | the id is a bare UUID | pass the stored id, `tui-session-…` included; a bare `--resume` opens the picker |
 | `dsh: profile "tui" does not exist` | the profile is not created yet | the `add` command creates it |
@@ -753,8 +753,8 @@ The mode is re-read rather than remembered: resuming mounts what that session's 
 The package is a Cordis plugin bundle that stacks over `@deepseek-ai/dsh-base`:
 
 - `@sagmans/dsh-tui/startup` parses this app's own flags and publishes the launch identity.
-- `@deepseek-ai/dsh-agent-presets` is the roster of modes, holding the id a session starts in when nobody names one.
-- `@deepseek-ai/dsh-code-runtime-worker-thread` and `@deepseek-ai/dsh-cordis-host-runner` are the host machinery PTC mode and creator mode need; only the Web bundle shipped them, so a terminal profile has to mount them to offer those modes at all.
+- The roster of modes holds the id a session starts in when nobody names one: `@deepseek-ai/dsh-agent-preset-registry` owns that service on the supported line, and each mode arrives as a row of `@deepseek-ai/dsh-agent-preset`, so this bundle declares the four modes itself, exactly as the Web bundle declares them for the browser. Both are mounted through this bundle's own `host/roster` entry point, because a patch row is applied before any service exists and the registry and the modes arrive with the harness's own agent services — after the surface that needs the roster.
+- `@deepseek-ai/dsh-cordis-host-runner` is the host machinery creator mode needs, and the base mounts no such row, so a terminal profile mounts it through this bundle's own `host/runner` entry point. The code runtime PTC mode runs programs against is a base row of its own (`ptc-runtime`) on the supported line, so this bundle mounts none of its own. Both packages are plain dependencies: a profile resolves exactly one copy of each, and the harness reads its runtime version off the runner it mounts.
 - `@sagmans/dsh-tui` owns the terminal: it creates or resumes one agent through `ctx.agents`, folds `session/event` into transcript rows and work state, renders them with `@earendil-works/pi-tui`, and releases the terminal on exit, on a boot failure, and on a signal.
 - `@sagmans/dsh-tui/todo-guard` is the one advisory row this bundle adds to the agent plane: it watches the harness's own `todos` and `plan` projections and rides the next tool result with a reminder when a plan ages. See [Todo discipline](#todo-discipline).
 
@@ -840,7 +840,7 @@ pnpm test
 pnpm run build
 ```
 
-**A linked profile loads the built entry point**, so edits under `src/` are invisible to `dsh --profile tui` until `pnpm run build` runs. The PTY driver rebuilds, checks nested links in the isolated `--home`, and rejects launchers other than `dsh 0.1.5-rc.3`.
+**A linked profile loads the built entry point**, so edits under `src/` are invisible to `dsh --profile tui` until `pnpm run build` runs. The PTY driver rebuilds, checks nested links in the isolated `--home`, and rejects a launcher whose version `dsh.compatibility.dshReleases` does not list.
 
 Clone your configured home with the dogfood helper for realistic runs. A minimal throwaway home can also expose startup failures without touching your real state:
 

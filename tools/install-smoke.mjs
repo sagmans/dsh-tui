@@ -19,7 +19,11 @@ const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const IMAGE = 'node:24-alpine'
 
 const manifest = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
-const bundled = Object.keys(manifest.dependencies ?? {}).filter(name => name.startsWith('@deepseek-ai/dsh-'))
+// The mounted set is the plain harness packages the manifest depends on. Each one
+// is a package the host also installs, so a second copy in a profile is exactly
+// the duplicate the container counts.
+const bundled = Object.entries(manifest.dependencies ?? {}).filter(([name]) =>
+  name.startsWith('@deepseek-ai/dsh-'))
 const releases = Object.keys(manifest.dsh?.compatibility?.dshReleases ?? {})
 // Numeric collation keeps rc.10 after rc.9, which plain string order does not.
 const harness = releases.sort((left, right) => left.localeCompare(right, 'en', { numeric: true })).at(-1)
@@ -43,7 +47,8 @@ try {
   const script = template
     .replaceAll('@HARNESS@', harness)
     .replaceAll('@VERSION@', manifest.version)
-    .replaceAll('@BUNDLED@', bundled.join(' '))
+    // The container counts one copy per mounted name.
+    .replaceAll('@BUNDLED@', bundled.map(([name]) => name).join(' '))
     .replaceAll('@TARBALL@', tarball)
 
   execFileSync('docker', ['run', '--rm', '-i', '-v', out + ':/pkg:ro', IMAGE, 'sh', '-s'], {

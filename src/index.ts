@@ -44,9 +44,12 @@ export const name = 'tui'
  *
  * `tools` is what lets a card read its tool's own render intent; a context that
  * has not injected it throws on the property read, which silently degraded
- * every card to a bare generic row.
+ * every card to a bare generic row. `agentPresets` is the roster this bundle
+ * mounts: the host row that provides it applies only once the harness's settings
+ * exist, which is after `agents` and `tools` come up, so without it here the
+ * surface would refuse to build against a roster that is simply not up yet.
  */
-export const inject = ['agents', 'tools']
+export const inject = ['agents', 'tools', 'agentPresets']
 
 /** The preset registry, asked for a service the agent's own composition holds. */
 interface ServiceFor {

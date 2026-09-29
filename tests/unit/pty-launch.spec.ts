@@ -5,8 +5,15 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 const PROJECT_ROOT = dirname(dirname(dirname(fileURLToPath(import.meta.url))))
-const RELEASE_VERSION = '0.1.5-rc.3'
-const SOURCE_VERSION = '0.1.7-alpha.2'
+/** The releases the manifest says the gates passed; the newest is the last one. */
+const RELEASE_VERSIONS = Object.keys(
+  (JSON.parse(readFileSync(join(PROJECT_ROOT, 'package.json'), 'utf8')) as {
+    readonly dsh: { readonly compatibility: { readonly dshReleases: Record<string, string> } }
+  }).dsh.compatibility.dshReleases,
+)
+const RELEASE_VERSION = RELEASE_VERSIONS[RELEASE_VERSIONS.length - 1] ?? ''
+/** A release the manifest does not verify, which is what a source checkout reports. */
+const SOURCE_VERSION = '0.3.0-alpha.2'
 const POLICY_URL = pathToFileURL(join(PROJECT_ROOT, 'tools', 'pty-launch.mjs')).href
 const ORIGINAL_PATH = process.env.PATH
 
@@ -109,8 +116,23 @@ describe('PTY launcher safety', () => {
       .toThrow(/--home.*unsafe.*symlink/)
   })
 
+  it('accepts every verified release, because each line mounts its own rows', () => {
+    for (const release of RELEASE_VERSIONS) {
+      expect(preparePtyLaunch({ home: scratch, launcher: launcher(release) }).argsPrefix)
+        .toEqual([launcher(release)])
+    }
+  })
+
+  it('refuses a launcher the matrix never verified', () => {
+    expect(() => preparePtyLaunch({ home: scratch, launcher: launcher('0.1.6-rc.1') }))
+      .toThrow(/verified release/)
+  })
+
   it('refuses a source-host launcher even with an isolated home', () => {
+    // The refusal has to name both sides, and the supported release moves with the
+    // matrix, so the expectation quotes the constants rather than a version literal.
+    const literal = (version: string): string => version.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     expect(() => preparePtyLaunch({ home: scratch, launcher: launcher(SOURCE_VERSION) }))
-      .toThrow(/launcher.*0\.1\.5-rc\.3.*0\.1\.7-alpha\.2/)
+      .toThrow(new RegExp(`launcher.*${literal(RELEASE_VERSION)}.*${literal(SOURCE_VERSION)}`))
   })
 })

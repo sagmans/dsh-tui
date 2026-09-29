@@ -133,9 +133,10 @@ export function createAppearancePreferences(ctx: Context, ports: AppearancePrefe
       ports.apply()
       ports.restyle()
     }
-    const section = ctx.on('settings/updated', changed)
+    // The harness folds a section's committed value into its one document event,
+    // so a write made by another surface still reaches the reader without a reload.
     const config = ctx.on('settings/document-updated', changed)
-    return () => { section(); config() }
+    return () => { config() }
   }
   return {
     read: () => {

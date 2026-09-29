@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { resolveConfig } from '@/config.ts'
+import { DEFAULT_PRESET } from '@/host/roster.ts'
+import { loadPresetDefinitions } from '@/host/preset-files.ts'
 import { TUI_STARTUP_SERVICE, name as startupRowName } from '@/startup.ts'
 
 /**
@@ -41,19 +43,26 @@ const PRESET_SUPPLIED_ROWS = [
   'tool-todo',
   'tool-web',
   'tool-workflow',
-  'workflow-worker-thread',
 ]
 
 /** Rows this bundle inserts, in patch order, and the package each one mounts. */
 const INSERTED_ROWS = [
+  ['agent-presets', '@sagmans/dsh-tui/host/roster'],
+  ['cordis-host-runner', '@sagmans/dsh-tui/host/runner'],
   ['tui-startup', '@sagmans/dsh-tui/startup'],
   ['tui', '@sagmans/dsh-tui'],
   ['tui-todo-guard', '@sagmans/dsh-tui/todo-guard'],
-  ['agent-presets', '@deepseek-ai/dsh-agent-presets'],
   ['subagent-model-selection-settings', '@deepseek-ai/dsh-tool-subagent/model-selection-settings'],
-  ['cordis-host-runner', '@deepseek-ai/dsh-cordis-host-runner'],
-  ['code-runtime', '@deepseek-ai/dsh-code-runtime-worker-thread'],
 ] as const
+
+/**
+ * Rows whose package mounts other harness packages.
+ *
+ * The loader applies a patch row before any service exists, so a condition here
+ * would be evaluated against an empty container: these rows name a shim of this
+ * bundle instead, which mounts once the services it needs are up.
+ */
+const SHIM_ROWS = ['agent-presets', 'cordis-host-runner']
 
 /** The mode a flagless run joins, which has to be one the roster actually ships. */
 const ROSTER_DEFAULT = 'ptc'
@@ -140,7 +149,23 @@ describe('the bundle patch', () => {
   })
 
   it('starts a flagless run in a mode the roster ships', () => {
-    expect(requireRow(insertedRows(patch), 'agent-presets').body).toContain(`default: ${ROSTER_DEFAULT}`)
+    expect(DEFAULT_PRESET).toBe(ROSTER_DEFAULT)
+    expect(loadPresetDefinitions().map(definition => definition.id)).toContain(ROSTER_DEFAULT)
+  })
+
+  it('leaves every shim row to the shim that mounts what the loader cannot', () => {
+    const rows = insertedRows(patch)
+    for (const id of SHIM_ROWS) {
+      expect(requireRow(rows, id).name).toMatch(/^@sagmans\/dsh-tui\/host\//u)
+    }
+    // A condition here would be evaluated while no service is up, which is the
+    // trap this shape exists to avoid: such a row is skipped and never revisited.
+    expect(patch).not.toContain('!!js "typeof ctx.get')
+  })
+
+  it('mounts those rows before the surface, which needs the roster while it builds', () => {
+    const ids = insertedRows(patch).map(row => row.id)
+    for (const id of SHIM_ROWS) expect(ids.indexOf(id)).toBeLessThan(ids.indexOf('tui'))
   })
 
 })

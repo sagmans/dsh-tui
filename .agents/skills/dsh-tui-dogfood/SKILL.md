@@ -24,7 +24,7 @@ the bundle once if absent from the cloned profile, updates only its dependency,
 restores local links from `link:` specifications, and launches
 `dsh --profile tui` by default. For this TUI, the packaged helper checks
 the launcher against compatible releases in the checkout’s `package.json` before
-cloning. This checkout uses installed `dsh 0.1.5-rc.3` for PTY tests. Never
+cloning. This checkout uses the installed `dsh 0.2.0-rc.2` line for PTY tests. Never
 substitute `pnpm dsh` or a `--dsh` path from a Harness source checkout: that
 host may migrate the cloned `settings.yaml`. The legacy
 `scripts/dogfood/run-tui-from-worktree.sh` remains available in dsh-tui and
@@ -62,6 +62,11 @@ state through a package link.
 
 The old dsh-tui entry point still requires a prelisted bundle. Do not use
 `dsh plugin add` on a cloned profile with other bundles; it can drop them.
+
+Use the active model in current session for dogfooding: pass `--model` and
+`--provider` through to the run, because a fixed route either has no credit and
+stops at `error: Insufficient Balance` after the surface is ready, or bills work
+only the plugin under test needed.
 
 Use `--status` to verify the existing bundles and the checkout `link:`
 dependency. In dsh-tui, drive a cloned profile with:

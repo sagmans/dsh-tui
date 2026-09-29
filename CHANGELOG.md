@@ -29,6 +29,57 @@ breaking change, and a patch carries only fixes.
   relative ladder as the shipped table, so this theme is dimmer in absolute terms
   and identical in structure to the others.
 
+- A fourth theme ships: `pine-slope`. Its anchor is `#173802`, a fill weight
+  rather than a text weight at 1.41:1 on a dark terminal, so the anchor paints the
+  band under a selected row while the accent is that hue lifted to where text
+  reads. Green is the family here and green also means an added line, so the accent
+  stays a lime while the semantic green is pushed toward grass: a reader never has
+  to ask whether a green row is the theme or the change. Every shade holds the
+  shipped table's own share of the theme's text luminance, so this theme is dimmer
+  in absolute terms and identical in structure to the others rather than a ladder
+  of its own. The tuning `polar-drift` settled — selected row on a band, a painted
+  working state, a quiet argument, a reply frame at container weight — is drawn the
+  same way here.
+
+### Fixed
+
+- The harness peer rows keep an open range. A peer range over harness modules can
+  only name the one prerelease tuple it reaches, so the range that admitted the
+  `0.1.5` line pulled a consumer's npm install back to it and collided with the
+  verified newer line; the supported line is stated by `dsh.compatibility` and
+  `peerDependenciesMeta` already keeps npm from installing the peers.
+
+### Changed
+
+- A dogfood run names its route in the clone's profile patch: the app's
+  `--provider` and `--model` flags are ignored when a session resumes, and
+  `$DSH_HOME/settings.yaml` is legacy on this line, renamed to
+  `settings.yaml.imported` without its sections reaching the profile. The release-age
+  exclusion now covers the `cordis` release the `0.2.0` line resolves.
+
+- The harness matrix names one line: `dsh.compatibility.dsh` is
+  `>=0.2.0-rc.2 <0.3.0`, `dsh.compatibility.dshReleases` verifies `0.2.0-rc.2` alone,
+  and every harness package this bundle mounts is a plain dependency on that release.
+  Support for the `0.1.5` and `0.1.7` lines is dropped. Mounting the rows of three
+  lines in one artefact is what made a consumer tree on `dsh@0.2.0-rc.2` hold two
+  copies of `@deepseek-ai/dsh-agent`, which the consumer install smoke refuses; one
+  line mounted leaves one copy of each mounted package, because nothing in a profile
+  resolves an alias of this bundle's own any more.
+
+- The bundle mounts the preset plane of the supported line. The roster package was
+  dissolved into a registry row plus one row per mode, so a terminal profile declares
+  its four modes the way the Web bundle declares them for the browser. Both are
+  mounted through this bundle's own `host/` entry points: a patch row is applied
+  before any service exists, and the registry and the modes arrive with the harness's
+  own agent services — after the surface that needs the roster would have been built.
+
+- The surface compiles against `0.2.0-rc.2`. A reminder now declares its own
+  message-source kind, because that release gives every producer a kind of its own and
+  removed the shared `plugin` kind; appearance listens on `settings/document-updated`
+  alone, the one document event left after a section's committed values were folded
+  into it. Preferences already reached the surface as a Config row, so the read and
+  write path itself needed no change.
+
 ## [0.10.0] - 2026-09-29
 
 ### Added
@@ -43,18 +94,6 @@ breaking change, and a patch carries only fixes.
   container weight so the prompt keeps the shade that means "what you typed", and
   a tool argument sits below the reasoning shade so it recedes under the label it
   belongs to.
-
-- A fourth theme ships: `pine-slope`. Its anchor is `#173802`, a fill weight
-  rather than a text weight at 1.41:1 on a dark terminal, so the anchor paints the
-  band under a selected row while the accent is that hue lifted to where text
-  reads. Green is the family here and green also means an added line, so the accent
-  stays a lime while the semantic green is pushed toward grass: a reader never has
-  to ask whether a green row is the theme or the change. Every shade holds the
-  shipped table's own share of the theme's text luminance, so this theme is dimmer
-  in absolute terms and identical in structure to the others rather than a ladder
-  of its own. The tuning `polar-drift` settled — selected row on a band, a painted
-  working state, a quiet argument, a reply frame at container weight — is drawn the
-  same way here.
 
 ### Changed
 

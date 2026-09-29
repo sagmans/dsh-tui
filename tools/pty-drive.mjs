@@ -13,7 +13,7 @@
  *   node tools/pty-drive.mjs --home DIR --prelude "/permission workspace-write" --prompt "Run: echo hi" --approve 15
  *   node tools/pty-drive.mjs --home DIR --prompt "Ask which colour" --answer "20:1,22:enter"
  *   node tools/pty-drive.mjs --home DIR --prelude "/preset " --prompt "" --answer "2:down-press,3:down-release" \
- *     --expect-last-pattern "❯ ([a-z]+)" --expect-last ptc
+ *     --expect-last-line-prefix "❯ " --expect-last ptc
  *   node tools/pty-drive.mjs --home DIR --args "--resume" --prompt "" --answer "4:enter"
  *   node tools/pty-drive.mjs --home DIR --cols 40 --prompt "Ask which colour" --answer "20:0,22:teal,24:enter"
  *   node tools/pty-drive.mjs --home DIR --prompt "" --answer "8:0,9:eu-central,11:left,12:left,13:X,15:enter" \
@@ -236,13 +236,14 @@ const keep = option('log', join(tmpdir(), `dsh-tui-pty-${Date.now()}.log`))
 /** Exit code the run is expected to end with, so a broken boot fails the harness. */
 const expectExit = Number.parseInt(option('expect-exit', '0'), 10)
 /**
- * A regex whose last match on the final screen must equal `--expect-last`.
+ * A line prefix whose last matching line on the final screen must equal
+ * `--expect-last`.
  *
  * A frame is repainted many times, so searching the whole screen cannot tell a
  * state from a state the surface has left; the last match is where it settled.
  * That is how a cursor row is asserted without a screenshot.
  */
-const expectLastPattern = option('expect-last-pattern', '')
+const expectLastLinePrefix = option('expect-last-line-prefix', '')
 const expectLast = option('expect-last', '')
 
 const launch = preparePtyLaunch({ home, launcher })
@@ -347,12 +348,14 @@ function finish() {
   if (code !== expectExit) {
     problems.push(`expected exit ${expectExit}, got ${code ?? 'no exit before the grace deadline'}`)
   }
-  if (expectLastPattern !== '') {
-    const matches = [...strip(raw).matchAll(new RegExp(expectLastPattern, 'gu'))]
-    const last = matches.at(-1)
-    const seen = last === undefined ? 'no match' : (last[1] ?? last[0])
+  if (expectLastLinePrefix !== '') {
+    // The check reads a line the app drew, not a pattern: a caller-supplied regular
+    // expression here is an injection surface, and every use of this flag is a
+    // prompt prefix whose last appearance is what the run has to hold.
+    const line = strip(raw).split('\n').filter(text => text.trimStart().startsWith(expectLastLinePrefix)).at(-1)
+    const seen = line === undefined ? 'no match' : line.trimStart().slice(expectLastLinePrefix.length).trim()
     if (seen !== expectLast) {
-      problems.push(`expected the last /${expectLastPattern}/ on screen to be ${JSON.stringify(expectLast)}, saw ${JSON.stringify(seen)}`)
+      problems.push(`expected the last line starting ${JSON.stringify(expectLastLinePrefix)} on screen to be ${JSON.stringify(expectLast)}, saw ${JSON.stringify(seen)}`)
     }
   }
   if (problems.length > 0) {

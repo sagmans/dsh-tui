@@ -19,7 +19,8 @@ node tools/pack-smoke.mjs
 
 The gate does not prove terminal behaviour. Run `node tools/pty-drive.mjs --home <clone>`
 and follow the manual acceptance table in the README: the driver verifies the
-installed `dsh 0.1.5-rc.3`, rebuilds, allocates a PTY, and prints the screen.
+installed launcher against the releases the manifest lists, rebuilds, allocates a
+PTY, and prints the screen.
 
 A linked profile loads `lib/`, never `src/`, so a run against a stale build
 tests the previous release. `tools/pty-drive.mjs` rebuilds on every run for that
@@ -79,6 +80,15 @@ of the same home; `--source-home DIR` clones a home other than `~/.dsh`, which
 is what a shell with a custom `DSH_HOME` needs, since the script deliberately
 does not follow `DSH_HOME` — an agent run has its own scratch home in that
 variable, and cloning that is never what a developer meant.
+
+### The model a dogfood run uses
+
+Use the active model in current session for dogfooding. Name it explicitly on the
+run (for example `-- --model <model> --provider <provider>`) instead of letting
+the clone's `settings.yaml` decide, so a run never bills a route the developer
+did not choose. A route with no credit stops at `error: Insufficient Balance`
+after the surface is ready, which proves composition and nothing about the plugin
+under test.
 
 ### What the clone carries
 
@@ -144,9 +154,9 @@ A session's preset mounts that row. Thus, `--profile tui` scans the roots above.
 | --- | --- | --- |
 | the surface waits with no output and `--help` waits with it | the bundle left `dsh.profile.bundles`, or a local bundle's link does not resolve at the clone's depth | re-run the dogfood script (it rebuilds every `link:` as an absolute symlink); `dsh plugin add` re-materialises relative links and drops the other bundles |
 | a source edit has no effect | the profile loads `lib/` | `pnpm run build`, or use the dogfood script |
-| `error: Insufficient Balance` on every turn | the provider account behind the copied credentials has no credit | top up or point `--model`/provider elsewhere |
+| `error: Insufficient Balance` on every turn | the provider account behind the copied credentials has no credit, or the run named it | point the run at the model active in the current session, which is what every dogfood run should use |
 | `pty-drive: --home must name an existing isolated directory` | the PTY driver refuses to use the live home | clone the profile first, then pass its directory with `--home` |
-| `pty-drive: launcher must report 0.1.5-rc.3, got ...` | the selected launcher is not the supported installed release | run `dsh --version` and select installed `dsh 0.1.5-rc.3`, not a Harness source checkout |
+| `pty-drive: launcher must report a verified release (...), got ...` | the selected launcher is not a release the manifest lists | run `dsh --version` and select that installed release, not a Harness source checkout |
 
 A broken link is silent: `dsh plugin install` and `dsh plugin add` drop a bundle
 they cannot resolve and still exit 0, so a missing row is worth checking against

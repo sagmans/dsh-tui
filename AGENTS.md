@@ -30,6 +30,9 @@ proven by that gate — use the cloned-home PTY command above and read its scree
 - `src/index.ts` mounts the surface; `src/startup.ts` parses this app's flags;
   `src/todo-guard.ts` is the one advisory agent-plane row, nudging a stale plan
   from the harness's own projections.
+- `src/host/` holds the rows the bundle patch cannot mount itself: the roster shim
+  publishes the mode registry plus one row per mode, and the runner shim mounts the
+  dynamic-plugin host creator mode needs, both after the services they wait on.
 - `src/agent/` composes, projects, and resumes the agent. `src/cards.ts`,
   `src/transcript.ts`, and `src/work.ts` fold `session/event` into what is drawn;
   `src/ui/` draws the dock, editor, gates, pickers, markdown, and mermaid;
@@ -66,6 +69,21 @@ history, storages, the stash, and themes. When a run needs the developer's own
 bundles and patch overlay, clone the home with
 `./scripts/dogfood/run-tui-from-worktree.sh` rather than pointing at it.
 
+**A dogfood run uses the active model in the current session.** Declare it in the
+clone's profile patch, in two entries: the adapter under the `llm-pi-ai` row's own
+config, as `providers: { zai: { apiKeyEnv: ZAI_API_KEY } }`, and the route under
+`agent-default-model`, as `provider`, `model`, and `reasoningEffort`. The
+adapter belongs there because a catalog route is only the picker's directory — a
+route declaring `source` with `auth.apiKeyRef` never registers one, and the turn
+then stops at `no adapter registered for provider "zai"`. The route belongs there
+because the app's `--provider` and `--model` flags are ignored when a session
+resumes, and `$DSH_HOME/settings.yaml` is legacy on this line: the launcher renames
+it to `settings.yaml.imported` and never folds its sections into the profile patch,
+so a route declared only there is silently absent. Naming the route keeps a scratch
+profile from billing a route the developer did not choose; a route with no credit
+stops at `error: Insufficient Balance` once the surface is ready, which says
+nothing about the plugin under test.
+
 **A rendered-frame change usually changes the golden snapshot.** Read
 `tests/golden/__snapshots__/frames.spec.ts.snap` in the diff before accepting it
 with `pnpm vitest run -u`.
@@ -76,12 +94,16 @@ rows. A row added there registers the same tool in two layers and fails
 composition. Host-plane insert rows are the exception: the todo guard registers
 no tool, so it cannot double a preset's.
 
-**The harness matrix pins one side and ranges the other.** The `devDependencies`
-and `dsh.compatibility.dshReleases` name the releases that passed the gates,
-while the mounted packages and the peers accept the whole compatible range so a
-profile resolves one copy instead of a private duplicate. `node
-tools/harness-matrix.mjs` guards the pair and [RELEASE.md](RELEASE.md#harness-matrix)
-owns the bump; moving either side alone is what broke the 0.5.0 npm install.
+**The harness matrix names one supported line.** The `devDependencies`,
+`dsh.compatibility.dshReleases`, and every harness package this bundle mounts name
+the same verified release, and `dsh.compatibility.dsh` is the range a profile
+resolves it through. One line means one copy: an alias of this bundle's own beside
+the base's own row is what made a consumer tree hold two copies of a mounted package
+and disable the host's rows, which `tools/install-smoke.mjs` counts. The harness
+peers stay `*` so npm resolves them against the consumer's own harness, because npm
+reaches a prerelease only through a comparator naming its own `X.Y.Z` tuple.
+`node tools/harness-matrix.mjs` guards the matrix and
+[RELEASE.md](RELEASE.md#harness-matrix) owns the bump.
 
 **Comments state why a choice was made**, not what the code does; the reason a
 non-obvious constraint exists is the part that prevents future drift.
