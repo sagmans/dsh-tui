@@ -76,6 +76,19 @@ for (const [name, declared] of mounted) {
   }
 }
 
+// A peer cannot span the two lines for the same reason, and npm resolves a peer
+// against the consumer's own tree: a range there pulls the harness back to the
+// tuple it names and collides with the newer line, which is exactly how the
+// consumer install smoke broke. Peers stay open, dsh.compatibility carries the
+// supported line, and the optional metadata keeps npm from installing them.
+for (const [name, declared] of Object.entries(manifest.peerDependencies ?? {})) {
+  if (!name.startsWith('@deepseek-ai/dsh-')) continue
+  if (declared !== '*' && declared !== compatibility) {
+    problems.push('harness peer ' + name + ' declares ' + declared
+      + ', which is neither "*" nor the compatible range ' + String(compatibility))
+  }
+}
+
 // An aliased install carries the release of the line no range can reach.
 for (const [name, declared] of Object.entries(manifest.dependencies ?? {})) {
   if (!String(declared).startsWith('npm:')) continue

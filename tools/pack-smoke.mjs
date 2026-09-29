@@ -316,8 +316,12 @@ try {
     problems.push('the manifest no longer declares the harness packages this bundle consumes')
   }
   for (const [name, range] of harnessPeers) {
-    if (range !== compatibility) {
-      problems.push(`peer ${name} accepts ${String(range)}, not the harness compatibility range ${String(compatibility)}`)
+    // A peer range can only name the one prerelease tuple it reaches, so a peer
+    // that has to serve more than one verified line stays open: npm resolves it
+    // against the consumer's own harness, while dsh.compatibility states the
+    // line this bundle supports.
+    if (range !== compatibility && range !== '*') {
+      problems.push(`peer ${name} accepts ${String(range)}, which is neither the harness compatibility range ${String(compatibility)} nor an open range`)
     }
     if (manifest.peerDependenciesMeta?.[name]?.optional !== true) {
       problems.push(`peer ${name} is required, which makes npm install a private harness copy`)

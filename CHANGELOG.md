@@ -41,6 +41,14 @@ breaking change, and a patch carries only fixes.
   working state, a quiet argument, a reply frame at container weight — is drawn the
   same way here.
 
+### Fixed
+
+- The harness peer rows keep an open range. A peer range over harness modules can
+  only name the one prerelease tuple it reaches, so the range that admitted the
+  `0.1.5` line pulled a consumer's npm install back to it and collided with the
+  verified newer line; the supported line is stated by `dsh.compatibility` and
+  `peerDependenciesMeta` already keeps npm from installing the peers.
+
 ### Changed
 
 - The harness matrix now accepts the whole `>=0.1.5-rc.1 <0.2.0` line and verifies

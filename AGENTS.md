@@ -66,6 +66,12 @@ history, storages, the stash, and themes. When a run needs the developer's own
 bundles and patch overlay, clone the home with
 `./scripts/dogfood/run-tui-from-worktree.sh` rather than pointing at it.
 
+**A dogfood run uses the active model in the current session.** Name it on the
+run itself (arguments after `--` reach `dsh`), so a scratch profile never bills
+a route the developer did not choose; a route with no credit stops at
+`error: Insufficient Balance` once the surface is ready, which says nothing
+about the plugin under test.
+
 **A rendered-frame change usually changes the golden snapshot.** Read
 `tests/golden/__snapshots__/frames.spec.ts.snap` in the diff before accepting it
 with `pnpm vitest run -u`.
@@ -78,8 +84,9 @@ no tool, so it cannot double a preset's.
 
 **The harness matrix names releases, and ranges only what a range can reach.**
 The `devDependencies` and `dsh.compatibility.dshReleases` name the releases
-that passed the gates and the peers accept the whole compatible range, but a
-mounted package either accepts that range or names one verified release: npm
+that passed the gates and a mounted package either accepts the whole compatible
+range or names one verified release, while the harness peers stay `*` so npm
+resolves them against the consumer's own harness: npm
 resolves a prerelease only through a comparator naming its own `X.Y.Z` tuple, so
 `>=0.1.5-rc.1 <0.2.0` reaches `0.1.5-rc.3` and never a `0.1.7` prerelease, which
 is how a profile ended up mounting an older line's copy beside the host's. `node
