@@ -58,6 +58,21 @@ describe('PTY launcher safety', () => {
     })
   })
 
+  it('starts the surface without the pane coordinates Herdr exported', async () => {
+    // The coordinates are how a surface claims the pane's agent row, so a run
+    // started inside a pane has to look like a run started outside one.
+    const module = await import(POLICY_URL)
+    const barePaneEnv = module.barePaneEnv as (base?: Record<string, string>) => Record<string, string>
+
+    expect(barePaneEnv({
+      PATH: '/bin',
+      HOME: '/home/dev',
+      HERDR_ENV: '1',
+      HERDR_PANE_ID: 'w1:p2',
+      HERDR_SOCKET_PATH: '/tmp/herdr.sock',
+    })).toEqual({ PATH: '/bin', HOME: '/home/dev' })
+  })
+
   it('refuses a run without an explicit scratch home', () => {
     expect(() => preparePtyLaunch({ launcher: launcher(RELEASE_VERSION) }))
       .toThrow(/--home.*isolated/)

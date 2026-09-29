@@ -8,6 +8,15 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+### Fixed
+
+- A dogfood or PTY run started inside a Herdr pane no longer claims that pane. The
+  run inherits the multiplexer's own coordinates through the environment, and a
+  surface started with them reports for the pane it borrows and hands the row back
+  on exit, which hides the agent really running there until it is restarted. The
+  PTY driver and the cloned-home launcher now start the surface without those
+  variables.
+
 ## [0.9.0] - 2026-09-28
 
 ### Added

@@ -427,6 +427,14 @@ printf 'home:    %s\n' "$home" >&2
 printf 'target:  %s\n' "$target_path" >&2
 printf 'profile: %s (%s)\n' "$profile" "$bundles" >&2
 
+# Herdr exports its pane coordinates into every process in a pane, and a surface
+# started with them claims that pane's agent row for this run: the row comes back
+# released, and the pane's real agent disappears from Herdr's pickers until it is
+# restarted. The clone is launched as a surface in a bare terminal instead.
+while IFS= read -r herdr_var; do
+  unset "$herdr_var"
+done < <(env | sed -n 's/^\(HERDR_[A-Za-z0-9_]*\)=.*/\1/p')
+
 run_command=(env "DSH_HOME=$home" "$dsh_bin" --profile "$profile")
 if [[ "${#passthrough[@]}" -gt 0 ]]; then
   run_command+=("${passthrough[@]}")

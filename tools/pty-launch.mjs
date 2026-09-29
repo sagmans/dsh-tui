@@ -13,6 +13,19 @@ function contains(parent, path) {
   return remainder === '' || (remainder !== '..' && !remainder.startsWith('..' + sep) && !isAbsolute(remainder))
 }
 
+/**
+ * The environment a surface gets when a tool starts it, rather than Herdr.
+ *
+ * Herdr exports its pane coordinates into every process it starts, and a
+ * surface that inherits them claims that pane's agent row for the test run and
+ * hands it back on the way out — which takes the row away from the agent really
+ * running in the pane. Stripping the coordinates is what keeps a reproduction
+ * from touching the pane it borrows.
+ */
+export function barePaneEnv(base = process.env) {
+  return Object.fromEntries(Object.entries(base).filter(([name]) => !name.startsWith('HERDR_')))
+}
+
 /** Keep test writes away from the live home, including symlinked and parent paths. */
 export function preparePtyLaunch({ home, launcher = '' }) {
   if (!home) throw new Error('pty-drive: --home must name an existing isolated directory')
@@ -41,7 +54,7 @@ export function preparePtyLaunch({ home, launcher = '' }) {
     result = spawnSync(command, [...argsPrefix, '--version'], {
       encoding: 'utf8',
       timeout: 5000,
-      env: { ...process.env, HOME: probeHome, DSH_HOME: probeHome },
+      env: { ...barePaneEnv(), HOME: probeHome, DSH_HOME: probeHome },
     })
   } finally {
     rmSync(probeHome, { recursive: true, force: true })

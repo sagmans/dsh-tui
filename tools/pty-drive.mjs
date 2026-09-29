@@ -46,7 +46,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import pty from 'node-pty'
-import { preparePtyLaunch } from './pty-launch.mjs'
+import { barePaneEnv, preparePtyLaunch } from './pty-launch.mjs'
 
 /**
  * Rebuild before driving.
@@ -255,7 +255,9 @@ const child = pty.spawn(launch.command, [...launch.argsPrefix, '--profile', 'tui
   rows,
   cwd: launch.cwd,
   env: {
-    ...process.env,
+    // The pane this tool runs in keeps its own agent row: a nested surface that
+    // inherited Herdr's coordinates would claim it and release it on exit.
+    ...barePaneEnv(),
     TERM: 'xterm-256color',
     DSH_PERMISSION_MODE: permissionMode,
     DSH_HOME: launch.home,
