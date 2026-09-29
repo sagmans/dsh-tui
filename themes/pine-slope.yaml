@@ -4,7 +4,9 @@
 # terminal it paints the band under a selected row and the one panel border that
 # names it, and the accent is that same hue lifted to where text reads. Every
 # neutral is the anchor's hue at a low saturation, so the surface reads as one
-# family rather than as grey rows with a green link on them.
+# family rather than as grey rows with a green link on them. Every shade sits a
+# step below the shipped table's own, so the family stays dark and soft beside a
+# bright terminal rather than competing with it.
 #
 # Green is the family here, and green is also what an added line means. The
 # accent therefore stays a lime while the semantic green is pushed toward grass:
@@ -21,16 +23,16 @@
 # copy into your own themes directory to edit.
 
 palette:
-  default: '#eef0ec'  # the anchor's hue at 7% saturation: text that carries the family
-  muted: '#c4ccbd'  # the same hue, one step down: labels and scaffolding
-  faint: '#93a788'  # the same hue again: reasoning, which is meant to recede
-  accent: '#a5e275'  # the anchor's hue lifted to text weight: headings, links, code, both frames
-  arg: '#5f8943'  # the anchor's hue below the reasoning shade: an argument recedes under its label
-  warn: '#f2bf57'  # state-warn, left in amber: a call still in flight
-  added: '#3dbb81'  # state-success, pushed toward grass: a change is not the theme's own lime
-  removed: '#dc6766'  # state-error, left in red
+  default: '#d4d9d0'  # the anchor's hue at 7% saturation, a step below the shipped table's text
+  muted: '#aab4a2'  # the same hue, one step down: labels and scaffolding
+  faint: '#798f6d'  # the same hue again: reasoning, which is meant to recede
+  accent: '#80c64a'  # the anchor's hue lifted to text weight, held back from the lime it could be
+  arg: '#486435'  # the anchor's hue below the reasoning shade: an argument recedes under its label
+  warn: '#e2a934'  # state-warn, left in amber: a call still in flight
+  added: '#368f66'  # state-success, pushed toward grass: a change is not the theme's own green
+  removed: '#ca4745'  # state-error, left in red
   user: '#173802'  # the anchor itself: the band under a selected row, and one panel border
-  assistant: '#eef0ec'  # the reply's text stays plain, so the frame is what marks it
+  assistant: '#d4d9d0'  # the reply's text stays plain, so the frame is what marks it
 
 tokens:
   # A row of the conversation. The reader's own turn keeps its frame and carries
@@ -43,7 +45,7 @@ tokens:
   # than the accent the prompt is framed in: the two frames then differ by how
   # loud they are instead of by hue, and a long answer never wears the shade that
   # means "this is what you typed".
-  transcript.assistant.border: { fg: '#6d8c5b' }
+  transcript.assistant.border: { fg: '#566b49' }
   transcript.notice: { fg: muted }
   transcript.marker: { fg: muted }
   transcript.reasoning.summary: { fg: faint, italic: true }
@@ -116,8 +118,8 @@ tokens:
   markdown.diff.context: {}
   markdown.diff.added: { fg: added }
   markdown.diff.removed: { fg: removed }
-  markdown.diff.addedEmphasis: { inherit: markdown.diff.added, bg: '#193e2d' }
-  markdown.diff.removedEmphasis: { inherit: markdown.diff.removed, bg: '#461d1b' }
+  markdown.diff.addedEmphasis: { inherit: markdown.diff.added, bg: '#122b1f' }
+  markdown.diff.removedEmphasis: { inherit: markdown.diff.removed, bg: '#2b1312' }
   markdown.diagram.border: { fg: muted }
   markdown.diagram.text: {}
   markdown.diagram.edge: { fg: accent }

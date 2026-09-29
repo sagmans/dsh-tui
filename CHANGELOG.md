@@ -26,9 +26,11 @@ breaking change, and a patch carries only fixes.
   band under a selected row while the accent is that hue lifted to where text
   reads. Green is the family here and green also means an added line, so the accent
   stays a lime while the semantic green is pushed toward grass: a reader never has
-  to ask whether a green row is the theme or the change. The tuning `polar-drift`
-  settled — selected row on a band, a painted working state, a quiet argument, a
-  reply frame at container weight — is drawn the same way here.
+  to ask whether a green row is the theme or the change. Every shade sits a step
+  below the shipped table's own, so the family stays dark and soft beside a bright
+  terminal. The tuning `polar-drift` settled — selected row on a band, a painted
+  working state, a quiet argument, a reply frame at container weight — is drawn the
+  same way here.
 
 ### Changed
 

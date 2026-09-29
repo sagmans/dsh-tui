@@ -262,34 +262,34 @@ describe('pine-slope', () => {
     // has selected while the accent lifted out of its hue is what text wears.
     const theme = themed(PINE)
     const current = theme.style('picker.rowCurrent', 'x')
-    expect(current).toContain('1;38;2;165;226;117')
+    expect(current).toContain('1;38;2;128;198;74')
     expect(current).toContain('48;2;23;56;2')
-    expect(theme.style('markdown.heading', 'x')).toContain('38;2;165;226;117')
-    expect(theme.editor.borderColor('x')).toContain('38;2;165;226;117')
+    expect(theme.style('markdown.heading', 'x')).toContain('38;2;128;198;74')
+    expect(theme.editor.borderColor('x')).toContain('38;2;128;198;74')
   })
 
   it('keeps a change out of the family the accent is drawn in', () => {
     // Green is the theme here and green also marks an added line: the semantic
     // green is pushed toward grass so the two can never be read as each other.
     const theme = themed(PINE)
-    expect(theme.style('markdown.diff.added', 'x')).toContain('38;2;61;187;129')
-    expect(theme.style('markdown.diff.removed', 'x')).toContain('38;2;220;103;102')
-    expect(theme.style('markdown.diagram.warning', 'x')).toContain('38;2;242;191;87')
+    expect(theme.style('markdown.diff.added', 'x')).toContain('38;2;54;143;102')
+    expect(theme.style('markdown.diff.removed', 'x')).toContain('38;2;202;71;69')
+    expect(theme.style('markdown.diagram.warning', 'x')).toContain('38;2;226;169;52')
   })
 
   it('holds the reader turn plain and its argument below the reasoning shade', () => {
     const theme = themed(PINE)
     const prompt = theme.style('transcript.user', 'x')
-    expect(prompt).toContain('38;2;238;240;236')
+    expect(prompt).toContain('38;2;212;217;208')
     expect(prompt).not.toContain('48;2;')
-    expect(theme.style('transcript.reasoning.body', 'x')).toContain('38;2;147;167;136')
-    expect(theme.style('tool.args', 'x')).toContain('38;2;95;137;67')
+    expect(theme.style('transcript.reasoning.body', 'x')).toContain('38;2;121;143;109')
+    expect(theme.style('tool.args', 'x')).toContain('38;2;72;100;53')
   })
 
   it('frames the reply at container weight and paints a turn in flight', () => {
     const theme = themed(PINE)
-    expect(theme.style('transcript.assistant.border', 'x')).toContain('38;2;109;140;91')
-    expect(theme.style('status.activity.working', 'x')).toContain('1;38;2;165;226;117')
-    expect(theme.style('status.activity.ready', 'x')).toContain('38;2;196;204;189')
+    expect(theme.style('transcript.assistant.border', 'x')).toContain('38;2;86;107;73')
+    expect(theme.style('status.activity.working', 'x')).toContain('1;38;2;128;198;74')
+    expect(theme.style('status.activity.ready', 'x')).toContain('38;2;170;180;162')
   })
 })
