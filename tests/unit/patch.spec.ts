@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { resolveConfig } from '@/config.ts'
+import { DEFAULT_PRESET } from '@/host/roster.ts'
+import { loadPresetDefinitions } from '@/host/preset-files.ts'
 import { TUI_STARTUP_SERVICE, name as startupRowName } from '@/startup.ts'
 
 /**
@@ -46,14 +48,23 @@ const PRESET_SUPPLIED_ROWS = [
 
 /** Rows this bundle inserts, in patch order, and the package each one mounts. */
 const INSERTED_ROWS = [
+  ['agent-presets', '@sagmans/dsh-tui/host/roster'],
+  ['cordis-host-runner', '@sagmans/dsh-tui/host/runner'],
+  ['code-runtime', '@sagmans/dsh-tui/host/code-runtime'],
   ['tui-startup', '@sagmans/dsh-tui/startup'],
   ['tui', '@sagmans/dsh-tui'],
   ['tui-todo-guard', '@sagmans/dsh-tui/todo-guard'],
-  ['agent-presets', '@deepseek-ai/dsh-agent-presets'],
   ['subagent-model-selection-settings', '@deepseek-ai/dsh-tool-subagent/model-selection-settings'],
-  ['cordis-host-runner', '@deepseek-ai/dsh-cordis-host-runner'],
-  ['code-runtime', '@deepseek-ai/dsh-code-runtime-worker-thread'],
 ] as const
+
+/**
+ * Rows whose package depends on which harness line is running.
+ *
+ * The loader mounts a patch row before any service exists and never activates one
+ * it skipped there, so a condition in the patch cannot choose between lines: these
+ * rows name a shim of this bundle, which decides once the settings service is up.
+ */
+const LINE_BOUND_ROWS = ['agent-presets', 'cordis-host-runner', 'code-runtime']
 
 /** The mode a flagless run joins, which has to be one the roster actually ships. */
 const ROSTER_DEFAULT = 'ptc'
@@ -140,7 +151,23 @@ describe('the bundle patch', () => {
   })
 
   it('starts a flagless run in a mode the roster ships', () => {
-    expect(requireRow(insertedRows(patch), 'agent-presets').body).toContain(`default: ${ROSTER_DEFAULT}`)
+    expect(DEFAULT_PRESET).toBe(ROSTER_DEFAULT)
+    expect(loadPresetDefinitions().map(definition => definition.id)).toContain(ROSTER_DEFAULT)
+  })
+
+  it('leaves every line-bound row to the shim that can tell the lines apart', () => {
+    const rows = insertedRows(patch)
+    for (const id of LINE_BOUND_ROWS) {
+      expect(requireRow(rows, id).name).toMatch(/^@sagmans\/dsh-tui\/host\//u)
+    }
+    // A condition here would be evaluated while no service is up, which is the
+    // trap this shape exists to avoid: such a row is skipped and never revisited.
+    expect(patch).not.toContain('!!js "typeof ctx.get')
+  })
+
+  it('mounts those rows before the surface, which needs the roster while it builds', () => {
+    const ids = insertedRows(patch).map(row => row.id)
+    for (const id of LINE_BOUND_ROWS) expect(ids.indexOf(id)).toBeLessThan(ids.indexOf('tui'))
   })
 
 })

@@ -31,6 +31,10 @@ const REQUIRED = [
   'package/lib/index.js',
   'package/lib/startup.js',
   'package/lib/install-skills.js',
+  'package/lib/host/roster.js',
+  'package/lib/host/runner.js',
+  'package/lib/host/code-runtime.js',
+  'package/lib/host/preset-files.js',
   'package/.agents/skills/dsh-tui-dogfood/SKILL.md',
   'package/.agents/skills/dsh-tui-dogfood/references/home-state.md',
   'package/.agents/skills/dsh-tui-dogfood/scripts/run-plugin-from-worktree.sh',
@@ -44,6 +48,13 @@ const REQUIRED = [
 // cannot draw.
 for (const theme of readdirSync(join(ROOT, 'themes'))) {
   if (theme.endsWith('.yaml')) REQUIRED.push(`package/themes/${theme}`)
+}
+
+// Derived for the same reason: the host shim reads a mode out of its own packed
+// file, so one the manifest forgets to pack is a mode the roster lists and the
+// loader cannot compose.
+for (const preset of readdirSync(join(ROOT, 'presets'))) {
+  if (preset.endsWith('.patch.yml')) REQUIRED.push(`package/presets/${preset}`)
 }
 
 /** Entries that must never ship. */
@@ -61,8 +72,31 @@ const PATCH_ROWS = [
   '@sagmans/dsh-tui/startup',
   '@sagmans/dsh-tui/todo-guard',
   "name: '@sagmans/dsh-tui'",
-  "name: '@deepseek-ai/dsh-agent-presets'",
-  "name: '@deepseek-ai/dsh-code-runtime-worker-thread'",
+  "name: '@sagmans/dsh-tui/host/roster'",
+  "name: '@sagmans/dsh-tui/host/runner'",
+  "name: '@sagmans/dsh-tui/host/code-runtime'",
+]
+
+/**
+ * Sources whose dynamic imports are mounts too.
+ *
+ * A row this bundle inserts mounts the package that matches the running harness
+ * line from inside a shim, which is the only place the choice can be made, so the
+ * packages a profile ends up resolving are named in both files.
+ */
+const SHIM_SOURCES = ['src/host/roster.ts', 'src/host/runner.ts', 'src/host/code-runtime.ts']
+
+/**
+ * Every file that mounts something: the patch, the shims, and the shipped modes.
+ *
+ * A mode's own rows name the packages a session's agent plane is made of, so the
+ * manifest's dependencies are checked against all three rather than the patch
+ * alone — the packages moved out of the patch when they moved into the modes.
+ */
+const MOUNT_SOURCES = [
+  'cordis.patch.yml',
+  ...SHIM_SOURCES,
+  ...readdirSync(join(ROOT, 'presets')).filter(name => name.endsWith('.patch.yml')).map(name => join('presets', name)),
 ]
 
 /**
@@ -100,16 +134,20 @@ const DISABLED_ROWS = [
 ]
 
 /**
- * First-party packages the patch names for rows this plugin provides.
+ * First-party packages the inserted rows mount, directly or through a shim.
  *
  * A bundle owns the rows it inserts, so naming anything here makes the profile
  * depend on a package that nothing would install unless this manifest declares
- * it — which the check below enforces.
+ * it — which the check below enforces. Both harness lines are listed on purpose:
+ * one build serves each line, and the shim picks by generation.
  */
 const NAMED_PACKAGES = [
   '@deepseek-ai/dsh-agent-presets',
+  '@deepseek-ai/dsh-agent-preset',
+  '@deepseek-ai/dsh-agent-preset-registry',
   '@deepseek-ai/dsh-code-runtime-worker-thread',
   '@deepseek-ai/dsh-cordis-host-runner',
+  '@sagmans/dsh-cordis-host-runner-017',
 ]
 
 /**
@@ -215,13 +253,18 @@ try {
       problems.push(`the bundle patch no longer disables ${id}, which a preset supplies`)
     }
   }
-  const named = new Set([...patch.matchAll(/name: '(@deepseek-ai\/[^']+)'/gu)].map(match => match[1]))
+  const mounts = MOUNT_SOURCES.map(source => readFileSync(join(ROOT, source), 'utf8')).join('\n')
+  // A subpath entry point belongs to its package, which is the name a profile
+  // has to resolve and the name the manifest declares.
+  const mounted = new Set(
+    [...mounts.matchAll(/(?:name: |import\()'(@[^']+)'/gu)].map(match => match[1].split('/').slice(0, 2).join('/')),
+  )
   const allowed = [...NAMED_PACKAGES, ...HOST_ROWS]
-  for (const name of named) {
+  for (const name of [...patch.matchAll(/name: '(@deepseek-ai\/[^']+)'/gu)].map(match => match[1])) {
     if (!allowed.includes(name)) problems.push(`the bundle patch mounts ${name}, which this plugin neither provides nor is documented as host machinery`)
   }
   for (const name of NAMED_PACKAGES) {
-    if (!named.has(name)) problems.push(`the bundle patch no longer mounts ${name}`)
+    if (!mounted.has(name)) problems.push(`no inserted row or shipped mode mounts ${name}`)
   }
   if (patch.includes('dsh-tui/ask-user')) {
     problems.push('the bundle patch still mounts the removed ask-user entry point')
@@ -255,7 +298,7 @@ try {
   for (const name of Object.keys(manifest.dependencies ?? {})) {
     if (!name.startsWith('@deepseek-ai/')) continue
     if (LIBRARY_PACKAGES.includes(name)) continue
-    if (!named.has(name)) problems.push(`the manifest depends on ${name}, but no patch row mounts it`)
+    if (!mounted.has(name)) problems.push(`the manifest depends on ${name}, but no row or mode mounts it`)
   }
 
   // npm resolves a required peer by installing a private copy. Against the

@@ -63,11 +63,25 @@ const compiled = Object.entries(manifest.devDependencies ?? {})
 if (mounted.length === 0) problems.push('the manifest mounts no harness package')
 if (compiled.length === 0) problems.push('the manifest compiles against no harness package')
 
-// A mounted package must accept the same line the peers accept: an exact pin
-// leaves the host's newer copy in place and resolves a private duplicate.
+// A mounted package either accepts the whole compatible line or names one
+// verified release. The range is the one the 0.1.5 line resolves; a row that
+// serves a newer line cannot use it, because a range admits a prerelease only
+// through a comparator naming that exact X.Y.Z tuple, so ">=0.1.5-rc.1 <0.2.0"
+// resolves 0.1.5-rc.3 and never 0.1.7-rc.2. Those rows therefore mount the
+// release this tree is verified against, the way the harness's own bundles pin.
 for (const [name, declared] of mounted) {
-  if (declared !== compatibility) {
-    problems.push('mounted package ' + name + ' declares ' + declared + ', not the compatible range ' + String(compatibility))
+  if (declared !== compatibility && !releases.includes(declared)) {
+    problems.push('mounted package ' + name + ' declares ' + declared
+      + ', which is neither the compatible range ' + String(compatibility) + ' nor a verified release')
+  }
+}
+
+// An aliased install carries the release of the line no range can reach.
+for (const [name, declared] of Object.entries(manifest.dependencies ?? {})) {
+  if (!String(declared).startsWith('npm:')) continue
+  const aliased = /^npm:(.+)@([^@]+)$/u.exec(String(declared))
+  if (aliased === null || !releases.includes(aliased[2])) {
+    problems.push('aliased dependency ' + name + ' declares ' + declared + ', whose version is not a verified release')
   }
 }
 

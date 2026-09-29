@@ -20,12 +20,12 @@ Applies to maintainers. Current release owner: repository owner ([`LICENSE`](LIC
 
 ## Harness matrix
 
-The plugin mounts harness packages and peers on harness modules, so one release line is verified at a time: `dsh.compatibility.dsh` is the range the peers and the mounted packages accept, and `dsh.compatibility.dshReleases` lists the releases that passed the gates. `verify` runs `node tools/harness-matrix.mjs` on every change, which checks that matrix offline — every verified release lies inside the range, the mounted packages accept the range, and the sources compile against a verified release. [`.github/workflows/harness-matrix.yml`](.github/workflows/harness-matrix.yml) runs the same tool with `--check-registry` daily and fails when `@deepseek-ai/dsh@latest` is not a verified release.
+The plugin mounts harness packages and peers on harness modules, so one release line is verified at a time: `dsh.compatibility.dsh` is the range the peers accept, and `dsh.compatibility.dshReleases` lists the releases that passed the gates. A mounted package either accepts that range or names one verified release, because npm resolves a prerelease only through a range comparator that names its own `X.Y.Z` tuple: `>=0.1.5-rc.1 <0.2.0` reaches `0.1.5-rc.3` and never a `0.1.7` prerelease, so the rows that serve the verified line mount its release, the way the harness's own bundles pin. `verify` runs `node tools/harness-matrix.mjs` on every change, which checks that matrix offline — every verified release lies inside the range, every mounted package accepts the range or names a verified release, every aliased install names one, and the sources compile against a verified release. [`.github/workflows/harness-matrix.yml`](.github/workflows/harness-matrix.yml) runs the same tool with `--check-registry` daily and fails when `@deepseek-ai/dsh@latest` is not a verified release.
 
 That failure is the matrix bump, and it is a release-sized change:
 
 1. Run `node tools/harness-matrix.mjs --check-registry` to read the release the harness now serves as `latest`.
-2. Add it to `dsh.compatibility.dshReleases` and raise the `@deepseek-ai/dsh-*` `devDependencies` to it; the mounted packages stay on `dsh.compatibility.dsh`.
+2. Add it to `dsh.compatibility.dshReleases`, raise the `@deepseek-ai/dsh-*` `devDependencies` to it, and raise every mounted package that names a release — plus every aliased install — to it as well; the rows that serve the older line stay on `dsh.compatibility.dsh`.
 3. `pnpm install`, then run every gate in [Gates](#gates--all-required-before-tagging).
 4. Dogfood a real session against the new release before it ships: install the candidate into a scratch profile and drive the terminal per [README](README.md#install).
 5. Land the bump through a reviewed PR and ship it with the next patch release.

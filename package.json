@@ -28,11 +28,24 @@
       "types": "./lib/todo-guard.d.ts",
       "default": "./lib/todo-guard.js"
     },
+    "./host/roster": {
+      "types": "./lib/host/roster.d.ts",
+      "default": "./lib/host/roster.js"
+    },
+    "./host/runner": {
+      "types": "./lib/host/runner.d.ts",
+      "default": "./lib/host/runner.js"
+    },
+    "./host/code-runtime": {
+      "types": "./lib/host/code-runtime.d.ts",
+      "default": "./lib/host/code-runtime.js"
+    },
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },
   "files": [
     "lib",
+    "presets",
     ".agents/skills/dsh-tui-dogfood",
     ".agents/skills/dsh-tui-update-models",
     "themes",
@@ -81,11 +94,24 @@
     "drive": "node tools/pty-drive.mjs"
   },
   "dependencies": {
+    "@deepseek-ai/dsh-agent-preset": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-agent-preset-registry": "0.1.7-rc.2",
     "@deepseek-ai/dsh-agent-presets": ">=0.1.5-rc.1 <0.2.0",
+    "@deepseek-ai/dsh-agent-tool-presentation": "0.1.7-rc.2",
     "@deepseek-ai/dsh-code-runtime-worker-thread": ">=0.1.5-rc.1 <0.2.0",
     "@deepseek-ai/dsh-cordis-host-runner": ">=0.1.5-rc.1 <0.2.0",
+    "@deepseek-ai/dsh-persona": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-plugin-manager": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-terminal": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-terminal-bash": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-tool-ask-user": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-tool-bash-persistent": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-tool-cordis": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-tool-pwsh-persistent": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-tool-subagent-control": "0.1.7-rc.2",
     "@deepseek-ai/schemastery": "3.18.2",
     "@earendil-works/pi-tui": "0.85.1",
+    "@sagmans/dsh-cordis-host-runner-017": "npm:@deepseek-ai/dsh-cordis-host-runner@0.1.7-rc.2",
     "commander": "^15.0.0",
     "js-yaml": "4.3.2",
     "lovely-mermaid": "0.3.3"

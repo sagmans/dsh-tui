@@ -81,6 +81,37 @@
   disabled: true
 
 - insert:
+    # The three rows below sit ahead of the surface on purpose: a row applies as
+    # soon as its own dependencies are up, the surface builds as soon as the
+    # harness's agent services are up, and the roster arrives only after settings
+    # — later than both. Each row decides the harness line from the composed
+    # tree, the one signal that exists that early.
+
+    # The roster of agent compositions, and the mode a session starts in when
+    # nobody names one. PTC leads because a flagless run should reach every tool
+    # through one program rather than one shell call at a time. The two harness
+    # lines keep their modes in different packages, and this row is what picks
+    # the one that belongs to the running line.
+    - id: agent-presets
+      name: '@sagmans/dsh-tui/host/roster'
+
+    # Creator mode inspects and re-composes the running harness, which needs the
+    # host half of the dynamic-plugin runner. Only the Web bundle ships this
+    # row, so a terminal profile has to mount it to offer that mode at all. The
+    # runner speaks the typert protocol of the line it was built for, so the row
+    # mounts the matching build: the profile installs both, the newer one under
+    # an alias, because no version range spans two prerelease lines.
+    - id: cordis-host-runner
+      name: '@sagmans/dsh-tui/host/runner'
+
+    # PTC mode runs its programs against a code runtime. The Web bundle mounts
+    # this at host level for the same reason: the runtime is machinery, while
+    # the preset decides whether an agent uses it. The 0.1.7 line moved the
+    # runtime into the base, so on that line this row mounts nothing — and that
+    # base row is what tells the two lines apart.
+    - id: code-runtime
+      name: '@sagmans/dsh-tui/host/code-runtime'
+
     - id: tui-startup
       name: '@sagmans/dsh-tui/startup'
 
@@ -111,29 +142,8 @@
         maxRemindersPerTurn: 3
         previewItems: 5
 
-    # The roster of agent compositions, and the mode a session starts in when
-    # nobody names one. PTC leads because a flagless run should reach every tool
-    # through one program rather than one shell call at a time. A profile patch
-    # may override this row's config.
-    - id: agent-presets
-      name: '@deepseek-ai/dsh-agent-presets'
-      config:
-        default: ptc
-
     # A preset's subagent tool samples its delegation model from this host-owned
     # settings row. It is host machinery rather than agent plane, which is why
     # the Web bundle inserts it too instead of leaving it to the preset.
     - id: subagent-model-selection-settings
       name: '@deepseek-ai/dsh-tool-subagent/model-selection-settings'
-
-    # Creator mode inspects and re-composes the running harness, which needs the
-    # host half of the dynamic-plugin runner. Only the Web bundle ships this
-    # row, so a terminal profile has to mount it to offer that mode at all.
-    - id: cordis-host-runner
-      name: '@deepseek-ai/dsh-cordis-host-runner'
-
-    # PTC mode runs its programs against a code runtime. The Web bundle mounts
-    # this at host level for the same reason: the runtime is machinery, while
-    # the preset decides whether an agent uses it.
-    - id: code-runtime
-      name: '@deepseek-ai/dsh-code-runtime-worker-thread'

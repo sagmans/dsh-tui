@@ -1,12 +1,29 @@
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, realpathSync, rmSync, statSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, isAbsolute, join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { problems } from '../.agents/skills/dsh-tui-dogfood/scripts/clone-links.mjs'
 
-const RELEASE_VERSION = '0.1.7-rc.2'
 const PROJECT_ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
+
+/**
+ * The releases a dogfood run may be driven against.
+ *
+ * A dogfood run proves the surface against a release the gates passed, and more
+ * than one line is verified at a time: the compatible range spans two prerelease
+ * lines, and the host rows mount different packages on each, so both have to be
+ * driven. The list is read from the manifest the matrix gate checks, which is the
+ * one place that pair is kept.
+ */
+function verifiedReleases() {
+  const manifest = JSON.parse(readFileSync(join(PROJECT_ROOT, 'package.json'), 'utf8'))
+  const releases = Object.keys(manifest?.dsh?.compatibility?.dshReleases ?? {})
+  if (releases.length === 0) {
+    throw new Error('pty-drive: the manifest names no verified dsh release in dsh.compatibility.dshReleases')
+  }
+  return releases
+}
 
 function contains(parent, path) {
   const remainder = relative(parent, path)
@@ -66,8 +83,9 @@ export function preparePtyLaunch({ home, launcher = '' }) {
     throw new Error('pty-drive: installed dsh launcher is unavailable or failed --version')
   }
   const version = result.stdout.trim()
-  if (version !== RELEASE_VERSION) {
-    throw new Error('pty-drive: launcher must report ' + RELEASE_VERSION + ', got ' + version)
+  const releases = verifiedReleases()
+  if (!releases.includes(version)) {
+    throw new Error('pty-drive: launcher must report a verified release (' + releases.join(', ') + '), got ' + version)
   }
   return { home: selectedHome, cwd: PROJECT_ROOT, command, argsPrefix }
 }

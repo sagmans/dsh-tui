@@ -27,7 +27,7 @@ export const REQUIRED_CAPABILITIES: readonly Capability[] = [
   {
     service: 'agentPresets',
     use: 'choosing the composition an agent runs, which owns its tools and prompt',
-    fix: 'mount @deepseek-ai/dsh-agent-presets, which this bundle inserts',
+    fix: 'mount @deepseek-ai/dsh-agent-presets or @deepseek-ai/dsh-agent-preset-registry, which this bundle inserts for the host line',
   },
   {
     service: 'appExit',

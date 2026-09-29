@@ -76,12 +76,15 @@ rows. A row added there registers the same tool in two layers and fails
 composition. Host-plane insert rows are the exception: the todo guard registers
 no tool, so it cannot double a preset's.
 
-**The harness matrix pins one side and ranges the other.** The `devDependencies`
-and `dsh.compatibility.dshReleases` name the releases that passed the gates,
-while the mounted packages and the peers accept the whole compatible range so a
-profile resolves one copy instead of a private duplicate. `node
-tools/harness-matrix.mjs` guards the pair and [RELEASE.md](RELEASE.md#harness-matrix)
-owns the bump; moving either side alone is what broke the 0.5.0 npm install.
+**The harness matrix names releases, and ranges only what a range can reach.**
+The `devDependencies` and `dsh.compatibility.dshReleases` name the releases
+that passed the gates and the peers accept the whole compatible range, but a
+mounted package either accepts that range or names one verified release: npm
+resolves a prerelease only through a comparator naming its own `X.Y.Z` tuple, so
+`>=0.1.5-rc.1 <0.2.0` reaches `0.1.5-rc.3` and never a `0.1.7` prerelease, which
+is how a profile ended up mounting an older line's copy beside the host's. `node
+tools/harness-matrix.mjs` guards the matrix and
+[RELEASE.md](RELEASE.md#harness-matrix) owns the bump.
 
 **Comments state why a choice was made**, not what the code does; the reason a
 non-obvious constraint exists is the part that prevents future drift.

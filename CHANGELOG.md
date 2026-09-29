@@ -46,9 +46,21 @@ breaking change, and a patch carries only fixes.
 - The harness matrix now accepts the whole `>=0.1.5-rc.1 <0.2.0` line and verifies
   `0.1.7-rc.2`, the release npm serves as `latest`. The former `<0.1.6` ceiling left
   a profile running the installed launcher resolving a harness copy of its own beside
-  the host's, which is the shape that broke the 0.5.0 npm install; the mounted packages
-  and peers already carried the wider range, so the ceiling was the one side out of
-  step with them.
+  the host's, which is the shape that broke the 0.5.0 npm install.
+
+- The bundle mounts the preset plane of both lines. `0.1.7` dissolved the roster
+  package into a registry row plus one row per mode, so a terminal profile now declares
+  its four modes the way the Web bundle declares them for the browser. The rows only
+  one line can take are mounted through this bundle's own `host/` entry points, which
+  read the harness line from the composed composition: a patch row is mounted before
+  any service exists, and one that waits for a service is mounted after the surface
+  that needs the roster. A mounted package therefore either accepts the compatible range or names
+  the verified release, because npm reaches a prerelease only through a range
+  comparator naming its own `X.Y.Z` tuple: `>=0.1.5-rc.1 <0.2.0` resolves
+  `0.1.5-rc.3` and never `0.1.7-rc.2`, which is how a profile ended up mounting the
+  older line's roster beside the host's loader. The dynamic-plugin runner is installed
+  under an alias for the same reason, its two copies speaking the typert protocol of
+  the line they were built for.
 
 - The surface compiles against `0.1.7-rc.2`. A reminder now declares its own
   message-source kind, because that release gives every producer a kind of its own and
