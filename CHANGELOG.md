@@ -43,6 +43,16 @@ breaking change, and a patch carries only fixes.
 
 ### Fixed
 
+- `--preset <id>` no longer refuses a mode this profile ships. A mode registers
+  itself from its own row's apply, which the composition schedules beside the
+  surface rather than before it, and the launch check read the roster as one of its
+  own first acts: every one of the four ids was answered with
+  `Unknown agent preset: <id>` and exit 1, while the same id worked from `/preset`
+  a moment later. The check now waits for the roster to hold its first mode, the
+  wait ends the moment it does, and a name no mode ever arrives for is still refused
+  after that window rather than hanging. The refusal also names the modes that do
+  exist, which is what the README already promised.
+
 - The mode table and the picker's glosses say what each id does here. They still
   described the compositions the modes carried before the agent plane moved back to
   the bundle shipping it — `minimal` promised "one tool: a persistent shell" while

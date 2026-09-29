@@ -40,8 +40,7 @@ interface FakeContext {
  * `get` answers nothing on purpose: a shim that asked a service would be applied
  * after the surface, which is the failure these modules exist to avoid.
  */
-function fakeContext(): Context & FakeContext {
-  const plugin = vi.fn()
+function fakeContext(plugin: ReturnType<typeof vi.fn> = vi.fn()): Context & FakeContext {
   // A service the harness does publish: the injected callback is what the roster
   // shim waits on before its own row can settle.
   const inject = vi.fn((_deps: readonly string[], callback: () => void) => {
@@ -50,6 +49,9 @@ function fakeContext(): Context & FakeContext {
   })
   return { get: () => undefined, plugin, inject } as unknown as Context & FakeContext
 }
+
+/** Let everything already scheduled run, imports included. */
+const settle = (): Promise<void> => new Promise(resolve => setTimeout(resolve, 0))
 
 describe('the host shims', () => {
   it('declares no dependency, so it is mounted at its place in the patch', () => {
@@ -64,6 +66,31 @@ describe('the host shims', () => {
     expect(ctx.plugin).toHaveBeenNthCalledWith(1, registry, { default: roster.DEFAULT_PRESET })
     expect(ctx.plugin).toHaveBeenNthCalledWith(2, presetRow, loadPresetDefinitions()[0])
     expect(ctx.plugin).toHaveBeenCalledTimes(1 + PRESET_FILES.length)
+  })
+
+  it('waits for every mode row to register before it settles', async () => {
+    // A mode is registered inside its own row's apply, and the launcher resolves
+    // `--preset NAME` the moment this row is done: a mount left in flight is a
+    // mode the launcher is told does not exist, while the picker offers it a
+    // second later.
+    const registered: string[] = []
+    const releases: (() => void)[] = []
+    const plugin = vi.fn((row: unknown, definition?: { readonly id?: string }) => {
+      if (row !== presetRow) return undefined
+      return new Promise<void>(resolve => releases.push(() => { registered.push(definition?.id ?? ''); resolve() }))
+    })
+    const ctx = fakeContext(plugin)
+    let applied = false
+    const applying = roster.apply(ctx).then(() => { applied = true })
+    while (releases.length < PRESET_FILES.length) await settle()
+    // The service this row waits on is already up, so only the modes can hold it:
+    // a row that asked for the mounts without awaiting them settles here.
+    for (let tick = 0; tick < 3; tick += 1) await settle()
+    expect(applied).toBe(false)
+    expect(registered).toEqual([])
+    for (const release of releases) release()
+    await applying
+    expect(registered).toEqual([...PRESET_FILES])
   })
 
   it('follows the roster service it mounts, so the surface builds behind it', async () => {

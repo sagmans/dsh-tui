@@ -39,6 +39,9 @@ export async function apply(ctx: Context): Promise<void> {
   // service without the schema step a partial row config would need.
   ctx.plugin(registry, { default: DEFAULT_PRESET })
   const { default: preset } = await import('@deepseek-ai/dsh-agent-preset')
-  for (const definition of loadPresetDefinitions()) ctx.plugin(preset, definition)
+  // A mode registers itself inside its own row's apply: awaiting them here is what
+  // makes this row mean "the roster this profile offers" rather than "the rows it
+  // asked for", for every reader that comes after it.
+  await Promise.all(loadPresetDefinitions().map(definition => ctx.plugin(preset, definition)))
   await whenRosterIsUp(ctx)
 }
