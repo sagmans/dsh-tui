@@ -8,6 +8,14 @@ const CONFIG_NOT_LIVE = 'the settings service cannot write live Config with this
 /** Appearance must not report success until its durable owner accepts the patch. */
 export interface SectionScope {
   readonly kind: 'installSection' | 'register' | 'config' | 'unsupported'
+  /**
+   * The document this scope's writes land in, when the host names one.
+   *
+   * Only a Config-backed row has a document of its own: a section host keeps the
+   * section in the settings file it always read, so naming a patch there would
+   * send the reader to a file their write never touches.
+   */
+  readonly document: string | undefined
   get(): unknown
   update(patch: object): Promise<void>
   /**
@@ -42,6 +50,8 @@ interface SettingsSeam {
   describe?(): ConfigDescriptor[]
   update?(ns: string, patch: object, revision?: number): Promise<void>
   writable?: boolean
+  /** The document a native editor shows; a host that keeps no such document omits it. */
+  readonly documentPath?: string
 }
 
 /** The row reader is needed before the Loader marks the calling fiber active. */
@@ -52,6 +62,12 @@ export interface SectionRequest<T> {
   readonly entry: T
   readonly onChange: () => void
   readonly config?: { readonly ns: string | undefined; readonly get: () => unknown; readonly live: boolean }
+}
+
+/** The path the host itself shows a reader; a guessed path is what sends them to a file nothing writes. */
+function documentOf(settings: SettingsSeam): string | undefined {
+  const path = settings.documentPath
+  return typeof path === 'string' && path !== '' ? path : undefined
 }
 
 /** Never manufacture a successful write when no supported owner can persist it. */
@@ -76,6 +92,7 @@ export function openSection<T>(service: unknown, request: SectionRequest<T>): Se
     attached = true
     return {
       kind: 'installSection',
+      document: undefined,
       readUser: () => readUser(request.ns),
       get: () => source(),
       update: async patch => {
@@ -88,6 +105,7 @@ export function openSection<T>(service: unknown, request: SectionRequest<T>): Se
     const scope = settings.register(request.ns, request.schema, { base: request.entry })
     return {
       kind: 'register',
+      document: undefined,
       readUser: () => readUser(request.ns),
       get: () => scope.get(),
       update: async patch => {
@@ -103,6 +121,7 @@ export function openSection<T>(service: unknown, request: SectionRequest<T>): Se
       : settings.describe!().find(row => row.ns === config.ns)
     return {
       kind: 'config',
+      document: documentOf(settings),
       readUser: () => readUser(config.ns),
       // Config is readable during startup even before describe() includes this fiber.
       get: () => {
@@ -120,6 +139,7 @@ export function openSection<T>(service: unknown, request: SectionRequest<T>): Se
   }
   return {
     kind: 'unsupported',
+    document: undefined,
     readUser: () => { throw new Error(READ_UNSUPPORTED) },
     get: () => { throw new Error(READ_UNSUPPORTED) },
     update: refuseWrite,

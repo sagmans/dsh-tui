@@ -16,6 +16,15 @@ breaking change, and a patch carries only fixes.
   and the record is what a reader finds, so a version short of either half is
   incomplete and is completed from the same signed tag rather than by retagging.
 
+### Fixed
+
+- `/theme tokens` names the file a preference lands in instead of the
+  `$DSH_HOME/settings.yaml` this line never writes. The footer carried one fixed
+  path, which the launcher renames before import, so a reader who followed it
+  edited a file nothing read and saw no change; the path now comes from the
+  settings service that owns it, and a host with no such document is told what the
+  command does rather than a path to edit.
+
 ## [0.11.1] - 2026-09-30
 
 ### Fixed

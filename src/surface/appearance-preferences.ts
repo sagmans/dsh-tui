@@ -1,5 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { openSection, type SectionScope } from '../compat/section.ts'
+import type { PreferenceHome } from '../theme-command.ts'
 import { asRecord } from '../theme-schema.ts'
 import { TUI_SETTINGS_NAMESPACE, TuiSettingsSchema, readScope, settingsProblemMessage, type TuiSettings } from '../theme-settings.ts'
 
@@ -22,6 +23,8 @@ export interface AppearancePreferencePorts {
 export interface AppearancePreferences {
   readonly read: () => TuiSettings
   readonly configBacked: () => boolean
+  /** Where a write lands, so a reader can be told which file to edit. */
+  readonly home: () => PreferenceHome
   readonly chooseTheme: (name: string) => void
   readonly allowsHistory: (field: 'enabled' | 'ghost', applied: boolean) => boolean
   readonly register: () => void
@@ -31,6 +34,8 @@ export interface AppearancePreferences {
 /** Keep attachment, persistence, and notifications on the same checked settings source. */
 export function createAppearancePreferences(ctx: Context, ports: AppearancePreferencePorts): AppearancePreferences {
   let configBacked = false
+  // Unknown until a supported owner answers: no owner means no file worth naming.
+  let home: PreferenceHome = { kind: 'unknown' }
   let activeScope: SectionScope | undefined
   let privacyRevision: number | undefined
   let hadUser = false
@@ -93,6 +98,9 @@ export function createAppearancePreferences(ctx: Context, ports: AppearancePrefe
         return
       }
       activeScope = scope
+      home = scope.kind === 'config'
+        ? scope.document === undefined ? { kind: 'unknown' } : { kind: 'document', path: scope.document }
+        : scope.kind === 'unsupported' ? { kind: 'unknown' } : { kind: 'section' }
       privacyRevision = undefined
       hadUser = false
       blocked = { enabled: false, ghost: false }
@@ -146,6 +154,7 @@ export function createAppearancePreferences(ctx: Context, ports: AppearancePrefe
       return section
     },
     configBacked: () => configBacked,
+    home: () => home,
     chooseTheme: name => chooseTheme(name),
     allowsHistory: (field, applied) => {
       observePrivacy()

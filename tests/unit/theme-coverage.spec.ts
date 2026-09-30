@@ -117,6 +117,28 @@ describe('/theme', () => {
     expect(renderThemeTable(toOverrides(parseSettings({}), library), library)[0]).toContain(DEFAULT_THEME)
   })
 
+  it('names the file the reader edits, from the host that owns the path', () => {
+    // The reader cannot find this path alone: the write lands in the profile's own
+    // patch, which is neither beside the package nor at the file older releases
+    // read, so a footer naming the wrong file is one they edit in vain.
+    const lines = renderThemeTable(toOverrides(parseSettings({}), library), library, {
+      kind: 'document', path: '/home/dev/.dsh/profiles/tui/cordis.patch.yml',
+    })
+    expect(lines.at(-1)).toContain('/home/dev/.dsh/profiles/tui/cordis.patch.yml')
+    expect(lines.at(-1)).toContain("under this row's config")
+  })
+
+  it('keeps the section file for a section host and names no file without an owner', () => {
+    // Both other shapes are answers about where the reader edits: one host reads a
+    // `dsh-tui:` section, and a host with no owner has no file to point at, so that
+    // line says what the command does instead of naming a path nothing writes.
+    const section = renderThemeTable(toOverrides(parseSettings({}), library), library, { kind: 'section' })
+    expect(section.at(-1)).toContain('$DSH_HOME/settings.yaml')
+    const unknown = renderThemeTable(toOverrides(parseSettings({}), library), library, { kind: 'unknown' })
+    expect(unknown.at(-1)).not.toContain('settings.yaml')
+    expect(renderThemeTable(toOverrides(parseSettings({}), library), library).at(-1)).not.toContain('settings.yaml')
+  })
+
   it('tells the reader which of the two files a row came from', () => {
     // A complete theme names every element, so the origin column is what says
     // which file to open: the theme's copy, or the line the reader wrote. An

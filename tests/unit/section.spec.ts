@@ -154,6 +154,31 @@ describe('the settings section seam', () => {
     expect(fromEntry.readUser()).toBeUndefined()
   })
 
+  it('reports the document a Config write lands in, from the host that owns the path', () => {
+    // The footer tells the reader which file to edit, and only the host knows it:
+    // a path the surface guessed is what sent readers to a file this line never writes.
+    const forms = {
+      documentPath: '/home/dev/.dsh/profiles/tui/cordis.patch.yml',
+      describe: () => [{ ns: 'terminal', value: {}, revision: 0 }],
+    }
+    const opened = openSection(forms, {
+      ...requestWith(() => {}), config: { ns: 'terminal', get: () => ({}), live: true },
+    })!
+    expect(opened.document).toBe('/home/dev/.dsh/profiles/tui/cordis.patch.yml')
+  })
+
+  it('names no document for a section host, a blank path, or no owner at all', () => {
+    // A section host keeps the reader's edit in the settings file it always read,
+    // so a patch path there would point at a file their write never touches.
+    const { service } = installingService(() => ({}))
+    expect(openSection(service, requestWith(() => {}))!.document).toBeUndefined()
+    const blank = { documentPath: '', describe: () => [{ ns: 'terminal', value: {}, revision: 0 }] }
+    expect(openSection(blank, {
+      ...requestWith(() => {}), config: { ns: 'terminal', get: () => ({}), live: true },
+    })!.document).toBeUndefined()
+    expect(openSection(undefined, requestWith(() => {}))!.document).toBeUndefined()
+  })
+
   it('refuses a section whose revision the service cannot state', () => {
     // A descriptor the service cannot date is one this seam cannot read: a
     // caller that trusted it would report an opt-out it never saw.
