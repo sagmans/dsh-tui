@@ -4,11 +4,10 @@ import { Gutter } from './gutter.ts'
 /**
  * The rows the input bar keeps when every other row is contested.
  *
- * The frame's two rules and one row of text: a bar that cannot show what the
- * reader is typing is not a bar, so this floor is reserved before any work
- * summary is allowed a row.
+ * One writable row remains visible even when work summaries compete for space;
+ * the left rail needs no extra rows above or below the draft.
  */
-export const PROMPT_MIN_ROWS = 3
+export const PROMPT_MIN_ROWS = 1
 
 /** The parts of the surface the root layout stacks, top to bottom. */
 export interface SurfaceParts {

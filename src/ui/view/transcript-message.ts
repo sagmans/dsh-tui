@@ -12,7 +12,7 @@ import { type TranscriptEntry } from '../../transcript.ts'
 import { type TuiToken } from '../../theme-tokens.ts'
 import { type TuiTheme } from '../../theme.ts'
 import { codeBlockLines } from '../diff.ts'
-import { canFrame, frameBlock, FRAME_COLUMNS, textWidth, type FrameRow } from '../frame.ts'
+import { canFrame, frameBlock, RAIL_COLUMNS, textWidth, type FrameRow } from '../frame.ts'
 import { gapRows } from '../gap.ts'
 import { ANSWER_FACE, type MarkdownFace, type MarkdownRenderer } from '../markdown.ts'
 import { type ClickSpan } from '../view.ts'
@@ -114,13 +114,14 @@ export class Messages {
      * only the drawing knows which columns of a row are the frame's.
      */
     pushFramed(lines: string[], copy: FrameRow[], text: string, width: number, live: boolean, face: MarkdownFace, borderToken: TuiToken): void {
-      const framed = canFrame(width, this.context.theme.visible(borderToken))
-      const inside = framed ? width - FRAME_COLUMNS : width
+      const framed = canFrame(width, this.context.theme.visible(borderToken), true)
+      const inside = framed ? width - RAIL_COLUMNS : width
       const body = this.markdownLines(text, textWidth(inside), live, face)
       const block = frameBlock(body, width, {
         text: line => line,
         border: rule => this.context.theme.style(borderToken, rule),
         framed,
+        rail: true,
       })
       // A card is an object of the transcript rather than a paragraph of it, so it
       // opens and closes with air: the prompt and the reply of one exchange stop

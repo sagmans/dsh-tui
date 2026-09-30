@@ -76,6 +76,8 @@ function readLine(line: string, rows: readonly FrameRow[], whole: ReadonlyMap<st
   // itself there was the shape and nothing more.
   const from = Math.max(hit.column, frame.lead)
   const to = Math.min(hit.column + visibleWidth(line), visibleWidth(drawn) - frame.trail)
+  // Whole empty message rows preserve paragraph breaks; rail-only fragments do not.
+  if (hit.whole && own.trimEnd() === '') return ''
   if (to <= from) return undefined
   return sliceByColumn(own, from - frame.lead, to - from, true).trimEnd()
 }

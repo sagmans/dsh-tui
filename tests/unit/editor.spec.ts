@@ -60,18 +60,37 @@ const settle = async (predicate: () => boolean): Promise<void> => {
 }
 
 describe('BoxedEditor', () => {
-  it('joins the editor rules into a box and keeps every row the full width', () => {
+  it('keeps borrowed dialog editors enclosed', () => {
+    const instance = editor()
+    instance.disableSubmit = true
+    instance.setText('answer')
+    const rows = instance.render(WIDTH)
+    expect(rows).toHaveLength(3)
+    expect(rows[0]?.startsWith('╭')).toBe(true)
+    expect(rows[1]?.endsWith('│')).toBe(true)
+    expect(rows[2]?.startsWith('╰')).toBe(true)
+  })
+
+  it('keeps scroll counts and maps clicks on the visible text below them', () => {
+    const instance = editor()
+    instance.setText(Array.from({ length: 30 }, (_, index) => `line ${index}`).join('\n'))
+    const rows = instance.render(WIDTH)
+    expect(rows[0]).toContain('↑')
+    expect(rows.every(row => !row.includes('─'))).toBe(true)
+    instance.handleMouse(mouse({ x: EDGE_AND_PADDING + 2, y: 1 }))
+    expect(instance.getCursor().col).toBe(2)
+    for (let row = 0; row < 30; row++) instance.handleInput('\u001b[A')
+    const top = instance.render(WIDTH)
+    expect(top.at(-1)).toContain('↓')
+  })
+
+  it('draws a left rail and keeps every row the full width', () => {
     const instance = editor()
     instance.setText('hello')
     const lines = instance.render(WIDTH)
-    expect(lines).toHaveLength(3)
-    expect(lines[0]!.startsWith('╭')).toBe(true)
-    expect(lines[0]!.endsWith('╮')).toBe(true)
-    expect(lines[1]!.startsWith('│')).toBe(true)
-    expect(lines[1]!.endsWith('│')).toBe(true)
-    expect(lines[1]!.startsWith('│ hello')).toBe(true)
-    expect(lines[2]!.startsWith('╰')).toBe(true)
-    expect(lines[2]!.endsWith('╯')).toBe(true)
+    expect(lines).toHaveLength(1)
+    expect(lines[0]!.startsWith('│ hello')).toBe(true)
+    expect(lines[0]!.trimEnd().endsWith('│')).toBe(false)
     for (const line of lines) expect(visibleWidth(line)).toBe(WIDTH)
   })
 
@@ -84,18 +103,18 @@ describe('BoxedEditor', () => {
     expect(visibleWidth(before)).toBe(EDGE_AND_PADDING + 'hello'.length)
   })
 
-  it('shows the completion menu above the box and outside the frame', async () => {
+  it('shows the completion menu above the rail without enclosing it', async () => {
     const instance = editor()
     completions(instance)
     instance.handleInput('/')
     await settle(() => instance.isShowingAutocomplete())
     const lines = instance.render(WIDTH)
-    const top = lines.findIndex(line => line.startsWith('╭'))
+    const top = lines.findIndex(line => line.startsWith('│'))
     expect(top).toBeGreaterThan(0)
     expect(lines[0]).toContain('help')
     expect(lines[1]).toContain('hello')
-    expect(lines.slice(top)).toHaveLength(3)
-    expect(lines.at(-1)!.startsWith('╰')).toBe(true)
+    expect(lines.slice(top)).toHaveLength(1)
+    expect(lines.at(-1)!.startsWith('│')).toBe(true)
     for (const line of lines) expect(visibleWidth(line)).toBe(WIDTH)
   })
 
@@ -103,11 +122,11 @@ describe('BoxedEditor', () => {
     const instance = editor()
     instance.setText('hello')
     instance.render(WIDTH)
-    instance.handleMouse(mouse({ x: EDGE_AND_PADDING + 2, y: 1 }))
+    instance.handleMouse(mouse({ x: EDGE_AND_PADDING + 2, y: 0 }))
     expect(instance.getCursor().col).toBe(2)
   })
 
-  it('selects the completion a click lands on above the box', async () => {
+  it('selects the completion a click lands on above the rail', async () => {
     const instance = editor()
     completions(instance)
     instance.handleInput('/')
@@ -125,7 +144,7 @@ describe('BoxedEditor', () => {
     expect(lines.some(line => line.includes('╭') || line.includes('╯') || line.includes('│'))).toBe(false)
     // Without a frame the text owns the whole row: reserving columns for
     // furniture nobody can see would narrow the input for no reader.
-    expect(visibleWidth(lines[1]!)).toBe(WIDTH)
+    expect(visibleWidth(lines[0]!)).toBe(WIDTH)
   })
 
   it('draws no frame when the box cannot fit', () => {
@@ -419,9 +438,9 @@ describe('prompt-history ghost completion', () => {
       suggestion: () => '界 ',
       paint: (text, cell) => (cell === 'cursor' ? '\u001b[7m' : '') + theme.style('editor.ghost', text) + '\u001b[0m',
     })
-    painted.setText('a'.repeat(26))
+    painted.setText('a'.repeat(27))
     const plain = new BoxedEditor(surface(), theme.editor)
-    plain.setText('a'.repeat(26))
+    plain.setText('a'.repeat(27))
     expect(painted.render(WIDTH)).toEqual(plain.render(WIDTH))
   })
 })
