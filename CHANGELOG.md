@@ -8,6 +8,8 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-09-30
+
 ### Added
 
 - A sixth theme ships: `marine-static`. Its anchor is `#041F21`, a fill weight
@@ -997,7 +999,8 @@ breaking change, and a patch carries only fixes.
 - Publication through npm OIDC trusted publishing, with the first version
   bootstrapped by hand ([#5](https://github.com/sagmans/dsh-tui/pull/5)).
 
-[Unreleased]: https://github.com/sagmans/dsh-tui/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/sagmans/dsh-tui/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/sagmans/dsh-tui/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/sagmans/dsh-tui/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/sagmans/dsh-tui/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/sagmans/dsh-tui/compare/v0.7.0...v0.8.0
