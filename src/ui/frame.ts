@@ -2,7 +2,7 @@ import { stripTerminalSequences, truncateToWidth, visibleWidth, wrapTextWithAnsi
 import { renderTerminalText } from '../terminal-text.ts'
 
 /**
- * The frame every prompt is closed into.
+ * The shared furniture keeps prompts recognizable through their whole life.
  *
  * The editor, the prompts queued above it, and the prompts already submitted
  * draw the same glyphs at the same width, so one prompt reads as the same object
@@ -13,12 +13,16 @@ export const FRAME_GLYPHS = { topLeft: '╭', topRight: '╮', bottomLeft: '╰'
 
 /** The frame costs one column each side, so the text wraps that much narrower. */
 export const FRAME_COLUMNS = 2
+/** A message rail leaves the right edge open without changing boxed pickers. */
+export const RAIL_COLUMNS = 1
 /** One column of air inside the frame, so a full line never touches the border. */
 export const PADDING_X = 1
 /** The frame's own column, the one `FRAME_GLYPHS.side` is drawn in. */
 const SIDE_COLUMNS = 1
 /** A box needs both edges, both paddings, and one column left to type in. */
 export const MIN_BOX_WIDTH = FRAME_COLUMNS + PADDING_X * 2 + 1
+/** Narrow rails still need padding and one writable cell. */
+export const MIN_RAIL_WIDTH = RAIL_COLUMNS + PADDING_X * 2 + 1
 
 /** The columns the text of a bar owns, given the width of everything inside its frame. */
 export function textWidth(innerWidth: number): number {
@@ -65,10 +69,12 @@ export function frameRule(innerWidth: number, hiddenRows: number): string {
 export interface FrameFaces {
   /** Paints one row of the block's own text. */
   readonly text: (line: string) => string
-  /** Paints the frame's rules and its two sides. */
+  /** One border face keeps rails and enclosed picker edges theme-compatible. */
   readonly border: (rule: string) => string
   /** Whether the frame may be drawn at all. */
   readonly framed: boolean
+  /** Messages share a quiet left edge; picker dialogs retain their enclosure. */
+  readonly rail?: boolean
 }
 
 /**
@@ -95,8 +101,8 @@ export interface FrameBlock {
 }
 
 /** Whether a bar has the width, and the visible border, to close a frame. */
-export function canFrame(width: number, borderVisible: boolean): boolean {
-  return borderVisible && width >= MIN_BOX_WIDTH
+export function canFrame(width: number, borderVisible: boolean, rail = false): boolean {
+  return borderVisible && width >= (rail ? MIN_RAIL_WIDTH : MIN_BOX_WIDTH)
 }
 
 /**
@@ -106,8 +112,8 @@ export function canFrame(width: number, borderVisible: boolean): boolean {
  * Markdown lays itself out to the width it is given, so its rows may not be
  * wrapped again here: a second pass would break a fence or a table the markdown
  * just drew. A block with a limit is a preview, and the rows it drops are
- * counted on the closing rule: a reader who cannot see the whole text still has
- * to see that it continues.
+ * counted beside the rail or on the closing rule: a clipped preview must still
+ * tell the reader that it continues.
  *
  * The copy of a block reads the same rows back as text: the frame's own rows
  * carry no text at all, and a row the frame holds names the columns of it that
@@ -115,7 +121,7 @@ export function canFrame(width: number, borderVisible: boolean): boolean {
  * rather than as the shape that held them.
  */
 export function frameBlock(lines: readonly string[], width: number, faces: FrameFaces, limit = Number.POSITIVE_INFINITY): FrameBlock {
-  const inside = faces.framed ? width - FRAME_COLUMNS : width
+  const inside = faces.framed ? width - (faces.rail ? RAIL_COLUMNS : FRAME_COLUMNS) : width
   const body = lines.slice(0, Math.max(0, limit))
   const rows = body.map(line => textRow(faces.text(line), inside))
   // The row is kept as the frame laid it out rather than as a copy trims it: the
@@ -125,6 +131,18 @@ export function frameBlock(lines: readonly string[], width: number, faces: Frame
   // that padding is the frame's, so a copy of these rows drops it too.
   if (!faces.framed) return { drawn: rows, copy: rows.map(row => ({ ...read(row), frame: { lead: PADDING_X, trail: PADDING_X } })) }
   const side = faces.border(FRAME_GLYPHS.side)
+  if (faces.rail) {
+    const drawn = rows.map(row => `${side}${row}`)
+    const copy: FrameRow[] = drawn.map(row => ({ ...read(row), frame: { lead: RAIL_COLUMNS + PADDING_X, trail: PADDING_X } }))
+    const hiddenRows = lines.length - body.length
+    // A preview must disclose omitted content even without a closing rule.
+    if (hiddenRows > 0) {
+      const indicator = `${side}${textRow(faces.border(`↓ ${hiddenRows} more`), inside)}`
+      drawn.push(indicator)
+      copy.push(read(indicator))
+    }
+    return { drawn, copy }
+  }
   const drawn = [
     faces.border(`${FRAME_GLYPHS.topLeft}${frameRule(inside, 0)}${FRAME_GLYPHS.topRight}`),
     ...rows.map(row => `${side}${row}${side}`),
@@ -153,7 +171,7 @@ export function frameLines(lines: readonly string[], width: number, faces: Frame
  * the frame's, and a sequence that reached one would fight the frame that owns it.
  */
 export function frameText(text: string, width: number, faces: FrameFaces, limit = Number.POSITIVE_INFINITY): string[] {
-  const inside = faces.framed ? width - FRAME_COLUMNS : width
+  const inside = faces.framed ? width - (faces.rail ? RAIL_COLUMNS : FRAME_COLUMNS) : width
   const drawn = renderTerminalText(text, { color: 'none' })
   return frameLines(wrapTextWithAnsi(drawn, textWidth(inside)), width, faces, limit)
 }

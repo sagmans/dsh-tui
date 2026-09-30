@@ -305,6 +305,8 @@ export /**
 function gateCard(typed = ''): TranscriptView {
   const typing = typed !== ''
   const bar = new BoxedEditor(STUB_TUI, theme.editor)
+  // The real modal owner borrows the editor with submission disabled.
+  bar.disableSubmit = true
   bar.setText(typed)
   const gate: GateCard = {
     kind: 'question',

@@ -15,7 +15,7 @@ import { ENTER_KEY } from '../input/key-press.ts'
 import { ghostDisplayLine, ghostGraphemes, isCursorAtTextEnd, nextGhostWord, type EditorCursor } from '../input/ghost.ts'
 import { promptKeys } from '../input/keymap.ts'
 import { renderTerminalText } from '../terminal-text.ts'
-import { FRAME_COLUMNS, FRAME_GLYPHS, MIN_BOX_WIDTH, PADDING_X } from './frame.ts'
+import { FRAME_COLUMNS, RAIL_COLUMNS, FRAME_GLYPHS, MIN_BOX_WIDTH, MIN_RAIL_WIDTH, PADDING_X, textRow } from './frame.ts'
 
 /**
  * Marks the rule that closes the input while one render is in flight.
@@ -90,20 +90,25 @@ export interface GhostBrush {
 }
 
 /**
- * The input bar drawn as a box, with its completion menu above it.
+ * The input bar shares the messages' left rail without enclosing the draft.
  *
- * The editor already draws the two rules and pads every row to the width it is
- * given, so the frame comes from rendering two columns narrower and wrapping
- * what comes back. The menu is lifted above the box because the reader scans it
- * while writing: a list that grows upward never covers the line being typed.
+ * The base editor still owns wrapping and scrolling, so only its enclosing
+ * rules are removed. Completion stays above the draft to avoid covering the
+ * line being typed, and scroll counts keep clipped text discoverable.
  */
 export class BoxedEditor extends Editor {
   /** Rows the menu took in the last render; a click there belongs to the list. */
   private menuRows = 0
   /** Rows between the rules in the last render; how the base editor counts its own. */
   private textRows = 0
-  /** Whether the last render drew a frame, which is what a click is mapped through. */
-  private boxed = false
+  /** Pointer translation is safe only after recognizing the base layout. */
+  private mapped = false
+  /** Hidden rows stay discoverable after removing the enclosing rules. */
+  private hiddenAbove = 0
+  private hiddenBelow = 0
+  /** Pointer offsets follow only the furniture actually drawn. */
+  private railColumns = 0
+  private topIndicatorRows = 0
 
   constructor(
     tui: TUI,
@@ -159,12 +164,14 @@ export class BoxedEditor extends Editor {
 
   /** Tag the closing rule so {@link render} can find where the box ends. */
   protected override renderBottomBorder(width: number, hiddenLineCount: number): string {
+    this.hiddenBelow = hiddenLineCount
     return `${super.renderBottomBorder(width, hiddenLineCount)}${CLOSING_TAG}`
   }
 
-  /** A rule redrawn as a box edge, so the corners carry the border's own colour. */
-  private edge(open: string, close: string, row: string): string {
-    return this.borderColor(`${open}${stripTerminalSequences(row)}${close}`)
+  /** The base owns scrolling; its count survives without its top rule. */
+  protected override renderTopBorder(width: number, hiddenLineCount: number): string {
+    this.hiddenAbove = hiddenLineCount
+    return super.renderTopBorder(width, hiddenLineCount)
   }
 
   /**
@@ -249,30 +256,37 @@ export class BoxedEditor extends Editor {
   }
 
   override render(width: number): string[] {
-    const side = this.borderColor(FRAME_GLYPHS.side)
-    // A frame narrower than its own furniture would eat the text it exists to
-    // hold, and a hidden border token asks for no frame at all: both cases keep
-    // the plain rules rather than reserve columns for what nobody can see.
+    // Borrowed question editors remain dialog furniture, not conversation messages.
+    const enclosed = this.disableSubmit
+    const minimum = enclosed ? MIN_BOX_WIDTH : MIN_RAIL_WIDTH
+    const side = width >= minimum ? this.borderColor(FRAME_GLYPHS.side) : ''
+    this.railColumns = side === '' ? 0 : enclosed ? FRAME_COLUMNS : RAIL_COLUMNS
+    const boxed = enclosed && this.railColumns > 0
+    const inside = width - this.railColumns
     const ghost = this.disableSubmit ? undefined : this.currentGhostSuffix()
-    if (width < MIN_BOX_WIDTH || side === '') {
-      this.boxed = false
-      return super.render(width).map(row => this.decorateText(this.ghostRow(row, ghost)))
-    }
-    const rows = super.render(width - FRAME_COLUMNS)
+    const rows = super.render(inside)
     const closing = rows.findIndex(row => row.includes(CLOSING_TAG))
-    // No tagged rule means the base did not paint the shape this class knows;
-    // an unframed render reports that better than a frame drawn on a guess.
-    if (closing < 0) return rows.map(row => row.replace(CLOSING_TAG, ''))
+    // An unfamiliar base layout must not receive guessed pointer offsets.
+    if (closing < 0) {
+      this.mapped = false
+      return rows.map(row => row.replace(CLOSING_TAG, ''))
+    }
     const menu = rows.slice(closing + 1)
     const text = rows.slice(1, closing)
     this.menuRows = menu.length
     this.textRows = text.length
-    this.boxed = true
-    // The menu keeps the page's own width; only its rows moved above the box.
-    const lines = menu.map(row => row + ' '.repeat(FRAME_COLUMNS))
-    lines.push(this.edge(FRAME_GLYPHS.topLeft, FRAME_GLYPHS.topRight, rows[0] ?? ''))
-    for (const row of text) lines.push(`${side}${this.decorateText(this.ghostRow(row, ghost))}${side}`)
-    lines.push(this.edge(FRAME_GLYPHS.bottomLeft, FRAME_GLYPHS.bottomRight, rows[closing]!.replace(CLOSING_TAG, '')))
+    this.mapped = true
+    this.topIndicatorRows = boxed || this.hiddenAbove > 0 ? 1 : 0
+    const lines = menu.map(row => row + ' '.repeat(this.railColumns))
+    const indicator = (direction: string, count: number): string =>
+      side + textRow(this.borderColor(`${direction} ${count} more`), inside)
+    const edge = (open: string, row: string, close: string): string =>
+      this.borderColor(open + stripTerminalSequences(row) + close)
+    if (boxed) lines.push(edge(FRAME_GLYPHS.topLeft, rows[0] ?? '', FRAME_GLYPHS.topRight))
+    else if (this.hiddenAbove > 0) lines.push(indicator('↑', this.hiddenAbove))
+    for (const row of text) lines.push(side + this.decorateText(this.ghostRow(row, ghost)) + (boxed ? side : ''))
+    if (boxed) lines.push(edge(FRAME_GLYPHS.bottomLeft, rows[closing]!.replace(CLOSING_TAG, ''), FRAME_GLYPHS.bottomRight))
+    else if (this.hiddenBelow > 0) lines.push(indicator('↓', this.hiddenBelow))
     return lines
   }
 
@@ -282,15 +296,15 @@ export class BoxedEditor extends Editor {
    * The base editor hit-tests the rows it painted in its own order — the input
    * under the top rule, the menu after the bottom one — and measures columns
    * from the edge of the width it was asked for. This subclass draws the menu
-   * first and indents every line by the frame, so a click has to be translated
+   * first, removes the rules, and adds a rail, so clicks must be translated
    * back before that hit test can say what it hit.
    */
   override handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
-    if (!this.boxed) return super.handleMouse(event)
-    const width = event.width - FRAME_COLUMNS
+    if (!this.mapped) return super.handleMouse(event)
+    const width = event.width - this.railColumns
     if (event.y < this.menuRows) {
       return super.handleMouse({ ...event, width, y: event.y + this.textRows + 2 })
     }
-    return super.handleMouse({ ...event, width, x: event.x - 1, y: event.y - this.menuRows })
+    return super.handleMouse({ ...event, width, x: event.x - (this.railColumns > 0 ? RAIL_COLUMNS : 0), y: event.y - this.menuRows + 1 - this.topIndicatorRows })
   }
 }

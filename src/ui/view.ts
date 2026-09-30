@@ -312,8 +312,8 @@ private pushPicker(lines: string[], picker: PickerCard, width: number): void {
         lines.push(...gapRows(this.air().steps))
         return
       case 'assistant':
-        // The reply is boxed the way the prompt that asked for it is, so one
-        // exchange reads as two objects rather than as a box and then a stream.
+        // Matching rails keep both halves of an exchange visually related
+        // without enclosing the reader's words or the agent's reply.
         this.messages.pushFramed(lines, copy, entry.text, width, live, ANSWER_FACE, 'transcript.assistant.border')
         return
       case 'user': {

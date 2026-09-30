@@ -25,7 +25,7 @@ export class QueueBar implements Component {
     // Nothing is cached: the prompts are read fresh on every frame.
   }
 
-  /** One queued prompt as the editor bar's own box, drawn in the queued face. */
+  /** Matching rails keep a submitted draft recognizable while it waits. */
   private box(text: string, width: number, framed: boolean): string[] {
     // A prompt can be longer than the screen; the reader needs to see that it is
     // waiting, not to re-read all of it, so the first rows stand for the whole.
@@ -33,6 +33,7 @@ export class QueueBar implements Component {
       text: line => this.theme.style('editor.queued', line),
       border: rule => this.theme.editor.borderColor(rule),
       framed,
+      rail: true,
     }, QUEUE_TEXT_ROWS)
   }
 
@@ -43,7 +44,7 @@ export class QueueBar implements Component {
     // Hiding the face hides the rows: a frame around text the reader cannot read
     // would look like an empty prompt waiting to be typed into.
     if (!this.theme.visible('editor.queued')) return []
-    const framed = canFrame(width, this.theme.visible('editor.border'))
+    const framed = canFrame(width, this.theme.visible('editor.border'), true)
     const shown = prompts.slice(-QUEUE_LIMIT)
     const lines: string[] = []
     // The reader typed the newest prompt last, so that is the row that must stay

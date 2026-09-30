@@ -8,6 +8,11 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+### Changed
+
+- User messages, assistant replies, queued prompts, and the prompt bar use a thin
+  left rail instead of enclosing borders, keeping conversations visually quiet.
+
 ## [0.11.2] - 2026-09-30
 
 ### Changed

@@ -49,15 +49,15 @@ describe('TranscriptView air', () => {
     model.apply({ type: 'assistant/message', data: { message: { content: [{ type: 'text', text: 'tell' }] } } })
     // The prompt's closing row and the reply's opening row are one break, not two:
     // what the reader asked for is air between two things, not one per thing.
-    expect(shape(viewOf(model, () => SHIPPED).render(40))).toEqual(['air', 'box', 'box', 'box', 'air', 'box', 'box', 'box', 'air'])
+    expect(shape(viewOf(model, () => SHIPPED).render(40))).toEqual(['air', 'box', 'air', 'box', 'air'])
   })
 
   it('opens a step with air, so a thought and the calls it made stay one group', () => {
     expect(shape(viewOf(stepped(), () => SHIPPED).render(40))).toEqual([
-      'air', 'box', 'box', 'box',
+      'air', 'box',
       'air', 'thought', 'call',
       'air', 'thought', 'call',
-      'air', 'box', 'box', 'box', 'air',
+      'air', 'box', 'air',
     ])
   })
 
@@ -76,7 +76,7 @@ describe('TranscriptView air', () => {
     const none: Spacing = { padding: 0, messages: 0, steps: 0 }
     const rows = viewOf(stepped(), () => none).render(40)
     expect(rows.every(row => row !== '')).toBe(true)
-    expect(shape(rows)).toEqual(['box', 'box', 'box', 'thought', 'call', 'thought', 'call', 'box', 'box', 'box'])
+    expect(shape(rows)).toEqual(['box', 'thought', 'call', 'thought', 'call', 'box'])
   })
 
   it('redraws the rows it cached when the reader moves the air', () => {
@@ -87,10 +87,10 @@ describe('TranscriptView air', () => {
     // part of the key: an edit to the document has to reach the rows already drawn.
     spacing = SHIPPED
     expect(shape(view.render(40))).toEqual([
-      'air', 'box', 'box', 'box',
+      'air', 'box',
       'air', 'thought', 'call',
       'air', 'thought', 'call',
-      'air', 'box', 'box', 'box', 'air',
+      'air', 'box', 'air',
     ])
   })
 })

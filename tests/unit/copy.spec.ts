@@ -23,6 +23,13 @@ const drag = (drawn: readonly string[], from: [number, number], to: [number, num
 }
 
 describe('a copied selection', () => {
+  it('copies rail messages and partial drags without removing indentation or wide glyphs', () => {
+    const drawn = frameBlock(['    漢字', '', 'after'], 20, { text: line => line, border: rule => rule, framed: true, rail: true })
+    expect(cleanCopied(reader(drawn.drawn), drawn.copy)).toBe('    漢字\n\nafter')
+    expect(cleanCopied(drag(drawn.drawn, [0, 0], [0, 10]), drawn.copy)).toBe('    漢字')
+    expect(cleanCopied(drag(drawn.drawn, [0, 6], [0, 10]), drawn.copy)).toBe('漢字')
+  })
+
   it('reads a message back as its words, with the box left behind', () => {
     const drawn = block(['hello', 'world'])
     expect(cleanCopied(reader(drawn.drawn), drawn.copy)).toBe('hello\nworld')
