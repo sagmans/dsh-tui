@@ -173,8 +173,13 @@ try {
   })
   try {
     const plugin = await import(pathToFileURL(join(unpacked, 'package', 'lib', 'index.js')).href)
+    // The reader the surface uses, because a live preference travels wrapped in
+    // the reference the loaded schema runtime makes: reading the wrapper's own
+    // keys would report every field as absent.
+    const { readRowSettings } = await import(pathToFileURL(join(unpacked, 'package', 'lib', 'config.js')).href)
     const validated = plugin.Config?.['~standard']?.validate(structuredClone(CONFIG_SMOKE_INPUT))
-    if (validated?.issues || validated?.value?.history?.enabled !== false || validated?.value?.history?.ghost !== false) {
+    const history = readRowSettings(validated?.value)?.history
+    if (validated?.issues || history?.enabled !== false || history?.ghost !== false) {
       problems.push('the packaged Config does not preserve false history preferences')
     }
   } finally {

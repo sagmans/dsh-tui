@@ -480,16 +480,18 @@ opt-outs and copy only the intended legacy fields into the actual TUI entry's
 `config`. Keep the original file for rollback.
 
 Live Config edits require the loaded schema runtime to create native volatile
-references. The released schemastery 3.18.2 implementation used by this checkout's
-unit tests lacks that API. A source host can resolve a different implementation
-with the same version label. TUI checks the loaded implementation and actual
-references, not the package version or CLI identity.
+references. This plugin therefore declares the schemastery release that provides
+the API, because an implementation without it wraps nothing: every preference
+field stays ordinary data and a Config-backed write never reaches the document
+the reader is looking at. TUI checks the loaded implementation and the actual
+references, not the package version or CLI identity, so a host that resolves an
+older copy gets the refusal instead of an import that silently does nothing.
 
 If the loaded schema runtime lacks native support, TUI exports ordinary fields
 rather than unsupported live metadata. TUI then rejects Config-backed writes,
 and the host cannot import preferences through its volatile-field settings API.
-Reading row preferences still works, and ordinary profile changes use the host's
-reload lifecycle. Native schema-backed hosts can apply live preference updates.
+Reading row preferences still works, and an ordinary profile change - the entry's
+own `config` in a profile patch - is applied by the host's reload lifecycle.
 
 Every field is optional, so a section that changes one shade is enough. The
 document is hot-reloaded: an edit restyles a running session and re-arms the
