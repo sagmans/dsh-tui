@@ -16,7 +16,8 @@ Applies to maintainers. Current release owner: repository owner ([`LICENSE`](LIC
 4. Dogfooding: install the candidate into a plugin profile and drive a real session in a terminal per [README](README.md#install). Unit tests do not prove the terminal surface.
 5. README accuracy pass: every documented command and profile path still behaves as written.
 6. `CHANGELOG.md` carries the version being tagged: `Unreleased` holds only what landed after it, the `## [X.Y.Z] - <date>` section names the tag, and the compare links point at that tag.
-7. A published npm version is immutable. A broken release is forward-fixed, never unpublished (see [Rollback](#rollback)).
+7. A publication carries both its `vX.Y.Z` tag and the GitHub release record for that tag. The tag is what `release.yml` publishes from and what a checkout resolves; the record is what a reader finds, and its notes are the version's `CHANGELOG.md` entry. Either half missing leaves the version incomplete: create the missing half from the same signed tag, and never retag and never republish a version already served.
+8. A published npm version is immutable. A broken release is forward-fixed, never unpublished (see [Rollback](#rollback)).
 
 ## Harness matrix
 
@@ -110,7 +111,7 @@ git tag -s -a "v${PKG_VERSION}" -m "v${PKG_VERSION}" <merged-sha>
 git push origin "v${PKG_VERSION}"
 ```
 
-The tag push runs `release.yml`: it re-verifies the candidate, then the publish job waits for the release owner's approval on the `npm-release` environment before publishing through OIDC trusted publishing with automatic provenance. Create the GitHub release from the tag using the drafted notes after publication succeeds.
+The tag push runs `release.yml`: it re-verifies the candidate, then the publish job waits for the release owner's approval on the `npm-release` environment before publishing through OIDC trusted publishing with automatic provenance. Create the GitHub release from the tag using the drafted notes once publication succeeds — the record is part of the release, not follow-up work, so a version that reaches the registry without it is finished by creating it from that same tag. A version already published before this rule is completed the same way.
 
 ## Rollback
 
