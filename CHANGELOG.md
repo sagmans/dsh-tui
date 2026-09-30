@@ -8,6 +8,8 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-09-30
+
 ### Fixed
 
 - A theme chosen from the picker persists again. The row pinned the released
@@ -1009,7 +1011,8 @@ breaking change, and a patch carries only fixes.
 - Publication through npm OIDC trusted publishing, with the first version
   bootstrapped by hand ([#5](https://github.com/sagmans/dsh-tui/pull/5)).
 
-[Unreleased]: https://github.com/sagmans/dsh-tui/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/sagmans/dsh-tui/compare/v0.11.1...HEAD
+[0.11.1]: https://github.com/sagmans/dsh-tui/compare/v0.11.0...v0.11.1
 [0.11.0]: https://github.com/sagmans/dsh-tui/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/sagmans/dsh-tui/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/sagmans/dsh-tui/compare/v0.8.0...v0.9.0
