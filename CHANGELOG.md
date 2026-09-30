@@ -63,6 +63,11 @@ Not published: release signature verification failed. Its changes ship in 0.12.1
 
 ### Fixed
 
+- Deferred host output and warning text obey UTF-8 byte budgets; oversized
+  diagnostics drop whole with counts instead of remaining unbounded. Warning event
+  retention also has a count bound, preserving retained event identities.
+- Recovered frame rendering allows a later failure to report again without
+  flooding repeated retries.
 - Large workspace completion yields during scoring so newer keyboard input can
   cancel obsolete rankings before filesystem proofs. Path containment checks remain unchanged.
 - Picker navigation and repainting reuse unchanged filter rankings while

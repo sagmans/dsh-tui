@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { HOST_WRITE_DROPPED, holdHostWrites, type HostWritable } from '@/terminal/host-writes.ts'
 
+const UTF8_BYTE_BUDGET = 4
+const OVERSIZE_BYTE_BUDGET = 3
+const INVALID_BYTE_BUDGETS = [-1, NaN, Infinity, 1.5]
+
 /** A stream that remembers what reached it. */
 interface FakeStream extends HostWritable {
   readonly written: string[]
@@ -79,20 +83,18 @@ describe('holdHostWrites', () => {
     expect(flushed).not.toContain('12345')
   })
 
-  it('holds a write larger than the budget whole rather than cutting it', () => {
+  it('drops a single over-budget write whole and reports its loss', () => {
     const screen = stream()
     const terminal = stream()
     const guard = holdHostWrites({ terminal, targets: [screen], limit: 8 })
     const oversized = 'x'.repeat(32)
-    // The budget counts whole writes, and the newest write is never the one
-    // given up, so a single write past it is still the reader's own program's
-    // output: it waits entire, where a cut at the limit would corrupt it.
+    // A single diagnostic must not bypass the byte bound or reach the shell cut in half.
     screen.write(oversized)
     guard.release()
-    expect(screen.written).toEqual([oversized])
+    expect(screen.written).toEqual([`${HOST_WRITE_DROPPED} (1 writes)\n`])
   })
 
-  it('drops the older writes a too-large write arrived after', () => {
+  it('preserves earlier bounded messages when a later write is oversized', () => {
     const screen = stream()
     const terminal = stream()
     const guard = holdHostWrites({ terminal, targets: [screen], limit: 8 })
@@ -100,9 +102,8 @@ describe('holdHostWrites', () => {
     screen.write('12345')
     screen.write(oversized)
     guard.release()
-    // Trimming still happens around it, and what is kept is released in the
-    // order it arrived, so the hold never reorders host output.
-    expect(screen.written).toEqual([`${HOST_WRITE_DROPPED} (1 writes)\n${oversized}`])
+    // An oversized record must not evict useful bounded diagnostics that still fit.
+    expect(screen.written).toEqual([`${HOST_WRITE_DROPPED} (1 writes)\n12345`])
   })
 
   it('gives every stream its own write back, exactly as it found it', () => {
@@ -135,5 +136,35 @@ describe('holdHostWrites', () => {
     screen.write('held', () => { settled += 1 })
     expect(settled).toBe(1)
     guard.release()
+  })
+
+  it('budgets UTF-8 bytes rather than UTF-16 code units', () => {
+    const screen = stream()
+    const terminal = stream()
+    const guard = holdHostWrites({ terminal, targets: [screen], limit: UTF8_BYTE_BUDGET })
+    screen.write('😀')
+    screen.write('😀')
+    guard.release()
+    expect(screen.written.at(-1)).toBe(`${HOST_WRITE_DROPPED} (1 writes)\n😀`)
+  })
+
+  it('drops an oversized whole write while retaining smaller messages and callbacks', () => {
+    const screen = stream()
+    const terminal = stream()
+    const guard = holdHostWrites({ terminal, targets: [screen], limit: OVERSIZE_BYTE_BUDGET })
+    let completed = 0
+    screen.write('ok')
+    screen.write('😀', () => { completed += 1 })
+    guard.release()
+    expect(completed).toBe(1)
+    expect(screen.written.at(-1)).toBe(`${HOST_WRITE_DROPPED} (1 writes)\nok`)
+  })
+
+  it.each(INVALID_BYTE_BUDGETS)('rejects invalid byte budget %s before replacing any stream', limit => {
+    const screen = stream()
+    const terminal = stream()
+    const original = screen.write
+    expect(() => holdHostWrites({ terminal, targets: [screen], limit })).toThrow(RangeError)
+    expect(screen.write).toBe(original)
   })
 })

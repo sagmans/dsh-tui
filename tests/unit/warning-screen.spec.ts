@@ -18,6 +18,9 @@ const AFTER = 'warning-after-screen'
 const DIRECT_ERROR = 'ordinary-stderr-still-visible'
 const RETAINED_FRAME = 'last good frame'
 const TIMEOUT_MS = 10_000
+const WARNING_SAMPLE_SIZE = 10_000
+const OVERSIZED_WARNING_SIZE = 20_000
+const ZERO_TEXT_WARNING_COUNT = 1000
 
 function run(flags: string[] = [], mode = ''): string {
   const env = { ...process.env }
@@ -138,6 +141,26 @@ function fakeTerminal(writes: string[] = []): Terminal {
  * hold itself is released on every path that ends the screen, including the two
  * failures that never reach a normal stop.
  */
+/** Delivery, not the default logger's formatting, proves retained identities and dropped diagnostics. */
+function capturedWarnings(emit: () => void): Error[] {
+  const listeners = process.rawListeners('warning')
+  const seen: Error[] = []
+  process.removeAllListeners('warning')
+  const observe = (warning: Error): void => { seen.push(warning) }
+  process.on('warning', observe)
+  const tui = new WarningSafeTui(fakeTerminal())
+  tui.start()
+  try {
+    emit()
+  } finally {
+    try { tui.stop({ preserveScreen: true }) } finally {
+      process.removeListener('warning', observe)
+      for (const listener of listeners) Reflect.apply(process.on, process, ['warning', listener])
+    }
+  }
+  return seen
+}
+
 describe('WarningSafeTui warning hold', () => {
   it('defers a warning while the screen is up and delivers it as the screen closes', () => {
     const originalEmit = process.emit
@@ -284,5 +307,51 @@ describe('WarningSafeTui warning hold', () => {
     // own emit back; a held slot would defer every later warning forever.
     expect(() => tui.start()).toThrow('terminal-start-failed')
     expect(process.emit).toBe(originalEmit)
+  })
+
+  it('reports a new failure after a successful recovery, not every retry', () => {
+    const errors: unknown[] = []
+    const tui = new WarningSafeTui(fakeTerminal())
+    let broken = true
+    tui.onFrameError = error => errors.push(error)
+    tui.setLayoutRoot({ render: () => { if (broken) throw new Error('frame episode'); return ['recovered'] }, invalidate: () => {} })
+    tui.start()
+    try {
+      tui.doRender()
+      tui.doRender()
+      broken = false
+      tui.doRender()
+      broken = true
+      tui.doRender()
+      tui.doRender()
+      expect(errors).toHaveLength(2)
+    } finally {
+      tui.stop({ preserveScreen: true })
+    }
+  })
+
+  it('bounds warning text by UTF-8 bytes while preserving retained event identity', () => {
+    const first = Object.assign(new Error('first'), { stack: '😀'.repeat(WARNING_SAMPLE_SIZE) })
+    const last = Object.assign(new Error('last'), { stack: first.stack })
+    const seen = capturedWarnings(() => { process.emit('warning', first); process.emit('warning', last) })
+    expect(seen).toContain(first)
+    expect(seen).not.toContain(last)
+    expect(seen.some(warning => warning.message.includes('warnings dropped'))).toBe(true)
+  })
+
+  it('drops an oversized warning rather than retaining or cutting it', () => {
+    const warning = Object.assign(new Error('oversized'), { stack: '😀'.repeat(OVERSIZED_WARNING_SIZE) })
+    const seen = capturedWarnings(() => process.emit('warning', warning))
+    expect(seen).not.toContain(warning)
+    expect(seen.some(warning => warning.message.includes('warnings dropped'))).toBe(true)
+  })
+
+  it('bounds zero-text warning events independently of the text budget', () => {
+    const count = ZERO_TEXT_WARNING_COUNT
+    const seen = capturedWarnings(() => {
+      for (let index = 0; index < count; index++) process.emit('warning', Object.assign(new Error(''), { name: '', stack: '' }))
+    })
+    expect(seen.length).toBeLessThan(count)
+    expect(seen.some(warning => warning.message.includes('warnings dropped'))).toBe(true)
   })
 })

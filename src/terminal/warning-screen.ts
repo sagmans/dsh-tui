@@ -1,17 +1,53 @@
+import { Buffer } from 'node:buffer'
 import { TuiAltScreen, type TuiAltScreenOptions, type Terminal, type TuiStopOptions } from '@earendil-works/pi-tui'
-import { holdHostWrites, HOST_WRITE_TARGETS, type HostWriteGuard } from './host-writes.ts'
+import { holdHostWrites, HOST_WRITE_LIMIT, HOST_WRITE_TARGETS, type HostWriteGuard } from './host-writes.ts'
 
 const WARNING_EVENT = 'warning'
+const WARNING_EVENT_LIMIT = 256
+const WARNING_TEXT_FIELDS = ['name', 'message', 'stack', 'code', 'detail']
+const WARNING_DROPPED = '… warnings dropped'
 const RESTORE_SHELL = '\x1b[?1049l\x1b[0m\x1b[?7h\x1b[?25h'
+
+/** Budget standard warning text without replacing the producer's retained event identity. */
+function warningBytes(args: readonly unknown[]): number {
+  let bytes = 0
+  try {
+    for (const argument of args) {
+      const values = argument instanceof Error
+        ? WARNING_TEXT_FIELDS.map(field => Reflect.get(argument, field))
+        : [argument]
+      for (const value of values) {
+        if ((value !== null && typeof value === 'object') || typeof value === 'function') return HOST_WRITE_LIMIT + 1
+        if (value !== undefined) bytes += Buffer.byteLength(String(value))
+        if (bytes > HOST_WRITE_LIMIT) return bytes
+      }
+    }
+  } catch {
+    // Opaque metadata or throwing getters cannot establish a safe retention budget.
+    return HOST_WRITE_LIMIT + 1
+  }
+  return bytes
+}
 
 /** Node's default warning listener writes outside the renderer, so delivery must wait for the shell. */
 function deferWarnings(): () => void {
   const emit = process.emit
   const pending: unknown[][] = []
+  let bytes = 0
+  let dropped = 0
   let active = true
   const deferredEmit = function (this: NodeJS.Process, event: string | symbol, ...args: unknown[]): boolean {
     if (active && this === process && event === WARNING_EVENT) {
-      pending.push(args)
+      // Root-cause warnings survive a burst; later repetitions must not grow the hold or repeatedly format stacks.
+      if (pending.length >= WARNING_EVENT_LIMIT || bytes >= HOST_WRITE_LIMIT) dropped += 1
+      else {
+        const size = warningBytes(args)
+        if (size > HOST_WRITE_LIMIT - bytes) dropped += 1
+        else {
+          pending.push(args)
+          bytes += size
+        }
+      }
       return process.listenerCount(WARNING_EVENT) > 0
     }
     return Reflect.apply(emit, this, [event, ...args]) as boolean
@@ -23,6 +59,14 @@ function deferWarnings(): () => void {
     // A later wrapper may own the slot; its retained reference must become a pass-through instead.
     if (process.emit === deferredEmit) process.emit = emit
     const failures: unknown[] = []
+    bytes = 0
+    if (dropped > 0) {
+      try {
+        Reflect.apply(emit, process, [WARNING_EVENT, new Error(`${WARNING_DROPPED} (${dropped} warnings)`)])
+      } catch (error) {
+        failures.push(error)
+      }
+    }
     for (const args of pending.splice(0)) {
       try {
         Reflect.apply(emit, process, [WARNING_EVENT, ...args])
@@ -44,7 +88,7 @@ export class WarningSafeTui extends TuiAltScreen {
   private hostWrites: HostWriteGuard | undefined
   private frameFailed = false
 
-  /** Told once when a frame could not be drawn, so the surface can report it. */
+  /** Each failure episode deserves a report, but repeated retries must not flood the surface. */
   onFrameError: ((error: unknown) => void) | undefined
 
   /**
@@ -80,6 +124,7 @@ export class WarningSafeTui extends TuiAltScreen {
   override doRender(): void {
     try {
       super.doRender()
+      this.frameFailed = false
     } catch (error) {
       if (this.frameFailed) return
       this.frameFailed = true
