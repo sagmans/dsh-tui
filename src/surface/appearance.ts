@@ -327,7 +327,8 @@ export function createAppearance(ctx: Context, ports: AppearancePorts): Appearan
       // document: a row-pinned theme would otherwise read as every shade
       // untouched, which is the opposite of the question this command answers.
       const section = appliedSection ?? preferences.read()
-      for (const line of renderThemeTable(toOverrides({ ...section, theme: previewTheme ?? themeName(section) }, themeLibrary), themeLibrary)) ports.notice(line)
+      const table = renderThemeTable(toOverrides({ ...section, theme: previewTheme ?? themeName(section) }, themeLibrary), themeLibrary, preferences.home())
+      for (const line of table) ports.notice(line)
       ports.render()
       return
     }

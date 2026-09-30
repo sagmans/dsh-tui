@@ -396,8 +396,21 @@ must not also be a way to lose the work.
 
 Every styled element is a named token with a shipped default, and every key is
 an action with one, so the surface can be restyled and rebound without touching
-code. Released hosts with section APIs store preferences in
-`$DSH_HOME/settings.yaml`, under a `dsh-tui:` section:
+code. On the supported line a preference lives in the active profile's own patch,
+under the TUI entry's `config`; `/theme <name>` writes a chosen theme there for
+you. Use the actual entry ID, normally `tui`, not the legacy `dsh-tui` namespace.
+
+```yaml
+- id: tui
+  config:
+    theme: violet-orbit
+    history:
+      enabled: false
+      ghost: false
+```
+
+A released host that keeps a `dsh-tui:` section reads the same fields from
+`$DSH_HOME/settings.yaml` instead, and reads every one shown below:
 
 ```yaml
 dsh-tui:
@@ -434,19 +447,6 @@ dsh-tui:
       bold: true
     dock.jobs.heading:
       hidden: true            # the element renders nothing at all
-```
-
-Config-backed source hosts store the same preference fields in the TUI entry's
-`config` in the active profile patch. Use the actual entry ID, normally `tui`,
-not the legacy `dsh-tui` namespace. For example:
-
-```yaml
-- id: tui
-  config:
-    theme: violet-orbit
-    history:
-      enabled: false
-      ghost: false
 ```
 
 The plugin exports a Config schema for all preferences shown above, including
@@ -764,7 +764,7 @@ The package is a Cordis plugin bundle that stacks over `@deepseek-ai/dsh-base`:
 
 A question whose id ends in `:secret` declares its typed answer a credential: the bar hides everything but its first and last four characters, and the free-text row a question with options offers is labelled `API KEY`. Wording is not a declaration, because hiding every question that mentions a key would hide answers their authors meant to be read.
 
-Air follows the log's own boundaries rather than every row. A prompt and a reply are objects of the transcript, so each frame opens and closes on blank rows — `spacing.messages`, one by default — and two boundaries that meet keep the wider ask instead of the sum, so one break never reads as two. A step is the other boundary: the loop's `step/start` opens it, which is what keeps a thought and the calls it made in one group and puts the next step's work underneath it, `spacing.steps` rows down. Nothing else is spaced — a reply after a reply, a folded thought's signpost, and the cards under the message that asked for them all stay flush — and every count accepts 0, which draws the rows exactly as the surface drew them before the air existed. `spacing.padding` insets the conversation and the work board under it instead of sitting at a seam, while the bar the reader types in, the prompts queued behind it, and the footer keep the window's full width; all three counts are read per frame, so an edit in `$DSH_HOME/settings.yaml` lands on the session already on screen.
+Air follows the log's own boundaries rather than every row. A prompt and a reply are objects of the transcript, so each frame opens and closes on blank rows — `spacing.messages`, one by default — and two boundaries that meet keep the wider ask instead of the sum, so one break never reads as two. A step is the other boundary: the loop's `step/start` opens it, which is what keeps a thought and the calls it made in one group and puts the next step's work underneath it, `spacing.steps` rows down. Nothing else is spaced — a reply after a reply, a folded thought's signpost, and the cards under the message that asked for them all stay flush — and every count accepts 0, which draws the rows exactly as the surface drew them before the air existed. `spacing.padding` insets the conversation and the work board under it instead of sitting at a seam, while the bar the reader types in, the prompts queued behind it, and the footer keep the window's full width; all three counts are read per frame, so an edit in the row's settings document lands on the session already on screen.
 
 The work board opens on a blank row of its own, so the conversation above it and the todos, jobs, and delegations below it are two regions rather than one stream. The blank row takes no row when the board has nothing to report: with no work on the board nothing is drawn and the bar sits directly under the transcript.
 
@@ -850,13 +850,18 @@ Clone your configured home with the dogfood helper for realistic runs. A minimal
 
 ```sh
 S=$(mktemp -d)
-cp ~/.dsh/.credentials.yaml ~/.dsh/settings.yaml "$S/" && chmod 600 "$S"/*.yaml
+cp ~/.dsh/.credentials.yaml "$S/" && chmod 600 "$S"/*.yaml
 DSH_HOME="$S" dsh plugin --profile tui add "$PWD"
 node tools/pty-drive.mjs --home "$S" --prompt 'Reply with exactly: pong'
 node tools/pty-drive.mjs --home "$S" --prompt 'Run: echo hi' --approve 20
 node tools/pty-drive.mjs --home "$S" --seconds 20 --prompt ''
 node tools/pty-drive.mjs --home "$S" --prompt 'Run: echo hi' --click 20:12
 ```
+
+A minimal home starts on the shipped defaults: `settings.yaml` is legacy on the
+supported line, where the launcher renames it before import, so a preference
+copied there is read by nothing. Use the dogfood clone above when a run needs
+your own preferences.
 
 Test specs import plugin sources through the `@/` alias. Under this test runner the spec file is resolved with a root-relative id, so parent-relative imports (`../src/...`) do not resolve; the alias and its matching `tsconfig.test.json` path mapping avoid that.
 
@@ -865,7 +870,7 @@ a fresh home, a cloned home, and the real one — is [DEVELOPMENT.md](DEVELOPMEN
 
 ## Manual acceptance
 
-The automated checks drive a real PTY, but they run on this machine's terminal. These are the checks only a terminal on your desk can answer; each line is what to do and what it should look like.
+The automated checks drive a real PTY, but they run on this machine's terminal. These are the checks only a terminal on your desk can answer; each line is what to do and what it should look like. A row that writes a preference names the `dsh-tui:` section; on the supported line the same fields go under the TUI entry's `config` in the profile patch.
 
 | Check | Expected |
 |---|---|
