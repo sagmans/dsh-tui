@@ -10,6 +10,9 @@ breaking change, and a patch carries only fixes.
 
 ### Changed
 
+- The prompt bar has one blank row above and below it to separate input from queued
+  prompts and session status.
+
 - User messages, assistant replies, queued prompts, and the prompt bar use a thin
   left rail instead of enclosing borders, keeping conversations visually quiet.
 

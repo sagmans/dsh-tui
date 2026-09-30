@@ -1,13 +1,16 @@
-import { HStack, VStack, type Component } from '@earendil-works/pi-tui'
+import { HStack, Spacer, VStack, type Component } from '@earendil-works/pi-tui'
 import { Gutter } from './gutter.ts'
 
 /**
  * The rows the input bar keeps when every other row is contested.
  *
  * One writable row remains visible even when work summaries compete for space;
- * the left rail needs no extra rows above or below the draft.
+ * visual spacing gives up its rows before the input does.
  */
 export const PROMPT_MIN_ROWS = 1
+
+/** Separate input from queued prompts and session status without adding typed newlines. */
+const PROMPT_SPACING_ROWS = 1
 
 /** The parts of the surface the root layout stacks, top to bottom. */
 export interface SurfaceParts {
@@ -77,7 +80,14 @@ export function surfaceLayout(parts: SurfaceParts, margin: MarginColumns = () =>
     // them up before the editor does: the bar being typed in outranks what is
     // waiting behind it.
     { component: parts.queue, basis: 'auto', shrink: 2, minSize: 0 },
-    { component: new VStack([{ component: parts.prompt, basis: 'auto', shrink: 1, minSize: 1 }]), basis: 'auto', shrink: 1, minSize: PROMPT_MIN_ROWS },
+    {
+      component: new VStack([
+        { component: new Spacer(PROMPT_SPACING_ROWS), basis: 'auto', shrink: 2, minSize: 0 },
+        { component: parts.prompt, basis: 'auto', shrink: 1, minSize: PROMPT_MIN_ROWS },
+        { component: new Spacer(PROMPT_SPACING_ROWS), basis: 'auto', shrink: 2, minSize: 0 },
+      ]),
+      basis: 'auto', shrink: 1, minSize: PROMPT_MIN_ROWS,
+    },
     { component: parts.status, basis: 'auto', shrink: 0, minSize: 1 },
   ])
 }
