@@ -3,9 +3,13 @@ import { Config, TuiConfigError, hasLiveRowSettings, readRowSettings, resolveCon
 import { TuiSettingsSchema } from '@/theme-settings.ts'
 
 describe('resolveConfig', () => {
-  it('does not mistake source metadata for native live Config references', () => {
+  it('creates native live references through the exported schema, which is the only thing a Config-backed write can reach', () => {
+    // The row's durable owner is the host's own Config document, so a preference
+    // write exists only while the loaded schema runtime wraps each field in its
+    // reference; an implementation without that API leaves plain data here and
+    // every theme the reader picks is refused instead of persisted.
     const parsed = Config({ sessionId: 'abc', history: { enabled: false, ghost: false } })
-    expect(hasLiveRowSettings(parsed)).toBe(false)
+    expect(hasLiveRowSettings(parsed)).toBe(true)
     expect(readRowSettings(parsed)).toMatchObject({ history: { enabled: false, ghost: false } })
   })
 

@@ -8,6 +8,16 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+### Fixed
+
+- A theme chosen from the picker persists again. The row pinned the released
+  schemastery 3.18.2, whose schema runtime creates no native volatile references,
+  so every Config-backed write was refused with `the settings service cannot write
+  live Config with this schema runtime; the patch was not applied` and the picker's
+  own preview was the only change a reader ever saw. The dependency now names the
+  release that provides the API, and a spec fails if the loaded runtime cannot
+  create the references a live write needs.
+
 ## [0.11.0] - 2026-09-30
 
 ### Added

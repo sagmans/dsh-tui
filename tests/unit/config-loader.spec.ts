@@ -3,6 +3,7 @@ import AgentDefaultModelConfig from '@deepseek-ai/dsh-agent-default-model'
 import { LlmAdapter, LlmRuntime, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { describe, expect, it, vi } from 'vitest'
+import { readRowSettings } from '@/config.ts'
 import * as tui from '@/index.ts'
 import { createModelCatalog } from '@/agent/model.ts'
 import { createStatusFacts } from '@/agent/status.ts'
@@ -54,9 +55,11 @@ describe('standalone plugin Config loading', () => {
       // A no-op body reaches Cordis validation without acquiring a terminal or session.
       const fiber = await ctx.plugin({ Config, apply }, raw)
       expect(apply).toHaveBeenCalledOnce()
-      expect(fiber.config).toMatchObject(before)
+      // Validation reaches the values through the references the schema runtime
+      // creates, which is the layer the surface itself reads preferences from.
+      expect(readRowSettings(fiber.config)).toMatchObject(PREFERENCES)
       expect(raw).toEqual(before)
-      expect(apply.mock.calls[0]?.[1]).toMatchObject({
+      expect(readRowSettings(apply.mock.calls[0]?.[1])).toMatchObject({
         history: { enabled: false, ghost: false, maxEntries: PREFERENCES.history.maxEntries },
       })
     } finally {
@@ -69,8 +72,10 @@ describe('standalone plugin Config loading', () => {
     const ctx = new Context()
     try {
       const fiber = await ctx.plugin({ Config, apply: vi.fn() }, { sessionId: SESSION_ID, ...preferences })
-      expect(fiber.config.history?.enabled).toBeUndefined()
-      expect(fiber.config.history?.ghost).toBeUndefined()
+      // Absence stays absent: nothing here may turn the opt-in switches on for
+      // a document whose import has not landed yet.
+      expect(readRowSettings(fiber.config)).not.toHaveProperty('history.enabled')
+      expect(readRowSettings(fiber.config)).not.toHaveProperty('history.ghost')
     } finally {
       await ctx.fiber.dispose()
     }
