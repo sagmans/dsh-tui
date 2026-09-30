@@ -22,6 +22,7 @@ export const DEFAULT_PREFIX_KEY: KeyId = DEFAULT_PREFIX_KEYS[0]!
  */
 const CHORD_SUBMISSIONS: Readonly<Record<string, Submission>> = {
   'chord.model': { kind: 'model', argument: '' },
+  'chord.serviceTier': { kind: 'service-tier' },
   'chord.plan': { kind: 'plan' },
   'chord.copy': { kind: 'copy' },
   'chord.stash': { kind: 'stash-draft' },

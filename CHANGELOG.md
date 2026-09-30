@@ -8,6 +8,10 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+### Added
+
+- Service tier selection follows a confirmed reasoning effort on supported routes. `prefix+t` opens tier selection independently; cancellation preserves the effort.
+
 ### Changed
 
 - The prompt bar has one blank row above and below it to separate input from queued

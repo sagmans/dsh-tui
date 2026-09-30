@@ -58,7 +58,7 @@ describe('the key tables', () => {
     expect(bindings.find(entry => entry.key === 'n')?.submission).toEqual({ kind: 'new', title: '' })
     expect(bindings.find(entry => entry.key === 'u')?.submission).toEqual({ kind: 'undo' })
     expect(bindings.find(entry => entry.key === 'r')?.submission).toEqual({ kind: 'redo' })
-    expect(chordKeysLine(defaultKeymap())).toBe('ctrl+x then m model · p plan mode · y copy · s stash the draft · l stashed drafts · e external editor · ? key map · n new session · u undo the last prompt · r redo the undone prompt')
+    expect(chordKeysLine(defaultKeymap())).toBe('ctrl+x then m model · t service tier · p plan mode · y copy · s stash the draft · l stashed drafts · e external editor · ? key map · n new session · u undo the last prompt · r redo the undone prompt')
   })
 
   it('opens the key map on the question mark that follows the prefix', () => {
@@ -69,7 +69,7 @@ describe('the key tables', () => {
 
   it('reads a chord the reader moved, and a prefix they changed', () => {
     const map = resolveKeymap({ 'chord.prefix': 'alt+z', 'chord.model': 'o' })
-    expect(chordKeysLine(map)).toBe('alt+z then o model · p plan mode · y copy · s stash the draft · l stashed drafts · e external editor · ? key map · n new session · u undo the last prompt · r redo the undone prompt')
+    expect(chordKeysLine(map)).toBe('alt+z then o model · t service tier · p plan mode · y copy · s stash the draft · l stashed drafts · e external editor · ? key map · n new session · u undo the last prompt · r redo the undone prompt')
     expect(chordBindings(map).find(entry => entry.label === 'model')?.key).toBe('o')
   })
 })

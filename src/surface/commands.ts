@@ -271,6 +271,9 @@ export function createCommands(ctx: Context, ports: CommandsPorts): Commands {
       case 'quit':
         ports.terminal.requestExit(0)
         return
+      case 'service-tier':
+        ports.route.openServiceTierPicker()
+        return
       case 'model':
         ports.route.runModelCommand(submission.argument)
         return

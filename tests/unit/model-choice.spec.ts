@@ -593,3 +593,38 @@ describe('deployment default', () => {
   })
 })
 
+
+/** Chained tier cancellation must never roll back an already confirmed effort. */
+describe('effort and service tier chaining', () => {
+  const provider = 'openai-codex'
+  const model = 'gpt-5.6-luna'
+  const high = 'high'
+  const priority = 'priority'
+  it.each([undefined, priority])('chains after effort and preserves effort when tier is %s', async tier => {
+    const select = vi.fn().mockResolvedValue(undefined)
+    const owner = { choices: () => [{ id: priority, name: 'Fast' }], current: () => undefined, select }
+    const llm = { listProviders: () => [{ id: provider }], listModels: async () => [], resolveModelInfo: async () => efforts(high) }
+    const ctx = { get: (name: string) => name === 'providerServiceTiers' ? owner : llm } as unknown as Context
+    const openPicker = vi.fn<(picker: Picker) => Promise<string | undefined>>()
+      .mockResolvedValueOnce(high).mockResolvedValueOnce(tier)
+    const route = createModelChoice(ctx, { statusFacts: () => facts({ provider, model }), keymap: defaultKeymap, openPicker, notice: () => {}, render: () => {} })
+    route.openEffortPicker()
+    await settle()
+    expect(openPicker).toHaveBeenCalledTimes(2)
+    expect(route.current()).toEqual({ provider, model, reasoningEffort: high })
+    if (tier === undefined) expect(select).not.toHaveBeenCalled()
+    else expect(select).toHaveBeenCalledWith(provider, model, priority)
+  })
+  it('does not chain when effort selection is cancelled', async () => {
+    const owner = { choices: vi.fn(() => [{ id: priority, name: 'Fast' }]), current: () => undefined, select: vi.fn() }
+    const llm = { listProviders: () => [{ id: provider }], listModels: async () => [], resolveModelInfo: async () => efforts(high) }
+    const openPicker = vi.fn<(picker: Picker) => Promise<string | undefined>>().mockResolvedValue(undefined)
+    const route = createModelChoice({ get: (name: string) => name === 'providerServiceTiers' ? owner : llm } as unknown as Context, {
+      statusFacts: () => facts({ provider, model }), keymap: defaultKeymap, openPicker, notice: () => {}, render: () => {},
+    })
+    route.openEffortPicker()
+    await settle()
+    expect(openPicker).toHaveBeenCalledTimes(1)
+    expect(owner.choices).not.toHaveBeenCalled()
+  })
+})
