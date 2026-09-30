@@ -72,6 +72,7 @@ function messageOf(value: unknown): string {
  */
 export class TranscriptModel {
   private readonly settled: TranscriptEntry[] = []
+  private contentRevision = 0
   private live = ''
   private liveReasoning = ''
   private reasoningStartedAt: number | undefined
@@ -116,6 +117,11 @@ export class TranscriptModel {
     return this.clock()
   }
 
+  /** Renderers retain a document until its folded content changes, independent of keyboard frames. */
+  get revision(): number {
+    return this.contentRevision
+  }
+
   /** Rows to render: settled rows, the in-flight reasoning, then the in-flight text. */
   entries(): readonly TranscriptEntry[] {
     const entries = [...this.settled]
@@ -158,6 +164,7 @@ export class TranscriptModel {
   }
 
   reset(): void {
+    this.contentRevision++
     this.settled.length = 0
     // The call fold's records name rows of the transcript being dropped, so the
     // fold is reset with it rather than left holding stale row indices.
@@ -171,12 +178,12 @@ export class TranscriptModel {
 
   /** Append a surface-local line that is not part of the durable conversation. */
   notice(text: string): void {
-    this.settled.push({ kind: 'notice', text })
+    this.append({ kind: 'notice', text })
   }
 
   /** Mark a boundary in the conversation: compaction, or work that ran elsewhere. */
   marker(text: string): void {
-    this.settled.push({ kind: 'marker', text })
+    this.append({ kind: 'marker', text })
   }
 
   /** Apply one transient assistant-stream chunk. */
@@ -185,10 +192,14 @@ export class TranscriptModel {
     if (record === undefined) return
     switch (record.type) {
       case 'text-delta':
-        if (typeof record.text === 'string') this.live += record.text
+        if (typeof record.text === 'string' && record.text !== '') {
+          this.live += record.text
+          this.contentRevision++
+        }
         return
       case 'reasoning-delta':
         if (typeof record.text !== 'string') return
+        this.contentRevision++
         this.reasoningStartedAt ??= this.clock()
         this.liveReasoningId ??= String(++this.thoughtSeq)
         this.liveReasoning += record.text
@@ -219,22 +230,22 @@ export class TranscriptModel {
     if (kind === 'completed') return
     if (kind === 'error') {
       const failure = messageOf(reason.error)
-      this.settled.push({ kind: 'notice', text: `turn failed: ${failure === '' ? 'model request failed' : failure}` })
+      this.append({ kind: 'notice', text: `turn failed: ${failure === '' ? 'model request failed' : failure}` })
       return
     }
     if (kind === 'aborted') {
       const cause = asRecord(reason.reason)
       const by = typeof cause?.kind === 'string' ? cause.kind : 'user'
-      this.settled.push({ kind: 'notice', text: `turn aborted (${by})` })
+      this.append({ kind: 'notice', text: `turn aborted (${by})` })
       return
     }
-    this.settled.push({ kind: 'notice', text: `turn ended: ${kind}` })
+    this.append({ kind: 'notice', text: `turn ended: ${kind}` })
   }
 
   /** Report a live agent failure the durable log never carries as a message. */
   reportError(error: unknown): void {
     const text = error instanceof Error ? error.message : messageOf(error)
-    this.settled.push({ kind: 'notice', text: `error: ${text === '' ? 'agent failed' : text}` })
+    this.append({ kind: 'notice', text: `error: ${text === '' ? 'agent failed' : text}` })
   }
 
   /**
@@ -251,7 +262,7 @@ export class TranscriptModel {
     // recorded message carries takes the next one.
     const id = this.liveReasoningId ?? String(++this.thoughtSeq)
     this.liveReasoningId = undefined
-    this.settled.push({
+    this.append({
       kind: 'reasoning',
       id,
       summary: `reasoning · ${describeTokens(text)}${timing}`,
@@ -282,18 +293,19 @@ export class TranscriptModel {
         // work apart from the next one's. Reading the loop's own event rather than
         // inferring a break from the rows is what makes a step that says nothing
         // and only calls tools still read as a step of its own.
-        this.settled.push({ kind: 'step' })
+        this.append({ kind: 'step' })
         return
       }
       case 'user/message': {
         const text = textOfContent(data.content)
         if (text === '') return
-        this.settled.push(sourceKind(data) === 'user'
+        this.append(sourceKind(data) === 'user'
           ? { kind: 'user', text }
           : { kind: 'notice', text: injectionSummary(data, text) })
         return
       }
       case 'turn/end': {
+        this.contentRevision++
         this.reportTurnEnd(asRecord(data.reason) ?? {})
         // A turn that ended without a recorded message must not leave streamed
         // text on screen as though it had settled.
@@ -331,10 +343,11 @@ export class TranscriptModel {
       case 'assistant/attempt': {
         // An attempt that settled without a message still has to explain itself.
         const failure = data.error === undefined ? '' : messageOf(data.error)
-        if (failure !== '') this.settled.push({ kind: 'notice', text: `request failed: ${failure}` })
+        if (failure !== '') this.append({ kind: 'notice', text: `request failed: ${failure}` })
         return
       }
       case 'assistant/message': {
+        this.contentRevision++
         const content = asRecord(data.message)?.content
         const text = textOfContent(content)
         // Settle whatever the stream held, then decide whether the recorded
@@ -346,7 +359,7 @@ export class TranscriptModel {
           for (const thought of reasoningTextsOf(content)) this.paintReasoning(thought, undefined)
         }
         this.live = ''
-        if (text !== '') this.settled.push({ kind: 'assistant', text })
+        if (text !== '') this.append({ kind: 'assistant', text })
         return
       }
       case 'tool/call':
@@ -364,9 +377,16 @@ export class TranscriptModel {
     }
   }
 
+  /** Surface-local and durable rows share the revision that invalidates retained documents. */
+  private append(entry: TranscriptEntry): void {
+    this.settled.push(entry)
+    this.contentRevision++
+  }
+
   /** Commit the rows the call fold drew: appends in order, replacements in place. */
   private commit(outcome: ToolCallOutcome): void {
-    for (const entry of outcome.appends) this.settled.push(entry)
+    this.contentRevision++
+    for (const entry of outcome.appends) this.append(entry)
     for (const { index, entry } of outcome.replacements) this.settled[index] = entry
   }
 

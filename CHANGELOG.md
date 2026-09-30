@@ -63,6 +63,9 @@ Not published: release signature verification failed. Its changes ship in 0.12.1
 
 ### Fixed
 
+- Typing reuses unchanged transcript rows, live Markdown, click targets, and copy
+  metadata instead of rebuilding the conversation on every keyboard frame.
+  Stream changes, folding, theme changes, overlays, and live clocks remain current.
 - The prompt keeps its draft, cursor, and footer visible without measuring the
   editor through a redundant layout wrapper on every frame.
 - Long styled model and tool output no longer stalls typing while the terminal
