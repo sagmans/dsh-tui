@@ -63,6 +63,8 @@ Not published: release signature verification failed. Its changes ship in 0.12.1
 
 ### Fixed
 
+- Picker navigation and repainting reuse unchanged filter rankings while
+  preserving late titles, source order, and replacement rows.
 - Canceled picker checks cannot settle or unlock a replacement picker.
   Already-aborted approvals stay closed; concurrent modal requests fail closed
   instead of replacing the active decision. Disposal settles waiting callers.

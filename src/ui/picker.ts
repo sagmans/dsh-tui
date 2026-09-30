@@ -92,6 +92,11 @@ export class ListPicker<Row> {
   private cursor = 0
   private filter = ''
   private note: string | undefined
+  private ranking: {
+    readonly needle: string
+    readonly haystacks: readonly string[]
+    readonly indices: readonly number[]
+  } | undefined
 
   constructor(
     private readonly source: () => readonly Row[],
@@ -122,14 +127,24 @@ export class ListPicker<Row> {
   /** Rows matching the typed filter, best match first. */
   visible(): readonly Row[] {
     const needle = this.filter.trim()
-    if (needle === '') return this.source()
-    // Ties keep the order the caller listed them in, so rows do not shuffle
-    // under the cursor while the reader is still typing.
-    return this.source()
-      .map(row => ({ row, score: matchScore(needle, this.haystackOf(row)) }))
-      .filter((entry): entry is { readonly row: Row; readonly score: number } => entry.score !== undefined)
+    const rows = this.source()
+    if (needle === '') return rows
+    const haystacks = rows.map(row => this.haystackOf(row))
+    const retained = this.ranking
+    // Late titles can change inside the same source array; only matching text invalidates ranks.
+    if (retained !== undefined && retained.needle === needle
+      && retained.haystacks.length === haystacks.length
+      && retained.haystacks.every((text, index) => text === haystacks[index])) {
+      return retained.indices.map(index => rows[index]!)
+    }
+    // Ties preserve source order, and indices read fresh rows even when objects are replaced.
+    const indices = haystacks
+      .map((text, index) => ({ index, score: matchScore(needle, text) }))
+      .filter((entry): entry is { readonly index: number; readonly score: number } => entry.score !== undefined)
       .sort((left, right) => right.score - left.score)
-      .map(entry => entry.row)
+      .map(entry => entry.index)
+    this.ranking = { needle, haystacks, indices }
+    return indices.map(index => rows[index]!)
   }
 
   /**
