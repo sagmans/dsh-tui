@@ -46,6 +46,24 @@ describe('the surface root layout', () => {
     expect(promptBox?.rect.height).toBeGreaterThanOrEqual(PROMPT_MIN_ROWS)
   })
 
+  it('leaves one blank row above and below the prompt without changing its text', () => {
+    const { prompt, editor } = promptOf('the draft')
+    const root = surfaceLayout({
+      transcript: rowsOf('row', 40),
+      dock: rowsOf('dock', 0),
+      queue: rowsOf('queued', 1),
+      prompt,
+      status: rowsOf('status', 1),
+    })
+    const frame = renderLayoutFrame(root, 80, 24, () => {})
+    const draftRow = frame.lines.findIndex(line => line.includes('the draft'))
+    expect(stripTerminalSequences(frame.lines[draftRow - 1]!).trim()).toBe('')
+    expect(stripTerminalSequences(frame.lines[draftRow + 1]!).trim()).toBe('')
+    expect(frame.lines[draftRow - 2]).toContain('queued 0')
+    expect(frame.lines[draftRow + 2]).toContain('status 0')
+    expect(editor.getText()).toBe('the draft')
+  })
+
   it('shows the whole work board when the terminal has room for it', () => {
     const { prompt } = promptOf('the draft')
     const root = surfaceLayout({
