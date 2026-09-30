@@ -63,6 +63,8 @@ Not published: release signature verification failed. Its changes ship in 0.12.1
 
 ### Fixed
 
+- The prompt keeps its draft, cursor, and footer visible without measuring the
+  editor through a redundant layout wrapper on every frame.
 - Long styled model and tool output no longer stalls typing while the terminal
   text renderer appends a line. Cursor rewrites and escape suppression retain
   their existing behavior.

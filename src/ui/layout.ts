@@ -80,14 +80,10 @@ export function surfaceLayout(parts: SurfaceParts, margin: MarginColumns = () =>
     // them up before the editor does: the bar being typed in outranks what is
     // waiting behind it.
     { component: parts.queue, basis: 'auto', shrink: 2, minSize: 0 },
-    {
-      component: new VStack([
-        { component: new Spacer(PROMPT_SPACING_ROWS), basis: 'auto', shrink: 2, minSize: 0 },
-        { component: parts.prompt, basis: 'auto', shrink: 1, minSize: PROMPT_MIN_ROWS },
-        { component: new Spacer(PROMPT_SPACING_ROWS), basis: 'auto', shrink: 2, minSize: 0 },
-      ]),
-      basis: 'auto', shrink: 1, minSize: PROMPT_MIN_ROWS,
-    },
+    { component: new Spacer(PROMPT_SPACING_ROWS), basis: 'auto', shrink: 2, minSize: 0 },
+    // The prompt already owns its editor layout; another stack repeats measurement.
+    { component: parts.prompt, basis: 'auto', shrink: 1, minSize: PROMPT_MIN_ROWS },
+    { component: new Spacer(PROMPT_SPACING_ROWS), basis: 'auto', shrink: 2, minSize: 0 },
     { component: parts.status, basis: 'auto', shrink: 0, minSize: 1 },
   ])
 }
