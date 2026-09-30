@@ -119,6 +119,11 @@ non-obvious constraint exists is the part that prevents future drift.
   `DRY_RUN=1`). Ask the maintainer instead of starting a release.
 - **Release shape:** the `vX.Y.Z` tag and `package.json` `version` must match,
   and a candidate reaches `main` through a reviewed PR (squash merge).
+- **A publication carries both its tag and its GitHub release.** The tag is what
+  `release.yml` publishes from; the record, with the `CHANGELOG.md` entry as notes,
+  is what a reader finds. A version short of either half is incomplete, and the
+  missing half is created from the same signed tag — never by retagging. The gates
+  are [RELEASE.md](RELEASE.md#gates--all-required-before-tagging)'s.
 - **Dependency install scripts and release age are gated in
   `pnpm-workspace.yaml`** (`allowBuilds`, `minimumReleaseAgeExclude`). Ask before
   adding a dependency or allowlisting a build.

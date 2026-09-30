@@ -8,6 +8,14 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+### Changed
+
+- A publication carries both its `vX.Y.Z` tag and the GitHub release record for
+  that tag, as [RELEASE.md](RELEASE.md#gates--all-required-before-tagging) and
+  [AGENTS.md](AGENTS.md) now state: the tag is what `release.yml` publishes from
+  and the record is what a reader finds, so a version short of either half is
+  incomplete and is completed from the same signed tag rather than by retagging.
+
 ## [0.11.1] - 2026-09-30
 
 ### Fixed
