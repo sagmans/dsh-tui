@@ -76,7 +76,6 @@ export const SURFACE_ACTIONS: readonly (Action & { readonly name: SurfaceActionI
 const CHORD_ACTIONS: readonly Action[] = [
   { id: 'chord.prefix', layer: 'chord', defaultKeys: ['ctrl+x'], label: 'start a chord', mayUseBare: false, mayUnbind: false, keyShape: 'chord' },
   { id: 'chord.model', layer: 'chord', defaultKeys: ['m'], label: 'model', mayUseBare: true, mayUnbind: false },
-  { id: 'chord.serviceTier', layer: 'chord', defaultKeys: ['t'], label: 'service tier', mayUseBare: true, mayUnbind: false },
   { id: 'chord.plan', layer: 'chord', defaultKeys: ['p'], label: 'plan mode', mayUseBare: true, mayUnbind: false },
   { id: 'chord.copy', layer: 'chord', defaultKeys: ['y'], label: 'copy', mayUseBare: true, mayUnbind: false },
   { id: 'chord.stash', layer: 'chord', defaultKeys: ['s'], label: 'stash the draft', mayUseBare: true, mayUnbind: false },
@@ -180,8 +179,15 @@ export const ACTION_CATALOG: readonly Action[] = [
   ...libraryActions(),
 ]
 
-export function actionOf(id: string): Action | undefined {
-  return ACTION_CATALOG.find(entry => entry.id === id)
+const PLUGIN_ACTION_PATTERN = /^plugin\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_.-]+$/
+
+/** Namespaced preferences survive an optional plugin's reload without accepting builtin typos. */
+export function isPluginActionId(id: string): boolean {
+  return PLUGIN_ACTION_PATTERN.test(id)
+}
+
+export function actionOf(id: string, catalog: readonly Action[] = ACTION_CATALOG): Action | undefined {
+  return catalog.find(entry => entry.id === id)
 }
 
 /** The keys one action ships with, this surface's own additions to a library row included. */

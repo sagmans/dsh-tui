@@ -290,6 +290,10 @@ export function createPromptInput(ctx: Context, ports: PromptInputPorts): Prompt
       }
       for (const binding of surfaceBindings(ports.keymap())) {
         if (!matchesKey(data, binding.key)) continue
+        if (binding.action === 'plugin') {
+          ports.runSubmission({ kind: 'plugin-action', id: binding.id })
+          return { consume: true }
+        }
         return surfaceActions[binding.action]() ? { consume: true } : undefined
       }
       return undefined

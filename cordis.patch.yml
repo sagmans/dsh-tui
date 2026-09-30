@@ -25,6 +25,10 @@
     - id: cordis-host-runner
       name: '@sagmans/dsh-tui/host/runner'
 
+    # Addons register before the surface takes its keyboard; each owner cleans up its own rows.
+    - id: tui-keymaps
+      name: '@sagmans/dsh-tui/keymaps'
+
     - id: tui-startup
       name: '@sagmans/dsh-tui/startup'
 

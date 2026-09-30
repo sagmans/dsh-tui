@@ -17,7 +17,6 @@ import { stripControlCharacters } from '../text.ts'
 import { EffortPicker, ModelPicker, PROVIDER_DEFAULT_EFFORT_ID, effortChoices } from '../ui/picker.ts'
 import type { StatusFacts } from '../ui/status.ts'
 import type { Picker } from './modal-input.ts'
-import { createServiceTierPicker } from './service-tier.ts'
 
 // Adapter errors may contain credentials or request bodies, even in their messages.
 const MODEL_DISCOVERY_FAILURE = 'could not list models; check provider configuration and credentials, then retry /model'
@@ -39,6 +38,8 @@ export interface ModelChoicePorts {
   readonly openPicker: (picker: Picker) => Promise<string | undefined>
   readonly notice: (message: string) => void
   readonly render: () => void
+  /** Addons may offer a follow-up only after this owner confirms an effort. */
+  readonly afterEffort?: (route: { provider: string; model: string }) => Promise<void>
 }
 
 /** The reads and operations the composing surface routes to the route owner. */
@@ -59,8 +60,6 @@ export interface ModelChoice {
   readonly runModelCommand: (argument: string) => void
   /** Offer the levels the route in force advertises. */
   readonly openEffortPicker: () => void
-  /** Choose paid processing independently without changing the route or effort. */
-  readonly openServiceTierPicker: () => void
 }
 
 /**
@@ -76,7 +75,6 @@ export interface ModelChoice {
  */
 export function createModelChoice(ctx: Context, ports: ModelChoicePorts): ModelChoice {
   const modelSwitch = new ModelSwitch()
-  const openServiceTier = createServiceTierPicker(ctx, ports)
   // One read per composition, kept whole: both gaps leave no catalog and ask for
   // opposite fixes, so a refusal names the cause it met rather than reading the
   // absence as a service that was never mounted.
@@ -267,7 +265,7 @@ export function createModelChoice(ctx: Context, ports: ModelChoicePorts): ModelC
       ))
       if (picked !== undefined) {
         applyEffort(route.provider, route.model, picked)
-        await openServiceTier(route, true)
+        await ports.afterEffort?.(route)
       }
     } catch (error) {
       ports.notice(`could not read reasoning efforts: ${error instanceof Error ? error.message : String(error)}`)
@@ -352,7 +350,7 @@ export function createModelChoice(ctx: Context, ports: ModelChoicePorts): ModelC
       ))
       if (picked !== undefined) {
         applyEffort(facts.provider, facts.model, picked)
-        await openServiceTier({ provider: facts.provider, model: facts.model }, true)
+        await ports.afterEffort?.({ provider: facts.provider, model: facts.model })
       }
     } catch (error) {
       ports.notice(`could not read reasoning efforts: ${error instanceof Error ? error.message : String(error)}`)
@@ -383,7 +381,6 @@ export function createModelChoice(ctx: Context, ports: ModelChoicePorts): ModelC
 
   return {
     current: () => modelSwitch.current(),
-    openServiceTierPicker: () => { void openServiceTier(effectiveRoute()) },
     setup: agentCtx => modelSwitch.install(agentCtx),
     adoptDefault,
     runModelCommand,

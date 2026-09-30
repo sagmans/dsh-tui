@@ -2,7 +2,10 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync }
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Context } from '@deepseek-ai/cordis'
+import { Context } from '@deepseek-ai/cordis'
+import { createKeymapRegistry, type KeymapRegistry } from '@/keymaps.ts'
+import { chordBindings } from '@/input/keymap.ts'
+import { keymapRows } from '@/keys-command.ts'
 import { createAppearance, type AppearancePorts } from '@/surface/appearance.ts'
 import { TUI_SETTINGS_NAMESPACE } from '@/theme-settings.ts'
 import { DEFAULT_PREFIX_KEYS, DEFAULT_PREFIX_WINDOW_S } from '@/input/keymap.ts'
@@ -93,7 +96,7 @@ interface Given {
   readonly lastPicker: () => Picker | undefined
 }
 
-function fixture(service?: unknown, options: { readonly rowTheme?: string; readonly color?: boolean } = {}): Given {
+function fixture(service?: unknown, options: { readonly rowTheme?: string; readonly color?: boolean; readonly pluginKeymaps?: KeymapRegistry } = {}): Given {
   const listeners = new Map<string, (...args: unknown[]) => void>()
   let attach = (): void => {}
   const ctx = {
@@ -115,6 +118,7 @@ function fixture(service?: unknown, options: { readonly rowTheme?: string; reado
   let renders = 0
   let invalidated = 0
   const ports: AppearancePorts = {
+    pluginKeymaps: options.pluginKeymaps,
     color: () => options.color ?? true,
     rowTheme: options.rowTheme,
     rowSettings: () => rowSettings.value,
@@ -684,4 +688,39 @@ describe('createAppearance settings attachment', () => {
     // every later edit of a document nothing on screen follows.
     expect([...given.listeners.keys()]).toEqual([])
   })
+})
+const PLUGIN_ACTION_ID = 'plugin.example.options'
+const PLUGIN_DEFAULT_KEY = 't'
+const PLUGIN_REBOUND_KEY = 'v'
+
+/** Real registry publication must update the painter's map, help, and keyboard together. */
+describe('appearance plugin keymap catalog', () => {
+  it('activates stored preferences on late registration and removes live rows with the owner', async () => {
+    const registry = createKeymapRegistry()
+    const given = fixture(undefined, { pluginKeymaps: registry })
+    given.rowSettings.value = { keys: { [PLUGIN_ACTION_ID]: PLUGIN_REBOUND_KEY } }
+    given.appearance.registerSection()
+    const stop = given.appearance.settingsListener()
+    const ctx = new Context()
+    const owner = await ctx.plugin((scoped: Context) => { registry.register(scoped, { id: PLUGIN_ACTION_ID, layer: 'chord', defaultKeys: [PLUGIN_DEFAULT_KEY], label: 'example options', handler: async () => {} }) })
+    try {
+      expect(chordBindings(given.appearance.keymap()).find(row => row.submission.kind === 'plugin-action')?.key).toBe(PLUGIN_REBOUND_KEY)
+      expect(keymapRows(given.appearance.keymap()).find(row => row.id === PLUGIN_ACTION_ID)?.label).toContain(PLUGIN_REBOUND_KEY)
+      await owner.dispose()
+      expect(chordBindings(given.appearance.keymap()).some(row => row.submission.kind === 'plugin-action')).toBe(false)
+      expect(given.appearance.keymap().written.has(PLUGIN_ACTION_ID)).toBe(true)
+      expect(given.notices).toEqual([])
+    } finally { stop(); await owner.dispose() }
+  })
+})
+it('reconciles registrations created before the appearance listener subscribes', async () => {
+  const registry = createKeymapRegistry()
+  const given = fixture(undefined, { pluginKeymaps: registry })
+  given.rowSettings.value = { keys: { [PLUGIN_ACTION_ID]: PLUGIN_REBOUND_KEY } }
+  given.appearance.registerSection()
+  const ctx = new Context()
+  const owner = await ctx.plugin((scoped: Context) => { registry.register(scoped, { id: PLUGIN_ACTION_ID, layer: 'chord', defaultKeys: [PLUGIN_DEFAULT_KEY], label: 'example options', handler: async () => {} }) })
+  const stop = given.appearance.settingsListener()
+  try { expect(chordBindings(given.appearance.keymap()).find(row => row.submission.kind === 'plugin-action')?.key).toBe(PLUGIN_REBOUND_KEY) }
+  finally { stop(); await owner.dispose() }
 })

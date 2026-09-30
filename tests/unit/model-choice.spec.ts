@@ -594,37 +594,42 @@ describe('deployment default', () => {
 })
 
 
-/** Chained tier cancellation must never roll back an already confirmed effort. */
-describe('effort and service tier chaining', () => {
-  const provider = 'openai-codex'
-  const model = 'gpt-5.6-luna'
+/** Addon follow-ups cannot change whether this owner confirmed a reasoning choice. */
+describe('generic effort follow-ups', () => {
+  const provider = 'lab'
+  const model = 'm'
   const high = 'high'
-  const priority = 'priority'
-  it.each([undefined, priority])('chains after effort and preserves effort when tier is %s', async tier => {
-    const select = vi.fn().mockResolvedValue(undefined)
-    const owner = { choices: () => [{ id: priority, name: 'Fast' }], current: () => undefined, select }
+  it.each([high, PROVIDER_DEFAULT_EFFORT_ID])('runs after confirming %s without replacing the effort', async choice => {
+    const afterEffort = vi.fn(async () => {})
     const llm = { listProviders: () => [{ id: provider }], listModels: async () => [], resolveModelInfo: async () => efforts(high) }
-    const ctx = { get: (name: string) => name === 'providerServiceTiers' ? owner : llm } as unknown as Context
-    const openPicker = vi.fn<(picker: Picker) => Promise<string | undefined>>()
-      .mockResolvedValueOnce(high).mockResolvedValueOnce(tier)
-    const route = createModelChoice(ctx, { statusFacts: () => facts({ provider, model }), keymap: defaultKeymap, openPicker, notice: () => {}, render: () => {} })
+    const openPicker = vi.fn<(picker: Picker) => Promise<string | undefined>>().mockResolvedValue(choice)
+    const route = createModelChoice(catalogCtx(llm), { statusFacts: () => facts({ provider, model }), keymap: defaultKeymap,
+      openPicker, afterEffort, notice: () => {}, render: () => {} })
     route.openEffortPicker()
     await settle()
-    expect(openPicker).toHaveBeenCalledTimes(2)
-    expect(route.current()).toEqual({ provider, model, reasoningEffort: high })
-    if (tier === undefined) expect(select).not.toHaveBeenCalled()
-    else expect(select).toHaveBeenCalledWith(provider, model, priority)
+    expect(afterEffort).toHaveBeenCalledWith({ provider, model })
+    expect(route.current()).toEqual(choice === high ? { provider, model, reasoningEffort: high } : { provider, model })
   })
-  it('does not chain when effort selection is cancelled', async () => {
-    const owner = { choices: vi.fn(() => [{ id: priority, name: 'Fast' }]), current: () => undefined, select: vi.fn() }
+  it('does not invoke a follow-up when effort selection is cancelled', async () => {
+    const afterEffort = vi.fn(async () => {})
     const llm = { listProviders: () => [{ id: provider }], listModels: async () => [], resolveModelInfo: async () => efforts(high) }
-    const openPicker = vi.fn<(picker: Picker) => Promise<string | undefined>>().mockResolvedValue(undefined)
-    const route = createModelChoice({ get: (name: string) => name === 'providerServiceTiers' ? owner : llm } as unknown as Context, {
-      statusFacts: () => facts({ provider, model }), keymap: defaultKeymap, openPicker, notice: () => {}, render: () => {},
-    })
+    const route = createModelChoice(catalogCtx(llm), { statusFacts: () => facts({ provider, model }), keymap: defaultKeymap,
+      openPicker: async () => undefined, afterEffort, notice: () => {}, render: () => {} })
     route.openEffortPicker()
     await settle()
-    expect(openPicker).toHaveBeenCalledTimes(1)
-    expect(owner.choices).not.toHaveBeenCalled()
+    expect(afterEffort).not.toHaveBeenCalled()
+  })
+  it('invokes the same follow-up after model then effort selection', async () => {
+    const afterEffort = vi.fn(async () => {})
+    const llm = { listProviders: () => [{ id: provider, name: provider }], listModels: async () => [{ id: model, name: model }], resolveModelInfo: async () => efforts(high) }
+    const openPicker = vi.fn<(picker: Picker) => Promise<string | undefined>>()
+      .mockResolvedValueOnce(modelRouteKey({ provider, model })).mockResolvedValueOnce(high)
+    const route = createModelChoice(catalogCtx(llm), { statusFacts: facts, keymap: defaultKeymap,
+      openPicker, afterEffort, notice: () => {}, render: () => {} })
+    route.runModelCommand('')
+    await settle()
+    await settle()
+    expect(afterEffort).toHaveBeenCalledWith({ provider, model })
+    expect(route.current()).toEqual({ provider, model, reasoningEffort: high })
   })
 })

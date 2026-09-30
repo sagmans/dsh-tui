@@ -7,7 +7,7 @@ export type Submission =
   | { readonly kind: 'resume' }
   | { readonly kind: 'status' }
   | { readonly kind: 'model'; readonly argument: string }
-  | { readonly kind: 'service-tier' }
+  | { readonly kind: 'plugin-action'; readonly id: string }
   | { readonly kind: 'preset'; readonly argument: string }
   | { readonly kind: 'jobs'; readonly argument: string }
   | { readonly kind: 'rename'; readonly title: string }

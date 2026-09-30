@@ -10,7 +10,7 @@ breaking change, and a patch carries only fixes.
 
 ### Added
 
-- Service tier selection follows a confirmed reasoning effort on supported routes. `prefix+t` opens tier selection independently; cancellation preserves the effort.
+- Plugins can register scoped chord and surface actions through `tuiKeymaps`. Generic picker ports and effort follow-ups keep addon behavior outside the terminal. Rebinding, help, conflict checks, and owner cleanup use the active plugin catalog.
 
 ### Changed
 

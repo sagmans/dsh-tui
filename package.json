@@ -20,6 +20,10 @@
       "types": "./lib/index.d.ts",
       "default": "./lib/index.js"
     },
+    "./keymaps": {
+      "types": "./lib/keymaps.d.ts",
+      "default": "./lib/keymaps.js"
+    },
     "./startup": {
       "types": "./lib/startup.d.ts",
       "default": "./lib/startup.js"

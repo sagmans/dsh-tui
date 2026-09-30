@@ -182,7 +182,6 @@ force, and the `keys:` section moves any of them — see [Keys](#keys).
 | Ctrl+X then S | stash the current draft |
 | Ctrl+X then L | open the current stash bank's drafts |
 | Ctrl+X then M | open the model picker |
-| Ctrl+X then T | pick the service tier independently on supported routes |
 | Ctrl+X then Y | copy the last answer to the clipboard |
 | Ctrl+X then E | edit the draft in `$VISUAL` (or `$EDITOR`) and take back what it saves |
 | Ctrl+X then ? | search the key map: every action and the keys in force, in a box over the transcript |
@@ -238,26 +237,63 @@ force, and the `keys:` section moves any of them — see [Keys](#keys).
 
 Typing `@` opens this workspace's files above the editor, ranked as the fragment is typed the way a fuzzy finder ranks a path list: `@edtr` reaches `src/ui/editor.ts` without spelling the separators, a directory offers itself with a trailing slash so typing continues into it, and a path holding a space is quoted. A directory whose own name holds a space offers no row, because the menu stops following the token once one is in it; the files under it are still listed, each quoted whole. The rows are what git tracks or would add, with ignored paths left out, so a suggestion never names build output or a secret the repository deliberately ignores; a tree git does not own is walked instead, skipping `node_modules`, `.git`, and the rest of the build litter. A path typed from the working directory still completes on Tab as before.
 
-Confirming a reasoning effort opens the service tier picker when the provider advertises tiers.
-`Ctrl+X` then `T` opens that picker without changing the effort.
-The `dsh-provider-extra` plugin initially supports Codex routes with Auto, Standard, and Fast (`priority`) choices.
-Fast can increase usage cost and requires account access.
-The provider profile saves the choice for that provider and model pair.
-Choose **provider default** to clear the explicit tier.
-Cancelling tier selection preserves the confirmed effort.
-Unsupported routes do not open a chained tier picker.
+### Plugin keymaps
+
+The bundle publishes `tuiKeymaps` before the surface starts.
+Optional plugins register their own actions; the terminal does not assign their meaning.
+Actions use namespaced `plugin.<owner>.<action>` IDs and either the `chord` or `surface` layer.
+Approval gates, questions, and library-owned editor bindings are not plugin registration layers.
+
+```ts
+import type { Context } from '@deepseek-ai/cordis'
+import type { KeymapRegistry } from '@sagmans/dsh-tui/keymaps'
+
+const REGISTRY = 'tuiKeymaps'
+const ACTION_ID = 'plugin.example.options'
+const KEY = 'v'
+const LABEL = 'example options'
+const PICKER = { title: 'Example options', rows: [{ id: 'inspect', name: 'Inspect' }] }
+
+export function apply(ctx: Context): void {
+  ctx.inject([REGISTRY], owner => {
+    const registry = owner.get(REGISTRY) as KeymapRegistry
+    registry.register(owner, {
+      id: ACTION_ID,
+      layer: 'chord',
+      defaultKeys: [KEY],
+      label: LABEL,
+      handler: async ports => {
+        const picked = await ports.pick(PICKER)
+        if (picked !== undefined) ports.notice(LABEL + ': ' + picked)
+      },
+    })
+  })
+}
+```
+
+Handlers receive the current route, generic row-picker ports, and a notice sink.
+The registering Context owns the action; disposal removes its bindings, help rows, and handler.
+Duplicate IDs and conflicting effective bindings are refused before publication.
+Registration and removal update the open surface and disarm any pending chord.
+
+Users can rebind plugin IDs through the same `keys` preference mapping as builtin actions.
+On Config-backed profiles, add `keys` directly to the existing TUI row's `config`, preserving its launch fields.
+Older settings-backed hosts use the `tui.keys` section.
+Preferences for absent plugins remain stored but inactive; registration validates them before activation.
+A plugin can register `afterEffort(owner, handler)` to offer a follow-up after confirmed effort selection.
+Cancelling the effort picker invokes no follow-up.
 
 `Ctrl+X` starts a chord. For the next two seconds the footer leads with the
 prefix alone — enough to say that a key is waiting, without reciting the map —
 and a key that finishes nothing is typed as usual rather than swallowed, so a
 prefix pressed by accident costs nothing; `/help` lists the chords, `m` for the
-model picker, `t` for service tier, `p` for plan mode, `n` for a fresh session, `y` for the last
+model picker, `p` for plan mode, `n` for a fresh session, `y` for the last
 answer, `u` to undo the last prompt, `r` to redo it, `s` to stash the draft,
 `l` for the stashes, `e` for the draft in the reader's own editor, and `?` for
 the key map.
 `keys.chord.prefix: alt+x` starts the chord with another key — or with a list of
 them, as so many ways in — and `prefixWindow: 0` waits for the next key instead
-of lapsing; every second key is a row of its own (`chord.model`, `chord.serviceTier`, `chord.plan`,
+of lapsing; every second key is a row of its own (`chord.model`, `chord.plan`,
 `chord.new`, `chord.copy`, `chord.stash`, `chord.stashes`, `chord.editor`,
 `chord.keys`, `chord.undo`, `chord.redo`), so a chord can be respelled whole. A prefix that is not a modifier
 chord, that the surface or the prompt bar already answers (`ctrl+c`, `ctrl+s`),
@@ -265,7 +301,7 @@ or that the terminal keeps (`ctrl+q`) is refused with the reason, and the
 shipped keymap stays in force. The chords themselves are the commands they stand
 for: `m`, `p`, `n`, `y`, `s`, `l`, `u`, `r`, and `?` ask the same dispatcher
 `/model`, `/plan`, `/new`, `/copy`, `/stash`, `/stash-list`, `/undo`, `/redo`,
-and `/keys` do; `t` opens tier selection without a typed command. `e` opens a program rather than
+and `/keys` do. `e` opens a program rather than
 running a line. Plan mode is the one pair that cannot share a name: `/plan` only
 enters, so the chord names `/plan off` instead when the agent is in plan mode —
 or is waiting for the turn boundary to become so — and reads that state from the

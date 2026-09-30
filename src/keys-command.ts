@@ -1,5 +1,5 @@
-import { actionLabel, keyName, keysFor, newShadows, type Keymap } from './input/actions.ts'
-import { ACTION_CATALOG, type ActionLayer } from './input/action-catalog.ts'
+import { keyName, keysFor, newShadows, catalogOf, type Keymap } from './input/actions.ts'
+import { type ActionLayer } from './input/action-catalog.ts'
 
 /** The layers a reader may ask for, in the order the table lists them. */
 export const KEYMAP_LAYERS: readonly ActionLayer[] = ['prompt', 'surface', 'chord', 'gate', 'question', 'picker', 'library']
@@ -58,13 +58,13 @@ export interface KeymapRow {
 export function keymapRows(map: Keymap, only?: ActionLayer): readonly KeymapRow[] {
   const layers = only === undefined ? KEYMAP_LAYERS : [only]
   const rows: KeymapRow[] = []
-  for (const action of ACTION_CATALOG) {
+  for (const action of catalogOf(map)) {
     if (!layers.includes(action.layer)) continue
     const keys = keysFor(map, action.id).map(keyName).join(' · ')
     const written = map.written.has(action.id)
     rows.push({
       id: action.id,
-      label: `${action.id} = ${keys === '' ? 'unbound' : keys} · ${actionLabel(action.id)}${written ? WRITTEN_MARK : ''}`,
+      label: `${action.id} = ${keys === '' ? 'unbound' : keys} · ${action.label}${written ? WRITTEN_MARK : ''}`,
       group: action.layer,
       written,
       action: true,

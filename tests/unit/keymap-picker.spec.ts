@@ -5,7 +5,7 @@ import { ACTION_CATALOG, KEYMAP_ALIASES } from '@/input/action-catalog.ts'
 import { KeymapPicker } from '@/ui/keymap-picker.ts'
 
 /** The rows this package writes out; the rest of the catalog is read from the library's own table. */
-const OWN_ACTIONS = 35
+const OWN_ACTIONS = 34
 
 /** A reader typing into the filter, one key press at a time. */
 const typed = (picker: KeymapPicker, text: string): KeymapPicker => {

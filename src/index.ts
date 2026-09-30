@@ -19,6 +19,8 @@ import { createBackgroundWork } from './surface/background-work.ts'
 import { createCommands } from './surface/commands.ts'
 import { createModalInput } from './surface/modal-input.ts'
 import { createModelChoice } from './surface/model-choice.ts'
+import { createPluginActions } from './surface/plugin-actions.ts'
+import { TUI_KEYMAP_SERVICE, type KeymapRegistry } from './keymaps.ts'
 import { createPromptInput } from './surface/prompt-input.ts'
 import { createPromptMemory } from './surface/prompt-memory.ts'
 import { createPresetChoice } from './surface/preset-choice.ts'
@@ -49,7 +51,7 @@ export const name = 'tui'
  * exist, which is after `agents` and `tools` come up, so without it here the
  * surface would refuse to build against a roster that is simply not up yet.
  */
-export const inject = ['agents', 'tools', 'agentPresets']
+export const inject = ['agents', 'tools', 'agentPresets', TUI_KEYMAP_SERVICE]
 
 /** The preset registry, asked for a service the agent's own composition holds. */
 interface ServiceFor {
@@ -126,6 +128,7 @@ export function apply(ctx: Context, config: unknown): void {
    * bar's own keys and may only apply once that owner exists.
    */
   const appearance = createAppearance(ctx, {
+    pluginKeymaps: ctx.get(TUI_KEYMAP_SERVICE) as KeymapRegistry | undefined,
     color: () => resolved.color,
     // The row's own theme is the layer a profile patch can pin on a harness
     // that keeps settings per row, so it is read here beside the section.
@@ -235,7 +238,15 @@ export function apply(ctx: Context, config: unknown): void {
    * it and read through ports because the screen, the keyboard and the settings
    * document that supplies the default all belong to the surface around it.
    */
+  const pluginActions = createPluginActions(ctx, {
+    statusFacts: () => statusFacts(),
+    keymap: appearance.keymap,
+    openPicker: picker => modalInput.openPicker(picker),
+    notice: message => sessionView.notice(message),
+    render: () => tui.requestRender(),
+  })
   const modelChoice = createModelChoice(ctx, {
+    afterEffort: pluginActions.afterEffort,
     statusFacts: () => statusFacts(),
     keymap: appearance.keymap,
     openPicker: picker => modalInput.openPicker(picker),
@@ -449,6 +460,7 @@ export function apply(ctx: Context, config: unknown): void {
    * typed after a session switch answers for the session now on screen.
    */
   const commands = createCommands(ctx, {
+    runPluginAction: pluginActions.run,
     launch: {
       sessionId: resolved.sessionId,
       resume: resolved.resume,
