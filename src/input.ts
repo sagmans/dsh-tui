@@ -56,4 +56,3 @@ export function deleteLastGrapheme(text: string): string {
   for (const grapheme of GRAPHEMES.segment(text)) last = grapheme.index
   return text.slice(0, last)
 }
-

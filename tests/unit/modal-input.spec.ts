@@ -1,242 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type { Context } from '@deepseek-ai/cordis'
-import type { ProcessTerminal } from '@earendil-works/pi-tui'
-import type { SessionId } from '@deepseek-ai/dsh-session'
 import { GATE_WAIT_KEY } from '@/herdr/constants.ts'
-import type { HerdrReporter } from '@/herdr/reporter.ts'
-import { defaultKeymap } from '@/input/actions.ts'
-import { createModalInput, type Picker } from '@/surface/modal-input.ts'
-import type { GateInputBar } from '@/ui/gate-input.ts'
+import { createModalInput } from '@/surface/modal-input.ts'
 import { POPUP_MAX_HEIGHT, popupRowBudget, popupWidth } from '@/ui/picker-card.ts'
-import type { PickerAction, PickerCard } from '@/ui/picker.ts'
-import type { PromptBar } from '@/ui/prompt.ts'
-import { createTheme } from '@/theme.ts'
-import type { WarningSafeTui } from '@/terminal/warning-screen.ts'
-
-const SESSION = 'tui-session-1' as SessionId
-const ESCAPE = '\x1b'
-const ENTER = '\r'
-/** The fixture's terminal size, which the popup's own box is derived from. */
-const COLUMNS = 80
-const ROWS = 24
-/** The gap the popup keeps from the screen edge. */
-const POPUP_MARGIN = 1
-
-/** A menu with no rows: what opening one claims is the whole point here. */
-function fakePicker(title: string): Picker {
-  const card = (): PickerCard => ({ title, note: undefined, rows: [], filter: '', hint: '', above: 0, below: 0 })
-  return { handleKey: () => ({ kind: 'cancel' }), card, setNote: () => {} }
-}
-
-/** A menu whose every press answers with the action the case scripts, and whose refusals are recorded. */
-function scriptedPicker(): Picker & { action: PickerAction | undefined; readonly notes: string[]; readonly windows: number[] } {
-  const notes: string[] = []
-  const windows: number[] = []
-  const picker: Picker & { action: PickerAction | undefined; readonly notes: string[]; readonly windows: number[] } = {
-    action: undefined,
-    notes,
-    windows,
-    handleKey: () => picker.action,
-    card: (window?: number): PickerCard => {
-      // A popup asks for the row budget the box can afford; recording it is how a
-      // case sees the terminal's own height reach the list.
-      if (window !== undefined) windows.push(window)
-      return {
-        title: 'History',
-        note: notes.at(-1),
-        rows: [],
-        filter: '',
-        hint: '',
-        above: 0,
-        below: 0,
-      }
-    },
-    setNote: (text: string | undefined) => {
-      notes.push(text ?? '')
-    },
-  }
-  return picker
-}
-
-interface WaitCall {
-  readonly kind: 'block' | 'unblock'
-  readonly key: string
-  readonly message: string | undefined
-}
-
-/** The waterfall the surface registered for one event. */
-type Waterfall = (request: unknown, next: () => unknown) => unknown
-
-interface OverlayCall {
-  readonly component: unknown
-  readonly options: unknown
-  hidden: number
-}
-
-/** The editor the surface hands to a question gate, holding whatever an answer typed into it. */
-interface EditorFake {
-  disableSubmit: boolean
-  focused: boolean
-  text: string
-  getExpandedText(): string
-  setText(text: string): void
-  handleInput(data: string): void
-  render(): string[]
-  setMode(): void
-}
-
-interface Fixture {
-  readonly waits: WaitCall[]
-  readonly renders: number[]
-  readonly focus: (unknown | null)[]
-  readonly overlays: OverlayCall[]
-  /** The prompt bar's borrow and giveBack calls, in order. */
-  readonly promptCalls: string[]
-  readonly editor: EditorFake
-  readonly ctx: Context
-  readonly ports: Parameters<typeof createModalInput>[1]
-  /** The approval waterfall, once the surface has registered it. */
-  readonly approval: () => Waterfall | undefined
-  /** The question waterfall, once the surface has registered it. */
-  readonly questions: () => Waterfall | undefined
-}
-
-function fixture(): Fixture {
-  const waits: WaitCall[] = []
-  const renders: number[] = []
-  const focus: (unknown | null)[] = []
-  const overlays: OverlayCall[] = []
-  const promptCalls: string[] = []
-  const handlers = new Map<string, Waterfall>()
-  const herdr: HerdrReporter = {
-    enabled: true,
-    driver: () => {},
-    background: () => {},
-    block: (key, message) => {
-      waits.push({ kind: 'block', key, message })
-    },
-    unblock: key => {
-      waits.push({ kind: 'unblock', key, message: undefined })
-    },
-    session: () => {},
-    publish: () => {},
-    releaseSync: () => {},
-    release: async () => {},
-    registerExitRelease: () => () => {},
-  }
-  const ctx = {
-    on: (event: string, handler: Waterfall) => {
-      handlers.set(event, handler)
-      return () => {}
-    },
-  } as unknown as Context
-  const editor: EditorFake = {
-    disableSubmit: false,
-    focused: false,
-    text: '',
-    getExpandedText: () => editor.text,
-    setText: text => {
-      editor.text = text
-    },
-    handleInput: data => {
-      editor.text += data
-    },
-    render: () => [],
-    setMode: () => {},
-  }
-  const ports = {
-    herdr,
-    editor: editor as unknown as GateInputBar,
-    tui: {
-      setFocus: (component: unknown | null) => {
-        focus.push(component)
-      },
-      requestRender: () => {
-        renders.push(1)
-      },
-      showOverlay: (component: unknown, options: unknown) => {
-        const call: OverlayCall = { component, options, hidden: 0 }
-        overlays.push(call)
-        return {
-          hide: () => {
-            call.hidden += 1
-          },
-        }
-      },
-    } as unknown as WarningSafeTui,
-    terminal: { rows: ROWS, columns: COLUMNS } as unknown as ProcessTerminal,
-    theme: createTheme('none'),
-    keymap: () => defaultKeymap(),
-    promptBar: {
-      borrow: (build: () => unknown) => {
-        promptCalls.push('borrow')
-        return build()
-      },
-      giveBack: () => {
-        promptCalls.push('giveBack')
-      },
-    } as unknown as PromptBar,
-    refreshCompletion: () => {},
-    activeSession: () => SESSION,
-  }
-  return {
-    waits,
-    renders,
-    focus,
-    overlays,
-    promptCalls,
-    editor,
-    ctx,
-    ports,
-    approval: () => handlers.get('approval/request'),
-    questions: () => handlers.get('user-questions/request'),
-  }
-}
-
-/** Walk the surface's own list first: that is the moment the waterfalls this spec asks for come to exist. */
-function registerListeners(modals: ReturnType<typeof createModalInput>): void {
-  for (const register of modals.requestListeners()) void register
-}
-
-function approvalWaterfall(modals: ReturnType<typeof createModalInput>, given: Fixture): Waterfall {
-  registerListeners(modals)
-  const approval = given.approval()
-  if (approval === undefined) throw new Error('the approval listener was never registered')
-  return approval
-}
-
-/**
- * Ask the surface for an approval the way the harness does.
- *
- * The waterfalls are handed back as registrations rather than installed by the
- * constructor, so the surface's own list is walked first: that is the moment the
- * listener this asks for comes to exist.
- */
-function requestApproval(
-  modals: ReturnType<typeof createModalInput>,
-  given: Fixture,
-  request: Record<string, unknown> = {},
-): unknown {
-  const approval = approvalWaterfall(modals, given)
-  return approval({ agent: { id: SESSION }, toolName: 'bash', reason: 'needs network', ...request }, () => undefined)
-}
-
-function requestQuestions(
-  modals: ReturnType<typeof createModalInput>,
-  given: Fixture,
-  request: Record<string, unknown>,
-): { readonly answer: unknown; readonly next: () => number } {
-  registerListeners(modals)
-  const questions = given.questions()
-  if (questions === undefined) throw new Error('the question listener was never registered')
-  let nexts = 0
-  const answer = questions({ signal: undefined, ...request }, () => {
-    nexts += 1
-  })
-  return { answer, next: () => nexts }
-}
-
-const settle = (): Promise<void> => new Promise(resolve => setTimeout(resolve, 0))
+import { SESSION, ESCAPE, ENTER, COLUMNS, ROWS, POPUP_MARGIN, fakePicker, scriptedPicker, fixture, approvalWaterfall, requestApproval, requestQuestions, settle } from './fixtures/modal-input.ts'
 
 describe('createModalInput herdr waits', () => {
   it('claims no wait for a menu the reader opened', async () => {
@@ -266,22 +32,18 @@ describe('createModalInput herdr waits', () => {
     expect(given.waits.at(-1)).toEqual({ kind: 'unblock', key: GATE_WAIT_KEY, message: undefined })
   })
 
-  it('leaves a gate the only wait while a menu is open behind it', async () => {
+  it('rejects approval behind an active menu without claiming a phantom wait', async () => {
     const given = fixture()
     const modals = createModalInput(given.ctx, given.ports)
-
-    // The order the surface can actually reach: a menu the reader opened is still
-    // up when the agent asks for an approval, and the gate takes the keyboard
-    // from it until it is answered.
     const opened = modals.openPicker(fakePicker('Model'))
-    requestApproval(modals, given)
-    modals.handleKey('y')
-    modals.handleKey(ESCAPE)
-    await opened
+    const approval = requestApproval(modals, given)
 
-    // One wait was claimed and one given back, both the gate's: a menu settling
-    // must not read as a decision the agent is still owed having been answered.
-    expect(given.waits.map(call => `${call.kind}:${call.key}`)).toEqual([`block:${GATE_WAIT_KEY}`, `unblock:${GATE_WAIT_KEY}`])
+    expect(await approval).toBe('cancelled')
+    expect(modals.pickerCard()?.title).toBe('Model')
+    expect(given.editor.disableSubmit).toBe(true)
+    modals.handleKey(ESCAPE)
+    expect(await opened).toBeUndefined()
+    expect(given.waits).toEqual([])
     expect(modals.gateCard()).toBeUndefined()
     expect(modals.pickerCard()).toBeUndefined()
   })
@@ -416,9 +178,10 @@ describe('createModalInput gates', () => {
     expect(given.promptCalls).toEqual(['borrow', 'giveBack'])
   })
 
-  it('leaves the gate that took the keyboard in place when the question behind it aborts', async () => {
+  it('does not let a rejected question abort the active approval', async () => {
     const given = fixture()
     const modals = createModalInput(given.ctx, given.ports)
+    const approval = requestApproval(modals, given)
     const controller = new AbortController()
     const call = requestQuestions(modals, given, {
       agent: { id: SESSION },
@@ -426,13 +189,12 @@ describe('createModalInput gates', () => {
       signal: controller.signal,
     })
 
-    // An approval can arrive while a question is up, and the gate that holds the
-    // keyboard now is the approval: the aborted question must answer its caller
-    // without closing a gate that belongs to someone else.
-    requestApproval(modals, given)
     controller.abort()
     await expect(call.answer as Promise<unknown>).resolves.toEqual({ answers: [] })
     expect(modals.gateCard()?.kind).toBe('approval')
+    expect(given.promptCalls).toEqual([])
+    modals.handleKey(ESCAPE)
+    expect(await approval).toBe('cancelled')
   })
 
   const passthrough: [string, Record<string, unknown>][] = [

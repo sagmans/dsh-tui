@@ -63,6 +63,9 @@ Not published: release signature verification failed. Its changes ship in 0.12.1
 
 ### Fixed
 
+- Canceled picker checks cannot settle or unlock a replacement picker.
+  Already-aborted approvals stay closed; concurrent modal requests fail closed
+  instead of replacing the active decision. Disposal settles waiting callers.
 - Picker and question filters accept Unicode commits and Kitty printable
   press/repeat events. Backspace removes complete graphemes; releases and
   functional keys cannot insert text or repeat actions.
