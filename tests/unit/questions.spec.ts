@@ -16,6 +16,22 @@ describe('QuestionGate', () => {
   const multi = toGateQuestions({
       questions: [{ id: 'q1', question: 'pick', options: [{ label: 'a' }, { label: 'b' }], multiSelect: true }],
     })
+  it.each(['😀', 'a\u0308', '\x1b[128512;1u'])('filters Unicode text without losing the option %j', data => {
+    const gate = gateOver(toGateQuestions({
+      questions: [{ id: 'q1', question: 'which?', options: [{ label: '😀 a\u0308 choice' }, { label: 'other' }] }],
+    }))
+    gate.handleKey(data)
+    expect(gate.card().options.map(row => row.label)).toEqual(['😀 a\u0308 choice'])
+    gate.handleKey(BACKSPACE)
+    expect(gate.card().options).toHaveLength(2)
+  })
+
+  it('selects an encoded digit exactly like its legacy key', () => {
+    const gate = gateOver(single)
+    gate.handleKey('\x1b[49;1u')
+    expect(gate.card().options[0]?.selected).toBe(true)
+  })
+
   it('moves the cursor and selects with space', () => {
       const gate = gateOver(single)
       gate.handleKey(DOWN)

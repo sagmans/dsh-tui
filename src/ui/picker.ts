@@ -1,6 +1,6 @@
 import { matchesKey } from '@earendil-works/pi-tui'
 import { hintKeys, matchesAction, moveHint, type Keymap } from '../input/actions.ts'
-import { pastedText } from '../input.ts'
+import { deleteLastGrapheme, releasedKey, typedText } from '../input.ts'
 import { matchScore } from '../input/match.ts'
 import type { StoredSession } from '../agent/history.ts'
 import { describeModelRoute, modelRouteKey, type ModelChoice, type ModelRoute } from '../agent/model.ts'
@@ -145,6 +145,7 @@ export class ListPicker<Row> {
 
   /** Apply one key press; returns an action only when the picker settles. */
   handleKey(data: string): PickerAction | undefined {
+    if (releasedKey(data)) return undefined
     const action = this.step(data)
     // A press that settles the list needs no announcement: the row it settled on
     // is the row already on screen.
@@ -187,7 +188,7 @@ export class ListPicker<Row> {
       return undefined
     }
     if (matchesKey(data, 'backspace')) {
-      this.filter = this.filter.slice(0, -1)
+      this.filter = deleteLastGrapheme(this.filter)
       this.cursor = 0
       return undefined
     }
@@ -196,7 +197,7 @@ export class ListPicker<Row> {
       this.cursor = 0
       return undefined
     }
-    const text = pastedText(data) ?? (data.length === 1 && data >= ' ' ? data : undefined)
+    const text = typedText(data)
     if (text !== undefined) {
       this.filter += text
       this.cursor = 0

@@ -63,6 +63,9 @@ Not published: release signature verification failed. Its changes ship in 0.12.1
 
 ### Fixed
 
+- Picker and question filters accept Unicode commits and Kitty printable
+  press/repeat events. Backspace removes complete graphemes; releases and
+  functional keys cannot insert text or repeat actions.
 - Typing reuses unchanged transcript rows, live Markdown, click targets, and copy
   metadata instead of rebuilding the conversation on every keyboard frame.
   Stream changes, folding, theme changes, overlays, and live clocks remain current.

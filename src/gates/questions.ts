@@ -3,7 +3,7 @@ import { type GateCard, type GateInput, lines, type GateQuestion, type GateAnswe
 import { CUSTOM_ROW_LABEL, CUSTOM_ROW_DESCRIPTION, CUSTOM_ROW_SHORTHAND, namedKeys, customRowExits, customHint, SECRET_ROW_LABEL, declaresSecret } from './question-card.ts'
 import { matchesKey } from '@earendil-works/pi-tui'
 import { matchesAction, type Keymap } from '../input/actions.ts'
-import { pastedText } from '../input.ts'
+import { deleteLastGrapheme, pastedText, releasedKey, typedText } from '../input.ts'
 import { matchScore } from '../input/match.ts'
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -207,6 +207,7 @@ export class QuestionGate {
 
   /** Apply one key press; returns the batch answer the first time it completes. */
   handleKey(data: string): GateAnswer[] | undefined {
+    if (releasedKey(data)) return undefined
     const question = this.current
     if (this.finished || question === undefined) return undefined
     const paste = pastedText(data)
@@ -277,7 +278,7 @@ export class QuestionGate {
         this.input.handleInput(data)
         return undefined
       }
-      this.typed = this.typed.slice(0, -1)
+      this.typed = deleteLastGrapheme(this.typed)
       this.cursor = 0
       return undefined
     }
@@ -285,8 +286,9 @@ export class QuestionGate {
       this.absorb(' ')
       return undefined
     }
-    if (question.options.length > 0 && /^[0-9]$/u.test(data)) {
-      const digit = Number.parseInt(data, 10)
+    const text = typedText(data)
+    if (question.options.length > 0 && text !== undefined && /^[0-9]$/u.test(text)) {
+      const digit = Number.parseInt(text, 10)
       if (digit === CUSTOM_ROW_NUMBER) {
         this.atCustom = true
         return undefined
@@ -298,7 +300,7 @@ export class QuestionGate {
       }
       return undefined
     }
-    if (data.length === 1 && data >= ' ') this.absorb(data)
+    if (text !== undefined) this.absorb(text)
     return undefined
   }
 

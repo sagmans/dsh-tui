@@ -7,6 +7,14 @@
  * instead of each re-deriving the same markers.
  */
 
+import { decodeKittyPrintable, isKeyRelease } from '@earendil-works/pi-tui'
+
+const KEY_SEQUENCE_START = '\x1b['
+const PRINTABLE_TEXT = /^[^\u0000-\u001f\u007f-\u009f]+$/u
+// Kitty reserves this area for functional keys, not printable filter characters.
+const KITTY_FUNCTIONAL_TEXT = /^[\ue000-\uf8ff]$/u
+const GRAPHEMES = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
+
 /** The markers the surface wraps a paste in once the terminal reports one. */
 const PASTE_START = '\x1b[200~'
 const PASTE_END = '\x1b[201~'
@@ -25,3 +33,27 @@ export function pastedText(data: string): string | undefined {
   const end = rest.indexOf(PASTE_END)
   return (end === -1 ? rest : rest.slice(0, end)).replace(/[\u0000-\u001f\u007f]/gu, '')
 }
+
+/** A release must not confirm a gate, move a cursor, or insert a second copy of a key. */
+export function releasedKey(data: string): boolean {
+  return data.startsWith(KEY_SEQUENCE_START) && isKeyRelease(data)
+}
+
+/** Shared decoding keeps custom filters consistent with the editor's terminal protocol. */
+export function typedText(data: string): string | undefined {
+  const paste = pastedText(data)
+  if (paste !== undefined) return paste
+  if (releasedKey(data)) return undefined
+  const decoded = decodeKittyPrintable(data)
+  if (decoded !== undefined && KITTY_FUNCTIONAL_TEXT.test(decoded)) return undefined
+  const text = decoded ?? data
+  return PRINTABLE_TEXT.test(text) ? text : undefined
+}
+
+/** UTF-16 deletion tears emoji and combining sequences into characters the reader never typed. */
+export function deleteLastGrapheme(text: string): string {
+  let last = 0
+  for (const grapheme of GRAPHEMES.segment(text)) last = grapheme.index
+  return text.slice(0, last)
+}
+
