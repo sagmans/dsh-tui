@@ -8,6 +8,8 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+## [0.11.2] - 2026-09-30
+
 ### Changed
 
 - A publication carries both its `vX.Y.Z` tag and the GitHub release record for
@@ -1028,7 +1030,8 @@ breaking change, and a patch carries only fixes.
 - Publication through npm OIDC trusted publishing, with the first version
   bootstrapped by hand ([#5](https://github.com/sagmans/dsh-tui/pull/5)).
 
-[Unreleased]: https://github.com/sagmans/dsh-tui/compare/v0.11.1...HEAD
+[Unreleased]: https://github.com/sagmans/dsh-tui/compare/v0.11.2...HEAD
+[0.11.2]: https://github.com/sagmans/dsh-tui/compare/v0.11.1...v0.11.2
 [0.11.1]: https://github.com/sagmans/dsh-tui/compare/v0.11.0...v0.11.1
 [0.11.0]: https://github.com/sagmans/dsh-tui/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/sagmans/dsh-tui/compare/v0.9.0...v0.10.0
