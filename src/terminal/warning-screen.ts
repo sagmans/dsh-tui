@@ -4,9 +4,12 @@ import { holdHostWrites, HOST_WRITE_LIMIT, HOST_WRITE_TARGETS, type HostWriteGua
 
 const WARNING_EVENT = 'warning'
 const WARNING_EVENT_LIMIT = 256
-const WARNING_TEXT_FIELDS = ['name', 'message', 'stack', 'code', 'detail']
+const ERROR_STACK_FIELD = 'stack'
+const WARNING_TEXT_FIELDS = ['name', 'message', ERROR_STACK_FIELD, 'code', 'detail']
+const HIGH_SURROGATE = /^[\ud800-\udbff]$/u
+const LOW_SURROGATE = /^[\udc00-\udfff]$/u
 const WARNING_DROPPED = '… warnings dropped'
-const NATIVE_ERROR_STACK = Object.getOwnPropertyDescriptor(new Error(), 'stack')
+const NATIVE_ERROR_STACK = Object.getOwnPropertyDescriptor(new Error(), ERROR_STACK_FIELD)
 const RESTORE_SHELL = '\x1b[?1049l\x1b[0m\x1b[?7h\x1b[?25h'
 
 /** Budget standard warning text without replacing the producer's retained event identity. */
@@ -21,7 +24,7 @@ function warningBytes(args: readonly unknown[]): number {
           const descriptor = Object.getOwnPropertyDescriptor(argument, field)
           // Native lazy stacks preserve trace locations; custom accessors can hide an unbounded closure.
           if (descriptor !== undefined && (descriptor.get !== undefined || descriptor.set !== undefined)
-            && !(field === 'stack' && descriptor.get === NATIVE_ERROR_STACK?.get && descriptor.set === NATIVE_ERROR_STACK?.set)) {
+            && !(field === ERROR_STACK_FIELD && descriptor.get === NATIVE_ERROR_STACK?.get && descriptor.set === NATIVE_ERROR_STACK?.set)) {
             return HOST_WRITE_LIMIT + 1
           }
           bytes += Buffer.byteLength(String(field))
@@ -100,6 +103,7 @@ export class WarningSafeTui extends TuiAltScreen {
   private releaseWarnings: (() => void) | undefined
   private hostWrites: HostWriteGuard | undefined
   private frameFailed = false
+  private highSurrogate: string | undefined
 
   /** Each failure episode deserves a report, but repeated retries must not flood the surface. */
   onFrameError: ((error: unknown) => void) | undefined
@@ -112,6 +116,19 @@ export class WarningSafeTui extends TuiAltScreen {
    */
   constructor(terminal: Terminal, options?: TuiAltScreenOptions) {
     super(terminal, undefined, undefined, options)
+    // The pinned stdin buffer splits legacy text into UTF-16 units; filters must receive complete Unicode scalars.
+    this.addInputListener(data => {
+      if (HIGH_SURROGATE.test(data)) {
+        this.highSurrogate = data
+        return { consume: true }
+      }
+      const previous = this.highSurrogate
+      this.highSurrogate = undefined
+      if (LOW_SURROGATE.test(data)) {
+        return previous === undefined ? { consume: true } : { data: previous + data }
+      }
+      return undefined
+    })
   }
 
   override start(): void {
@@ -146,6 +163,7 @@ export class WarningSafeTui extends TuiAltScreen {
   }
 
   override stop(options?: TuiStopOptions): void {
+    this.highSurrogate = undefined
     try {
       super.stop(options)
     } catch (error) {

@@ -84,6 +84,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
     "test": "vitest run",
     "coverage": "vitest run --coverage",
+    "test:terminal": "pnpm run build && node tools/terminal-behavior.mjs",
     "test:release": "python3 -m unittest discover -s tests/release -p 'test_*.py'",
     "prepare": "npm run build",
     "prepack": "npm run build",

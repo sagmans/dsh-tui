@@ -37,10 +37,12 @@ jobs:
       # would first surface as an unrecoverable registry write.
       - name: Release helper tests
         run: pnpm test:release
-      # The PTY harness is a development tool: CI proves the artefact packs and
-      # its modules parse, and leaves terminal behaviour to a local run.
+      # Full-profile dogfood remains local; CI also guards native widget/input and restore invariants without credentials.
       - name: Package smoke
         run: node tools/pack-smoke.mjs
+      # Timing varies across hosts; only key preservation, redraw and restore invariants gate shared runners.
+      - name: Native terminal behavior
+        run: pnpm test:terminal
       # The manifest and the tree it describes must name the same harness
       # release; the registry half of this check runs on schedule.
       - name: Harness matrix

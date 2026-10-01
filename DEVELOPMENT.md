@@ -15,9 +15,14 @@ pnpm run typecheck
 pnpm test
 pnpm test:release
 node tools/pack-smoke.mjs
+pnpm test:terminal
 ```
 
-The gate does not prove terminal behaviour. Run `node tools/pty-drive.mjs --home <clone>`
+Unit and golden tests do not prove native terminal behaviour. `pnpm test:terminal` checks native widgets in a credential-free PTY.
+It checks ASCII, Unicode, paste, Kitty press/repeat/release, redraw limits, resize, and terminal restoration during styled streaming.
+Its receipt reports dispatch-to-output-write timing, not hardware-input-to-pixel latency. Shared CI runners do not enforce timing budgets.
+
+This check does not start a full Cordis profile or contact a model. Run `node tools/pty-drive.mjs --home <clone>`
 and follow the manual acceptance table in the README: the driver verifies the
 installed launcher against the releases the manifest lists, rebuilds, allocates a
 PTY, and prints the screen.
@@ -25,6 +30,22 @@ PTY, and prints the screen.
 A linked profile loads `lib/`, never `src/`, so a run against a stale build
 tests the previous release. `tools/pty-drive.mjs` rebuilds on every run for that
 reason; a profile you launch by hand does not.
+
+## Performance evidence
+
+Use the same machine, Node version, terminal, dimensions, profile, and workload for baseline and treatment.
+Record input and output timestamps, sample counts, p50/p95, maximum, redraw counts, and terminal restoration.
+Do not treat PTY output or a 60 fps video without input timestamps as hardware latency proof.
+Run timing budgets only on a controlled host; native behavioral invariants remain safe gates on shared CI runners.
+
+Profile matching history suggestions separately from unmatched input. Fresh raw-user consent still gates each actual suggestion.
+The supported SettingsForms API exposes `describe(options)`, but no namespace-scoped raw-user read.
+A scoped optimization needs a supported harness capability. Do not cache consent or substitute applied configuration for raw opt-outs.
+
+Measure history misses at 2,000 and 20,000 entries, and streaming at 100 and 10,000 settled entries.
+A miss cache or incremental document assembly needs a material measured benefit before it adds invalidation state.
+Keep coverage for 10,000-character drafts, 45,700-character live output, and 8,000-character styled output when testing those workloads.
+Native Linux CI and local macOS PTYs do not replace the supported emulator, tmux, SSH, and hardware-key acceptance checks.
 
 ## Trying a change in a real profile
 

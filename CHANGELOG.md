@@ -39,6 +39,7 @@ breaking change, and a patch carries only fixes.
 - Borrowed transcript frames cannot be mutated into stale rows or mismatched copy metadata.
 - Workspace ranking tests exercise the cooperative production path instead of a duplicated synchronous implementation.
 - One-row terminals keep the draft visible; two-row terminals keep both input and the footer even under dock and queue pressure.
+- Legacy emoji survives the pinned terminal decoder’s split UTF-16 delivery without admitting malformed filter commits. Native PTY CI now guards input, redraw, resize, and shell restoration without credentials or timing thresholds on shared runners.
 - Ordinary typing and unmatched prompt-history prefixes no longer rebuild every plugin’s settings forms. Fresh consent still gates each ghost suggestion before it appears or enters the draft.
 
 ### Changed
