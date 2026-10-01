@@ -4,6 +4,8 @@ import { HOST_WRITE_DROPPED, holdHostWrites, type HostWritable } from '@/termina
 const UTF8_BYTE_BUDGET = 4
 const OVERSIZE_BYTE_BUDGET = 3
 const INVALID_BYTE_BUDGETS = [-1, NaN, Infinity, 1.5]
+const ZERO_BYTE_BUDGET = 0
+const ZERO_BUDGET_DIAGNOSTIC = 'diagnostic'
 
 /** A stream that remembers what reached it. */
 interface FakeStream extends HostWritable {
@@ -81,6 +83,16 @@ describe('holdHostWrites', () => {
     expect(flushed).toContain('67890')
     expect(flushed).toBe(`${HOST_WRITE_DROPPED} (1 writes)\n67890`)
     expect(flushed).not.toContain('12345')
+  })
+
+  it('reports dropped writes even when the retention budget is zero', () => {
+    const screen = stream()
+    const terminal = stream()
+    const guard = holdHostWrites({ terminal, targets: [screen], limit: ZERO_BYTE_BUDGET })
+    screen.write(ZERO_BUDGET_DIAGNOSTIC)
+    expect(screen.written).toEqual([])
+    guard.release()
+    expect(screen.written).toEqual([`${HOST_WRITE_DROPPED} (1 writes)\n`])
   })
 
   it('drops a single over-budget write whole and reports its loss', () => {

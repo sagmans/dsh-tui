@@ -1,9 +1,63 @@
 /** Canceled requests and asynchronous verdicts must not acquire another modal's keyboard. */
-import { describe, expect, it } from 'vitest'
+import { Context } from '@deepseek-ai/cordis'
+import { describe, expect, it, vi } from 'vitest'
+import { createTerminalLifecycle } from '@/surface/terminal-lifecycle.ts'
 import { createModalInput } from '@/surface/modal-input.ts'
-import { ENTER, ESCAPE, fixture, requestApproval, requestQuestions, scriptedPicker, settle } from './fixtures/modal-input.ts'
+import { SESSION, ENTER, ESCAPE, fixture, requestApproval, requestQuestions, scriptedPicker, settle } from './fixtures/modal-input.ts'
+
+const HERDR_MODE_ENV = 'HERDR_ENV'
+const INERT_HERDR_CONTEXT = ''
+const CANCELLED_APPROVAL_OUTCOME = 'cancelled'
+const APPROVAL_REQUEST_EVENT = 'approval/request'
+const DISPOSAL_TOOL_NAME = 'pending tool'
+const DISPOSAL_REASON = 'reader decision'
 
 describe('modal request ownership', () => {
+  it('releases a live gate before real Cordis ownership restores the terminal', async () => {
+    vi.stubEnv(HERDR_MODE_ENV, INERT_HERDR_CONTEXT)
+    const given = fixture()
+    const ctx = new Context()
+    const controller = new AbortController()
+    let modals: ReturnType<typeof createModalInput> | undefined
+    let gateAtStop: ReturnType<ReturnType<typeof createModalInput>['gateCard']>
+    const focusChanges: unknown[] = []
+    let stopped = false
+    const owner = await ctx.plugin((scoped: Context) => {
+      const lifecycle = createTerminalLifecycle(scoped, {
+        reportFrameError: () => {}, notice: () => {}, copyRows: () => [],
+        activeSession: () => SESSION, sessionOpened: () => false, turnRunning: () => false,
+        stopClock: () => {}, exit: () => {}, draftText: () => given.editor.text,
+        draftBorrowed: () => false, holdDraft: text => given.editor.setText(text),
+        writeDraft: text => given.editor.setText(text),
+      })
+      vi.spyOn(lifecycle.terminal, 'write').mockImplementation(() => {})
+      const stop = lifecycle.tui.stop.bind(lifecycle.tui)
+      vi.spyOn(lifecycle.tui, 'stop').mockImplementation(options => { stopped = true; gateAtStop = modals?.gateCard(); stop(options) })
+      const setFocus = lifecycle.tui.setFocus.bind(lifecycle.tui)
+      vi.spyOn(lifecycle.tui, 'setFocus').mockImplementation(component => { focusChanges.push(component); setFocus(component) })
+      modals = createModalInput(scoped, { ...given.ports, tui: lifecycle.tui, terminal: lifecycle.terminal, herdr: lifecycle.herdr })
+      modals.requestListeners()
+    })
+    try {
+      const answer = Reflect.apply(ctx.waterfall, ctx, [APPROVAL_REQUEST_EVENT, {
+        agent: { id: SESSION }, toolName: DISPOSAL_TOOL_NAME, reason: DISPOSAL_REASON, signal: controller.signal,
+      }, () => undefined])
+      expect(modals?.gateCard()?.title).toContain(DISPOSAL_TOOL_NAME)
+      await owner.dispose()
+      expect(await answer).toBe(CANCELLED_APPROVAL_OUTCOME)
+      expect(stopped).toBe(true)
+      expect(gateAtStop).toBeUndefined()
+      expect(given.editor.disableSubmit).toBe(false)
+      const focusCount = focusChanges.length
+      controller.abort()
+      expect(focusChanges.length).toBe(focusCount)
+    } finally {
+      await owner.dispose()
+      vi.restoreAllMocks()
+      vi.unstubAllEnvs()
+    }
+  })
+
   it.each([undefined, 'old refusal', new Error('expired check')])('ignores a canceled picker verdict %j after another picker opens', async reason => {
     const given = fixture()
     const modals = createModalInput(given.ctx, given.ports)

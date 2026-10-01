@@ -79,6 +79,7 @@ export interface ModalInput {
   readonly gateCard: () => GateCard | undefined
   /** The card a pending picker draws in the transcript, when it draws one there. */
   readonly pickerCard: () => PickerCard | undefined
+  /** Busy and disposed owners fail closed with the same no-selection outcome as reader cancellation. */
   readonly openPicker: (
     picker: Picker,
     vet?: (id: string) => Promise<string | undefined>,

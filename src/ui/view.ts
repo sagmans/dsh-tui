@@ -76,10 +76,9 @@ const nestedCallsClickKey = (id: string): string | undefined => (id === '' ? und
 /**
  * Renders the transcript rows and any pending gate as terminal lines.
  *
- * The component stays a pure projection: it holds no cache of its own, so a
- * resize, a resume, or an open gate redraws the same rows without replaying
- * anything. Everything it draws came from a model, a tool, or a file, so the
- * text passes through the display escaping before it is styled.
+ * Retained rows must keep their click and copy accounts, so one document owner
+ * refreshes them together while overlays remain transient. External text still
+ * passes through display escaping before styling because it is not terminal protocol.
  */
 /** What sits below the transcript while the reader is being asked something. */
 export interface TranscriptViewOptions {
@@ -95,10 +94,10 @@ export interface TranscriptViewOptions {
    */
   readonly keys?: () => Keymap
   /**
-   * How one tool's cards draw, read per render.
+   * Mutable tool policies require invalidate() when changed.
    *
-   * The settings document is hot-reloaded, so a captured table would keep
-   * folding a session under the policy it happened to start with.
+   * Callback identity cannot describe live configuration, so entry and
+   * document caches must refresh together. The settings composition already does this.
    */
   readonly toolDisplay?: (tool: string) => ToolDisplaySpec
   /**
@@ -119,7 +118,7 @@ export class TranscriptView implements Component {
   private readonly gates: GateCards
   /** Presentation policy stays here; the document retains rows with their hit and copy metadata. */
 
-constructor(
+  constructor(
     private readonly model: TranscriptModel,
     private readonly theme: TuiTheme,
     private readonly markdown: MarkdownRenderer,
@@ -135,7 +134,7 @@ constructor(
       renderEntry: (entry, lines, width, live, spans, copy) => this.renderEntry(entry, lines, width, live, spans, copy),
     })
   }
-private get viewState(): ViewState {
+  private get viewState(): ViewState {
     return this.options.state?.() ?? DEFAULT_VIEW_STATE
   }
 /** The display the reader configured for a tool, or the shipped one. */
@@ -218,7 +217,7 @@ private get viewState(): ViewState {
     this.clicked.set(span.key, !span.expanded)
     return { handled: true, render: true }
   }
-invalidate(): void {
+  invalidate(): void {
     // The rows are keyed by width and expansion state, so a real change misses
     // anyway; an explicit invalidate means the caller wants them rebuilt.
     this.document.invalidate()
@@ -249,7 +248,7 @@ invalidate(): void {
   private keymap(): Keymap {
     return this.options.keys?.() ?? defaultKeymap()
   }
-private reasoningFoldHint(): string {
+  private reasoningFoldHint(): string {
     return hintKeys(this.keymap(), 'surface.reasoning') || REASONING_FOLD_FALLBACK
   }
 /**
@@ -267,7 +266,7 @@ private reasoningFoldHint(): string {
     // clears it.
     return this.model.liveCall(entry.id).running || (entry.card.subCalls ?? []).some(call => call.running)
   }
-private pushPicker(lines: string[], picker: PickerCard, width: number): void {
+  private pushPicker(lines: string[], picker: PickerCard, width: number): void {
     // The overlay opens under the transcript on one row of air, unless the row
     // above is already air: the break belongs between the two, not to each.
     pushGap(lines)
