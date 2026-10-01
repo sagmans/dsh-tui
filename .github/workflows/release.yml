@@ -12,6 +12,11 @@ on:
 permissions:
   contents: read
 
+# pnpm can link a skipped optional package to the project root with the isolated
+# layout, so npm would audit the project version under that dependency name.
+env:
+  PNPM_NODE_LINKER: hoisted
+
 jobs:
   verify:
     timeout-minutes: 20
@@ -27,7 +32,7 @@ jobs:
         with:
           node-version: '24'
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile --config.node-linker="$PNPM_NODE_LINKER"
       # The released artefact is built from this tree, so its registry signatures
       # are checked before the tag can reach the approval gate.
       - name: Dependency signatures
@@ -69,7 +74,7 @@ jobs:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'
       # devDependencies supply tsc for the prepack build that npm publish runs.
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile --config.node-linker="$PNPM_NODE_LINKER"
       # --provenance keeps the attestation explicit and fails loudly if the
       # trusted-publisher match is misconfigured.
       - run: npm publish --provenance --access public
