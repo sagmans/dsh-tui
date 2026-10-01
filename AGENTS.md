@@ -113,17 +113,8 @@ non-obvious constraint exists is the part that prevents future drift.
 
 ## Boundaries
 
-- **Publication is tag-driven CI, never local.** `release.yml` publishes through
-  npm OIDC trusted publishing and the repository stores no token; the
-  `scripts/npm/` helpers act only on an explicit `CONFIRM=<action>` (preview with
-  `DRY_RUN=1`). Ask the maintainer instead of starting a release.
-- **Release shape:** the `vX.Y.Z` tag and `package.json` `version` must match,
-  and a candidate reaches `main` through a reviewed PR (squash merge).
-- **A publication carries both its tag and its GitHub release.** The tag is what
-  `release.yml` publishes from; the record, with the `CHANGELOG.md` entry as notes,
-  is what a reader finds. A version short of either half is incomplete, and the
-  missing half is created from the same signed tag — never by retagging. The gates
-  are [RELEASE.md](RELEASE.md#gates--all-required-before-tagging)'s.
+- **Release and publication:** follow the signed-tag, approval, and readback
+  sequence below and the gates in [RELEASE.md](RELEASE.md).
 - **Dependency install scripts and release age are gated in
   `pnpm-workspace.yaml`** (`allowBuilds`, `minimumReleaseAgeExclude`). Ask before
   adding a dependency or allowlisting a build.
@@ -133,3 +124,40 @@ non-obvious constraint exists is the part that prevents future drift.
 - **Every PR carries its `CHANGELOG.md` entry** under `## [Unreleased]`, in the
   section that fits (`Added`, `Changed`, `Fixed`, …). The entry is part of the
   change, not a follow-up, and its absence makes the PR incomplete.
+
+## Release and publication
+
+Read [RELEASE.md](RELEASE.md) before preparing a version, pushing a release tag,
+publishing, or repairing a release record. Shipping a documentation or code PR
+is not approval to publish. Require explicit maintainer approval for publication
+and each remote release action; never publish on your own initiative.
+
+1. Land the candidate through a reviewed PR to `main`. Match `package.json`
+   `version`, the `vX.Y.Z` tag, and the versioned `CHANGELOG.md` entry.
+   Pass the release gates in `RELEASE.md` on the exact merged commit.
+2. Create an annotated, signed tag on that commit:
+   `git tag -s -a "vX.Y.Z" -m "vX.Y.Z" <merged-sha>`.
+   Verify it with `git verify-tag "vX.Y.Z"`. Never use a lightweight or unsigned
+   release tag; require GitHub to verify the signature after the approved push.
+3. Push only that tag with `git push origin "vX.Y.Z"` after approval.
+   `.github/workflows/release.yml` verifies the tag and publishes through npm
+   OIDC trusted publishing after the `npm-release` environment approval.
+   Wait for success; never substitute a local `npm publish`. The documented
+   first-publication bootstrap is a maintainer-only exception, not a retry path.
+4. After publication succeeds, create the GitHub release from the existing tag:
+   `gh release create "vX.Y.Z" --verify-tag --title "vX.Y.Z" --notes-file <notes-file>`.
+   Use that version's changelog entry as notes. Set `--latest=false` when filling
+   an older release so it does not replace the current latest release.
+5. Read back the npm version, tarball integrity and available provenance, the
+   remote tag's verified signature and source commit, and the published GitHub
+   release for the same version. A green workflow alone is not completion:
+   every npm version requires its own signed tag and GitHub release record.
+
+Published versions and tags are immutable. Never delete, move, or re-sign an
+existing release tag, and never republish or unpublish an existing npm version.
+For a missing GitHub release, verify the existing signed tag and create only its
+release record with `--verify-tag`; do not push another tag or retry publication.
+If a tag or signature is missing or invalid, stop and ask the maintainer; do not
+invent a source commit from current `main`. Forward-fix broken packages as
+`RELEASE.md` directs. Helper mutations require `CONFIRM=<action>`; preview
+with `DRY_RUN=1`.
