@@ -21,6 +21,8 @@ const TIMEOUT_MS = 10_000
 const WARNING_SAMPLE_SIZE = 10_000
 const OVERSIZED_WARNING_SIZE = 20_000
 const ZERO_TEXT_WARNING_COUNT = 1000
+const WARNING_CAUSE_BYTES = 2 * 1024 * 1024
+const ROOT_WARNING_CODE = 'ROOT_CAUSE'
 
 function run(flags: string[] = [], mode = ''): string {
   const env = { ...process.env }
@@ -344,6 +346,44 @@ describe('WarningSafeTui warning hold', () => {
     const seen = capturedWarnings(() => process.emit('warning', warning))
     expect(seen).not.toContain(warning)
     expect(seen.some(warning => warning.message.includes('warnings dropped'))).toBe(true)
+  })
+
+  it('delivers the root warning before a drop notice to one-shot consumers', () => {
+    const root = Object.assign(new Error('root warning'), { code: ROOT_WARNING_CODE })
+    const oversized = Object.assign(new Error('oversized'), { stack: '😀'.repeat(OVERSIZED_WARNING_SIZE) })
+    let first: Error | undefined
+    capturedWarnings(() => {
+      process.once('warning', warning => { first = warning })
+      process.emit('warning', root)
+      process.emit('warning', oversized)
+    })
+    expect(first).toBe(root)
+    expect((first as Error & { code?: string }).code).toBe(ROOT_WARNING_CODE)
+  })
+
+  it.each(['cause', 'metadata'])('rejects unbudgetable Error %s without retaining its graph', field => {
+    const warning = Object.assign(new Error('small text'), { [field]: Buffer.alloc(WARNING_CAUSE_BYTES) })
+    const seen = capturedWarnings(() => process.emit('warning', warning))
+    expect(seen).not.toContain(warning)
+    expect(seen.some(entry => entry.message.includes('warnings dropped'))).toBe(true)
+  })
+
+  it('budgets custom string metadata and rejects opaque event payloads', () => {
+    const warning = Object.assign(new Error('small text'), { metadata: '😀'.repeat(OVERSIZED_WARNING_SIZE) })
+    const payload = { details: Buffer.alloc(WARNING_CAUSE_BYTES) }
+    const seen = capturedWarnings(() => { process.emit('warning', warning); Reflect.apply(process.emit, process, ['warning', payload]) })
+    expect(seen).not.toContain(warning)
+    expect(seen).not.toContain(payload)
+    expect(seen.some(entry => entry.message.includes('2 warnings'))).toBe(true)
+  })
+
+  it('rejects custom accessors without evaluating their retained closure', () => {
+    const warning = new Error('accessor metadata')
+    let evaluated = false
+    Object.defineProperty(warning, 'metadata', { get: () => { evaluated = true; return '' } })
+    const seen = capturedWarnings(() => process.emit('warning', warning))
+    expect(evaluated).toBe(false)
+    expect(seen).not.toContain(warning)
   })
 
   it('bounds zero-text warning events independently of the text budget', () => {

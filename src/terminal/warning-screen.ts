@@ -6,6 +6,7 @@ const WARNING_EVENT = 'warning'
 const WARNING_EVENT_LIMIT = 256
 const WARNING_TEXT_FIELDS = ['name', 'message', 'stack', 'code', 'detail']
 const WARNING_DROPPED = '… warnings dropped'
+const NATIVE_ERROR_STACK = Object.getOwnPropertyDescriptor(new Error(), 'stack')
 const RESTORE_SHELL = '\x1b[?1049l\x1b[0m\x1b[?7h\x1b[?25h'
 
 /** Budget standard warning text without replacing the producer's retained event identity. */
@@ -13,9 +14,20 @@ function warningBytes(args: readonly unknown[]): number {
   let bytes = 0
   try {
     for (const argument of args) {
-      const values = argument instanceof Error
-        ? WARNING_TEXT_FIELDS.map(field => Reflect.get(argument, field))
-        : [argument]
+      const values: unknown[] = []
+      if (argument instanceof Error) {
+        // Retaining identity also retains every own metadata graph, not just the text Node prints.
+        for (const field of new Set<PropertyKey>([...WARNING_TEXT_FIELDS, ...Reflect.ownKeys(argument)])) {
+          const descriptor = Object.getOwnPropertyDescriptor(argument, field)
+          // Native lazy stacks preserve trace locations; custom accessors can hide an unbounded closure.
+          if (descriptor !== undefined && (descriptor.get !== undefined || descriptor.set !== undefined)
+            && !(field === 'stack' && descriptor.get === NATIVE_ERROR_STACK?.get && descriptor.set === NATIVE_ERROR_STACK?.set)) {
+            return HOST_WRITE_LIMIT + 1
+          }
+          bytes += Buffer.byteLength(String(field))
+          values.push(Reflect.get(argument, field))
+        }
+      } else values.push(argument)
       for (const value of values) {
         if ((value !== null && typeof value === 'object') || typeof value === 'function') return HOST_WRITE_LIMIT + 1
         if (value !== undefined) bytes += Buffer.byteLength(String(value))
@@ -60,16 +72,17 @@ function deferWarnings(): () => void {
     if (process.emit === deferredEmit) process.emit = emit
     const failures: unknown[] = []
     bytes = 0
-    if (dropped > 0) {
+    for (const args of pending.splice(0)) {
       try {
-        Reflect.apply(emit, process, [WARNING_EVENT, new Error(`${WARNING_DROPPED} (${dropped} warnings)`)])
+        Reflect.apply(emit, process, [WARNING_EVENT, ...args])
       } catch (error) {
         failures.push(error)
       }
     }
-    for (const args of pending.splice(0)) {
+    // One-shot consumers need the original root cause before an aggregate loss notification.
+    if (dropped > 0) {
       try {
-        Reflect.apply(emit, process, [WARNING_EVENT, ...args])
+        Reflect.apply(emit, process, [WARNING_EVENT, new Error(`${WARNING_DROPPED} (${dropped} warnings)`)])
       } catch (error) {
         failures.push(error)
       }
