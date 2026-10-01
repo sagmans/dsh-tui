@@ -35,6 +35,9 @@ breaking change, and a patch carries only fixes.
   their existing behavior.
 
 - Warning loss notices no longer replace the original diagnostic for one-shot consumers. Opaque Error metadata and custom accessors cannot bypass the retention budget.
+- Picker and question filters reject malformed Unicode scalar input without affecting valid emoji or combining text.
+- Borrowed transcript frames cannot be mutated into stale rows or mismatched copy metadata.
+- Workspace ranking tests exercise the cooperative production path instead of a duplicated synchronous implementation.
 - Ordinary typing and unmatched prompt-history prefixes no longer rebuild every plugin’s settings forms. Fresh consent still gates each ghost suggestion before it appears or enters the draft.
 
 ### Changed

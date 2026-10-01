@@ -31,7 +31,8 @@ export function pastedText(data: string): string | undefined {
   if (start === -1) return undefined
   const rest = data.slice(start + PASTE_START.length)
   const end = rest.indexOf(PASTE_END)
-  return (end === -1 ? rest : rest.slice(0, end)).replace(/[\u0000-\u001f\u007f]/gu, '')
+  const text = (end === -1 ? rest : rest.slice(0, end)).replace(/[\u0000-\u001f\u007f]/gu, '')
+  return text.isWellFormed() ? text : undefined
 }
 
 /** A release must not confirm a gate, move a cursor, or insert a second copy of a key. */
@@ -47,7 +48,7 @@ export function typedText(data: string): string | undefined {
   const decoded = decodeKittyPrintable(data)
   if (decoded !== undefined && KITTY_FUNCTIONAL_TEXT.test(decoded)) return undefined
   const text = decoded ?? data
-  return PRINTABLE_TEXT.test(text) ? text : undefined
+  return text.isWellFormed() && PRINTABLE_TEXT.test(text) ? text : undefined
 }
 
 /** UTF-16 deletion tears emoji and combining sequences into characters the reader never typed. */

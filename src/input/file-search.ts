@@ -171,18 +171,6 @@ export function offerableCandidate(candidate: Candidate): boolean {
  * to the shallower, shorter path, which is the one the reader is likelier to
  * mean.
  */
-export function rankFiles(query: string, candidates: readonly Candidate[], limit: number): readonly Candidate[] {
-  const needle = query.trim()
-  if (needle === '') return topLevel(candidates, limit)
-  const scored: { candidate: Candidate; score: number }[] = []
-  for (const candidate of candidates) {
-    const score = fuzzyScore(needle, candidate.path)
-    if (score === undefined) continue
-    scored.push({ candidate, score })
-  }
-  scored.sort((left, right) => compareScored(left, right))
-  return scored.slice(0, limit).map(entry => entry.candidate)
-}
 
 /** Cooperative scoring prevents a large live completion from taking the editor's keyboard. */
 export async function rankFilesAsync(query: string, candidates: readonly Candidate[], limit: number, signal: AbortSignal): Promise<readonly Candidate[]> {

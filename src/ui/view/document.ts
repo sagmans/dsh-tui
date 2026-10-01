@@ -89,6 +89,8 @@ export class TranscriptDocument {
     }
     this.clickSpans = spans
     this.copied = copied
+    // Component's mutable return type must not let a borrower corrupt cached rows and their hit/copy accounts.
+    Object.freeze(lines)
     this.frame = { tag, revision, presentation, tick: clocked ? tick : undefined, lines }
     return lines
   }

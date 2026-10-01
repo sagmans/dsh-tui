@@ -48,6 +48,10 @@ describe('ListPicker card window', () => {
     ['unknown control sequence', '\x1b[2J', ''],
     ['functional key', '\x1b[57364;1u', ''],
     ['text resembling a release', ':3u', ':3u'],
+    ['lone high surrogate', '\ud800', ''],
+    ['lone low surrogate', '\udfff', ''],
+    ['Kitty surrogate', '\x1b[55296u', ''],
+    ['malformed paste', '\x1b[200~bad\ud800\x1b[201~', ''],
   ])('accepts filter text without leaking commands: %s', (_name, data, expected) => {
     const list = picker(3)
     list.handleKey(data)

@@ -31,6 +31,18 @@ describe('TranscriptView document reuse', () => {
     expect(view.copyRows()).toEqual(copied)
   })
 
+  it('prevents borrowed frame mutation from poisoning later rows or copy metadata', () => {
+    const model = new TranscriptModel()
+    model.apply(assistant('stable answer'))
+    const view = viewOf(model)
+    const borrowed = view.render(WIDTH)
+    const expected = [...borrowed]
+    const copied = [...view.copyRows()]
+    expect(() => borrowed.pop()).toThrow(TypeError)
+    expect(view.render(WIDTH)).toEqual(expected)
+    expect(view.copyRows()).toEqual(copied)
+  })
+
   it('keeps an unchanged document through events the transcript does not display', () => {
     const model = new TranscriptModel()
     model.apply(assistant('stable answer'))
