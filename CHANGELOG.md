@@ -8,6 +8,8 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-10-01
+
 ### Fixed
 
 - The prompt cursor uses native terminal blinking and hides when the terminal reports focus loss. Focus changes preserve drafts and question ownership. Cursor modes return to their previous values after shutdown or external-editor handoff.
@@ -1120,7 +1122,8 @@ Not published: release signature verification failed. Its changes ship in 0.12.1
 - Publication through npm OIDC trusted publishing, with the first version
   bootstrapped by hand ([#5](https://github.com/sagmans/dsh-tui/pull/5)).
 
-[Unreleased]: https://github.com/sagmans/dsh-tui/compare/v0.12.1...HEAD
+[Unreleased]: https://github.com/sagmans/dsh-tui/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/sagmans/dsh-tui/compare/v0.12.1...v0.13.0
 [0.12.1]: https://github.com/sagmans/dsh-tui/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/sagmans/dsh-tui/compare/v0.11.2...v0.12.0
 [0.11.2]: https://github.com/sagmans/dsh-tui/compare/v0.11.1...v0.11.2
