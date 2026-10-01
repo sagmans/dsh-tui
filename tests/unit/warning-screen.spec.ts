@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { Terminal } from '@earendil-works/pi-tui'
 import { WarningSafeTui } from '@/terminal/warning-screen.ts'
 
@@ -23,6 +23,9 @@ const OVERSIZED_WARNING_SIZE = 20_000
 const ZERO_TEXT_WARNING_COUNT = 1000
 const WARNING_CAUSE_BYTES = 2 * 1024 * 1024
 const ROOT_WARNING_CODE = 'ROOT_CAUSE'
+const REPORTER_FAILURE = 'reporter-failed'
+const FRAME_REPORTER_NOTICE = 'frame error reporter failed'
+const TWO_WARNING_NOTICE = '… warnings dropped: 2'
 
 function run(flags: string[] = [], mode = ''): string {
   const env = { ...process.env }
@@ -253,6 +256,40 @@ describe('WarningSafeTui warning hold', () => {
     }
   })
 
+  it('contains a throwing frame reporter and reports its failure once until rendering recovers', () => {
+    const tui = new WarningSafeTui(fakeTerminal([]))
+    const diagnostic = vi.spyOn(process, 'emitWarning').mockImplementation(() => {})
+    let broken = true
+    let reports = 0
+    tui.addChild({
+      render: () => {
+        if (broken) throw new Error(REPORTER_FAILURE)
+        return [RETAINED_FRAME]
+      },
+      invalidate: () => {},
+    })
+    tui.onFrameError = () => {
+      reports++
+      throw new Error(REPORTER_FAILURE)
+    }
+    tui.start()
+    try {
+      expect(() => tui.doRender()).not.toThrow()
+      expect(() => tui.doRender()).not.toThrow()
+      expect(reports).toBe(1)
+      expect(diagnostic).toHaveBeenCalledExactlyOnceWith(FRAME_REPORTER_NOTICE)
+      broken = false
+      tui.doRender()
+      broken = true
+      expect(() => tui.doRender()).not.toThrow()
+      expect(reports).toBe(2)
+      expect(diagnostic).toHaveBeenCalledTimes(2)
+    } finally {
+      tui.stop({ preserveScreen: true })
+      diagnostic.mockRestore()
+    }
+  })
+
   it('reports the first frame that cannot draw and stays quiet about the next', () => {
     const writes: string[] = []
     const tui = new WarningSafeTui(fakeTerminal(writes))
@@ -374,7 +411,7 @@ describe('WarningSafeTui warning hold', () => {
     const seen = capturedWarnings(() => { process.emit('warning', warning); Reflect.apply(process.emit, process, ['warning', payload]) })
     expect(seen).not.toContain(warning)
     expect(seen).not.toContain(payload)
-    expect(seen.some(entry => entry.message.includes('2 warnings'))).toBe(true)
+    expect(seen.some(entry => entry.message === TWO_WARNING_NOTICE)).toBe(true)
   })
 
   it('rejects custom accessors without evaluating their retained closure', () => {

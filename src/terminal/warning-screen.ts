@@ -9,6 +9,7 @@ const WARNING_TEXT_FIELDS = ['name', 'message', ERROR_STACK_FIELD, 'code', 'deta
 const HIGH_SURROGATE = /^[\ud800-\udbff]$/u
 const LOW_SURROGATE = /^[\udc00-\udfff]$/u
 const WARNING_DROPPED = '… warnings dropped'
+const FRAME_REPORTER_FAILURE = 'frame error reporter failed'
 const NATIVE_ERROR_STACK = Object.getOwnPropertyDescriptor(new Error(), ERROR_STACK_FIELD)
 const RESTORE_SHELL = '\x1b[?1049l\x1b[0m\x1b[?7h\x1b[?25h'
 
@@ -85,7 +86,7 @@ function deferWarnings(): () => void {
     // One-shot consumers need the original root cause before an aggregate loss notification.
     if (dropped > 0) {
       try {
-        Reflect.apply(emit, process, [WARNING_EVENT, new Error(`${WARNING_DROPPED} (${dropped} warnings)`)])
+        Reflect.apply(emit, process, [WARNING_EVENT, new Error(`${WARNING_DROPPED}: ${dropped}`)])
       } catch (error) {
         failures.push(error)
       }
@@ -158,7 +159,12 @@ export class WarningSafeTui extends TuiAltScreen {
     } catch (error) {
       if (this.frameFailed) return
       this.frameFailed = true
-      this.onFrameError?.(error)
+      try {
+        this.onFrameError?.(error)
+      } catch {
+        // A broken reporter cannot replace a contained frame failure with an uncaught render-timer exception.
+        process.emitWarning(FRAME_REPORTER_FAILURE)
+      }
     }
   }
 

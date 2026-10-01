@@ -14,7 +14,9 @@ breaking change, and a patch carries only fixes.
   diagnostics drop whole with counts instead of remaining unbounded. Warning event
   retention also has a count bound, preserving retained event identities.
 - Recovered frame rendering allows a later failure to report again without
-  flooding repeated retries.
+  flooding repeated retries. A throwing frame-error reporter cannot escape the
+  render timer; its fallback warning waits for shell restoration.
+- Warning loss notices show one count without repeating the warning unit.
 - Large workspace completion yields during scoring so newer keyboard input can
   cancel obsolete rankings before filesystem proofs. Path containment checks remain unchanged.
 - Picker navigation and repainting reuse unchanged filter rankings while
@@ -33,7 +35,6 @@ breaking change, and a patch carries only fixes.
 - Long styled model and tool output no longer stalls typing while the terminal
   text renderer appends a line. Cursor rewrites and escape suppression retain
   their existing behavior.
-
 - Warning loss notices no longer replace the original diagnostic for one-shot consumers. Opaque Error metadata and custom accessors cannot bypass the retention budget.
 - Picker and question filters reject malformed Unicode scalar input without affecting valid emoji or combining text.
 - Borrowed transcript frames cannot be mutated into stale rows or mismatched copy metadata.
