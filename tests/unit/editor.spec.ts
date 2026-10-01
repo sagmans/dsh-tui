@@ -6,7 +6,7 @@ import {
   type TUI,
   type TuiMouseEvent,
 } from '@earendil-works/pi-tui'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defaultKeymap, resolveKeymap, type Keymap } from '@/input/actions.ts'
 import { installKeybindings } from '@/input/keymap.ts'
 import { createTheme } from '@/theme.ts'
@@ -16,6 +16,10 @@ import { BoxedEditor, type GhostBrush } from '@/ui/editor.ts'
 const WIDTH = 30
 /** The frame and the air it keeps off the text: one column each side, one more inside. */
 const EDGE_AND_PADDING = 2
+/** An unmatched prefix reproduces ordinary repeat input rather than a ghost offer. */
+const UNMATCHED_GHOST_TEXT = 'aaaaaaaa'
+/** Only the explicit whole-ghost chord may consume a fresh permission decision. */
+const ACCEPT_GHOST_ALL = '\u0005'
 
 /** The surface only ever lends the editor its terminal size and a repaint. */
 const surface = (): TUI => ({
@@ -335,6 +339,35 @@ describe('prompt-history ghost completion', () => {
     instance.setText('fix ')
     return instance
   }
+
+  it('keeps ordinary input off the ghost permission path', () => {
+    const enabled = vi.fn(() => true)
+    const instance = ghosted(brush({ enabled }))
+    const before = instance.getText()
+    instance.handleInput(UNMATCHED_GHOST_TEXT)
+    expect(instance.getText()).toBe(before + UNMATCHED_GHOST_TEXT)
+    expect(enabled).not.toHaveBeenCalled()
+  })
+
+  it('does not project ghost permissions when no cached suffix matches', () => {
+    const enabled = vi.fn(() => true)
+    const instance = ghosted(brush({ enabled }))
+    instance.setText(UNMATCHED_GHOST_TEXT)
+    instance.render(WIDTH)
+    expect(enabled).not.toHaveBeenCalled()
+  })
+
+  it('rechecks revoked permission before painting or accepting a matching ghost', () => {
+    let allowed = true
+    const instance = ghosted(brush({ enabled: () => allowed }))
+    const before = instance.getText()
+    const offered = brush().suggestion({ text: before, lines: instance.getLines(), cursor: instance.getCursor() })!
+    expect(instance.render(WIDTH).some(line => line.includes(offered))).toBe(true)
+    allowed = false
+    expect(instance.render(WIDTH).some(line => line.includes(offered))).toBe(false)
+    instance.handleInput(ACCEPT_GHOST_ALL)
+    expect(instance.getText()).toBe(before)
+  })
 
   it('draws the offered suffix inside the frame at the full width', () => {
     const instance = ghosted()

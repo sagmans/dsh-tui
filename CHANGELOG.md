@@ -8,6 +8,10 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+### Fixed
+
+- Ordinary typing and unmatched prompt-history prefixes no longer rebuild every plugin’s settings forms. Fresh consent still gates each ghost suggestion before it appears or enters the draft.
+
 ### Changed
 
 - Every queued prompt and every work dock board opens with one blank row. Rails
