@@ -2,11 +2,20 @@ import { visibleWidth } from '@earendil-works/pi-tui'
 import { describe, expect, it } from 'vitest'
 import { createTheme } from '@/theme.ts'
 import { DEFAULT_PALETTE } from '@/theme-defaults.ts'
-import { cacheRate, usageTotals } from '@/agent/status.ts'
+import { cacheRate, usageTotals, createStatusFacts } from '@/agent/status.ts'
+import { Context } from '@deepseek-ai/cordis'
+import { SessionId } from '@deepseek-ai/dsh-session'
 import { formatTokens } from '@/tokens.ts'
 import { formatStatus, shortPath, type StatusFacts } from '@/ui/status.ts'
 
 const theme = createTheme('none')
+const FOOTER_HINT = 'Burst'
+const FOOTER_PROVIDER = 'example-provider'
+const HINTED_MODEL = 'example-model'
+const OTHER_MODEL = 'example-other-model'
+const FOOTER_SESSION = 'footer-route'
+const FOOTER_WIDTH = 200
+const NARROW_FOOTER_WIDTH = 35
 
 const facts = (overrides: Partial<StatusFacts> = {}): StatusFacts => ({
   chord: undefined,
@@ -249,4 +258,22 @@ describe('formatStatus theming', () => {
     const hidden = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['status.cwd', { hidden: true }]]) })
     expect(formatStatus(facts(), 200, hidden)).not.toContain('source/opensource')
   })
+})
+it('places generic route qualifiers beside effort and remains width bounded', () => {
+  const value = facts({ modelHints: [FOOTER_HINT] })
+  expect(formatStatus(value, FOOTER_WIDTH, theme)).toContain(' (max · Burst)')
+  expect(formatStatus(facts({ effort: undefined, modelHints: [FOOTER_HINT] }), FOOTER_WIDTH, theme)).toContain(' (Burst)')
+  expect(formatStatus(facts({ model: undefined, modelHints: [FOOTER_HINT] }), FOOTER_WIDTH, theme)).not.toContain(FOOTER_HINT)
+  expect(visibleWidth(formatStatus(value, NARROW_FOOTER_WIDTH, theme))).toBeLessThanOrEqual(NARROW_FOOTER_WIDTH)
+})
+it('reads qualifiers from the currently selected route on each footer projection', () => {
+  const ctx = new Context()
+  let model = HINTED_MODEL
+  const read = createStatusFacts(ctx, {
+    sessionId: () => SessionId(FOOTER_SESSION), activity: () => ({ running: false, startedAt: undefined }),
+    override: () => ({ provider: FOOTER_PROVIDER, model }), routeHints: route => route.model === HINTED_MODEL ? [FOOTER_HINT] : [],
+  })
+  expect(formatStatus(read(), FOOTER_WIDTH, theme)).toContain(' (Burst)')
+  model = OTHER_MODEL
+  expect(formatStatus(read(), FOOTER_WIDTH, theme)).not.toContain(FOOTER_HINT)
 })

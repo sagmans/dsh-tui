@@ -282,6 +282,8 @@ Older settings-backed hosts use the `tui.keys` section.
 Preferences for absent plugins remain stored but inactive; registration validates them before activation.
 A plugin can register `afterEffort(owner, handler)` to offer a follow-up after confirmed effort selection.
 Cancelling the effort picker invokes no follow-up.
+An action may supply `routeHint(route)`, a synchronous optional model qualifier owned by the same Context.
+The footer reads live qualifiers beside effort; failed or control-bearing hints stay hidden.
 
 `Ctrl+X` starts a chord. For the next two seconds the footer leads with the
 prefix alone — enough to say that a key is waiting, without reciting the map —

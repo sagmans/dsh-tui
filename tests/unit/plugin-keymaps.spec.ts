@@ -7,6 +7,11 @@ import { chordBindings } from '@/input/keymap.ts'
 const ID = 'plugin.example.choice'
 const KEY = 't'
 const REMAPPED_KEY = 'v'
+const ROUTE_HINT = 'Burst'
+const OTHER_MODEL = 'other-model'
+const HINT_ACTION_LABEL = 'example choice'
+const PRIVATE_HINT_ERROR = 'private plugin details'
+const UNSAFE_HINT = '\u001b[31munsafe'
 const ports: ActionPorts = { route: { provider: 'example', model: 'model' }, pick: async () => undefined, notice: () => {} }
 
 /** Use real Cordis owners so disposal tests prove the public lifecycle contract. */
@@ -105,4 +110,28 @@ it('keeps a shared effort handler until every registering owner releases it', as
     await registry.effortConfirmed(ports)
     expect(calls).toBe(1)
   } finally { await first.dispose(); await second.dispose() }
+})
+it('reads a route qualifier only from its live action owner', async () => {
+  const registry = createKeymapRegistry()
+  const route = ports.route!
+  const owner = await install(registry, { id: ID, layer: 'chord', defaultKeys: [KEY], label: HINT_ACTION_LABEL,
+    handler: async () => {}, routeHint: current => current.model === route.model ? ROUTE_HINT : undefined })
+  try {
+    expect(registry.routeHints(route)).toEqual([ROUTE_HINT])
+    expect(registry.routeHints({ ...route, model: OTHER_MODEL })).toEqual([])
+    await owner.dispose()
+    expect(registry.routeHints(route)).toEqual([])
+  } finally { await owner.dispose() }
+})
+
+it('keeps footer reads safe when a plugin qualifier fails or contains controls', async () => {
+  const registry = createKeymapRegistry()
+  const owner = await install(registry, { id: ID, layer: 'chord', defaultKeys: [KEY], label: HINT_ACTION_LABEL,
+    handler: async () => {}, routeHint: () => { throw new Error(PRIVATE_HINT_ERROR) } })
+  try { expect(registry.routeHints(ports.route!)).toEqual([]) }
+  finally { await owner.dispose() }
+  const unsafe = await install(registry, { id: ID, layer: 'chord', defaultKeys: [KEY], label: HINT_ACTION_LABEL,
+    handler: async () => {}, routeHint: () => UNSAFE_HINT })
+  try { expect(registry.routeHints(ports.route!)).toEqual([]) }
+  finally { await unsafe.dispose() }
 })

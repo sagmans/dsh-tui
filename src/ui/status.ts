@@ -17,6 +17,8 @@ export interface StatusFacts {
   readonly provider: string | undefined
   readonly model: string | undefined
   readonly effort: string | undefined
+  /** Optional route owners qualify the model, not unrelated session or permission facts. */
+  readonly modelHints?: readonly string[] | undefined
   /** The agent preset (mode) the session runs; fixed once it has a turn. */
   readonly agentPreset: string | undefined
   /** The permission preset, which is a sandbox policy and a different thing. */
@@ -119,8 +121,9 @@ export function formatStatus(facts: StatusFacts, width: number, theme: TuiTheme)
   if (facts.model !== undefined && facts.model !== '') {
     const route = facts.provider === undefined || facts.provider === '' ? facts.model : `${facts.provider}/${facts.model}`
     push('status.model', route)
-    // The effort qualifies the model, so it reads as part of it.
-    if (facts.effort !== undefined && facts.effort !== '') push('status.effort', ` (${facts.effort})`, true)
+    // Effort and addon hints qualify the same route, so they share one attached group.
+    const qualifiers = [facts.effort, ...(facts.modelHints ?? [])].filter(value => value !== undefined && value !== '')
+    if (qualifiers.length > 0) push('status.effort', ` (${qualifiers.join(SEPARATOR_TEXT)})`, true)
   }
   if (facts.preset !== undefined && facts.preset !== '') push('status.permission', facts.preset)
   // Parked drafts come before the running numbers: a row cut to width loses its

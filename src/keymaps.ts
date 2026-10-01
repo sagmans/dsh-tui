@@ -27,12 +27,15 @@ export interface PluginAction {
   readonly defaultKeys: readonly KeyId[]
   readonly label: string
   readonly handler: (ports: ActionPorts) => Promise<void>
+  /** Route-specific qualifiers share the action owner rather than leaking provider policy into the footer. */
+  readonly routeHint?: (route: NonNullable<ActionPorts['route']>) => string | undefined
 }
 /** One host's registry keeps optional plugins independent of other terminal instances. */
 export interface KeymapRegistry {
   register(owner: Context, action: PluginAction): () => void
   afterEffort(owner: Context, handler: (ports: ActionPorts) => Promise<void>): () => void
   catalog(): readonly Action[]
+  routeHints(route: NonNullable<ActionPorts['route']>): readonly string[]
   dispatch(id: string, ports: ActionPorts): Promise<void>
   effortConfirmed(ports: ActionPorts): Promise<void>
   observe(validate: (catalog: readonly Action[]) => void, changed: () => void): () => void
@@ -59,9 +62,23 @@ export function createKeymapRegistry(): KeymapRegistry {
   }
   return {
     catalog,
+    routeHints: route => {
+      const hints: string[] = []
+      for (const action of [...registrations.values()]) {
+        if (registrations.get(action.id) !== action) continue
+        try {
+          const hint = action.routeHint?.(route)
+          if (typeof hint === 'string' && hint.trim() && stripControlCharacters(hint) === hint) hints.push(hint.trim())
+        } catch {
+          // An optional addon cannot break a repaint or expose private failure details.
+        }
+      }
+      return hints
+    },
     register: (owner, action) => {
       if (!isPluginActionId(action.id) || !action.label.trim() || stripControlCharacters(action.label) !== action.label
-        || !['chord', 'surface'].includes(action.layer) || typeof action.handler !== 'function') throw new Error(INVALID_ACTION)
+        || !['chord', 'surface'].includes(action.layer) || typeof action.handler !== 'function'
+        || (action.routeHint !== undefined && typeof action.routeHint !== 'function')) throw new Error(INVALID_ACTION)
       if (registrations.has(action.id)) throw new Error(DUPLICATE)
       const defaults = readKeys({ ...action, defaultKeys: [], mayUseBare: action.layer === 'chord', mayUnbind: true }, action.defaultKeys)
       const row = Object.freeze({ ...action, defaultKeys: Object.freeze([...defaults]) })

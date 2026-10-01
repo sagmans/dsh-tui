@@ -374,6 +374,7 @@ export function apply(ctx: Context, config: unknown): void {
   let stash: PromptStash | undefined
 
   const statusFacts = createStatusFacts(ctx, {
+    routeHints: route => ctx.get(TUI_KEYMAP_SERVICE)?.routeHints(route) ?? [],
     sessionId: () => sessionLifecycle.activeSession(),
     activity: () => sessionLifecycle.activity(),
     override: () => modelChoice.current(),
