@@ -54,6 +54,11 @@ Not published: release signature verification failed. Its changes ship in 0.12.1
 - User messages, assistant replies, queued prompts, and the prompt bar use a thin
   left rail instead of enclosing borders, keeping conversations visually quiet.
 
+- Every queued prompt and every work dock board opens with one blank row. Rails
+  and dashed rules drawn tight under the rows above them read as one block, so a
+  waiting prompt no longer fuses with the reasoning rows above it or with the
+  prompt before it, and the dock's boards read as separate lists.
+
 ## [0.11.2] - 2026-09-30
 
 ### Changed
