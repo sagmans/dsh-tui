@@ -170,9 +170,9 @@ export function offerableCandidate(candidate: Candidate): boolean {
  * file — a directory is a place to keep typing, a file ends the search — then
  * to the shallower, shorter path, which is the one the reader is likelier to
  * mean.
+ *
+ * Cooperative scoring prevents a large live completion from taking the editor's keyboard.
  */
-
-/** Cooperative scoring prevents a large live completion from taking the editor's keyboard. */
 export async function rankFilesAsync(query: string, candidates: readonly Candidate[], limit: number, signal: AbortSignal): Promise<readonly Candidate[]> {
   if (signal.aborted) return []
   const needle = query.trim()

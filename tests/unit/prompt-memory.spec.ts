@@ -8,6 +8,7 @@
  */
 
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -27,6 +28,15 @@ import { STASH_CLEAR_CHOICE } from '@/ui/stash-picker.ts'
  * here in the one place that asserts it.
  */
 const GHOST_CURSOR_PREFIX = '\u001b[7m'
+const IO_FREE_PROMPT = 'cached history probe'
+const IO_FREE_PREFIX = 'cached'
+const IO_FREE_SUFFIX = ' history probe'
+
+// Real disk reads still run; observing this boundary catches a future lazy load behind disabled ghosts.
+vi.mock('node:fs/promises', async importOriginal => {
+  const fs = await importOriginal<typeof import('node:fs/promises')>()
+  return { ...fs, readFile: vi.fn(fs.readFile) }
+})
 
 /** Refusal a bar borrowed by a question answers a park with; private to src/stash.ts. */
 const EDITOR_BUSY_MESSAGE = 'the prompt bar is answering a question; finish or cancel it first'
@@ -166,6 +176,22 @@ async function loaded(given: Harness, count: number): Promise<void> {
 }
 
 describe('the ghost the bar draws', () => {
+  it('probes only already-loaded history after recording is disabled', async () => {
+    seed([entry(IO_FREE_PROMPT)])
+    let enabled = true
+    const given = harness({ historyEnabled: () => enabled })
+    await loaded(given, 1)
+    expect(vi.mocked(readFile)).toHaveBeenCalledWith(historyFile(), 'utf8')
+    enabled = false
+    const reads = vi.mocked(readFile)
+    reads.mockClear()
+    expect(given.memory.ghostBrush.enabled()).toBe(false)
+    expect(ghost(given.memory, IO_FREE_PREFIX)).toBe(IO_FREE_SUFFIX)
+    expect(ghost(given.memory, IO_FREE_PROMPT)).toBeUndefined()
+    await Promise.resolve()
+    expect(reads).not.toHaveBeenCalled()
+  })
+
   it.each([
     { why: 'recording is off', options: { historyEnabled: () => false } },
     { why: 'the ghost is off', options: { historyGhost: () => false } },

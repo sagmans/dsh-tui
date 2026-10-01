@@ -43,12 +43,6 @@ export const DEFAULT_VIEW_STATE: ViewState = { expandCards: false, expandReasoni
  * A card's rows cover the calls it dispatched, so the card and each of those
  * calls have a span; the click takes the tightest one it falls in.
  */
-/**
- * Where one clickable message drew, so a click can find what it landed on.
- *
- * A card's rows cover the calls it dispatched, so the card and each of those
- * calls have a span; the click takes the tightest one it falls in.
- */
 export interface ClickSpan {
   /** Stable across redraws, so a click outlives the entry it was made on. */
   readonly key: string
@@ -145,7 +139,7 @@ export class TranscriptView implements Component {
   private air(): Spacing {
     return this.options.spacing?.() ?? DEFAULT_SPACING
   }
-/**
+  /**
    * Whether one tool message draws open.
    *
    * A click outranks the key, which outranks the tool's start state: Ctrl+O
@@ -187,7 +181,7 @@ export class TranscriptView implements Component {
     const clicked = key === undefined ? undefined : this.clicked.get(key)
     return clicked ?? this.viewState.expandSubCalls
   }
-/**
+  /**
    * Answer a click on a message by folding or unfolding that one row.
    *
    * The tightest span under the point wins, so a click on a dispatched call
@@ -222,7 +216,7 @@ export class TranscriptView implements Component {
     // anyway; an explicit invalidate means the caller wants them rebuilt.
     this.document.invalidate()
   }
-/**
+  /**
    * Wrap one text block under a prefix, keeping the prefix's column budget.
    *
    * The block is drawn before it is wrapped: a sequence a terminal would have
@@ -251,7 +245,7 @@ export class TranscriptView implements Component {
   private reasoningFoldHint(): string {
     return hintKeys(this.keymap(), 'surface.reasoning') || REASONING_FOLD_FALLBACK
   }
-/**
+  /**
    * Whether any part of one card is still in flight.
    *
    * Only a card with work outstanding has a clock attached to its cache, so the
@@ -332,14 +326,15 @@ export class TranscriptView implements Component {
     const retained = this.document.render(width, base, this.presentationRevision)
     const picker = this.options.picker?.()
     const gate = this.options.gate?.()
-    if (picker === undefined && gate === undefined) return retained
+    // pi-tui requires string[] but borrows child rows; the native PTY gate protects this pinned boundary.
+    if (picker === undefined && gate === undefined) return retained as string[]
     // Overlays have independent mutable state and must never enter the retained conversation.
     const lines = [...retained]
     if (picker !== undefined) this.pushPicker(lines, picker, width)
     if (gate !== undefined) this.gates.pushGate(lines, gate, width)
     return lines
   }
-/**
+  /**
    * The framed rows the last render drew, in the order the transcript reads.
    *
    * A copy of a selection is read off the screen, so it carries the frame the

@@ -18,7 +18,7 @@ interface DocumentFrame {
   readonly revision: number
   readonly presentation: number
   readonly tick: number | undefined
-  readonly lines: string[]
+  readonly lines: readonly string[]
 }
 
 /** Draft-only frames must not traverse history or format unchanged stream snapshots. */
@@ -44,7 +44,7 @@ export class TranscriptDocument {
   }
 
   /** History scans are needed only when content, presentation, or a displayed clock changes. */
-  render(width: number, tag: string, presentation: number): string[] {
+  render(width: number, tag: string, presentation: number): readonly string[] {
     const revision = this.context.model.revision
     const tick = Math.floor(this.context.model.now() / SECOND_MS)
     const frame = this.frame
