@@ -8,7 +8,33 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+## [0.12.1] - 2026-10-01
+
+### Fixed
+
+- Release verification and publication use hoisted dependency linking so a skipped optional package cannot resolve to this project during the npm signature audit. Signature and provenance gates remain enabled.
+
+### Added
+
+- Plugin actions can provide route-scoped footer hints beside effort, with owner cleanup and safe rendering.
+
+- Plugins can register scoped chord and surface actions through `tuiKeymaps`. Generic picker ports and effort follow-ups keep addon behavior outside the terminal. Rebinding, help, conflict checks, and owner cleanup use the active plugin catalog.
+
+### Changed
+
+- Agent guidance now requires signed version tags, matching GitHub releases,
+  publication approval, and npm readback so published versions keep a complete
+  source and release record without accidental republication.
+
+- The prompt bar has one blank row above and below it to separate input from queued
+  prompts and session status.
+
+- User messages, assistant replies, queued prompts, and the prompt bar use a thin
+  left rail instead of enclosing borders, keeping conversations visually quiet.
+
 ## [0.12.0] - 2026-10-01
+
+Not published: release signature verification failed. Its changes ship in 0.12.1; the signed tag remains unchanged.
 
 ### Added
 
@@ -1050,7 +1076,8 @@ breaking change, and a patch carries only fixes.
 - Publication through npm OIDC trusted publishing, with the first version
   bootstrapped by hand ([#5](https://github.com/sagmans/dsh-tui/pull/5)).
 
-[Unreleased]: https://github.com/sagmans/dsh-tui/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/sagmans/dsh-tui/compare/v0.12.1...HEAD
+[0.12.1]: https://github.com/sagmans/dsh-tui/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/sagmans/dsh-tui/compare/v0.11.2...v0.12.0
 [0.11.2]: https://github.com/sagmans/dsh-tui/compare/v0.11.1...v0.11.2
 [0.11.1]: https://github.com/sagmans/dsh-tui/compare/v0.11.0...v0.11.1
