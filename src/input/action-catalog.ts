@@ -179,8 +179,15 @@ export const ACTION_CATALOG: readonly Action[] = [
   ...libraryActions(),
 ]
 
-export function actionOf(id: string): Action | undefined {
-  return ACTION_CATALOG.find(entry => entry.id === id)
+const PLUGIN_ACTION_PATTERN = /^plugin\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_.-]+$/
+
+/** Namespaced preferences survive an optional plugin's reload without accepting builtin typos. */
+export function isPluginActionId(id: string): boolean {
+  return PLUGIN_ACTION_PATTERN.test(id)
+}
+
+export function actionOf(id: string, catalog: readonly Action[] = ACTION_CATALOG): Action | undefined {
+  return catalog.find(entry => entry.id === id)
 }
 
 /** The keys one action ships with, this surface's own additions to a library row included. */

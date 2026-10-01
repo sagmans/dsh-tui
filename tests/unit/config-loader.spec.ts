@@ -1,3 +1,7 @@
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { SettingsForms } from '@deepseek-ai/dsh-settings'
 import { Context, type Plugin } from '@deepseek-ai/cordis'
 import AgentDefaultModelConfig from '@deepseek-ai/dsh-agent-default-model'
 import { LlmAdapter, LlmRuntime, type StreamChunk } from '@deepseek-ai/dsh-llm'
@@ -8,6 +12,8 @@ import * as tui from '@/index.ts'
 import { createModelCatalog } from '@/agent/model.ts'
 import { createStatusFacts } from '@/agent/status.ts'
 
+const PLUGIN_ACTION_ID = 'plugin.example.options'
+const PLUGIN_KEY = 'v'
 const SESSION_ID = SessionId('config-loader-regression')
 const PROVIDER = 'standalone-core'
 const MODEL = 'offline-model'
@@ -104,4 +110,28 @@ describe('standalone plugin Config loading', () => {
       await ctx.fiber.dispose()
     }
   })
+})
+it('keeps optional plugin key preferences through real Cordis Config references', async () => {
+  const ctx = new Context()
+  try {
+    const fiber = await ctx.plugin({ Config: exportedConfig(), apply: vi.fn() }, { sessionId: SESSION_ID, keys: { [PLUGIN_ACTION_ID]: PLUGIN_KEY } })
+    expect(readRowSettings(fiber.config)).toMatchObject({ keys: { [PLUGIN_ACTION_ID]: PLUGIN_KEY } })
+  } finally { await ctx.fiber.dispose() }
+})
+/** The public form projection, not only Config parsing, controls what the painter can read. */
+it('keeps optional plugin keys in the public profile settings projection', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'dsh-keymap-projection-'))
+  const ctx = new Context()
+  const raw = { sessionId: SESSION_ID, keys: { [PLUGIN_ACTION_ID]: PLUGIN_KEY } }
+  try {
+    const fiber = await ctx.plugin({ Config: exportedConfig(), apply: vi.fn() }, raw)
+    const entry = { id: SESSION_ID, options: { id: SESSION_ID, config: raw }, fiber }
+    // Metadata and startup readiness stay inert; the shipped service owns all projection behavior.
+    ctx.provide('configEditor', { configuration: () => [{ entry, inherited: raw, override: raw }] } as never)
+    ctx.provide('profileContext', { home } as never)
+    ctx.provide('loader', { await: async () => {} } as never)
+    const forms = new SettingsForms(ctx)
+    expect(forms.describe()[0]?.value).toMatchObject({ keys: { [PLUGIN_ACTION_ID]: PLUGIN_KEY } })
+    await new Promise<void>(resolve => setImmediate(resolve))
+  } finally { await ctx.fiber.dispose(); rmSync(home, { recursive: true, force: true }) }
 })

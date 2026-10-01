@@ -237,6 +237,54 @@ force, and the `keys:` section moves any of them — see [Keys](#keys).
 
 Typing `@` opens this workspace's files above the editor, ranked as the fragment is typed the way a fuzzy finder ranks a path list: `@edtr` reaches `src/ui/editor.ts` without spelling the separators, a directory offers itself with a trailing slash so typing continues into it, and a path holding a space is quoted. A directory whose own name holds a space offers no row, because the menu stops following the token once one is in it; the files under it are still listed, each quoted whole. The rows are what git tracks or would add, with ignored paths left out, so a suggestion never names build output or a secret the repository deliberately ignores; a tree git does not own is walked instead, skipping `node_modules`, `.git`, and the rest of the build litter. A path typed from the working directory still completes on Tab as before.
 
+### Plugin keymaps
+
+The bundle publishes `tuiKeymaps` before the surface starts.
+Optional plugins register their own actions; the terminal does not assign their meaning.
+Actions use namespaced `plugin.<owner>.<action>` IDs and either the `chord` or `surface` layer.
+Approval gates, questions, and library-owned editor bindings are not plugin registration layers.
+
+```ts
+import type { Context } from '@deepseek-ai/cordis'
+import type { KeymapRegistry } from '@sagmans/dsh-tui/keymaps'
+
+const REGISTRY = 'tuiKeymaps'
+const ACTION_ID = 'plugin.example.options'
+const KEY = 'v'
+const LABEL = 'example options'
+const PICKER = { title: 'Example options', rows: [{ id: 'inspect', name: 'Inspect' }] }
+
+export function apply(ctx: Context): void {
+  ctx.inject([REGISTRY], owner => {
+    const registry = owner.get(REGISTRY) as KeymapRegistry
+    registry.register(owner, {
+      id: ACTION_ID,
+      layer: 'chord',
+      defaultKeys: [KEY],
+      label: LABEL,
+      handler: async ports => {
+        const picked = await ports.pick(PICKER)
+        if (picked !== undefined) ports.notice(LABEL + ': ' + picked)
+      },
+    })
+  })
+}
+```
+
+Handlers receive the current route, generic row-picker ports, and a notice sink.
+The registering Context owns the action; disposal removes its bindings, help rows, and handler.
+Duplicate IDs and conflicting effective bindings are refused before publication.
+Registration and removal update the open surface and disarm any pending chord.
+
+Users can rebind plugin IDs through the same `keys` preference mapping as builtin actions.
+On Config-backed profiles, add `keys` directly to the existing TUI row's `config`, preserving its launch fields.
+Older settings-backed hosts use the `tui.keys` section.
+Preferences for absent plugins remain stored but inactive; registration validates them before activation.
+A plugin can register `afterEffort(owner, handler)` to offer a follow-up after confirmed effort selection.
+Cancelling the effort picker invokes no follow-up.
+An action may supply `routeHint(route)`, a synchronous optional model qualifier owned by the same Context.
+The footer reads live qualifiers beside effort; failed or control-bearing hints stay hidden.
+
 `Ctrl+X` starts a chord. For the next two seconds the footer leads with the
 prefix alone — enough to say that a key is waiting, without reciting the map —
 and a key that finishes nothing is typed as usual rather than swallowed, so a
@@ -255,8 +303,7 @@ or that the terminal keeps (`ctrl+q`) is refused with the reason, and the
 shipped keymap stays in force. The chords themselves are the commands they stand
 for: `m`, `p`, `n`, `y`, `s`, `l`, `u`, `r`, and `?` ask the same dispatcher
 `/model`, `/plan`, `/new`, `/copy`, `/stash`, `/stash-list`, `/undo`, `/redo`,
-and `/keys` do; `e` is the
-one chord with no command behind it, because it opens a program rather than
+and `/keys` do. `e` opens a program rather than
 running a line. Plan mode is the one pair that cannot share a name: `/plan` only
 enters, so the chord names `/plan off` instead when the agent is in plan mode —
 or is waiting for the turn boundary to become so — and reads that state from the

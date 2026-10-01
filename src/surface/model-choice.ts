@@ -38,6 +38,8 @@ export interface ModelChoicePorts {
   readonly openPicker: (picker: Picker) => Promise<string | undefined>
   readonly notice: (message: string) => void
   readonly render: () => void
+  /** Addons may offer a follow-up only after this owner confirms an effort. */
+  readonly afterEffort?: (route: { provider: string; model: string }) => Promise<void>
 }
 
 /** The reads and operations the composing surface routes to the route owner. */
@@ -261,7 +263,10 @@ export function createModelChoice(ctx: Context, ports: ModelChoicePorts): ModelC
         `reasoning effort · ${route.provider}/${route.model}`,
         ports.keymap,
       ))
-      if (picked !== undefined) applyEffort(route.provider, route.model, picked)
+      if (picked !== undefined) {
+        applyEffort(route.provider, route.model, picked)
+        await ports.afterEffort?.(route)
+      }
     } catch (error) {
       ports.notice(`could not read reasoning efforts: ${error instanceof Error ? error.message : String(error)}`)
     }
@@ -343,7 +348,10 @@ export function createModelChoice(ctx: Context, ports: ModelChoicePorts): ModelC
         `reasoning effort · ${facts.provider}/${facts.model}`,
         ports.keymap,
       ))
-      if (picked !== undefined) applyEffort(facts.provider, facts.model, picked)
+      if (picked !== undefined) {
+        applyEffort(facts.provider, facts.model, picked)
+        await ports.afterEffort?.({ provider: facts.provider, model: facts.model })
+      }
     } catch (error) {
       ports.notice(`could not read reasoning efforts: ${error instanceof Error ? error.message : String(error)}`)
     } finally {

@@ -1,4 +1,4 @@
-import { type ActionLayer, type Action, type SurfaceActionId, SURFACE_ACTIONS, LIBRARY_KEY_ADDITIONS, KEYMAP_ALIASES, ACTION_CATALOG, actionOf, shippedKeys } from './action-catalog.ts'
+import { type ActionLayer, type Action, type SurfaceActionId, SURFACE_ACTIONS, LIBRARY_KEY_ADDITIONS, KEYMAP_ALIASES, ACTION_CATALOG, actionOf, shippedKeys, isPluginActionId } from './action-catalog.ts'
 import { TERMINAL_OWNED_KEYS, normalizeKey, isPressable, isSimpleChord, isBareCharacter } from './key-press.ts'
 import { refuseMatcherClashes, refusePromptClashes, refusePrefixTakingKeys, refuseLibraryClashes, refuseViewportTakingKeys } from './keymap-conflicts.ts'
 import { matchesKey, type KeyId } from '@earendil-works/pi-tui'
@@ -21,7 +21,11 @@ export type KeymapOverrides = Readonly<Record<string, KeyListValue>>
 export interface Keymap {
   readonly effective: Readonly<Record<string, readonly KeyId[]>>
   readonly written: ReadonlySet<string>
+  readonly catalog?: readonly Action[]
 }
+
+/** Each surface resolves its own extensions rather than mutating a process-wide table. */
+export function catalogOf(map: Keymap): readonly Action[] { return map.catalog ?? ACTION_CATALOG }
 
 /** One key a reader wrote, over the layer that would otherwise answer it. */
 export interface Shadow {
@@ -92,7 +96,8 @@ export function hintKeys(map: Keymap, id: string): string {
   return keysFor(map, id).map(keyName).join('/')
 }
 
-function readKeys(action: Action, value: string | readonly string[]): readonly KeyId[] {
+/** External defaults follow the same terminal key validation as user preferences. */
+export function readKeys(action: Action, value: string | readonly string[]): readonly KeyId[] {
   const written = Array.isArray(value) ? value : [value]
   const keys: KeyId[] = []
   for (const raw of written) {
@@ -126,30 +131,31 @@ function readKeys(action: Action, value: string | readonly string[]): readonly K
  * document is edited by hand: a message the reader cannot act on is a message
  * that costs them the whole section.
  */
-export function resolveKeymap(overrides: KeymapOverrides): Keymap {
+export function resolveKeymap(overrides: KeymapOverrides, catalog: readonly Action[] = ACTION_CATALOG): Keymap {
   // An addition naming a row the library no longer draws would silently drop
   // the key, so it is refused while the startup still has somewhere to say so.
   for (const id of Object.keys(LIBRARY_KEY_ADDITIONS)) {
     if (actionOf(id)?.layer !== 'library') throw new Error(`key additions name ${id}, which is not a library action this surface can bind`)
   }
   const effective: Record<string, readonly KeyId[]> = {}
-  for (const action of ACTION_CATALOG) effective[action.id] = [...shippedKeys(action)]
+  for (const action of catalog) effective[action.id] = [...shippedKeys(action)]
   const written = new Set<string>()
   for (const [id, value] of Object.entries(overrides)) {
     if (value === undefined) continue
     const canonical = KEYMAP_ALIASES[id]
     if (canonical !== undefined) throw new Error(`key action "${id}" belongs to the prompt bar; write ${canonical} instead`)
-    const action = actionOf(id)
+    const action = actionOf(id, catalog) ?? (isPluginActionId(id)
+      ? { id, layer: 'chord' as const, defaultKeys: [], label: id, mayUseBare: true, mayUnbind: true } : undefined)
     if (action === undefined) throw new Error(`unknown dsh-tui key action: ${id}`)
     effective[id] = readKeys(action, value)
     written.add(id)
   }
-  refusePromptClashes(effective)
-  refuseMatcherClashes(effective)
-  refusePrefixTakingKeys(effective)
+  refusePromptClashes(effective, catalog)
+  refuseMatcherClashes(effective, catalog)
+  refusePrefixTakingKeys(effective, catalog)
   refuseLibraryClashes(effective)
-  refuseViewportTakingKeys(effective, written)
-  return { effective, written }
+  refuseViewportTakingKeys(effective, written, catalog)
+  return { effective, written, catalog }
 }
 
 /** The map as it reads when the reader has written nothing, built once. */
@@ -166,10 +172,10 @@ const WINNING_LAYERS: readonly ActionLayer[] = ['chord', 'surface']
 
 /** Every key the chord or surface layer takes from a library action, in layer order. */
 export function shadowsOf(map: Keymap): readonly Shadow[] {
-  const library = ACTION_CATALOG.filter(action => action.layer === 'library')
+  const library = catalogOf(map).filter(action => action.layer === 'library')
   const found: Shadow[] = []
   for (const layer of WINNING_LAYERS) {
-    for (const winner of ACTION_CATALOG.filter(action => action.layer === layer)) {
+    for (const winner of catalogOf(map).filter(action => action.layer === layer)) {
       for (const key of keysFor(map, winner.id)) {
         for (const loser of library) {
           if (keysFor(map, loser.id).includes(key)) found.push({ key, winner: winner.id, loser: loser.id })
@@ -198,7 +204,7 @@ export function newShadows(map: Keymap): readonly Shadow[] {
 /** One key the surface answers itself, in the order the catalog lists them. */
 export interface SurfaceBinding {
   readonly key: KeyId
-  readonly action: SurfaceActionId
+  readonly action: SurfaceActionId | 'plugin'
   readonly id: string
 }
 
@@ -207,6 +213,10 @@ export function surfaceBindings(map: Keymap): readonly SurfaceBinding[] {
   const found: SurfaceBinding[] = []
   for (const action of SURFACE_ACTIONS) {
     for (const key of keysFor(map, action.id)) found.push({ key, action: action.name, id: action.id })
+  }
+  for (const action of catalogOf(map)) {
+    if (action.layer !== 'surface' || !isPluginActionId(action.id)) continue
+    for (const key of keysFor(map, action.id)) found.push({ key, action: 'plugin', id: action.id })
   }
   return found
 }

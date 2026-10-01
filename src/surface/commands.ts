@@ -73,6 +73,8 @@ interface CommandRegistry {
  * refusal and a repaint are printed through.
  */
 export interface CommandsPorts {
+  /** Optional addon actions use the same human-input router as built-in commands. */
+  readonly runPluginAction?: (id: string) => Promise<void>
   /** The launch this run was started for, and the mode its own flag named. */
   readonly launch: PresetLaunch
   readonly preset: string | undefined
@@ -270,6 +272,9 @@ export function createCommands(ctx: Context, ports: CommandsPorts): Commands {
         return
       case 'quit':
         ports.terminal.requestExit(0)
+        return
+      case 'plugin-action':
+        void ports.runPluginAction?.(submission.id)
         return
       case 'model':
         ports.route.runModelCommand(submission.argument)

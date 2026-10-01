@@ -1,6 +1,8 @@
 import type { KeyId } from '@earendil-works/pi-tui'
 import type { Context } from '@deepseek-ai/cordis'
-import { defaultKeymap, type Keymap } from '../input/actions.ts'
+import { defaultKeymap, resolveKeymap, type Keymap } from '../input/actions.ts'
+import type { Action } from '../input/action-catalog.ts'
+import type { KeymapRegistry } from '../keymaps.ts'
 import { DEFAULT_PREFIX_KEYS, DEFAULT_PREFIX_WINDOW_S } from '../input/keymap.ts'
 import { DEFAULT_SPACING, type Spacing } from '../spacing.ts'
 import { createDeferredNotice, type NoticeSink } from '../settings-notice.ts'
@@ -28,6 +30,8 @@ const MS_PER_SECOND = 1000
  * armed at that moment.
  */
 export interface AppearancePorts {
+  /** Composition supplies optional addon registration without hiding a new service dependency. */
+  readonly pluginKeymaps?: KeymapRegistry | undefined
   /** Whether colour was asked for at launch; the flag outranks anything configured. */
   readonly color: () => boolean
   /**
@@ -220,6 +224,9 @@ export function createAppearance(ctx: Context, ports: AppearancePorts): Appearan
   let prefixWindowMs = DEFAULT_PREFIX_WINDOW_S * MS_PER_SECOND
   /** Every action's keys in force; the settings document owns it and a press reads it live. */
   let keymap: Keymap = defaultKeymap()
+  const registry = ports.pluginKeymaps
+  const resolvePlugins = (map: Keymap, catalog: readonly Action[]): Keymap =>
+    resolveKeymap(Object.fromEntries([...map.written].map(id => [id, map.effective[id]])), catalog)
   /** Whether prompts are recorded and offered, and the cap on how many; the settings document owns all three. */
   let historyEnabled = false
   let historyGhost = false
@@ -240,7 +247,7 @@ export function createAppearance(ctx: Context, ports: AppearancePorts): Appearan
     spacing = section.spacing
     prefixKeys = section.prefixes
     prefixWindowMs = section.prefixWindow * MS_PER_SECOND
-    keymap = section.keymap
+    keymap = registry === undefined ? section.keymap : resolvePlugins(section.keymap, registry.catalog())
     ports.keybindings().installBindings()
     historyEnabled = section.history.enabled
     historyGhost = section.history.ghost
@@ -425,7 +432,16 @@ export function createAppearance(ctx: Context, ports: AppearancePorts): Appearan
     openNotices: sink => settingsNotice.open(sink),
     registerSection: preferences.register,
     createThemesHome,
-    settingsListener: preferences.listen,
+    settingsListener: () => {
+      const stopRegistry = registry?.observe(catalog => { resolvePlugins(keymap, catalog) }, () => {
+        applySettings()
+        ports.render()
+      })
+      // Startup can publish a plugin between the first preference read and this subscription.
+      if (registry !== undefined) applySettings()
+      const stopSettings = preferences.listen()
+      return () => { stopRegistry?.(); stopSettings() }
+    },
     watchThemes: watchThemeFiles,
     runThemeCommand,
   }

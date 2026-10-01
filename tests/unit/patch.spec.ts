@@ -17,6 +17,7 @@ const patch = readFileSync(new URL('../../cordis.patch.yml', import.meta.url), '
 const INSERTED_ROWS = [
   ['agent-presets', '@sagmans/dsh-tui/host/roster'],
   ['cordis-host-runner', '@sagmans/dsh-tui/host/runner'],
+  ['tui-keymaps', '@sagmans/dsh-tui/keymaps'],
   ['tui-startup', '@sagmans/dsh-tui/startup'],
   ['tui', '@sagmans/dsh-tui'],
   ['tui-todo-guard', '@sagmans/dsh-tui/todo-guard'],

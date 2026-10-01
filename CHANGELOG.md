@@ -8,6 +8,12 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+### Added
+
+- Plugin actions can provide route-scoped footer hints beside effort, with owner cleanup and safe rendering.
+
+- Plugins can register scoped chord and surface actions through `tuiKeymaps`. Generic picker ports and effort follow-ups keep addon behavior outside the terminal. Rebinding, help, conflict checks, and owner cleanup use the active plugin catalog.
+
 ### Changed
 
 - The prompt bar has one blank row above and below it to separate input from queued

@@ -1,5 +1,5 @@
 import z from '@deepseek-ai/schemastery'
-import { ACTION_CATALOG } from './action-catalog.ts'
+import { ACTION_CATALOG, isPluginActionId } from './action-catalog.ts'
 
 /**
  * One action's keys as the document writes them: one key, or a list of them.
@@ -12,12 +12,11 @@ const KeyListSchema = z.union([z.string(), z.array(z.string())])
 /**
  * The `keys:` half of the section.
  *
- * Built from the catalog rather than written out, so an action added to the
- * table is settable at once and every action accepts the same shape.
+ * A dictionary preserves optional plugin rows through profile settings projection;
+ * a fixed object exposes only its schema-declared builtin names.
+ * The resolver still validates action names and key policy before activation.
  */
-export const KeymapSectionSchema = z.object(Object.fromEntries(
-  ACTION_CATALOG.map(action => [action.id, KeyListSchema]),
-))
+export const KeymapSectionSchema: z = z.dict(KeyListSchema)
 
 const ACTION_IDS: ReadonlySet<string> = new Set(ACTION_CATALOG.map(action => action.id))
 
@@ -29,5 +28,5 @@ const ACTION_IDS: ReadonlySet<string> = new Set(ACTION_CATALOG.map(action => act
  * could not debug from the screen.
  */
 export function isActionId(name: string): boolean {
-  return ACTION_IDS.has(name)
+  return ACTION_IDS.has(name) || isPluginActionId(name)
 }

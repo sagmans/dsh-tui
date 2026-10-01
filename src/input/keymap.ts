@@ -1,6 +1,6 @@
 import { KeybindingsManager, TUI_KEYBINDINGS, matchesKey, setKeybindings, type KeyId } from '@earendil-works/pi-tui'
-import { defaultKeymap, keysFor, type Keymap } from './actions.ts'
-import { ACTION_CATALOG, LIBRARY_KEY_ADDITIONS } from './action-catalog.ts'
+import { defaultKeymap, keysFor, catalogOf, type Keymap } from './actions.ts'
+import { LIBRARY_KEY_ADDITIONS, isPluginActionId } from './action-catalog.ts'
 import { ENTER_KEY } from './key-press.ts'
 import type { Submission } from './submission.ts'
 
@@ -47,9 +47,9 @@ export interface ChordBinding {
 /** The chords in force, in catalog order. */
 export function chordBindings(map: Keymap): readonly ChordBinding[] {
   const found: ChordBinding[] = []
-  for (const action of ACTION_CATALOG) {
+  for (const action of catalogOf(map)) {
     if (action.layer !== 'chord' || action.id === 'chord.prefix') continue
-    const submission = CHORD_SUBMISSIONS[action.id]
+    const submission: Submission | undefined = isPluginActionId(action.id) ? { kind: 'plugin-action', id: action.id } : CHORD_SUBMISSIONS[action.id]
     if (submission === undefined) continue
     for (const key of keysFor(map, action.id)) found.push({ key, submission, label: action.label })
   }
@@ -64,7 +64,7 @@ export function chordKeysLine(map: Keymap): string {
 /** The keys the surface answers itself, as help lists them. */
 export function surfaceKeysLine(map: Keymap): string {
   const found: string[] = []
-  for (const action of ACTION_CATALOG) {
+  for (const action of catalogOf(map)) {
     if (action.layer !== 'surface') continue
     for (const key of keysFor(map, action.id)) found.push(`${key} ${action.label}`)
   }
@@ -83,7 +83,7 @@ export function surfaceKeysLine(map: Keymap): string {
  */
 export function libraryOverrides(map: Keymap): Record<string, KeyId[]> {
   const overrides: Record<string, KeyId[]> = {}
-  for (const action of ACTION_CATALOG) {
+  for (const action of catalogOf(map)) {
     if (action.layer !== 'library') continue
     if (!map.written.has(action.id) && LIBRARY_KEY_ADDITIONS[action.id] === undefined) continue
     overrides[action.id] = [...keysFor(map, action.id)]

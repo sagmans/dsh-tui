@@ -78,6 +78,8 @@ export interface StatusSources {
     readonly reasoningEffort?: string
   } | undefined) | undefined
   readonly home?: string | undefined
+  /** Addons qualify the active route without putting provider-specific policy in the painter. */
+  readonly routeHints?: (route: { readonly provider: string; readonly model: string }) => readonly string[]
   /**
    * The chord waiting for its next key, read per paint so its window lapses on
    * screen rather than only in the reader's head.
@@ -118,6 +120,8 @@ export function createStatusFacts(ctx: Context, sources: StatusSources): () => S
       provider: selection?.provider,
       model: selection?.model,
       effort: selection?.reasoningEffort,
+      modelHints: selection?.provider !== undefined && selection.model !== undefined
+        ? sources.routeHints?.({ provider: selection.provider, model: selection.model }) : undefined,
       agentPreset: session === undefined ? undefined : projectionString(ctx, session, AGENT_PRESET_KEY),
       preset,
       contextTokens: numberOr(pressure?.pressureTokens),
