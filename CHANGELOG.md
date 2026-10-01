@@ -8,6 +8,13 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+### Changed
+
+- Every queued prompt and every work dock board opens with one blank row. Rails
+  and dashed rules drawn tight under the rows above them read as one block, so a
+  waiting prompt no longer fuses with the reasoning rows above it or with the
+  prompt before it, and the dock's boards read as separate lists.
+
 ## [0.12.1] - 2026-10-01
 
 ### Fixed

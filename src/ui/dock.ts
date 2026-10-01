@@ -4,6 +4,7 @@ import { DOCK_SUBAGENT_LIMIT, describeSubagent, type SubagentRun } from '../suba
 import type { TuiToken } from '../theme-tokens.ts'
 import type { TuiTheme } from '../theme.ts'
 import type { TodoEntry, WorkState } from '../work.ts'
+import { pushGap } from './gap.ts'
 
 /** Todo rows the dock keeps on screen; the rest become a count. */
 export const DOCK_TODO_LIMIT = 4
@@ -125,6 +126,17 @@ export class WorkDock implements Component {
   }
 
   /**
+   * The blank row a board opens with when another board is already drawn.
+   *
+   * The boards report different kinds of work, and two dashed rules read as one
+   * list until a row of air says otherwise. The panel's own lead row is the
+   * break above the first board, so the first one here asks for nothing.
+   */
+  private openBoard(lines: string[]): void {
+    if (lines.length > 0) pushGap(lines)
+  }
+
+  /**
    * The dashed rule that opens a section, with the section's name on it.
    *
    * A name with no room left for a dash after it is drawn as the heading it
@@ -169,6 +181,7 @@ export class WorkDock implements Component {
     // went on.
     const open = todos.filter(isOpenTodo)
     if (open.length === 0) return
+    this.openBoard(lines)
     const ordered = orderTodos(open)
     const rows: string[] = []
     for (const todo of ordered.slice(0, DOCK_TODO_LIMIT)) {
@@ -193,6 +206,7 @@ export class WorkDock implements Component {
     const running = runs.filter(run => run.status === 'running')
     if (running.length <= DOCK_SUBAGENT_LIMIT) this.subagentsExpanded = false
     if (running.length === 0) return
+    this.openBoard(lines)
     const start = lines.length
     const headingRows = this.theme.visible('dock.subagents.heading') ? 1 : 0
     const limit = this.subagentsExpanded ? running.length : DOCK_SUBAGENT_LIMIT
@@ -223,6 +237,7 @@ export class WorkDock implements Component {
     // the outcome it reported had been read.
     const live = jobs.filter(job => isLive(job.status))
     if (live.length === 0) return
+    this.openBoard(lines)
     const ordered = [...live].sort((left, right) => right.startedAt - left.startedAt)
     const now = this.now()
     const rows: string[] = []
@@ -258,9 +273,11 @@ export class WorkDock implements Component {
       // always sees that something was left out.
       const objective = state.goal.objective.replace(/\s+/gu, ' ')
       const lead = `${GOAL_MARK} goal ${phase}${rounds} · `
+      this.openBoard(lines)
       lines.push(this.theme.cut(this.theme.rich(`${lead}${objective}`, { token: 'dock.goal', column: visibleWidth(lead) }), width, '…'))
     }
     if (state.planMode && this.theme.visible('dock.planMode')) {
+      this.openBoard(lines)
       lines.push(this.theme.style('dock.planMode', this.theme.cut(`${PLAN_MODE_MARK} plan mode · answer the plan before edits happen`, width, '…')))
     }
     const subagents = this.subagents()

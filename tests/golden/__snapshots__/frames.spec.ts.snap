@@ -53,11 +53,15 @@ exports[`golden frames > renders a busy dock at 40 columns 1`] = `
 [
   "",
   "◎ goal round 6/256 · complete the plan …",
+  "",
   "⏸ plan mode · answer the plan before ed…",
+  "",
   "┄┄ ⚇ subagents · 1 running ┄┄┄┄┄┄┄┄┄┄┄┄┄",
   "  ▸ c000cfa3 · spawn · running 4s",
+  "",
   "┄┄ ⛭ jobs · 1 running ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄",
   "  ▸ bash-1 · running 12s — sleep 45 && …",
+  "",
   "┄┄ ☰ todos · 1 left ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄",
   "  ▸ verify the dock",
 ]
@@ -67,11 +71,15 @@ exports[`golden frames > renders a busy dock at 80 columns 1`] = `
 [
   "",
   "◎ goal round 6/256 · complete the plan for this dsh-tui plugin",
+  "",
   "⏸ plan mode · answer the plan before edits happen",
+  "",
   "┄┄ ⚇ subagents · 1 running ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄",
   "  ▸ c000cfa3 · spawn · running 4s",
+  "",
   "┄┄ ⛭ jobs · 1 running ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄",
   "  ▸ bash-1 · running 12s — sleep 45 && echo bg-done",
+  "",
   "┄┄ ☰ todos · 1 left ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄",
   "  ▸ verify the dock",
 ]
@@ -187,6 +195,7 @@ exports[`golden frames > renders the dock at 40 columns 1`] = `
 [
   "",
   "⏸ plan mode · answer the plan before ed…",
+  "",
   "┄┄ ☰ todos · 2 left ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄",
   "  ▸ verify the dock",
   "  ☐ document the dock",
@@ -197,6 +206,7 @@ exports[`golden frames > renders the dock at 80 columns 1`] = `
 [
   "",
   "⏸ plan mode · answer the plan before edits happen",
+  "",
   "┄┄ ☰ todos · 2 left ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄",
   "  ▸ verify the dock",
   "  ☐ document the dock",
@@ -233,7 +243,9 @@ exports[`golden frames > renders the model picker at 80 columns 1`] = `
 
 exports[`golden frames > renders the queued prompts at 40 columns 1`] = `
 [
+  "",
   "│ also mention the queue in the summary ",
+  "",
   "│ and keep the README sentence short,   ",
   "│ with the same shape the bar above the ",
   "│ editor draws                          ",
@@ -242,7 +254,9 @@ exports[`golden frames > renders the queued prompts at 40 columns 1`] = `
 
 exports[`golden frames > renders the queued prompts at 80 columns 1`] = `
 [
+  "",
   "│ also mention the queue in the summary                                         ",
+  "",
   "│ and keep the README sentence short, with the same shape the bar above the     ",
   "│ editor draws                                                                  ",
 ]

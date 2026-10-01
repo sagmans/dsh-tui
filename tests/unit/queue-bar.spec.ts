@@ -40,53 +40,65 @@ describe('QueueBar', () => {
     const input = editor.render(WIDTH)
     const lines = bar([PROMPT]).render(WIDTH)
     // Matching geometry keeps the draft recognizable as it moves into the queue.
-    expect(lines).toHaveLength(1)
-    expect(visibleWidth(lines[0]!)).toBe(visibleWidth(input[0]!))
-    expect(lines[0]).toBe(`│ ${PROMPT}${' '.repeat(WIDTH - 2 - PROMPT.length)}`)
+    expect(lines).toHaveLength(2)
+    expect(visibleWidth(lines[1]!)).toBe(visibleWidth(input[0]!))
+    expect(lines[1]).toBe(`│ ${PROMPT}${' '.repeat(WIDTH - 2 - PROMPT.length)}`)
   })
 
   it('recedes a queued prompt with a faint italic face', () => {
     const lines = bar([PROMPT], createTheme('truecolor')).render(WIDTH)
-    expect(lines[0]).toContain(`\u001B[2;3m${PROMPT}\u001B[0m`)
-    expect(visibleWidth(lines[0]!)).toBe(WIDTH)
+    expect(lines[1]).toContain(`\u001B[2;3m${PROMPT}\u001B[0m`)
+    expect(visibleWidth(lines[1]!)).toBe(WIDTH)
   })
 
   it('consumes what a prompt carries, so a payload cannot repaint the frame', () => {
     // A queued prompt is drawn by the bar rather than obeyed, and a colour it
     // pasted would fight the queued face, so only its words reach the frame.
     const lines = bar(['a\u001B[31mb']).render(WIDTH)
-    expect(lines[0]).toContain('ab')
-    expect(lines[0]).not.toContain('\u001B')
-    expect(visibleWidth(lines[0]!)).toBe(WIDTH)
+    expect(lines[1]).toContain('ab')
+    expect(lines[1]).not.toContain('\u001B')
+    expect(visibleWidth(lines[1]!)).toBe(WIDTH)
   })
 
   it('keeps a long prompt to its first rows and counts the rest', () => {
     const lines = bar([['one', 'two', 'three', 'four', 'five'].join('\n')]).render(WIDTH)
-    expect(lines).toHaveLength(4)
-    expect(lines.slice(0, -1).map(inner)).toEqual(['one', 'two', 'three'])
+    expect(lines).toHaveLength(5)
+    expect(lines.slice(1, -1).map(inner)).toEqual(['one', 'two', 'three'])
     // Removing the closing rule must not hide the fact that the preview continues.
     expect(lines.at(-1)?.trimEnd()).toBe('│ ↓ 2 more')
   })
 
   it('wraps a prompt at the bar\'s own text width', () => {
     const lines = bar(['the quick brown fox jumps over the lazy dog']).render(WIDTH)
-    expect(lines).toHaveLength(2)
-    expect(lines.map(inner)).toEqual(['the quick brown fox jumps', 'over the lazy dog'])
+    expect(lines).toHaveLength(3)
+    expect(lines.slice(1).map(inner)).toEqual(['the quick brown fox jumps', 'over the lazy dog'])
   })
 
   it('keeps the newest prompts and counts the ones it left out', () => {
     const lines = bar(['one', 'two', 'three', 'four', 'five']).render(WIDTH)
-    expect(lines).toHaveLength(4)
-    expect(lines[0]).toBe('… 2 queued earlier')
+    expect(lines).toHaveLength(8)
+    expect(lines[1]).toBe('… 2 queued earlier')
     // The reader typed the newest one last, so that is the row that must stay
     // reachable; the ones above it are the ones the harness is about to take.
     expect(lines.slice(1).filter(row => row.startsWith('│')).map(inner)).toEqual(['three', 'four', 'five'])
   })
 
+  it('opens every queued block with one blank row', () => {
+    // A queued prompt is an object the reader already submitted, the way a
+    // transcript card is one: a rail tight under the rows above it, or under the
+    // prompt before it, reads as part of them.
+    const row = (text: string): string => `│ ${text}${' '.repeat(WIDTH - 2 - text.length)}`
+    expect(bar(['one', 'two']).render(WIDTH)).toEqual(['', row('one'), '', row('two')])
+    // The count stands in for the prompts it hides, so it opens the same way.
+    const counted = bar(['one', 'two', 'three', 'four', 'five']).render(WIDTH)
+    expect(counted[0]).toBe('')
+    expect(counted[2]).toBe('')
+  })
+
   it('draws no frame when the border token is hidden', () => {
     const lines = bar([PROMPT], themed({ 'editor.border': { hidden: true } })).render(WIDTH)
     expect(lines.some(row => row.includes('╭') || row.includes('╯') || row.includes('│'))).toBe(false)
-    expect(lines[0]).toBe(` ${PROMPT}${' '.repeat(WIDTH - 2 - PROMPT.length)} `)
+    expect(lines[1]).toBe(` ${PROMPT}${' '.repeat(WIDTH - 2 - PROMPT.length)} `)
   })
 
   it('draws nothing when the queued face is hidden', () => {

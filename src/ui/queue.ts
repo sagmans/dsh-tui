@@ -1,6 +1,7 @@
 import type { Component } from '@earendil-works/pi-tui'
 import type { TuiTheme } from '../theme.ts'
 import { canFrame, frameText } from './frame.ts'
+import { pushGap } from './gap.ts'
 
 /** Queued prompts the bar draws; everything older becomes one count above them. */
 const QUEUE_LIMIT = 3
@@ -47,12 +48,22 @@ export class QueueBar implements Component {
     const framed = canFrame(width, this.theme.visible('editor.border'), true)
     const shown = prompts.slice(-QUEUE_LIMIT)
     const lines: string[] = []
+    // Every queued prompt is an object the reader already submitted, so each
+    // block opens with the air a transcript card opens with: a rail drawn tight
+    // under the rows above it, or under the prompt before it, reads as part of
+    // them rather than as a prompt of its own. The bar cannot see the rows above
+    // it, so it draws its own break unconditionally — a fused block is the error
+    // a reader loses by.
     // The reader typed the newest prompt last, so that is the row that must stay
     // on screen; the ones dropped here are the ones a claim is about to take.
     if (shown.length < prompts.length) {
+      pushGap(lines)
       lines.push(this.theme.style('editor.queued.more', this.theme.cut(`… ${prompts.length - shown.length} queued earlier`, width, '…')))
     }
-    for (const prompt of shown) lines.push(...this.box(prompt, width, framed))
+    for (const prompt of shown) {
+      pushGap(lines)
+      lines.push(...this.box(prompt, width, framed))
+    }
     return lines
   }
 }

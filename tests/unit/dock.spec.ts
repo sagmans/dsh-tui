@@ -160,19 +160,19 @@ describe('WorkDock', () => {
     const jobs = [{ id: 'bash-1', kind: 'bash', label: 'build', status: 'running' as const, startedAt: 1_000, finishedAt: undefined }]
     const dock = new WorkDock(() => ({ ...EMPTY, goal: { objective: 'Inspect dock', roundsStarted: 1, maxRounds: 2, phase: 'active' } }), theme, () => jobs, () => runs)
     const click: TuiMouseEvent = {
-      type: 'click', button: 'left', x: 5, y: 2, screenX: 5, screenY: 2, width: 80, height: 9,
+      type: 'click', button: 'left', x: 5, y: 3, screenX: 5, screenY: 3, width: 80, height: 9,
       shift: false, alt: false, ctrl: false,
     }
-    expect(dock.render(80)[2]).toBe(rule('⚇ subagents ▸ · 4 running', 80))
+    expect(dock.render(80)[3]).toBe(rule('⚇ subagents ▸ · 4 running', 80))
     expect(dock.handleMouse({ ...click, y: 1 })).toBeUndefined()
-    expect(dock.handleMouse({ ...click, y: 3, x: 70 })).toEqual({ handled: true, render: true })
-    expect(dock.render(80)[2]).toBe(rule('⚇ subagents ▾ · 4 running', 80))
-    expect(dock.handleMouse({ ...click, y: 7 })).toBeUndefined()
+    expect(dock.handleMouse({ ...click, y: 4, x: 70 })).toEqual({ handled: true, render: true })
+    expect(dock.render(80)[3]).toBe(rule('⚇ subagents ▾ · 4 running', 80))
+    expect(dock.handleMouse({ ...click, y: 10 })).toBeUndefined()
     expect(dock.handleMouse({ ...click, button: 'right' })).toBeUndefined()
     expect(dock.handleMouse({ ...click, type: 'press' })).toBeUndefined()
-    expect(dock.render(80)[2]).toBe(rule('⚇ subagents ▾ · 4 running', 80))
+    expect(dock.render(80)[3]).toBe(rule('⚇ subagents ▾ · 4 running', 80))
     expect(dock.handleMouse(click)).toEqual({ handled: true, render: true })
-    expect(dock.render(80)[2]).toBe(rule('⚇ subagents ▸ · 4 running', 80))
+    expect(dock.render(80)[3]).toBe(rule('⚇ subagents ▸ · 4 running', 80))
   })
 
   it('opens a child by its full id only from its visible text', () => {
@@ -200,6 +200,23 @@ describe('WorkDock', () => {
       { runId: 'r2', provider: 'fork', id: 'child-2', startedAt: 1_000, status: 'failed' as const, finishedAt: 2_000 },
     ]
     expect(new WorkDock(() => EMPTY, theme, () => [], () => runs).render(80)).toEqual([])
+  })
+
+  it('opens each board with one blank row after another board', () => {
+    // The boards report different kinds of work, and two rules with no air
+    // between them read as one list. The panel's own lead row is the break above
+    // the first board, so only a second board asks for air.
+    const jobs = [{ id: 'bash-1', kind: 'bash', label: 'build', status: 'running' as const, startedAt: 1_000, finishedAt: undefined }]
+    const todos = [{ content: 'next thing', status: 'pending' as const }]
+    const lines = new WorkDock(() => ({ ...EMPTY, todos }), theme, () => jobs).render(80)
+    expect(lines).toEqual([
+      LEAD,
+      rule('⛭ jobs · 1 running', 80),
+      expect.stringContaining('▸ bash-1'),
+      '',
+      rule('☰ todos · 1 left', 80),
+      '  ☐ next thing',
+    ])
   })
 
   it('names a section on the edge of its list instead of on a row above it', () => {
@@ -259,8 +276,8 @@ describe('WorkDock theming', () => {
     // accent, user and warn: the three shades the shipped table gives the rules,
     // so a reader tells the boards apart without reading a row of either.
     expect(lines[1]).toContain('38;2;39;245;200m')
-    expect(lines[3]).toContain('38;2;215;175;95m')
-    expect(lines[5]).toContain('38;2;95;175;215m')
+    expect(lines[4]).toContain('38;2;215;175;95m')
+    expect(lines[7]).toContain('38;2;95;175;215m')
     // A section rule is not the only element a row answers to: the job row carries
     // the running element's own colour wherever the row is drawn.
     const red = createTheme('truecolor', { palette: DEFAULT_PALETTE, tokens: new Map([['dock.jobs.running', { fg: '#ff0000' }]]) })
