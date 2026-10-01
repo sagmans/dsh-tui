@@ -10,6 +10,7 @@ breaking change, and a patch carries only fixes.
 
 ### Fixed
 
+- The prompt cursor uses native terminal blinking and hides when the terminal reports focus loss. Focus changes preserve drafts and question ownership. Cursor modes return to their previous values after shutdown or external-editor handoff.
 - Deferred host output and warning text obey UTF-8 byte budgets; oversized
   diagnostics drop whole with counts instead of remaining unbounded. Warning event
   retention also has a count bound, preserving retained event identities.

@@ -1,7 +1,13 @@
 import { Buffer } from 'node:buffer'
-import { TuiAltScreen, type TuiAltScreenOptions, type Terminal, type TuiStopOptions } from '@earendil-works/pi-tui'
+import { TuiAltScreen, type TuiAltScreenOptions, type Terminal, type TuiStopOptions, type TuiInputListener } from '@earendil-works/pi-tui'
 import { holdHostWrites, HOST_WRITE_LIMIT, HOST_WRITE_TARGETS, type HostWriteGuard } from './host-writes.ts'
 
+const FOCUS_IN = '\x1b[I'
+const FOCUS_OUT = '\x1b[O'
+/** Preserve shell preferences without changing cursor shape or scheduling blink frames. */
+const SAVE_CURSOR_MODES = '\x1b[?12s\x1b[?1004s'
+const ENABLE_CURSOR_MODES = '\x1b[?12h\x1b[?1004h'
+const RESTORE_CURSOR_MODES = '\x1b[?1004r\x1b[?12r'
 const WARNING_EVENT = 'warning'
 const WARNING_EVENT_LIMIT = 256
 const ERROR_STACK_FIELD = 'stack'
@@ -105,6 +111,10 @@ export class WarningSafeTui extends TuiAltScreen {
   private hostWrites: HostWriteGuard | undefined
   private frameFailed = false
   private highSurrogate: string | undefined
+  /** A stopped surface must never alter the cursor of an external editor. */
+  private cursorModesActive = false
+  /** Initialization follows super(): only the native constructor listener needs interception. */
+  private readonly applicationListenersReady = true
 
   /** Each failure episode deserves a report, but repeated retries must not flood the surface. */
   onFrameError: ((error: unknown) => void) | undefined
@@ -116,7 +126,7 @@ export class WarningSafeTui extends TuiAltScreen {
    * ever has to name.
    */
   constructor(terminal: Terminal, options?: TuiAltScreenOptions) {
-    super(terminal, undefined, undefined, options)
+    super(terminal, true, undefined, options)
     // The pinned stdin buffer splits legacy text into UTF-16 units; filters must receive complete Unicode scalars.
     this.addInputListener(data => {
       if (HIGH_SURROGATE.test(data)) {
@@ -132,10 +142,26 @@ export class WarningSafeTui extends TuiAltScreen {
     })
   }
 
+  /** The native viewport listener consumes focus reports, so observation must precede that listener's cleanup. */
+  override addInputListener(listener: TuiInputListener): () => void {
+    if (this.applicationListenersReady) return super.addInputListener(listener)
+    return super.addInputListener(data => {
+      if (this.cursorModesActive && (data === FOCUS_IN || data === FOCUS_OUT)) {
+        this.setShowHardwareCursor(data === FOCUS_IN)
+      }
+      return listener(data)
+    })
+  }
+
   override start(): void {
     this.releaseWarnings ??= deferWarnings()
     this.hostWrites ??= holdHostWrites({ terminal: this.terminal, targets: HOST_WRITE_TARGETS })
     try {
+      if (!this.cursorModesActive) {
+        this.cursorModesActive = true
+        this.terminal.write(SAVE_CURSOR_MODES + ENABLE_CURSOR_MODES)
+      }
+      this.setShowHardwareCursor(true)
       super.start()
     } catch (error) {
       this.stop({ preserveScreen: true })
@@ -177,24 +203,32 @@ export class WarningSafeTui extends TuiAltScreen {
       this.terminal.write(RESTORE_SHELL)
       throw error
     } finally {
-      // Warnings go first, while the hold is still in place, so what they print
-      // joins the host text in the order it arrived; the release then writes it
-      // all out behind the exit sequence this call already wrote.
-      const release = this.releaseWarnings
-      this.releaseWarnings = undefined
-      let warningFailure: { readonly error: unknown } | undefined
       try {
-        release?.()
-      } catch (error) {
-        // A listener that throws must not strand the host's own writing: the
-        // hold below is the terminal's, and it goes back on every path out of
-        // stop() — only then is the listener's failure surfaced again.
-        warningFailure = { error }
+        // Native stop disables focus reporting; restore saved modes only after its final write.
+        if (this.cursorModesActive) {
+          this.cursorModesActive = false
+          this.terminal.write(RESTORE_CURSOR_MODES)
+        }
+      } finally {
+        // Warnings go first, while the hold is still in place, so what they print
+        // joins the host text in the order it arrived; the release then writes it
+        // all out behind the exit sequence this call already wrote.
+        const release = this.releaseWarnings
+        this.releaseWarnings = undefined
+        let warningFailure: { readonly error: unknown } | undefined
+        try {
+          release?.()
+        } catch (error) {
+          // A listener that throws must not strand the host's own writing: the
+          // hold below is the terminal's, and it goes back on every path out of
+          // stop() — only then is the listener's failure surfaced again.
+          warningFailure = { error }
+        }
+        const writes = this.hostWrites
+        this.hostWrites = undefined
+        writes?.release()
+        if (warningFailure !== undefined) throw warningFailure.error
       }
-      const writes = this.hostWrites
-      this.hostWrites = undefined
-      writes?.release()
-      if (warningFailure !== undefined) throw warningFailure.error
     }
   }
 }

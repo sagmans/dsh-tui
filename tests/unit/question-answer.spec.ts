@@ -4,6 +4,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
+import { CURSOR_MARKER } from '@earendil-works/pi-tui'
 import { type Context } from '@deepseek-ai/cordis'
 import { type GateQuestion } from '@/gates.ts'
 import { QuestionGate, toGateQuestions } from '@/gates/questions.ts'
@@ -15,8 +16,8 @@ import { answerBar, gateOver, answerText, answerRows, ESC, ENTER, UP, LEFT, DOWN
 
 /** A bracketed paste as the terminal sends it. */
 const paste = (text: string): string => `\x1b[200~${text}\x1b[201~`
-/** Reverse video the base editor draws the cursor cell with, which masking must not hide. */
-const CURSOR = '\u001b[7m'
+/** The native renderer needs the marker even when credential text is masked. */
+const CURSOR = CURSOR_MARKER
 
 
 describe('QuestionGate paste', () => {
@@ -109,11 +110,13 @@ describe('the row a declared credential is drawn in', () => {
       expect(answerRows(gate)).toContain('abcd **** **** mnop')
     })
   it('keeps the cursor mark the terminal reads, which masking must not hide', () => {
-      const gate = declared()
+      const bar = answerBar()
+      const gate = new QuestionGate(toGateQuestions({ questions: [{ id: 'prompt:secret', question: 'Enter the value' }] }), bar, defaultKeymap)
       gate.handleKey(paste('sk-ant-api03-FAKE998877665544332211'))
+      // The modal owner lends focus to the answer editor, not to the question gate.
+      bar.focused = true
       const row = answerRows(gate)
-      // The cursor is an escape around a cell, not text: replacing that cell
-      // would lose the position the terminal was told to place the cursor at.
+      // Masking must preserve the native marker without revealing the credential.
       expect(row).toContain(CURSOR)
       expect(row.indexOf(CURSOR)).toBeGreaterThan(row.indexOf('2211'))
     })

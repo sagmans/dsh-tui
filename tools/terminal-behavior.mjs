@@ -33,6 +33,12 @@ const ACCEPTED_KITTY_EVENTS = 2
 const ERASE_DISPLAY = /\x1b\[(?:2|3)J/g
 const ENTER_SCREEN = '\x1b[?1049h'
 const EXIT_SCREEN = '\x1b[?1049l'
+const FOCUS_IN = '\x1b[I'
+const FOCUS_OUT = '\x1b[O'
+const CURSOR_SHOW = '\x1b[?25h'
+const CURSOR_HIDE = '\x1b[?25l'
+const BLINK_ENABLED = '\x1b[?12h'
+const CURSOR_MODES_RESTORED = '\x1b[?1004r\x1b[?12r'
 const TINY_HEIGHTS = [1, 2, 3]
 const DIAGNOSTIC_TAIL_CHARACTERS = 2000
 const EXIT_SUCCESS = 0
@@ -73,6 +79,14 @@ try {
   await delay(DRAIN_MS)
   child.write(PASTE_START + PASTE_TEXT + PASTE_END)
   await delay(DRAIN_MS)
+  // Streaming continues while focus changes, so subsequent frames must respect terminal focus.
+  assert.ok(output.includes(BLINK_ENABLED), 'native cursor blinking was not requested')
+  child.write(FOCUS_OUT)
+  await delay(DRAIN_MS)
+  assert.ok(output.lastIndexOf(CURSOR_HIDE) > output.lastIndexOf(CURSOR_SHOW), 'background redraw showed the cursor')
+  child.write(FOCUS_IN)
+  await delay(DRAIN_MS)
+  assert.ok(output.lastIndexOf(CURSOR_SHOW) > output.lastIndexOf(CURSOR_HIDE), 'focus return did not restore the cursor')
   child.write(PICKER_BYTES)
   await delay(DRAIN_MS)
   for (const data of [KITTY_PRESS, KITTY_REPEAT, KITTY_RELEASE, KITTY_COMMAND, UNICODE_TEXT, PASTE_START + PASTE_TEXT + PASTE_END]) {
@@ -98,6 +112,7 @@ try {
   assert.deepEqual(receipt.failures, [], 'native frame failed')
   assert.ok(output.slice(0, readyOffset).includes(ENTER_SCREEN), 'alternate screen was not entered')
   assert.ok(output.slice(0, receiptOffset).includes(EXIT_SCREEN), 'alternate screen was not restored')
+  assert.ok(output.slice(0, receiptOffset).includes(CURSOR_MODES_RESTORED), 'cursor modes were not restored')
   assert.ok(receipt.outputSamples > 0, 'no native output latency samples')
   console.log(JSON.stringify({ platform: process.platform, node: process.version, cols: COLS, rows: ROWS, tinyHeights: TINY_HEIGHTS, ...receipt }, null, 2))
 } finally {
