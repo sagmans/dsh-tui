@@ -16,6 +16,10 @@ breaking change, and a patch carries only fixes.
 
 ### Changed
 
+- Agent guidance now requires signed version tags, matching GitHub releases,
+  publication approval, and npm readback so published versions keep a complete
+  source and release record without accidental republication.
+
 - The prompt bar has one blank row above and below it to separate input from queued
   prompts and session status.
 
