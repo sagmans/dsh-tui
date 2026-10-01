@@ -8,6 +8,8 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-10-01
+
 ### Added
 
 - Plugin actions can provide route-scoped footer hints beside effort, with owner cleanup and safe rendering.
@@ -1048,7 +1050,8 @@ breaking change, and a patch carries only fixes.
 - Publication through npm OIDC trusted publishing, with the first version
   bootstrapped by hand ([#5](https://github.com/sagmans/dsh-tui/pull/5)).
 
-[Unreleased]: https://github.com/sagmans/dsh-tui/compare/v0.11.2...HEAD
+[Unreleased]: https://github.com/sagmans/dsh-tui/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/sagmans/dsh-tui/compare/v0.11.2...v0.12.0
 [0.11.2]: https://github.com/sagmans/dsh-tui/compare/v0.11.1...v0.11.2
 [0.11.1]: https://github.com/sagmans/dsh-tui/compare/v0.11.0...v0.11.1
 [0.11.0]: https://github.com/sagmans/dsh-tui/compare/v0.10.0...v0.11.0
