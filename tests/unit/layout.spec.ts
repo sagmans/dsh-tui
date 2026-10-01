@@ -8,6 +8,13 @@ import { PROMPT_MIN_ROWS, surfaceLayout } from '@/ui/layout.ts'
 import { PromptBar } from '@/ui/prompt.ts'
 
 const MAX_PROMPT_RENDER_PASSES = 2
+const TINY_HEIGHTS = [1, 2, 3]
+const TINY_WIDTHS = [20, 40, 80, 120, 200]
+const TINY_DRAFT = 'draft'
+const TINY_FOOTER = 'status'
+const LARGE_TRANSCRIPT_ROWS = 40
+const LARGE_DOCK_ROWS = 16
+const LARGE_QUEUE_ROWS = 8
 
 /** The surface only ever lends the editor its terminal size and a repaint. */
 const STUB_TUI = { requestRender: () => {}, terminal: { rows: 24, columns: 80 } } as unknown as TUI
@@ -25,6 +32,24 @@ function promptOf(text: string): { prompt: PromptBar; editor: BoxedEditor } {
 }
 
 describe('the surface root layout', () => {
+  it.each(TINY_HEIGHTS.flatMap(height => TINY_WIDTHS.map(width => ({ height, width }))))(
+    'keeps input at $width columns by $height rows under dock and queue pressure', ({ height, width }) => {
+      const { prompt, editor } = promptOf(TINY_DRAFT)
+      const root = surfaceLayout({
+        transcript: rowsOf('row', LARGE_TRANSCRIPT_ROWS),
+        dock: rowsOf('dock', LARGE_DOCK_ROWS),
+        queue: rowsOf('queued', LARGE_QUEUE_ROWS),
+        prompt,
+        status: rowsOf(TINY_FOOTER, 1),
+      })
+      const frame = renderLayoutFrame(root, width, height, () => {})
+      expect(frame.lines).toHaveLength(height)
+      expect(frame.lines.some(line => line.includes(TINY_DRAFT))).toBe(true)
+      if (height > 1) expect(frame.lines.some(line => line.includes(TINY_FOOTER))).toBe(true)
+      expect(editor.getText()).toBe(TINY_DRAFT)
+    },
+  )
+
   it('does not add an editor measurement beyond the prompt layout and placement', () => {
     const { prompt, editor } = promptOf('the draft')
     const render = vi.spyOn(editor, 'render')

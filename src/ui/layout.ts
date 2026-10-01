@@ -75,7 +75,8 @@ function inset(parts: SurfaceParts, margin: MarginColumns): HStack {
  */
 export function surfaceLayout(parts: SurfaceParts, margin: MarginColumns = () => 0): VStack {
   return new VStack([
-    { component: inset(parts, margin), basis: 0, grow: 1, minSize: 1 },
+    // A one-row terminal must lend its only row to input, not an empty transcript floor.
+    { component: inset(parts, margin), basis: 0, grow: 1, minSize: 0 },
     // Queued input earns rows only while something is waiting, and it gives
     // them up before the editor does: the bar being typed in outranks what is
     // waiting behind it.
