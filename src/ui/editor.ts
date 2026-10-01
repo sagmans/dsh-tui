@@ -62,6 +62,8 @@ const KITTY_CTRL_J = '\u001b[106;5u'
  * character before treating the sequence as padding.
  */
 const CURSOR_AT_END = '\u001b[7m \u001b[0m'
+/** Typed text contains no escapes, so only the base editor's cursor cell can match. */
+const SYNTHETIC_CURSOR = /\u001b\[7m([^\u001b]*)\u001b\[0m/gu
 /** Only acceptance chords need a live consent projection before changing the draft. */
 const GHOST_ACCEPT_ALL_KEY = 'ctrl+e'
 const GHOST_WORD_RIGHT_ACTION = 'tui.editor.cursorWordRight'
@@ -236,7 +238,7 @@ export class BoxedEditor extends Editor {
     if (drawn === '') return row
     const [first = '', ...rest] = ghostGraphemes(drawn)
     const spaces = ' '.repeat(Math.max(0, room - used))
-    return before + brush.paint(first, 'cursor') + brush.paint(rest.join(''), 'rest') + spaces
+    return before + brush.paint(first, 'rest') + brush.paint(rest.join(''), 'rest') + spaces
   }
 
   /**
@@ -290,7 +292,7 @@ export class BoxedEditor extends Editor {
       this.borderColor(open + stripTerminalSequences(row) + close)
     if (boxed) lines.push(edge(FRAME_GLYPHS.topLeft, rows[0] ?? '', FRAME_GLYPHS.topRight))
     else if (this.hiddenAbove > 0) lines.push(indicator('↑', this.hiddenAbove))
-    for (const row of text) lines.push(side + this.decorateText(this.ghostRow(row, ghost)) + (boxed ? side : ''))
+    for (const row of text) lines.push(side + this.decorateText(this.ghostRow(row, ghost).replace(SYNTHETIC_CURSOR, '$1')) + (boxed ? side : ''))
     if (boxed) lines.push(edge(FRAME_GLYPHS.bottomLeft, rows[closing]!.replace(CLOSING_TAG, ''), FRAME_GLYPHS.bottomRight))
     else if (this.hiddenBelow > 0) lines.push(indicator('↓', this.hiddenBelow))
     return lines
