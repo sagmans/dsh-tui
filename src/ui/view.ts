@@ -1,9 +1,9 @@
-import { RowCache } from './rows.ts'
+import { TranscriptDocument } from './view/document.ts'
 import { type PickerCard } from './picker.ts'
 import { pickerCardLines } from './picker-card.ts'
 import { ANSWER_FACE, type MarkdownRenderer } from './markdown.ts'
 import { type FrameRow } from './frame.ts'
-import { gapRows, placeGap, pushGap } from './gap.ts'
+import { gapRows, pushGap } from './gap.ts'
 import { type TuiTheme } from '../theme.ts'
 import { type TuiToken } from '../theme-tokens.ts'
 import { DEFAULT_TOOL_DISPLAY, type ToolDisplaySpec } from '../tool-display.ts'
@@ -43,12 +43,6 @@ export const DEFAULT_VIEW_STATE: ViewState = { expandCards: false, expandReasoni
  * A card's rows cover the calls it dispatched, so the card and each of those
  * calls have a span; the click takes the tightest one it falls in.
  */
-/**
- * Where one clickable message drew, so a click can find what it landed on.
- *
- * A card's rows cover the calls it dispatched, so the card and each of those
- * calls have a span; the click takes the tightest one it falls in.
- */
 export interface ClickSpan {
   /** Stable across redraws, so a click outlives the entry it was made on. */
   readonly key: string
@@ -76,10 +70,9 @@ const nestedCallsClickKey = (id: string): string | undefined => (id === '' ? und
 /**
  * Renders the transcript rows and any pending gate as terminal lines.
  *
- * The component stays a pure projection: it holds no cache of its own, so a
- * resize, a resume, or an open gate redraws the same rows without replaying
- * anything. Everything it draws came from a model, a tool, or a file, so the
- * text passes through the display escaping before it is styled.
+ * Retained rows must keep their click and copy accounts, so one document owner
+ * refreshes them together while overlays remain transient. External text still
+ * passes through display escaping before styling because it is not terminal protocol.
  */
 /** What sits below the transcript while the reader is being asked something. */
 export interface TranscriptViewOptions {
@@ -95,10 +88,10 @@ export interface TranscriptViewOptions {
    */
   readonly keys?: () => Keymap
   /**
-   * How one tool's cards draw, read per render.
+   * Mutable tool policies require invalidate() when changed.
    *
-   * The settings document is hot-reloaded, so a captured table would keep
-   * folding a session under the policy it happened to start with.
+   * Callback identity cannot describe live configuration, so entry and
+   * document caches must refresh together. The settings composition already does this.
    */
   readonly toolDisplay?: (tool: string) => ToolDisplaySpec
   /**
@@ -111,41 +104,15 @@ export interface TranscriptViewOptions {
 }
 
 export class TranscriptView implements Component {
-private readonly rows: RowCache<TranscriptEntry>
-/**
-   * Fold choices the reader made by clicking, per message.
-   *
-   * Absent means the key or the tool's own policy decides, so a settings edit
-   * stays in charge of messages nobody clicked. Keyed by the call or thought id
-   * rather than by the entry, because a result replaces the entry a click was
-   * made on and a thought outlives the live row that streamed it.
-   */
+  private readonly document: TranscriptDocument
   private readonly clicked = new Map<string, boolean>()
-/** The rows each clickable message drew last render, for mapping a click back to it. */
-  private spans: readonly ClickSpan[] = []
-/** The same spans relative to their entry, so a cached entry still answers clicks. */
-  private readonly entrySpans = new WeakMap<TranscriptEntry, readonly ClickSpan[]>()
-/**
-   * The framed rows each entry drew last render, for reading a copy back out.
-   *
-   * Relative to the entry for the same reason the spans are: a cached entry draws
-   * no rows this frame and still has to answer for what it drew before.
-   */
-  private readonly entryCopy = new WeakMap<TranscriptEntry, readonly FrameRow[]>()
-/**
-   * The framed rows the in-flight entries drew this frame.
-   *
-   * They cannot be kept by entry the way the settled ones are: every frame builds
-   * a live entry as a fresh object, so a map keyed by it would never answer. A copy
-   * is read against the last frame, so it is the render that keeps them.
-   */
-  private liveCopy: readonly FrameRow[] = []
+  private presentationRevision = 0
   private readonly cards: ToolCards
   private readonly messages: Messages
   private readonly gates: GateCards
-  /** The row renderers, each told only what it draws, so the view stays the one owner of view state and row caches. */
+  /** Presentation policy stays here; the document retains rows with their hit and copy metadata. */
 
-constructor(
+  constructor(
     private readonly model: TranscriptModel,
     private readonly theme: TuiTheme,
     private readonly markdown: MarkdownRenderer,
@@ -154,9 +121,14 @@ constructor(
     this.cards = new ToolCards({ theme: this.theme, keymap: () => this.keymap(), toolDisplay: tool => this.toolDisplay(tool), expansionOf: entry => this.expansionOf(entry), subCallsOpen: entry => this.subCallsOpen(entry), liveCall: callId => this.model.liveCall(callId), cardOpenHint: () => hintKeys(this.keymap(), 'surface.toolDetail') || CARD_OPEN_FALLBACK, toolKey: id => toolClickKey(id), subCallsKey: id => nestedCallsClickKey(id), subCallKey: (parentId, id) => subCallClickKey(parentId, id), subCallOpen: (parentId, id) => this.subCallOpen(parentId, id) })
     this.messages = new Messages({ theme: this.theme, markdown: this.markdown, reasoningOpen: entry => this.reasoningOpen(entry), reasoningFoldHint: () => this.reasoningFoldHint(), reasoningKey: id => reasoningClickKey(id), spacing: () => this.air(), pushWrapped: (lines, text, width, prefix, token) => this.pushWrapped(lines, text, width, prefix, token) })
     this.gates = new GateCards({ theme: this.theme, pushWrapped: (lines, text, width, prefix, token) => this.pushWrapped(lines, text, width, prefix, token) })
-    this.rows = new RowCache<TranscriptEntry>()
+    this.document = new TranscriptDocument({
+      model,
+      entryTag: (entry, base) => this.entryTag(entry, base),
+      clocked: entry => this.isLive(entry) || (entry.kind === 'reasoning' && entry.live),
+      renderEntry: (entry, lines, width, live, spans, copy) => this.renderEntry(entry, lines, width, live, spans, copy),
+    })
   }
-private get viewState(): ViewState {
+  private get viewState(): ViewState {
     return this.options.state?.() ?? DEFAULT_VIEW_STATE
   }
 /** The display the reader configured for a tool, or the shipped one. */
@@ -167,7 +139,7 @@ private get viewState(): ViewState {
   private air(): Spacing {
     return this.options.spacing?.() ?? DEFAULT_SPACING
   }
-/**
+  /**
    * Whether one tool message draws open.
    *
    * A click outranks the key, which outranks the tool's start state: Ctrl+O
@@ -209,7 +181,7 @@ private get viewState(): ViewState {
     const clicked = key === undefined ? undefined : this.clicked.get(key)
     return clicked ?? this.viewState.expandSubCalls
   }
-/**
+  /**
    * Answer a click on a message by folding or unfolding that one row.
    *
    * The tightest span under the point wins, so a click on a dispatched call
@@ -221,11 +193,12 @@ private get viewState(): ViewState {
   handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
     if (event.type !== 'click' || event.button !== 'left') return undefined
     let span: ClickSpan | undefined
-    for (const candidate of this.spans) {
+    for (const candidate of this.document.spans) {
       if (event.y < candidate.start || event.y >= candidate.end) continue
       if (span === undefined || candidate.end - candidate.start < span.end - span.start) span = candidate
     }
     if (span === undefined) return undefined
+    this.presentationRevision++
     // One click on a program's header opens the one level under it: the calls the
     // program dispatched, each still the single row it is read at. The program's
     // own body is the level below that, and it stays folded here because a click
@@ -238,12 +211,12 @@ private get viewState(): ViewState {
     this.clicked.set(span.key, !span.expanded)
     return { handled: true, render: true }
   }
-invalidate(): void {
+  invalidate(): void {
     // The rows are keyed by width and expansion state, so a real change misses
     // anyway; an explicit invalidate means the caller wants them rebuilt.
-    this.rows.clear()
+    this.document.invalidate()
   }
-/**
+  /**
    * Wrap one text block under a prefix, keeping the prefix's column budget.
    *
    * The block is drawn before it is wrapped: a sequence a terminal would have
@@ -269,10 +242,10 @@ invalidate(): void {
   private keymap(): Keymap {
     return this.options.keys?.() ?? defaultKeymap()
   }
-private reasoningFoldHint(): string {
+  private reasoningFoldHint(): string {
     return hintKeys(this.keymap(), 'surface.reasoning') || REASONING_FOLD_FALLBACK
   }
-/**
+  /**
    * Whether any part of one card is still in flight.
    *
    * Only a card with work outstanding has a clock attached to its cache, so the
@@ -287,7 +260,7 @@ private reasoningFoldHint(): string {
     // clears it.
     return this.model.liveCall(entry.id).running || (entry.card.subCalls ?? []).some(call => call.running)
   }
-private pushPicker(lines: string[], picker: PickerCard, width: number): void {
+  private pushPicker(lines: string[], picker: PickerCard, width: number): void {
     // The overlay opens under the transcript on one row of air, unless the row
     // above is already air: the break belongs between the two, not to each.
     pushGap(lines)
@@ -332,83 +305,36 @@ private pushPicker(lines: string[], picker: PickerCard, width: number): void {
         return
     }
   }
-render(width: number): string[] {
+  /** Entry folds remain local so a click does not spend every settled row's cache. */
+  private entryTag(entry: TranscriptEntry, base: string): string {
+    const open = entry.kind === 'tool' ? this.expansionOf(entry) : entry.kind === 'reasoning' ? this.reasoningOpen(entry) : undefined
+    const shape = entry.kind === 'tool' && this.subCallsOpen(entry) ? 'P' : 'p'
+    const marks = entry.kind === 'tool'
+      ? `${open === true ? '+' : '-'}${shape}${(entry.card.subCalls ?? []).map(call => (this.subCallOpen(entry.id, call.id) ? '1' : '0')).join('')}`
+      : open === true ? '+' : '-'
+    const clock = this.isLive(entry) ? `|${Math.floor(this.model.now() / SECOND_MS)}` : ''
+    return `${base}|${marks}${clock}`
+  }
+
+  render(width: number): string[] {
     if (width <= 0) return []
     const state = this.viewState
-    // The revision is part of the key: rows drawn under an older theme table
-    // must miss, or a settings change would restyle only the rows that happened
-    // to be redrawn for another reason.
-    // The air the reader asked for is part of the key for the same reason: the rows
-    // an entry holds are its own air plus its own body.
     const gaps = this.air()
-    const baseTag = `${width}|${state.expandCards ? 'c' : '-'}${state.expandReasoning ? 'r' : '-'}${state.expandSubCalls ? 'p' : '-'}|${this.theme.revision}|${gaps.messages}${gaps.steps}`
-    const lines: string[] = []
-    const spans: ClickSpan[] = []
-    const liveCopy: FrameRow[] = []
-    const settled = this.model.settledCount()
-    const entries = this.model.entries()
-    for (const [index, entry] of entries.entries()) {
-      const start = lines.length
-      // Every fold this entry can answer to is part of the tag, so clicking one
-      // message — or one call inside it — rebuilds that message alone while the
-      // rows around it stay cached.
-      const open = entry.kind === 'tool' ? this.expansionOf(entry) : entry.kind === 'reasoning' ? this.reasoningOpen(entry) : undefined
-      // Whether a program's calls are drawn is part of the key, because it moves
-      // rows the card's own fold does not: the calls come and go under a header
-      // that stays where it is, and a cached entry would keep answering with what
-      // the reader had already clicked away from.
-      const shape = entry.kind === 'tool' && this.subCallsOpen(entry) ? 'P' : 'p'
-      const marks = entry.kind === 'tool'
-        ? `${open === true ? '+' : '-'}${shape}${(entry.card.subCalls ?? []).map(call => (this.subCallOpen(entry.id, call.id) ? '1' : '0')).join('')}`
-        : open === true ? '+' : '-'
-      // A running row is drawn from a clock the rest of the row is not, so its
-      // cache is spent every second: the entries after it stay put, and a card
-      // waiting out a two-minute run keeps saying so instead of freezing at the
-      // first second it was drawn.
-      const tag = `${baseTag}|${marks}${this.isLive(entry) ? `|${Math.floor(this.model.now() / SECOND_MS)}` : ''}`
-      const local: ClickSpan[] = []
-      const copy: FrameRow[] = []
-      const rows: string[] = []
-      // The in-flight rows change on every frame, so caching them would only
-      // fill the cache with objects nobody will ask for again.
-      if (index >= settled) {
-        this.renderEntry(entry, rows, width, true, local, copy)
-        // A row still arriving is drawn every frame, so it is never cached: its
-        // copy account goes to the frame rather than to an entry nobody can name.
-        liveCopy.push(...copy)
-      } else {
-        const cached = this.rows.lookup(entry, tag)
-        const saved = this.entrySpans.get(entry)
-        const savedCopy = this.entryCopy.get(entry)
-        if (cached !== undefined && saved !== undefined && savedCopy !== undefined) {
-          rows.push(...cached)
-          local.push(...saved)
-        } else {
-          this.renderEntry(entry, rows, width, false, local, copy)
-          this.rows.store(entry, tag, rows)
-          this.entrySpans.set(entry, local)
-          this.entryCopy.set(entry, copy)
-        }
-      }
-      // The entry goes in through the seam rather than straight onto the rows drawn
-      // so far: the air it opens with is given up when the row above is already air,
-      // so a break between two things stays one break however many asked for one.
-      const base = start - placeGap(lines, rows)
-      // A span is kept relative to its entry so a cached entry can still hand it
-      // back, and the row of air a seam dropped moves it with the rows that stayed.
-      for (const span of local) {
-        spans.push({ ...span, start: span.start + base, end: span.end + base })
-      }
-    }
-    this.spans = spans
-    this.liveCopy = liveCopy
+    const keys = this.keymap()
+    // Width, folds, theme, spacing, and key hints can change without a transcript event.
+    const base = `${width}|${state.expandCards ? 'c' : '-'}${state.expandReasoning ? 'r' : '-'}${state.expandSubCalls ? 'p' : '-'}|${this.theme.revision}|${gaps.messages}:${gaps.steps}|${hintKeys(keys, 'surface.toolDetail')}|${hintKeys(keys, 'surface.reasoning')}`
+    const retained = this.document.render(width, base, this.presentationRevision)
     const picker = this.options.picker?.()
-    if (picker !== undefined) this.pushPicker(lines, picker, width)
     const gate = this.options.gate?.()
+    // pi-tui requires string[] but borrows child rows; the native PTY gate protects this pinned boundary.
+    if (picker === undefined && gate === undefined) return retained as string[]
+    // Overlays have independent mutable state and must never enter the retained conversation.
+    const lines = [...retained]
+    if (picker !== undefined) this.pushPicker(lines, picker, width)
     if (gate !== undefined) this.gates.pushGate(lines, gate, width)
     return lines
   }
-/**
+  /**
    * The framed rows the last render drew, in the order the transcript reads.
    *
    * A copy of a selection is read off the screen, so it carries the frame the
@@ -417,13 +343,6 @@ render(width: number): string[] {
    * frame back out of a copy without ever touching a character the reader wrote.
    */
   copyRows(): readonly FrameRow[] {
-    const rows: FrameRow[] = []
-    for (const entry of this.model.entries()) {
-      const saved = this.entryCopy.get(entry)
-      if (saved !== undefined) rows.push(...saved)
-    }
-    // The rows still arriving are not kept by entry, so they come from the frame.
-    rows.push(...this.liveCopy)
-    return rows
+    return this.document.copyRows()
   }
 }

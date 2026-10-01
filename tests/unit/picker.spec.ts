@@ -37,6 +37,35 @@ describe('ListPicker card window', () => {
       defaultKeymap,
     )
 
+  it.each([
+    ['emoji', '😀', '😀'],
+    ['composed commit', 'a\u0308', 'a\u0308'],
+    ['Kitty press', '\x1b[97;1u', 'a'],
+    ['Kitty repeat', '\x1b[97;1:2u', 'a'],
+    ['Kitty shifted text', '\x1b[97:65;2u', 'A'],
+    ['Kitty release', '\x1b[97;1:3u', ''],
+    ['modified command', '\x1b[97;5u', ''],
+    ['unknown control sequence', '\x1b[2J', ''],
+    ['functional key', '\x1b[57364;1u', ''],
+    ['text resembling a release', ':3u', ':3u'],
+    ['lone high surrogate', '\ud800', ''],
+    ['lone low surrogate', '\udfff', ''],
+    ['Kitty surrogate', '\x1b[55296u', ''],
+    ['malformed paste', '\x1b[200~bad\ud800\x1b[201~', ''],
+  ])('accepts filter text without leaking commands: %s', (_name, data, expected) => {
+    const list = picker(3)
+    list.handleKey(data)
+    expect(list.card().filter).toBe(expected)
+  })
+
+  it.each(['😀', 'a\u0308', '👨‍👩‍👧'])('deletes the entire pasted grapheme %s', text => {
+    const list = picker(3)
+    list.handleKey(`\x1b[200~${text}\x1b[201~`)
+    list.handleKey('\x7f')
+    expect(list.card().filter).toBe('')
+    expect(list.card().rows).toHaveLength(3)
+  })
+
   it('draws the window its caller can afford, and counts what it left out', () => {
     const card = picker(30).card(5)
     expect(card.rows).toHaveLength(5)

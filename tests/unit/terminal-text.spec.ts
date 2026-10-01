@@ -1,7 +1,11 @@
+import { performance } from 'node:perf_hooks'
 import { describe, expect, it } from 'vitest'
 import { clipVisibleGraphemes, escapeTerminalText, renderTerminalText, TAB_STOP } from '@/terminal-text.ts'
 
 const ESC = '\u001b'
+const LONG_STYLED_LINE_LENGTH = 32 * 1024
+// The broad ceiling detects multi-second input stalls without requiring a fast CI host.
+const LONG_LINE_RENDER_BUDGET_MS = 1000
 
 /**
  * Every escape sequence in a string, so a test can prove the surface only ever
@@ -50,6 +54,28 @@ describe('escapeTerminalText', () => {
 })
 
 describe('renderTerminalText', () => {
+  it('keeps long styled output from blocking interaction for a second', () => {
+    const text = 'x'.repeat(LONG_STYLED_LINE_LENGTH)
+    const started = performance.now()
+    const drawn = renderTerminalText(
+      `${ESC}[31m${text}${ESC}[0m${ESC}[2J!`,
+      { color: '16' },
+    )
+    const elapsed = performance.now() - started
+
+    expect(drawn).toBe(`${ESC}[31m${text}${ESC}[39m!`)
+    expect(elapsed).toBeLessThan(LONG_LINE_RENDER_BUDGET_MS)
+  })
+
+  it.each([
+    ['中a\bX', '中X'],
+    ['中\bX', ' X'],
+    ['a\u0308\bX', 'X'],
+    ['a\tX\bY', 'a' + ' '.repeat(TAB_STOP - 1) + 'Y'],
+  ])('keeps grapheme cells and tab gaps intact when overwriting %j', (raw, expected) => {
+    expect(renderTerminalText(raw, { color: '16' })).toBe(expected)
+  })
+
   it('draws a tab on its stop and keeps line feeds', () => {
     expect(renderTerminalText('a\tb\nc', { color: '16' })).toBe(`a${' '.repeat(TAB_STOP - 1)}b\nc`)
   })

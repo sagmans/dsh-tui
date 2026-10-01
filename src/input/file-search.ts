@@ -1,4 +1,10 @@
+import { setImmediate } from 'node:timers/promises'
+import { performance } from 'node:perf_hooks'
 import { fuzzyScore } from './fuzzy.ts'
+
+/** Ranking must give a newer keyboard event time to cancel obsolete work. */
+const RANK_BATCH_SIZE = 256
+const RANK_SLICE_MS = 4
 
 /** One row the workspace offers: a file, or a directory to open. */
 export interface Candidate {
@@ -164,18 +170,27 @@ export function offerableCandidate(candidate: Candidate): boolean {
  * file — a directory is a place to keep typing, a file ends the search — then
  * to the shallower, shorter path, which is the one the reader is likelier to
  * mean.
+ *
+ * Cooperative scoring prevents a large live completion from taking the editor's keyboard.
  */
-export function rankFiles(query: string, candidates: readonly Candidate[], limit: number): readonly Candidate[] {
+export async function rankFilesAsync(query: string, candidates: readonly Candidate[], limit: number, signal: AbortSignal): Promise<readonly Candidate[]> {
+  if (signal.aborted) return []
   const needle = query.trim()
   if (needle === '') return topLevel(candidates, limit)
-  const scored: { candidate: Candidate; score: number }[] = []
+  const scored: Scored[] = []
+  let batch = 0
+  let deadline = performance.now() + RANK_SLICE_MS
   for (const candidate of candidates) {
     const score = fuzzyScore(needle, candidate.path)
-    if (score === undefined) continue
-    scored.push({ candidate, score })
+    if (score !== undefined) scored.push({ candidate, score })
+    if (++batch >= RANK_BATCH_SIZE || performance.now() >= deadline) {
+      await setImmediate()
+      if (signal.aborted) return []
+      batch = 0
+      deadline = performance.now() + RANK_SLICE_MS
+    }
   }
-  scored.sort((left, right) => compareScored(left, right))
-  return scored.slice(0, limit).map(entry => entry.candidate)
+  return scored.sort(compareScored).slice(0, limit).map(entry => entry.candidate)
 }
 
 interface Scored {

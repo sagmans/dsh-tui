@@ -4,7 +4,7 @@ import {
   type AutocompleteSuggestions,
   type SlashCommand,
 } from '@earendil-works/pi-tui'
-import { atToken, atValue, offerableCandidate, rankFiles, SUGGESTION_LIMIT, type Candidate } from './file-search.ts'
+import { atToken, atValue, offerableCandidate, rankFilesAsync, SUGGESTION_LIMIT, type Candidate } from './file-search.ts'
 import { createFileIndex, type FileIndex } from './file-index.ts'
 import { LOCAL_COMMANDS, LOCAL_COMMAND_DESCRIPTIONS } from './submission.ts'
 import { renderTerminalText } from '../terminal-text.ts'
@@ -94,7 +94,8 @@ class WorkspaceFileProvider extends CombinedAutocompleteProvider {
       // insert is checked here as well: a row the menu cannot draw honestly,
       // or cannot follow up on, must not reach the prompt.
       const offerable = candidates.filter(candidate => offerableCandidate(candidate))
-      const ranked = rankFiles(token.query, offerable, SUGGESTION_LIMIT)
+      const ranked = await rankFilesAsync(token.query, offerable, SUGGESTION_LIMIT, options.signal)
+      if (options.signal.aborted) return null
       // The listing is a snapshot, so every row is proven again as it is
       // offered: a path the workspace no longer holds, or one whose link now
       // points out of it, must not reach the prompt. The proofs run together so

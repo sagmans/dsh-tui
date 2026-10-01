@@ -231,8 +231,8 @@ describe('QuestionGate free-text row', () => {
     })
   it('returns the cursor to the row the free-text row was entered from', () => {
       const gate = providerGate()
-      gate.handleKey('down')
-      gate.handleKey('down')
+      gate.handleKey(DOWN)
+      gate.handleKey(DOWN)
       const left = gate.card().options.find(option => option.current)?.label
       expect(left).toBeDefined()
       gate.handleKey('0')

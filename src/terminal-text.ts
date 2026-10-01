@@ -148,15 +148,20 @@ export function renderTerminalText(raw: string, options: RenderTextOptions): str
   let out = ''
 
   const write = (text: string, width: number): void => {
+    const last = cells[cells.length - 1]
     if (width === 0) {
-      const last = cells[cells.length - 1]
       if (last !== undefined && last.col + last.width === cursor) last.text += text
       return
     }
-    cells = cells.filter(cell => cell.col >= cursor + width || cell.col + cell.width <= cursor)
-    let at = cells.findIndex(cell => cell.col >= cursor + width)
-    if (at < 0) at = cells.length
-    cells.splice(at, 0, { col: cursor, width, text, style })
+    // Styled append-only output must not rescan its whole row for each grapheme.
+    if (last === undefined || cursor >= last.col + last.width) {
+      cells.push({ col: cursor, width, text, style })
+    } else {
+      cells = cells.filter(cell => cell.col >= cursor + width || cell.col + cell.width <= cursor)
+      let at = cells.findIndex(cell => cell.col >= cursor + width)
+      if (at < 0) at = cells.length
+      cells.splice(at, 0, { col: cursor, width, text, style })
+    }
     cursor += width
   }
 

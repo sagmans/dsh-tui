@@ -6,7 +6,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { rmSync } from 'node:fs'
 import { createCompletionProvider } from '@/input/completion.ts'
-import { atToken, atValue, rankFiles, SUGGESTION_LIMIT } from '@/input/file-search.ts'
+import { atToken, atValue, rankFilesAsync, SUGGESTION_LIMIT } from '@/input/file-search.ts'
 import { scratch, file, directory, signal } from './fixtures/workspace.ts'
 
 afterEach(() => {
@@ -37,34 +37,34 @@ describe('atToken', () => {
     })
 })
 
-describe('rankFiles', () => {
-  it('lists top-level entries for an empty fragment, directories first', () => {
+describe('rankFilesAsync', () => {
+  it('lists top-level entries for an empty fragment, directories first', async () => {
       const candidates = [file('src/deep.ts'), directory('src'), file('README.md'), file('src.ts')]
-      expect(rankFiles('', candidates, 20).map(entry => entry.path)).toEqual(['src', 'README.md', 'src.ts'])
+      expect((await rankFilesAsync('', candidates, SUGGESTION_LIMIT, signal)).map(entry => entry.path)).toEqual(['src', 'README.md', 'src.ts'])
     })
   /**
      * The order below is the order the fzf binary prints for the same fragment
      * and paths, so the file list ranks the way the finder readers know.
      */
-    it('ranks a workspace the way fzf ranks the same paths', () => {
+    it('ranks a workspace the way fzf ranks the same paths', async () => {
       const candidates = [
         file('docs/editor-notes/old.md'),
         file('tests/unit/editor.spec.ts'),
         file('src/ui/editor.ts'),
       ]
-      expect(rankFiles('edtr', candidates, 20).map(entry => entry.path)).toEqual([
+      expect((await rankFilesAsync('edtr', candidates, SUGGESTION_LIMIT, signal)).map(entry => entry.path)).toEqual([
         'src/ui/editor.ts',
         'docs/editor-notes/old.md',
         'tests/unit/editor.spec.ts',
       ])
     })
-  it('lets a fragment scoped to a directory lead with that directory', () => {
+  it('lets a fragment scoped to a directory lead with that directory', async () => {
       const candidates = [file('src/input/completion.ts'), file('src/ui/editor.ts')]
-      expect(rankFiles('src/ui', candidates, 20).map(entry => entry.path)).toEqual(['src/ui/editor.ts', 'src/input/completion.ts'])
+      expect((await rankFilesAsync('src/ui', candidates, SUGGESTION_LIMIT, signal)).map(entry => entry.path)).toEqual(['src/ui/editor.ts', 'src/input/completion.ts'])
     })
-  it('keeps a directory above a file it ties with, so it can be opened', () => {
+  it('keeps a directory above a file it ties with, so it can be opened', async () => {
       const candidates = [file('src/app.ts'), directory('src/app')]
-      expect(rankFiles('app', candidates, 20).map(entry => entry.path)).toEqual(['src/app', 'src/app.ts'])
+      expect((await rankFilesAsync('app', candidates, SUGGESTION_LIMIT, signal)).map(entry => entry.path)).toEqual(['src/app', 'src/app.ts'])
     })
   it('holds the list to the suggestions a menu can show', async () => {
       // The cap is the menu's own, so the rows are gathered through the provider
@@ -78,9 +78,9 @@ describe('rankFiles', () => {
       const found = await provider.getSuggestions(['@file'], 0, 5, { signal })
       expect(found?.items).toHaveLength(SUGGESTION_LIMIT)
     })
-  it('matches a path whose spaces were quoted', () => {
+  it('matches a path whose spaces were quoted', async () => {
       const candidates = [file('docs/my file.md'), file('docs/other.md')]
-      expect(rankFiles('my file', candidates, 20).map(entry => entry.path)).toEqual(['docs/my file.md'])
+      expect((await rankFilesAsync('my file', candidates, SUGGESTION_LIMIT, signal)).map(entry => entry.path)).toEqual(['docs/my file.md'])
     })
 })
 

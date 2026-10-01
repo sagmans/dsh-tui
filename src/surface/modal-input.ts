@@ -31,6 +31,8 @@ export interface Picker {
 /** The one picker a terminal can present at a time, and how it settles its caller. */
 interface PendingPicker {
   readonly picker: Picker
+  /** A verdict can lock only the list that requested it. */
+  vetting: boolean
   readonly settle: (id: string | undefined) => void
   /**
    * Why this run cannot open an id, or undefined when it can.
@@ -77,6 +79,7 @@ export interface ModalInput {
   readonly gateCard: () => GateCard | undefined
   /** The card a pending picker draws in the transcript, when it draws one there. */
   readonly pickerCard: () => PickerCard | undefined
+  /** Busy and disposed owners fail closed with the same no-selection outcome as reader cancellation. */
   readonly openPicker: (
     picker: Picker,
     vet?: (id: string) => Promise<string | undefined>,
@@ -100,8 +103,9 @@ export interface ModalInput {
 export function createModalInput(ctx: Context, ports: ModalInputPorts): ModalInput {
   let pending: PendingGate | undefined
   let pendingPicker: PendingPicker | undefined
-  /** A pick being vetted owns the list, not the keyboard: filtering stays live while its verdict is read. */
-  let vetting = false
+  let disposed = false
+  // One decision keeps its keyboard; disposal permanently closes admission.
+  const occupied = (): boolean => disposed || pending !== undefined || pendingPicker !== undefined
 
   const openGate = (next: PendingGate): void => {
     pending = next
@@ -157,8 +161,9 @@ export function createModalInput(ctx: Context, ports: ModalInputPorts): ModalInp
     picker: Picker,
     vet?: (id: string) => Promise<string | undefined>,
     placement: 'inline' | 'popup' = 'inline',
-  ): Promise<string | undefined> =>
-    new Promise<string | undefined>(resolve => {
+  ): Promise<string | undefined> => {
+    if (occupied()) return Promise.resolve(undefined)
+    return new Promise<string | undefined>(resolve => {
       const overlay = placement === 'popup'
         ? ports.tui.showOverlay(
             new PickerPopup(rows => picker.card(rows), () => ports.terminal.rows, ports.theme),
@@ -176,6 +181,7 @@ export function createModalInput(ctx: Context, ports: ModalInputPorts): ModalInp
         : undefined
       pendingPicker = {
         picker,
+        vetting: false,
         settle: resolve,
         vet,
         card: overlay === undefined ? () => picker.card() : undefined,
@@ -193,6 +199,7 @@ export function createModalInput(ctx: Context, ports: ModalInputPorts): ModalInp
       ports.tui.setFocus(null)
       ports.tui.requestRender()
     })
+  }
 
   /**
    * Read one press while a modal interaction owns the keyboard.
@@ -222,12 +229,13 @@ export function createModalInput(ctx: Context, ports: ModalInputPorts): ModalInp
       return true
     }
     if (pendingPicker !== undefined) {
-      const action = pendingPicker.picker.handleKey(data)
+      const current = pendingPicker
+      const action = current.picker.handleKey(data)
       if (action === undefined) {
         ports.tui.requestRender()
         return true
       }
-      if (vetting) {
+      if (current.vetting) {
         // A refusal check must not take the keyboard with it: the reader keeps
         // filtering and can still leave, while a second pick waits for the
         // first verdict rather than racing it.
@@ -238,12 +246,12 @@ export function createModalInput(ctx: Context, ports: ModalInputPorts): ModalInp
         settlePicker(undefined)
         return true
       }
-      const vet = pendingPicker.vet
+      const vet = current.vet
       if (vet === undefined) {
         settlePicker(action.id)
         return true
       }
-      vetting = true
+      current.vetting = true
       void (async () => {
         let reason: string | undefined
         let vetCrashed = false
@@ -256,9 +264,9 @@ export function createModalInput(ctx: Context, ports: ModalInputPorts): ModalInp
           vetCrashed = true
         } finally {
           // A check that fails must not take the keyboard with it.
-          vetting = false
+          current.vetting = false
         }
-        if (pendingPicker === undefined) return
+        if (pendingPicker !== current) return
         if (vetCrashed) {
           settlePicker(undefined)
           return
@@ -267,13 +275,25 @@ export function createModalInput(ctx: Context, ports: ModalInputPorts): ModalInp
           settlePicker(action.id)
           return
         }
-        pendingPicker.picker.setNote(reason)
+        current.picker.setNote(reason)
         ports.tui.requestRender()
       })()
       return true
     }
     return false
   }
+
+  // Waiting callers must settle before an unloaded surface loses its keyboard and overlay resources.
+  ctx.effect(() => () => {
+    disposed = true
+    if (pending !== undefined) {
+      pending.gate.cancel()
+      if (pending.kind === 'approval') pending.settle('cancelled')
+      else pending.settle([])
+      closeGate()
+    }
+    if (pendingPicker !== undefined) settlePicker(undefined)
+  })
 
   return {
     gateCard: () => pending?.gate.card(),
@@ -286,14 +306,21 @@ export function createModalInput(ctx: Context, ports: ModalInputPorts): ModalInp
       // questions never reach the human.
       ctx.on('approval/request', (request, next) => {
         if (request.agent.id !== ports.activeSession()) return next()
+        if (occupied() || request.signal?.aborted === true) return Promise.resolve<ApprovalOutcome>('cancelled')
         return new Promise<ApprovalOutcome>(resolve => {
           const gate = new ApprovalGate(request.toolName, request.reason, ports.keymap)
-          request.signal?.addEventListener('abort', () => {
+          const settle = (outcome: ApprovalOutcome): void => {
+            request.signal?.removeEventListener('abort', onAbort)
+            resolve(outcome)
+          }
+          const onAbort = (): void => {
             gate.cancel()
             if (pending?.gate === gate) closeGate()
-            resolve('cancelled')
-          }, { once: true })
-          openGate({ kind: 'approval', gate, settle: resolve })
+            settle('cancelled')
+          }
+          openGate({ kind: 'approval', gate, settle })
+          request.signal?.addEventListener('abort', onAbort, { once: true })
+          if (request.signal?.aborted === true) onAbort()
         })
       }),
       ctx.on('user-questions/request', (request, next) => {
@@ -301,6 +328,7 @@ export function createModalInput(ctx: Context, ports: ModalInputPorts): ModalInp
         if (agentId !== undefined && agentId !== ports.activeSession()) return next()
         const questions = toGateQuestions(request)
         if (questions.length === 0) return next()
+        if (occupied()) return Promise.resolve<AskUserQuestionAnswer>({ answers: [] })
         return new Promise<AskUserQuestionAnswer>(resolve => {
           const gate = ports.promptBar.borrow(() => {
             // The bar is an answer's for as long as the gate holds it, so the menu

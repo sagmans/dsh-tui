@@ -62,6 +62,9 @@ const KITTY_CTRL_J = '\u001b[106;5u'
  * character before treating the sequence as padding.
  */
 const CURSOR_AT_END = '\u001b[7m \u001b[0m'
+/** Only acceptance chords need a live consent projection before changing the draft. */
+const GHOST_ACCEPT_ALL_KEY = 'ctrl+e'
+const GHOST_WORD_RIGHT_ACTION = 'tui.editor.cursorWordRight'
 
 /** Which run of a ghost is being drawn: the cursor cell, or the text after it. */
 export type GhostCell = 'cursor' | 'rest'
@@ -83,7 +86,7 @@ export interface GhostRequest {
 export interface GhostBrush {
   /** Whether the affordance may draw at all; colour and settings decide this. */
   enabled(): boolean
-  /** The suffix to offer after the typed text, or undefined for none. */
+  /** Probe already-loaded entries only: consent must gate exposure, not trigger storage access. */
   suggestion(input: GhostRequest): string | undefined
   /** Paint one run of the suffix; '' leaves the run undrawn. */
   paint(text: string, cell: GhostCell): string
@@ -185,7 +188,7 @@ export class BoxedEditor extends Editor {
   /** The suggestion to draw this paint, or undefined when the brush offers none. */
   private currentGhostSuffix(): string | undefined {
     const brush = this.ghost
-    if (brush === undefined || !brush.enabled()) return undefined
+    if (brush === undefined) return undefined
     const lines = this.getLines()
     const cursor = this.getCursor()
     // A cursor parked over a typed space draws the same cell as one at the very
@@ -199,7 +202,8 @@ export class BoxedEditor extends Editor {
     const suffix = brush.suggestion({ text: this.getExpandedText(), lines, cursor })
     // The bar paints this text itself, so it is drawn without colour: a sequence
     // the brush offered must not escape the face the bar is drawing it in.
-    return suffix === undefined ? undefined : renderTerminalText(suffix, { color: 'none' })
+    // An absent cached match cannot expose history; projecting every plugin's settings here would stall ordinary typing.
+    return suffix === undefined || !brush.enabled() ? undefined : renderTerminalText(suffix, { color: 'none' })
   }
 
   /**
@@ -240,16 +244,18 @@ export class BoxedEditor extends Editor {
    * its own meaning the moment nothing is offered.
    */
   private acceptGhost(data: string): boolean {
+    const wordRight = getKeybindings().matches(data, GHOST_WORD_RIGHT_ACTION)
+    // Normal input cannot accept a ghost, so it must not pay for history consent or lookup.
+    if (!wordRight && !matchesKey(data, GHOST_ACCEPT_ALL_KEY)) return false
     const suffix = this.currentGhostSuffix()
     if (suffix === undefined) return false
-    if (getKeybindings().matches(data, 'tui.editor.cursorWordRight')) {
+    if (wordRight) {
       const word = nextGhostWord(suffix)
       if (word === undefined) return false
       this.insertTextAtCursor(word)
       this.tui.requestRender()
       return true
     }
-    if (!matchesKey(data, 'ctrl+e')) return false
     this.insertTextAtCursor(suffix)
     this.tui.requestRender()
     return true

@@ -17,13 +17,16 @@ History: [CHANGELOG.md](CHANGELOG.md).
 | Release-helper guards (python3 >= 3.11) | `pnpm test:release` |
 | Build `src` into `lib` | `pnpm run build` |
 | Tarball inventory check | `node tools/pack-smoke.mjs` |
+| Native widget PTY invariants | `pnpm test:terminal` |
 | Drive the real surface in a PTY | `node tools/pty-drive.mjs --home <clone> --prompt 'Reply with exactly: pong'` |
 | Dogfood a worktree in a cloned home | `./scripts/dogfood/run-tui-from-worktree.sh <worktree name or path>` |
 
 `.github/workflows/ci.yml` is the completion gate, in this order: `pnpm install
 --frozen-lockfile`, `npm audit signatures`, `pnpm typecheck`, `pnpm test`,
-`pnpm test:release`, `node tools/pack-smoke.mjs`. Terminal behaviour is not
-proven by that gate — use the cloned-home PTY command above and read its screen.
+`pnpm test:release`, `node tools/pack-smoke.mjs`, `pnpm test:terminal`. The native
+widget gate checks input, redraw, resize, and restoration without credentials.
+It does not prove full-profile composition or hardware input-to-pixel latency.
+Use the cloned-home PTY command above and read its screen for actual profile usage.
 
 ## Map
 

@@ -8,6 +8,41 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+### Fixed
+
+- Deferred host output and warning text obey UTF-8 byte budgets; oversized
+  diagnostics drop whole with counts instead of remaining unbounded. Warning event
+  retention also has a count bound, preserving retained event identities.
+- Recovered frame rendering allows a later failure to report again without
+  flooding repeated retries. A throwing frame-error reporter cannot escape the
+  render timer; its fallback warning waits for shell restoration.
+- Warning loss notices show one count without repeating the warning unit.
+- Large workspace completion yields during scoring so newer keyboard input can
+  cancel obsolete rankings before filesystem proofs. Path containment checks remain unchanged.
+- Picker navigation and repainting reuse unchanged filter rankings while
+  preserving late titles, source order, and replacement rows.
+- Canceled picker checks cannot settle or unlock a replacement picker.
+  Already-aborted approvals stay closed; concurrent modal requests fail closed
+  instead of replacing the active decision. Disposal settles waiting callers.
+- Picker and question filters accept Unicode commits and Kitty printable
+  press/repeat events. Backspace removes complete graphemes; releases and
+  functional keys cannot insert text or repeat actions.
+- Typing reuses unchanged transcript rows, live Markdown, click targets, and copy
+  metadata instead of rebuilding the conversation on every keyboard frame.
+  Stream changes, folding, theme changes, overlays, and live clocks remain current.
+- The prompt keeps its draft, cursor, and footer visible without measuring the
+  editor through a redundant layout wrapper on every frame.
+- Long styled model and tool output no longer stalls typing while the terminal
+  text renderer appends a line. Cursor rewrites and escape suppression retain
+  their existing behavior.
+- Warning loss notices no longer replace the original diagnostic for one-shot consumers. Opaque Error metadata and custom accessors cannot bypass the retention budget.
+- Picker and question filters reject malformed Unicode scalar input without affecting valid emoji or combining text.
+- Borrowed transcript frames cannot be mutated into stale rows or mismatched copy metadata.
+- Workspace ranking tests exercise the cooperative production path instead of a duplicated synchronous implementation.
+- One-row terminals keep the draft visible; two-row terminals keep both input and the footer even under dock and queue pressure.
+- Legacy emoji survives the pinned terminal decoder’s split UTF-16 delivery without admitting malformed filter commits. Native PTY CI now guards input, redraw, resize, and shell restoration without credentials or timing thresholds on shared runners.
+- Ordinary typing and unmatched prompt-history prefixes no longer rebuild every plugin’s settings forms. Fresh consent still gates each ghost suggestion before it appears or enters the draft.
+
 ### Changed
 
 - Every queued prompt and every work dock board opens with one blank row. Rails
@@ -60,6 +95,7 @@ Not published: release signature verification failed. Its changes ship in 0.12.1
 
 - User messages, assistant replies, queued prompts, and the prompt bar use a thin
   left rail instead of enclosing borders, keeping conversations visually quiet.
+
 
 ## [0.11.2] - 2026-09-30
 

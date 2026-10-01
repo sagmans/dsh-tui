@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { stripTerminalSequences, type Component, type TUI, type TuiMouseEvent } from '@earendil-works/pi-tui'
 import { getLayoutBoxesAt, renderLayoutFrame } from '@earendil-works/pi-tui/dist/layout.js'
 import { dispatchMouseEvent } from '@earendil-works/pi-tui/dist/tui.js'
@@ -6,6 +6,15 @@ import { createTheme } from '@/theme.ts'
 import { BoxedEditor } from '@/ui/editor.ts'
 import { PROMPT_MIN_ROWS, surfaceLayout } from '@/ui/layout.ts'
 import { PromptBar } from '@/ui/prompt.ts'
+
+const MAX_PROMPT_RENDER_PASSES = 2
+const TINY_HEIGHTS = [1, 2, 3]
+const TINY_WIDTHS = [20, 40, 80, 120, 200]
+const TINY_DRAFT = 'draft'
+const TINY_FOOTER = 'status'
+const LARGE_TRANSCRIPT_ROWS = 40
+const LARGE_DOCK_ROWS = 16
+const LARGE_QUEUE_ROWS = 8
 
 /** The surface only ever lends the editor its terminal size and a repaint. */
 const STUB_TUI = { requestRender: () => {}, terminal: { rows: 24, columns: 80 } } as unknown as TUI
@@ -23,6 +32,42 @@ function promptOf(text: string): { prompt: PromptBar; editor: BoxedEditor } {
 }
 
 describe('the surface root layout', () => {
+  it.each(TINY_HEIGHTS.flatMap(height => TINY_WIDTHS.map(width => ({ height, width }))))(
+    'keeps input at $width columns by $height rows under dock and queue pressure', ({ height, width }) => {
+      const { prompt, editor } = promptOf(TINY_DRAFT)
+      const root = surfaceLayout({
+        transcript: rowsOf('row', LARGE_TRANSCRIPT_ROWS),
+        dock: rowsOf('dock', LARGE_DOCK_ROWS),
+        queue: rowsOf('queued', LARGE_QUEUE_ROWS),
+        prompt,
+        status: rowsOf(TINY_FOOTER, 1),
+      })
+      const frame = renderLayoutFrame(root, width, height, () => {})
+      expect(frame.lines).toHaveLength(height)
+      expect(frame.lines.some(line => line.includes(TINY_DRAFT))).toBe(true)
+      if (height > 1) expect(frame.lines.some(line => line.includes(TINY_FOOTER))).toBe(true)
+      expect(editor.getText()).toBe(TINY_DRAFT)
+    },
+  )
+
+  it('does not add an editor measurement beyond the prompt layout and placement', () => {
+    const { prompt, editor } = promptOf('the draft')
+    const render = vi.spyOn(editor, 'render')
+    const root = surfaceLayout({
+      transcript: rowsOf('row', 40),
+      dock: rowsOf('dock', 16),
+      queue: rowsOf('queued', 0),
+      prompt,
+      status: rowsOf('status', 1),
+    })
+
+    const frame = renderLayoutFrame(root, 80, 12, () => {})
+
+    expect(frame.lines.some(line => line.includes('the draft'))).toBe(true)
+    // pi-tui measures the prompt before placing its editor; another wrapper costs a third pass.
+    expect(render.mock.calls.length).toBeLessThanOrEqual(MAX_PROMPT_RENDER_PASSES)
+  })
+
   it('keeps the draft and the footer when the dock wants more rows than the terminal has', () => {
     const { prompt } = promptOf('the draft')
     const root = surfaceLayout({
