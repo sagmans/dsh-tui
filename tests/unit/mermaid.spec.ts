@@ -15,6 +15,11 @@ vi.mock('lovely-mermaid', async (importOriginal) => {
 
 /** The renderer is handed text the view already escaped, so fixtures carry no controls. */
 const SIMPLE = ['```mermaid', 'flowchart LR', '  A[Start] --> B[Done]', '```'].join('\n')
+const STREAMING_WIDTH = 80
+const STREAMING_DELTAS = 3
+const OVERFLOW_REPLY = Array.from({ length: MERMAID_CACHE_LIMIT + 1 }, (_, index) =>
+  ['```mermaid', 'flowchart TB', `  N${index} --> M${index}`, '```'].join('\n'),
+).join('\n\n')
 
 /** The token types a message lexes to, so a drawing cannot silently change the structure around it. */
 function lex(markdown: string): string[] {
@@ -160,6 +165,20 @@ describe('the mermaid mode', () => {
 })
 
 describe('a drawn diagram', () => {
+  it('keeps overflowing replies within retained layout capacity during streaming', () => {
+    const draw = transform()
+    const before = vi.mocked(render).mock.calls.length
+    const initial = draw(OVERFLOW_REPLY, STREAMING_WIDTH, true)
+    expect(vi.mocked(render).mock.calls.length - before).toBe(MERMAID_CACHE_LIMIT)
+    expect(initial).toContain('```mermaid')
+    const retained = vi.mocked(render).mock.calls.length
+    for (let delta = 0; delta < STREAMING_DELTAS; delta += 1) {
+      const tail = `\n\nstreaming ${delta}`
+      expect(draw(OVERFLOW_REPLY + tail, STREAMING_WIDTH, true)).toBe(initial + tail)
+    }
+    expect(vi.mocked(render).mock.calls.length).toBe(retained)
+  })
+
   it('adds no escape of its own when colour is off', () => {
     expect(transform()(SIMPLE, 80, false)).not.toContain('\u001b')
   })

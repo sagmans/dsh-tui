@@ -197,12 +197,14 @@ export function createMermaidTransform(options: MermaidOptions): MermaidTransfor
 
     let out = ''
     let cursor = 0
+    let fences = 0
     for (const token of parser.lexer(markdown)) {
       const at = markdown.indexOf(token.raw, cursor)
       // A lexer that rewrote its own input cannot be spliced back into it, and
       // the message is worth more than the drawing: it stays as written.
       if (at < 0) return markdown
-      const body = isMermaidFence(token)
+      // A reply must not evict its own drawing window on every streaming delta; overflow stays readable source.
+      const body = isMermaidFence(token) && fences++ < MERMAID_CACHE_LIMIT
         ? fenceBlock(token, out, markdown.slice(at + token.raw.length), availableWidth, live)
         : token.raw
       out += markdown.slice(cursor, at) + body
