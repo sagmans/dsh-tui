@@ -17,6 +17,8 @@ const RECEIPT = 'terminal-behavior-receipt:'
 const QUIT_KEY = 'ctrl+c'
 const PICKER_KEY = 'ctrl+p'
 const SETTLED_MESSAGES = 100
+const LARGE_MESSAGE_CHARACTERS = 150_000
+const LARGE_MESSAGE_TEXT = 'z'
 const STYLED_CHARACTERS = 8000
 const STREAM_INTERVAL_MS = 20
 const STREAM_TEXT = '.'
@@ -43,6 +45,7 @@ const model = new TranscriptModel()
 const pending = []
 const latency = []
 const failures = []
+const renderedWidths = new Set()
 let pickerOpen = false
 let ended = false
 let enteredRawMode = false
@@ -57,6 +60,8 @@ terminal.write = data => {
 for (let index = 0; index < SETTLED_MESSAGES; index++) {
   model.apply({ type: MESSAGE_EVENT, data: { message: { content: [{ type: TEXT_CONTENT, text: `settled ${index}` }] } } })
 }
+// A retained message exercises the argument-safe row and copy paths when the driver narrows the terminal.
+model.apply({ type: MESSAGE_EVENT, data: { message: { content: [{ type: TEXT_CONTENT, text: LARGE_MESSAGE_TEXT.repeat(LARGE_MESSAGE_CHARACTERS) }] } } })
 model.applyStreamChunk({ type: TEXT_DELTA, text: `${SGR_START}${STYLED_TEXT.repeat(STYLED_CHARACTERS)}${CARRIAGE_RETURN}${REPAINT_TEXT.repeat(STYLED_CHARACTERS)}${SGR_END}` })
 const picker = new ListPicker(
   () => PICKER_ROWS, () => PICKER_TITLE, row => row.label,
@@ -68,7 +73,13 @@ const view = new TranscriptView(model, theme, new MarkdownRenderer(theme.markdow
 })
 const editor = new BoxedEditor(tui, theme.editor)
 const empty = { render: () => [], invalidate: () => {} }
-const status = { render: () => [READY], invalidate: () => {} }
+const status = {
+  render: width => {
+    renderedWidths.add(width)
+    return [READY]
+  },
+  invalidate: () => {},
+}
 
 /** A receipt survives outside the alternate screen so the driver can prove semantic retention and restoration. */
 function finish() {
@@ -85,6 +96,8 @@ function finish() {
     failures,
     settledMessages: SETTLED_MESSAGES,
     styledCharacters: STYLED_CHARACTERS,
+    largeMessageCharacters: LARGE_MESSAGE_CHARACTERS,
+    renderedWidths: [...renderedWidths],
     outputSamples: sorted.length,
     dispatchToWriteP95Ms: sorted[Math.floor(sorted.length * LATENCY_QUANTILE)] ?? null,
   }
@@ -93,7 +106,7 @@ function finish() {
   })
 }
 tui.onFrameError = error => {
-  failures.push(String(error))
+  failures.push(error instanceof Error ? error.stack ?? String(error) : String(error))
   finish()
 }
 tui.addInputListener(data => {

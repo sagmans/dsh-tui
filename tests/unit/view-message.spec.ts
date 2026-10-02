@@ -13,7 +13,29 @@ import { MarkdownRenderer } from '@/ui/markdown.ts'
 import { TranscriptView } from '@/ui/view.ts'
 import { theme, COLLAPSED, viewOf, mouse } from './fixtures/transcript-view.ts'
 
+const LARGE_MESSAGE_CHARACTERS = 150_000
+const RESIZE_WIDTHS = [80, 1, 2, 80]
+
 describe('TranscriptView text', () => {
+  it('retains a large message and its copy rows across narrow resizes and cached redraws', () => {
+    const text = 'x'.repeat(LARGE_MESSAGE_CHARACTERS)
+    const model = new TranscriptModel()
+    model.apply({ type: 'assistant/message', data: { message: { content: [{ type: 'text', text }] } } })
+    const view = viewOf(model)
+    for (const width of RESIZE_WIDTHS) {
+      const lines = view.render(width)
+      // One column cannot fit the existing frame padding; its row accounts must still survive.
+      if (width > 1) expect(lines.join('').replace(/[^x]/gu, '').length).toBe(text.length)
+      expect(view.copyRows().length).toBeGreaterThan(0)
+      if (width > 1) expect(view.copyRows().map(row => row.drawn).join('').replace(/[^x]/gu, '').length).toBe(text.length)
+      if (width === 1) expect(view.copyRows().length).toBeGreaterThanOrEqual(LARGE_MESSAGE_CHARACTERS)
+      model.apply({ type: 'assistant/message', data: { message: { content: [{ type: 'text', text: 'notice' }] } } })
+      const cached = view.render(width)
+      expect(cached.length).toBeGreaterThanOrEqual(lines.length)
+      if (width > 1) expect(cached.join('').replace(/[^x]/gu, '').length).toBe(text.length)
+    }
+  })
+
   it('renders assistant text as markdown inside its frame', () => {
       const model = new TranscriptModel()
       model.apply({ type: 'assistant/message', data: { message: { content: [{ type: 'text', text: '# Title\n\nplain **strong**' }] } } })

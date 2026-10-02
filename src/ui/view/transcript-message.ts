@@ -128,8 +128,11 @@ export class Messages {
       // touching, and so do the rows of a turn after them. The rows are the
       // frame's own and carry no text, so a copy of the message leaves them out.
       const air = gapRows(this.context.spacing().messages)
-      lines.push(...air, ...block.drawn, ...air)
-      copy.push(...block.copy)
+      // Retained messages can exceed the engine's function-argument limit on narrow terminals.
+      for (const rows of [air, block.drawn, air]) {
+        for (const row of rows) lines.push(row)
+      }
+      for (const row of block.copy) copy.push(row)
     }
   /**
      * The face a thought is drawn in.

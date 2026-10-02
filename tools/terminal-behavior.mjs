@@ -40,13 +40,16 @@ const CURSOR_HIDE = '\x1b[?25l'
 const BLINK_ENABLED = '\x1b[?12h'
 const CURSOR_MODES_RESTORED = '\x1b[?1004r\x1b[?12r'
 const TINY_HEIGHTS = [1, 2, 3]
+const RESIZE_WIDTHS = [1, COLS]
 const DIAGNOSTIC_TAIL_CHARACTERS = 2000
 const EXIT_SUCCESS = 0
 
 let output = ''
 let readyOffset
+let restoreOffset
 let exited = false
 const ready = Promise.withResolvers()
+const restored = Promise.withResolvers()
 const exit = Promise.withResolvers()
 const deadline = Promise.withResolvers()
 const child = pty.spawn(process.execPath, [CHILD], {
@@ -58,6 +61,7 @@ const watchdog = setTimeout(() => {
 }, TIMEOUT_MS)
 child.onData(data => {
   output += data
+  if (restoreOffset !== undefined && output.includes(READY, restoreOffset)) restored.resolve()
   if (readyOffset === undefined && output.includes(READY)) {
     readyOffset = output.length
     ready.resolve()
@@ -65,12 +69,24 @@ child.onData(data => {
 })
 child.onExit(status => {
   exited = true
+  restored.resolve()
   exit.resolve(status)
   if (readyOffset === undefined) ready.reject(new Error(`terminal-behavior: child exited before readiness (${status.exitCode})`))
 })
 
 try {
   await Promise.race([ready.promise, deadline.promise])
+  // An empty editor isolates transcript overflow from the dependency's narrow wide-grapheme wrapping.
+  for (const width of RESIZE_WIDTHS) {
+    assert.equal(exited, false, output.slice(-DIAGNOSTIC_TAIL_CHARACTERS))
+    if (width === COLS) restoreOffset = output.length
+    child.resize(width, ROWS)
+    await delay(DRAIN_MS)
+  }
+  // Linux resize delivery is asynchronous; visible wide-frame output must precede Unicode typing.
+  await Promise.race([restored.promise, deadline.promise])
+  assert.equal(exited, false, output.slice(-DIAGNOSTIC_TAIL_CHARACTERS))
+  const typingOffset = output.length
   for (let index = 0; index < ASCII_COUNT; index++) {
     child.write(ASCII_KEY)
     await delay(KEY_INTERVAL_MS)
@@ -94,7 +110,7 @@ try {
     await delay(DRAIN_MS)
   }
   // Byte encoding replaces lone surrogates; component tests, not a fabricated PTY claim, prove malformed scalar behavior.
-  assert.equal(output.slice(readyOffset).match(ERASE_DISPLAY)?.length ?? 0, 0, 'typing must not clear the whole screen')
+  assert.equal(output.slice(typingOffset).match(ERASE_DISPLAY)?.length ?? 0, 0, 'typing must not clear the whole screen')
   for (const height of TINY_HEIGHTS) {
     child.resize(COLS, height)
     await delay(DRAIN_MS)
@@ -110,11 +126,12 @@ try {
   assert.equal(receipt.enteredRawMode, true, 'native TTY never entered raw mode')
   assert.equal(receipt.rawMode, false, 'terminal stayed in raw mode')
   assert.deepEqual(receipt.failures, [], 'native frame failed')
+  for (const width of RESIZE_WIDTHS) assert.ok(receipt.renderedWidths.includes(width), `native frame width ${width} was not rendered`)
   assert.ok(output.slice(0, readyOffset).includes(ENTER_SCREEN), 'alternate screen was not entered')
   assert.ok(output.slice(0, receiptOffset).includes(EXIT_SCREEN), 'alternate screen was not restored')
   assert.ok(output.slice(0, receiptOffset).includes(CURSOR_MODES_RESTORED), 'cursor modes were not restored')
   assert.ok(receipt.outputSamples > 0, 'no native output latency samples')
-  console.log(JSON.stringify({ platform: process.platform, node: process.version, cols: COLS, rows: ROWS, tinyHeights: TINY_HEIGHTS, ...receipt }, null, 2))
+  console.log(JSON.stringify({ platform: process.platform, node: process.version, cols: COLS, rows: ROWS, tinyHeights: TINY_HEIGHTS, resizeWidths: RESIZE_WIDTHS, ...receipt }, null, 2))
 } finally {
   clearTimeout(watchdog)
   if (!exited) child.kill()
