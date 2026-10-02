@@ -11,6 +11,15 @@ const ROWS = 24
 const TIMEOUT_MS = 10_000
 const EXIT_GRACE_MS = 1000
 const CASE_TIMEOUT_MS = TIMEOUT_MS + EXIT_GRACE_MS
+const CLEAN_MODE = 'clean'
+const REJECTION_MODE = 'rejection'
+const EXIT_MODE = 'exit'
+const CLEANUP_FAILURE_MODE = 'cleanup-failure'
+const EXCEPTION_MODE = 'exception'
+const MODES = [CLEAN_MODE, EXCEPTION_MODE, REJECTION_MODE, EXIT_MODE, CLEANUP_FAILURE_MODE]
+const CLEAN_STATUS = 0
+const FIRST_OFFSET = 0
+const FIRST_LINE = 0
 const FRAME = 'terminal-crash-frame'
 const FAILURE = 'terminal-crash-proof'
 const RECEIPT = 'terminal-crash-receipt:'
@@ -45,7 +54,7 @@ function run(mode: string): Promise<{ output: string; exitCode: number }> {
 describe('native fatal terminal handoff', () => {
   it.each(['clean', 'exception', 'rejection', 'exit', 'cleanup-failure'])('restores shell ownership on %s', async mode => {
     const { output, exitCode } = await run(mode)
-    expect(exitCode, output.slice(-OUTPUT_TAIL)).toBe(mode === 'clean' ? 0 : mode === 'exit' ? FORCED_STATUS : FAILED_STATUS)
+    expect(exitCode, output.slice(-OUTPUT_TAIL)).toBe(mode === CLEAN_MODE ? 0 : mode === 'exit' ? FORCED_STATUS : FAILED_STATUS)
     const frame = output.indexOf(FRAME)
     expect(frame).toBeGreaterThanOrEqual(0)
     for (const sequence of [EXIT_ALT, CURSOR_SHOW, MOUSE_OFF, PASTE_OFF, KEYBOARD_RESET, RESTORE_MODES]) {
@@ -54,13 +63,13 @@ describe('native fatal terminal handoff', () => {
     }
     const at = output.lastIndexOf(RECEIPT)
     expect(at).toBeGreaterThan(frame)
-    const receipt = JSON.parse(output.slice(at + RECEIPT.length).split(/\r?\n/u)[0]!)
+    const receipt = JSON.parse(output.slice(at + RECEIPT.length).split(/\r?\n/u)[FIRST_LINE]!)
     expect(receipt).toMatchObject({
       enteredRawMode: true, rawMode: false, cleanupFailureObserved: mode === 'cleanup-failure',
       warningOwnershipRestored: true, stdoutOwnershipRestored: true, stderrOwnershipRestored: true,
       fatalHooksRestored: true, exitHooksRestored: true,
     })
-    if (mode !== 'clean' && mode !== 'exit') expect(output).toContain(FAILURE)
+    if (mode !== CLEAN_MODE && mode !== EXIT_MODE) expect(output).toContain(FAILURE)
     if (mode === 'cleanup-failure') expect(output).not.toContain(CLEANUP_FAILURE)
   }, CASE_TIMEOUT_MS)
 })

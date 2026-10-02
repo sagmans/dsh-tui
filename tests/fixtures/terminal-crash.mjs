@@ -4,6 +4,10 @@ import { ProcessTerminal } from '@earendil-works/pi-tui'
 import { WarningSafeTui } from '../../src/terminal/warning-screen.ts'
 
 const MODE = process.argv[2]
+const CLEAN_MODE = 'clean'
+const REJECTION_MODE = 'rejection'
+const EXIT_MODE = 'exit'
+const CLEANUP_FAILURE_MODE = 'cleanup-failure'
 const FRAME = 'terminal-crash-frame'
 const FAILURE = 'terminal-crash-proof'
 const CLEANUP_FAILURE = 'terminal-crash-cleanup-failure'
@@ -27,7 +31,7 @@ let cleanupFailureObserved = false
 const tui = new WarningSafeTui(terminal)
 tui.addChild({ render: () => [FRAME], invalidate() {} })
 terminal.write = data => {
-  if (MODE === 'cleanup-failure' && data === RESTORE_MODES) {
+  if (MODE === CLEANUP_FAILURE_MODE && data === RESTORE_MODES) {
     cleanupFailureObserved = true
     throw new Error(CLEANUP_FAILURE)
   }
@@ -35,11 +39,11 @@ terminal.write = data => {
   if (armed || !data.includes(FRAME)) return
   armed = true
   setImmediate(() => {
-    if (MODE === 'clean') {
+    if (MODE === CLEAN_MODE) {
       tui.stop({ preserveScreen: true })
-    } else if (MODE === 'exit') {
+    } else if (MODE === EXIT_MODE) {
       process.exit(FORCED_EXIT_CODE)
-    } else if (MODE === 'rejection') {
+    } else if (MODE === REJECTION_MODE) {
       void Promise.reject(new Error(FAILURE))
     } else {
       throw new Error(FAILURE)
