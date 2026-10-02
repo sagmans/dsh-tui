@@ -6,6 +6,13 @@ const ESC = '\u001b'
 const BELL = '\u0007'
 const C1_CONTROL = '\u0080'
 const BIDI_CONTROL = '\u202e'
+const CANCELLED_STRING_CASES = [
+  { raw: `before${ESC}]0;ignored\u0018after`, expected: 'beforeafter' },
+  { raw: `before${ESC}]0;ignored\u001aafter\u0007`, expected: 'beforeafter\\x07' },
+  { raw: `before${ESC}Pignored\u0018after${ESC}\\end`, expected: 'beforeafterend' },
+  { raw: `before${ESC}Pignored\u001aafter\nrow`, expected: 'beforeafter\nrow' },
+  { raw: 'before\u0018after', expected: 'before\\x18after' },
+]
 const COMBINING_REPAINT_CASES = [
   { raw: `abc\rA${ESC}[0m\u0301`, expected: 'A\u0301bc' },
   { raw: 'abc\b\u0301', expected: 'ab\u0301c' },
@@ -73,6 +80,10 @@ describe('escapeTerminalText', () => {
 })
 
 describe('renderTerminalText', () => {
+  it.each(CANCELLED_STRING_CASES)('resumes visible output when CAN or SUB cancels a string: %j', ({ raw, expected }) => {
+    expect(renderTerminalText(raw, { color: REPAINT_COLOUR })).toBe(expected)
+  })
+
   it.each(COMBINING_REPAINT_CASES)('attaches zero-width marks only at retained cell boundaries: %j', ({ raw, expected }) => {
     expect(renderTerminalText(raw, { color: REPAINT_COLOUR, column: REPAINT_MARGIN })).toBe(expected)
   })

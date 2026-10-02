@@ -76,6 +76,10 @@ const STRING_INTRODUCERS = new Set(['P', 'X', '^', '_'])
 
 const STRING_END = '\u0007'
 
+const STRING_CANCEL = '\u0018'
+
+const STRING_SUBSTITUTE = '\u001a'
+
 export const RESET = 0
 
 export type Token =
@@ -128,11 +132,10 @@ function isCsiFinal(code: number): boolean {
 /**
  * Read one escape sequence at `at`.
  *
- * A string sequence (OSC, DCS, and their siblings) runs to BEL or ST; when its
- * terminator never arrives the sequence is reported incomplete rather than
- * swallowed to the end of the row, because the renderer and the editor want
- * different answers for a truncated sequence and only the scanner knows where
- * it stopped.
+ * CAN/SUB cancellation must release following output from the string grammar
+ * so an aborted OSC, DCS, or sibling cannot swallow visible evidence. An absent
+ * terminator or cancellation remains incomplete because the renderer and editor
+ * distinguish truncated sequences from completed ones.
  */
 function readEscape(raw: string, at: number): Piece | undefined {
   const introducer = raw[at + 1]
@@ -161,7 +164,9 @@ function readEscape(raw: string, at: number): Piece | undefined {
   if (introducer === OSC_INTRODUCER || STRING_INTRODUCERS.has(introducer)) {
     let end = at + 2
     while (end < raw.length) {
-      if (raw[end] === STRING_END) return { token: { kind: 'consumed' }, raw: raw.slice(at, end + 1) }
+      if (raw[end] === STRING_END || raw[end] === STRING_CANCEL || raw[end] === STRING_SUBSTITUTE) {
+        return { token: { kind: 'consumed' }, raw: raw.slice(at, end + 1) }
+      }
       if (raw[end] === ESC && raw[end + 1] === '\\') return { token: { kind: 'consumed' }, raw: raw.slice(at, end + 2) }
       end += 1
     }
