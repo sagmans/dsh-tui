@@ -1,10 +1,14 @@
-import { mkdirSync } from 'node:fs'
+import { closeSync, constants, fchmodSync, mkdirSync, openSync } from 'node:fs'
 import { homedir } from 'node:os'
 import path from 'node:path'
 import { rowText } from './cards.ts'
 import { dshHomeDir } from './stash/paths.ts'
+import { PRIVATE_DIR_MODE } from './stash/private-fs.ts'
 import { renderTerminalText } from './terminal-text.ts'
 import type { TranscriptEntry } from './transcript.ts'
+
+/** Permission repair must target the owned directory, never a link into unrelated storage. */
+const EXPORT_DIRECTORY_FLAGS = constants.O_RDONLY | (constants.O_DIRECTORY ?? 0) | (constants.O_NOFOLLOW ?? 0)
 
 /**
  * A fragment as a document holds it.
@@ -31,10 +35,16 @@ export function exportsHomeDir(env: NodeJS.ProcessEnv = process.env, home: strin
   return path.join(dshHomeDir(env, home), EXPORTS_DIR_NAME)
 }
 
-/** Create the exports directory if it is missing; empty when it is there. */
+/** Owner-only storage keeps dumps private even when the harness home can be traversed. */
 export function ensureExportsHome(dir: string): readonly string[] {
   try {
-    mkdirSync(dir, { recursive: true })
+    mkdirSync(dir, { recursive: true, mode: PRIVATE_DIR_MODE })
+    const directory = openSync(dir, EXPORT_DIRECTORY_FLAGS)
+    try {
+      fchmodSync(directory, PRIVATE_DIR_MODE)
+    } finally {
+      closeSync(directory)
+    }
     return []
   } catch (error) {
     return [`exports: cannot create ${dir}: ${message(error)}`]

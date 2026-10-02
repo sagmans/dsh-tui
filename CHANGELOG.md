@@ -10,6 +10,8 @@ breaking change, and a patch carries only fixes.
 
 ### Fixed
 
+- Transcript exports keep owner-only directory and file permissions, including existing destinations, and refuse symbolic-link destinations before permission changes or writes.
+
 - No-colour row cuts strip incoming terminal styling as well as generated resets, including rows that fit without truncation.
 
 - Status rows flatten fact line breaks before measuring and clipping, so legal multiline paths cannot exceed the footer width.
