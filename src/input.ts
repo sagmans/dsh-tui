@@ -11,6 +11,8 @@ import { decodeKittyPrintable, isKeyRelease } from '@earendil-works/pi-tui'
 
 const KEY_SEQUENCE_START = '\x1b['
 const PRINTABLE_TEXT = /^[^\u0000-\u001f\u007f-\u009f]+$/u
+/** Paste filters share the typed-text policy, so terminal controls cannot become invisible search characters. */
+const PASTE_CONTROL_BYTES = /[\u0000-\u001f\u007f-\u009f]/gu
 // Kitty reserves this area for functional keys, not printable filter characters.
 const KITTY_FUNCTIONAL_TEXT = /^[\ue000-\uf8ff]$/u
 const GRAPHEMES = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
@@ -31,7 +33,7 @@ export function pastedText(data: string): string | undefined {
   if (start === -1) return undefined
   const rest = data.slice(start + PASTE_START.length)
   const end = rest.indexOf(PASTE_END)
-  const text = (end === -1 ? rest : rest.slice(0, end)).replace(/[\u0000-\u001f\u007f]/gu, '')
+  const text = (end === -1 ? rest : rest.slice(0, end)).replace(PASTE_CONTROL_BYTES, '')
   return text.isWellFormed() ? text : undefined
 }
 

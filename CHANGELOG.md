@@ -10,6 +10,8 @@ breaking change, and a patch carries only fixes.
 
 ### Fixed
 
+- Bracketed-paste filters remove C1 controls consistently with typed input, so invisible terminal bytes cannot disrupt picker searches.
+
 - Transcript exports keep owner-only directory and file permissions, including existing destinations, and refuse symbolic-link destinations before permission changes or writes.
 
 - No-colour row cuts strip incoming terminal styling as well as generated resets, including rows that fit without truncation.
