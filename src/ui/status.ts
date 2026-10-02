@@ -165,7 +165,8 @@ function renderSegments(segments: readonly Segment[], width: number, theme: TuiT
     // separator and at least the mark that something was cut.
     if (budget - lead < ellipsisWidth) break
     const room = budget - lead
-    const drawn = theme.rich(segment.text, { token: segment.token, column: width - budget })
+    // Flatten before measuring: a retained line break becomes a visible space in the status row.
+    const drawn = oneRow(theme.rich(segment.text, { token: segment.token, column: width - budget }))
     const textWidth = visibleWidth(drawn)
     if (textWidth > room) {
       // Not the last segment: the rest is omitted, so the row must show it.
