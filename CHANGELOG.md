@@ -10,6 +10,8 @@ breaking change, and a patch carries only fixes.
 
 ### Fixed
 
+- Text clipping budgets include complete visible control spellings without splitting them or changing ordinary grapheme and styling behavior.
+
 - Post-exit failures and resume hints display foreign terminal controls literally while preserving ordinary text and line breaks.
 
 - Fatal Node exits restore terminal modes and release warning/output ownership without suppressing the original failure or exit status.

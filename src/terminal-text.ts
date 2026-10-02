@@ -57,6 +57,8 @@ function visibleLength(piece: Piece): number {
       for (const _ of GRAPHEMES.segment(piece.raw)) count += 1
       return count
     }
+    // A visible escape is four or six characters, not the one control that produced it.
+    case 'control': return spellControls(piece.raw).length
     case 'sgr':
     case 'consumed':
     case 'incomplete': return 0
