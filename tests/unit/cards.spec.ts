@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { cardDetailRows, CARD_SHELL_PREVIEW, shellFoldHint } from '@/cards/preview.ts'
-import { bound, CARD_DETAIL_MAX, CARD_PART_LIMIT, clip, rowText, type CardRow, type ToolCard } from '@/cards.ts'
+import { contentLines, bound, CARD_DETAIL_MAX, CARD_PART_LIMIT, clip, rowText, type CardRow, type ToolCard } from '@/cards.ts'
 import { cardOfCall, cardOfResult, renderFileDiff } from '@/cards/presenter.ts'
 import { carriedFields, mergeCards, subCallRow, subCallRows } from '@/cards/composition.ts'
 
@@ -10,7 +10,26 @@ const texts = (rows: readonly CardRow[]): string[] => rows.map(rowText)
 /** A single-style row, for building expected cards without ceremony. */
 const row = (cls: CardRow['parts'][number]['class'], text: string): CardRow => ({ parts: [{ class: cls, text }] })
 
+const LARGE_TOOL_LINES = 150_000
+
+describe('tool result content', () => {
+  it('bounds a large raw tool result after ingestion without losing its line count', () => {
+    const output = Array.from({ length: LARGE_TOOL_LINES }, (_, index) => String(index)).join('\n')
+    const card = cardOfResult(undefined, { name: 'bash', failed: false, contentLines: contentLines([{ type: 'text', text: output }]) })
+    expect(card.totalLines).toBe(LARGE_TOOL_LINES)
+    expect(card.detail).toHaveLength(CARD_DETAIL_MAX)
+    expect(texts(card.detail)).toEqual(Array.from({ length: CARD_DETAIL_MAX }, (_, index) => String(index)))
+  })
+
+  it('preserves nested tool-result content in recorded order', () => {
+    const nested = Array.from({ length: LARGE_TOOL_LINES }, (_, index) => ({ type: 'text', text: String(index) }))
+    expect(contentLines([{ type: 'tool-result', text: 'before', content: nested }, { type: 'text', text: 'after' }]))
+      .toEqual(['before', ...nested.map(block => block.text), 'after'])
+  })
+})
+
 describe('renderFileDiff', () => {
+
   it('renders a new file as additions only', () => {
     const lines = renderFileDiff({ path: 'a.txt', oldText: null, newText: 'one\ntwo' })
     expect(texts(lines)).toEqual(['a.txt  new', '+one', '+two'])
