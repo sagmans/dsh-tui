@@ -10,6 +10,8 @@ breaking change, and a patch carries only fixes.
 
 ### Fixed
 
+- Streaming Mermaid replies draw only the retained 32-fence window and keep overflow as source, preventing each delta from evicting every cached layout.
+
 - Cancelled terminal control strings release subsequent visible output at CAN or SUB instead of swallowing it until a later terminator.
 
 - Terminal repainting retains combining marks on the glyph immediately before the cursor, including retained wide glyphs.
