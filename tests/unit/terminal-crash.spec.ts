@@ -52,24 +52,24 @@ function run(mode: string): Promise<{ output: string; exitCode: number }> {
 }
 
 describe('native fatal terminal handoff', () => {
-  it.each(['clean', 'exception', 'rejection', 'exit', 'cleanup-failure'])('restores shell ownership on %s', async mode => {
+  it.each(MODES)('restores shell ownership on %s', async mode => {
     const { output, exitCode } = await run(mode)
-    expect(exitCode, output.slice(-OUTPUT_TAIL)).toBe(mode === CLEAN_MODE ? 0 : mode === 'exit' ? FORCED_STATUS : FAILED_STATUS)
+    expect(exitCode, output.slice(-OUTPUT_TAIL)).toBe(mode === CLEAN_MODE ? CLEAN_STATUS : mode === EXIT_MODE ? FORCED_STATUS : FAILED_STATUS)
     const frame = output.indexOf(FRAME)
-    expect(frame).toBeGreaterThanOrEqual(0)
+    expect(frame).toBeGreaterThanOrEqual(FIRST_OFFSET)
     for (const sequence of [EXIT_ALT, CURSOR_SHOW, MOUSE_OFF, PASTE_OFF, KEYBOARD_RESET, RESTORE_MODES]) {
-      if (mode === 'cleanup-failure' && sequence === RESTORE_MODES) continue
+      if (mode === CLEANUP_FAILURE_MODE && sequence === RESTORE_MODES) continue
       expect(output.lastIndexOf(sequence), sequence).toBeGreaterThan(frame)
     }
     const at = output.lastIndexOf(RECEIPT)
     expect(at).toBeGreaterThan(frame)
     const receipt = JSON.parse(output.slice(at + RECEIPT.length).split(/\r?\n/u)[FIRST_LINE]!)
     expect(receipt).toMatchObject({
-      enteredRawMode: true, rawMode: false, cleanupFailureObserved: mode === 'cleanup-failure',
+      enteredRawMode: true, rawMode: false, cleanupFailureObserved: mode === CLEANUP_FAILURE_MODE,
       warningOwnershipRestored: true, stdoutOwnershipRestored: true, stderrOwnershipRestored: true,
       fatalHooksRestored: true, exitHooksRestored: true,
     })
     if (mode !== CLEAN_MODE && mode !== EXIT_MODE) expect(output).toContain(FAILURE)
-    if (mode === 'cleanup-failure') expect(output).not.toContain(CLEANUP_FAILURE)
+    if (mode === CLEANUP_FAILURE_MODE) expect(output).not.toContain(CLEANUP_FAILURE)
   }, CASE_TIMEOUT_MS)
 })
