@@ -66,21 +66,21 @@ export class TranscriptDocument {
       if (index >= settled) {
         // Only the current live frame survives; obsolete streaming prefixes never enter the settled cache.
         this.context.renderEntry(entry, rows, width, true, local, copy)
-        copied.push(...copy)
+        for (const row of copy) copied.push(row)
       } else {
         const cached = this.rows.lookup(entry, entryTag)
         const saved = this.entrySpans.get(entry)
         const savedCopy = this.entryCopy.get(entry)
         if (cached !== undefined && saved !== undefined && savedCopy !== undefined) {
-          rows.push(...cached)
-          local.push(...saved)
-          copied.push(...savedCopy)
+          for (const row of cached) rows.push(row)
+          for (const span of saved) local.push(span)
+          for (const row of savedCopy) copied.push(row)
         } else {
           this.context.renderEntry(entry, rows, width, false, local, copy)
           this.rows.store(entry, entryTag, rows)
           this.entrySpans.set(entry, local)
           this.entryCopy.set(entry, copy)
-          copied.push(...copy)
+          for (const row of copy) copied.push(row)
         }
       }
       // Seam air changes row offsets, so hit spans follow placement rather than cached local coordinates.

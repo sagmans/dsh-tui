@@ -25,6 +25,8 @@ const PASTE_START = '\x1b[200~'
 const PASTE_END = '\x1b[201~'
 const PICKER_BYTES = '\x10'
 const QUIT_BYTES = '\x03'
+const CLEAR_DRAFT_BYTES = '\x15'
+const UNDO_DRAFT_BYTES = '\x1b[45;5u'
 const KITTY_PRESS = '\x1b[97;1u'
 const KITTY_REPEAT = '\x1b[97;1:2u'
 const KITTY_RELEASE = '\x1b[97;1:3u'
@@ -40,6 +42,7 @@ const CURSOR_HIDE = '\x1b[?25l'
 const BLINK_ENABLED = '\x1b[?12h'
 const CURSOR_MODES_RESTORED = '\x1b[?1004r\x1b[?12r'
 const TINY_HEIGHTS = [1, 2, 3]
+const RESIZE_WIDTHS = [1, 2, COLS]
 const DIAGNOSTIC_TAIL_CHARACTERS = 2000
 const EXIT_SUCCESS = 0
 
@@ -99,6 +102,20 @@ try {
     child.resize(COLS, height)
     await delay(DRAIN_MS)
   }
+  // Empty the draft through native input so unrelated wide-grapheme editor wrapping cannot mask transcript failures.
+  child.write(PICKER_BYTES)
+  await delay(DRAIN_MS)
+  child.write(CLEAR_DRAFT_BYTES)
+  await delay(DRAIN_MS)
+  // Narrow frames must retain large messages without trapping future redraws in the error boundary.
+  for (const width of RESIZE_WIDTHS) {
+    assert.equal(exited, false, output.slice(-DIAGNOSTIC_TAIL_CHARACTERS))
+    child.resize(width, ROWS)
+    await delay(DRAIN_MS)
+  }
+  // Undo restores the original draft, keeping the existing native retention assertion authoritative.
+  child.write(UNDO_DRAFT_BYTES)
+  await delay(DRAIN_MS)
   child.write(QUIT_BYTES)
   const status = await Promise.race([exit.promise, deadline.promise])
   assert.equal(status.exitCode, EXIT_SUCCESS, output.slice(-DIAGNOSTIC_TAIL_CHARACTERS))
@@ -114,7 +131,7 @@ try {
   assert.ok(output.slice(0, receiptOffset).includes(EXIT_SCREEN), 'alternate screen was not restored')
   assert.ok(output.slice(0, receiptOffset).includes(CURSOR_MODES_RESTORED), 'cursor modes were not restored')
   assert.ok(receipt.outputSamples > 0, 'no native output latency samples')
-  console.log(JSON.stringify({ platform: process.platform, node: process.version, cols: COLS, rows: ROWS, tinyHeights: TINY_HEIGHTS, ...receipt }, null, 2))
+  console.log(JSON.stringify({ platform: process.platform, node: process.version, cols: COLS, rows: ROWS, tinyHeights: TINY_HEIGHTS, resizeWidths: RESIZE_WIDTHS, ...receipt }, null, 2))
 } finally {
   clearTimeout(watchdog)
   if (!exited) child.kill()
