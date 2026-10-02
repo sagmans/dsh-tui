@@ -9,6 +9,7 @@ import { visibleWidth } from '@earendil-works/pi-tui'
 import { CUSTOM_ROW_NUMBER, type GateCard } from '../../gates.ts'
 import { type TuiToken } from '../../theme-tokens.ts'
 import { type TuiTheme } from '../../theme.ts'
+import { displayText } from '../../text.ts'
 import { pushGap } from '../gap.ts'
 
 const OPTION_INDENT = '   '
@@ -48,11 +49,11 @@ export class GateCards {
         const glyph = this.context.theme.glyph(glyphToken) || (gate.kind === 'approval' ? APPROVAL_MARK : QUESTION_MARK)
         // The question is the thing being decided, so it wraps rather than being
         // cut: a reader cannot answer a sentence they were not shown.
-        this.context.pushWrapped(lines, gate.title, width, `${glyph} `, 'gate.title')
+        this.context.pushWrapped(lines, displayText(gate.title, { column: visibleWidth(`${glyph} `) }), width, `${glyph} `, 'gate.title')
       }
       if (this.context.theme.visible('gate.detail')) {
         for (const detail of gate.detail) {
-          this.context.pushWrapped(lines, detail, width, DETAIL_INDENT, 'gate.detail')
+          this.context.pushWrapped(lines, displayText(detail, { column: visibleWidth(DETAIL_INDENT) }), width, DETAIL_INDENT, 'gate.detail')
         }
       }
       gate.options.forEach((option, position) => {
@@ -111,8 +112,7 @@ export class GateCards {
       const box = row.selected ? CHECKBOX_ON : CHECKBOX_OFF
       const lead = `${OPTION_INDENT}${cursor} ${box} ${row.number}. `
       const text = row.description === undefined ? row.label : `${row.label} — ${row.description}`
-      // The text reaches pushWrapped undrawn: it is read once there, and reading
-      // it twice would show the reader the escape instead of the character.
-      this.context.pushWrapped(lines, text, width, lead, token)
+      // A choice must expose its original text rather than let controls repaint it.
+      this.context.pushWrapped(lines, displayText(text, { column: visibleWidth(lead) }), width, lead, token)
     }
 }
