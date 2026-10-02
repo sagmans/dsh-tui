@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -27,6 +27,14 @@ const STORED = 'stored-1'
 const AGENT = { id: 'agent-1' } as unknown as Agent
 const DRAFT = 'a draft worth keeping'
 const ANSWER = 'the last one'
+const EXPORT_DESTINATIONS = [false, true]
+const EXPECTED_EXPORT_DIR_MODE = 0o700
+const EXPECTED_EXPORT_FILE_MODE = 0o600
+const INITIAL_EXPORT_DIR_MODE = 0o755
+const INITIAL_EXPORT_FILE_MODE = 0o644
+const PERMISSION_MASK = 0o777
+const OLD_EXPORT = 'previous export'
+const LINKED_EXPORT_DESTINATIONS = ['file', 'directory'] as const
 
 /** The commands the host registry answers with, as completion reads them. */
 function command(name: string): RegisteredCommand {
@@ -693,22 +701,32 @@ describe('createCommands todo', () => {
 })
 
 describe('createCommands export', () => {
-  it('writes the visible transcript and tells the reader where', () => {
+  it.each(EXPORT_DESTINATIONS)('writes the visible transcript privately and tells the reader where; existing=%s', (existing) => {
     const given = fixture()
     given.entries = [{ kind: 'user', text: 'ask' }, { kind: 'assistant', text: 'answer' }]
     const path = join(scratch(), 'dump.md')
+    if (existing) {
+      writeFileSync(path, OLD_EXPORT)
+      chmodSync(path, INITIAL_EXPORT_FILE_MODE)
+    }
     createCommands(given.ctx, given.ports).runSubmission({ kind: 'export', path })
 
     expect(readFileSync(path, 'utf8')).toBe(transcriptToText(given.entries))
+    expect(statSync(path).mode & PERMISSION_MASK).toBe(EXPECTED_EXPORT_FILE_MODE)
     expect(given.notices).toEqual(['transcript written to ' + path])
     expect(given.renders).toBe(1)
   })
 
-  it('writes a dump with no destination into the exports home, never the themes one', () => {
+  it.each(EXPORT_DESTINATIONS)('writes a dump into the private exports home, never the themes one; existing=%s', (existing) => {
     const given = fixture()
     given.entries = [{ kind: 'user', text: 'ask' }]
     const home = scratch()
     vi.stubEnv('DSH_HOME', home)
+    const exports = join(home, EXPORTS_DIR_NAME)
+    if (existing) {
+      mkdirSync(exports)
+      chmodSync(exports, INITIAL_EXPORT_DIR_MODE)
+    }
 
     createCommands(given.ctx, given.ports).runSubmission({ kind: 'export', path: '' })
 
@@ -718,9 +736,33 @@ describe('createCommands export', () => {
     // directory the terminal was started in stays clean either way.
     const path = join(home, EXPORTS_DIR_NAME, defaultExportFile(SESSION))
     expect(readFileSync(path, 'utf8')).toBe(transcriptToText(given.entries))
+    expect(statSync(path).mode & PERMISSION_MASK).toBe(EXPECTED_EXPORT_FILE_MODE)
     expect(given.notices).toEqual(['transcript written to ' + path])
+    expect(statSync(exports).mode & PERMISSION_MASK).toBe(EXPECTED_EXPORT_DIR_MODE)
     expect(existsSync(join(home, 'themes'))).toBe(false)
     expect(existsSync(join(process.cwd(), defaultExportFile(SESSION)))).toBe(false)
+  })
+
+  it.each(LINKED_EXPORT_DESTINATIONS)('refuses linked export %s destinations without changing their targets', (kind) => {
+    const given = fixture()
+    const home = scratch()
+    vi.stubEnv('DSH_HOME', home)
+    const target = join(home, 'target')
+    const directory = kind === 'directory'
+    const link = join(home, directory ? EXPORTS_DIR_NAME : 'linked.md')
+    if (directory) mkdirSync(target)
+    else writeFileSync(target, OLD_EXPORT)
+    const initialMode = directory ? INITIAL_EXPORT_DIR_MODE : INITIAL_EXPORT_FILE_MODE
+    chmodSync(target, initialMode)
+    symlinkSync(target, link)
+
+    createCommands(given.ctx, given.ports).runSubmission({ kind: 'export', path: directory ? '' : link })
+
+    expect(statSync(target).mode & PERMISSION_MASK).toBe(initialMode)
+    if (!directory) expect(readFileSync(target, 'utf8')).toBe(OLD_EXPORT)
+    expect(given.notices).toHaveLength(1)
+    expect(given.notices[0]?.startsWith(directory ? 'exports: cannot create ' : 'could not write ')).toBe(true)
+    expect(given.renders).toBe(1)
   })
 
   it('keeps a dump whose directory cannot be created a notice rather than a failure', () => {

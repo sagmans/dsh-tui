@@ -1,4 +1,4 @@
-import { writeFileSync } from 'node:fs'
+import { closeSync, constants, fchmodSync, ftruncateSync, openSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -11,6 +11,7 @@ import { chordKeysLine, surfaceKeysLine } from '../input/keymap.ts'
 import { LOCAL_COMMANDS, type Submission } from '../input/submission.ts'
 import { KEYMAP_LAYERS, keymapLayer } from '../keys-command.ts'
 import type { PromptStash } from '../stash.ts'
+import { PRIVATE_FILE_MODE } from '../stash/private-fs.ts'
 import { clipboardSequence } from '../terminal/clipboard.ts'
 import { windowTitle } from '../terminal/title.ts'
 import { formatTokens } from '../tokens.ts'
@@ -28,6 +29,11 @@ import { createSessionPicker } from './session-picker.ts'
 import type { SessionView } from './session-view.ts'
 import type { StagedTurns } from './staged-turns.ts'
 import type { TerminalLifecycle } from './terminal-lifecycle.ts'
+
+/** A private dump must name its own inode rather than a link into unrelated storage. */
+const EXPORT_WRITE_FLAGS = constants.O_WRONLY | constants.O_CREAT | (constants.O_NOFOLLOW ?? 0)
+const EMPTY_EXPORT_LENGTH = 0
+const EXPORT_ENCODING = 'utf8'
 
 /**
  * The command plane: where a typed line, a chord, a host command, and the
@@ -174,7 +180,16 @@ export function createCommands(ctx: Context, ports: CommandsPorts): Commands {
       path = resolve(argument)
     }
     try {
-      writeFileSync(path, transcriptToText(ports.transcript.model.entries()), 'utf8')
+      const text = transcriptToText(ports.transcript.model.entries())
+      const file = openSync(path, EXPORT_WRITE_FLAGS, PRIVATE_FILE_MODE)
+      try {
+        // Existing dumps need their permissions repaired before private contents reach the selected inode.
+        fchmodSync(file, PRIVATE_FILE_MODE)
+        ftruncateSync(file, EMPTY_EXPORT_LENGTH)
+        writeFileSync(file, text, EXPORT_ENCODING)
+      } finally {
+        closeSync(file)
+      }
       ports.transcript.notice(`transcript written to ${path}`)
     } catch (error) {
       ports.transcript.notice(`could not write ${path}: ${error instanceof Error ? error.message : String(error)}`)
