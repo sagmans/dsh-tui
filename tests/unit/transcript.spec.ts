@@ -8,7 +8,20 @@ import { REASONING_CHAR_LIMIT, TranscriptModel } from '@/transcript.ts'
 import { text } from './fixtures/transcript.ts'
 
 
+const LARGE_MESSAGE_LINES = 150_000
+
 describe('TranscriptModel rows', () => {
+  it('folds a large multiline message and still accepts the next prompt', () => {
+    const body = 'line\n'.repeat(LARGE_MESSAGE_LINES) + 'tail'
+    const model = new TranscriptModel()
+    model.apply({ type: 'user/message', data: { content: text(body), source: { kind: 'user' } } })
+    model.apply({ type: 'user/message', data: { content: text('next'), source: { kind: 'user' } } })
+    expect(model.entries()).toHaveLength(2)
+    const first = model.entries()[0]
+    expect(first?.kind === 'user' && first.text === body).toBe(true)
+    expect(model.entries()[1]).toEqual({ kind: 'user', text: 'next' })
+  })
+
   it('renders a human prompt as a user row', () => {
       const model = new TranscriptModel()
       model.apply({ type: 'user/message', data: { content: text('hello'), source: { kind: 'user' } } })

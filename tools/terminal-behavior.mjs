@@ -126,6 +126,7 @@ try {
   assert.equal(receipt.enteredRawMode, true, 'native TTY never entered raw mode')
   assert.equal(receipt.rawMode, false, 'terminal stayed in raw mode')
   assert.deepEqual(receipt.failures, [], 'native frame failed')
+  assert.equal(receipt.foldedNotice, true, 'large injected message did not reach the transcript')
   for (const width of RESIZE_WIDTHS) assert.ok(receipt.renderedWidths.includes(width), `native frame width ${width} was not rendered`)
   assert.ok(output.slice(0, readyOffset).includes(ENTER_SCREEN), 'alternate screen was not entered')
   assert.ok(output.slice(0, receiptOffset).includes(EXIT_SCREEN), 'alternate screen was not restored')
