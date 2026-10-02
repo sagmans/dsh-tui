@@ -17,6 +17,13 @@ const RECEIPT = 'terminal-behavior-receipt:'
 const QUIT_KEY = 'ctrl+c'
 const PICKER_KEY = 'ctrl+p'
 const SETTLED_MESSAGES = 100
+const FOLD_LINE_COUNT = 150_000
+const FOLD_LINE = 'fold'
+const FOLD_SEPARATOR = '\n'
+const FOLD_PLUGIN = 'fold-proof'
+const FOLD_EVENT = 'user/message'
+const FOLD_SOURCE = 'plugin'
+const FOLD_PREFIX = `injected ${FOLD_PLUGIN} · ${FOLD_LINE_COUNT} lines`
 const LARGE_MESSAGE_CHARACTERS = 150_000
 const LARGE_MESSAGE_TEXT = 'z'
 const STYLED_CHARACTERS = 8000
@@ -57,6 +64,9 @@ terminal.write = data => {
   const now = performance.now()
   for (const start of pending.splice(0)) latency.push(now - start)
 }
+// A summarized injection exercises the durable fold without letting rendering costs obscure ingestion failures.
+model.apply({ type: FOLD_EVENT, data: { content: [{ type: TEXT_CONTENT, text: Array(FOLD_LINE_COUNT).fill(FOLD_LINE).join(FOLD_SEPARATOR) }], source: { kind: FOLD_SOURCE, plugin: FOLD_PLUGIN } } })
+const foldedNotice = model.entries().some(entry => entry.kind === 'notice' && entry.text.startsWith(FOLD_PREFIX))
 for (let index = 0; index < SETTLED_MESSAGES; index++) {
   model.apply({ type: MESSAGE_EVENT, data: { message: { content: [{ type: TEXT_CONTENT, text: `settled ${index}` }] } } })
 }
@@ -97,6 +107,8 @@ function finish() {
     settledMessages: SETTLED_MESSAGES,
     styledCharacters: STYLED_CHARACTERS,
     largeMessageCharacters: LARGE_MESSAGE_CHARACTERS,
+    foldedNotice,
+    foldLineCount: FOLD_LINE_COUNT,
     renderedWidths: [...renderedWidths],
     outputSamples: sorted.length,
     dispatchToWriteP95Ms: sorted[Math.floor(sorted.length * LATENCY_QUANTILE)] ?? null,

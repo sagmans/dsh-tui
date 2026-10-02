@@ -25,8 +25,13 @@ export function contentLinesOf(content: unknown): string[] {
     if (record.type === 'reasoning') continue
     // Any block that carries text counts; a tool-result block also holds its
     // model-facing content one level deeper.
-    if (typeof record.text === 'string') lines.push(...record.text.split('\n'))
-    if (Array.isArray(record.content)) lines.push(...contentLinesOf(record.content))
+    // Recorded blocks can exceed the engine's argument limit; keep every line without argument spreading.
+    if (typeof record.text === 'string') {
+      for (const line of record.text.split('\n')) lines.push(line)
+    }
+    if (Array.isArray(record.content)) {
+      for (const line of contentLinesOf(record.content)) lines.push(line)
+    }
   }
   return lines
 }
@@ -49,7 +54,10 @@ export function reasoningTextsOf(content: unknown): string[] {
     const record = asRecord(block)
     if (record === undefined) continue
     if (record.type === 'reasoning' && typeof record.text === 'string') thoughts.push(record.text)
-    if (Array.isArray(record.content)) thoughts.push(...reasoningTextsOf(record.content))
+    // Nested recorded thoughts have the same unbounded block count as visible lines.
+    if (Array.isArray(record.content)) {
+      for (const thought of reasoningTextsOf(record.content)) thoughts.push(thought)
+    }
   }
   return thoughts
 }
