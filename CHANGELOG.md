@@ -10,6 +10,8 @@ breaking change, and a patch carries only fixes.
 
 ### Fixed
 
+- Fatal Node exits restore terminal modes and release warning/output ownership without suppressing the original failure or exit status.
+
 - Large tool-result content reaches card clipping without overflowing the argument stack; previews keep their existing limit and complete line counts.
 
 - Large durable messages and nested content no longer overflow the argument stack while folding; visible lines and recorded thoughts retain their order and separation.
