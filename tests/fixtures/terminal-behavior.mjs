@@ -21,6 +21,8 @@ const STYLED_CHARACTERS = 8000
 const STREAM_INTERVAL_MS = 20
 const STREAM_TEXT = '.'
 const STYLED_TEXT = 'x'
+const REPAINT_TEXT = 'y'
+const CARRIAGE_RETURN = '\r'
 const SGR_START = '\x1b[32m'
 const SGR_END = '\x1b[0m'
 const COLOR_MODE = 'none'
@@ -55,7 +57,7 @@ terminal.write = data => {
 for (let index = 0; index < SETTLED_MESSAGES; index++) {
   model.apply({ type: MESSAGE_EVENT, data: { message: { content: [{ type: TEXT_CONTENT, text: `settled ${index}` }] } } })
 }
-model.applyStreamChunk({ type: TEXT_DELTA, text: `${SGR_START}${STYLED_TEXT.repeat(STYLED_CHARACTERS)}${SGR_END}` })
+model.applyStreamChunk({ type: TEXT_DELTA, text: `${SGR_START}${STYLED_TEXT.repeat(STYLED_CHARACTERS)}${CARRIAGE_RETURN}${REPAINT_TEXT.repeat(STYLED_CHARACTERS)}${SGR_END}` })
 const picker = new ListPicker(
   () => PICKER_ROWS, () => PICKER_TITLE, row => row.label,
   row => ({ label: row.label, description: undefined, current: false }), row => row.label,

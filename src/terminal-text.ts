@@ -143,32 +143,35 @@ export function renderTerminalText(raw: string, options: RenderTextOptions): str
   const codes = encoder(color, base)
   let style: TextStyle = GROUND
   let previous: TextStyle = GROUND
-  let cells: Cell[] = []
+  const cells = new Map<number, Cell>()
+  let last: Cell | undefined
   let cursor = column
   let out = ''
 
   const write = (text: string, width: number): void => {
-    const last = cells[cells.length - 1]
     if (width === 0) {
       if (last !== undefined && last.col + last.width === cursor) last.text += text
       return
     }
-    // Styled append-only output must not rescan its whole row for each grapheme.
-    if (last === undefined || cursor >= last.col + last.width) {
-      cells.push({ col: cursor, width, text, style })
-    } else {
-      cells = cells.filter(cell => cell.col >= cursor + width || cell.col + cell.width <= cursor)
-      let at = cells.findIndex(cell => cell.col >= cursor + width)
-      if (at < 0) at = cells.length
-      cells.splice(at, 0, { col: cursor, width, text, style })
+    // Column ownership bounds overwrite work to the graphemes it actually replaces.
+    for (let col = cursor; col < cursor + width; col++) {
+      const replaced = cells.get(col)
+      if (replaced === undefined) continue
+      for (let occupied = replaced.col; occupied < replaced.col + replaced.width; occupied++) cells.delete(occupied)
+      if (replaced === last) last = undefined
     }
+    const cell: Cell = { col: cursor, width, text, style }
+    for (let col = cursor; col < cursor + width; col++) cells.set(col, cell)
+    if (last === undefined || cell.col >= last.col) last = cell
     cursor += width
   }
 
   const flush = (): void => {
-    if (cells.length > 0) {
+    if (cells.size > 0) {
       let drawn = column
-      for (const cell of cells) {
+      // Repaint insertion order differs from screen order; sort once per completed row.
+      const ordered = [...cells].filter(([col, cell]) => col === cell.col).map(([, cell]) => cell).sort((left, right) => left.col - right.col)
+      for (const cell of ordered) {
         if (cell.col > drawn) {
           out += codes.between(previous, GROUND)
           previous = GROUND
@@ -180,7 +183,8 @@ export function renderTerminalText(raw: string, options: RenderTextOptions): str
         drawn = cell.col + cell.width
       }
     }
-    cells = []
+    cells.clear()
+    last = undefined
     cursor = column
   }
 

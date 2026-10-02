@@ -54,6 +54,15 @@ describe('escapeTerminalText', () => {
 })
 
 describe('renderTerminalText', () => {
+  it('keeps a full long-row repaint responsive', () => {
+    const original = 'x'.repeat(LONG_STYLED_LINE_LENGTH)
+    const replacement = 'y'.repeat(LONG_STYLED_LINE_LENGTH)
+    const started = performance.now()
+    const drawn = renderTerminalText(original + '\r' + replacement, { color: 'none' })
+    expect(drawn).toBe(replacement)
+    expect(performance.now() - started).toBeLessThan(LONG_LINE_RENDER_BUDGET_MS)
+  })
+
   it('keeps long styled output from blocking interaction for a second', () => {
     const text = 'x'.repeat(LONG_STYLED_LINE_LENGTH)
     const started = performance.now()
