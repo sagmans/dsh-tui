@@ -16,6 +16,8 @@ const OTHER_MODEL = 'example-other-model'
 const FOOTER_SESSION = 'footer-route'
 const FOOTER_WIDTH = 200
 const NARROW_FOOTER_WIDTH = 35
+const MIN_FOOTER_WIDTH = 1
+const MULTILINE_CWD = '/tmp/one\ntwo'
 
 const facts = (overrides: Partial<StatusFacts> = {}): StatusFacts => ({
   chord: undefined,
@@ -48,10 +50,14 @@ describe('an armed chord', () => {
     expect(formatStatus(facts(), 200, theme)).not.toContain('ctrl+x')
   })
 
-  it('keeps a fact that carries a break on one row', () => {
-    // A path is the reader's own, and a break in it would put the rest of the
-    // row over the row below instead of wrapping.
-    expect(formatStatus(facts({ cwd: '/tmp/one\ntwo' }), 200, theme)).not.toContain('\n')
+  it('keeps a fact that carries a break on one row within the given width', () => {
+    // A legal path break must not turn into an unbudgeted space after the row was cut.
+    const multiline = facts({ cwd: MULTILINE_CWD })
+    for (let width = MIN_FOOTER_WIDTH; width <= FOOTER_WIDTH; width += 1) {
+      const line = formatStatus(multiline, width, theme)
+      expect(line).not.toContain('\n')
+      expect(visibleWidth(line)).toBeLessThanOrEqual(width)
+    }
   })
 })
 
