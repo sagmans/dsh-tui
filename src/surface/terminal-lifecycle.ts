@@ -10,6 +10,7 @@ import { installSignalRestore } from '../terminal/signals.ts'
 import { CLEAR_TITLE, windowTitle } from '../terminal/title.ts'
 import { WarningSafeTui } from '../terminal/warning-screen.ts'
 import { cleanCopied } from '../ui/copy.ts'
+import { escapeTerminalText } from '../terminal-text.ts'
 import type { FrameRow } from '../ui/frame.ts'
 
 /**
@@ -178,7 +179,8 @@ export function createTerminalLifecycle(ctx: Context, ports: TerminalLifecyclePo
       .finally(() => {
         // Everything below is written after the release: a failure nobody can
         // read is not a failure that was reported.
-        if (reason !== undefined) terminal.write(`\ndsh-tui: ${reason}\n`)
+        // Once the shell owns the terminal, foreign controls must remain evidence rather than terminal instructions.
+        if (reason !== undefined) terminal.write(escapeTerminalText(`\ndsh-tui: ${reason}\n`))
         // The hint is computed here rather than read from the context because
         // only the surface knows which session it is leaving: a fork or a
         // switch moves it. A run that opened nothing has nothing to offer back:

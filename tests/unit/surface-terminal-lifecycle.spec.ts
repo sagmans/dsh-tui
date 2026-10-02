@@ -11,6 +11,9 @@ import { windowTitle } from '@/terminal/title.ts'
 import { frameBlock, type FrameRow } from '@/ui/frame.ts'
 
 const SESSION = 'tui-session-1' as SessionId
+const FAILED_EXIT_STATUS = 1
+const CONTROL_REASON = 'failed\x1b]0;title\x07\x1b[31mred\x1b[0m\rprefix\b\x9b2J'
+const LITERAL_REASON = String.raw`failed\x1B]0;title\x07\x1B[31mred\x1B[0m\x0Dprefix\x08\x9B2J`
 /** The status a shell reports a SIGTERM with; the surface leaves the way a supervisor expects. */
 const SIGTERM_STATUS = 143
 /** What the bar holds when the reader asks for their own editor. */
@@ -122,6 +125,14 @@ function fixture(): Fixture {
 }
 
 describe('createTerminalLifecycle exits', () => {
+  it('prints control-bearing failures literally after returning the terminal', async () => {
+    const given = fixture()
+    given.lifecycle.requestExit(FAILED_EXIT_STATUS, CONTROL_REASON)
+    await vi.waitFor(() => { expect(given.exits).toEqual([FAILED_EXIT_STATUS]) })
+    expect(given.writes).toContain(`\ndsh-tui: ${LITERAL_REASON}\n`)
+    expect(given.stops()).toBe(1)
+  })
+
   it('leaves at once with the reason the caller gave and the session to come back to', async () => {
     const given = fixture()
     given.lifecycle.requestExit(0, 'interrupted')

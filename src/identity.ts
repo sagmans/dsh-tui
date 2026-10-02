@@ -1,5 +1,6 @@
 import { SessionId } from '@deepseek-ai/dsh-session'
 import type { LauncherAgentIdentity } from '@deepseek-ai/dsh-agent-loop'
+import { escapeTerminalText } from './terminal-text.ts'
 
 /** A command line that cannot be resolved into one launch identity. */
 export class LaunchUsageError extends Error {}
@@ -61,5 +62,6 @@ export const PROFILE_NAME = 'tui'
 
 /** Line printed after the terminal is handed back, so the session is recoverable. */
 export function resumeHint(sessionId: string, profile: string): string {
-  return `To resume this session: dsh --profile ${profile} --resume=${sessionId}`
+  // Launch arguments and stored identities must not regain terminal privileges in the shell-facing hint.
+  return escapeTerminalText(`To resume this session: dsh --profile ${profile} --resume=${sessionId}`)
 }

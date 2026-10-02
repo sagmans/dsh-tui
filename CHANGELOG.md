@@ -10,6 +10,8 @@ breaking change, and a patch carries only fixes.
 
 ### Fixed
 
+- Post-exit failures and resume hints display foreign terminal controls literally while preserving ordinary text and line breaks.
+
 - Fatal Node exits restore terminal modes and release warning/output ownership without suppressing the original failure or exit status.
 
 - Large tool-result content reaches card clipping without overflowing the argument stack; previews keep their existing limit and complete line counts.
