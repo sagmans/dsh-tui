@@ -18,6 +18,10 @@ import { answerBar, gateOver, answerText, answerRows, ESC, ENTER, UP, LEFT, DOWN
 const paste = (text: string): string => `\x1b[200~${text}\x1b[201~`
 /** The native renderer needs the marker even when credential text is masked. */
 const CURSOR = CURSOR_MARKER
+const C1_START = 0x80
+const C1_COUNT = 0x20
+const C1_TEXT = Array.from({ length: C1_COUNT }, (_, index) => String.fromCharCode(C1_START + index)).join('')
+const PROVIDER_FILTER_PASTES = ['Claude Pro', `Claude${C1_TEXT} Pro`]
 
 
 describe('QuestionGate paste', () => {
@@ -46,9 +50,9 @@ describe('QuestionGate paste', () => {
       gate.handleKey(paste('release/0.2'))
       expect(answerRows(gate)).toContain('release/0.2')
     })
-  it('filters the options from a pasted provider name', () => {
+  it.each(PROVIDER_FILTER_PASTES)('filters pasted provider names without admitting terminal controls: %j', (text) => {
       const gate = providerGate()
-      gate.handleKey(paste('Claude Pro'))
+      gate.handleKey(paste(text))
       expect(gate.card().options.map(option => option.label)).toEqual(['Anthropic (Claude Pro/Max)'])
     })
   it('leads with the heading the caller sent, which the seam promises and a plugin relies on', () => {
