@@ -146,13 +146,14 @@ export function renderTerminalText(raw: string, options: RenderTextOptions): str
   let style: TextStyle = GROUND
   let previous: TextStyle = GROUND
   const cells = new Map<number, Cell>()
-  let last: Cell | undefined
   let cursor = column
   let out = ''
 
   const write = (text: string, width: number): void => {
     if (width === 0) {
-      if (last !== undefined && last.col + last.width === cursor) last.text += text
+      // Cursor adjacency, not repaint insertion order, decides which retained glyph owns a combining mark.
+      const preceding = cells.get(cursor - 1)
+      if (preceding !== undefined && preceding.col + preceding.width === cursor) preceding.text += text
       return
     }
     // Column ownership bounds overwrite work to the graphemes it actually replaces.
@@ -160,11 +161,9 @@ export function renderTerminalText(raw: string, options: RenderTextOptions): str
       const replaced = cells.get(col)
       if (replaced === undefined) continue
       for (let occupied = replaced.col; occupied < replaced.col + replaced.width; occupied++) cells.delete(occupied)
-      if (replaced === last) last = undefined
     }
     const cell: Cell = { col: cursor, width, text, style }
     for (let col = cursor; col < cursor + width; col++) cells.set(col, cell)
-    if (last === undefined || cell.col >= last.col) last = cell
     cursor += width
   }
 
@@ -186,7 +185,6 @@ export function renderTerminalText(raw: string, options: RenderTextOptions): str
       }
     }
     cells.clear()
-    last = undefined
     cursor = column
   }
 

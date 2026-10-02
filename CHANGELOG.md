@@ -10,6 +10,8 @@ breaking change, and a patch carries only fixes.
 
 ### Fixed
 
+- Terminal repainting retains combining marks on the glyph immediately before the cursor, including retained wide glyphs.
+
 - Text clipping budgets include complete visible control spellings without splitting them or changing ordinary grapheme and styling behavior.
 
 - Post-exit failures and resume hints display foreign terminal controls literally while preserving ordinary text and line breaks.
