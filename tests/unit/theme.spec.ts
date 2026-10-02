@@ -4,6 +4,15 @@ import type { ThemeOverrides } from '@/theme-settings.ts'
 import { DEFAULT_PALETTE } from '@/theme-defaults.ts'
 import { type StyleSpec, type TuiToken } from '@/theme-tokens.ts'
 
+const ESC = '\u001b'
+const CUT_ELLIPSIS = '…'
+const COLOR_NONE_CUT_CASES = [
+  { raw: 'a row far too long for the width it was given', width: 10, expected: 'a row far…' },
+  { raw: `${ESC}[31mplain${ESC}[39m`, width: 10, expected: 'plain' },
+  { raw: `${ESC}[31mabcdefgh${ESC}[39m`, width: 4, expected: 'abc…' },
+  { raw: `${ESC}[1;4mabcdef${ESC}[22;24m`, width: 4, expected: 'abc…' },
+]
+
 const overrides = (tokens: Partial<Record<TuiToken, StyleSpec>>, palette = DEFAULT_PALETTE): ThemeOverrides => ({
   palette,
   tokens: new Map(Object.entries(tokens) as [TuiToken, StyleSpec][]),
@@ -11,16 +20,15 @@ const overrides = (tokens: Partial<Record<TuiToken, StyleSpec>>, palette = DEFAU
 
 describe('createTheme', () => {
   /**
-   * The width helper closes a cut with a reset whether or not it opened a style,
-   * so a row would carry escapes with colour off and break the one promise the
-   * mode makes. Guarding here keeps it a property of the theme rather than
-   * something each renderer has to remember.
+   * Incoming styles and generated resets must not override the reader's
+   * no-colour choice. Guarding here keeps that promise a property of the
+   * theme rather than something each renderer has to remember.
    */
-  it('cuts a row without leaving an escape behind when colour is off', () => {
+  it.each(COLOR_NONE_CUT_CASES)('cuts a row without leaving an escape behind when colour is off: %j', ({ raw, width, expected }) => {
     const theme = createTheme('none')
-    const cut = theme.cut('a row far too long for the width it was given', 10, '…')
-    expect(cut).not.toContain('\u001B')
-    expect(cut).toContain('…')
+    const cut = theme.cut(raw, width, CUT_ELLIPSIS)
+    expect(cut).toBe(expected)
+    expect(cut).not.toContain(ESC)
   })
 
   it('still closes a cut when colour is on, so no style outlives its row', () => {
