@@ -3,6 +3,16 @@ import { describe, expect, it } from 'vitest'
 import { clipVisibleGraphemes, escapeTerminalText, renderTerminalText, TAB_STOP } from '@/terminal-text.ts'
 
 const ESC = '\u001b'
+const BELL = '\u0007'
+const C1_CONTROL = '\u0080'
+const BIDI_CONTROL = '\u202e'
+const CONTROL_CLIP_CASES = [
+  { raw: BELL.repeat(3), limit: 3, expected: '…' },
+  { raw: BELL.repeat(3), limit: 9, expected: BELL.repeat(2) + '…' },
+  { raw: C1_CONTROL.repeat(3), limit: 5, expected: C1_CONTROL + '…' },
+  { raw: BIDI_CONTROL.repeat(2), limit: 7, expected: BIDI_CONTROL + '…' },
+  { raw: BELL, limit: 4, expected: BELL },
+]
 const LONG_STYLED_LINE_LENGTH = 32 * 1024
 // The broad ceiling detects multi-second input stalls without requiring a fast CI host.
 const LONG_LINE_RENDER_BUDGET_MS = 1000
@@ -178,6 +188,12 @@ describe('renderTerminalText', () => {
 })
 
 describe('clipVisibleGraphemes', () => {
+  it.each(CONTROL_CLIP_CASES)('budgets the complete visible spelling of controls: %j', ({ raw, limit, expected }) => {
+    const clipped = clipVisibleGraphemes(raw, limit)
+    expect(clipped).toBe(expected)
+    expect(renderTerminalText(clipped, { color: 'none' }).length).toBeLessThanOrEqual(limit)
+  })
+
   it('counts what the reader sees, not the sequences around it', () => {
     expect(clipVisibleGraphemes('abcdef', 3)).toBe('ab…')
     expect(clipVisibleGraphemes(`${ESC}[31mabcdef`, 3)).toBe(`${ESC}[31mab…`)
