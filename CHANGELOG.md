@@ -10,6 +10,8 @@ breaking change, and a patch carries only fixes.
 
 ### Fixed
 
+- No-colour row cuts strip incoming terminal styling as well as generated resets, including rows that fit without truncation.
+
 - Status rows flatten fact line breaks before measuring and clipping, so legal multiline paths cannot exceed the footer width.
 
 - Streaming Mermaid replies draw only the retained 32-fence window and keep overflow as source, preventing each delta from evicting every cached layout.

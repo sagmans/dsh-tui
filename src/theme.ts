@@ -1,10 +1,10 @@
-import { truncateToWidth, type EditorTheme, type MarkdownTheme, type SelectListTheme } from '@earendil-works/pi-tui'
+import { stripTerminalSequences, truncateToWidth, type EditorTheme, type MarkdownTheme, type SelectListTheme } from '@earendil-works/pi-tui'
 import { codeBlockLines, plainCodeLines } from './ui/diff.ts'
 import { oneRow } from './text.ts'
 import { renderTerminalText } from './terminal-text.ts'
 import { detectColourMode, type ColourMode } from './theme-capability.ts'
 import { DEFAULT_PALETTE, DEFAULT_TOKENS } from './theme-defaults.ts'
-import { resetSequence, resolveToken, type ResolvedStyle } from './theme-resolver.ts'
+import { resolveToken, type ResolvedStyle } from './theme-resolver.ts'
 import type { TuiToken } from './theme-tokens.ts'
 import { themeLayer, type ThemeOverrides } from './theme-settings.ts'
 
@@ -134,16 +134,15 @@ export function createTheme(mode: ColourMode = detectColourMode(process.env), ov
   /**
    * Truncate to a width, honouring the promise that `none` emits nothing.
    *
-   * pi-tui closes a cut by writing a reset unconditionally, whether or not the
-   * text carried any styling, so a truncated row leaks escapes even when
-   * colour is off. Those resets close styles this surface never opened, so
-   * dropping them restores the contract without changing what is drawn.
+   * Incoming styling and the width helper's closing reset must not override
+   * the reader's no-colour choice; stripping terminal sequences preserves
+   * the visible cut while keeping that promise for both short and long rows.
    */
   const cut = (text: string, width: number, ellipsis = ''): string => {
     // A row is one row: a break that reached the cut would be written as a move
     // to the next line, over whatever the frame put there.
     const truncated = truncateToWidth(oneRow(text), width, ellipsis)
-    return mode === 'none' ? truncated.replaceAll(resetSequence(), '') : truncated
+    return mode === 'none' ? stripTerminalSequences(truncated) : truncated
   }
   const visible = (token: TuiToken): boolean => !resolve(token).hidden
   /**
