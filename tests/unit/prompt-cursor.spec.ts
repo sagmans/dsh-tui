@@ -18,6 +18,8 @@ const EXIT_SCREEN = '\x1b[?1049l'
 const TEXT = '中😀e\u0301'
 const HOME_KEY = '\x1b[H'
 const START_FAILURE = 'terminal start failed'
+const FATAL_EVENT = 'uncaughtExceptionMonitor'
+const EXIT_EVENT = 'exit'
 const RESTORE_FAILURE = 'cursor restore failed'
 
 /** A real native renderer with captured terminal delivery exposes focus and redraw regressions. */
@@ -123,8 +125,12 @@ describe('native prompt cursor', () => {
   it('restores saved modes and warning ownership after partial startup failure', () => {
     const { tui, terminal, writes } = screen()
     const originalEmit = process.emit
+    const fatalListeners = process.rawListeners(FATAL_EVENT)
+    const exitListeners = process.rawListeners(EXIT_EVENT)
     vi.spyOn(terminal, 'start').mockImplementation(() => { throw new Error(START_FAILURE) })
     expect(() => tui.start()).toThrow(START_FAILURE)
+    expect(process.rawListeners(FATAL_EVENT)).toEqual(fatalListeners)
+    expect(process.rawListeners(EXIT_EVENT)).toEqual(exitListeners)
     expect(writes.join('')).toContain(RESTORE_MODES)
     expect(process.emit).toBe(originalEmit)
   })

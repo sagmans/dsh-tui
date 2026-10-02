@@ -9,6 +9,8 @@ const SAVE_CURSOR_MODES = '\x1b[?12s\x1b[?1004s'
 const ENABLE_CURSOR_MODES = '\x1b[?12h\x1b[?1004h'
 const RESTORE_CURSOR_MODES = '\x1b[?1004r\x1b[?12r'
 const WARNING_EVENT = 'warning'
+const FATAL_EVENT = 'uncaughtExceptionMonitor'
+const EXIT_EVENT = 'exit'
 const WARNING_EVENT_LIMIT = 256
 const ERROR_STACK_FIELD = 'stack'
 const WARNING_TEXT_FIELDS = ['name', 'message', ERROR_STACK_FIELD, 'code', 'detail']
@@ -115,6 +117,14 @@ export class WarningSafeTui extends TuiAltScreen {
   private cursorModesActive = false
   /** Initialization follows super(): only the native constructor listener needs interception. */
   private readonly applicationListenersReady = true
+  /** Fatal cleanup must preserve Node's original diagnostic and nonzero exit rather than claiming the exception. */
+  private readonly restoreAfterCrash = (): void => {
+    try {
+      this.stop({ preserveScreen: true })
+    } catch {
+      // A restoration failure cannot replace the fatal error Node is already reporting.
+    }
+  }
 
   /** Each failure episode deserves a report, but repeated retries must not flood the surface. */
   onFrameError: ((error: unknown) => void) | undefined
@@ -159,6 +169,8 @@ export class WarningSafeTui extends TuiAltScreen {
     try {
       if (!this.cursorModesActive) {
         this.cursorModesActive = true
+        process.on(FATAL_EVENT, this.restoreAfterCrash)
+        process.on(EXIT_EVENT, this.restoreAfterCrash)
         this.terminal.write(SAVE_CURSOR_MODES + ENABLE_CURSOR_MODES)
       }
       this.setShowHardwareCursor(true)
@@ -195,6 +207,9 @@ export class WarningSafeTui extends TuiAltScreen {
   }
 
   override stop(options?: TuiStopOptions): void {
+    // A stopped or restarting owner must leave no fatal hooks pointing at its former terminal.
+    process.removeListener(FATAL_EVENT, this.restoreAfterCrash)
+    process.removeListener(EXIT_EVENT, this.restoreAfterCrash)
     this.highSurrogate = undefined
     try {
       super.stop(options)
