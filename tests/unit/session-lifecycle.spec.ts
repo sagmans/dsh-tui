@@ -240,6 +240,26 @@ const queued = (text: string, kind = 'user'): unknown => ({
   content: [{ type: 'text', text }],
 })
 describe('createSessionLifecycle', () => {
+  it('routes only the driven session status to optional notifications', async () => {
+    const given = fixture()
+    const moshi = { session: vi.fn(), driver: vi.fn() }
+    Object.assign(given.ports, {
+      moshi,
+      refreshJobs: () => expect(moshi.session).toHaveBeenLastCalledWith(given.lifecycle.activeSession(), 'idle'),
+    })
+    await given.lifecycle.openAgent(SESSION_A, false)
+    expect(moshi.session).toHaveBeenCalledWith(SESSION_A, 'idle')
+    given.lifecycle.driverListeners()
+    given.delivery('agent/status', { agent: { id: CHILD }, status: 'running' })
+    given.delivery('agent/status', { agent: { id: SESSION_A }, status: 'unknown' })
+    expect(moshi.driver).not.toHaveBeenCalled()
+    given.delivery('agent/status', { agent: { id: SESSION_A }, status: 'running' })
+    given.delivery('agent/status', { agent: { id: SESSION_A }, status: 'idle' })
+    expect(moshi.driver.mock.calls).toEqual([['running'], ['idle']])
+    await given.lifecycle.openAgent(SESSION_B, false)
+    expect(moshi.session).toHaveBeenLastCalledWith(SESSION_B, 'idle')
+    given.dispose()
+  })
   it('starts with no agent, nothing open and no turn running', () => {
     const given = fixture()
 

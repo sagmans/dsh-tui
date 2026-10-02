@@ -882,6 +882,36 @@ rows = [
 
 With that row present, a pane waiting on a decision names the tool that asked instead of showing a colour alone. A label longer than the 80 characters Herdr holds whole is cut here rather than server-side, so the ellipsis lands where this surface put it; the message that rides the state report keeps its own, longer bound.
 
+## Moshi notifications
+
+[Moshi](https://getmoshi.app/docs/notifications) can send optional notifications for the session this terminal drives.
+Set `DSH_TUI_MOSHI_TOKEN` in the process environment before you start `dsh --profile tui`.
+Use a Moshi API token, not the host secret used by `moshi-hook`.
+The reporter is disabled when this variable is absent or empty.
+It works without Herdr or the Moshi daemon.
+
+Load the token through your secret manager. Do not put it in profile YAML, shell history, or a conversation.
+Unset `DSH_TUI_MOSHI_TOKEN` and restart the surface to disable notifications.
+
+The reporter sends these fixed messages:
+
+- **DSH needs attention:** “Return to the terminal to continue.” An agent approval or question triggers this notification.
+- **DSH finished:** “The current session is ready for input.” The driven agent and its background work must both stop.
+
+Reader navigation does not trigger attention notifications. Duplicate status events do not produce duplicate notifications.
+A finished run can include cancellation or failure; the message does not report task success.
+Switching sessions discards queued notifications and aborts outstanding delivery.
+Notifications already delivered cannot be recalled.
+
+The only JSON fields sent to `https://api.getmoshi.app/api/webhook` are `token`, `title`, and `message`.
+The message contains no transcript, prompt, tool arguments, approval text, working directory, or session/pane identifiers.
+The token selects its owning Moshi device; the reporter does not request multi-device delivery.
+Requests abort after three seconds. Network and HTTP failures remain silent, with no retries.
+Notification delivery never blocks agent work or terminal teardown.
+
+This integration does not provide native Chat View, Live Activity, remote approval controls, or automatic pane navigation.
+Use the existing Moshi SSH connection to return to the terminal.
+
 ## Development
 
 ```sh
