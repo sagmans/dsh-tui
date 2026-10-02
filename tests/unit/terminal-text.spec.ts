@@ -6,6 +6,15 @@ const ESC = '\u001b'
 const BELL = '\u0007'
 const C1_CONTROL = '\u0080'
 const BIDI_CONTROL = '\u202e'
+const COMBINING_REPAINT_CASES = [
+  { raw: `abc\rA${ESC}[0m\u0301`, expected: 'A\u0301bc' },
+  { raw: 'abc\b\u0301', expected: 'ab\u0301c' },
+  { raw: '中ab\b\b\u0301', expected: '中\u0301ab' },
+  { raw: '中\b\u0301', expected: '中' },
+  { raw: 'abc\r\u0301', expected: 'abc' },
+]
+const REPAINT_COLOUR = 'none' as const
+const REPAINT_MARGIN = 4
 const CONTROL_CLIP_CASES = [
   { raw: BELL.repeat(3), limit: 3, expected: '…' },
   { raw: BELL.repeat(3), limit: 9, expected: BELL.repeat(2) + '…' },
@@ -64,6 +73,10 @@ describe('escapeTerminalText', () => {
 })
 
 describe('renderTerminalText', () => {
+  it.each(COMBINING_REPAINT_CASES)('attaches zero-width marks only at retained cell boundaries: %j', ({ raw, expected }) => {
+    expect(renderTerminalText(raw, { color: REPAINT_COLOUR, column: REPAINT_MARGIN })).toBe(expected)
+  })
+
   it('keeps a full long-row repaint responsive', () => {
     const original = 'x'.repeat(LONG_STYLED_LINE_LENGTH)
     const replacement = 'y'.repeat(LONG_STYLED_LINE_LENGTH)
