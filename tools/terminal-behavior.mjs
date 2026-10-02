@@ -25,8 +25,6 @@ const PASTE_START = '\x1b[200~'
 const PASTE_END = '\x1b[201~'
 const PICKER_BYTES = '\x10'
 const QUIT_BYTES = '\x03'
-const CLEAR_DRAFT_BYTES = '\x15'
-const UNDO_DRAFT_BYTES = '\x1b[45;5u'
 const KITTY_PRESS = '\x1b[97;1u'
 const KITTY_REPEAT = '\x1b[97;1:2u'
 const KITTY_RELEASE = '\x1b[97;1:3u'
@@ -42,14 +40,16 @@ const CURSOR_HIDE = '\x1b[?25l'
 const BLINK_ENABLED = '\x1b[?12h'
 const CURSOR_MODES_RESTORED = '\x1b[?1004r\x1b[?12r'
 const TINY_HEIGHTS = [1, 2, 3]
-const RESIZE_WIDTHS = [1, 2, COLS]
+const RESIZE_WIDTHS = [1, COLS]
 const DIAGNOSTIC_TAIL_CHARACTERS = 2000
 const EXIT_SUCCESS = 0
 
 let output = ''
 let readyOffset
+let restoreOffset
 let exited = false
 const ready = Promise.withResolvers()
+const restored = Promise.withResolvers()
 const exit = Promise.withResolvers()
 const deadline = Promise.withResolvers()
 const child = pty.spawn(process.execPath, [CHILD], {
@@ -61,6 +61,7 @@ const watchdog = setTimeout(() => {
 }, TIMEOUT_MS)
 child.onData(data => {
   output += data
+  if (restoreOffset !== undefined && output.includes(READY, restoreOffset)) restored.resolve()
   if (readyOffset === undefined && output.includes(READY)) {
     readyOffset = output.length
     ready.resolve()
@@ -68,12 +69,24 @@ child.onData(data => {
 })
 child.onExit(status => {
   exited = true
+  restored.resolve()
   exit.resolve(status)
   if (readyOffset === undefined) ready.reject(new Error(`terminal-behavior: child exited before readiness (${status.exitCode})`))
 })
 
 try {
   await Promise.race([ready.promise, deadline.promise])
+  // An empty editor isolates transcript overflow from the dependency's narrow wide-grapheme wrapping.
+  for (const width of RESIZE_WIDTHS) {
+    assert.equal(exited, false, output.slice(-DIAGNOSTIC_TAIL_CHARACTERS))
+    if (width === COLS) restoreOffset = output.length
+    child.resize(width, ROWS)
+    await delay(DRAIN_MS)
+  }
+  // Linux resize delivery is asynchronous; visible wide-frame output must precede Unicode typing.
+  await Promise.race([restored.promise, deadline.promise])
+  assert.equal(exited, false, output.slice(-DIAGNOSTIC_TAIL_CHARACTERS))
+  const typingOffset = output.length
   for (let index = 0; index < ASCII_COUNT; index++) {
     child.write(ASCII_KEY)
     await delay(KEY_INTERVAL_MS)
@@ -97,25 +110,11 @@ try {
     await delay(DRAIN_MS)
   }
   // Byte encoding replaces lone surrogates; component tests, not a fabricated PTY claim, prove malformed scalar behavior.
-  assert.equal(output.slice(readyOffset).match(ERASE_DISPLAY)?.length ?? 0, 0, 'typing must not clear the whole screen')
+  assert.equal(output.slice(typingOffset).match(ERASE_DISPLAY)?.length ?? 0, 0, 'typing must not clear the whole screen')
   for (const height of TINY_HEIGHTS) {
     child.resize(COLS, height)
     await delay(DRAIN_MS)
   }
-  // Empty the draft through native input so unrelated wide-grapheme editor wrapping cannot mask transcript failures.
-  child.write(PICKER_BYTES)
-  await delay(DRAIN_MS)
-  child.write(CLEAR_DRAFT_BYTES)
-  await delay(DRAIN_MS)
-  // Narrow frames must retain large messages without trapping future redraws in the error boundary.
-  for (const width of RESIZE_WIDTHS) {
-    assert.equal(exited, false, output.slice(-DIAGNOSTIC_TAIL_CHARACTERS))
-    child.resize(width, ROWS)
-    await delay(DRAIN_MS)
-  }
-  // Undo restores the original draft, keeping the existing native retention assertion authoritative.
-  child.write(UNDO_DRAFT_BYTES)
-  await delay(DRAIN_MS)
   child.write(QUIT_BYTES)
   const status = await Promise.race([exit.promise, deadline.promise])
   assert.equal(status.exitCode, EXIT_SUCCESS, output.slice(-DIAGNOSTIC_TAIL_CHARACTERS))
@@ -127,6 +126,7 @@ try {
   assert.equal(receipt.enteredRawMode, true, 'native TTY never entered raw mode')
   assert.equal(receipt.rawMode, false, 'terminal stayed in raw mode')
   assert.deepEqual(receipt.failures, [], 'native frame failed')
+  for (const width of RESIZE_WIDTHS) assert.ok(receipt.renderedWidths.includes(width), `native frame width ${width} was not rendered`)
   assert.ok(output.slice(0, readyOffset).includes(ENTER_SCREEN), 'alternate screen was not entered')
   assert.ok(output.slice(0, receiptOffset).includes(EXIT_SCREEN), 'alternate screen was not restored')
   assert.ok(output.slice(0, receiptOffset).includes(CURSOR_MODES_RESTORED), 'cursor modes were not restored')

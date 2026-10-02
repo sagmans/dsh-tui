@@ -45,6 +45,7 @@ const model = new TranscriptModel()
 const pending = []
 const latency = []
 const failures = []
+const renderedWidths = new Set()
 let pickerOpen = false
 let ended = false
 let enteredRawMode = false
@@ -72,7 +73,13 @@ const view = new TranscriptView(model, theme, new MarkdownRenderer(theme.markdow
 })
 const editor = new BoxedEditor(tui, theme.editor)
 const empty = { render: () => [], invalidate: () => {} }
-const status = { render: () => [READY], invalidate: () => {} }
+const status = {
+  render: width => {
+    renderedWidths.add(width)
+    return [READY]
+  },
+  invalidate: () => {},
+}
 
 /** A receipt survives outside the alternate screen so the driver can prove semantic retention and restoration. */
 function finish() {
@@ -90,6 +97,7 @@ function finish() {
     settledMessages: SETTLED_MESSAGES,
     styledCharacters: STYLED_CHARACTERS,
     largeMessageCharacters: LARGE_MESSAGE_CHARACTERS,
+    renderedWidths: [...renderedWidths],
     outputSamples: sorted.length,
     dispatchToWriteP95Ms: sorted[Math.floor(sorted.length * LATENCY_QUANTILE)] ?? null,
   }
