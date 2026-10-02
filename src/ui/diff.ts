@@ -27,6 +27,8 @@ export const DIFF_MIN_SHARED_GRAPHEMES = 4
  * the pair draws whole-row, which is how a replacement looks anyway.
  */
 export const DIFF_EMPHASIS_MAX_GRAPHEMES = 2048
+/** One excess cluster proves the row needs whole-row drawing without scanning its remaining clusters. */
+const DIFF_EMPHASIS_SCAN_LIMIT = DIFF_EMPHASIS_MAX_GRAPHEMES + 1
 
 /**
  * File-level scaffolding a unified diff carries around its hunks.
@@ -166,9 +168,10 @@ function runsFor(clusters: readonly string[], head: number, tail: number): reado
  * emoji would otherwise take the band on half of itself.
  */
 function pairRuns(removed: string, added: string): { readonly removed: readonly Run[]; readonly added: readonly Run[] } | undefined {
-  const before = splitGraphemes(removed)
-  const after = splitGraphemes(added)
-  if (before.length > DIFF_EMPHASIS_MAX_GRAPHEMES || after.length > DIFF_EMPHASIS_MAX_GRAPHEMES) return undefined
+  const before = splitGraphemes(removed, DIFF_EMPHASIS_SCAN_LIMIT)
+  if (before.length > DIFF_EMPHASIS_MAX_GRAPHEMES) return undefined
+  const after = splitGraphemes(added, DIFF_EMPHASIS_SCAN_LIMIT)
+  if (after.length > DIFF_EMPHASIS_MAX_GRAPHEMES) return undefined
   const { head, tail } = sharedEdges(before, after)
   if (head + tail < DIFF_MIN_SHARED_GRAPHEMES) return undefined
   return { removed: runsFor(before, head, tail), added: runsFor(after, head, tail) }

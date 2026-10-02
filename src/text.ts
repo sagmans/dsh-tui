@@ -15,6 +15,8 @@
 
 import { escapeTerminalText, type EscapeTextOptions } from './terminal-text.ts'
 
+const UNLIMITED_GRAPHEMES = Number.POSITIVE_INFINITY
+
 /**
  * Render control characters as visible escapes, keeping line feeds.
  *
@@ -88,14 +90,17 @@ export function tailGraphemes(text: string, limit: number): string {
 /**
  * Text as the clusters a reader would count.
  *
- * The two cutters above bail out before scanning when the text is shorter than
- * the budget; a caller comparing two pieces of text cluster by cluster — the
- * two sides of an edit, for one — has to see every one of them, and comparing
- * clusters is what keeps a drawn run from ending inside a character.
+ * Comparing clusters keeps a drawn run from ending inside a character. A caller
+ * with a work budget can stop after the first excess cluster without retaining
+ * the rest of an oversized row; callers without a budget still keep every one.
  */
-export function splitGraphemes(text: string): string[] {
+export function splitGraphemes(text: string, limit = UNLIMITED_GRAPHEMES): string[] {
   const clusters: string[] = []
-  for (const { segment } of GRAPHEMES.segment(text)) clusters.push(segment)
+  if (limit <= 0) return clusters
+  for (const { segment } of GRAPHEMES.segment(text)) {
+    clusters.push(segment)
+    if (clusters.length >= limit) break
+  }
   return clusters
 }
 

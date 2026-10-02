@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { stripTerminalSequences } from '@earendil-works/pi-tui'
 import { createTheme, type TuiTheme } from '@/theme.ts'
 import { DEFAULT_PALETTE, DIFF_ADDED_BAND, DIFF_REMOVED_BAND } from '@/theme-defaults.ts'
@@ -18,6 +18,14 @@ const rgb = (hex: string): string => [1, 3, 5].map(at => Number.parseInt(hex.sli
 const added = `38;2;${rgb(DEFAULT_PALETTE.added)}`
 const removed = `38;2;${rgb(DEFAULT_PALETTE.removed)}`
 const muted = `38;2;${rgb(DEFAULT_PALETTE.muted)}`
+const LARGE_DIFF_ROW_LENGTH = 100_000
+const COMBINING_CLUSTER = 'e\u0301'
+const LAST_CHANGED_CLUSTER = 1
+const MAX_SEGMENT_VISITS = DIFF_EMPHASIS_MAX_GRAPHEMES + 1
+const OVERSIZED_DIFF_PAIRS = [
+  { removed: 'x'.repeat(LARGE_DIFF_ROW_LENGTH) + '1', added: 'x'.repeat(LARGE_DIFF_ROW_LENGTH) + '2', visits: MAX_SEGMENT_VISITS },
+  { removed: 'xxxx1', added: 'x'.repeat(LARGE_DIFF_ROW_LENGTH) + '2', visits: MAX_SEGMENT_VISITS + 'xxxx1'.length },
+]
 
 /** The look the answer's markdown theme hands a fence. */
 const look = (active: TuiTheme = createTheme('truecolor')): DiffLook => ({
@@ -126,6 +134,15 @@ describe('a paired edit', () => {
     expect(rows[1]).toContain(added)
   })
 
+  it('counts the emphasis boundary in complete graphemes, not UTF-16 units', () => {
+    const shared = COMBINING_CLUSTER.repeat(DIFF_EMPHASIS_MAX_GRAPHEMES - LAST_CHANGED_CLUSTER)
+    const source = [`-${shared}1`, `+${shared}2`]
+    const rows = renderDiffBlock(source.join('\n'), look())
+    expect(banded(rows[0] ?? '', rgb(DIFF_REMOVED_BAND))).toEqual(['1'])
+    expect(banded(rows[1] ?? '', rgb(DIFF_ADDED_BAND))).toEqual(['2'])
+    expect(rows.map(stripTerminalSequences)).toEqual(source)
+  })
+
   it('pairs only as many rows as both runs carry', () => {
     const rows = renderDiffBlock(['-const a = 1', '-const b = 1', '+const a = 2'].join('\n'), look())
     expect(banded(rows[0] ?? '', rgb(DIFF_REMOVED_BAND))).toEqual(['1'])
@@ -134,12 +151,31 @@ describe('a paired edit', () => {
     expect(rows[1]).toContain(removed)
   })
 
-  it('gives up the band on a pair longer than a frame should cut', () => {
-    const long = 'x'.repeat(DIFF_EMPHASIS_MAX_GRAPHEMES)
-    const rows = renderDiffBlock([`-${long}1`, `+${long}2`].join('\n'), look())
-    expect(rows.join('')).not.toContain('48;2;')
-    expect(rows[0]).toContain(removed)
-    expect(rows[1]).toContain(added)
+  it.each(OVERSIZED_DIFF_PAIRS)('keeps oversized pairs whole without exhausting their grapheme iterators; budget=$visits', (pair) => {
+    const segment = Intl.Segmenter.prototype.segment
+    let visits = 0
+    const spy = vi.spyOn(Intl.Segmenter.prototype, 'segment').mockImplementation(function (this: Intl.Segmenter, input: string) {
+      const segments = segment.call(this, input)
+      const iterator = segments[Symbol.iterator].bind(segments)
+      // Observe real ICU work, rather than replacing the grapheme policy with a test implementation.
+      Object.defineProperty(segments, Symbol.iterator, { value: function* () {
+        for (const item of iterator()) {
+          visits += 1
+          yield item
+        }
+      } })
+      return segments
+    })
+    try {
+      const rows = renderDiffBlock([`-${pair.removed}`, `+${pair.added}`].join('\n'), look())
+      expect(rows.join('')).not.toContain('48;2;')
+      expect(rows[0]).toContain(removed)
+      expect(rows[1]).toContain(added)
+      expect(rows.map(stripTerminalSequences)).toEqual([`-${pair.removed}`, `+${pair.added}`])
+      expect(visits).toBeLessThanOrEqual(pair.visits)
+    } finally {
+      spy.mockRestore()
+    }
   })
 })
 
