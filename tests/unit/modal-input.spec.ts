@@ -1,10 +1,26 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { GATE_WAIT_KEY } from '@/herdr/constants.ts'
 import { createModalInput } from '@/surface/modal-input.ts'
 import { POPUP_MAX_HEIGHT, popupRowBudget, popupWidth } from '@/ui/picker-card.ts'
 import { SESSION, ESCAPE, ENTER, COLUMNS, ROWS, POPUP_MARGIN, fakePicker, scriptedPicker, fixture, approvalWaterfall, requestApproval, requestQuestions, settle } from './fixtures/modal-input.ts'
 
 describe('createModalInput herdr waits', () => {
+  it('notifies for agent gates but never for reader navigation', async () => {
+    const given = fixture()
+    const moshi = { block: vi.fn(), unblock: vi.fn() }
+    Object.assign(given.ports, { moshi })
+    const modals = createModalInput(given.ctx, given.ports)
+    const picker = modals.openPicker(fakePicker('Model'))
+    modals.handleKey(ESCAPE)
+    await picker
+    expect(moshi.block).not.toHaveBeenCalled()
+    const answered = requestApproval(modals, given)
+    expect(moshi.block).toHaveBeenCalledWith(GATE_WAIT_KEY)
+    expect(moshi.block.mock.calls[0]).toHaveLength(1)
+    modals.handleKey('y')
+    await answered
+    expect(moshi.unblock).toHaveBeenCalledWith(GATE_WAIT_KEY)
+  })
   it('claims no wait for a menu the reader opened', async () => {
     const given = fixture()
     const modals = createModalInput(given.ctx, given.ports)

@@ -5,6 +5,7 @@ import { SessionId } from '@deepseek-ai/dsh-session'
 import { forkPoint, type ForkEvent } from '../agent/fork.ts'
 import { startAgent, type ForkInheritance, type TuiAgent } from '../agent/host.ts'
 import type { HerdrReporter } from '../herdr/reporter.ts'
+import type { MoshiReporter } from '../moshi.ts'
 import { driverReportFor, sessionStartReason } from '../herdr/state.ts'
 import { pendingPrompts } from '../queue.ts'
 import { BELL, shouldRingBell } from '../terminal/bell.ts'
@@ -78,6 +79,8 @@ export interface SessionLifecyclePorts {
   readonly refreshJobs: () => void
   /** The pane's agent row, which hears the driver rather than each turn. */
   readonly herdr: HerdrReporter
+  /** Absent unless the reader explicitly enabled external notifications. */
+  readonly moshi?: MoshiReporter | undefined
   /** Write to the tty, but only while this surface owns it. */
   readonly writeTerminal: (text: string) => void
   /** Whether the exit has begun, which mutes the bell. */
@@ -218,6 +221,8 @@ export function createSessionLifecycle(ctx: Context, ports: SessionLifecyclePort
     activeSession = id
     ports.setViewed(id)
     agent = handle
+    // Seed identity before the new session publishes its resumed background facts.
+    ports.moshi?.session(activeSession, handle.agent.status)
     // A resumed agent can already own live jobs, so the pane must know about
     // them before its driver's phase is reported as idle.
     ports.refreshJobs()
@@ -442,6 +447,7 @@ export function createSessionLifecycle(ctx: Context, ports: SessionLifecyclePort
       const status = driverReportFor(payload, activeSession)
       if (status === undefined) return
       ports.herdr.driver(status)
+      ports.moshi?.driver(status)
     }),
   ]
 

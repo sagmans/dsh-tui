@@ -12,6 +12,7 @@ import { describeSkillDrift } from './install-skills.ts'
 import { windowTitle } from './terminal/title.ts'
 import { toolDisplayFor } from './tool-display.ts'
 import { runModelList } from './model-list.ts'
+import { createMoshiReporter } from './moshi.ts'
 import { LIST_MODELS_SERVICE } from './startup.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { createAppearance } from './surface/appearance.ts'
@@ -278,6 +279,7 @@ export function apply(ctx: Context, config: unknown): void {
       if (sessionView.viewingChild()) await sessionView.show(sessionLifecycle.activeSession())
     },
   })
+  const moshi = createMoshiReporter()
   const backgroundWork = createBackgroundWork(ctx, {
     drivingAgent: () => sessionLifecycle.drivingAgent(),
     activeSession: () => sessionLifecycle.activeSession(),
@@ -287,7 +289,10 @@ export function apply(ctx: Context, config: unknown): void {
     navigate: id => {
       void sessionView.show(SessionId(id))
     },
-    backgroundChanged: running => herdr.background(running),
+    backgroundChanged: running => {
+      herdr.background(running)
+      moshi?.background(running)
+    },
   })
   const markdown = new MarkdownRenderer(theme.markdown, createMermaidTransform({ theme, mode: () => appearance.mermaidMode() }))
   const terminalLifecycle = createTerminalLifecycle(ctx, {
@@ -298,7 +303,10 @@ export function apply(ctx: Context, config: unknown): void {
     sessionOpened: () => sessionLifecycle.sessionOpened(),
     turnRunning: () => sessionLifecycle.turnRunning(),
     stopClock: () => sessionLifecycle.stopClock(),
-    exit: appExit,
+    exit: code => {
+      moshi?.dispose()
+      appExit(code)
+    },
     draftText: () => editor.getExpandedText(),
     draftBorrowed: () => promptBar.isBorrowed(),
     holdDraft: text => promptBar.replaceHeld(text),
@@ -333,6 +341,7 @@ export function apply(ctx: Context, config: unknown): void {
    */
   const modalInput = createModalInput(ctx, {
     herdr,
+    moshi,
     editor,
     tui,
     terminal,
@@ -427,6 +436,7 @@ export function apply(ctx: Context, config: unknown): void {
     resetRoster: () => backgroundWork.resetRoster(),
     refreshJobs: () => backgroundWork.refresh(),
     herdr,
+    moshi,
     writeTerminal,
     exiting: exited,
     disposers,
@@ -516,6 +526,9 @@ export function apply(ctx: Context, config: unknown): void {
 
   appearance.createThemesHome()
   disposers.push(appearance.watchThemes())
+
+  // Teardown reverses registration order; abort notifications before gates release their waits.
+  disposers.push(() => moshi?.dispose())
 
   void commands.start().catch((error: unknown) => {
     requestExit(1, error instanceof Error ? error.message : String(error))

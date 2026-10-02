@@ -7,6 +7,7 @@ import { ApprovalGate, type GateAnswer, type GateCard } from '../gates.ts'
 import { QuestionGate, toGateQuestions } from '../gates/questions.ts'
 import { GATE_WAIT_KEY } from '../herdr/constants.ts'
 import type { HerdrReporter } from '../herdr/reporter.ts'
+import type { MoshiReporter } from '../moshi.ts'
 import type { Keymap } from '../input/actions.ts'
 import type { TuiTheme } from '../theme.ts'
 import type { WarningSafeTui } from '../terminal/warning-screen.ts'
@@ -62,6 +63,8 @@ interface PendingPicker {
  */
 export interface ModalInputPorts {
   readonly herdr: HerdrReporter
+  /** Absent unless the reader explicitly enabled external notifications. */
+  readonly moshi?: MoshiReporter | undefined
   readonly editor: GateInputBar
   readonly tui: WarningSafeTui
   readonly terminal: ProcessTerminal
@@ -112,6 +115,7 @@ export function createModalInput(ctx: Context, ports: ModalInputPorts): ModalInp
     // The card's own title names the decision, which is what a reader glancing
     // at a wall of panes needs in order to know which one to open.
     ports.herdr.block(GATE_WAIT_KEY, next.gate.card().title)
+    ports.moshi?.block(GATE_WAIT_KEY)
     // A gate owns the keyboard: the editor must not collect the decision keys.
     ports.editor.disableSubmit = true
     ports.tui.setFocus(null)
@@ -125,6 +129,7 @@ export function createModalInput(ctx: Context, ports: ModalInputPorts): ModalInp
   const closeGate = (): void => {
     pending = undefined
     ports.herdr.unblock(GATE_WAIT_KEY)
+    ports.moshi?.unblock(GATE_WAIT_KEY)
     ports.editor.disableSubmit = false
     // The question is answered or skipped, so the reader gets their prompt back
     // in the bar they left it in, with the menu the prompt bar offered.

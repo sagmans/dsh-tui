@@ -8,6 +8,10 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+### Added
+
+- Optional Moshi completion and attention notifications, enabled only by `DSH_TUI_MOSHI_TOKEN`. Fixed messages exclude conversation content and session identifiers; bounded delivery never blocks agent work.
+
 ### Fixed
 
 - Intraline diff emphasis stops grapheme collection after its budget is exceeded instead of materializing entire oversized rows; whole-row fallback and Unicode boundaries remain intact.
