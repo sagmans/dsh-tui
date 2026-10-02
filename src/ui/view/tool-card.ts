@@ -10,6 +10,7 @@ import { visibleWidth, wrapTextWithAnsi } from '@earendil-works/pi-tui'
 import { cardDetailRows, shellFoldHint, shellRetentionHint, type CardPreview } from '../../cards/preview.ts'
 import { clip, oneLine, type CardRow, type CardStat, type CardStatKind, type ToolCard, type ToolCardKind, type ToolSubCall } from '../../cards.ts'
 import { type Keymap } from '../../input/actions.ts'
+import { displayText } from '../../text.ts'
 import { type TranscriptEntry } from '../../transcript.ts'
 import { type LiveCallState } from '../../transcript/tool-calls.ts'
 import { type ToolDisplaySpec } from '../../tool-display.ts'
@@ -143,7 +144,7 @@ export class ToolCards {
       // Where the calls stopped, so the card's own rows are counted from below them.
       const callsEnd = lines.length
       if (expanded && card.kind === 'terminal' && card.argument !== undefined && card.argument !== '' && this.context.theme.visible('tool.args')) {
-        this.pushStyledWrapped(lines, this.context.theme.rich(card.argument, { token: 'tool.args', column: visibleWidth(DETAIL_INDENT) }), width, DETAIL_INDENT)
+        this.pushStyledWrapped(lines, this.context.theme.rich(displayText(card.argument, { column: visibleWidth(DETAIL_INDENT) }), { token: 'tool.args', column: visibleWidth(DETAIL_INDENT) }), width, DETAIL_INDENT)
       }
       for (const row of detail) {
         const drawn = this.detailRow(row, card.kind)
@@ -347,7 +348,9 @@ export class ToolCards {
   /** A card's argument, styled and flattened, clipped to `limit` when one is given. */
     private cardArgument(card: ToolCard, limit?: number): string {
       if (card.argument === undefined || card.argument === '' || !this.context.theme.visible('tool.args')) return ''
-      const shown = limit === undefined ? card.argument : clip(oneLine(card.argument), limit)
+      // Arguments describe an action, so repaint controls must remain visible evidence.
+      const literal = displayText(card.argument)
+      const shown = limit === undefined ? literal : clip(oneLine(literal), limit)
       return this.context.theme.rich(shown, { token: 'tool.args' })
     }
   /**

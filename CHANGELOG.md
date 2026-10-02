@@ -8,6 +8,10 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+### Fixed
+
+- Commands and approval choices retain literal control-character evidence while tool output keeps terminal repaint semantics.
+
 ## [0.13.0] - 2026-10-01
 
 ### Fixed
