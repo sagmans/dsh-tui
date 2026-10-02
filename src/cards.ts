@@ -299,8 +299,13 @@ export function contentLines(content: unknown): string[] {
     const record = block as Record<string, unknown>
     // Any block that carries text counts; a tool-result block also holds its
     // model-facing content one level deeper.
-    if (typeof record.text === 'string') lines.push(...record.text.split('\n'))
-    if (Array.isArray(record.content)) lines.push(...contentLines(record.content))
+    // Tool output can exceed engine argument limits before card clipping; preserve its complete line count.
+    if (typeof record.text === 'string') {
+      for (const line of record.text.split('\n')) lines.push(line)
+    }
+    if (Array.isArray(record.content)) {
+      for (const line of contentLines(record.content)) lines.push(line)
+    }
   }
   return lines
 }

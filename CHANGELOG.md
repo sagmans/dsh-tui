@@ -10,6 +10,8 @@ breaking change, and a patch carries only fixes.
 
 ### Fixed
 
+- Large tool-result content reaches card clipping without overflowing the argument stack; previews keep their existing limit and complete line counts.
+
 - Large durable messages and nested content no longer overflow the argument stack while folding; visible lines and recorded thoughts retain their order and separation.
 
 - Large retained messages survive narrow terminal resizes and cached redraws without overflowing the argument stack; copy-row and click metadata remain paired.

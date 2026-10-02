@@ -3,6 +3,8 @@ import { performance } from 'node:perf_hooks'
 import { ProcessTerminal, ScrollView, matchesKey } from '@earendil-works/pi-tui'
 import { WarningSafeTui } from '../../lib/terminal/warning-screen.js'
 import { TranscriptModel } from '../../lib/transcript.js'
+import { contentLines } from '../../lib/cards.js'
+import { cardOfResult } from '../../lib/cards/presenter.js'
 import { TranscriptView } from '../../lib/ui/view.js'
 import { MarkdownRenderer } from '../../lib/ui/markdown.js'
 import { BoxedEditor } from '../../lib/ui/editor.js'
@@ -23,6 +25,11 @@ const FOLD_SEPARATOR = '\n'
 const FOLD_PLUGIN = 'fold-proof'
 const FOLD_EVENT = 'user/message'
 const FOLD_SOURCE = 'plugin'
+const TOOL_FOLD_NAME = 'fold-tool'
+const TOOL_FOLD_ID = 'tool-fold-proof'
+const TOOL_CALL_EVENT = 'tool/call'
+const TOOL_RESULT_EVENT = 'tool/result'
+const EMPTY_ARGUMENTS = '{}'
 const FOLD_PREFIX = `injected ${FOLD_PLUGIN} · ${FOLD_LINE_COUNT} lines`
 const LARGE_MESSAGE_CHARACTERS = 150_000
 const LARGE_MESSAGE_TEXT = 'z'
@@ -48,7 +55,10 @@ const EXIT_FAILURE = 1
 const terminal = new ProcessTerminal()
 const tui = new WarningSafeTui(terminal)
 const theme = createTheme(COLOR_MODE)
-const model = new TranscriptModel()
+const model = new TranscriptModel({
+  call: () => undefined,
+  result: (name, input) => cardOfResult(undefined, { name, failed: input.isError, contentLines: contentLines(input.content) }),
+})
 const pending = []
 const latency = []
 const failures = []
@@ -67,6 +77,10 @@ terminal.write = data => {
 // A summarized injection exercises the durable fold without letting rendering costs obscure ingestion failures.
 model.apply({ type: FOLD_EVENT, data: { content: [{ type: TEXT_CONTENT, text: Array(FOLD_LINE_COUNT).fill(FOLD_LINE).join(FOLD_SEPARATOR) }], source: { kind: FOLD_SOURCE, plugin: FOLD_PLUGIN } } })
 const foldedNotice = model.entries().some(entry => entry.kind === 'notice' && entry.text.startsWith(FOLD_PREFIX))
+// The card presenter must ingest the whole result before its normal retained-row budget takes effect.
+model.apply({ type: TOOL_CALL_EVENT, data: { name: TOOL_FOLD_NAME, arguments: EMPTY_ARGUMENTS, callId: TOOL_FOLD_ID } })
+model.apply({ type: TOOL_RESULT_EVENT, data: { message: { toolCallId: TOOL_FOLD_ID, content: [{ type: TEXT_CONTENT, text: Array(FOLD_LINE_COUNT).fill(FOLD_LINE).join(FOLD_SEPARATOR) }], isError: false } } })
+const toolFold = model.entries().find(entry => entry.kind === 'tool' && entry.id === TOOL_FOLD_ID)
 for (let index = 0; index < SETTLED_MESSAGES; index++) {
   model.apply({ type: MESSAGE_EVENT, data: { message: { content: [{ type: TEXT_CONTENT, text: `settled ${index}` }] } } })
 }
@@ -109,6 +123,8 @@ function finish() {
     largeMessageCharacters: LARGE_MESSAGE_CHARACTERS,
     foldedNotice,
     foldLineCount: FOLD_LINE_COUNT,
+    toolFoldLines: toolFold?.kind === 'tool' ? toolFold.card.totalLines : undefined,
+    toolFoldRows: toolFold?.kind === 'tool' ? toolFold.card.detail.length : undefined,
     renderedWidths: [...renderedWidths],
     outputSamples: sorted.length,
     dispatchToWriteP95Ms: sorted[Math.floor(sorted.length * LATENCY_QUANTILE)] ?? null,

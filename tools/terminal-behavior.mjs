@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import pty from 'node-pty'
 import { barePaneEnv } from './pty-launch.mjs'
+import { CARD_DETAIL_MAX } from '../lib/cards.js'
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const CHILD = join(ROOT, 'tests/fixtures/terminal-behavior.mjs')
@@ -127,6 +128,8 @@ try {
   assert.equal(receipt.rawMode, false, 'terminal stayed in raw mode')
   assert.deepEqual(receipt.failures, [], 'native frame failed')
   assert.equal(receipt.foldedNotice, true, 'large injected message did not reach the transcript')
+  assert.equal(receipt.toolFoldLines, receipt.foldLineCount, 'large tool result lost its full line count')
+  assert.equal(receipt.toolFoldRows, CARD_DETAIL_MAX, 'large tool result exceeded its retained row budget')
   for (const width of RESIZE_WIDTHS) assert.ok(receipt.renderedWidths.includes(width), `native frame width ${width} was not rendered`)
   assert.ok(output.slice(0, readyOffset).includes(ENTER_SCREEN), 'alternate screen was not entered')
   assert.ok(output.slice(0, receiptOffset).includes(EXIT_SCREEN), 'alternate screen was not restored')
