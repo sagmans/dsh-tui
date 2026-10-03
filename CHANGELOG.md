@@ -14,6 +14,8 @@ breaking change, and a patch carries only fixes.
 
 ### Fixed
 
+- Resume hints preserve whitespace and shell punctuation as literal identity tokens while keeping terminal controls visible.
+
 - Deeply nested recorded content preserves visible text, reasoning separation, and tool-result order without exhausting the call stack.
 
 - Oversized Markdown layouts fall back to readable source when the renderer exceeds its stack limit, preserving retained text across narrow resizes.
