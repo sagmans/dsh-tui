@@ -108,7 +108,9 @@ The profile then keeps `@deepseek-ai/dsh-base` and no application, so `dsh --pro
 
 ### Use the installed Harness launcher
 
-Run `dsh --version` and confirm the release is inside the supported window (`>=0.2.0-rc.2 <0.3.0`) before launching this plugin. `pnpm dsh` from a Harness source checkout runs its development host, not the installed release. That host can migrate `settings.yaml` and is outside this plugin's supported range; do not use it for TUI dogfooding.
+The manifest declares `>=0.2.0-rc.2 <0.3.0`, but lists only `0.2.0-rc.2` as a verified release. Range membership alone does not prove compatibility. Run `dsh --version` and use that installed release for dogfooding. `pnpm dsh` from a Harness source checkout runs a development host, not the verified installed release. It can migrate `settings.yaml`; do not use it for TUI dogfooding.
+
+The surface probes required and optional services at startup, and selects settings APIs by capability. These checks do not validate the host version or prove full-profile behavior. The dogfood helper and PTY driver separately check the launcher against the manifest's verified releases.
 
 ## Troubleshooting
 
@@ -118,7 +120,7 @@ Two facts explain most failures.
 
 **`dsh plugin install` removes a bundle it cannot resolve, and says nothing.** The command reconciles `dsh.profile.bundles` against the installed dependencies. A bundle whose path does not resolve leaves the list, and the command still exits 0. The next launch composes `@deepseek-ai/dsh-base` alone. No application plugin mounts, so nothing reads the command line: `dsh --profile tui` then prints nothing and never exits, and `--help` waits with it.
 
-**npm reports `overriding peer dependency` while a harness tree resolves, and the lines are not failures.** The harness floats its own prereleases, so its dependencies hold overlapping ranges over the same packages and npm names each range it overrides; the install still exits 0. A plugin profile does not have that shape — `dsh plugin add` resolves one copy of every package this bundle mounts. The plugin's own peers are optional so that npm keeps the host's copy instead of nesting a private one.
+**npm can report `overriding peer dependency` while a harness tree resolves.** A warning alone does not mean the install failed; check its exit status. This plugin pins its mounted harness dependencies to `0.2.0-rc.2` and declares optional harness peers as `*`. Optional peers avoid automatic installation when absent; neither open peers nor exact dependencies guarantee consumer deduplication. The consumer install smoke checks package-copy counts for its selected release and install paths, not every host in the declared range.
 
 | Symptom | Cause | Fix |
 |---|---|---|
@@ -127,7 +129,7 @@ Two facts explain most failures.
 | `dsh-tui: both stdin and stdout must be TTYs` | stdin or stdout is a pipe, a file, or a CI runner | run the command from a terminal |
 | Node warnings, such as `ExperimentalWarning: stripTypeScriptTypes …`, appear after exit | the TUI holds runtime warnings until it returns the terminal to your shell; startup warnings remain visible before the TUI starts | read the warnings in your shell after exit; no warning-suppression flag is needed |
 | Changes under `src/` have no effect | a linked profile loads `lib/`, not `src/` | `pnpm run build` in the plugin checkout |
-| TUI preferences disappear after launching a Harness source checkout | that host treats `settings.yaml` as migration input, not live preferences | use an installed release inside the supported window with a cloned home; preserve the original settings file |
+| TUI preferences disappear after launching a Harness source checkout | that host treats `settings.yaml` as migration input, not live preferences | use the verified installed release with a cloned home; preserve the original settings file |
 | `--preset <id>` is refused, because the session's agent preset is fixed | a session keeps the mode that composed it, and this session already took a turn | `/preset <id>` before the first turn, or resume without `--preset` |
 | `--resume <id>` starts a new session | the id is a bare UUID | pass the stored id, `tui-session-…` included; a bare `--resume` opens the picker |
 | `dsh: profile "tui" does not exist` | the profile is not created yet | the `add` command creates it |
@@ -500,27 +502,27 @@ The plugin exports a Config schema for all preferences shown above, including
 `prefix`, `prefixWindow`, and `keys`. Launch fields such as `sessionId`,
 `model`, and `provider` remain separate from live preference edits.
 The settings service owns persistence. TUI does not create another preference store.
-It uses released `installSection` or `register` APIs, or Config-backed
+It uses legacy section-style `installSection` or `register` APIs, or Config-backed
 `describe` and revision-checked `update` APIs. Unsupported or read-only writes
 show a notice instead of reporting success. A rejected theme selection restores
 the applied theme, and `/theme tokens` reports that same appearance.
 
 On Config-backed hosts, absent `history.enabled` and `history.ghost` stay off.
 Set each switch to `true` explicitly to enable it. This prevents recording while
-the host's asynchronous legacy import is pending or has failed. Released section
-hosts retain their existing defaults. If the host reports unreadable preferences,
+the host's asynchronous legacy import is pending or has failed. Legacy section-style
+settings providers retain their existing defaults. If the host reports unreadable preferences,
 history stays off. Readable `false` switches survive errors in other fields.
 Malformed updates retain the last valid appearance and do not overwrite their source.
 
 When public descriptors expose raw user layers, history checks those layers at use
 time. A readable opt-out survives rejected siblings even without a change event.
 Another rejected opt-in cannot clear this protection; a valid committed update can.
-A released-provider limit remains: after an absent user section, rejected scalar
+A section-provider limit remains: after an absent user section, rejected scalar
 sections can produce identical public descriptors. TUI cannot detect that transition
-without host validity metadata, so normal released defaults remain active.
+without host validity metadata, so section-provider defaults remain active.
 
-The inspected source host has no legacy import alias from `dsh-tui` to `tui`.
-Exporting Config does not resolve that namespace mismatch. The host can rename
+The verified `0.2.0-rc.2` settings service has no legacy import alias from `dsh-tui` to `tui`.
+Exporting Config does not resolve that namespace mismatch. The service renames
 `settings.yaml` to `settings.yaml.imported` before import completes.
 TUI does not retry or restore that file automatically. Preserve current privacy
 opt-outs and copy only the intended legacy fields into the actual TUI entry's
@@ -804,8 +806,8 @@ The mode is re-read rather than remembered: resuming mounts what that session's 
 The package is a Cordis plugin bundle that stacks over `@deepseek-ai/dsh-base`:
 
 - `@sagmans/dsh-tui/startup` parses this app's own flags and publishes the launch identity.
-- The roster of modes holds the id a session starts in when nobody names one: `@deepseek-ai/dsh-agent-preset-registry` owns that service on the supported line, and each mode arrives as a row of `@deepseek-ai/dsh-agent-preset`, so this bundle declares the four modes itself. Both are mounted through this bundle's own `host/roster` entry point, because a patch row is applied before any service exists and the registry and the modes arrive with the harness's own agent services — after the surface that needs the roster. A mode names a selection rather than a composition: the plugins an agent runs on belong to the bundle shipping each of them, and the profile's own layers compose them, so a mode here declares no plugin row and the patch disables none. The one row a mode does own is its presentation: `ptc` mounts `@deepseek-ai/dsh-agent-tool-presentation` with `mode: ptc`, because the form an agent's tools take is declared per agent — a session's own row cannot say it, and a mode without the row presents natively whatever its id says.
-- `@deepseek-ai/dsh-cordis-host-runner` is the host machinery creator mode needs, and the base mounts no such row, so a terminal profile mounts it through this bundle's own `host/runner` entry point. The code runtime PTC mode runs programs against is a base row of its own (`ptc-runtime`) on the supported line, so this bundle mounts none of its own. Both packages are plain dependencies: a profile resolves exactly one copy of each, and the harness reads its runtime version off the runner it mounts.
+- The roster of modes holds the id a session starts in when nobody names one: `@deepseek-ai/dsh-agent-preset-registry` owns that service on the supported line, and each mode arrives as a row of `@deepseek-ai/dsh-agent-preset`, so this bundle declares the four modes itself. Both are mounted through this bundle's own `host/roster` entry point, because a patch row is applied before any service exists and the registry and the modes arrive with the harness's own agent services — after the surface that needs the roster. A mode names a selection rather than a composition: the plugins an agent runs on belong to the bundle shipping each of them, and the profile's own layers compose them, so the other shipped modes declare no plugin row and the patch disables none. The one row a mode does own is its presentation: `ptc` mounts `@deepseek-ai/dsh-agent-tool-presentation` with `mode: ptc`, because the form an agent's tools take is declared per agent — a session's own row cannot say it, and a mode without the row presents natively whatever its id says.
+- `@deepseek-ai/dsh-cordis-host-runner` is the host machinery creator mode needs, and the base mounts no such row, so a terminal profile mounts it through this bundle's own `host/runner` entry point. The code runtime PTC mode runs programs against is a base row of its own (`ptc-runtime`) on the supported line, so this bundle mounts none of its own. The registry, preset, and runner packages are plain dependencies pinned to `0.2.0-rc.2`; these pins do not guarantee one copy in every consumer tree.
 - `@sagmans/dsh-tui` owns the terminal: it creates or resumes one agent through `ctx.agents`, folds `session/event` into transcript rows and work state, renders them with `@earendil-works/pi-tui`, and releases the terminal on exit, on a boot failure, and on a signal.
 - `@sagmans/dsh-tui/todo-guard` is the one advisory row this bundle adds to the agent plane: it watches the harness's own `todos` and `plan` projections and rides the next tool result with a reminder when a plan ages. See [Todo discipline](#todo-discipline).
 
@@ -823,7 +825,7 @@ A PTC card is the one card with children: every call the `run_code` program disp
 
 A card's header names the tool, then, on a skill card, the skill it loaded in the `tool.skill` colour, then the argument the call was made with — a path or a command — in the `tool.args` colour, then the facts the result measured: a read reports its line range, line count, and token size; a file change that carried no prior content to compare against reports its lines and tokens; one that did reports added, changed, and removed lines as `+n ~n -n` in green, yellow, and red. Each stat is its own token, so any of them can be recoloured or hidden independently, and so are the elements a call in flight is drawn with — hiding `tool.running.elapsed` leaves the name in its running colour, hiding `tool.running.title` leaves the seconds counting, hiding `tool.elapsed.done` takes the total off a program's settled row, and a dispatched row is toned the same way per state with `tool.subcall.running` and `tool.subcall.title`. A state is only how a name is painted, so hiding one of those colours leaves the name in the colour a call with no state is read in rather than taking the name away. Hiding `tool.skill` is the same promise for a subject: the skill keeps its name in the label's colour. `/export` and a dispatched row spell the name too, so the words survive where no colour is.
 
-The bundle also takes the base's global agent rows out of the composition, twenty-three of them. Every one is a row the shipped modes supply per session instead, so leaving it mounted registers the same tool names in two layers and doubles each prompt section it owns. What stays mounted is the host: sessions, storage, models, permissions, jobs, and the command registry.
+The bundle disables no base row. The profile's layers supply the agent tools, prompt sections, skills, and planning. The shipped modes do not duplicate those rows; PTC adds only its tool-presentation row.
 
 ### Todo discipline
 
@@ -935,10 +937,11 @@ node tools/pty-drive.mjs --home "$S" --seconds 20 --prompt ''
 node tools/pty-drive.mjs --home "$S" --prompt 'Run: echo hi' --click 20:12
 ```
 
-A minimal home starts on the shipped defaults: `settings.yaml` is legacy on the
-supported line, where the launcher renames it before import, so a preference
-copied there is read by nothing. Use the dogfood clone above when a run needs
-your own preferences.
+A minimal home starts on the shipped defaults. On verified `0.2.0-rc.2`, the
+settings service renames legacy `settings.yaml` before attempting a one-time
+import into matching profile entries. Rejected sections remain only in
+`settings.yaml.imported`. Use the active profile patch for current preferences,
+or the dogfood clone above when a run needs your own composition.
 
 Test specs import plugin sources through the `@/` alias. Under this test runner the spec file is resolved with a root-relative id, so parent-relative imports (`../src/...`) do not resolve; the alias and its matching `tsconfig.test.json` path mapping avoid that.
 
@@ -1056,7 +1059,7 @@ discipline as this one.
 
 | Plugin | What it adds |
 |---|---|
-| [`@sagmans/dsh-auto-compact`](https://github.com/sagmans/dsh-auto-compact) | An absolute token trigger for automatic compaction: the conversation condenses at `min(thresholdTokens, contextWindow × thresholdRatio)` instead of the window ratio alone, so a large-window model pays a fixed price, with per-route overrides. Its patch swaps the shipped `compaction-basic` backend — the same row this bundle already takes out of the global composition — so the profile still keeps exactly one compaction service, and this surface needs no setting for it. |
+| [`@sagmans/dsh-auto-compact`](https://github.com/sagmans/dsh-auto-compact) | An absolute token trigger for automatic compaction: the conversation condenses at `min(thresholdTokens, contextWindow × thresholdRatio)` instead of the window ratio alone, so a large-window model pays a fixed price, with per-route overrides. Its patch swaps the shipped `compaction-basic` backend — a row this bundle does not disable — so the profile still keeps exactly one compaction service, and this surface needs no setting for it. |
 | [`@sagmans/dsh-provider-extra`](https://github.com/sagmans/dsh-provider-extra) | Extra provider routes: OpenCode Go, which sends the live conversation id in `x-opencode-session` for routing and prompt caching, and OpenAI Codex over a ChatGPT subscription's OAuth flow with the harness credential store. Its routes join the `/model` picker like every configured provider. TUI also works without this package, using the core `llm` and `agentDefaultModel` services. |
 
 ```sh

@@ -23,8 +23,10 @@ History: [CHANGELOG.md](CHANGELOG.md).
 
 `.github/workflows/ci.yml` is the completion gate, in this order: `pnpm install
 --frozen-lockfile`, `npm audit signatures`, `pnpm typecheck`, `pnpm test`,
-`pnpm test:release`, `node tools/pack-smoke.mjs`, `pnpm test:terminal`. The native
-widget gate checks input, redraw, resize, and restoration without credentials.
+`pnpm test:release`, `node tools/pack-smoke.mjs`, `pnpm test:terminal`,
+`node tools/harness-matrix.mjs`, `node tools/install-smoke.mjs`. The consumer
+install gate needs Docker. The native widget gate checks input, redraw, resize,
+and restoration without credentials.
 It does not prove full-profile composition or hardware input-to-pixel latency.
 Use the cloned-home PTY command above and read its screen for actual profile usage.
 
@@ -80,10 +82,12 @@ config, as `providers: { zai: { apiKeyEnv: ZAI_API_KEY } }`, and the route under
 adapter belongs there because a catalog route is only the picker's directory — a
 route declaring `source` with `auth.apiKeyRef` never registers one, and the turn
 then stops at `no adapter registered for provider "zai"`. The route belongs there
-because the app's `--provider` and `--model` flags are ignored when a session
-resumes, and `$DSH_HOME/settings.yaml` is legacy on this line: the launcher renames
-it to `settings.yaml.imported` and never folds its sections into the profile patch,
-so a route declared only there is silently absent. Naming the route keeps a scratch
+so the clone has an explicit default; check `/status` on resume rather than
+relying on `--provider` and `--model` alone. `$DSH_HOME/settings.yaml` is legacy
+on this line: the settings service
+renames it to `settings.yaml.imported` before attempting a one-time import into matching
+profile entries. Rejected sections stay only in that renamed file; do not rely
+on the legacy file for the clone's route. Naming the route keeps a scratch
 profile from billing a route the developer did not choose; a route with no credit
 stops at `error: Insufficient Balance` once the surface is ready, which says
 nothing about the plugin under test.
@@ -92,24 +96,23 @@ nothing about the plugin under test.
 `tests/golden/__snapshots__/frames.spec.ts.snap` in the diff before accepting it
 with `pnpm vitest run -u`.
 
-**`cordis.patch.yml` mounts only this bundle's own rows, and disables none.** The
+**`cordis.patch.yml` inserts the TUI rows and host model-selection settings, and disables none.** The
 agent plane — tools, prompt sections, skills, commands, and planning — belongs to
 the bundle that ships each of those plugins, and the profile's own layers compose
-it. The shipped modes are selections rather than compositions, so they list no
-plugin either. A row mounted here registers a plugin the profile already
-registered, and composition fails with "already registered" for every one of
-them; a row disabled here is the same mistake from the other side.
+it. The shipped modes are selections rather than full compositions; only PTC adds
+a `tool-presentation` plugin. Do not duplicate agent rows the profile already
+registers: duplicate registrations can fail with "already registered". Do not
+disable those profile-owned rows from this surface bundle.
 
-**The harness matrix names one supported line.** The `devDependencies`,
-`dsh.compatibility.dshReleases`, and every harness package this bundle mounts name
-the same verified release, and `dsh.compatibility.dsh` is the range a profile
-resolves it through. One line means one copy: an alias of this bundle's own beside
-the base's own row is what made a consumer tree hold two copies of a mounted package
-and disable the host's rows, which `tools/install-smoke.mjs` counts. The harness
-peers stay `*` so npm resolves them against the consumer's own harness, because npm
-reaches a prerelease only through a comparator naming its own `X.Y.Z` tuple.
-`node tools/harness-matrix.mjs` guards the matrix and
-[RELEASE.md](RELEASE.md#harness-matrix) owns the bump.
+**The declared harness range is not the verified list.** The manifest declares
+`>=0.2.0-rc.2 <0.3.0`, but lists only `0.2.0-rc.2` as verified. Mounted and
+development harness dependencies pin that release; harness peers are open (`*`)
+and optional. These declarations do not guarantee consumer deduplication.
+`node tools/harness-matrix.mjs` checks manifest consistency, not installed
+versions, compilation, or runtime behavior. `--check-registry` checks only the
+`latest` dist-tag, not RC tags. Consumer install smoke checks selected install
+paths and package-copy counts, not interactive profile behavior.
+[RELEASE.md](RELEASE.md#harness-matrix) owns verification and matrix changes.
 
 **Comments state why a choice was made**, not what the code does; the reason a
 non-obvious constraint exists is the part that prevents future drift.
@@ -143,7 +146,7 @@ and each remote release action; never publish on your own initiative.
    Verify it with `git verify-tag "vX.Y.Z"`. Never use a lightweight or unsigned
    release tag; require GitHub to verify the signature after the approved push.
 3. Push only that tag with `git push origin "vX.Y.Z"` after approval.
-   `.github/workflows/release.yml` verifies the tag and publishes through npm
+   `.github/workflows/release.yml` checks tag/version agreement and publishes through npm
    OIDC trusted publishing after the `npm-release` environment approval.
    Wait for success; never substitute a local `npm publish`. The documented
    first-publication bootstrap is a maintainer-only exception, not a retry path.

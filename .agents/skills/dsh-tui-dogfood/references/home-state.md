@@ -8,7 +8,7 @@ profile. It gives the operational detail behind [../SKILL.md](../SKILL.md).
 | Entry | Kind | What reads or writes it |
 | --- | --- | --- |
 | `.credentials.yaml` | secret | the provider layer, at start-up; read-only |
-| `settings.yaml`, `settings.yaml.imported` | config | the `dsh-tui:` section: theme, tokens, dock, stash, prompt history |
+| `settings.yaml`, `settings.yaml.imported` | legacy config | On verified `0.2.0-rc.2`, settings migration renames the file before attempting a one-time import into profile entries. Rejected sections remain in `.imported`; neither file is the live TUI configuration. |
 | `themes/` | data | created and watched at start-up; saving a file changes the live surface |
 | `prompt-history.json` | data | the editor's history recall; appended as prompts are sent |
 | `tui-stash/` | data | the parked-draft bank, one file per session, behind a lock |
@@ -20,9 +20,9 @@ profile. It gives the operational detail behind [../SKILL.md](../SKILL.md).
 
 ## Home state versus profile state
 
-Credentials, settings, themes, history, the stash, storages, and sessions belong
-to the **home**: every profile in it shares them. The bundle list and the patch
-overlay belong to the **profile**: a new profile name starts from the base plus
+Credentials, themes, history, the stash, storages, and sessions belong to the
+**home**: every profile in it shares them. On verified `0.2.0-rc.2`, live settings,
+the bundle list, and the patch overlay belong to the **profile**: a new profile name starts from the base plus
 whatever is added to it, and inherits none of another profile's bundles or
 patches. That is the trap behind "test it in a profile named after the feature" —
 the run is compositionally thinner than the developer's own while still writing
