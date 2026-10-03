@@ -14,6 +14,8 @@ breaking change, and a patch carries only fixes.
 
 ### Fixed
 
+- Growing streaming diagrams retain completed layouts beside them instead of repeatedly rebuilding the current reply.
+
 - Tool preview budgets reserve enough room for expanded tabs at any insertion column, without changing Unicode grapheme boundaries.
 
 - Resume hints preserve whitespace and shell punctuation as literal identity tokens while keeping terminal controls visible.
