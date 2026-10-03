@@ -1,14 +1,19 @@
-import { closeSync, constants, fchmodSync, mkdirSync, openSync } from 'node:fs'
+import { closeSync, constants, fchmodSync, lstatSync, mkdirSync, mkdtempSync, openSync, renameSync, rmdirSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import path from 'node:path'
 import { rowText } from './cards.ts'
 import { dshHomeDir } from './stash/paths.ts'
-import { PRIVATE_DIR_MODE } from './stash/private-fs.ts'
+import { PRIVATE_DIR_MODE, PRIVATE_FILE_MODE } from './stash/private-fs.ts'
 import { renderTerminalText } from './terminal-text.ts'
 import type { TranscriptEntry } from './transcript.ts'
 
 /** Permission repair must target the owned directory, never a link into unrelated storage. */
 const EXPORT_DIRECTORY_FLAGS = constants.O_RDONLY | (constants.O_DIRECTORY ?? 0) | (constants.O_NOFOLLOW ?? 0)
+const EXPORT_WRITE_FLAGS = constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | (constants.O_NOFOLLOW ?? 0)
+const EXPORT_STAGING_PREFIX = '.dsh-export-'
+const EXPORT_STAGED_FILE = 'transcript.tmp'
+const EXPORT_ENCODING = 'utf8'
+const EXPORT_DESTINATION_ERROR = 'export destination must be a regular file'
 
 /**
  * A fragment as a document holds it.
@@ -48,6 +53,28 @@ export function ensureExportsHome(dir: string): readonly string[] {
     return []
   } catch (error) {
     return [`exports: cannot create ${dir}: ${message(error)}`]
+  }
+}
+
+/** Existing readers and hard links must never inherit newly exported private text. */
+export function writeTranscriptExport(filePath: string, text: string): void {
+  const destination = lstatSync(filePath, { throwIfNoEntry: false })
+  if (destination !== undefined && !destination.isFile()) throw new Error(EXPORT_DESTINATION_ERROR)
+  const staging = mkdtempSync(path.join(path.dirname(filePath), EXPORT_STAGING_PREFIX))
+  const stagedFile = path.join(staging, EXPORT_STAGED_FILE)
+  try {
+    const file = openSync(stagedFile, EXPORT_WRITE_FLAGS, PRIVATE_FILE_MODE)
+    try {
+      fchmodSync(file, PRIVATE_FILE_MODE)
+      writeFileSync(file, text, EXPORT_ENCODING)
+    } finally {
+      closeSync(file)
+    }
+    // Replacement publishes an owner-only inode rather than reusing earlier readers' file descriptions.
+    renameSync(stagedFile, filePath)
+  } finally {
+    rmSync(stagedFile, { force: true })
+    rmdirSync(staging)
   }
 }
 
