@@ -212,7 +212,7 @@ export class ToolCards {
         const skill = call.skill === undefined || call.skill === '' ? '' : this.skillName(call.skill, titleToken, column)
         const argument = call.argument === undefined || !this.context.theme.visible('tool.subcall.args')
           ? ''
-          : this.context.theme.rich(call.argument, { token: 'tool.subcall.args', column })
+          : this.context.theme.rich(displayText(call.argument, { column }), { token: 'tool.subcall.args', column })
         // How the call ended is the tool's own line about its outcome — a shell's
         // exit status — and it is the only part of a dispatch's result that fits on
         // the one row a reader scans.
