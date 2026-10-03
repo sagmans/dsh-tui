@@ -15,6 +15,7 @@ const TINY_FOOTER = 'status'
 const LARGE_TRANSCRIPT_ROWS = 40
 const LARGE_DOCK_ROWS = 16
 const LARGE_QUEUE_ROWS = 8
+const MULTILINE_FOOTER_ROWS = 8
 
 /** The surface only ever lends the editor its terminal size and a repaint. */
 const STUB_TUI = { requestRender: () => {}, terminal: { rows: 24, columns: 80 } } as unknown as TUI
@@ -40,7 +41,7 @@ describe('the surface root layout', () => {
         dock: rowsOf('dock', LARGE_DOCK_ROWS),
         queue: rowsOf('queued', LARGE_QUEUE_ROWS),
         prompt,
-        status: rowsOf(TINY_FOOTER, 1),
+        status: rowsOf(TINY_FOOTER, MULTILINE_FOOTER_ROWS),
       })
       const frame = renderLayoutFrame(root, width, height, () => {})
       expect(frame.lines).toHaveLength(height)

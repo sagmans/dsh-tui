@@ -1,4 +1,4 @@
-import { type Component, visibleWidth } from '@earendil-works/pi-tui'
+import { type Component, visibleWidth, wrapTextWithAnsi } from '@earendil-works/pi-tui'
 import { oneRow } from '../text.ts'
 import { renderTerminalText } from '../terminal-text.ts'
 import { formatTokens } from '../tokens.ts'
@@ -45,6 +45,8 @@ const PATH_SEGMENTS = 2
 const SEPARATOR_TEXT = ' · '
 /** Marks the point where a row was cut; the reader must know something is missing. */
 const ELLIPSIS = '…'
+/** Wrapping needs every fact before assigning terminal rows; clipping first loses the tail. */
+const WRAPPING_WIDTH = Number.POSITIVE_INFINITY
 /** The mark that says which of the two activities the session is in. */
 const WORKING_MARK = '▶'
 const READY_MARK = '●'
@@ -158,6 +160,8 @@ function renderSegments(segments: readonly Segment[], width: number, theme: TuiT
   const ellipsisWidth = visibleWidth(ELLIPSIS)
   let out = ''
   let budget = width
+  // An unbounded row still needs a finite column so tabs retain their terminal stops.
+  let column = 0
   for (const [index, segment] of segments.entries()) {
     const joining = index === 0 || segment.join
     const lead = joining || !showSeparator ? 0 : visibleWidth(SEPARATOR_TEXT)
@@ -166,7 +170,7 @@ function renderSegments(segments: readonly Segment[], width: number, theme: TuiT
     if (budget - lead < ellipsisWidth) break
     const room = budget - lead
     // Flatten before measuring: a retained line break becomes a visible space in the status row.
-    const drawn = oneRow(theme.rich(segment.text, { token: segment.token, column: width - budget }))
+    const drawn = oneRow(theme.rich(segment.text, { token: segment.token, column }))
     const textWidth = visibleWidth(drawn)
     if (textWidth > room) {
       // Not the last segment: the rest is omitted, so the row must show it.
@@ -175,11 +179,12 @@ function renderSegments(segments: readonly Segment[], width: number, theme: TuiT
     }
     out += `${lead > 0 ? separator : ''}${drawn}`
     budget -= lead + textWidth
+    column += lead + textWidth
   }
   return out === '' ? theme.cut('', Math.max(0, width), ELLIPSIS) : out
 }
 
-/** A one-row view of the state around the transcript. */
+/** The session facts wrap so narrow terminals retain the same information as wide ones. */
 export class StatusBar implements Component {
   constructor(
     private readonly facts: () => StatusFacts,
@@ -191,6 +196,6 @@ export class StatusBar implements Component {
   }
 
   render(width: number): string[] {
-    return width <= 0 ? [] : [formatStatus(this.facts(), width, this.theme)]
+    return width <= 0 ? [] : wrapTextWithAnsi(formatStatus(this.facts(), WRAPPING_WIDTH, this.theme), width)
   }
 }
