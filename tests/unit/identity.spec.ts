@@ -5,7 +5,7 @@ import { LaunchUsageError, identityOf, resolveLaunchIntent, resumeHint } from '@
 
 const SHELL_FIXTURE = fileURLToPath(new URL('../fixtures/resume-hint.sh', import.meta.url))
 const HINT_PREFIX = 'To resume this session: '
-const SHELL_TOKENS = ['session with spaces', "session'quoted", 'session; printf unexpected', 'session$(printf unexpected)']
+const SHELL_TOKENS = ['session with spaces', 'session\twith\ttabs', 'session\nwith\nlines', "session'quoted", 'session; printf unexpected', 'session$(printf unexpected)']
 const CONTROL_ID = 'session\x1b]0;title\x07\rhidden\b\x9dtitle\x9c'
 const CONTROL_PROFILE = 'tui\x1b[31m'
 const LITERAL_HINT = String.raw`To resume this session: dsh --profile 'tui\x1B[31m' --resume='session\x1B]0;title\x07\x0Dhidden\x08\x9Dtitle\x9C'`

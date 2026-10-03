@@ -2,6 +2,7 @@ import { SessionId } from '@deepseek-ai/dsh-session'
 import type { LauncherAgentIdentity } from '@deepseek-ai/dsh-agent-loop'
 import { escapeTerminalText } from './terminal-text.ts'
 
+const HINT_TEXT_OPTIONS = { tab: 'keep' } as const
 const SHELL_WORD = /^[A-Za-z0-9_./:-]+$/u
 const SHELL_QUOTE = "'"
 const SHELL_QUOTE_ESCAPE = "'\\''"
@@ -66,7 +67,8 @@ export const PROFILE_NAME = 'tui'
 
 /** Pasted recovery commands must retain identity tokens rather than interpreting them as shell syntax. */
 function hintToken(value: string): string {
-  const text = escapeTerminalText(value)
+  // Quoting already protects whitespace; tab expansion would change the identity being resumed.
+  const text = escapeTerminalText(value, HINT_TEXT_OPTIONS)
   return SHELL_WORD.test(text) ? text : `${SHELL_QUOTE}${text.replaceAll(SHELL_QUOTE, SHELL_QUOTE_ESCAPE)}${SHELL_QUOTE}`
 }
 
