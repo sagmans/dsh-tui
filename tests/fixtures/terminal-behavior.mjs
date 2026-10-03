@@ -20,6 +20,8 @@ const QUIT_KEY = 'ctrl+c'
 const PICKER_KEY = 'ctrl+p'
 const SETTLED_MESSAGES = 100
 const FOLD_LINE_COUNT = 150_000
+const FOLD_DEPTH = 10_000
+const FOLD_NESTED_TYPE = 'tool-result'
 const FOLD_LINE = 'fold'
 const FOLD_SEPARATOR = '\n'
 const FOLD_PLUGIN = 'fold-proof'
@@ -75,12 +77,15 @@ terminal.write = data => {
   const now = performance.now()
   for (const start of pending.splice(0)) latency.push(now - start)
 }
+// Deep recorded results must remain readable independently of their retained preview size.
+let foldContent = [{ type: TEXT_CONTENT, text: Array(FOLD_LINE_COUNT).fill(FOLD_LINE).join(FOLD_SEPARATOR) }]
+for (let depth = 0; depth < FOLD_DEPTH; depth++) foldContent = [{ type: FOLD_NESTED_TYPE, content: foldContent }]
 // A summarized injection exercises the durable fold without letting rendering costs obscure ingestion failures.
-model.apply({ type: FOLD_EVENT, data: { content: [{ type: TEXT_CONTENT, text: Array(FOLD_LINE_COUNT).fill(FOLD_LINE).join(FOLD_SEPARATOR) }], source: { kind: FOLD_SOURCE, plugin: FOLD_PLUGIN } } })
+model.apply({ type: FOLD_EVENT, data: { content: foldContent, source: { kind: FOLD_SOURCE, plugin: FOLD_PLUGIN } } })
 const foldedNotice = model.entries().some(entry => entry.kind === 'notice' && entry.text.startsWith(FOLD_PREFIX))
 // The card presenter must ingest the whole result before its normal retained-row budget takes effect.
 model.apply({ type: TOOL_CALL_EVENT, data: { name: TOOL_FOLD_NAME, arguments: EMPTY_ARGUMENTS, callId: TOOL_FOLD_ID } })
-model.apply({ type: TOOL_RESULT_EVENT, data: { message: { toolCallId: TOOL_FOLD_ID, content: [{ type: TEXT_CONTENT, text: Array(FOLD_LINE_COUNT).fill(FOLD_LINE).join(FOLD_SEPARATOR) }], isError: false } } })
+model.apply({ type: TOOL_RESULT_EVENT, data: { message: { toolCallId: TOOL_FOLD_ID, content: foldContent, isError: false } } })
 const toolFold = model.entries().find(entry => entry.kind === 'tool' && entry.id === TOOL_FOLD_ID)
 for (let index = 0; index < SETTLED_MESSAGES; index++) {
   model.apply({ type: MESSAGE_EVENT, data: { message: { content: [{ type: TEXT_CONTENT, text: `settled ${index}` }] } } })
