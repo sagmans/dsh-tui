@@ -49,11 +49,16 @@ export type CardPreview =
  * change every card at once without rebuilding the transcript.
  */
 export function cardDetailRows(card: ToolCard, preview: CardPreview): { lines: readonly CardRow[]; hidden: number } {
+  // Expansion shares the retention budget so opening cards stays bounded in the transcript.
+  // Tail counts budget screen rows: nonpositive counts spend none, and oversized
+  // counts must not hide retained output through negative slice offsets.
   const lines = preview.expanded
     ? card.detail.slice(0, CARD_DETAIL_MAX)
     : preview.preview === 'tail'
       ? card.detail.slice(Math.max(0, card.detail.length - Math.max(0, preview.rows)))
       : []
+  // Use the original row count so fold hints include retention losses, and
+  // opening a card still reports rows that expansion cannot recover.
   return { lines, hidden: Math.max(0, card.totalLines - lines.length) }
 }
 

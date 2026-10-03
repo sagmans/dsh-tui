@@ -99,6 +99,10 @@ const GATE_ACTIONS: readonly Action[] = [
   { id: 'gate.cancel', layer: 'gate', defaultKeys: ['escape', 'ctrl+c'], label: 'cancel', mayUseBare: false, mayUnbind: false },
 ]
 
+// Questions, pickers, and library completion share movement aliases so switching
+// lists does not require switching navigation keys (see LIBRARY_KEY_ADDITIONS).
+// Separate toggling from confirmation so a question can collect multiple choices
+// before advancing; Enter commits the choice in both questions and pickers.
 const QUESTION_ACTIONS: readonly Action[] = [
   { id: 'question.up', layer: 'question', defaultKeys: ['up', 'ctrl+p'], label: 'previous option', mayUseBare: false, mayUnbind: false },
   { id: 'question.down', layer: 'question', defaultKeys: ['down', 'ctrl+n'], label: 'next option', mayUseBare: false, mayUnbind: false },

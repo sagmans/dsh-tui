@@ -1,5 +1,6 @@
 name: verify
 
+# Check proposed changes and merged candidates without granting source-write authority.
 on:
   push:
     branches: [main]
@@ -15,20 +16,26 @@ jobs:
       # Actions are pinned to commit SHAs so a moved tag cannot change what runs.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          # Later verification steps need source, not reusable Git credentials.
           persist-credentials: false
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
         with:
+          # Keep installation on the same pnpm major as release verification.
           version: 11
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
+          # Exercise the supported consumer major; this does not pin the exact >=22.19 floor.
           node-version: '22'
+          # Reuse dependency downloads without relaxing the frozen-lockfile gate.
           cache: pnpm
+      # Fail on resolution drift rather than verify dependencies absent from the reviewed lockfile.
       - name: Install
         run: pnpm install --frozen-lockfile
-      # Registry signatures and publish attestations for the whole tree: an
-      # unsigned or tampered dependency fails here, before anything ships.
+      # Check registry signature and attestation evidence before later release gates;
+      # this is not proof that every dependency is signed or install scripts were disabled.
       - name: Dependency signatures
         run: npm audit signatures
+      # Static contracts and exercised behavior catch different classes of regressions.
       - name: Typecheck
         run: pnpm typecheck
       - name: Unit and golden tests
@@ -37,7 +44,7 @@ jobs:
       # would first surface as an unrecoverable registry write.
       - name: Release helper tests
         run: pnpm test:release
-      # Full-profile dogfood remains local; CI also guards native widget/input and restore invariants without credentials.
+      # Check the packed consumer artefact, not just source: required exports and assets must survive packaging.
       - name: Package smoke
         run: node tools/pack-smoke.mjs
       # Timing varies across hosts; only key preservation, redraw and restore invariants gate shared runners.

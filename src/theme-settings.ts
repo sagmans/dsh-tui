@@ -1,3 +1,7 @@
+/**
+ * Keep harness registration and strict reads together so schema fills do not become appearance overrides.
+ * Rejected reads retain the last-good appearance and salvage readable privacy opt-outs before resolving theme layers.
+ */
 import type { KeyId } from '@earendil-works/pi-tui'
 import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-settings'
@@ -43,17 +47,20 @@ const SUBCALL_DISPLAYS = ['collapsed', 'inline'] as const
  */
 const DEFAULT_SUBCALL_DISPLAY: SubCallDisplay = 'collapsed'
 
-/** How a reply's mermaid fences draw: never, once settled, or as the reply streams. */
+/** Separate diagram timing from styling so readers can choose live drawings, settled drawings, or the original source fence. */
 export const MERMAID_MODES = ['off', 'final', 'streaming'] as const
 export type MermaidMode = (typeof MERMAID_MODES)[number]
 
-/** The shipped mode: a diagram draws itself while the reply arrives, without waiting for the turn. */
+/** Make diagrams part of the arriving answer; readers can choose final for settled drawings instead. */
 const DEFAULT_MERMAID_MODE: MermaidMode = 'streaming'
 
 /** Longest chord window a reader may ask for, so a typo cannot arm one for an hour. */
 const MAX_PREFIX_WINDOW_S = 60
 
-/** Prompt history is on, and offers the dimmed completion, until the reader says otherwise. */
+/**
+ * Keep cross-session recall and completion available without retyping prompts on legacy section providers.
+ * Config-backed scopes require explicit opt-in so pending or failed legacy imports cannot silently enable either feature.
+ */
 const DEFAULT_HISTORY_ENABLED = true
 const DEFAULT_HISTORY_GHOST = true
 
@@ -161,13 +168,15 @@ function rejectUnknownKeys(raw: unknown): void {
   }
 }
 
-/** One display flag as the reader wrote it. */
+/**
+ * Validate tool rows before merging: the open-ended tools schema cannot enforce their field types.
+ * These validators keep display policies supported and tail counts within the card detail limit.
+ */
 function toolFlag(value: unknown, field: string): boolean {
   if (typeof value !== 'boolean') throw new Error(`${field} must be a boolean`)
   return value
 }
 
-/** One bounded count as the reader wrote it. */
 function toolInteger(value: unknown, field: string, bounds: { readonly min: number; readonly max: number }): number {
   if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < bounds.min || value > bounds.max) {
     throw new Error(`${field} must be an integer between ${bounds.min} and ${bounds.max}`)
@@ -175,7 +184,6 @@ function toolInteger(value: unknown, field: string, bounds: { readonly min: numb
   return value
 }
 
-/** One `output` value as the reader wrote it. */
 function toolOutput(value: unknown, field: string): ToolOutputDisplay {
   if (typeof value !== 'string' || !(TOOL_OUTPUT_DISPLAYS as readonly string[]).includes(value)) {
     throw new Error(`${field} must be one of: ${TOOL_OUTPUT_DISPLAYS.join(', ')}`)
@@ -229,8 +237,9 @@ export function parseSettings(raw: unknown): TuiSettings {
   const writtenPalette = asRecord(section.palette) ?? {}
   const palette: Record<string, string> = {}
   for (const [name, value] of Object.entries(writtenPalette)) {
-    // Same fill-in problem as the tokens: the schema supplies a default for
-    // every entry, so only a value the reader chose is an override.
+    // Omit shipped palette values so schema fills do not shadow a named theme.
+    // This also omits an explicit value equal to the shipped one; this filter
+    // cannot distinguish that choice from a registration fill.
     if (value === undefined || value === DEFAULT_PALETTE[name as PaletteName]) continue
     palette[name] = parsed.palette[name as PaletteName]
   }
@@ -292,7 +301,10 @@ export interface HistorySettings {
   readonly maxEntries: number
 }
 
-/** What the section holds once parsed: only what the reader wrote. */
+/**
+ * Give consumers resolved behavioral settings while keeping appearance overrides sparse,
+ * so schema fills do not shadow the theme layers.
+ */
 export interface TuiSettings {
   /** The theme the reader named, or nothing to draw the package's own. */
   readonly theme: string | undefined
@@ -314,7 +326,10 @@ export interface TuiSettings {
   readonly spacing: Spacing
 }
 
-/** The section as it reads when the reader has written nothing. */
+/**
+ * Seed appearance before the first settings read or when startup has no last-good section.
+ * On rejected reads, readScope replaces these history defaults with salvaged switches and preserves prior opt-outs.
+ */
 export function defaultSettings(): TuiSettings {
   return {
     theme: undefined,

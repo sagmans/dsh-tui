@@ -18,15 +18,10 @@ import { escapeTerminalText, type EscapeTextOptions } from './terminal-text.ts'
 const UNLIMITED_GRAPHEMES = Number.POSITIVE_INFINITY
 
 /**
- * Render control characters as visible escapes, keeping line feeds.
- *
- * A line feed is the only control a renderer already understands; everything
- * else becomes text so the reader can see that it was there instead of the
- * terminal acting on it. A tab is the exception that is not spelled: it is
- * expanded to the stop the tool that wrote it used, because a stop the layout
- * cannot predict would desynchronize wrapping. Text that is *drawn* is not read
- * this way at all — it goes through `renderTerminalText`, which interprets the
- * sequences a terminal would have interpreted.
+ * Keep controls visible in literal labels and questions rather than allowing
+ * them to repaint content. Line feeds preserve rows; tabs normally expand to
+ * this surface's stops so wrapping can predict their width. Terminal-like output
+ * instead uses `renderTerminalText` to interpret safe styling and repaint behavior.
  */
 export function displayText(raw: string, options?: EscapeTextOptions): string {
   return escapeTerminalText(raw, options)

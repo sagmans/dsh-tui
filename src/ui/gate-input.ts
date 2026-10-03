@@ -7,7 +7,7 @@ export type GateInputMode = 'answer' | 'secret'
 /** One character of the mask, repeated to the width of what it hides. */
 const MASKED = '*'
 
-/** How much of a credential stays readable at each end, so its owner can recognize it. */
+/** Keep recognizable ends of each rendered row; wrapping means these are not credential-wide ends. */
 const MASK_HEAD = 4
 const MASK_TAIL = 4
 
@@ -46,12 +46,12 @@ function visibleAt(text: string): { segment: string; position: number }[] {
 }
 
 /**
- * Hide the middle of a credential and keep its ends readable.
+ * Keep recognizable ends while reducing exposure of each rendered answer row.
  *
- * The reader is checking which key they pasted, and a row of asterisks answers
- * nothing; a bystander is not meant to read it either, so only the first and
- * last few characters survive. Rows are masked one at a time because that is
- * how the editor hands them over, and a credential is written on one line.
+ * The base editor wraps before this hook, so readable ends repeat at wrap
+ * boundaries rather than belonging to the credential as a whole. Each row keeps
+ * four non-whitespace graphemes at each end; rows with eight or fewer remain
+ * fully visible. This partial display mask does not guarantee secrecy.
  */
 function maskCredentialRow(row: string): string {
   const segments: { escape: boolean; text: string }[] = []
@@ -83,8 +83,8 @@ function maskCredentialRow(row: string): string {
  * It is the prompt bar's own component, so an answer is written with the
  * movement, deletion, undo, and paste that bar already has. Its mode decides
  * only how the answer is shown: a question that declares a credential is
- * answered in the same bar with the middle of the value hidden, never in a
- * second widget that would have to grow its own editing.
+ * answered in the same bar with partial display masking, never in a second
+ * widget that would have to grow its own editing.
  */
 export class GateInputBar extends BoxedEditor {
   private mode: GateInputMode = 'answer'
@@ -96,7 +96,7 @@ export class GateInputBar extends BoxedEditor {
     this.invalidate()
   }
 
-  /** Hide a credential's middle while its owner still recognizes both ends. */
+  /** Apply the recognition-oriented mask to rendered rows without changing the stored answer. */
   protected override decorateText(row: string): string {
     return this.mode === 'secret' ? maskCredentialRow(row) : row
   }

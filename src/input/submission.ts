@@ -1,4 +1,8 @@
-/** What one submitted editor line asks the surface to do. */
+/**
+ * Share one dispatch contract between typed lines, chords, and plugin bindings
+ * so equivalent requests reach the same surface handler. Draft-only actions
+ * remain distinct because typing a command consumes the draft it would edit.
+ */
 export type Submission =
   | { readonly kind: 'empty' }
   | { readonly kind: 'quit' }
@@ -44,13 +48,13 @@ export type Submission =
   | { readonly kind: 'command'; readonly name: string; readonly line: string }
   | { readonly kind: 'prompt'; readonly text: string }
 
-/** Commands the surface answers itself, without a model turn. */
+/** Keep local command discovery shared by help and completion, aligned with classifySubmission. */
 export const LOCAL_COMMANDS = [
   '/help', '/status', '/model', '/preset', '/todo', '/theme', '/keys', '/jobs', '/subagents', '/fork', '/new', '/reload', '/undo', '/redo', '/rename', '/export', '/copy', '/history', '/clear', '/resume', '/quit', '/exit',
   '/stash', '/stash-pop', '/stash-apply', '/stash-list', '/stash-drop', '/stash-clear',
 ] as const
 
-/** What each local command does, shown in the editor's completion menu. */
+/** Keep descriptions keyed to LOCAL_COMMANDS so completion can explain every advertised local command. */
 export const LOCAL_COMMAND_DESCRIPTIONS: Readonly<Record<string, string>> = {
   '/help': 'list registered and local commands',
   '/status': 'show the session, model, permissions, and context',

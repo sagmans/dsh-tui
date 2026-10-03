@@ -58,7 +58,10 @@ const SHIPPED_GLOSS: Readonly<Record<string, string>> = {
   cordis: 'the same agent, for authoring the composition itself',
 }
 
-/** How one preset appears in the picker. */
+/**
+ * Prioritize an inability to start over descriptive metadata so the picker
+ * explains why that choice cannot run.
+ */
 export function describePreset(preset: PresetSummary, currentId: string | undefined): PickerRow {
   const gloss = SHIPPED_GLOSS[preset.id]
   const described = preset.broken !== undefined
@@ -130,7 +133,11 @@ function textOr(value: unknown): string | undefined {
   return typeof value === 'string' && value !== '' ? value : undefined
 }
 
-/** One roster row, or undefined when it names no usable id. */
+/**
+ * Keep roster rows usable by the picker without inferring local authorship.
+ * Only explicit user trust earns the "authored here" label; the system fallback
+ * is presentation metadata, not a trust check before mounting.
+ */
 function toSummary(value: unknown): PresetSummary | undefined {
   const record = asRecord(value)
   const id = textOr(record?.id)

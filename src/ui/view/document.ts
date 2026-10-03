@@ -24,6 +24,7 @@ interface DocumentFrame {
 /** Draft-only frames must not traverse history or format unchanged stream snapshots. */
 export class TranscriptDocument {
   private readonly rows = new RowCache<TranscriptEntry>()
+  // Match RowCache's weak entry lifetime so metadata does not retain entries after the model drops them.
   private readonly entrySpans = new WeakMap<TranscriptEntry, readonly ClickSpan[]>()
   private readonly entryCopy = new WeakMap<TranscriptEntry, readonly FrameRow[]>()
   private frame: DocumentFrame | undefined
@@ -43,7 +44,10 @@ export class TranscriptDocument {
     this.frame = undefined
   }
 
-  /** History scans are needed only when content, presentation, or a displayed clock changes. */
+  /**
+   * Reuse unchanged frames without scanning history. The caller must include width and other
+   * non-model layout inputs in tag because rows and their hit/copy metadata depend on them.
+   */
   render(width: number, tag: string, presentation: number): readonly string[] {
     const revision = this.context.model.revision
     const tick = Math.floor(this.context.model.now() / SECOND_MS)

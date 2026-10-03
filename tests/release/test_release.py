@@ -30,6 +30,8 @@ class ReleaseTests(unittest.TestCase):
             "name": PACKAGE, "version": "1.0.0",
             "repository": {"url": "git+https://github.com/example/tool.git"},
         }
+        # Start with matching release identity; cases override the gate they
+        # challenge, not unrelated prerequisites.
         self.env = {
             **os.environ,
             "PKG_NAME": PACKAGE, "PKG_VERSION": "1.0.0", "REPO": REPOSITORY,
@@ -51,6 +53,7 @@ class ReleaseTests(unittest.TestCase):
         self.pack()
 
     def pack(self):
+        """Bind artifact review to real archive bytes and the checkout manifest, without a full package build."""
         (self.cwd / "package.json").write_text(json.dumps(self.metadata))
         artifact = self.cwd / "reviewed.tgz"
         with tarfile.open(artifact, "w:gz") as archive:
@@ -72,6 +75,7 @@ class ReleaseTests(unittest.TestCase):
         return [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
 
     def assert_no_mutation(self):
+        """Validation grants no write authority; dry runs and missing confirmation must leave no attempted mutations."""
         for call in self.calls():
             args = call[1:]
             self.assertNotIn("publish", args)
@@ -79,6 +83,8 @@ class ReleaseTests(unittest.TestCase):
             self.assertNotIn("set", args)
             self.assertNotIn("--method", args)
 
+    # Account, registry, and source checks prevent configuration or checkout
+    # drift from redirecting a release.
     def test_preflight_checks_explicit_identity_and_registry(self):
         result = self.run_helper("preflight")
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -127,6 +133,8 @@ class ReleaseTests(unittest.TestCase):
                 self.assertIn("redirected", result.stderr)
         self.assert_no_mutation()
 
+    # Bootstrap must preserve reviewed bytes without lifecycle hooks;
+    # ambiguous absence cannot authorize publication.
     def test_bootstrap_publishes_reviewed_tarball_without_hooks(self):
         result = self.run_helper("bootstrap-publish", CONFIRM="bootstrap-publish")
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -150,6 +158,8 @@ class ReleaseTests(unittest.TestCase):
                 self.assertNotEqual(result.returncode, 0)
         self.assert_no_mutation()
 
+    # An incomplete registry read may trail a successful write. Mismatched
+    # identity and unknown write outcomes need inspection, not retries.
     def test_bootstrap_retries_registry_readback_after_write(self):
         result = self.run_helper("bootstrap-publish", CONFIRM="bootstrap-publish", SCENARIO="lag")
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -232,6 +242,8 @@ class ReleaseTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
         self.assert_no_mutation()
 
+    # Trust binds the reviewed workflow and environment to the exact publish
+    # grant. Colour must not obscure readback values.
     def test_configure_trust_requires_review_and_refuses_conflict(self):
         for env in ({"WORKFLOW_REVIEWED": "0"}, {"SCENARIO": "trust-conflict"}):
             result = self.run_helper("configure-trust", CONFIRM="configure-trust", **env)
@@ -267,6 +279,8 @@ class ReleaseTests(unittest.TestCase):
         self.assert_no_mutation()
         self.assertTrue(any("--paginate" in call for call in self.calls()))
 
+    # Matching controls need no writes. Conflicts and partial failures must not
+    # overwrite policy or continue later mutations.
     def test_github_setup_creates_then_rechecks_and_is_idempotent(self):
         result = self.run_helper("setup-github-release", CONFIRM="setup-github-release")
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -289,6 +303,8 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn("conflict", result.stderr)
         self.assert_no_mutation()
 
+    # Command success does not prove MFA settings: the helper has no MFA
+    # readback and must require manual verification.
     def test_hardening_uses_explicit_registry_without_claiming_verification(self):
         result = self.run_helper("harden-publishing", CONFIRM="harden-publishing")
         self.assertEqual(result.returncode, 0, result.stderr)

@@ -1,6 +1,7 @@
 /**
- * What the escapes carry: the colour a terminal can draw, the tab and the
- * cursor a frame writes, and the same frames rendered in truecolor.
+ * Preserve styling escapes so plain-frame snapshots cannot hide colour-output
+ * regressions. Keep tab-stop and carriage-return coverage independent of colour
+ * support to catch layout regressions when styling is disabled.
  */
 
 import { describe, expect, it } from 'vitest'
@@ -28,6 +29,8 @@ describe('terminal text', () => {
     })
 })
 
+// One comfortable width bounds escape-heavy snapshot diffs;
+// plain-frame WIDTHS cases cover wrapping and truncation separately.
 describe('styled golden frames', () => {
   const styled = createTheme('truecolor')
   it('renders the transcript with its escapes', () => {

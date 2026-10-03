@@ -7,10 +7,10 @@ const SHELL_WORD = /^[A-Za-z0-9_./:-]+$/u
 const SHELL_QUOTE = "'"
 const SHELL_QUOTE_ESCAPE = "'\\''"
 
-/** A command line that cannot be resolved into one launch identity. */
+/** Let startup report argument conflicts as CLI usage errors without treating unrelated failures as invalid arguments. */
 export class LaunchUsageError extends Error {}
 
-/** Resolved intent of the arguments dsh handed to this app. */
+/** Separate argument validation from identity construction so startup rejects conflicts before publishing a session. */
 export interface LaunchIntent {
   /** Exact session id to resume, or empty for a fresh session. */
   readonly resumeId: string
@@ -55,7 +55,10 @@ export function resolveLaunchIntent(input: {
   }
 }
 
-/** Identity the agent-loop row would adopt when a profile configures one. */
+/**
+ * Use the same fresh-session naming convention as /new and forks; the UUID
+ * distinguishes conversations. Resuming must preserve the supplied lookup key.
+ */
 export function identityOf(intent: LaunchIntent, uuid: string): LauncherAgentIdentity {
   return intent.resumeId === ''
     ? { id: SessionId(`tui-session-${uuid}`), resume: false }

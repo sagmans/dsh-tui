@@ -5,7 +5,7 @@ import { formatTokens } from '../tokens.ts'
 import type { TuiToken } from '../theme-tokens.ts'
 import type { TuiTheme } from '../theme.ts'
 
-/** Everything the footer states, gathered by the surface around it. */
+/** Caller-supplied facts keep footer presentation independent of session services and activity tracking. */
 export interface StatusFacts {
   /** The chord waiting for its second key, when one is armed. */
   readonly chord: string | undefined
@@ -61,8 +61,6 @@ interface Segment {
   readonly join: boolean
 }
 
-/** Compact a token count, because the exact number changes nothing a reader decides. */
-
 /**
  * Shorten an absolute path for the footer: the reader's own home becomes `~`,
  * and only a path from outside it is cut down to its tail.
@@ -80,6 +78,10 @@ export function shortPath(path: string, home: string | undefined): string {
   return `…/${segments.slice(-PATH_SEGMENTS).join('/')}`
 }
 
+/**
+ * Whole seconds keep the running-time cue compact; the minimum avoids a zero-time label for an active turn.
+ * This is an approximate footer cue, not a normalized duration: minute-boundary rounding can leave a 60s remainder.
+ */
 function elapsed(ms: number): string {
   if (ms < MINUTE_MS) return `${Math.max(1, Math.round(ms / SECOND_MS))}s`
   return `${Math.floor(ms / MINUTE_MS)}m${String(Math.round((ms % MINUTE_MS) / SECOND_MS)).padStart(2, '0')}s`
@@ -132,6 +134,7 @@ export function formatStatus(facts: StatusFacts, width: number, theme: TuiTheme)
   // tail, and a reader who cannot see the count cannot know the directory is
   // holding work they meant to come back to.
   if (facts.stashed !== undefined && facts.stashed > 0) push('status.stash', `${STASH_LABEL} ${facts.stashed}`)
+  // Compact context counts so the model and directory can share the footer with them.
   if (facts.contextTokens !== undefined) {
     push('status.context', facts.contextWindow === undefined
       ? `ctx ${formatTokens(facts.contextTokens)}`
@@ -173,7 +176,6 @@ function renderSegments(segments: readonly Segment[], width: number, theme: TuiT
     const drawn = oneRow(theme.rich(segment.text, { token: segment.token, column }))
     const textWidth = visibleWidth(drawn)
     if (textWidth > room) {
-      // Not the last segment: the rest is omitted, so the row must show it.
       out += `${lead > 0 ? separator : ''}${theme.cut(drawn, room, ELLIPSIS)}`
       return out
     }

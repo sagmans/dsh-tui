@@ -31,7 +31,7 @@ export function layerNote(layer: ActionLayer): string {
   return LAYER_NOTES[layer]
 }
 
-/** One row of the key map, as the list shows it. */
+/** Keep library shadows visible but distinct from actions, so the picker heading counts only effective actions. */
 export interface KeymapRow {
   /** The action id, or the shadow's own name; what a pick would settle on. */
   readonly id: string

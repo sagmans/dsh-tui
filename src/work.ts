@@ -1,6 +1,6 @@
 import type { FoldableEvent } from './transcript.ts'
 
-/** One entry of the agent's todo list, as the tool writes it. */
+/** Share the surface's content/status contract between the durable fold, dock, and guard without importing the agent-owned tool. */
 export interface TodoEntry {
   readonly content: string
   readonly status: 'pending' | 'in_progress' | 'completed'
@@ -36,6 +36,8 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
 
 const TODO_STATUSES = new Set<TodoEntry['status']>(['pending', 'in_progress', 'completed'])
 
+/** Recover displayable entries from the current snapshot so one malformed item
+ * does not hide valid siblings or leave an older checklist on screen. */
 function todoEntries(value: unknown): TodoEntry[] {
   if (!Array.isArray(value)) return []
   const entries: TodoEntry[] = []
@@ -188,6 +190,9 @@ export class WorkFold {
         return
       case 'todo/write': {
         const entries = todoEntries(data.todos)
+        // An empty checklist contributes no work-board row. This display state
+        // loses whether a list was written; it cannot establish the history
+        // claimed by describeTodos' empty-state wording.
         this.todos = entries.length === 0 ? undefined : entries
         return
       }

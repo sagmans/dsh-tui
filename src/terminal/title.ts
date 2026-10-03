@@ -8,6 +8,7 @@
 
 import { stripControlCharacters } from '../text.ts'
 
+// OSC 0 gives icon and window labels the same session context; BEL terminates this OSC payload.
 const OSC_INTRODUCER = '\u001b]'
 const STRING_TERMINATOR = '\u0007'
 const TITLE_CODE = '0'
@@ -25,7 +26,7 @@ const TITLE_CODE = '0'
  */
 const TITLE_BREAKS = /[\t\n]/gu
 
-/** How much of a directory name the title keeps. */
+/** Keep tab labels compact without spending their directory budget on shared path prefixes. */
 export const TITLE_DIR_LIMIT = 40
 
 /**
@@ -39,7 +40,7 @@ export function titleSequence(title: string): string {
   return `${OSC_INTRODUCER}${TITLE_CODE};${stripControlCharacters(title).replace(TITLE_BREAKS, '')}${STRING_TERMINATOR}`
 }
 
-/** The window title for a session, in the terms a tab bar can show. */
+/** Keep the directory and its parent as session context; the suffix takes priority when tab space is tight. */
 export function windowTitle(cwd: string, activity: 'ready' | 'working'): string {
   const segments = cwd.split('/').filter(segment => segment !== '')
   const tail = segments.slice(-2).join('/')

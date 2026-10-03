@@ -8,7 +8,7 @@
  * live or came back out of a log.
  */
 
-/** Narrowing for the structural event reads below; each reader keeps its own copy rather than sharing one. */
+/** Non-object recorded blocks must not interrupt transcript reconstruction; object fields still need their own checks. */
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined
 }

@@ -18,13 +18,17 @@ from execution import ReleaseError, mutate, read_json, read_with_retry, require,
 from github_release import setup_github
 
 REGISTRY = "https://registry.npmjs.org/"
+# npm 11.15.0 added trust-command permissions, which expected_trust checks before accepting publication authority.
 MINIMUM_NPM = (11, 15, 0)
+# Restrict identities to the helper's supported scoped-package, repository, and release-version subset, not every valid registry identity.
 PACKAGE_PATTERN = r"@[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9._-]*"
 REPOSITORY_PATTERN = r"[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*"
 NAME_PATTERN = r"[A-Za-z0-9][A-Za-z0-9._-]*"
 VERSION_PATTERN = r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?"
+# Full object IDs let source() compare SOURCE_SHA directly with HEAD without resolving abbreviations.
 SHA_PATTERN = r"[0-9a-f]{40}(?:[0-9a-f]{24})?"
 MANIFEST_PATH = "package/package.json"
+# Bound manifest decoding, archive traversal, and the whole-file integrity buffer; these are processing budgets, not format limits.
 MAX_MANIFEST_BYTES = 1024 * 1024
 MAX_MEMBERS = 10000
 MAX_ARTIFACT_BYTES = 100 * 1024 * 1024
@@ -41,7 +45,11 @@ EMPTY_CONFIG_VALUES = ("", "undefined", "null")
 
 
 def parse_trust_list(text):
-    """Read npm's human-readable trust output; npm suppresses the browser authentication URL in JSON mode."""
+    """Read text mode because npm suppresses the browser authentication URL in JSON mode.
+
+    Ignore authentication chatter and separate publisher fields at blank lines to avoid mixing record identities.
+    Verification covers parsed records only; ignored or differently framed output cannot prove absent grants.
+    """
     configs = []
     current = {}
     for raw_line in text.splitlines():
@@ -78,6 +86,10 @@ def single_metadata(response):
 
 
 class Target:
+    """Reject mismatched local or remote metadata to avoid preparing a release for another target.
+
+    Authentication checks the selected account and registry before dispatch can reach a mutation.
+    """
     def __init__(self):
         require(os.environ.get("DRY_RUN", "0") in ("0", "1"), "DRY_RUN must be 0 or 1")
         self.package = setting("PKG_NAME", PACKAGE_PATTERN)
@@ -116,7 +128,8 @@ class Target:
                 "unsupported or conflicting publishConfig; review it explicitly")
 
     def effective_registry(self, key):
-        # Read the configured value without overriding the key under inspection.
+        # Permit absent overrides because npm_command pins the public registry; verify_registry rejects explicit redirects.
+        # Read without overriding the inspected key so a conflicting value remains visible.
         value = run([self.npm_bin, "config", "get", key]).stdout.strip()
         return REGISTRY if value in EMPTY_CONFIG_VALUES else value
 
@@ -134,6 +147,7 @@ class Target:
         self.verify_registry()
 
     def source(self):
+        """Pin release preparation to the reviewed commit; reject tracked changes and non-ignored untracked files, not ignored artifacts."""
         sha = setting("SOURCE_SHA", SHA_PATTERN)
         root = run([self.git_bin, "rev-parse", "--show-toplevel"]).stdout.strip()
         require(Path(root).resolve() == Path.cwd().resolve(), "run from the target repository root")
@@ -142,6 +156,7 @@ class Target:
                 "working tree must be clean; keep artifacts outside the target")
 
     def artifact(self):
+        """Limit archive processing and reject ambiguous manifests so release preparation uses the selected reviewed artifact."""
         path = Path(setting("ARTIFACT")).resolve(strict=True)
         require(path.is_file() and path.stat().st_size <= MAX_ARTIFACT_BYTES, "artifact must be a bounded regular file")
         integrity = "sha512-" + base64.b64encode(hashlib.sha512(path.read_bytes()).digest()).decode()
@@ -158,6 +173,7 @@ class Target:
         return path
 
     def workflow(self):
+        # File existence does not establish safe publication authority; the operator must review the workflow.
         workflow = setting("WORKFLOW_FILE", r"[A-Za-z0-9][A-Za-z0-9._-]*\.ya?ml")
         environment = setting("ENVIRONMENT", NAME_PATTERN)
         require(Path(".github/workflows", workflow).is_file(), "release workflow is missing")
@@ -165,6 +181,7 @@ class Target:
         return workflow, environment
 
     def expected_trust(self, configs):
+        # Require one exact parsed publisher grant so additional or conflicting parsed grants cannot pass verification.
         workflow, environment = self.workflow()
         require(isinstance(configs, list), "unexpected npm trust response schema")
         if len(configs) != 1 or not isinstance(configs[0], dict):
@@ -193,6 +210,7 @@ def bootstrap(target):
             and isinstance(response.get("error"), dict) and response["error"].get("code") == "E404",
             "unable to establish an explicit registry not-found response")
     print("Registry returned not-found for this account; this does not reserve the name or prove ownership.")
+    # Recheck the reviewed bytes after the registry probe; disable lifecycle scripts to avoid publish-time script execution.
     target.artifact()
     mutate("bootstrap-publish", target.npm_command("publish", str(artifact), "--ignore-scripts", "--access=public", "--tag=latest"))
     if os.environ.get("DRY_RUN", "0") != "1":
@@ -204,6 +222,7 @@ def bootstrap(target):
 
 
 def configure_trust(target):
+    """Refuse conflicting parsed grants rather than replace publication authority; readback keeps attempted creation from implying success."""
     workflow, environment = target.workflow()
     target.registry_metadata()
     configs = target.trust_configs()
@@ -229,6 +248,10 @@ def verify(target):
 
 
 def main():
+    """Gate mutation preparation on action-specific approval and the reviewed source checkout.
+
+    MFA settings need operator confirmation because this helper has no MFA readback.
+    """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", choices=ACTIONS)
     args = parser.parse_args()
@@ -259,6 +282,8 @@ def main():
 if __name__ == "__main__":
     try:
         main()
+    # Keep validation, file, and archive failures concise; unexpected programming errors retain their traceback.
+    # Only ReleaseError messages are controlled here; this boundary does not sanitize other exception text.
     except (ReleaseError, OSError, ValueError, tarfile.TarError) as error:
         print(f"error: {error}", file=sys.stderr)
         sys.exit(1)

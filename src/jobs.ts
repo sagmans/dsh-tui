@@ -37,6 +37,7 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
 
 /** How long a job ran, or has been running, in the reader's units. */
 export function describeDuration(ms: number): string {
+  // A positive whole-second minimum keeps subsecond work from displaying as no time spent.
   const elapsed = Math.max(0, ms)
   if (elapsed < MINUTE_MS) return `${Math.max(1, Math.round(elapsed / SECOND_MS))}s`
   if (elapsed < HOUR_MS) return `${Math.floor(elapsed / MINUTE_MS)}m${String(Math.round((elapsed % MINUTE_MS) / SECOND_MS)).padStart(2, '0')}s`
@@ -50,6 +51,7 @@ export function isLive(status: JobStatus): boolean {
 
 /** When a settled job ended, in the reader's units. */
 function describeFinished(job: JobSummary, now: number): string {
+  // Missing finish metadata still permits an age label, but its fallback measures age since start, not completion.
   const finishedAt = job.finishedAt ?? job.startedAt
   const elapsed = Math.max(0, now - finishedAt)
   if (elapsed < SECOND_MS) return 'just now'
@@ -95,6 +97,7 @@ export function parseJobsArgument(argument: string): JobsCommand | { readonly ki
 }
 
 /** The part of the job registry this surface uses, described structurally. */
+// Listing remains useful without action or watch capabilities, so those methods are optional.
 interface JobRegistryLike {
   list?(caller?: unknown): readonly unknown[]
   read?(id: string, caller?: unknown): unknown
@@ -102,6 +105,7 @@ interface JobRegistryLike {
   onJobsChanged?(listener: (owner?: unknown) => void): () => void
 }
 
+// Keep identifiable jobs visible without display metadata; fallback timestamps do not establish actual job times.
 function toSummary(value: unknown): JobSummary | undefined {
   const record = asRecord(value)
   const id = record?.id
@@ -112,6 +116,7 @@ function toSummary(value: unknown): JobSummary | undefined {
     kind: typeof record?.kind === 'string' ? record.kind : 'job',
     label: typeof record?.label === 'string' ? record.label : '',
     status: status as JobStatus,
+    // Use epoch rather than refresh time so missing metadata does not make a job appear newly started.
     startedAt: typeof record?.startedAt === 'number' ? record.startedAt : 0,
     finishedAt: typeof record?.finishedAt === 'number' ? record.finishedAt : undefined,
   }
@@ -132,6 +137,10 @@ export interface JobDirectory {
  * Jobs are live process state rather than durable events, so this is the one
  * part of the surface a resume cannot reconstruct: the dock shows what this
  * run started, and says so by simply being empty afterwards.
+ *
+ * Forward the driving agent as caller so the registry decides which jobs that
+ * agent may access. Preserve change owners so the watcher can ignore other
+ * sessions without losing ownerless refreshes.
  */
 export function createJobDirectory(ctx: Context): JobDirectory | undefined {
   const registry = ctx.get('jobs') as JobRegistryLike | undefined

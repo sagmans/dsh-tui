@@ -1,41 +1,28 @@
 # marine-static — the shipped table, anchored on the deep teal #041F21.
 #
-# The anchor is a fill weight rather than a text weight: at 1.08:1 against a dark
-# terminal it marks the row a picker has selected by its hue and adds almost no
-# contrast of its own, which is why the accent is that same hue lifted to where
-# text reads. Every neutral is the anchor's hue at a low saturation, so the surface
-# reads as one family rather than as grey rows with a teal link on them.
+# The deep teal anchor separates container treatment from the brighter text accent.
+# Shared palette roles preserve the UI hierarchy when a reader adjusts the shades.
+# No background is set here, so contrast depends on the terminal's own background;
+# these foreground values do not guarantee contrast ratios or equal luminance across themes.
 #
-# The shades hold the shipped table's own ladder — each role takes the same share
-# of the theme's text luminance (muted 0.63, faint 0.42, arg 0.25, accent 0.57,
-# warn 0.61, added 0.56, removed 0.25) — so this theme is dimmer in absolute terms
-# and identical in structure to any other, and a reader who knows one knows this
-# one. Only the level and the chroma are its own.
-#
-# This family stands in the same water as polar-drift's cyan, so the accent is held
-# well back from the neon: the same hue with far less chroma at a lower level is
-# what keeps the two from reading as one theme drawn twice. Green and amber sit far
-# from the family and stay where every surface keeps them.
-#
-# Every element below names a palette entry rather than a shade of its own, so
-# the anchor and the accent it lifts to are one line each to move. The three that
-# name a literal say why there.
+# Shared roles keep the anchor and text accent independently adjustable;
+# literal container and diff-emphasis shades retain their separate treatments.
 #
 # This file is a reference and a layer, not a workspace: it ships inside the
 # package and a new version replaces it. /theme export marine-static writes a full copy
 # into your own themes directory to edit.
 
 palette:
-  default: '#adbbbc'  # the anchor's hue at 10% saturation: the level every other shade is a share of
-  muted: '#809a9b'  # 0.63 of the text's luminance: labels and scaffolding
-  faint: '#638184'  # 0.42: reasoning, which is meant to recede
-  accent: '#2e9ca4'  # 0.56: the anchor's hue lifted to text weight for headings, links, code, frames
-  arg: '#3f686a'  # 0.25: an argument recedes under the label of the call it belongs to
-  warn: '#bf8a1f'  # 0.61, in amber: a call that has not answered
-  added: '#3b9f65'  # 0.56, in green: something that arrived
-  removed: '#b03236'  # 0.25, in red: something taken away
-  user: '#041f21'  # the anchor itself: the band under a selected row, and one panel border
-  assistant: '#adbbbc'  # the reply's text stays plain, so the frame is what marks it
+  default: '#adbbbc'
+  muted: '#809a9b'
+  faint: '#638184'
+  accent: '#2e9ca4'
+  arg: '#3f686a'
+  warn: '#bf8a1f'
+  added: '#3b9f65'
+  removed: '#b03236'
+  user: '#041f21'
+  assistant: '#adbbbc'
 
 tokens:
   # A row of the conversation. The reader's own turn keeps its frame and carries
@@ -51,6 +38,7 @@ tokens:
   transcript.assistant.border: { fg: '#416265' }
   transcript.notice: { fg: muted }
   transcript.marker: { fg: muted }
+  # Reasoning recedes beneath the reply; tool details below likewise defer to their call labels.
   transcript.reasoning.summary: { fg: faint, italic: true }
   transcript.reasoning.body: { fg: faint }
   transcript.reasoning.hint: { fg: faint, italic: true }
@@ -71,8 +59,8 @@ tokens:
   tool.hint: { fg: muted }
   tool.failed.title: { fg: removed }
   tool.failed.glyph: { fg: removed }
-  # A call still in flight is state, which is amber's job here; the failed row
-  # stays red so the two can never be read as each other.
+  # Amber reserves attention for calls still pending rather than completed tool labels.
+  # Red distinguishes failure from pending calls; color alone cannot guarantee recognition.
   tool.running.title: { fg: warn }
   tool.running.elapsed: { fg: warn }
   tool.elapsed.done: { fg: muted, italic: true }
@@ -97,7 +85,8 @@ tokens:
   tool.web.source: { fg: muted }
   tool.web.truncated: { fg: muted }
   tool.generic.detail: { fg: muted }
-  # A reply, which is markdown, and the diagrams in it.
+  # Accent marks navigable links, syntax and diagram structure without tinting whole bodies;
+  # empty body styles retain resolver defaults, while scaffolding stays secondary.
   markdown.heading: { fg: accent, bold: true }
   markdown.link: { fg: accent, underline: true }
   markdown.linkUrl: { fg: muted }
@@ -114,8 +103,8 @@ tokens:
   markdown.underline: { underline: true }
   # A fenced diff: the scaffolding recedes, the rows carry the semantic shades,
   # and the characters that changed sit on a band of the row's own colour. The
-  # band is a shade derived from that colour rather than a palette entry, so it
-  # stays a literal, and the foreground inherits so a palette move carries both.
+  # band stays separate from foreground roles to keep character emphasis independently adjustable;
+  # inherited foreground follows palette changes without changing the literal background.
   markdown.diff.header: { fg: muted }
   markdown.diff.hunk: { fg: muted }
   markdown.diff.context: {}
@@ -144,7 +133,8 @@ tokens:
   picker.hint: { fg: muted }
   picker.cursor: {}
   picker.border: { fg: muted }
-  # A question or an approval, which stops the turn until it is answered.
+  # Weight emphasizes the pending decision and current option without requiring a color change.
+  # The renderer also supplies a cursor and numbered choices; muted detail is still decision context.
   gate.title: { bold: true }
   gate.glyphApproval: { bold: true }
   gate.glyphQuestion: { bold: true }
@@ -191,6 +181,8 @@ tokens:
   # The one border in the surface that is not a divider: it holds what the reader
   # is writing, which is where the brand belongs on a send affordance.
   editor.border: { fg: accent }
+  # Dim queued prompts and ghost suggestions distinguish pending work from text being edited.
+  # Completion weight supplements the accent prefix so its current label need not rely on hue.
   editor.queued: { dim: true, italic: true }
   editor.queued.more: { fg: muted }
   editor.ghost: { dim: true }

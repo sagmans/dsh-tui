@@ -43,7 +43,7 @@ import type { TerminalLifecycle } from './terminal-lifecycle.ts'
  * is reachable nowhere else.
  */
 
-/** The preset registry, asked for a service the agent's own composition holds. */
+/** Plan state belongs to the driven agent's composition; only its scoped service lookup is needed here. */
 interface ServiceFor {
   serviceFor(agent: unknown, name: string): unknown
 }
@@ -182,17 +182,15 @@ export function createCommands(ctx: Context, ports: CommandsPorts): Commands {
     ports.render()
   }
 
-  /** Show the todo list the agent has been keeping. */
+  /** Inspect the visible todo projection locally, without asking the agent to start another turn. */
   const runTodoCommand = (): void => {
     ports.transcript.notice(describeTodos(ports.transcript.workState().todos))
     ports.render()
   }
 
   /**
-   * Put the last answer on the reader's clipboard.
-   *
-   * The clipboard belongs to the terminal, so this asks it through OSC 52 —
-   * which is also the only route that works over SSH.
+   * OSC 52 asks the reader's terminal to update its clipboard, avoiding a
+   * clipboard API on the remote host when the surface runs over SSH.
    */
   const runCopyCommand = (): void => {
     const last = [...ports.transcript.model.entries()].reverse().find(entry => entry.kind === 'assistant')
@@ -206,6 +204,8 @@ export function createCommands(ctx: Context, ports: CommandsPorts): Commands {
     ports.render()
   }
 
+  // Include agent commands, surface commands, and active bindings so help and
+  // unknown-command refusals expose both typed and keyboard input routes.
   const helpText = (): string => {
     const current = ports.session.drivingAgent()?.agent
     // Read once: the registry is the surface's own lookup, and asking it twice
@@ -248,6 +248,8 @@ export function createCommands(ctx: Context, ports: CommandsPorts): Commands {
       ports.render()
       return
     }
+    // The registry requires a signal; Ctrl+C targets the driven turn, not this command.
+    // Dispatch stays off the synchronous input route so further submissions remain available.
     const controller = new AbortController()
     void commands.execute(current.agent, line, [], controller.signal).then(execution => {
       const result = execution?.result
@@ -362,6 +364,8 @@ export function createCommands(ctx: Context, ports: CommandsPorts): Commands {
           : `context ${formatTokens(facts.contextTokens)}${facts.contextWindow === undefined ? '' : `/${formatTokens(facts.contextWindow)}`}`
         ports.transcript.notice([
           `session ${ports.session.activeSession()}`,
+          // Status describes the driven session; a child transcript ID would label another agent
+          // alongside this session's model, permissions, and context.
           ports.transcript.viewingChild() ? undefined : `viewing ${ports.transcript.viewed()}`,
           facts.model === undefined
             ? undefined
@@ -378,6 +382,7 @@ export function createCommands(ctx: Context, ports: CommandsPorts): Commands {
         return
       }
       case 'clear':
+        // Keep /clear display-only so clearing the screen does not discard resumable session history.
         ports.transcript.reset()
         ports.render()
         return
@@ -415,6 +420,8 @@ export function createCommands(ctx: Context, ports: CommandsPorts): Commands {
         // While a turn is running the human is steering it, not opening another.
         if (ports.session.turnRunning()) driven.steer(submission.text)
         else {
+          // Before sending, let an unset route adopt the late-loaded default
+          // so the composition placeholder does not override the available settings.
           ports.route.adoptDefault()
           void ports.staged.send(submission.text)
         }

@@ -207,8 +207,9 @@ export function createTerminalLifecycle(ctx: Context, ports: TerminalLifecyclePo
    *
    * The screen is handed over rather than drawn beside: an editor needs the
    * terminal, so this is the one moment the surface is not the process painting
-   * on it. Every failure is reported as a notice and leaves the bar as it was,
-   * because the caller is a key press with nowhere to put an error.
+   * on it. Failures become notices because a key press has no error receiver.
+   * Failure to obtain a draft preserves the bar; cleanup or resume failure can
+   * still return saved text.
    */
   const externalEditor = new ExternalEditor({
     suspend: () => {

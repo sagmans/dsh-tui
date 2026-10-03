@@ -135,7 +135,10 @@ function rowKind(line: string, previous: string | undefined, next: string | unde
   return 'context'
 }
 
-/** The longest shared head and matching tail of two rows, in clusters. */
+/**
+ * A single middle band gives paired rows a cheap emphasis preview during streaming.
+ * Only matching edges stay unbanded; interior matches are not a full character alignment.
+ */
 function sharedEdges(before: readonly string[], after: readonly string[]): { readonly head: number; readonly tail: number } {
   let head = 0
   while (head < before.length && head < after.length && before[head] === after[head]) head += 1

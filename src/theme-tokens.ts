@@ -1,4 +1,4 @@
-/** Palette entries a token may name instead of a literal colour. */
+/** Palette names let related elements share a reader-defined shade; literals allow independent overrides. */
 export const PALETTE_NAMES = ['default', 'muted', 'faint', 'accent', 'arg', 'warn', 'added', 'removed', 'user', 'assistant'] as const
 
 /** A named palette entry. */
@@ -18,13 +18,13 @@ export interface StyleSpec {
   readonly strike?: boolean
   /** Rendered before the element when set; empty ships nothing. */
   readonly glyph?: string
-  /** The element renders nothing at all when true. */
+  /** Signals visibility-aware renderers to omit the element; style-only hooks, including select-list text, remain unstyled. */
   readonly hidden?: boolean
-  /** Start from another token's fields instead of this token's own defaults. */
+  /** Share another token's appearance over these defaults, retaining fields the inherited token does not supply. */
   readonly inherit?: TuiToken
 }
 
-/** The resolved escape pair and marks one element needs. */
+/** Keep terminal-ready styling and visibility separate from author-facing fields so rendering needs no palette interpretation. */
 export interface ResolvedStyle {
   readonly prefix: string
   readonly suffix: string
@@ -231,5 +231,5 @@ export const CARD_ROW_TOKEN: Readonly<Record<string, Readonly<Partial<Record<Car
   generic: { detail: 'tool.generic.detail' },
 }
 
-/** The elements a named theme draws its own way, as the layer a resolver takes. */
+/** Named themes reuse compiled defaults so they need not repeat every token definition; reader overrides still take precedence. */
 export type ThemedSpecs = Readonly<Partial<Record<TuiToken, StyleSpec>>>

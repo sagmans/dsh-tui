@@ -42,6 +42,11 @@ export interface HerdrSessionInput {
   readonly reason: SessionStartReason
 }
 
+/**
+ * Keep lifecycle reporting independent of the process environment, socket,
+ * clock, and exit command so those effects can be supplied independently.
+ * The surface uses the defaults for its containing pane.
+ */
 export interface HerdrReporterOptions {
   readonly client?: HerdrClient
   readonly env?: HerdrEnvironment
@@ -69,7 +74,7 @@ export interface HerdrReporter {
    * read as done between two turns of an agent that is still working.
    */
   driver(status: DriverStatus): void
-  /** Work the driven session still owns after its foreground driver settles. */
+  /** Driver settlement is not completion while delegated agents or jobs still run. */
   background(running: boolean): void
   /**
    * A decision is waiting on the reader, under the key of the slot holding it.
@@ -104,12 +109,10 @@ export function createHerdrReporter(options: HerdrReporterOptions = {}): HerdrRe
   const release = options.releaseSync ?? ((): void => releaseAgentSync(env, nextSeq()))
   const retryBaseMs = Math.max(1, options.retryBaseMs ?? RETRY_BASE_MS)
   /**
-   * The waits still owed, oldest first.
+   * Key waits by slot so replacements do not double-count a decision.
    *
-   * A map keyed by the slot that opened the wait, so a slot taken over twice
-   * holds one entry and gives it back once; the newest remaining wait is the one
-   * that names the row, because the older ones are behind it in the reader's
-   * queue rather than in front of it.
+   * Distinct slots retain insertion order; replacing a title keeps its slot
+   * in place. The last remaining slot in that order names the row.
    */
   const waits = new Map<string, string>()
   let driverRunning = false
@@ -288,8 +291,8 @@ export function createHerdrReporter(options: HerdrReporterOptions = {}): HerdrRe
       reporter.publish()
     },
     unblock(key) {
-      // A key nothing holds is not a wait that ended: dropping it keeps a slot
-      // that was taken over from clearing the row the new owner still needs.
+      // Slot keys carry no owner identity: callers must avoid clearing a
+      // replacement wait when an older owner settles.
       waits.delete(key)
       reporter.publish()
     },

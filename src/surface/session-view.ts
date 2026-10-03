@@ -56,7 +56,7 @@ export interface SessionView {
    * not keep an agent alive after its world unwinds.
    */
   readonly clearPresentScope: () => void
-  /** Start a fresh transcript: every reset revokes reads started for the previous view. */
+  /** Return a generation predicate so a guarded stored-log fold cannot overwrite a newer view. */
   readonly reset: () => () => boolean
   /** Show a session without folding it; the caller owns the fold that follows. */
   readonly setViewed: (id: SessionId) => void
@@ -103,7 +103,6 @@ export function createSessionView(ctx: Context, ports: SessionViewPorts): Sessio
   const work = new WorkFold()
   /** The session the transcript is showing, which can be one of its children. */
   let viewedSession = ports.initialSession
-  /** Only the newest transcript switch may finish an asynchronous stored-log read. */
   const viewGeneration = new ViewGeneration()
   /**
    * The fold's place in the viewed session's durable sequence.
@@ -115,7 +114,7 @@ export function createSessionView(ctx: Context, ports: SessionViewPorts): Sessio
    */
   const foldCursor = new FoldCursor()
 
-  /** Every transcript reset revokes reads started for the previous view. */
+  /** A view switch passes this predicate to its stored-log fold to reject a late read after another reset. */
   const reset = (): (() => boolean) => {
     const current = viewGeneration.begin()
     model.reset()
@@ -220,9 +219,9 @@ export function createSessionView(ctx: Context, ports: SessionViewPorts): Sessio
   /**
    * Fold one durable event of the session on screen, and repaint.
    *
-   * The caller filters on the identity it drives first: the surface state —
-   * activity, timer, title, bell, job board — belongs to that agent even while
-   * a child is on screen.
+   * The two owners filter independently: this fold follows the viewed session,
+   * while activity, timer, title, bell, and job board follow the driven agent.
+   * Watching a child must not move the parent's surface state to that child.
    */
   const observe = (id: SessionId, event: ForkEvent): void => {
     if (id !== viewedSession) return

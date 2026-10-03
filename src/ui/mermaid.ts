@@ -14,12 +14,9 @@ const MERMAID_MENTION = /mermaid/iu
 export const MERMAID_CACHE_LIMIT = 32
 
 /**
- * The largest source this surface lays out.
- *
- * Layout is synchronous and happens inside a frame, and a streaming reply asks
- * for it again on every delta, so past this the frame costs more than the
- * drawing is worth and the source stays. Well above what the renderer's own
- * node cap can fill, so no drawing a reader actually sees is kept out.
+ * Bound source size before synchronous layout runs inside a frame.
+ * Streaming replies revisit fences on each delta; oversized fences stay readable
+ * as source. This limits layout input, not elapsed time or all renderable diagrams.
  */
 export const MERMAID_MAX_SOURCE = 32 * 1024
 
@@ -101,6 +98,7 @@ function drawnWidth(art: MermaidArt): number {
   return widest
 }
 
+/** Keep the loss notice compact beside the retained source; the count signals that the first warning is not exhaustive. */
 function warningText(art: MermaidArt): string {
   const first = art.warnings[0] ?? ''
   const rest = art.warnings.length - 1

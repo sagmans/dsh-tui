@@ -1,19 +1,16 @@
-# violet-orbit — the pi theme of the same name, brought over shade for shade.
+# violet-orbit — palette roles mapped to this surface.
 #
-# The two surfaces do not share a vocabulary: pi names a message background
-# where this one names the transcript row that draws it. The port therefore
-# keeps pi's shades verbatim and re-applies them here by what an element *is*,
-# and every line below that came from pi names the pi key it came from — the
-# only thing that makes a later change to either theme reviewable. One shade
-# has no pi key to name, and says why it is here instead.
+# Role annotations keep palette changes reviewable against the named pi roles;
+# they do not verify upstream shade provenance. Local adaptations explain why
+# arguments, assistant frames, and skill labels need different emphasis.
 #
 # This file is a reference and a layer, not a workspace: it ships inside the
 # package and a new version replaces it. /theme export violet-orbit writes a
 # full copy into your own themes directory to edit.
 
 palette:
-  # Pi's own roles, moved across unchanged: every element that names the
-  # palette rather than a literal follows the theme without being listed.
+  # Shared palette entries let related roles change together instead of drifting
+  # through independent literal colours. Inline labels name the corresponding roles.
   default: '#e8e9ff'  # text
   muted: '#9aa0c8'  # muted
   faint: '#676d95'  # dim
@@ -23,15 +20,9 @@ palette:
   removed: '#ef4444'  # error
   user: '#f0f1ff'  # userMessageText
   assistant: '#e8e9ff'  # text
-  # Pi has no argument colour of its own, and its link blue — the shade that
-  # first came over — shares a family with the label pi gives a tool name, so
-  # the two halves of one row could not be told apart. Separating them by family
-  # costs a hue, and the obvious one is already spent: a sage that differs from
-  # the label also differs from nothing on a diff card, where an argument and an
-  # added line read as two shades of one green. Separating by value costs no hue
-  # at all — the argument sits dark enough to recede under the label it belongs
-  # to, and the shades that mean something arrived go on being the only ones.
-  arg: '#4B5680'  # no pi key: see the note below
+  # Darker arguments recede beneath tool labels without borrowing the green
+  # reserved for additions, keeping call detail distinct from change summaries.
+  arg: '#4B5680'
 
 tokens:
   # A reader's own turn. Pi fills the row, but this surface already frames it,
@@ -151,6 +142,8 @@ tokens:
   dock.todos.border: { fg: accent }  # accent
   dock.todos.heading: { fg: '#b5b5ff', bold: true }  # mdHeading
   dock.todos.pending: { fg: muted }  # unchanged from the shipped table
+  # Accent distinguishes active plan work from pending items; live delegations
+  # and jobs remain watch-list context rather than sharing that emphasis.
   dock.todos.inProgress: { fg: accent }
   dock.todos.overflow: { fg: muted }  # unchanged from the shipped table
   dock.subagents.border: { fg: faint }  # dim
@@ -182,9 +175,12 @@ tokens:
   status.separator: { fg: '#343652' }  # border
   # The input bar owns its border even when the sent prompt starts at the same shade.
   editor.border: { fg: '#6f76c9' }
+  # Submitted input recedes to distinguish waiting prompts from the editable draft.
   editor.queued: { fg: faint, italic: true }
   editor.queued.more: { fg: faint }
+  # History suggestions recede because they are not draft text until accepted.
   editor.ghost: { dim: true }  # unchanged from the shipped table
+  # Emphasize the completion to accept; descriptions and list state stay secondary.
   editor.selectList.selectedPrefix: { fg: accent }  # unchanged from the shipped table
   editor.selectList.selectedText: { fg: '#a7a7ff', bg: '#2e315c', bold: true }  # selectedBg
   editor.selectList.description: { fg: faint }

@@ -37,6 +37,8 @@ export function createAppearancePreferences(ctx: Context, ports: AppearancePrefe
   // Unknown until a supported owner answers: no owner means no file worth naming.
   let home: PreferenceHome = { kind: 'unknown' }
   let activeScope: SectionScope | undefined
+  // Where descriptors expose raw opt-outs, rejection may leave both revision and notifications unchanged.
+  // Keep their veto for that revision so a rejected opt-in cannot resume history.
   let privacyRevision: number | undefined
   let hadUser = false
   let blocked = { enabled: false, ghost: false }
@@ -61,6 +63,7 @@ export function createAppearancePreferences(ctx: Context, ports: AppearancePrefe
         if (history?.ghost !== undefined && history.ghost !== true) blocked.ghost = true
       }
     } catch {
+      // Unreadable raw preferences cannot authorize recording or suggestions.
       blocked = { enabled: true, ghost: true }
     }
   }
@@ -69,6 +72,7 @@ export function createAppearancePreferences(ctx: Context, ports: AppearancePrefe
     // Until a supported owner can read preferences, absence cannot authorize recording.
     return { ...row, history: { ...row.history, enabled: false, ghost: false } }
   }
+  // Without a writable owner, leaving the preview would imply a choice that cannot persist.
   let chooseTheme = (_name: string): void => {
     ports.restorePreview()
     ports.problem(WRITE_UNSUPPORTED)
@@ -105,6 +109,7 @@ export function createAppearancePreferences(ctx: Context, ports: AppearancePrefe
       hadUser = false
       blocked = { enabled: false, ghost: false }
       configBacked = scope.kind === 'config'
+      // Give rejected candidates the painter’s last valid appearance and applied privacy opt-outs, not fresh defaults.
       readSection = () => readScope({ get: () => {
         const raw = scope.get()
         if (scope.kind !== 'config') return raw
@@ -119,6 +124,7 @@ export function createAppearancePreferences(ctx: Context, ports: AppearancePrefe
           ghost: history?.ghost === undefined ? false : history.ghost,
         } }
       } }, ports.problem, ports.applied())
+      // A preview is not a persisted choice: success requires owner acceptance; rejection must restore the applied appearance.
       chooseTheme = name => {
         void scope.update({ theme: name }).then(
           () => {
@@ -157,6 +163,7 @@ export function createAppearancePreferences(ctx: Context, ports: AppearancePrefe
     home: () => home,
     chooseTheme: name => chooseTheme(name),
     allowsHistory: (field, applied) => {
+      // Raw opt-outs may produce no change event, so each history use must consult the veto.
       observePrivacy()
       return applied && !blocked[field]
     },

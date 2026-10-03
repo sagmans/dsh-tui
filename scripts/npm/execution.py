@@ -1,4 +1,4 @@
-"""Shared approval and CLI boundaries for optional release operations."""
+"""Share release validation and approval boundaries without exposing raw CLI responses in validation errors."""
 
 import json
 import os
@@ -10,9 +10,9 @@ import subprocess
 import sys
 import time
 
+# Limit each read buffer allocation; total captured output is not capped.
 PTY_CHUNK_BYTES = 65536
-# The registry needed about six minutes to serve the tarball of a version it had already accepted,
-# so the window for a read that trails a write is minutes, not seconds.
+# Allow bounded propagation waits when registry reads trail a completed write.
 READ_ATTEMPTS = 10
 READ_BACKOFF_SECONDS = 5
 READ_BACKOFF_CAP_SECONDS = 120
@@ -21,8 +21,7 @@ READ_BACKOFF_CAP_SECONDS = 120
 # the window closes, so the prompt is answered as soon as it appears.
 PTY_PROMPT_PATTERN = re.compile(r"Press ENTER to open in the browser")
 PTY_PROMPT_REPLY = b"\n"
-# A child that has just printed a prompt may not be reading yet, and a closed slave raises instead
-# of returning short, so the reply is retried across a few chunks rather than sent once.
+# Give browser-launch input a bounded delivery opportunity without making a closed PTY a CLI failure.
 PTY_REPLY_ATTEMPTS = 5
 # The prompt can straddle a read boundary, so a tail longer than the prompt itself is kept and
 # matched on. Matching the tail rather than the accumulated output keeps memory bounded.
@@ -72,19 +71,23 @@ def run(command, *, data=None, check=True, tty=False):
 
 
 def _run_in_pty(command):
+    """Keep browser authentication interactive while capturing metadata for the caller's validation."""
     master, slave = pty.openpty()
     answered = False
     seen = ""
     try:
         try:
+            # Keep npm outside the caller's terminal session while supplying its authentication terminal explicitly.
             process = subprocess.Popen(command, stdin=slave, stdout=slave, stderr=slave, start_new_session=True)
         finally:
+            # A parent-held slave would keep the master open after npm exits.
             os.close(slave)
         chunks = []
         while True:
             try:
                 chunk = os.read(master, PTY_CHUNK_BYTES)
             except OSError:
+                # End capture, not validation: callers still check the child exit and parsed metadata.
                 break
             if not chunk:
                 break
@@ -104,10 +107,10 @@ def _run_in_pty(command):
 
 
 def _answer_prompt(master):
-    """Press ENTER for the browser prompt, tolerating a child that has stopped reading.
+    """Keep browser-launch input best-effort; the child exit status decides CLI success.
 
-    The write is retried because the child can print the prompt before it starts reading, and a
-    failure to write only means the process is gone, which the read loop already handles.
+    Limit automatic input to one prompt match so repeated tail matches cannot answer a later operator prompt.
+    Exhausted writes also consume that allowance; neither retries nor this return value establish delivery.
     """
     for _ in range(PTY_REPLY_ATTEMPTS):
         try:
@@ -121,8 +124,8 @@ def _answer_prompt(master):
 def read_with_retry(operation, *, attempts=READ_ATTEMPTS, backoff=READ_BACKOFF_SECONDS, cap=READ_BACKOFF_CAP_SECONDS):
     """Retry a read that did not complete; a registry read can trail a completed write.
 
-    Only a transport failure is repeated. A read that answered with the wrong shape or identity is a
-    different problem, and repeating it would delay the report without changing the outcome.
+    Checked nonzero CLI exits are retryable, not just transport failures. Successfully read metadata
+    with invalid shape or identity fails without retry, so propagation waits do not hide validation errors.
     """
     delay = backoff
     for attempt in range(attempts):
@@ -136,6 +139,10 @@ def read_with_retry(operation, *, attempts=READ_ATTEMPTS, backoff=READ_BACKOFF_S
 
 
 def mutate(action, command, *, data=None):
+    """Require approval for this exact action; preview grants no authority.
+
+    An uncertain write needs remote inspection, not an automatic retry that could repeat the mutation.
+    """
     dry_run = os.environ.get("DRY_RUN", "0") == "1"
     require(dry_run or os.environ.get("CONFIRM") == action, f"set CONFIRM={action}")
     print(("dry-run: " if dry_run else "running: ") + shlex.join(command), flush=True)

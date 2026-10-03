@@ -12,9 +12,9 @@ import type { ForkEvent } from './fork.ts'
 
 /** One closed turn that contains a direct prompt and can be undone as a unit. */
 export interface TurnPoint {
-  /** Turn number the harness opened. */
+  /** Harness turn number when available; the fallback ordinal counts undoable turns, not all harness turns. */
   readonly turn: number
-  /** Index of the turn's `turn/start`: the prefix a divergence inherits. */
+  /** Cut before the prompt's inbox splice when known, otherwise before turn/start, to avoid redelivery on divergence. */
   readonly seedCount: number
   /** The first direct prompt's text, which the composer gets back. */
   readonly promptText: string
@@ -40,16 +40,20 @@ export const NO_UNDO: UndoState = { sessionId: undefined, hidden: 0, lastRestore
  */
 export const UNDO_TURN_SETTLE_MS = 10_000
 
-/** The cursor at the tip of one session. */
+/** A newly opened session must not inherit hidden turns or ownership of restored text from the previous cursor. */
 export function resetUndo(sessionId: SessionId): UndoState {
   return { sessionId, hidden: 0, lastRestored: '' }
 }
 
+/** Durable event payloads are unknown; absent fields must not prevent undoing other closed turns. */
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined
 }
 
-/** The text blocks of a direct prompt, joined the way the composer hands them back. */
+/**
+ * The draft bar accepts text, not event content blocks; this projection cannot restore non-text content.
+ * Newlines keep separate text blocks from running together, without claiming to reproduce the original prompt.
+ */
 function promptText(data: unknown): string {
   const content = asRecord(data)?.content
   const parts: string[] = []
@@ -99,6 +103,8 @@ export function turnsOf(events: readonly ForkEvent[]): readonly TurnPoint[] {
       continue
     }
     if (open === undefined) continue
+    // Keep restored text tied to the earliest direct prompt, whose delivery anchors the divergence cut.
+    // Later direct prompts in this bracket remain part of the same hidden turn, not separate undo steps.
     if (open.promptText === undefined && isDirectPrompt(event)) {
       open.promptText = promptText(event.data)
       const id = asRecord(event.data)?.id

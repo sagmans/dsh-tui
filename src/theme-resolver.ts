@@ -1,3 +1,6 @@
+// Resolve theme layers and palette names before terminal conversion so renderers
+// share appearance policy instead of interpreting configuration per row.
+
 import { type ColourMode, sgrBackgroundPrefix, sgrPrefix } from './theme-capability.ts'
 import { DEFAULT_TOKENS } from './theme-defaults.ts'
 import { PALETTE_NAMES, type ColourSpec, type PaletteName, type StyleSpec, type ThemedSpecs, type TuiToken } from './theme-tokens.ts'
@@ -14,7 +17,7 @@ export function resetSequence(): string {
   return RESET
 }
 
-/** The resolved escape pair and marks one element needs. */
+/** Expose visibility separately from escapes so renderers can omit hidden elements rather than draw them unstyled. */
 export interface ResolvedStyle {
   readonly prefix: string
   readonly suffix: string
@@ -22,7 +25,7 @@ export interface ResolvedStyle {
   readonly hidden: boolean
 }
 
-/** Map a colour specification through the palette, leaving literals alone. */
+/** Palette names let related elements share a shade; literals keep an element independent. */
 function resolveColour(spec: ColourSpec, palette: Readonly<Record<PaletteName, string>>): string | number {
   if (typeof spec === 'string' && (PALETTE_NAMES as readonly string[]).includes(spec)) {
     return palette[spec as PaletteName]
@@ -81,7 +84,6 @@ export function mergeTokenSpec(
   return merge(token)
 }
 
-/** Turn a colour SGR sequence into the parameter list it belongs to. */
 function colourParams(sequence: string): string | undefined {
   return sequence === '' ? undefined : sequence.slice('\u001B['.length, -1)
 }
@@ -89,8 +91,8 @@ function colourParams(sequence: string): string | undefined {
 /**
  * Resolve one token into the escapes a renderer needs.
  *
- * Faint is dropped once a colour is chosen: stacking it on a deliberate grey is
- * what made the old output differ per terminal.
+ * A foreground choice takes precedence over dim so faintness comes from the
+ * chosen shade rather than an additional terminal attribute.
  */
 export function resolveToken(
   token: TuiToken,
@@ -100,6 +102,7 @@ export function resolveToken(
   themed?: ThemedSpecs,
 ): ResolvedStyle {
   const merged = mergeTokenSpec(token, overrides, themed) as Record<string, unknown>
+  // Hidden removes the element, including its glyph; disabling styling alone keeps it visible.
   if (merged.hidden === true) return { prefix: '', suffix: '', glyph: '', hidden: true }
 
   // With no colour capability the whole promise is "emit nothing", which
@@ -120,8 +123,9 @@ export function resolveToken(
   ]) {
     if (params !== undefined) codes.push(params)
   }
-  // One sequence for attributes and colours together: two escapes in a row would
-  // let a renderer that re-orders them drop half the style.
+  // Keep attributes and colours in one base sequence for rich-text rendering to
+  // reapply when foreign colours return to the element's ground.
   const prefix = codes.length === 0 ? '' : `\u001B[${codes.join(';')}m`
+  // Close emitted styling to avoid bleed into following text; plain tokens need no reset.
   return { prefix, suffix: prefix === '' ? '' : RESET, glyph: (merged.glyph as string | undefined) ?? '', hidden: false }
 }

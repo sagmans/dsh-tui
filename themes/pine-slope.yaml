@@ -1,17 +1,13 @@
 # pine-slope — the shipped table, anchored on the pine #173802.
 #
-# The anchor is a fill weight rather than a text weight: at 1.41:1 against a dark
-# terminal it paints the band under a selected row and the one panel border that
-# names it, and the accent is that same hue lifted to where text reads. Every
-# neutral is the anchor's hue at a low saturation, so the surface reads as one
-# family rather than as grey rows with a green link on them.
+# The anchor gives selected rows a low-brightness fill rather than text colour.
+# The accent lifts that hue for text; actual contrast depends on the terminal
+# background. Every neutral uses the anchor's hue at low saturation so the
+# surface reads as one family rather than grey rows with a green link on them.
 #
-# The shades hold the shipped table's own ladder — each role takes the same share
-# of the theme's text luminance (muted 0.63, faint 0.42, arg 0.25, accent 0.57,
-# warn 0.61, added 0.56, removed 0.25) — so this theme is dimmer in absolute terms
-# and identical in structure to any other, and a reader who knows one knows this
-# one. Only the level and the chroma are its own, which is what keeps it soft
-# beside a bright terminal instead of competing with it.
+# This palette keeps arguments below reasoning and labels below body text so
+# supporting detail recedes. These relative levels belong to this palette;
+# other shipped themes use different luminance relationships.
 #
 # Green is the family here, and green is also what an added line means. The
 # accent therefore stays a lime while the semantic green is pushed toward grass:
@@ -152,6 +148,8 @@ tokens:
   gate.glyphQuestion: { bold: true }
   gate.detail: { fg: muted }
   gate.option: {}
+  # Bold and the cursor distinguish keyboard focus without a picker-style band;
+  # the checkbox remains the separate cue for an answer already selected.
   gate.optionCurrent: { bold: true }
   gate.cursor: {}
   gate.hint: { fg: muted }
@@ -186,6 +184,7 @@ tokens:
   status.permission: { fg: muted }
   status.context: { fg: muted }
   status.cache: { fg: muted }
+  # Parked drafts need a return-to-work cue, unlike passive footer metadata.
   status.stash: { fg: accent }
   status.cwd: { fg: muted }
   status.separator: { fg: muted }
@@ -193,9 +192,12 @@ tokens:
   # The one border in the surface that is not a divider: it holds what the reader
   # is writing, which is where the brand belongs on a send affordance.
   editor.border: { fg: accent }
+  # Submitted input recedes to distinguish waiting prompts from the editable draft.
   editor.queued: { dim: true, italic: true }
   editor.queued.more: { fg: muted }
+  # History suggestions recede because they are not draft text until accepted.
   editor.ghost: { dim: true }
+  # Emphasize the completion to accept; descriptions and list state stay secondary.
   editor.selectList.selectedPrefix: { fg: accent }
   editor.selectList.selectedText: { bold: true }
   editor.selectList.description: { fg: muted }

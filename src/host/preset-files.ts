@@ -11,7 +11,9 @@ import { load as parseYaml } from 'js-yaml'
  * tools, prompt sections, skills, and planning belong to the bundle shipping
  * each of them, so a mode that listed them would mount plugins this bundle does
  * not own — a second registration of what the profile already composed. These
- * files therefore carry the preset declaration alone.
+ * files therefore omit those profile-owned plugins. PTC alone includes tool
+ * presentation because tool form belongs to the preset mounting scope, not
+ * the session.
  *
  * The harness keeps one row per mode, and each surface bundle owns its own rows:
  * the browser bundle keeps them in its patch layer. A patch row here would be
@@ -35,6 +37,9 @@ const presetDirectory = new URL('../../presets/', import.meta.url)
 export function loadPresetDefinitions(): readonly PresetDefinition[] {
   return PRESET_FILES.map((mode) => {
     const file = fileURLToPath(new URL(`${mode}.patch.yml`, presetDirectory))
+    // These package-owned declarations supply the roster, not user patch input.
+    // Require one row per file so missing or extra rows fail before modes mount;
+    // Cordis validates the extracted configs when the roster mounts the preset plugin.
     const document = parseYaml(readFileSync(file, 'utf8')) as readonly { insert?: readonly { config?: unknown }[] }[]
     const rows = document.flatMap((entry) => entry?.insert ?? [])
     if (rows.length !== 1) throw new Error(`${file}: expected one preset row, found ${rows.length}`)

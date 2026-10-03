@@ -19,14 +19,20 @@ export default defineConfig({
     },
   },
   test: {
+    // Match the plugin's Node host for specs; release and terminal checks have
+    // separate commands, so this runner does not stand in for those gates.
     include: ['tests/**/*.spec.ts'],
     environment: 'node',
     reporters: 'dot',
     coverage: {
+      // Vite serves transformed modules from virtual URLs; the provider maps
+      // their coverage back to source lines that raw NODE_V8_COVERAGE misses.
       provider: 'v8',
       // Only the shipped plugin counts: specs, fixtures, and tooling would
       // otherwise inflate the number the audit judges.
       include: ['src/**/*.ts'],
+      // Keep the run readable in the terminal and inspectable as structured totals;
+      // a separate coverage directory keeps those artifacts out of shipped lib/.
       reporter: ['text-summary', 'json-summary'],
       reportsDirectory: 'coverage',
     },

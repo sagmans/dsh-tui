@@ -58,7 +58,11 @@ const REMINDER_KIND = 'tui-todo-guard'
 /** The reminder source; unlabeled context would read as a user prompt in derived history. */
 const PLUGIN_SOURCE: MessageSource = { kind: REMINDER_KIND, plugin: name }
 
-/** Defaults every deployment inherits; the bundle patch states them again for readers. */
+/**
+ * Cooldowns leave steps for useful work before another nudge; the longer
+ * missing-list wait leaves short turns alone. The cap bounds extra model steps,
+ * and the preview bounds quoted checklist rows while retaining an omitted count.
+ */
 export const TODO_GUARD_DEFAULTS = {
   staleSteps: 6,
   missingListSteps: 12,
@@ -177,9 +181,9 @@ export interface TodoObservation {
 /**
  * The decision core, free of Cordis so it can be tested directly.
  *
- * It counts model steps rather than tool calls: a plan ages by how much the
- * agent has thought and acted since its last write, and a parallel batch of
- * calls is one step, so one batch can never spend the whole reminder budget.
+ * Count model steps rather than tool calls so a parallel batch does not
+ * spend the reminder budget on every result. Writes and reminders restart
+ * the cooldown; it is not a measurement of total time since the last write.
  */
 export class TodoGuard {
   private readonly counters = new WeakMap<object, Counters>()
@@ -200,8 +204,8 @@ export class TodoGuard {
       counters.remindedThisStep = false
       return
     }
-    // Only a committed write restarts the age. An attempt the tool rejected
-    // never reaches this event, so it cannot buy the stale list quiet steps.
+    // A rejected write never reaches this event, so attempting a write cannot
+    // reset the reminder cooldown.
     if (type === TODO_WRITE_EVENT) counters.steps = 0
   }
 
@@ -217,6 +221,8 @@ export class TodoGuard {
     if (observation.planActive !== false) return undefined
     if (observation.todos.kind === 'unavailable') return undefined
     if (counters.remindedThisStep || counters.reminders >= this.config.maxRemindersPerTurn) return undefined
+    // A written list with no open work owes no update; suggest a first list only
+    // when the projection says none was written, not when its work is finished.
     const open = observation.todos.kind === 'listed' ? observation.todos.todos.filter(isOpenTodo) : []
     const reminder = open.length > 0
       ? counters.steps >= this.config.staleSteps
@@ -226,6 +232,8 @@ export class TodoGuard {
         ? missingListReminder(counters.steps)
         : undefined
     if (reminder === undefined) return undefined
+    // Space reminders with a fresh cooldown; steps now measure time since a
+    // committed write or reminder, not total age since the last write.
     counters.steps = 0
     counters.remindedThisStep = true
     counters.reminders += 1
@@ -269,6 +277,9 @@ function readTodos(ctx: Context, session: object): TodoListRead {
   const state = read.state
   if (state === null) return { kind: 'absent' }
   if (!Array.isArray(state)) return { kind: 'unavailable' }
+  // Keep usable siblings so one malformed item does not hide known open work.
+  // An array is not evidence of an unwritten list, even if no item is usable;
+  // only the projection's null sentinel warrants a missing-list reminder.
   const todos: TodoEntry[] = []
   for (const item of state) {
     const record = asRecord(item)

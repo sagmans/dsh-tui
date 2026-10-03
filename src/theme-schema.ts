@@ -38,17 +38,12 @@ export const StyleSpecSchema = z.object({
   inherit: z.union([...TUI_TOKENS]),
 })
 
-/** The palette half: every entry optional, each defaulting to the shipped shade. */
+/** Shipped shades let partial palettes validate; layer readers must retain only written keys. */
 export const PaletteSchema = z.object(Object.fromEntries(
   PALETTE_NAMES.map(name => [name, ColourSchema.default(DEFAULT_PALETTE[name])]),
 ))
 
-/**
- * The token half: every element optional, but an unknown name rejected.
- *
- * Spelled out rather than `z.dict` because `dict` would accept any key, which is
- * exactly the silent-typo failure this schema has to prevent.
- */
+/** Share field validation between settings and theme files; unknownNames owns name rejection. */
 export const TokensSchema = z.object(Object.fromEntries(
   TUI_TOKENS.map(token => [token, StyleSpecSchema]),
 ))
@@ -59,7 +54,7 @@ export const TOKEN_NAME_SET: ReadonlySet<string> = new Set(TUI_TOKENS)
 /** Every palette entry the surface has, for the same reason. */
 export const PALETTE_NAME_SET: ReadonlySet<string> = new Set(PALETTE_NAMES)
 
-/** A mapping as it was written, or undefined when the value is not one. */
+/** Exclude null and arrays so both readers apply mapping validation only to configuration objects. */
 export function asRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined
 }
@@ -75,7 +70,10 @@ export function unknownNames(block: unknown, known: ReadonlySet<string>): string
   return Object.keys(asRecord(block) ?? {}).filter(name => !known.has(name))
 }
 
-/** The palette a written block set, keeping only the entries it named. */
+/**
+ * Exclude schema-filled defaults so omitted entries cannot overwrite a lower layer
+ * when the theme palette is composed with shipped shades and reader overrides.
+ */
 export function writtenPalette(raw: unknown): Readonly<Partial<Record<PaletteName, string>>> {
   const written: Record<string, string> = (asRecord(raw) ?? {}) as Record<string, string>
   const validated = PaletteSchema(written) as Record<PaletteName, string>

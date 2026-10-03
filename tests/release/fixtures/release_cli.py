@@ -1,4 +1,8 @@
-"""Synthetic CLI boundary; never contacts npm or GitHub."""
+"""Isolate release guards from npm and GitHub writes.
+
+Reject unrecognized commands so new helper operations need explicit fixture support.
+Recognized commands may accept trailing arguments without validating their shape.
+"""
 import json
 import os
 from pathlib import Path
@@ -6,12 +10,18 @@ import sys
 
 ARGS = sys.argv[1:]
 TOOL = Path(sys.argv[0]).name
+# Fresh CLI processes share state for readback and idempotence; the call log
+# exposes attempted writes even when a command fails.
 SCENARIO = os.environ.get("SCENARIO", "absent")
 STATE = Path("state.json")
+# Pin command routing separately from configured redirects:
+# trust commands cannot pin the scoped registry key.
 REGISTRY_FLAG = "--registry=https://registry.npmjs.org/"
 COLOR_FLAG = "--color=false"
 GREEN = "\x1b[32m"
 RESET = "\x1b[0m"
+# Match the helper's publish-grant contract, including stage publish; stage-only,
+# extra authority, and a different repository must fail exact-trust verification.
 TRUST_FIELDS = ("type", "id", "file", "repository", "environment")
 TRUST_PERMISSION_LABELS = {"createPackage": "publish", "createStagedPackage": "stage publish"}
 TRUST = {"id": "test", "type": "github", "file": "release.yml", "repository": "example/tool",
@@ -44,6 +54,8 @@ def print_trust(configs):
     print()
 
 
+# Synthetic source identity lets the helper reject an unreviewed checkout
+# without consulting the real repository.
 if TOOL == "git":
     if ARGS == ["status", "--porcelain", "--untracked-files=all"]:
         print("?? dirty" if SCENARIO == "dirty" else "")
@@ -56,6 +68,8 @@ if TOOL == "git":
     sys.exit(0)
 
 if TOOL == "npm":
+    # Keep the baseline at the helper's minimum; old-npm and whoami faults
+    # challenge version and account gates.
     if ARGS == ["--version"]:
         print("10.0.0" if SCENARIO == "old-npm" else "11.15.0")
         sys.exit(0)
@@ -92,11 +106,15 @@ if TOOL == "npm":
         state["trust"] = True
         save()
         sys.exit(0)
+    # MFA writes have no helper readback; public access is a separate
+    # verification scenario, not MFA state.
     if args[:2] == ["access", "set"]:
         sys.exit(0)
     if args[:3] == ["access", "get", "status"]:
         output({"@example/tool": "private" if SCENARIO == "private-access" else "public"})
     if args[0] == "view":
+        # Only structured E404 establishes absence; other errors must not
+        # authorize bootstrap publication.
         if args[1] == "@example/tool":
             if SCENARIO == "existing":
                 output("@example/tool")
@@ -113,6 +131,8 @@ if TOOL == "npm":
             save()
             print(json.dumps({"error": {"code": "E404"}}))
             sys.exit(1)
+        # Corrupt identity and integrity independently to guard against
+        # accepting another package or unreviewed bytes.
         metadata = json.loads(Path("package.json").read_text())
         metadata["dist"] = {"integrity": "bad" if SCENARIO == "bad-integrity" else os.environ["ARTIFACT_INTEGRITY"]}
         if SCENARIO == "wrong-manifest":
@@ -123,6 +143,8 @@ if TOOL == "npm":
         if SCENARIO == "double-metadata":
             metadata = [metadata, metadata]
         output(metadata)
+    # Registry visibility is independent of write success so readback can lag
+    # an accepted publication.
     if args[0] == "publish":
         if SCENARIO == "publish-error":
             sys.exit(1)
@@ -131,6 +153,8 @@ if TOOL == "npm":
         sys.exit(0)
     sys.exit(2)
 
+# Shared control state supports independent readback and create-only
+# idempotence; conflicts must never authorize replacement.
 if TOOL == "gh":
     if ARGS == ["auth", "status", "--hostname", "github.com"]:
         sys.exit(0)
@@ -179,6 +203,8 @@ if TOOL == "gh":
         if endpoint == rulesets_endpoint + "/8":
             output(state["ruleset"])
         sys.exit(2)
+    # Empty first pages force inspection beyond page one before declaring
+    # controls absent or matching.
     if endpoint == policies_endpoint:
         policies = state.get("policies", [])
         if SCENARIO == "branch-policy":

@@ -5,6 +5,9 @@
 // permission repair and reads bound to the object that was inspected. Ownership
 // and symlink checks are what keep one user's drafts out of another's reach on a
 // shared machine or a network home.
+//
+// Ownership checks require process.getuid; without it these helpers do not
+// establish current-user ownership.
 
 import { constants, type Stats } from 'node:fs'
 import { type FileHandle, link, lstat, mkdir, open, readlink, rmdir, rm, unlink } from 'node:fs/promises'
@@ -13,14 +16,19 @@ import path from 'node:path'
 export const PRIVATE_DIR_MODE = 0o700
 export const PRIVATE_FILE_MODE = 0o600
 
+// Bound collision-probing filesystem work without overwriting earlier recovery files.
+// Exhaustion leaves the source in place rather than searching indefinitely.
 const MAX_QUARANTINE_ATTEMPTS = 1000
+// Use kernel open-time guards where Node exposes them. Validated opens also
+// reject observed type or inode changes; zero fallbacks do not provide equivalent
+// kernel-enforced no-follow or directory-only guarantees.
 const NO_FOLLOW_FLAG = constants.O_NOFOLLOW ?? 0
 const DIRECTORY_FLAG = constants.O_DIRECTORY ?? 0
 const ROOT_UID = 0
 const WORLD_WRITABLE_MODE = 0o002
 const GROUP_WRITABLE_MODE = 0o020
 const STICKY_MODE = 0o1000
-/** The kernel's own limit on a link chain, past which the path cannot be opened anyway. */
+/** Bound link traversal work across the queued paths; this is not a portable kernel limit. */
 const MAX_LINK_HOPS = 32
 const TOO_MANY_LINKS_MESSAGE = 'passes through too many links to be checked'
 
@@ -258,6 +266,8 @@ export async function readPrivateTextFile(
 
 async function readText(handle: FileHandle, maxBytes: number | undefined, label: string): Promise<string> {
   if (maxBytes === undefined) return handle.readFile('utf8')
+  // One extra byte detects an over-budget file without loading the rest.
+  // Repeat short reads because only a zero-byte read establishes EOF.
   const buffer = Buffer.alloc(maxBytes + 1)
   let bytesRead = 0
   while (bytesRead < buffer.length) {
@@ -269,6 +279,12 @@ async function readText(handle: FileHandle, maxBytes: number | undefined, label:
   return buffer.subarray(0, bytesRead).toString('utf8')
 }
 
+/**
+ * Exclusive creation protects names already held by other writers. Complete bytes
+ * are synced before callers publish by rename or link; directory durability is
+ * their responsibility. Failed writes attempt cleanup, but close or removal errors
+ * can leave output behind.
+ */
 export async function writePrivateFileExclusive(filePath: string, data: string | Uint8Array): Promise<void> {
   const flags = constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | NO_FOLLOW_FLAG
   const handle = await open(filePath, flags, PRIVATE_FILE_MODE)
@@ -330,6 +346,12 @@ export async function quarantinePrivateFile(
   throw new Error(`unable to reserve quarantine path for ${filePath}`)
 }
 
+/**
+ * Recursive removal is for disposable lock contents, not stash banks. Callers
+ * must establish which lock they may remove; these checks cannot exclude a
+ * replacement before pathname-based deletion. Flush the owned parent to persist
+ * the removal.
+ */
 export async function removePrivateDirectory(directory: string, label = 'storage directory'): Promise<void> {
   let stats: Stats
   try {

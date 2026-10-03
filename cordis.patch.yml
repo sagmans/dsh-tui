@@ -29,6 +29,8 @@
     - id: tui-keymaps
       name: '@sagmans/dsh-tui/keymaps'
 
+    # Parse launcher intent once; injection keeps the surface behind committed startup state
+    # and prevents --help or usage errors from mounting the interactive screen.
     - id: tui-startup
       name: '@sagmans/dsh-tui/startup'
 

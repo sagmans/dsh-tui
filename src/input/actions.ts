@@ -168,9 +168,11 @@ export function defaultKeymap(): Keymap {
 
 let shippedMap: Keymap | undefined
 
+// The prompt listener tries chords, then surface actions, before the editor.
+// These overlaps name potential precedence; a surface handler may still decline a press.
 const WINNING_LAYERS: readonly ActionLayer[] = ['chord', 'surface']
 
-/** Every key the chord or surface layer takes from a library action, in layer order. */
+/** Potential chord and surface overlaps with library actions, in listener order. */
 export function shadowsOf(map: Keymap): readonly Shadow[] {
   const library = catalogOf(map).filter(action => action.layer === 'library')
   const found: Shadow[] = []
@@ -208,7 +210,10 @@ export interface SurfaceBinding {
   readonly id: string
 }
 
-/** Every key the surface's own listener answers, in catalog order. */
+/**
+ * Builtins and plugins share the listener's live keymap projection.
+ * Keep the plugin id because its submission cannot dispatch through a builtin handler name.
+ */
 export function surfaceBindings(map: Keymap): readonly SurfaceBinding[] {
   const found: SurfaceBinding[] = []
   for (const action of SURFACE_ACTIONS) {

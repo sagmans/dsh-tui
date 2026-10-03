@@ -57,8 +57,8 @@ export function frameRule(innerWidth: number, hiddenRows: number): string {
     return `${'─'.repeat(left)}${label}${'─'.repeat(width - left - labelWidth)}`
   }
   // Too narrow for a centred label: name it as far as it fits instead of
-  // dropping the fact. Both the label and the fallback are ASCII, so slicing by
-  // character is slicing by column here.
+  // dropping the fact. Character slicing relies on these fixed indicator
+  // glyphs occupying one terminal cell each.
   const indicator = `─── ↓ ${hiddenRows} more `
   if (visibleWidth(indicator) <= width) return indicator + '─'.repeat(width - visibleWidth(indicator))
   const ellipsis = '...'.slice(0, width)
@@ -86,7 +86,7 @@ export interface FrameFaces {
  * it read, and the columns of frame standing at each end of its text.
  */
 export interface FrameRow {
-  /** The row as a copy returns it: styling gone, trailing blanks gone. */
+  /** Keep unstyled trailing padding because frame offsets refer to the original drawn columns. */
   readonly drawn: string
   /** The frame's columns at each end of the row's own text; absent when the row is frame alone. */
   readonly frame?: { readonly lead: number; readonly trail: number }

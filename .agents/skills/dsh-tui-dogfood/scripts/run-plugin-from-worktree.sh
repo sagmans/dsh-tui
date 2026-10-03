@@ -6,6 +6,8 @@ name="$(basename "${BASH_SOURCE[0]}")"
 TUI_PACKAGE_NAME='@sagmans/dsh-tui'
 # The link policy is shared with the validator, so both read one rule set.
 helper_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+# Default to the caller checkout so this packaged helper is not tied to its install location;
+# the legacy wrapper overrides it to remain anchored when invoked from another directory.
 default_repo="${DSH_DOGFOOD_DEFAULT_REPO:-$PWD}"
 default_repo="$(cd "$default_repo" && pwd -P)"
 
@@ -54,6 +56,7 @@ EOF
 
 target=""
 home=""
+# Agent sessions may set DSH_HOME to scratch state, not the developer home to clone.
 source_home="$HOME/.dsh"
 profile="tui"
 dsh_bin="${DSH_BIN:-}"
@@ -93,6 +96,8 @@ if [[ -n "$source_home" ]]; then source_home="${source_home/#\~/$HOME}"; fi
 
 # --- the repository's worktrees ---------------------------------------------
 
+# Git discovery is best-effort so an unavailable registry does not block the
+# sibling-directory fallback; the chosen directory still needs a plugin manifest.
 worktree_lines() {
   git -C "$default_repo" worktree list --porcelain 2>/dev/null || true
 }
@@ -143,6 +148,8 @@ resolve_target() {
   local hit sibling
   hit="$(resolve_by_name "$target")"
   if [[ -z "$hit" ]]; then
+    # Anchor sibling lookup to the selected repository, not the caller's cwd,
+    # so neighboring plugin checkouts need not appear in its Git worktree registry.
     sibling="$(cd "$default_repo/.." 2>/dev/null && pwd -P)/$target"
     if [[ -d "$sibling" ]]; then hit="$sibling"; fi
   fi
@@ -195,6 +202,7 @@ else
   [[ -d "$source_home" ]] || die "no home to clone at $source_home; pass --source-home"
   source_home="$(cd "$source_home" && pwd -P)"
 fi
+# Physical paths keep parent symlink aliases from bypassing overlap checks.
 [[ ! -L "$home" ]] || die "scratch home cannot be a symlink: $home"
 home="$(node -e "const fs=require('node:fs'),p=require('node:path');let x=p.resolve(process.argv[1]),b=x;while(!fs.existsSync(b))b=p.dirname(b);console.log(p.join(fs.realpathSync(b),p.relative(b,x)))" "$home")"
 [[ ! -L "$home" ]] || die "scratch home cannot be a symlink: $home"
@@ -203,10 +211,12 @@ user_home="$(cd "$HOME" && pwd -P)"
 [[ "$home/" != "$user_home/"* && "$user_home/" != "$home/"* ]] || die "scratch home cannot overlap the user home"
 [[ "$home/" != "$target_path/"* && "$target_path/" != "$home/"* ]] || die "scratch home cannot overlap the target checkout"
 [[ "$home" != / ]] || die "scratch home cannot be filesystem root"
+# Marker identities occupy one line each; embedded newlines would break identity checks.
 for path in "$home" "$source_home" "$target_path"; do [[ "$path" != *$'\n'* ]] || die "paths cannot contain newlines"; done
 marker="$home/.dsh-dogfood"
 profile_json="$home/profiles/$profile/package.json"
 
+# Credential permission changes must not affect a shared inode or an external symlink target.
 check_credentials() {
   [[ ! -L "$home/.credentials.yaml" ]] || die "cloned credentials cannot be a symlink"
   [[ -e "$home/.credentials.yaml" ]] || return 0
@@ -285,9 +295,8 @@ fi
 
 if [[ -d "$home" && "$action" != "clean" && "$dry_run" != 1 ]]; then
   validate_marker
-  # A marker that still reads 0 belongs to a run the kernel killed before it could
-  # clean up: the identity matches, so --reseed takes it, but nothing may reuse a
-  # home whose copy stopped halfway. A marker without the line predates this.
+  # Copy or later setup failures can leave ready=0; require --reseed rather than
+  # reuse an incomplete clone.
   [[ "$reseed" == 1 ]] || [[ "$(marker_value ready)" != 0 ]] || die "$home is a half-seeded clone; pass --reseed to clone it again"
   check_credentials
   chmod 700 "$home"
@@ -311,7 +320,7 @@ if [[ ! -d "$home" ]]; then
   chmod 700 "$home"
   # Written before the copy, so whatever the copy does this directory is one that
   # --clean and --reseed already own: an interrupted clone is recoverable rather
-  # than a husk neither action will touch. The copy marks it ready when it lands.
+  # than a husk neither action will touch. It becomes reusable only after setup.
   printf 'home=%s\nsource=%s\ntarget=%s\nprofile=%s\nready=0\n' "$home" "$source_home" "$target_path" "$profile" > "$marker"
   chmod 600 "$marker"
   if [[ "$fresh" == 1 ]]; then
@@ -342,6 +351,7 @@ check_clone_links
 
 # --- build, link, run --------------------------------------------------------
 
+# Linked TUI profiles load lib/, not src/, so rebuilding makes source edits visible to the run.
 if [[ "$build" == 1 && ! -d "$target_path/node_modules" ]]; then
   die "$target_path has no node_modules; run pnpm install there first (or pass --no-build)"
 fi
@@ -392,6 +402,8 @@ const state = (file) => fs.lstatSync(file, { throwIfNoEntry: false })
 for (const part of [directory, path.dirname(directory), moduleDir]) {
   if (state(part)?.isSymbolicLink()) throw Error("unsafe symlink in profile path: " + part)
 }
+// Reject invalid names and unsafe existing destinations before replacing links;
+// target-boundary checks run afterward and do not roll back earlier relinking.
 for (const [name, spec] of entries) {
   if (!packagePattern.test(name)) throw Error("invalid link dependency name: " + name)
   if (name.includes("\n") || spec.includes("\n") || spec.includes("\0")) throw Error("unsafe link dependency: " + name)
@@ -417,8 +429,8 @@ if ! node -e "process.exit(require(process.argv[1]).dsh.profile.bundles.includes
   die "profile '$profile' does not list $package_name after relink (bundles: $bundles)"
 fi
 
-# The home is finished: it points at the target and its bundles answer, so it is
-# ready to be reused rather than re-seeded.
+# Completed setup permits clone reuse; link safety and bundle membership checks
+# do not prove that the bundles load or answer at runtime.
 printf 'home=%s\nsource=%s\ntarget=%s\nprofile=%s\nready=1\n' "$home" "$source_home" "$target_path" "$profile" > "$marker"
 chmod 600 "$marker"
 

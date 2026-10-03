@@ -225,9 +225,13 @@ export function createAppearance(ctx: Context, ports: AppearancePorts): Appearan
   /** Every action's keys in force; the settings document owns it and a press reads it live. */
   let keymap: Keymap = defaultKeymap()
   const registry = ports.pluginKeymaps
+  // Only explicit overrides survive catalog changes; inherited keys must follow the current plugin defaults.
   const resolvePlugins = (map: Keymap, catalog: readonly Action[]): Keymap =>
     resolveKeymap(Object.fromEntries([...map.written].map(id => [id, map.effective[id]])), catalog)
-  /** Whether prompts are recorded and offered, and the cap on how many; the settings document owns all three. */
+  /**
+   * Start history off until a supported preference source authorizes it; attachment failures must leave it off.
+   * Getters recheck exposed raw user layers so rejected edits cannot hide an opt-out behind cached settings.
+   */
   let historyEnabled = false
   let historyGhost = false
   let historyMaxEntries = defaultSettings().history.maxEntries
@@ -433,6 +437,7 @@ export function createAppearance(ctx: Context, ports: AppearancePorts): Appearan
     registerSection: preferences.register,
     createThemesHome,
     settingsListener: () => {
+      // Validate against reader overrides before publication so conflicting plugin keys never reach the active map.
       const stopRegistry = registry?.observe(catalog => { resolvePlugins(keymap, catalog) }, () => {
         applySettings()
         ports.render()

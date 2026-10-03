@@ -109,6 +109,8 @@ export function createKeymapRegistry(): KeymapRegistry {
       if (action === undefined) throw new Error(UNAVAILABLE)
       await action.handler(ports)
     },
+    // Addons can offer route-specific UI after effort selection without entering the built-in action table.
+    // Await each followup before another picker opens; earlier callbacks may dispose later registrations.
     effortConfirmed: async ports => {
       for (const registration of [...followups]) if (followups.has(registration)) await registration.handler(ports)
     },

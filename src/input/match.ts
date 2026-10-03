@@ -16,12 +16,12 @@ const SCATTERED_HIT = 1_000_000
 /**
  * What one character of distance from the start of the row costs.
  *
- * A contiguous hit that starts earlier is the class the reader is aiming at,
- * so its position has to outrank any difference the fuzzy reading can make
- * inside the same band; the fuzzy score is clamped below this step for that
- * reason.
+ * Favor earlier contiguous hits while retaining fuzzy quality in the ranking.
+ * Each fuzzy adjustment lies between -999 and +999, so it can outweigh a
+ * one-character position difference; earlier position is not an absolute rule.
  */
 const POSITION_PENALTY_PER_CHAR = 1_000
+/** Bound the penalty so late contiguous hits stay above scattered hits; positions beyond the cap share a penalty. */
 const POSITION_PENALTY_CAP = 500
 
 /** Room a fuzzy reading has inside its band, one point less than a band step. */

@@ -17,7 +17,7 @@ export interface ToolDisplaySpec {
   readonly tail: number
 }
 
-/** A tool's row as it is read: only the fields the reader wrote, still writable while they are collected. */
+/** Preserve omitted fields during collection so resolution inherits the reader's default instead of a parser default. */
 export type WrittenToolDisplay = { -readonly [K in keyof ToolDisplaySpec]?: ToolDisplaySpec[K] }
 
 /** The values the `output` key accepts, declared once for the schema and the refusal message. */
@@ -29,7 +29,7 @@ export const TOOL_DISPLAY_LIMITS = {
   tail: { min: 0, max: CARD_DETAIL_MAX },
 } as const
 
-/** What every tool draws when the reader has written nothing: one clipped line, no output. */
+/** Fold cards and hide output initially so long reads, diffs, and searches do not bury the conversation. */
 export const DEFAULT_TOOL_DISPLAY: ToolDisplaySpec = {
   collapsed: true,
   output: 'hidden',

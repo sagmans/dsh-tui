@@ -43,13 +43,12 @@ const SECOND_MS = 1000
 const MINUTE_MS = 60 * SECOND_MS
 
 /**
- * How long the reader's editor may hold the terminal before it is stopped.
+ * The timeout for requesting termination while the editor owns the terminal.
  *
- * A child that never exits is the one failure this handoff cannot report its way
- * out of: the screen is already given up, so nothing can draw, no key is read,
- * and the session ends with the terminal left in the editor's state. Thirty
- * minutes is far past a draft anyone is still writing and firmly inside a
- * morning, which is the line between a slow reader and a stuck process.
+ * The surface cannot read its own input during the handoff, so a timeout gives
+ * an editor that never exits a recovery path. Restoration still waits for the
+ * child after the stop request, and its saved draft is read back after exit
+ * so timing out does not itself discard saved work.
  */
 export const EDITOR_TIMEOUT_MS = 30 * MINUTE_MS
 
@@ -78,12 +77,12 @@ const SEPARATORS: ReadonlySet<string> = new Set([' ', '\t', '\n', '\r'])
 /**
  * One configured command line as argv, or undefined when it names nothing.
  *
- * A reader writes an editor the way a shell would take it — `code --wait`,
- * `emacsclient -t` — so the line is split the way a shell would split it:
- * quotes group, and nothing else is special. No shell ever sees the result,
- * because an environment value is data and a shell would execute a typo. An
- * unterminated quote takes the rest of the line rather than refusing the whole
- * binding: a missing quote should not leave the reader with no editor at all.
+ * Quote grouping and whitespace separation support commands such as
+ * `code --wait` without executing editor configuration through a shell.
+ * This is not shell parsing: backslashes stay literal, and empty quoted
+ * arguments are omitted. An unterminated quote takes the rest of the line
+ * rather than refusing the whole binding: a missing quote should not leave
+ * the reader with no editor at all.
  */
 export function parseEditorCommand(value: string): readonly string[] | undefined {
   const argv: string[] = []
@@ -181,9 +180,9 @@ export interface ExternalEditorOptions {
 /**
  * The reader's editor, opened over one draft.
  *
- * Every failure is reported through the host and answered with `undefined`
- * ("keep what the bar had") rather than thrown, because the caller is a key
- * press with nowhere to put an error.
+ * A refused handoff or unusable draft is reported through the host and
+ * answered with `undefined` ("keep what the bar had") rather than thrown,
+ * because the caller is a key press with nowhere to put an error.
  */
 export class ExternalEditor {
   private readonly env: NodeJS.ProcessEnv
@@ -297,8 +296,10 @@ export class ExternalEditor {
         filled += bytesRead
       }
       if (filled > MAX_DRAFT_BYTES) return { kind: 'too-large' }
+      // Prevent edited file content from injecting terminal controls or disguising text in the live prompt.
       return { kind: 'text', text: stripControlCharacters(buffer.subarray(0, filled).toString('utf8')) }
     } finally {
+      // Closing must not replace the accepted draft or mask the original read failure.
       await handle.close().catch(() => undefined)
     }
   }
@@ -318,6 +319,7 @@ export class ExternalEditor {
    */
   private run(command: string, args: readonly string[], file: string): Promise<Error | undefined> {
     return new Promise(resolve => {
+      // Keep the session's project context and editor environment, not the scratch directory's context.
       const child = this.spawn(command, [...args, file], {
         stdio: 'inherit',
         cwd: process.cwd(),

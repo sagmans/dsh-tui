@@ -4,11 +4,10 @@
 // distinct key versions prevent an absolute directory from ever colliding with
 // a session id, while both identifiers stay readable under the stash directory.
 //
-// Readability cannot be bought with injectivity: a separator made of hyphens
-// cannot be told apart from a hyphen inside an owner id, and truncating a long
-// id can land on a name a shorter id already owns. Two distinct owners sharing
-// one bank would expose drafts, so every key ends with a digest of the exact id. The readable part is then only a label: two distinct
-// identifiers collide in the label, never in the file.
+// Flattening and truncation can give distinct owners the same readable label.
+// A digest of the exact owner reduces those collisions; it does not rule them out.
+// The store also checks the persisted owner before accepting a bank, so a filename
+// match alone cannot expose another owner's drafts.
 
 import { createHash } from 'node:crypto'
 import { homedir } from 'node:os'
@@ -34,10 +33,10 @@ const HOME_TILDE_SEPARATORS = ['/', '\\'] as const
 /** The subtree of `DSH_HOME` this surface owns. */
 const STASH_DIR_NAME = 'tui-stash'
 
-// POSIX filenames may not contain "/" or NUL, and everything else is legal, so
-// once separators are flattened the result is filename-safe on the platforms
-// this surface targets. 200 keeps the whole key, digest included, well under the
-// common 255-byte filename limit.
+// Owner path separators must not create nested banks. Flattening and escaping
+// address those separators, not every filename constraint: NUL is left unchanged.
+// The 200-byte key budget, digest included, leaves room for the .json extension
+// under the common 255-byte filename limit.
 const SANITIZE_MAX_LENGTH = 200
 const SEPARATOR = '--'
 const SESSION_KEY_FORMAT_VERSION = 'v2'
@@ -48,10 +47,10 @@ const ESCAPED_SEPARATOR = '%2D%2D'
 const BACKSLASH = '\\'
 const ESCAPED_BACKSLASH = '%5C'
 const HASH_ALGORITHM = 'sha256'
-/** 64 bits of digest, which no deliberate name can be built to collide with. */
+/** Retain a 64-bit owner digest to distinguish labels within the filename budget, not to guarantee uniqueness. */
 const HASH_LENGTH = 16
 
-/** The stash file for one scope owner. */
+/** Keep the exact owner beside its filename key so the store can reject a bank with a mismatched persisted owner. */
 export interface StashPaths {
   /** Exact scope owner, retained in the on-disk sessionId field. */
   readonly sessionId: string
@@ -128,6 +127,10 @@ export function stashBaseDir(env: NodeJS.ProcessEnv = process.env, home: string 
   return path.join(dshHomeDir(env, home), STASH_DIR_NAME)
 }
 
+/**
+ * Separate scope namespaces leave drafts in their original banks when the surface changes scope.
+ * PromptStash passes its configured scope explicitly; this session default is not the surface default.
+ */
 export function resolveStashPaths(sessionId: string, baseDir: string = stashBaseDir(), scope: StashScope = 'session'): StashPaths {
   const key = sanitizeSessionId(sessionId, scope === 'path' ? PATH_KEY_FORMAT_VERSION : SESSION_KEY_FORMAT_VERSION)
   return { sessionId, key, file: path.join(baseDir, `${key}.json`) }

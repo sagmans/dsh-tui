@@ -6,8 +6,8 @@ import type { ForkEvent } from './agent/fork.ts'
  *
  * A resumed session is folded while its agent's loop is already live, so the
  * same event reaches the surface twice: once on the stream, once from the log
- * the fold is reading. Every durable event carries a monotonic sequence number,
- * which is what tells a row that has already been drawn from one that has not.
+ * the fold is reading. When an event carries a sequence number, the cursor uses
+ * that number to suppress deliveries at or below the session's high-water mark.
  *
  * The session is part of the question rather than the caller's memory: numbers
  * restart with every session, and a transcript that starts on a session other
@@ -38,7 +38,7 @@ export class ViewGeneration {
   }
 }
 
-/** Consumes durable events in sequence order, each exactly once per session. */
+/** Suppress sequenced replay/live overlap per session; older arrivals are dropped, not reordered, and unsequenced deliveries always pass. */
 export class FoldCursor {
   private session: SessionId | undefined
   private through: number | undefined
@@ -60,6 +60,8 @@ export class FoldCursor {
       this.session = session
       this.through = undefined
     }
+    // Without a sequence, this cursor cannot identify replay/live overlap; dropping
+    // the delivery could lose content. Unsequenced events can therefore repeat.
     if (typeof event.seq === 'number') {
       if (this.through !== undefined && event.seq <= this.through) return false
       this.through = event.seq

@@ -10,5 +10,6 @@
       name: '@deepseek-ai/dsh-agent-preset'
       config:
         id: standard
+        # Keep picker position aligned with PRESET_FILES, independently of the default mode.
         order: 1
         plugins: []

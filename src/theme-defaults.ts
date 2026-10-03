@@ -85,8 +85,8 @@ const muted: StyleSpec = { fg: 'muted' }
 /**
  * The reasoning row recedes past the muted family, hence its own entry.
  *
- * Italic is what separates the signpost from the thought it introduces; the
- * darker grey is what makes the thought itself the brightest thing there.
+ * Italic distinguishes the signpost while sharing the thought's shade, so the
+ * label does not compete with the body it introduces.
  */
 const signpost: StyleSpec = { fg: 'faint', italic: true }
 
@@ -101,11 +101,9 @@ const thought: StyleSpec = { fg: 'faint' }
 const plain: StyleSpec = {}
 
 /**
- * The shipped appearance of every token.
- *
- * Defaults reproduce the surface as it looked before tokens existed, except the
- * muted family, which moves from faint-on-a-palette-slot to an explicit grey.
- * A test asserts every token in {@link TUI_TOKENS} appears here.
+ * Supply a complete appearance when neither a theme nor a reader override owns
+ * an element. The Record<TuiToken, StyleSpec> constraint keeps new tokens from
+ * lacking a fallback.
  */
 export const DEFAULT_TOKENS: Readonly<Record<TuiToken, StyleSpec>> = {
   'transcript.user': { fg: 'user' },
@@ -121,6 +119,7 @@ export const DEFAULT_TOKENS: Readonly<Record<TuiToken, StyleSpec>> = {
   // running colour, so the name it wears when nothing is happening has to be a
   // colour of its own.
   'tool.title': { fg: 'accent' },
+  // Keep the tool marker distinct from its idle title; this shared running/completed hue is not a failure signal.
   'tool.glyph': { fg: 'warn' },
   // The base accent keeps the unthemed skill row aligned with tool.title;
   // themes can override either token independently.
@@ -163,6 +162,8 @@ export const DEFAULT_TOKENS: Readonly<Record<TuiToken, StyleSpec>> = {
   'tool.web.truncated': muted,
   'tool.generic.detail': muted,
 
+  // Accent separates document structure from body text; weight marks headings
+  // and underlining distinguishes links from other accented spans.
   'markdown.heading': { fg: 'accent', bold: true },
   'markdown.link': { fg: 'accent', underline: true },
   'markdown.linkUrl': muted,
@@ -189,6 +190,8 @@ export const DEFAULT_TOKENS: Readonly<Record<TuiToken, StyleSpec>> = {
   // palette move carries both without the reader restating either.
   'markdown.diff.addedEmphasis': { inherit: 'markdown.diff.added', bg: DIFF_ADDED_BAND },
   'markdown.diff.removedEmphasis': { inherit: 'markdown.diff.removed', bg: DIFF_REMOVED_BAND },
+  // Keep diagram labels in the body shade while edges and titles orient the
+  // reader; warning colour separates rendering losses from retained source.
   'markdown.diagram.border': muted,
   'markdown.diagram.text': plain,
   'markdown.diagram.edge': { fg: 'accent' },
@@ -196,6 +199,8 @@ export const DEFAULT_TOKENS: Readonly<Record<TuiToken, StyleSpec>> = {
   'markdown.diagram.title': { fg: 'accent', bold: true },
   'markdown.diagram.warning': { fg: 'warn' },
 
+  // Current choices gain weight without replacing the surrounding foreground;
+  // cursor glyphs locate focus separately from the row's emphasis.
   'picker.title': { bold: true },
   'picker.glyph': { bold: true },
   'picker.note': { bold: true },
@@ -212,11 +217,14 @@ export const DEFAULT_TOKENS: Readonly<Record<TuiToken, StyleSpec>> = {
   'gate.glyphApproval': { bold: true },
   'gate.glyphQuestion': { bold: true },
   'gate.detail': muted,
+  // Match picker focus emphasis; a checkbox separately records selection.
   'gate.option': plain,
   'gate.optionCurrent': { bold: true },
   'gate.cursor': plain,
   'gate.hint': muted,
 
+  // Keep the active objective and plan constraint prominent above work-board
+  // details without assigning either a separate state colour.
   'dock.goal': { bold: true },
   'dock.planMode': { bold: true },
   // The row that separates the conversation from the boards under it: the boards
@@ -239,6 +247,7 @@ export const DEFAULT_TOKENS: Readonly<Record<TuiToken, StyleSpec>> = {
   'dock.jobs.running': muted,
   'dock.jobs.overflow': muted,
 
+  // An armed chord needs attention before passive measurements in the footer.
   'status.prefix': { fg: 'accent' },
   // The way back is a key the reader presses, so it carries the weight of an
   // armed chord rather than toning down with the facts.
@@ -266,6 +275,8 @@ export const DEFAULT_TOKENS: Readonly<Record<TuiToken, StyleSpec>> = {
   // Faint only: the ghost is a suggestion, and a named colour would drop the
   // faint that makes it read as not-yet-typed.
   'editor.ghost': { dim: true },
+  // Separate the focus marker from the emphasized completion text; descriptions
+  // remain secondary to the candidate the reader can accept.
   'editor.selectList.selectedPrefix': { fg: 'accent' },
   'editor.selectList.selectedText': { bold: true },
   'editor.selectList.description': muted,

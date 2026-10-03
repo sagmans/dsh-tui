@@ -99,6 +99,8 @@ function deferWarnings(): () => void {
         failures.push(error)
       }
     }
+    // Keep the first listener error intact for stop()'s post-cleanup rethrow;
+    // later failures must not prevent remaining warnings from replaying.
     if (failures.length > 0) throw failures[0]
   }
 }
@@ -225,9 +227,9 @@ export class WarningSafeTui extends TuiAltScreen {
           this.terminal.write(RESTORE_CURSOR_MODES)
         }
       } finally {
-        // Warnings go first, while the hold is still in place, so what they print
-        // joins the host text in the order it arrived; the release then writes it
-        // all out behind the exit sequence this call already wrote.
+        // Replay warnings before releasing host writes, so direct host-stream output
+        // remains buffered until cleanup releases diagnostics. Replay cannot recover
+        // the warnings' original positions among host writes.
         const release = this.releaseWarnings
         this.releaseWarnings = undefined
         let warningFailure: { readonly error: unknown } | undefined

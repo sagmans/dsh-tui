@@ -2,7 +2,7 @@
 import { type CardRowClass } from './theme-tokens.ts'
 import { clipVisibleGraphemes } from './terminal-text.ts'
 
-/** What a tool's result presenter receives, plus the call arguments it was asked with. */
+/** Keep call arguments beside the result because the tool's presenter needs both to interpret its output. */
 export interface ToolResultInput {
   readonly argumentsJson: string
   readonly content: unknown
@@ -21,7 +21,7 @@ export interface ToolPresenter {
   result(name: string, input: ToolResultInput): ToolCard | undefined
 }
 
-/** Which treatment a card gets; mirrors the tool's declared render intent. */
+/** Preserve the tool's render intent so the renderer can choose kind-specific detail treatment without inspecting tool names. */
 export type ToolCardKind = 'generic' | 'terminal' | 'diff' | 'search' | 'read' | 'web'
 
 /**
@@ -41,20 +41,20 @@ export interface CardRow {
   readonly parts: readonly CardPart[]
 }
 
-/** A row drawn in a single style. */
+/** Give single-style text the same fragment shape that mixed-style rows use for rendering and export. */
 export function cardRow(cls: CardRowClass, text: string): CardRow {
   return { parts: [{ class: cls, text }] }
 }
 
-/** The words of a row with no styling, for callers that only need the text. */
+/** Export the same words the screen draws without carrying terminal-only row styles. */
 export function rowText(row: CardRow): string {
   return row.parts.map(part => part.text).join('')
 }
 
-/** What a measured fact on a card is, which decides its colour and symbol. */
+/** Keep statistic meaning separate from text so the renderer supplies its symbol and theme token. */
 export type CardStatKind = 'added' | 'changed' | 'removed' | 'size'
 
-/** One measured fact a card reports beside its header, e.g. a change or size count. */
+/** Keep measurements in card data so headers can present them without parsing tool output. */
 export interface CardStat {
   readonly kind: CardStatKind
   /** The number or phrase; the renderer supplies the symbol and the styling. */
@@ -102,8 +102,8 @@ export interface ToolSubCall {
    * What the tool's own presenter drew for the call — a diff derived from the
    * arguments, a raw input — kept only for the reader who opens the row.
    *
-   * A call that failed carries none: the change it declared never happened, and
-   * rows that still drew as applied would say otherwise.
+   * Hide declared-change rows on failure so the preview does not imply successful
+   * application; failure does not prove that no partial effects occurred.
    */
   readonly presented?: ToolSubCallRows
   /** What the call's outcome presented, of whatever kind, kept for the same reader. */
@@ -257,6 +257,10 @@ function clipRow(row: CardRow): CardRow {
   return { parts: row.parts.map(part => ({ class: part.class, text: clipLine(part.text) })) }
 }
 
+/**
+ * Keep opening context within the retention budget: the first diff header or the
+ * start of generic content remains available. Terminal outcomes use boundTail.
+ */
 export function bound(rows: readonly CardRow[]): { detail: CardRow[]; totalLines: number } {
   return { detail: rows.slice(0, CARD_DETAIL_MAX).map(clipRow), totalLines: rows.length }
 }
@@ -275,9 +279,8 @@ export function boundTail(rows: readonly CardRow[]): { detail: CardRow[]; totalL
 /**
  * Build a card from raw text lines.
  *
- * Every path that turns text into a card goes through here, so a tool with no
- * presenter — or a result whose presenter declined — cannot keep a hundred
- * thousand lines alive in the transcript.
+ * Bound fallback text cards too, so a missing or declining presenter cannot
+ * retain unbounded detail rows in the transcript.
  */
 export function cardFromLines(
   kind: ToolCardKind,
@@ -290,7 +293,7 @@ export function cardFromLines(
   return { kind, tool, title, detail: bounded.detail, failed, totalLines: bounded.totalLines }
 }
 
-/** Text lines carried by model-facing content blocks. */
+/** Project text-bearing content for fallback cards without turning unknown or non-text payloads into display text. */
 export function contentLines(content: unknown): string[] {
   if (!Array.isArray(content)) return []
   const lines: string[] = []

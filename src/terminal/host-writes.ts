@@ -8,19 +8,16 @@ import { Buffer } from 'node:buffer'
  * already on screen: the damage is skipped as unchanged and stays until
  * something forces a full repaint. Warnings are deferred separately; this is the
  * channel a library, a stray `console.log`, or an unhandled rejection report
- * writes to directly. Text is held until the screen is given back, then written
- * in the order it arrived, so a reader still gets the diagnostics — after the
- * frame they would otherwise have ruined.
+ * writes to directly. Text waits until the screen is given back so diagnostics
+ * do not ruin a frame. Retained writes preserve order within each stream;
+ * streams replay in target order, not in cross-stream arrival order.
  *
  * The surface's own drawing goes through the terminal object, which is wrapped
  * here: a write made inside that call passes through, and everything else waits.
  *
- * What waits is bounded in whole writes, not in bytes: once a stream holds more
- * than its budget the oldest writes are dropped, and the newest write is never
- * cut or given up, so the hold ends at whichever is larger — the budget, or that
- * one write. A write larger than the budget is therefore held whole, because
- * this is the reader's own program's output and half a line is corruption where
- * a bigger hold is only memory.
+ * Retained text stays within each stream's byte budget. Oversized writes are
+ * rejected whole, and older writes are evicted to make room for later ones:
+ * truncating individual writes would present incomplete diagnostics as intact.
  */
 
 /** One stream a host may write to without asking the surface. */
@@ -29,11 +26,7 @@ export interface HostWritable {
 }
 
 /**
- * The hold budget one stream trims back to.
- *
- * Trimming counts whole writes, so this is the point the oldest write is given
- * up at rather than a ceiling on the bytes a stream holds; the header says what
- * the newest write does to it.
+ * A per-stream byte ceiling prevents deferred diagnostics from growing without bound.
  */
 export const HOST_WRITE_LIMIT = 64 * 1024
 
@@ -85,6 +78,8 @@ function holdStream(target: HostWritable, held: HeldWrites, isSurfaceWrite: () =
   target.write = function (this: unknown, ...args: unknown[]): unknown {
     if (isSurfaceWrite()) return Reflect.apply(original, this, args)
     const [chunk, encoding, callback] = args
+    // Retention and replay share a UTF-8 text budget so held diagnostics have a bounded replay size.
+    // This is not byte-preserving: original bytes and write encodings are not preserved.
     const text = typeof chunk === 'string'
       ? chunk
       : chunk instanceof Uint8Array
@@ -101,6 +96,7 @@ function holdStream(target: HostWritable, held: HeldWrites, isSurfaceWrite: () =
         held.dropped += 1
       }
     }
+    // Producers must not wait for a drain this hold never emits; acknowledgment is not terminal delivery.
     if (typeof encoding === 'function') encoding()
     else if (typeof callback === 'function') callback()
     return true

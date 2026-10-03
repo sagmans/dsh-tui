@@ -185,8 +185,8 @@ function overlapIdentity(overlap: PressOverlap): string {
  * reader never touched. Rows are compared twice: by the press they were written
  * as, which is what the bar's own rows are matched by, and by every sequence the
  * matcher folds, which is what catches one control byte carrying two spellings.
- * The overlaps the library itself ships are left alone: those are rows it
- * already knows how to tell apart.
+ * Preserve overlaps already present in the shipped map, including shadowing,
+ * while refusing newly introduced conflicts.
  */
 export function refuseLibraryClashes(effective: Readonly<Record<string, readonly KeyId[]>>): void {
   const shipped = new Set([...sharedPresses(shippedLibraryRows())].map(([press, ids]) => `${press}\u0000${ids.join(',')}`))

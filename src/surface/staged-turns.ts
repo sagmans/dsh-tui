@@ -147,12 +147,14 @@ export function createStagedTurns(ports: StagedTurnPorts): StagedTurns {
       ports.render()
       return undefined
     }
-    // Park before the interrupt: cancelling the turn drops the queue, so a
-    // park that fails must refuse the undo while the words are still queued.
+    // Park before the interrupt: cancelling the turn drops the queue. A rejected
+    // park must leave unsaved words queued; stash notices alone do not reject.
     if (queued.length > 0) {
       try {
         await parkQueued(queued)
       } catch {
+        // Earlier entries may already be stored, but that does not prove every
+        // prompt has a saved copy. Preserve the queue rather than risk losing words.
         ports.notice('could not park the queued prompts; undo cancelled')
         ports.render()
         return undefined
@@ -290,11 +292,13 @@ export function createStagedTurns(ports: StagedTurnPorts): StagedTurns {
       const source = ports.activeSession()
       const events = await ports.sessionEvents(source)
       const turns = turnsOf(events)
-      // hidden > 0 was settled above, and the driven session's log is read from
-      // memory, so the cursor still names a turn this list holds.
+      // Branch from the oldest hidden turn to exclude the whole undone suffix.
+      // This assumes the cursor still matches the source log after the await.
       const tail = hiddenTail(cursor, turns)!
       const seed = events.slice(0, tail.seedCount)
       const childId = SessionId(`tui-session-${randomUUID()}`)
+      // The source log preserves the undone turns, not this agent; disposal is
+      // not rolled back if the child cannot open, so a send failure can leave no driver.
       await ports.disposeOutgoing()
       const opened = await ports.openSession(childId, false, seed.length === 0 ? undefined : { from: source, events: seed })
       ports.notice(`continuing in a new branch · ${source} keeps the undone turns`)

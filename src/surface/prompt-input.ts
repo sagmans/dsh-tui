@@ -223,7 +223,7 @@ export function createPromptInput(ctx: Context, ports: PromptInputPorts): Prompt
     },
   }
 
-  /** One scan of the workspace, shared by both menus: the listing is read-only and cached. */
+  /** Share lazy, expiring scans between both menus so reuse does not freeze the workspace listing. */
   const fileIndex = createFileIndex(process.cwd())
   /** The menu the prompt bar offers: the commands this session can run, and the workspace's files. */
   let promptCompletion: CombinedAutocompleteProvider | undefined

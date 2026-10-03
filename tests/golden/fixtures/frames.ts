@@ -33,8 +33,9 @@ export /**
  * truncation are where a terminal surface usually breaks.
  */
 const WIDTHS = [80, 40]
+// Keep baseline layout independent of terminal colour capabilities; callers can supply a styled theme.
 export const theme = createTheme('none')
-export /** The footer facts this file pins; a case that varies one spreads over them. */
+export /** Keep route, usage, and directory facts populated and fixed to pin footer wrapping at both widths. */
 const STATUS_FACTS: StatusFacts = {
   chord: undefined,
   back: undefined,
@@ -101,6 +102,10 @@ function fixturePresenter(): ReturnType<typeof createToolPresenter> {
   } as Record<string, unknown>
   return createToolPresenter({ tools: { get: (name: string) => tools[name] } } as unknown as Context)
 }
+/**
+ * Keep transcript and dock projections on the same scenario by sharing their durable events.
+ * Include a user prompt and a plugin notice so injected instructions do not read as user speech.
+ */
 export function fixture(frameTheme = theme): { view: TranscriptView; dock: WorkDock; status: StatusBar } {
   const model = new TranscriptModel(fixturePresenter())
   const work = new WorkFold()
@@ -138,6 +143,7 @@ export function fixture(frameTheme = theme): { view: TranscriptView; dock: WorkD
     type: 'tool/result',
     data: { message: { content: [{ type: 'tool-result', toolCallId: 'c2', text: FIXTURE_FILE_LINES.join('\n') }], isError: false } },
   })
+  // Pin the history marker beside completed, active, and pending checklist states.
   model.apply({ type: 'compaction/summary', data: { shadowedSeqs: [1, 2, 3], shadowedTokenCount: 4200 } })
   feed({ type: 'plan/mode', data: { active: true } })
   feed({ type: 'todo/write', data: { todos: [
@@ -230,6 +236,10 @@ function markdownMessages(frameTheme = theme): TranscriptView {
 }
 export /** One frozen moment, so a frame with elapsed times is still a stable artefact. */
 const NOW = 1_700_000_000_000
+/**
+ * Combine replayable plan and goal state with live jobs and delegations to pin a busy dock.
+ * Include a completed delegation to pin its omission from work in flight.
+ */
 export function busyDock(frameTheme = theme): WorkDock {
   const work = new WorkFold()
   work.apply({ type: 'plan/mode', data: { active: true } })
@@ -260,6 +270,7 @@ const QUEUED_PROMPTS = [
 export function queued(frameTheme = theme): QueueBar {
   return new QueueBar(() => QUEUED_PROMPTS, frameTheme)
 }
+/** Pin title fallback beside directory, age, and event counts; NOW keeps age labels stable. */
 export function pickerCard(): SessionPicker {
   return new SessionPicker(
     [
@@ -271,7 +282,7 @@ export function pickerCard(): SessionPicker {
     defaultKeymap,
   )
 }
-export /** The configured-route list, headed by the route the next step will use. */
+export /** Pin the current route and explicit effort in the heading beside current and alternative route choices. */
 function modelPickerCard(): ModelPicker {
   return new ModelPicker(
     () => [
@@ -283,7 +294,7 @@ function modelPickerCard(): ModelPicker {
     defaultKeymap,
   )
 }
-export /** The drafts parked for one session, whose rows are the draft itself. */
+export /** Pin command-line draft indexes beside text and frozen ages under the owning bank heading. */
 function stashPickerCard(): StashPicker {
   return new StashPicker(
     [
@@ -305,7 +316,7 @@ export /**
 function gateCard(typed = ''): TranscriptView {
   const typing = typed !== ''
   const bar = new BoxedEditor(STUB_TUI, theme.editor)
-  // The real modal owner borrows the editor with submission disabled.
+  // Match the borrowed question editor so its answer uses dialog framing, not conversation rails.
   bar.disableSubmit = true
   bar.setText(typed)
   const gate: GateCard = {
@@ -388,13 +399,6 @@ function dispatchedFrame(frameTheme = theme): TranscriptView {
   })
 }
 export /**
- * Styled frames.
- *
- * The plain snapshots prove layout, not that a token reached the screen: with
- * colour off, every escape is dropped. These pin the emitted sequences, which is
- * the only place a wrong slot or a dropped reset would show up in CI.
- */
-/**
  * A tool row a terminal would have acted on: a tab on its stop, a colour run,
  * and a carriage return that rewrites the row it sits on.
  *

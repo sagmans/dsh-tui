@@ -25,10 +25,10 @@ export interface AtToken {
   readonly quoted: boolean
 }
 
-/** Suggestions a completion menu is allowed to gather at once. */
+/** Bound menu rows and the concurrent reachability proofs completion performs for them. */
 export const SUGGESTION_LIMIT = 20
 
-/** Where one token ends and the next begins, as a shell reader expects. */
+/** Share token boundaries with quoting so an inserted path survives the same parser that offers it. */
 const TOKEN_DELIMITERS = new Set([' ', '\t', '"', "'", '='])
 
 const QUOTE = '"'
@@ -165,13 +165,14 @@ export function offerableCandidate(candidate: Candidate): boolean {
 /**
  * The rows that best answer the fragment, best first.
  *
- * Only the paths are searched, the way fzf searches a path list, so a fragment
+ * Only the paths are searched, so a fragment
  * may match a segment anywhere in the tree. Ties fall to a directory over a
  * file — a directory is a place to keep typing, a file ends the search — then
  * to the shallower, shorter path, which is the one the reader is likelier to
  * mean.
  *
- * Cooperative scoring prevents a large live completion from taking the editor's keyboard.
+ * Scoring yields so newer input can cancel it; the final full sort is synchronous
+ * and is not bounded by the suggestion limit.
  */
 export async function rankFilesAsync(query: string, candidates: readonly Candidate[], limit: number, signal: AbortSignal): Promise<readonly Candidate[]> {
   if (signal.aborted) return []
@@ -190,6 +191,8 @@ export async function rankFilesAsync(query: string, candidates: readonly Candida
       deadline = performance.now() + RANK_SLICE_MS
     }
   }
+  // Select from the global ranking, not the listing order, so a late-listed
+  // candidate can still displace an earlier one from the limited menu.
   return scored.sort(compareScored).slice(0, limit).map(entry => entry.candidate)
 }
 
@@ -212,7 +215,7 @@ export function depthOf(path: string): number {
   return path.split('/').length
 }
 
-/** The entries a bare at-sign offers: what sits directly in the workspace. */
+/** With no fragment to rank, offer root entries as starting points; directories let the reader narrow the path. */
 function topLevel(candidates: readonly Candidate[], limit: number): readonly Candidate[] {
   return candidates
     .filter(candidate => !candidate.path.includes('/'))

@@ -6,14 +6,14 @@ import type { TuiTheme } from '../theme.ts'
 import type { TodoEntry, WorkState } from '../work.ts'
 import { pushGap } from './gap.ts'
 
-/** Todo rows the dock keeps on screen; the rest become a count. */
+/** Bound the todo preview so a growing plan does not consume the conversation; overflow remains counted. */
 export const DOCK_TODO_LIMIT = 4
 
-/** The mark that introduces a dock section, so a literal never lives in a template. */
 const GOAL_MARK = '◎'
 const PLAN_MODE_MARK = '⏸'
 const TODOS_MARK = '☰'
 const SUBAGENTS_MARK = '⚇'
+/** Make hidden running children discoverable by marking when their preview can expand. */
 const SUBAGENTS_COLLAPSED_MARK = '▸'
 const SUBAGENTS_EXPANDED_MARK = '▾'
 const JOBS_MARK = '⛭'
@@ -238,6 +238,8 @@ export class WorkDock implements Component {
     const live = jobs.filter(job => isLive(job.status))
     if (live.length === 0) return
     this.openBoard(lines)
+    // Give recent starts the limited preview slots so new work appears even while older jobs remain live.
+    // Older work stays in the overflow count; this ordering does not rank urgency.
     const ordered = [...live].sort((left, right) => right.startedAt - left.startedAt)
     const now = this.now()
     const rows: string[] = []

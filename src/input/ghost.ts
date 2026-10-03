@@ -20,6 +20,7 @@ export interface EditorCursor {
 
 /** What one paint knows when it asks for a suggestion. */
 export interface GhostInput {
+  /** Newest first, matching the history store; order breaks ties between matching prefixes. */
   readonly entries: readonly GhostCandidate[]
   readonly text: string
   readonly lines: readonly string[]
@@ -42,7 +43,7 @@ const NEXT_WORD = /^\s*\S+/u
 // a ZWJ cluster across the cursor cell.
 const GRAPHEMES = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
 
-/** Whether the cursor sits past the last character of the whole text. */
+/** Ghost drawing and acceptance append after the cursor, so neither may run inside existing text. */
 export function isCursorAtTextEnd(input: { lines: readonly string[]; cursor: EditorCursor }): boolean {
   const lastLineIndex = Math.max(0, input.lines.length - 1)
   const lastLine = input.lines[lastLineIndex] ?? ''
@@ -57,6 +58,7 @@ export function isCursorAtTextEnd(input: { lines: readonly string[]; cursor: Edi
  * an empty ghost and hide the useful one behind it.
  */
 export function ghostSuffix(input: GhostInput): string | undefined {
+  // An empty prefix narrows nothing; require typed text before offering a history continuation.
   if (input.text.length === 0) return undefined
   if (!isCursorAtTextEnd(input)) return undefined
   const match = input.entries.find(entry => entry.text !== input.text && entry.text.startsWith(input.text))
@@ -68,7 +70,7 @@ export function nextGhostWord(text: string): string | undefined {
   return text.match(NEXT_WORD)?.[0]
 }
 
-/** The suffix as one drawn line: only the first line, marked when it continues. */
+/** Keep the ghost within the editor cursor row; mark a fold so acceptance can still include unseen following lines. */
 export function ghostDisplayLine(text: string): string {
   const newlineIndex = text.indexOf('\n')
   if (newlineIndex < 0) return text

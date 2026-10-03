@@ -12,7 +12,7 @@ import {
 } from '../jobs.ts'
 import { SubagentRoster, createSubagentControl, describeSubagents, parseSubagentsArgument, resolveRun } from '../subagents.ts'
 
-/** Decode a lifecycle payload the roster only takes when it carries the shape it expects. */
+/** Guard optional lifecycle metadata reads against non-object payloads; the roster validates identifiers separately. */
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined
 }
@@ -99,10 +99,8 @@ export function createBackgroundWork(ctx: Context, ports: BackgroundWorkPorts): 
     try {
       jobs = jobDirectory.list(agent.agent)
     } catch (error) {
-      // A registry that cannot be asked must not take the command or the watch
-      // down with it: the board keeps its last known shape — nothing, on a
-      // first read — and the reader is told why, in the reason the registry
-      // gave, rather than the surface dying where they cannot see it.
+      // Keep list failures visible without aborting the command or job watch.
+      // Clearing this projection removes job-derived liveness; it does not prove jobs stopped.
       jobs = []
       ports.notice(`could not list background jobs: ${error instanceof Error ? error.message : String(error)}`)
     }
@@ -149,6 +147,7 @@ export function createBackgroundWork(ctx: Context, ports: BackgroundWorkPorts): 
     }
   }
 
+  // Read/kill exceptions escape so registry failures do not become empty-output or stop-result notices.
   const runJobsCommand = (argument: string): void => {
     const agent = ports.drivingAgent()
     if (jobDirectory === undefined) {
@@ -206,6 +205,7 @@ export function createBackgroundWork(ctx: Context, ports: BackgroundWorkPorts): 
     jobs: () => jobs,
     refresh,
     acceptCatalog: info => roster.catalog(info),
+    // Both projections belong to the outgoing agent; do not carry its work into the next session.
     resetRoster: () => {
       roster.reset()
       jobs = []

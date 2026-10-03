@@ -3,7 +3,7 @@ import { carriedFields, mergeCards, subCallRow, subCallRows, SUBCALL_MAX } from 
 import type { TranscriptEntry } from '../transcript.ts'
 import { contentLinesOf } from './message-content.ts'
 
-/** One second in milliseconds, which is the unit a duration is reported in. */
+/** Convert clock milliseconds so tool cards report elapsed time in whole seconds. */
 export const SECOND_MS = 1000
 
 interface PendingCall {
@@ -96,9 +96,9 @@ export class ToolCallFold {
   /**
    * How long one call has been in flight, or that it is not.
    *
-   * The fold owns the request-to-result window, so a renderer asks here rather
-   * than timing the row itself: a row read twice in one frame would otherwise
-   * report two durations for one call.
+   * The fold owns the request timestamp and pending-call lifecycle, so renderers
+   * need not maintain a second timing state. Each read samples the clock anew;
+   * reads within one frame can cross a whole-second boundary.
    */
   liveCall(callId: string): LiveCallState {
     const call = callId === '' ? undefined : this.pending.get(callId)
@@ -298,7 +298,10 @@ function toolCallIdOf(message: Record<string, unknown> | undefined): string {
   return typeof firstBlock?.toolCallId === 'string' ? firstBlock.toolCallId : ''
 }
 
-/** The arguments a nested call was made with, as the shape a presenter is asked with. */
+/**
+ * Missing or unserializable arguments must not discard an otherwise identifiable nested call.
+ * Empty text lets the fold retain the call when its arguments cannot be represented.
+ */
 function argumentsJsonOf(value: unknown): string {
   if (value === undefined) return ''
   try {
@@ -308,7 +311,7 @@ function argumentsJsonOf(value: unknown): string {
   }
 }
 
-/** Narrowing for the structural event reads above; each reader keeps its own copy rather than sharing one. */
+/** Non-object result envelopes must not interrupt result folding; object fields still need their own checks. */
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined
 }

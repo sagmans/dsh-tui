@@ -76,7 +76,7 @@ export interface AddEntryInput {
   readonly text: string
   /** Caller-supplied id; generated when omitted. */
   readonly id?: string
-  /** Caller-supplied timestamp, used only when a recovery path restores an entry. */
+  /** Preserve an explicit timestamp instead of assigning the store clock's current time; ordering remains newest-first insertion. */
   readonly createdAt?: number
 }
 
@@ -91,12 +91,14 @@ export interface QuarantineRecord {
   readonly syncFailed: boolean
 }
 
+/** Replacement already landed: report the later failure without inviting a retry of the committed mutation. */
 export interface StashWriteOutcome {
   readonly committed: true
   readonly phase: StashFailurePhase
   readonly error: unknown
 }
 
+/** Replacement writers must report landed writes separately from failures, so callers do not retry committed mutations. */
 export type StashWriter = (
   filePath: string,
   file: StashFile,
@@ -127,6 +129,7 @@ export class StashStore {
   private readonly now: Clock
   private readonly write: StashWriter
 
+  /** Keep validation and mutation locking here even when callers replace timestamp or persistence behavior. */
   constructor(paths: StashPaths, loaded: LoadResult, now: Clock = Date.now, write: StashWriter = writeStashFile) {
     this.paths = paths
     this.now = now
@@ -147,18 +150,19 @@ export class StashStore {
     return this.file.entries.length
   }
 
-  /** The recovery location the last read produced, if any, reported once. */
+  /** Consume recovery notices so repeated UI synchronization does not announce the same quarantine again. */
   takeQuarantine(): QuarantineRecord | undefined {
     const recovery = this.corruptRecovery
     this.corruptRecovery = undefined
     return recovery
   }
 
-  /** Resolve a selector against the entries currently held. */
+  /** Resolve the snapshot before editor restoration; subsequent removal must use the returned stable id. */
   find(selector: string | undefined): ResolvedEntry | undefined {
     return resolveBySelector(this.file.entries, selector)
   }
 
+  // Loading may quarantine corrupt input, so reads need the same exclusive lock as writers.
   async refresh(): Promise<void> {
     await withStashFileLock(this.filePath, () => this.reloadFresh())
   }
@@ -172,6 +176,7 @@ export class StashStore {
     const text = sanitizeStashText(input.text)
     return withStashMutationLock(this.filePath, async () => {
       await this.reloadFresh()
+      // Strict parsing rejects duplicate ids; refuse them before a save makes the bank unreadable.
       if (this.file.entries.some(entry => entry.id === id)) throw new Error(DUPLICATE_STASH_ID_MESSAGE)
       const entry: StashEntry = { id, text, createdAt: input.createdAt ?? this.now() }
       const next: StashFile = { ...this.file, entries: [entry, ...this.file.entries] }
@@ -179,7 +184,7 @@ export class StashStore {
     })
   }
 
-  /** Remove one entry by its exact id, reporting what was removed. */
+  /** After pop restores the editor, target that exact draft even if concurrent additions changed its index. */
   async removeById(id: string): Promise<ResolvedEntry | undefined> {
     assertSafeEntryId(id)
     return withStashMutationLock(this.filePath, async () => {
@@ -234,6 +239,7 @@ export class StashStore {
 
   private async persistMutation<Result>(next: StashFile, result: Result): Promise<StashMutationResult<Result>> {
     const outcome = await this.write(this.filePath, next)
+    // Replacement precedes the directory-sync warning; keep memory aligned with the landed write before reporting its result.
     this.file = next
     if (outcome?.committed === true) {
       throw new StashCommittedError(result, { phase: outcome.phase, error: outcome.error })
@@ -263,6 +269,7 @@ export async function loadStashStore(
   now: Clock = Date.now,
   write: StashWriter = writeStashFile,
 ): Promise<StashStore> {
+  // Initial loading can quarantine a bank too; serialize that move with mutations.
   const loaded = await withStashFileLock(paths.file, () => readCurrentStashFile(paths.file, paths.sessionId))
   if (loaded.kind === 'unsupported') throw new UnsupportedStashSchemaError(loaded.version)
   return new StashStore(paths, loaded, now, write)
@@ -306,6 +313,7 @@ async function quarantineCorrupt(
   return { kind: 'corrupt', quarantinedTo: quarantined.path, quarantineSyncFailed: quarantined.syncError !== undefined }
 }
 
+/** Preserve the replacement boundary with operation overrides: a later directory-sync failure warns about a landed write. */
 export async function writeStashFile(
   filePath: string,
   file: StashFile,
