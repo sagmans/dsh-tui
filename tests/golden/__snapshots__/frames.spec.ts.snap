@@ -310,19 +310,26 @@ exports[`golden frames > renders the stash picker at 80 columns 1`] = `
 
 exports[`golden frames > renders the status row at 40 columns 1`] = `
 [
-  "● ready · standard · zai-coding-cn/glm-…",
+  "● ready · standard ·",
+  "zai-coding-cn/glm-5.3 (max) ·",
+  "workspace-write · ctx 17.5k/1.0M · cache",
+  "87% ·",
+  "~/source/opensource/deepseek-harness/mas",
+  "ter",
 ]
 `;
 
 exports[`golden frames > renders the status row at 80 columns 1`] = `
 [
-  "● ready · standard · zai-coding-cn/glm-5.3 (max) · workspace-write · ctx 17.5k/…",
+  "● ready · standard · zai-coding-cn/glm-5.3 (max) · workspace-write · ctx",
+  "17.5k/1.0M · cache 87% · ~/source/opensource/deepseek-harness/master",
 ]
 `;
 
 exports[`golden frames > renders the status row with parked drafts at 80 columns 1`] = `
 [
-  "● ready · standard · zai-coding-cn/glm-5.3 (max) · workspace-write · stash 3 · …",
+  "● ready · standard · zai-coding-cn/glm-5.3 (max) · workspace-write · stash 3 ·",
+  "ctx 17.5k/1.0M · cache 87% · ~/src/app",
 ]
 `;
 

@@ -14,6 +14,8 @@ breaking change, and a patch carries only fixes.
 
 ### Fixed
 
+- The footer wraps on narrow terminals so session details remain visible instead of being cut to one row.
+
 - Nested tool arguments retain literal control-character evidence in folded and expanded rows while their output keeps terminal repaint semantics.
 
 - Intraline diff emphasis stops grapheme collection after its budget is exceeded instead of materializing entire oversized rows; whole-row fallback and Unicode boundaries remain intact.

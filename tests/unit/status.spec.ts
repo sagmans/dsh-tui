@@ -1,4 +1,4 @@
-import { visibleWidth } from '@earendil-works/pi-tui'
+import { stripTerminalSequences, visibleWidth } from '@earendil-works/pi-tui'
 import { describe, expect, it } from 'vitest'
 import { createTheme } from '@/theme.ts'
 import { DEFAULT_PALETTE } from '@/theme-defaults.ts'
@@ -6,7 +6,7 @@ import { cacheRate, usageTotals, createStatusFacts } from '@/agent/status.ts'
 import { Context } from '@deepseek-ai/cordis'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { formatTokens } from '@/tokens.ts'
-import { formatStatus, shortPath, type StatusFacts } from '@/ui/status.ts'
+import { formatStatus, shortPath, StatusBar, type StatusFacts } from '@/ui/status.ts'
 
 const theme = createTheme('none')
 const FOOTER_HINT = 'Burst'
@@ -16,6 +16,7 @@ const OTHER_MODEL = 'example-other-model'
 const FOOTER_SESSION = 'footer-route'
 const FOOTER_WIDTH = 200
 const NARROW_FOOTER_WIDTH = 35
+const FOOTER_RESIZE_WIDTHS = [20, NARROW_FOOTER_WIDTH, 80, FOOTER_WIDTH]
 const MIN_FOOTER_WIDTH = 1
 const MULTILINE_CWD = '/tmp/one\ntwo'
 
@@ -37,6 +38,21 @@ const facts = (overrides: Partial<StatusFacts> = {}): StatusFacts => ({
   cwd: '/Users/dev/source/opensource/deepseek-harness/master',
   home: '/Users/dev',
   ...overrides,
+})
+
+describe('responsive footer rows', () => {
+  it.each(FOOTER_RESIZE_WIDTHS)('retains every fact when resized to %i columns', width => {
+    for (const mode of ['none', 'truecolor'] as const) {
+      const footerTheme = createTheme(mode)
+      const footer = new StatusBar(() => facts(), footerTheme)
+      const full = stripTerminalSequences(formatStatus(facts(), FOOTER_WIDTH, footerTheme)).replace(/\s/gu, '')
+      const lines = footer.render(width)
+      expect(lines.map(stripTerminalSequences).join('').replace(/\s/gu, '')).toBe(full)
+      for (const line of lines) expect(visibleWidth(line)).toBeLessThanOrEqual(width)
+      expect(footer.render(FOOTER_WIDTH)).toHaveLength(1)
+      expect(footer.render(0)).toEqual([])
+    }
+  })
 })
 
 describe('an armed chord', () => {
