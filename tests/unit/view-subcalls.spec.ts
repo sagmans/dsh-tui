@@ -15,6 +15,16 @@ import { MarkdownRenderer } from '@/ui/markdown.ts'
 import { TranscriptView, type ViewState } from '@/ui/view.ts'
 import { painted, viewOf, mouse } from './fixtures/transcript-view.ts'
 
+const DECISION_WIDTH = 120
+const DISPATCH_ROW = 1
+const REPAINT_OUTPUT = 'old\rnew'
+const REPAINT_ROW = '    new'
+const LITERAL_COMMANDS = [
+  ['carriage return', 'echo first\recho last', 'echo first\\x0Decho last'],
+  ['backspace', 'echo first\b!', 'echo first\\x08!'],
+  ['styling', 'echo \u001b[31mred\u001b[0m', 'echo \\x1B[31mred\\x1B[0m'],
+] as const
+
 describe('TranscriptView nested PTC calls', () => {
   /** Declares each nested call the way the real tools do, so its row is the tool's own header. */
     const nestedPresenter: ToolPresenter = {
@@ -89,6 +99,15 @@ describe('TranscriptView nested PTC calls', () => {
       const model = foldedProgram([{ name: 'bash', args: { command: 'echo one\necho two' } }])
       expect(viewOf(model, FOLDED).render(60)).toEqual(['search the tree', '  bash echo one echo two · exit 0'])
     })
+  it.each(LITERAL_COMMANDS)('keeps %s evidence when a dispatched command opens', (_name, command, literal) => {
+    const view = viewOf(foldedProgram([{ name: 'bash', args: { command }, content: REPAINT_OUTPUT }]), FOLDED)
+    expect(view.render(DECISION_WIDTH)[DISPATCH_ROW]).toContain(literal)
+    // Opening a call must preserve its argument while its output still behaves like a terminal.
+    view.handleMouse(mouse('click', 'left', DISPATCH_ROW))
+    const opened = view.render(DECISION_WIDTH)
+    expect(opened[DISPATCH_ROW]).toContain(literal)
+    expect(opened).toContain(REPAINT_ROW)
+  })
   it('marks a failed call in the failed colour without hiding it', () => {
       const colour = createTheme('truecolor')
       const model = foldedProgram([{ name: 'bash', args: { command: 'exit 1' }, failed: true }])
