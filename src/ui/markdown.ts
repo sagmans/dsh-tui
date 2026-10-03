@@ -1,8 +1,10 @@
-import { Markdown, type DefaultTextStyle, type MarkdownOptions, type MarkdownTheme } from '@earendil-works/pi-tui'
+import { Markdown, wrapTextWithAnsi, type DefaultTextStyle, type MarkdownOptions, type MarkdownTheme } from '@earendil-works/pi-tui'
+import { displayText } from '../text.ts'
 import type { MermaidTransform } from './mermaid.ts'
 
 /** Parsed messages kept for redraws; everything above this is cold transcript. */
 export const MARKDOWN_CACHE_LIMIT = 64
+const STACK_OVERFLOW_MESSAGE = 'Maximum call stack size exceeded'
 
 /**
  * How a row is based where the markdown itself has no rule for the text.
@@ -56,7 +58,14 @@ export class MarkdownRenderer {
       this.parsed.delete(key)
     }
     this.parsed.set(key, message)
-    return message.render(Math.max(1, Math.floor(width)))
+    const availableWidth = Math.max(1, Math.floor(width))
+    try {
+      return message.render(availableWidth)
+    } catch (error) {
+      if (!(error instanceof RangeError) || error.message !== STACK_OVERFLOW_MESSAGE) throw error
+      // Source remains inspectable when dependency layout exceeds the engine's argument or recursion limit.
+      return wrapTextWithAnsi(displayText(text), availableWidth)
+    }
   }
 
   /**

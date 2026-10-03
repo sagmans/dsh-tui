@@ -33,6 +33,7 @@ const EMPTY_ARGUMENTS = '{}'
 const FOLD_PREFIX = `injected ${FOLD_PLUGIN} · ${FOLD_LINE_COUNT} lines`
 const LARGE_MESSAGE_CHARACTERS = 150_000
 const LARGE_MESSAGE_TEXT = 'z'
+const LARGE_MESSAGE_PREFIX = '- '
 const STYLED_CHARACTERS = 8000
 const STREAM_INTERVAL_MS = 20
 const STREAM_TEXT = '.'
@@ -85,7 +86,7 @@ for (let index = 0; index < SETTLED_MESSAGES; index++) {
   model.apply({ type: MESSAGE_EVENT, data: { message: { content: [{ type: TEXT_CONTENT, text: `settled ${index}` }] } } })
 }
 // A retained message exercises the argument-safe row and copy paths when the driver narrows the terminal.
-model.apply({ type: MESSAGE_EVENT, data: { message: { content: [{ type: TEXT_CONTENT, text: LARGE_MESSAGE_TEXT.repeat(LARGE_MESSAGE_CHARACTERS) }] } } })
+model.apply({ type: MESSAGE_EVENT, data: { message: { content: [{ type: TEXT_CONTENT, text: LARGE_MESSAGE_PREFIX + LARGE_MESSAGE_TEXT.repeat(LARGE_MESSAGE_CHARACTERS) }] } } })
 model.applyStreamChunk({ type: TEXT_DELTA, text: `${SGR_START}${STYLED_TEXT.repeat(STYLED_CHARACTERS)}${CARRIAGE_RETURN}${REPAINT_TEXT.repeat(STYLED_CHARACTERS)}${SGR_END}` })
 const picker = new ListPicker(
   () => PICKER_ROWS, () => PICKER_TITLE, row => row.label,

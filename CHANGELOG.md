@@ -14,6 +14,8 @@ breaking change, and a patch carries only fixes.
 
 ### Fixed
 
+- Oversized Markdown layouts fall back to readable source when the renderer exceeds its stack limit, preserving retained text across narrow resizes.
+
 - The footer wraps on narrow terminals so session details remain visible instead of being cut to one row.
 
 - Nested tool arguments retain literal control-character evidence in folded and expanded rows while their output keeps terminal repaint semantics.
