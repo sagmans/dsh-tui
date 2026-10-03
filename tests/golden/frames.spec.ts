@@ -1,6 +1,6 @@
 /**
- * Whole frames at the two widths that matter: the transcript, the dock, the
- * status row, a call, a program of calls, a diagram, and the markdown body.
+ * Pin rendered output so layout changes require review against fixed fixtures.
+ * WIDTHS documents why wrapping and truncation need both widths.
  */
 
 import { describe, expect, it } from 'vitest'
@@ -59,6 +59,8 @@ describe('golden frames', () => {
         expect(dispatchedFrame().render(width)).toMatchSnapshot()
       })
     }
+  // Multiple drafts pin the numeric count, not just stash presence;
+  // a comfortable width keeps the populated-footer snapshot readable.
   it('renders the status row with parked drafts at 80 columns', () => {
       expect(parkedStatus(3).render(80)).toMatchSnapshot()
     })

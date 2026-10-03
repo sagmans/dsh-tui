@@ -37,6 +37,7 @@ const LARGE_MESSAGE_CHARACTERS = 150_000
 const LARGE_MESSAGE_TEXT = 'z'
 const LARGE_MESSAGE_PREFIX = '- '
 const STYLED_CHARACTERS = 8000
+// Space stream updates to sustain redraw pressure without a tight loop; this cadence is not a latency budget.
 const STREAM_INTERVAL_MS = 20
 const STREAM_TEXT = '.'
 const STYLED_TEXT = 'x'
@@ -44,10 +45,12 @@ const REPAINT_TEXT = 'y'
 const CARRIAGE_RETURN = '\r'
 const SGR_START = '\x1b[32m'
 const SGR_END = '\x1b[0m'
+// This gate checks input, geometry, and restoration, not palette output; omit theme-generated styling.
 const COLOR_MODE = 'none'
 const MESSAGE_EVENT = 'assistant/message'
 const TEXT_CONTENT = 'text'
 const TEXT_DELTA = 'text-delta'
+// Match the mounted transcript's scroll policy so redraws exercise its production layout contract.
 const SCROLL_POLICY = { follow: 'end', primary: true, overscroll: 'chain' }
 const LATENCY_QUANTILE = 0.95
 const PICKER_TITLE = 'Terminal input'
@@ -58,6 +61,7 @@ const EXIT_FAILURE = 1
 const terminal = new ProcessTerminal()
 const tui = new WarningSafeTui(terminal)
 const theme = createTheme(COLOR_MODE)
+// Missing tool views must still preserve result counts through the production generic-card fallback.
 const model = new TranscriptModel({
   call: () => undefined,
   result: (name, input) => cardOfResult(undefined, { name, failed: input.isError, contentLines: contentLines(input.content) }),
@@ -87,11 +91,15 @@ const foldedNotice = model.entries().some(entry => entry.kind === 'notice' && en
 model.apply({ type: TOOL_CALL_EVENT, data: { name: TOOL_FOLD_NAME, arguments: EMPTY_ARGUMENTS, callId: TOOL_FOLD_ID } })
 model.apply({ type: TOOL_RESULT_EVENT, data: { message: { toolCallId: TOOL_FOLD_ID, content: foldContent, isError: false } } })
 const toolFold = model.entries().find(entry => entry.kind === 'tool' && entry.id === TOOL_FOLD_ID)
+// Settled assistant messages exercise redraws with conversation history, not only synthetic tool results.
+// The count is a workload size, not an asserted retention threshold.
 for (let index = 0; index < SETTLED_MESSAGES; index++) {
   model.apply({ type: MESSAGE_EVENT, data: { message: { content: [{ type: TEXT_CONTENT, text: `settled ${index}` }] } } })
 }
 // A retained message exercises the argument-safe row and copy paths when the driver narrows the terminal.
 model.apply({ type: MESSAGE_EVENT, data: { message: { content: [{ type: TEXT_CONTENT, text: LARGE_MESSAGE_PREFIX + LARGE_MESSAGE_TEXT.repeat(LARGE_MESSAGE_CHARACTERS) }] } } })
+// Long styled and carriage-return content must remain renderable through the driver's one-column resize.
+// This is a wrapping workload, not a claim that the PTY displays the source escape sequences unchanged.
 model.applyStreamChunk({ type: TEXT_DELTA, text: `${SGR_START}${STYLED_TEXT.repeat(STYLED_CHARACTERS)}${CARRIAGE_RETURN}${REPAINT_TEXT.repeat(STYLED_CHARACTERS)}${SGR_END}` })
 const picker = new ListPicker(
   () => PICKER_ROWS, () => PICKER_TITLE, row => row.label,
@@ -103,6 +111,8 @@ const view = new TranscriptView(model, theme, new MarkdownRenderer(theme.markdow
 })
 const editor = new BoxedEditor(tui, theme.editor)
 const empty = { render: () => [], invalidate: () => {} }
+// Readiness belongs in frame output so the driver waits for native writes, not process startup.
+// Width receipts record render calls; they do not independently prove that every frame reached the terminal.
 const status = {
   render: width => {
     renderedWidths.add(width)
@@ -143,6 +153,8 @@ tui.onFrameError = error => {
   failures.push(error instanceof Error ? error.stack ?? String(error) : String(error))
   finish()
 }
+// Picker bytes must not also edit the draft: the driver checks both decoders independently
+// with Kitty events, Unicode, and paste, leaving ordinary input to the focused editor.
 tui.addInputListener(data => {
   if (matchesKey(data, QUIT_KEY)) {
     finish()
@@ -168,6 +180,7 @@ tui.setLayoutRoot(surfaceLayout({
 tui.setFocus(editor)
 tui.start()
 enteredRawMode = process.stdin.isRaw
+// Redraws must continue during typing and focus changes for the driver's screen-clear and cursor-visibility checks.
 stream = setInterval(() => {
   model.applyStreamChunk({ type: TEXT_DELTA, text: STREAM_TEXT })
   tui.requestRender()
