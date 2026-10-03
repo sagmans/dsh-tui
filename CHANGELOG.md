@@ -14,6 +14,8 @@ breaking change, and a patch carries only fixes.
 
 ### Fixed
 
+- Tool preview budgets reserve enough room for expanded tabs at any insertion column, without changing Unicode grapheme boundaries.
+
 - Resume hints preserve whitespace and shell punctuation as literal identity tokens while keeping terminal controls visible.
 
 - Deeply nested recorded content preserves visible text, reasoning separation, and tool-result order without exhausting the call stack.
