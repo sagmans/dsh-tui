@@ -16,6 +16,8 @@ pnpm test
 pnpm test:release
 node tools/pack-smoke.mjs
 pnpm test:terminal
+node tools/harness-matrix.mjs
+node tools/install-smoke.mjs  # requires Docker with a running daemon
 ```
 
 Unit and golden tests do not prove native terminal behaviour. `pnpm test:terminal` checks native widgets in a credential-free PTY.
@@ -104,10 +106,12 @@ variable, and cloning that is never what a developer meant.
 
 ### The model a dogfood run uses
 
-Use the active model in current session for dogfooding. Name it explicitly on the
-run (for example `-- --model <model> --provider <provider>`) instead of letting
-the clone's `settings.yaml` decide, so a run never bills a route the developer
-did not choose. A route with no credit stops at `error: Insufficient Balance`
+Use the active model in the current session for dogfooding. Configure its adapter
+and `agent-default-model` route in the clone's profile patch. `settings.yaml` is
+legacy input on verified `0.2.0-rc.2`, not a live route overlay. Do not rely on launch flags
+`--model` and `--provider` alone for a resumed session; check `/status` and
+select `/model` before sending a prompt. A route with no credit
+stops at `error: Insufficient Balance`
 after the surface is ready, which proves composition and nothing about the plugin
 under test.
 
@@ -116,7 +120,7 @@ under test.
 | Entry | Why it decides what you see |
 | --- | --- |
 | `.credentials.yaml` | the run cannot answer without it |
-| `settings.yaml` (+ `.imported`) | theme, tokens, dock and stash sections |
+| `settings.yaml` (+ `.imported`) | legacy migration input; live Config-backed settings belong to profile entries on verified `0.2.0-rc.2` |
 | `themes/` | the surface writes and watches this directory at start-up |
 | `prompt-history.json` | history recall in the editor |
 | `tui-stash/` | the parked-draft bank and its lock |
@@ -136,7 +140,7 @@ state it has never seen, use an empty home and copy in only what the run needs
 
 ```sh
 S=$(mktemp -d)
-cp ~/.dsh/.credentials.yaml ~/.dsh/settings.yaml "$S/" && chmod 600 "$S"/*.yaml
+cp ~/.dsh/.credentials.yaml "$S/" && chmod 600 "$S/.credentials.yaml"
 DSH_HOME="$S" dsh plugin --profile tui add "$PWD"
 DSH_HOME="$S" dsh --profile tui
 ```
@@ -166,8 +170,8 @@ TTY. Use `dsh --profile tui install-skills --update` to replace it without a
 prompt. The skill tells an agent how to hand a developer an isolated profile
 to test.
 
-The surface's bundle patch disables the base `skill-filesystem` row on purpose.
-A session's preset mounts that row. Thus, `--profile tui` scans the roots above.
+The surface's bundle patch does not disable `skill-filesystem`. The profile's
+composition must supply the skill rows; the shipped modes do not mount them.
 
 ## Troubleshooting
 

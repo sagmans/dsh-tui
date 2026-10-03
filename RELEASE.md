@@ -19,16 +19,24 @@ Applies to maintainers. Current release owner: repository owner ([`LICENSE`](LIC
 7. A publication carries both its `vX.Y.Z` tag and the GitHub release record for that tag. The tag is what `release.yml` publishes from and what a checkout resolves; the record is what a reader finds, and its notes are the version's `CHANGELOG.md` entry. Either half missing leaves the version incomplete: create the missing half from the same signed tag, and never retag and never republish a version already served.
 8. A published npm version is immutable. A broken release is forward-fixed, never unpublished (see [Rollback](#rollback)).
 
+Main/PR `verify` also runs the native terminal gate, offline harness matrix, and consumer install smoke. The tag workflow does not rerun those three gates. Both workflows install before `npm audit signatures`; that audit does not prove lifecycle scripts were disabled. The consumer smoke disables scripts for its direct npm installs, not explicitly for `dsh plugin add`. Keep real-session dogfooding separate from these automated checks.
+
 ## Harness matrix
 
-The plugin mounts harness packages and peers on harness modules, so exactly one release line is supported: `dsh.compatibility.dsh` is the range a profile resolves the line through, and `dsh.compatibility.dshReleases` lists the releases that passed the gates. Every harness package this bundle mounts is a plain dependency on the verified release, so a profile resolves one copy of each — an alias of the bundle's own beside the base's row is what put a second copy of a mounted package in a consumer's tree, which the consumer install smoke counts. The harness peers stay `*` rather than carry that range, because npm resolves a peer against the consumer's own tree and a range there can only name the one prerelease tuple it reaches. `verify` runs `node tools/harness-matrix.mjs` on every change, which checks that matrix offline — every verified release lies inside the range and on the supported line, every mounted package names a verified release on that line rather than an alias, every harness peer stays `*` or carries the range, and the sources compile against a verified release. [`.github/workflows/harness-matrix.yml`](.github/workflows/harness-matrix.yml) runs the same tool with `--check-registry` daily and fails when `@deepseek-ai/dsh@latest` is not a verified release.
+The manifest declares `dsh.compatibility.dsh` as `>=0.2.0-rc.2 <0.3.0`. Its `dsh.compatibility.dshReleases` lists only `0.2.0-rc.2` as verified. Do not treat the rest of the declared range as tested. Mounted harness dependencies and harness development dependencies name that exact release; harness peers are open (`*`) and optional. These declarations do not guarantee deduplication in a consumer tree.
 
-That failure is the matrix bump, and it is a release-sized change:
+`verify` runs `node tools/harness-matrix.mjs` to check manifest consistency offline. It checks release bounds and line, mounted dependency declarations without aliases, allowed peer declarations, and one listed development dependency version. It does not compile sources, inspect installed package versions, run a profile, or independently verify the release list. Typecheck and runtime gates supply separate evidence.
+
+The consumer install smoke packs the candidate and selects the highest listed release in `node:24-alpine`. Its npm-project install uses `--ignore-scripts` and counts `dsh-agent` copies. Its plugin-profile install checks bundle membership and counts mounted harness packages within its search depth. It does not start an interactive profile or call a model, and it does not test every release in the declared range. These checks do not prove general consumer deduplication or all lifecycle-script behavior.
+
+[`.github/workflows/harness-matrix.yml`](.github/workflows/harness-matrix.yml) runs the tool with `--check-registry` daily. That mode checks only `@deepseek-ai/dsh`'s `latest` dist-tag against the listed releases. It does not monitor `rc` or other tags, or discover every newly published prerelease.
+
+An unlisted `latest` requires investigation, not automatic verification. A verified-release change requires the following steps:
 
 1. Run `node tools/harness-matrix.mjs --check-registry` to read the release the harness now serves as `latest`.
-2. Add it to `dsh.compatibility.dshReleases`, raise the `@deepseek-ai/dsh-*` `devDependencies` to it, and raise every mounted package to it as well; a release that starts a new line also raises `dsh.compatibility.dsh`. Dropping the line a release replaces is the same change as this one.
+2. Prepare a candidate with matching harness development and mounted dependency versions. Update the declared range if needed. A proposed `dshReleases` entry is not verification evidence until the gates pass.
 3. `pnpm install`, then run every gate in [Gates](#gates--all-required-before-tagging).
-4. Dogfood a real session against the new release before it ships: install the candidate into a scratch profile and drive the terminal per [README](README.md#install).
+4. Dogfood a real session against the new release before it ships: install the candidate into a scratch profile and drive the terminal per [README](README.md#install). Keep the verified entry only after successful checks and dogfooding.
 5. Land the bump through a reviewed PR and ship it with the next patch release.
 
 ## Release identity and authority
@@ -51,7 +59,7 @@ Prerequisites: `python3` 3.11 or newer, npm 11.15.0 or newer, authenticated `npm
 
 ## First publication (`v0.1.0` only)
 
-npm requires a package to exist before trusted publishing can be configured, so the `v0.1.0` tag verifies but skips the publish job in [`release.yml`](.github/workflows/release.yml). The release owner publishes that version by hand from a clean checkout of the exact signed tag. Keep the reviewed artefact outside the checkout and unchanged until publication completes.
+npm requires a package to exist before trusted publishing can be configured, so the `v0.1.0` tag runs candidate verification but skips the publish job in [`release.yml`](.github/workflows/release.yml). The release owner publishes that version by hand from a clean checkout of the exact signed tag. Keep the reviewed artefact outside the checkout and unchanged until publication completes.
 
 ```sh
 set -a; . scripts/npm/target.env; set +a
@@ -111,7 +119,7 @@ git tag -s -a "v${PKG_VERSION}" -m "v${PKG_VERSION}" <merged-sha>
 git push origin "v${PKG_VERSION}"
 ```
 
-The tag push runs `release.yml`: it re-verifies the candidate, then the publish job waits for the release owner's approval on the `npm-release` environment before publishing through OIDC trusted publishing with automatic provenance. Create the GitHub release from the tag using the drafted notes once publication succeeds — the record is part of the release, not follow-up work, so a version that reaches the registry without it is finished by creating it from that same tag. A version already published before this rule is completed the same way.
+The tag push runs `release.yml`: it checks tag/version agreement and reruns its candidate gates, not tag-signature verification, then the publish job waits for the release owner's approval on the `npm-release` environment before publishing through OIDC trusted publishing with automatic provenance. Create the GitHub release from the tag using the drafted notes once publication succeeds — the record is part of the release, not follow-up work, so a version that reaches the registry without it is finished by creating it from that same tag. A version already published before this rule is completed the same way.
 
 ## Rollback
 
