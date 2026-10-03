@@ -1,4 +1,5 @@
-# Consumer install smoke inside node:24-alpine. install-smoke.mjs replaces the
+# Exercise npm resolution and dsh profile installation: a valid local package can
+# still fail either consumer path. install-smoke.mjs replaces the
 # @HARNESS@, @VERSION@, @BUNDLED@ and @TARBALL@ placeholders before piping this
 # script in, so every path below is a container path.
 set -eu
@@ -8,6 +9,9 @@ echo "install-smoke: node $(node -v), npm $(npm -v), harness @HARNESS@"
 # package into one npm project.
 mkdir -p /npm-check && cd /npm-check
 npm init -y >/dev/null 2>&1
+# Direct npm steps isolate resolution from lifecycle execution; audit requests and
+# funding output add no evidence to these tree checks. dsh plugin add remains
+# a separate installer path, not a lifecycle-script suppression guarantee.
 if ! npm install --ignore-scripts --no-audit --no-fund "@deepseek-ai/dsh@@HARNESS@" /pkg/@TARBALL@ >npm.log 2>&1; then
   echo "install-smoke: npm could not resolve the packed tree"
   tail -40 npm.log
@@ -22,6 +26,7 @@ echo "install-smoke: npm tree ok"
 # Phase two: the supported path, where dsh itself builds the profile.
 npm install -g --ignore-scripts --no-audit --no-fund "@deepseek-ai/dsh@@HARNESS@" >/dev/null 2>&1
 corepack enable >/dev/null 2>&1
+# Keep profile creation and install state in the disposable container, away from developer state.
 export DSH_HOME=/dsh-home
 if ! dsh plugin --profile tui add /pkg/@TARBALL@ >plugin.log 2>&1; then
   echo "install-smoke: the plugin profile install failed"
@@ -31,6 +36,8 @@ fi
 PROFILE="$DSH_HOME/profiles/tui/node_modules"
 test "$(node -p "require('$PROFILE/@sagmans/dsh-tui/package.json').version")" = "@VERSION@"
 node -e "const bundles = require('$DSH_HOME/profiles/tui/package.json').dsh.profile.bundles; if (!bundles.includes('@sagmans/dsh-tui')) { console.error('install-smoke: the bundle left dsh.profile.bundles'); process.exit(1) }"
+# Bound traversal of the installed tree; deeper copies are outside this smoke
+# check, so a count of one is not a general deduplication guarantee.
 for pkg in @BUNDLED@; do
   copies=$(find "$PROFILE" -maxdepth 4 -path "*/$pkg/package.json" | wc -l | tr -d ' ')
   test "$copies" = "1" || { echo "install-smoke: $pkg resolved $copies copies"; exit 1; }

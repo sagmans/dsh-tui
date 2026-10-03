@@ -1,30 +1,28 @@
 #!/usr/bin/env node
 /**
- * Print the model directory a dsh profile resolves, with the provenance of
- * every field.
+ * Inspect the profile's owned catalog and inherited model facts without
+ * composing the profile.
  *
  * The surface reads prices, context windows, and reasoning levels from the
  * composition, not from the vendor's page, so an inherited or stale value is
  * invisible in the UI. This reads the same two inputs the resolver does - the
  * owned catalog in the profile patch, and the installed pi-ai provider data -
- * and names where each number came from: "installed" for the source's own
- * entry, "template:<id>" for a clone, "route" for the protocol a sourceless
- * route declares once for every model it serves, "metadata" for what the
- * catalog declares.
+ * to expose inheritance and overrides that the UI does not distinguish.
+ * Installed facts are the unlabeled baseline; "template:<id>", "route", and
+ * "metadata" identify departures from it.
  *
  * An entry the catalog spells out completely needs no installed entry at all,
  * so a missing harness install must not hide it. A `filter` route is the
  * exception: its membership is the installed catalog's, so it cannot be read
- * without that install. A declaration the plugin's resolver would refuse is
- * reported as a refusal here too, because a catalog that cannot compose serves
- * nothing.
+ * without provider data. Selected resolution checks expose unusable declarations,
+ * but this inspection does not validate every template, schema, or ownership rule.
+ * Compose the candidate before trusting it as a usable profile.
  *
  * Usage: dump-model-catalog.mjs [--home <dsh home>] [--profile <name>]
  *                               [--data <pi-ai data dir>] [--json]
  *
- * `--data` names the installed provider-data directory to inherit from, which
- * is how a reading is checked where no harness is installed - a `filter` route
- * and every template clone need one.
+ * `--data` supplies inherited facts when no harness is installed, so filter
+ * membership and template-derived values can still be inspected offline.
  */
 import { execFileSync } from 'node:child_process'
 import { readFileSync, realpathSync } from 'node:fs'
@@ -55,6 +53,7 @@ export function supportedLevels(levelMap) {
   })
 }
 
+/** Defaults target the documented TUI patch; DSH_HOME keeps inspection on the caller-selected home. */
 function parseArgs(argv) {
   const options = { home: process.env.DSH_HOME ?? join(homedir(), '.dsh'), profile: 'tui', data: undefined, json: false }
   for (let index = 0; index < argv.length; index += 1) {
@@ -80,7 +79,10 @@ function dataDirectory() {
   }
 }
 
-/** Every JSON patch entry that configures the owned catalog, last one winning. */
+/**
+ * The catalog:setup flow map is the machine-readable inspection boundary;
+ * block YAML needs list-models composition. Later patch entries take precedence.
+ */
 export function catalogConfig(patch) {
   const lines = readFileSync(patch, 'utf8').split('\n')
   let catalog
@@ -92,6 +94,10 @@ export function catalogConfig(patch) {
   return catalog
 }
 
+/**
+ * Unusable inherited data must not prevent inspection of fully declared models.
+ * Read and parse failures lose their diagnostics here; dependent entries get resolution errors instead.
+ */
 export function providerData(directory, source) {
   if (directory === undefined || source === undefined) return undefined
   try {
@@ -229,6 +235,8 @@ function rowsOf(catalog, directory) {
         ...(result.requestMax === undefined ? {} : { requestMax: result.requestMax }),
         ...(result.aliases === undefined ? {} : { aliases: result.aliases }),
         ...(result.tiers === undefined ? {} : { tiers: result.tiers }),
+        // Installed facts are the baseline; name only other origins to expose
+        // template inheritance and catalog overrides without repeating that baseline.
         origins: INHERITED_FIELDS
           .map(field => [field, result.origins[field]])
           .filter(([, origin]) => origin !== INSTALLED)

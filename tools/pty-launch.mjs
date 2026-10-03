@@ -10,11 +10,9 @@ const PROJECT_ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 /**
  * The releases a dogfood run may be driven against.
  *
- * A dogfood run proves the surface against a release the gates passed, and more
- * than one line is verified at a time: the compatible range spans two prerelease
- * lines, and the host rows mount different packages on each, so both have to be
- * driven. The list is read from the manifest the matrix gate checks, which is the
- * one place that pair is kept.
+ * Restrict launches to manifest-listed releases so a dogfood run cannot imply
+ * verification of an unlisted host. The matrix checks list consistency; gates
+ * and real-session dogfooding supply verification evidence.
  */
 function verifiedReleases() {
   const manifest = JSON.parse(readFileSync(join(PROJECT_ROOT, 'package.json'), 'utf8'))
@@ -76,7 +74,8 @@ export function preparePtyLaunch({ home, launcher = '' }) {
   } finally {
     rmSync(probeHome, { recursive: true, force: true })
   }
-  // Reject links created by the candidate while it reported its version.
+  // Recheck links because candidate code can change the scratch tree during the
+  // version probe; the earlier isolation check cannot cover those changes.
   const unsafeAfterProbe = problems(selectedHome, liveHome)
   if (unsafeAfterProbe.length > 0) throw new Error('pty-drive: --home has unsafe symlink or hardlink: ' + unsafeAfterProbe[0])
   if (result.error || result.status !== 0) {

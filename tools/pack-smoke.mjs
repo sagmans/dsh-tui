@@ -63,6 +63,7 @@ const FORBIDDEN = [
   /^package\/\.plans\//u,
   /^package\/node_modules\//u,
   /^package\/tools\//u,
+  // A stale bundle-owned question tool would cross the profile-owned agent-plane boundary.
   /^package\/lib\/ask-user\.js$/u,
 ]
 
@@ -86,9 +87,9 @@ const SHIM_SOURCES = ['src/host/roster.ts', 'src/host/runner.ts']
 /**
  * Every file that mounts something: the patch, the shims, and the shipped modes.
  *
- * A mode's own rows name the packages a session's agent plane is made of, so the
- * manifest's dependencies are checked against all three rather than the patch
- * alone — the packages moved out of the patch when they moved into the modes.
+ * Each source can name a package the profile must resolve, including PTC's
+ * presentation row. Checking only the patch would miss shim and mode mounts;
+ * modes otherwise select an agent plane supplied by other bundles.
  */
 const MOUNT_SOURCES = [
   'cordis.patch.yml',
@@ -131,6 +132,7 @@ const LIBRARY_PACKAGES = [
   '@deepseek-ai/schemastery',
 ]
 
+/** Traverse built modules for syntax checks: tarball inventory alone cannot prove Node can parse them. */
 function walk(directory) {
   const found = []
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
@@ -191,6 +193,7 @@ try {
   if (!helper.isFile() || helper.isSymbolicLink() || (helper.mode & 0o111) === 0) {
     problems.push('installed dogfood helper is not executable')
   }
+  // Replacement must discard stale skill files while retaining executable helpers.
   writeFileSync(join(destination, 'stale.txt'), 'old copy')
   const updated = installBundledSkill(SKILL_NAME, join(out, 'home'), true)
   if (updated !== destination || readdirSync(updated).includes('stale.txt')) {
@@ -239,6 +242,7 @@ try {
   for (const [, id] of patch.matchAll(/- id: ([^\n]+)\n  disabled: true/gu)) {
     problems.push('the bundle must not disable host rows: ' + id)
   }
+  // Skill installation requires explicit consent; npm installation must not perform it through install hooks.
   for (const script of INSTALL_LIFECYCLE_SCRIPTS) {
     if (manifest.scripts?.[script] !== undefined) {
       problems.push(`the package must never use the ${script} install hook`)
@@ -262,11 +266,9 @@ try {
     if (!mounted.has(name)) problems.push(`the manifest depends on ${name}, but no row or mode mounts it`)
   }
 
-  // npm resolves a required peer by installing a private copy. Against the
-  // harness's floating prerelease peers that copy is what made npm refuse the
-  // install, and a duplicate singleton is wrong even when it resolves: the host
-  // profile supplies these modules, so the manifest names the range it accepts
-  // without ever owning the package.
+  // Host-provided peers stay optional so npm need not supply missing harness
+  // modules for this bundle. Consumer smoke checks selected copy counts, not
+  // general deduplication across every consumer tree.
   const compatibility = manifest.dsh?.compatibility?.dsh
   if (typeof compatibility !== 'string') {
     problems.push('the manifest does not declare dsh.compatibility.dsh for its peers to follow')
@@ -277,10 +279,8 @@ try {
     problems.push('the manifest no longer declares the harness packages this bundle consumes')
   }
   for (const [name, range] of harnessPeers) {
-    // A peer range can only name the one prerelease tuple it reaches, so a peer
-    // that has to serve more than one verified line stays open: npm resolves it
-    // against the consumer's own harness, while dsh.compatibility states the
-    // line this bundle supports.
+    // Accept open or declared-compatible peers for consumer-provided modules;
+    // dsh.compatibility, not the peer declaration, owns the supported line.
     if (range !== compatibility && range !== '*') {
       problems.push(`peer ${name} accepts ${String(range)}, which is neither the harness compatibility range ${String(compatibility)} nor an open range`)
     }

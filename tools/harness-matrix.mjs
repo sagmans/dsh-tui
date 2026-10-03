@@ -20,8 +20,10 @@ const compatibility = manifest.dsh?.compatibility?.dsh
 const releases = Object.keys(manifest.dsh?.compatibility?.dshReleases ?? {})
 const problems = []
 
-/** Orders X.Y.Z[-tag.N] with semver's rule that a prerelease precedes its release. */
+/** Numeric prerelease-aware bounds keep verified RCs inside the declared compatibility range. */
 function compareVersions(left, right) {
+  // Bounds need an ordering this comparator can represent; unsupported version forms
+  // must fail rather than produce a misleading compatibility result.
   const parse = (value) => {
     const match = /^(\d+)\.(\d+)\.(\d+)(?:-([a-z]+)\.(\d+))?$/u.exec(value ?? '')
     if (match === null) throw new Error('unsupported version: ' + String(value))
@@ -41,7 +43,6 @@ function compareVersions(left, right) {
   return a.prerelease[1] - b.prerelease[1]
 }
 
-/** The numbers that name a harness line, which is every release one build serves. */
 const lineOf = (version) => String(version).split('-')[0].split('.').slice(0, 2).join('.')
 
 const range = /^>=(\S+) <(\S+)$/u.exec(compatibility ?? '')
@@ -91,12 +92,9 @@ for (const [name, declared] of mounted) {
   }
 }
 
-// A peer range over harness modules can only name the one prerelease tuple it
-// reaches, and npm resolves a peer against the consumer's own tree: a range there
-// pulls the harness back to the tuple it names and collides with the supported
-// line, which is exactly how the consumer install smoke broke. Peers stay open,
-// dsh.compatibility carries the supported line, and the optional metadata keeps
-// npm from installing them.
+// Accept open or declared-compatible peers so host modules can resolve from the
+// consumer tree. pack-smoke separately requires optional peer metadata; neither
+// declaration guarantees deduplication, which consumer smoke checks on selected paths.
 for (const [name, declared] of Object.entries(manifest.peerDependencies ?? {})) {
   if (!name.startsWith('@deepseek-ai/dsh-')) continue
   if (declared !== '*' && declared !== compatibility) {

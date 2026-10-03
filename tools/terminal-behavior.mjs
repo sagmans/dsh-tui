@@ -15,6 +15,8 @@ const RECEIPT = 'terminal-behavior-receipt:'
 const TERM = 'xterm-256color'
 const COLS = 100
 const ROWS = 30
+// Pace input and redraws to allow asynchronous work; bound hangs with a watchdog.
+// These waits are synchronization allowances, not calibrated latency acceptance budgets.
 const TIMEOUT_MS = 30_000
 const KEY_INTERVAL_MS = 10
 const DRAIN_MS = 100
@@ -40,7 +42,10 @@ const CURSOR_SHOW = '\x1b[?25h'
 const CURSOR_HIDE = '\x1b[?25l'
 const BLINK_ENABLED = '\x1b[?12h'
 const CURSOR_MODES_RESTORED = '\x1b[?1004r\x1b[?12r'
+// Stress row allocation when normal prompt/footer floors cannot all fit;
+// these small heights check survival, not a distinct layout guarantee per height.
 const TINY_HEIGHTS = [1, 2, 3]
+// Exercise extreme narrowing and restoration before checking retained native input.
 const RESIZE_WIDTHS = [1, COLS]
 const DIAGNOSTIC_TAIL_CHARACTERS = 2000
 const EXIT_SUCCESS = 0
@@ -134,6 +139,8 @@ try {
   assert.ok(output.slice(0, readyOffset).includes(ENTER_SCREEN), 'alternate screen was not entered')
   assert.ok(output.slice(0, receiptOffset).includes(EXIT_SCREEN), 'alternate screen was not restored')
   assert.ok(output.slice(0, receiptOffset).includes(CURSOR_MODES_RESTORED), 'cursor modes were not restored')
+  // Require dispatch-to-native-write instrumentation, not a timing threshold;
+  // samples do not measure hardware input or visible pixels.
   assert.ok(receipt.outputSamples > 0, 'no native output latency samples')
   console.log(JSON.stringify({ platform: process.platform, node: process.version, cols: COLS, rows: ROWS, tinyHeights: TINY_HEIGHTS, resizeWidths: RESIZE_WIDTHS, ...receipt }, null, 2))
 } finally {

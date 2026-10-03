@@ -2,14 +2,12 @@
 /**
  * Link policy for the dogfood clone.
  *
- * A cloned home is a sandbox: a dogfood run may write only inside it. Two kinds
- * of link are legitimate there — a package entry that resolves to an installed
- * package or another checkout, and a link that stays inside the clone. A link
- * that escapes is either copied in or refused, and which one depends on who
- * writes the entry: the instruction files below are only read, so the bytes come
- * along; everything else (credentials, settings, storages, sessions, profiles)
- * is state the run may write, and a link out of the clone would let that write
- * reach the developer's own home. Refusing is the safe answer there.
+ * Protect mutable home state from writes reaching the source home. Package
+ * links remain external for dependency loading; writes through them are not
+ * isolated. Other links must stay inside the clone. The instruction files below
+ * are only read, so their external targets can be copied into the clone instead
+ * of blocking a run. Refuse escaping links for other home entries so writes
+ * cannot follow them into the developer's own home.
  *
  * Usage: clone-links.mjs check|materialize <home> <source>
  */
@@ -25,8 +23,9 @@ import { pathToFileURL } from 'node:url'
 export const INSTRUCTION_ENTRIES = new Set(['AGENTS.md', 'CLAUDE.md'])
 
 /**
- * Paths whose whole purpose is to point at an installed package, which may live
- * outside the clone. A link here is expected; a link anywhere else is not.
+ * Package entries may resolve externally so cloned profiles can load installed
+ * packages or checkouts, except source-home targets. Other retained links must stay
+ * inside the clone to keep home-state writes local.
  */
 export const packageEntry = (parts) => parts[0] === 'profiles' && (
   parts[1] === 'node_modules' && parts.length > 2 ||
@@ -34,8 +33,14 @@ export const packageEntry = (parts) => parts[0] === 'profiles' && (
   parts[2] === '.dsh-module-fallback' && parts[3] === 'node_modules' && parts.length > 4
 )
 
+/**
+ * Boundary checks require physical absolute paths; this lexical check cannot resolve aliases.
+ * The separator prevents sibling names sharing a prefix from passing the home boundary.
+ */
 export const inside = (root, file) => file === root || file.startsWith(root + path.sep)
 
+// Keep the read-only exception scoped to home instruction entries; matching names
+// inside mutable state do not establish read-only use.
 const instruction = (home, file) => {
   const parts = path.relative(home, file).split(path.sep)
   return parts.length === 1 && INSTRUCTION_ENTRIES.has(parts[0])
@@ -59,7 +64,6 @@ export function destination(file) {
 const entries = (root) => fs.readdirSync(root, { withFileTypes: true })
 const partsOf = (home, file) => path.relative(home, file).split(path.sep)
 
-/** Every reason the clone cannot be run as a sandbox, in the order they are met. */
 export function problems(home, source) {
   const found = []
   const visit = (dir) => {
@@ -73,6 +77,8 @@ export function problems(home, source) {
       } else if (entry.isDirectory()) {
         visit(file)
       } else if (entry.isFile() && !packageEntry(parts) && fs.lstatSync(file).nlink > 1) {
+        // Hardlink names share writable contents; the link count cannot prove every name stays inside the clone.
+        // Reject non-package hardlinks conservatively rather than risk writes reaching another home.
         found.push('unsafe cloned hardlink outside package modules: ' + file)
       }
     }
@@ -93,6 +99,8 @@ export function materialize(home) {
         const target = destination(path.resolve(dir, fs.readlinkSync(file)))
         if (inside(home, target)) continue
         if (!fs.existsSync(target)) {
+          // No instruction content exists to copy; dropping the external link lets
+          // boundary validation proceed without retaining an escape path.
           fs.rmSync(file)
           console.log('materialize: dropped dangling link ' + path.relative(home, file))
           report.dropped += 1

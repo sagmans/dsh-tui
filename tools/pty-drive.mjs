@@ -23,9 +23,9 @@
  *   node tools/pty-drive.mjs --home DIR --prompt "say hi" --submit alt-enter   # legacy ESC CR
  *   node tools/pty-drive.mjs --home DIR --launcher /path/to/dsh/lib/bin.js --prompt "say hi"
  *
- * Every run ends by reporting the child's exit code and whether the terminal
- * was handed back, because a surface that exits cleanly but leaves the shell in
- * raw mode has failed the reader.
+ * Restoration escape sequences help diagnose terminal handback, but their
+ * presence anywhere in the output does not prove final state or raw-mode reset.
+ * The driver reports missing sequences without failing the run for them.
  *
  * --launcher selects an installed release binary when PATH points elsewhere.
  * The driver rejects source-host versions before it builds or opens a PTY.
@@ -78,7 +78,7 @@ function ensureSpawnHelper() {
     const mode = statSync(helper).mode
     if ((mode & 0o111) === 0) chmodSync(helper, mode | 0o755)
   } catch {
-    // A missing prebuild means node-pty built from source; nothing to repair.
+    // Keep best-effort helper repair from blocking PTY allocation; spawn reports allocation errors.
   }
 }
 
@@ -88,7 +88,10 @@ const option = (name, fallback) => {
   return index >= 0 && args[index + 1] !== undefined ? args[index + 1] : fallback
 }
 const prompt = option('prompt', 'Reply with exactly: pong')
-/** Launcher arguments for the child, for reaching a mode the default run does not. */
+/**
+ * Reach child modes without shell evaluation; --args accepts only space-separated
+ * tokens, so quoting cannot preserve spaces within an argument.
+ */
 const extraArgs = option('args', '').split(' ').filter(argument => argument !== '')
 const home = option('home', undefined)
 /** An installed dsh binary to reproduce a specific released host. */
@@ -143,11 +146,9 @@ const NAMED_KEYS = {
   'ctrl+n': '\u000e',
   'ctrl+p': '\u0010',
   'alt+d': '\u001bd',
-  // A terminal that speaks the keyboard protocol reports alt+letter as a
-  // codepoint with a modifier rather than as an escape followed by the letter.
-  // Both spellings are listed, but neither reaches the surface through a pty
-  // driven this way — the shipped alt+d binding does not react to either — so
-  // no run here can prove an alt+letter binding; only the unit specs can.
+  // Name modifier-codepoint spellings alongside legacy ESC-letter input so a
+  // run can exercise either encoding. Sent bytes alone do not prove the active
+  // terminal protocol or binding accepted the chord.
   'alt+d-kitty': '\u001b[100;3u',
   'alt+z-kitty': '\u001b[122;3u',
   // The chord prefix has no printable byte: it arrives as the control the
@@ -232,16 +233,16 @@ const permissionMode = option('permission-mode', 'workspace-write')
 const signalOption = option('signal', '')
 // process.kill takes POSIX names, so accept the short form a reader would type.
 const signal = signalOption === '' || signalOption.startsWith('SIG') ? signalOption : `SIG${signalOption.toUpperCase()}`
+// Keep the full PTY trace for diagnosis beyond the stripped console tail.
+// Output can be sensitive: the chosen path is overwritten with default creation
+// permissions, and this driver does not redact or remove the retained log.
 const keep = option('log', join(tmpdir(), `dsh-tui-pty-${Date.now()}.log`))
 /** Exit code the run is expected to end with, so a broken boot fails the harness. */
 const expectExit = Number.parseInt(option('expect-exit', '0'), 10)
 /**
- * A line prefix whose last matching line on the final screen must equal
- * `--expect-last`.
- *
- * A frame is repainted many times, so searching the whole screen cannot tell a
- * state from a state the surface has left; the last match is where it settled.
- * That is how a cursor row is asserted without a screenshot.
+ * Compare the last prefix-bearing line in stripped output with `--expect-last`
+ * to check a recorded row without a screenshot. This is output history, not a
+ * reconstructed final screen: stripping escapes discards cursor and erase semantics.
  */
 const expectLastLinePrefix = option('expect-last-line-prefix', '')
 const expectLast = option('expect-last', '')
@@ -276,9 +277,11 @@ const strip = text => text
   .replace(/\u001B[@-Z\\-_]/gu, '')
 
 const at = (ms, action) => setTimeout(action, ms)
+// Leave startup time before scripted input; this schedule does not detect readiness.
 const PRELUDE_AT_MS = 6000
 /** The gap between a click's press and its release, short enough to be one gesture. */
 const CLICK_RELEASE_MS = 60
+// Give a prelude time to affect the state the subsequent prompt assumes.
 const PRELUDE_LEAD_MS = 1500
 const promptAt = PRELUDE_AT_MS + (prelude === '' ? 0 : PRELUDE_LEAD_MS)
 if (prelude !== '') at(PRELUDE_AT_MS, () => child.write(`${prelude}${submit}`))
@@ -296,7 +299,6 @@ for (const click of clicks) {
   at(promptAt + click.at * 1000, () => child.write(`${cell}M`))
   at(promptAt + click.at * 1000 + CLICK_RELEASE_MS, () => child.write(`${cell}m`))
 }
-/** Sequences a terminal must see before the shell is usable again. */
 const RESTORE_SEQUENCES = {
   'alt screen': '\u001b[?1049l',
   'cursor shown': '\u001b[?25h',
@@ -325,7 +327,7 @@ if (signal === '') {
   })
 }
 
-/** How long the child is given to exit before the harness stops waiting. */
+/** Allow shutdown to complete without leaving a stalled child holding the PTY indefinitely. */
 const EXIT_GRACE_MS = 12_000
 let exitInfo
 let reported = false
@@ -349,9 +351,8 @@ function finish() {
     problems.push(`expected exit ${expectExit}, got ${code ?? 'no exit before the grace deadline'}`)
   }
   if (expectLastLinePrefix !== '') {
-    // The check reads a line the app drew, not a pattern: a caller-supplied regular
-    // expression here is an injection surface, and every use of this flag is a
-    // prompt prefix whose last appearance is what the run has to hold.
+    // Treat the supplied prefix literally so metacharacters cannot broaden the
+    // historical line selected for comparison.
     const line = strip(raw).split('\n').filter(text => text.trimStart().startsWith(expectLastLinePrefix)).at(-1)
     const seen = line === undefined ? 'no match' : line.trimStart().slice(expectLastLinePrefix.length).trim()
     if (seen !== expectLast) {

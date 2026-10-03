@@ -3,5 +3,6 @@
 set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 export DSH_DOGFOOD_DEFAULT_REPO="$(cd "$script_dir/../.." && pwd -P)"
+# Require prelisted bundle membership to preserve an existing cloned profile's bundle selection when relinking.
 export DSH_DOGFOOD_REQUIRE_LISTED=1
 exec "$DSH_DOGFOOD_DEFAULT_REPO/.agents/skills/dsh-tui-dogfood/scripts/run-plugin-from-worktree.sh" "$@"

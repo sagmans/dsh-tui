@@ -6,14 +6,22 @@ import os
 from execution import mutate, read_json, require, run, setting
 
 ACTION = "setup-github-release"
+# Bind GitHub API authority to the same github.com host required by the package repository metadata.
 HOST = "github.com"
+# RepositoryRole 5 limits release-tag rule bypass to repository administrators.
 ADMIN_ROLE_ID = 5
+# Keep names and reviewer logins within the helper's conservative identity subset.
 SAFE_NAME = r"[A-Za-z0-9][A-Za-z0-9._-]*"
 REVIEWER_PATTERN = r"[A-Za-z0-9][A-Za-z0-9-]{0,38}"
+# Constrain tag authority to literal paths or a trailing wildcard rather than broader ruleset pattern syntax.
 TAG_PATTERN = r"[A-Za-z0-9._/-]+\*?"
 
 
 def setup_github(target):
+    """Bind approval to the verified reviewer and environment without administrator approval bypass.
+
+    Keep administrator release-tag authority separate from the environment's publication approval.
+    """
     _, environment = target.workflow()
     reviewer = setting("REVIEWER", REVIEWER_PATTERN)
     tag = setting("TAG_PATTERN", TAG_PATTERN)
@@ -25,6 +33,7 @@ def setup_github(target):
         return [target.gh_bin, "api", "--hostname", HOST, endpoint, *args]
 
     def get(endpoint, *, missing=False):
+        # Authentication or service failures must not be mistaken for absence and authorize creation.
         result = run(command(endpoint), check=False)
         if missing and result.returncode != 0 and "(HTTP 404)" in result.stderr:
             return None
@@ -32,6 +41,7 @@ def setup_github(target):
         return read_json(result.stdout)
 
     def pages(endpoint, key=None):
+        # A later page may contain a conflicting control; creation decisions need the complete list.
         value = read_json(run(command(endpoint, "--paginate", "--slurp")).stdout)
         require(isinstance(value, list), "unexpected GitHub pagination response")
         items = []
@@ -108,6 +118,7 @@ def setup_github(target):
         change(policies_endpoint, "POST", {"name": tag, "type": "tag"})
     if not matches:
         change(rulesets_endpoint, "POST", ruleset_payload)
+    # Preview cannot establish installed controls; real writes need independent inspection before reporting success.
     if os.environ.get("DRY_RUN", "0") == "1":
         print("GitHub preview only; no controls changed.")
     else:
