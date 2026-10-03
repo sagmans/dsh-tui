@@ -1,4 +1,5 @@
 {
+  // The package loads lib/ as Node ESM; keep browser globals out of its host contract.
   "compilerOptions": {
     "target": "ES2024",
     "lib": [
@@ -9,18 +10,28 @@
     "types": [
       "node"
     ],
+    // Missing indexed entries and absent optional fields must stay visible to callers,
+    // rather than type-checking as values the session or stash may not contain.
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
+    // Preserve runtime imports and make relative TypeScript imports usable in emitted JS.
     "verbatimModuleSyntax": true,
     "rewriteRelativeImportExtensions": true,
+    // Renamed base-widget hooks and accidental state-branch fallthrough must surface
+    // during checking rather than change terminal dispatch unnoticed.
     "noImplicitOverride": true,
     "noFallthroughCasesInSwitch": true,
+    // Package exports expose types beside the JS; maps let declaration navigation
+    // and runtime debugging refer back to source locations.
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
+    // Publish the plugin without compiling fixtures or tooling into its entry points.
     "outDir": "lib",
     "rootDir": "src",
+    // Limit checking work by omitting declaration-file internals, not their use in
+    // plugin sources; this does not certify dependency declarations as consistent.
     "skipLibCheck": true
   },
   "include": [

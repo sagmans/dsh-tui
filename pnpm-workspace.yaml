@@ -5,11 +5,11 @@ allowBuilds:
   # The PTY dogfood harness needs node-pty's native addon.
   node-pty: true
 
-# The pinned dsh release set was published inside the release-age window, and
-# this project tracks that exact release, so the window cannot be waited out.
-# Scoped to the one publisher and version line the plugin targets.
+# Allow consumed harness releases to install before the general release-age window elapses.
+# The dsh wildcard covers every matching version, not just the pinned release;
+# the Cordis entries are version-specific. Neither scope proves release safety.
 minimumReleaseAgeExclude:
   - '@deepseek-ai/dsh-*'
   - '@deepseek-ai/cordis@4.0.2'
-  # The 0.2.0 line moves cordis forward, and that release sits inside the window.
+  # Keep this Cordis exception version-specific rather than exempting future releases.
   - '@deepseek-ai/cordis@4.0.4'

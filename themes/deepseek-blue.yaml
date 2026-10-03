@@ -1,49 +1,30 @@
-# deepseek-blue — the table the surface ships, in the colours DeepSeek draws.
+# deepseek-blue — the shipped blue-accent theme.
 #
-# Every shade here is a step of the product's own design system rather than a
-# colour picked for this file, and each palette line names the token it came
-# from, so the surface can be re-derived from the product instead of guessed at.
-# The steps are the product's dark-theme ones, because a terminal is dark:
+# Palette roles centralize foreground choices so one edit reaches related UI elements.
+# This light-text palette supplies no terminal background; contrast depends on the
+# reader's background and color capabilities, not on a guaranteed dark terminal.
 #
-#   default, assistant   label-primary     neutral-bluish-50   #f9fafb
-#   muted                label-secondary   neutral-bluish-300  #cfd3d6
-#   faint                label-tertiary    neutral-bluish-400  #adb2b8
-#   accent               brand-text        deepseek-400        #679efe
-#   arg                  —                 deepseek-300        #b7c8fe
-#   warn                 state-warn        amber-500           #f59e0b
-#   added                state-success     green-500           #22c55e
-#   removed              state-error       red-400             #f25a5a
-#   user                 bubble            neutral-bluish-850  #2c2c2e  (a panel border, not a fill)
+# Palette entries carry shared roles; literal container and diff-emphasis shades
+# keep those treatments separate from foreground accents.
 #
-# The brand itself is deepseek-500 #3964fe, drawn as deepseek-450 #5686fe on a
-# dark surface. The accent is one step lighter than either because what it paints
-# is text — links, code, headings — and the product keeps its own step for the
-# brand as text. That single line is where a reader moves the brand.
-#
-# Ten palette entries carry the whole theme: every element below names one rather
-# than a shade of its own. Three elements name a different entry than the shipped
-# table names, and say why where they do.
-#
-# The semantic shades stay the product's green, red, and amber. Something added
-# is green and something removed is red on every surface a reader already uses,
-# and a hue that moved with the theme would have to be learned again with each
-# one.
+# Green, red and amber separate additions, removals and pending state from the
+# blue accent used for labels and navigation.
 
 palette:
-  default: '#f9fafb'  # label-primary, neutral-bluish-50
-  muted: '#cfd3d6'  # label-secondary, neutral-bluish-300
-  faint: '#adb2b8'  # label-tertiary, neutral-bluish-400
-  accent: '#679efe'  # brand-text, deepseek-400
-  arg: '#b7c8fe'  # deepseek-300
-  warn: '#f59e0b'  # state-warn, amber-500
-  added: '#22c55e'  # state-success, green-500
-  removed: '#f25a5a'  # state-error on a dark surface, red-400
-  user: '#2c2c2e'  # the product's bubble fill, neutral-bluish-850: only a panel border names it now
-  assistant: '#f9fafb'  # label-primary, neutral-bluish-50
+  default: '#f9fafb'
+  muted: '#cfd3d6'
+  faint: '#adb2b8'
+  accent: '#679efe'
+  arg: '#b7c8fe'
+  warn: '#f59e0b'
+  added: '#22c55e'
+  removed: '#f25a5a'
+  user: '#2c2c2e'
+  assistant: '#f9fafb'
 
 tokens:
-  # A row of the conversation. The product fills this one, but this surface
-  # already frames it, and a band inside the frame treats one fact twice: it reads
+  # A row of the conversation already has a frame; a band inside it
+  # treats one fact twice: it reads
   # as a selected row rather than as what the reader typed.
   transcript.user: { fg: default }
   # The sent prompt keeps the brand shade without inheriting editor overrides.
@@ -54,11 +35,12 @@ tokens:
   transcript.assistant.border: { fg: '#d6c29a' }
   transcript.notice: { fg: muted }
   transcript.marker: { fg: muted }
+  # Reasoning recedes beneath the reply; tool details below likewise defer to their call labels.
   transcript.reasoning.summary: { fg: faint, italic: true }
   transcript.reasoning.body: { fg: faint }
   transcript.reasoning.hint: { fg: faint, italic: true }
   # A tool card, drawn in layers: every card, then one kind of card.
-  # A call is not a warning: the product keeps amber for state, and this label is
+  # A call is not a warning: amber is reserved for state here, and this label is
   # the loudest thing on the row, so it carries the brand instead.
   tool.title: { fg: accent }
   tool.glyph: { fg: accent }  # follows the label it sits beside
@@ -73,8 +55,8 @@ tokens:
   tool.hint: { fg: muted }
   tool.failed.title: { fg: removed }
   tool.failed.glyph: { fg: removed }
-  # A call still in flight is state, which is what amber is for here; the failed
-  # row stays red so the two can never be read as each other.
+  # Amber reserves attention for calls still pending rather than completed tool labels.
+  # Red distinguishes failure from pending calls; color alone cannot guarantee recognition.
   tool.running.title: { fg: warn }
   tool.running.elapsed: { fg: warn }
   tool.elapsed.done: { fg: muted, italic: true }
@@ -99,7 +81,8 @@ tokens:
   tool.web.source: { fg: muted }
   tool.web.truncated: { fg: muted }
   tool.generic.detail: { fg: muted }
-  # A reply, which is markdown, and the diagrams in it.
+  # Accent marks navigable links, syntax and diagram structure without tinting whole bodies;
+  # empty body styles retain resolver defaults, while scaffolding stays secondary.
   markdown.heading: { fg: accent, bold: true }
   markdown.link: { fg: accent, underline: true }
   markdown.linkUrl: { fg: muted }
@@ -116,8 +99,8 @@ tokens:
   markdown.underline: { underline: true }
   # A fenced diff: the scaffolding recedes, the rows carry the semantic shades,
   # and the characters that changed sit on a band of the row's own colour. The
-  # band is a shade derived from that colour rather than a product token, so it
-  # stays a literal, and the foreground inherits so a palette move carries both.
+  # band stays separate from foreground roles to keep character emphasis independently adjustable;
+  # inherited foreground follows palette changes without changing the literal background.
   markdown.diff.header: { fg: muted }
   markdown.diff.hunk: { fg: muted }
   markdown.diff.context: {}
@@ -131,7 +114,8 @@ tokens:
   markdown.diagram.edgeLabel: { fg: muted }
   markdown.diagram.title: { fg: accent, bold: true }
   markdown.diagram.warning: { fg: warn }
-  # A list drawn over the transcript.
+  # Weight keeps current choices distinct from ordinary rows without assigning a selection hue;
+  # the picker renderer supplies a cursor as a separate non-color cue.
   picker.title: { bold: true }
   picker.glyph: { bold: true }
   picker.note: { bold: true }
@@ -143,7 +127,8 @@ tokens:
   picker.hint: { fg: muted }
   picker.cursor: {}
   picker.border: { fg: muted }
-  # A question or an approval, which stops the turn until it is answered.
+  # Weight emphasizes the pending decision and current option without requiring a color change.
+  # The renderer also supplies a cursor and numbered choices; muted detail is still decision context.
   gate.title: { bold: true }
   gate.glyphApproval: { bold: true }
   gate.glyphQuestion: { bold: true }
@@ -152,7 +137,8 @@ tokens:
   gate.optionCurrent: { bold: true }
   gate.cursor: {}
   gate.hint: { fg: muted }
-  # The work panel above the editor.
+  # Distinct section hues identify each work list at its edge without coloring every row.
+  # Muted rows keep entries secondary to headings.
   dock.goal: { bold: true }
   dock.planMode: { bold: true }
   dock.todos.border: { fg: accent }
@@ -168,7 +154,7 @@ tokens:
   dock.jobs.heading: { bold: true }
   dock.jobs.running: { fg: muted }
   dock.jobs.overflow: { fg: muted }
-  # The footer.
+  # Activity text and glyphs distinguish working from ready while both remain secondary footer facts.
   status.prefix: { fg: accent }
   status.back: { fg: accent }
   status.activity.working: { fg: muted }
@@ -184,9 +170,10 @@ tokens:
   status.cwd: { fg: muted }
   status.separator: { fg: muted }
   # The prompt bar.
-  # The one border in the surface that is not a divider: it holds what the reader
-  # is writing, which is where the product puts the brand on its send button.
+  # Accent frames the active input so it remains distinct from secondary footer facts.
   editor.border: { fg: accent }
+  # Dim queued prompts and ghost suggestions distinguish pending work from text being edited.
+  # Completion weight supplements the accent prefix so its current label need not rely on hue.
   editor.queued: { dim: true, italic: true }
   editor.queued.more: { fg: muted }
   editor.ghost: { dim: true }

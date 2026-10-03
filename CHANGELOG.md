@@ -14,6 +14,8 @@ breaking change, and a patch carries only fixes.
 
 ### Fixed
 
+- Inline comments explain implementation purposes and constraints without promising unsupported isolation, rollback, event-ordering, or lifecycle guarantees. Executable behavior remains unchanged.
+
 - Compatibility guidance distinguishes the declared harness range from verified releases, capability probes from version checks, and manifest consistency from install and runtime evidence. Corrected composition and release-workflow claims.
 
 - Transcript exports replace destinations with fresh owner-only files while preserving earlier file readers and unrelated hard-linked paths.
