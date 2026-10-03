@@ -4,6 +4,7 @@ set -euo pipefail
 
 name="$(basename "${BASH_SOURCE[0]}")"
 TUI_PACKAGE_NAME='@sagmans/dsh-tui'
+ISOLATED_ENV_PREFIXES=('HERDR_' 'DSH_TUI_MOSHI_')
 # The link policy is shared with the validator, so both read one rule set.
 helper_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 # Default to the caller checkout so this packaged helper is not tied to its install location;
@@ -443,9 +444,12 @@ printf 'profile: %s (%s)\n' "$profile" "$bundles" >&2
 # started with them claims that pane's agent row for this run: the row comes back
 # released, and the pane's real agent disappears from Herdr's pickers until it is
 # restarted. The clone is launched as a surface in a bare terminal instead.
-while IFS= read -r herdr_var; do
-  unset "$herdr_var"
-done < <(env | sed -n 's/^\(HERDR_[A-Za-z0-9_]*\)=.*/\1/p')
+# Incidental model notifications must not borrow the caller's production token.
+for isolated_prefix in "${ISOLATED_ENV_PREFIXES[@]}"; do
+  while IFS= read -r isolated_var; do
+    if [[ "$isolated_var" == "$isolated_prefix"* ]]; then unset "$isolated_var"; fi
+  done < <(compgen -e)
+done
 
 run_command=(env "DSH_HOME=$home" "$dsh_bin" --profile "$profile")
 if [[ "${#passthrough[@]}" -gt 0 ]]; then

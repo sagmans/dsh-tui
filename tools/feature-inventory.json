@@ -7,12 +7,15 @@
       "description": "Installed Harness, base bundle, linked worktree, fresh home",
       "cost": "free",
       "scenarios": [
-        "commands"
+        "commands",
+        "clone-helper"
       ],
       "sources": [
         "src/index.ts",
         "src/host/",
-        "src/compat/"
+        "src/compat/",
+        "tools/pty-launch.mjs",
+        ".agents/skills/dsh-tui-dogfood/scripts/run-plugin-from-worktree.sh"
       ]
     },
     {

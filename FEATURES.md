@@ -31,7 +31,7 @@ CI checks its dependency signatures before dogfood.
 Free runs start real `dsh --profile tui` processes in PTYs.
 Each profile composes the installed base bundle and the current worktree.
 The runner creates private homes and workspaces without copying credentials or live state.
-Its environment excludes model credentials and existing agent-pane coordinates.
+Its environment excludes model credentials, existing agent-pane coordinates, and notification credentials.
 Free input submits only local surface commands.
 Model prompts require the separate paid mode.
 
@@ -54,6 +54,8 @@ The clone must contain the chosen model adapter and its required credentials.
 The runner selects the route through `/model` and reads it back through `/status`.
 It refuses paid execution without `--home`, `--provider`, `--model`, and `--scenario`.
 It never reads a model route from an implicit default.
+Paid runs also exclude pane coordinates and notification credentials.
+Notification checks require a separate, explicitly requested development token and direct scratch-profile launch.
 
 Demand-only scenarios cover replies, rich text, tools, PTC, conversation branching, clipboard transport, questions, approvals, queues, work, jobs, and delegations.
 A model that cannot perform the requested tool workflow fails that scenario.

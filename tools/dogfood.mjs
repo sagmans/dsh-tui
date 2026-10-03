@@ -11,7 +11,7 @@ import yaml from 'js-yaml'
 import { LOCAL_COMMANDS } from '../lib/input/submission.js'
 import { ACTION_CATALOG } from '../lib/input/action-catalog.js'
 import { TUI_TOKENS, PALETTE_NAMES, CARD_ROW_CLASSES } from '../lib/theme-tokens.js'
-import { preparePtyLaunch } from './pty-launch.mjs'
+import { barePaneEnv, preparePtyLaunch } from './pty-launch.mjs'
 import { PtyScreen } from './pty-screen.mjs'
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
@@ -50,6 +50,9 @@ const MAX_RAW_BYTES = 64 * 1024 * 1024
 const PRIVATE_DIR_MODE = 0o700
 const PRIVATE_FILE_MODE = 0o600
 const TERMINAL_NAME = 'xterm-256color'
+const ISOLATION_SENTINEL = 'dogfood-isolation-sentinel'
+const ENABLED_ENV_VALUE = '1'
+const PERMISSION_MODE = 'workspace-write'
 const EVIDENCE_PREFIX = 'dsh-tui-dogfood-'
 const READY = 'ready'
 const RESTORE = ['\x1b[?1049l', '\x1b[?25h', '\x1b[?1006l']
@@ -164,16 +167,29 @@ async function run(scenario, reused) {
     else if (file.hardlink) linkSync(safeFile(file.hardlink), path)
     else writeFileSync(path, file.content, { mode: file.mode ?? PRIVATE_FILE_MODE })
   }
-  const env = paid ? Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('HERDR_')))
+  const env = paid ? barePaneEnv()
     : Object.fromEntries(FREE_ENV.flatMap(key => process.env[key] === undefined ? [] : [[key, process.env[key]]]))
   const launch = preparePtyLaunch({ home, launcher: supplied('--launcher') ? option('--launcher') : '', env })
-  const childEnv = { ...env, HOME: osHome, DSH_HOME: home, TMPDIR: scratchTemp, TMP: scratchTemp, TEMP: scratchTemp, DSH_PERMISSION_MODE: 'workspace-write', DSH_TELEMETRY_DISABLED: '1', TERM: TERMINAL_NAME }
+  const childEnv = { ...env, HOME: osHome, DSH_HOME: home, TMPDIR: scratchTemp, TMP: scratchTemp, TEMP: scratchTemp, DSH_PERMISSION_MODE: PERMISSION_MODE, DSH_TELEMETRY_DISABLED: ENABLED_ENV_VALUE, TERM: TERMINAL_NAME }
   if (scenario.editor) childEnv.VISUAL = `${JSON.stringify(process.execPath)} ${JSON.stringify(join(ROOT, 'tools/dogfood-editor.mjs'))}`
   if (scenario.invocation) {
-    const result = scenario.tool === 'native-terminal'
+    let result
+    if (scenario.tool === 'clone-helper') {
+      const helper = join(ROOT, '.agents/skills/dsh-tui-dogfood/scripts/run-plugin-from-worktree.sh')
+      const clone = join(folder, 'clone')
+      const args = [helper, '--source-home', home, '--home', clone]
+      const options = { cwd: workspace, env: { ...childEnv, DSH_DOGFOOD_DEFAULT_REPO: ROOT, DSH_DOGFOOD_REQUIRE_LISTED: ENABLED_ENV_VALUE, DSH_TUI_MOSHI_TOKEN: ISOLATION_SENTINEL, HERDR_DOGFOOD_SENTINEL: ISOLATION_SENTINEL }, encoding: 'utf8', timeout: DEADLINE_MS * 3 }
+      const setup = spawnSync('bash', ['-x', ...args, '--no-launch'], options)
+      writeFileSync(join(folder, 'setup.txt'), (setup.stdout ?? '') + (setup.stderr ?? ''), { mode: PRIVATE_FILE_MODE })
+      const status = setup.status === 0 ? spawnSync('bash', [...args, '--status'], options) : setup
+      const cleanup = spawnSync('bash', [...args, '--clean'], options)
+      if (cleanup.error || cleanup.status !== 0) throw new Error(`dogfood: clone cleanup failed: ${cleanup.stderr}`)
+      if (!setup.stderr?.includes('unset DSH_TUI_MOSHI_TOKEN') || !setup.stderr.includes('unset HERDR_DOGFOOD_SENTINEL')) throw new Error('dogfood: helper retained notification or pane authority')
+      result = status
+    } else result = scenario.tool === 'native-terminal'
       ? spawnSync(process.execPath, [join(ROOT, 'tools/terminal-behavior.mjs')], { cwd: workspace, env: childEnv, encoding: 'utf8', timeout: DEADLINE_MS * 3 })
       : scenario.tool === 'release'
-      ? spawnSync('python3', [join(ROOT, 'scripts/npm/release.py'), ...scenario.invocation], { cwd: workspace, env: { ...childEnv, DRY_RUN: '1' }, encoding: 'utf8', timeout: DEADLINE_MS })
+      ? spawnSync('python3', [join(ROOT, 'scripts/npm/release.py'), ...scenario.invocation], { cwd: workspace, env: { ...childEnv, DRY_RUN: ENABLED_ENV_VALUE }, encoding: 'utf8', timeout: DEADLINE_MS })
       : spawnSync(launch.command, [...launch.argsPrefix, '--profile', PROFILE, ...scenario.invocation], { cwd: workspace, env: childEnv, encoding: 'utf8', timeout: DEADLINE_MS })
     const output = (result.stdout ?? '') + (result.stderr ?? '')
     writeFileSync(join(folder, 'cli.txt'), output, { mode: PRIVATE_FILE_MODE })

@@ -18,6 +18,8 @@ breaking change, and a patch carries only fixes.
 
 ### Fixed
 
+- Dogfood launchers exclude inherited Moshi notification tokens and agent-pane coordinates, preventing incidental production notifications during model checks. Real credential-free helper setup, status, and cleanup now run automatically.
+
 - Inline comments explain implementation purposes and constraints without promising unsupported isolation, rollback, event-ordering, or lifecycle guarantees. Executable behavior remains unchanged.
 
 - Compatibility guidance distinguishes the declared harness range from verified releases, capability probes from version checks, and manifest consistency from install and runtime evidence. Corrected composition and release-workflow claims.

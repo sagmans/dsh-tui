@@ -1692,6 +1692,12 @@
       "tool": "native-terminal",
       "invocation": [],
       "expect": "\"failures\": []"
+    },
+    {
+      "id": "clone-helper",
+      "tool": "clone-helper",
+      "invocation": [],
+      "expect": "link:"
     }
   ],
   "paid": [
