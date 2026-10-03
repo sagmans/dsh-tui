@@ -42,7 +42,10 @@ export function projectionState(ctx: Context, session: unknown, key: string): un
   return read.kind === 'state' ? read.state : undefined
 }
 
-/** One projection's state when it is a record. */
+/**
+ * Guard field access in projection consumers; non-object state follows the
+ * missing-state path, without validating individual fields.
+ */
 export function projectionRecord(
   ctx: Context,
   session: unknown,
@@ -52,7 +55,10 @@ export function projectionRecord(
   return typeof state === 'object' && state !== null ? state as Record<string, unknown> : undefined
 }
 
-/** One projection's state when it is a non-empty string. */
+/**
+ * Keep unusable projection ids out of roster lookups; absent or empty ids
+ * follow the missing-state path.
+ */
 export function projectionString(ctx: Context, session: unknown, key: string): string | undefined {
   const state = projectionState(ctx, session, key)
   return typeof state === 'string' && state !== '' ? state : undefined

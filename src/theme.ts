@@ -107,14 +107,8 @@ function editorTheme(
   }
 }
 
-/**
- * Build the surface theme.
- *
- * Every token is resolved once, when the theme is built, rather than per frame:
- * a repaint walks the whole transcript and re-resolving a palette chain for
- * every row would pay for the same answer thousands of times. A settings change
- * builds a new theme instead, which is also what makes the swap atomic.
- */
+/** Cache each token on first use so rows sharing a token do not repeat palette
+ * and inheritance resolution within this theme. */
 export function createTheme(mode: ColourMode = detectColourMode(process.env), overrides: ThemeOverrides = NO_OVERRIDES): TuiTheme {
   const resolved = new Map<TuiToken, ResolvedStyle>()
   // Looked up once: a theme is one layer of every token's answer, not a

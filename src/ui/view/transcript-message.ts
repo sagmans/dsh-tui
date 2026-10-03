@@ -53,13 +53,14 @@ function recessiveMarkdownTheme(style: (text: string) => string, theme: TuiTheme
   }
 }
 
+/** Keep fold policy in the view so drawing a message does not own interaction state. */
 export interface MessagesContext {
   readonly theme: TuiTheme
   readonly markdown: MarkdownRenderer
   readonly reasoningOpen: (entry: Extract<TranscriptEntry, { kind: 'reasoning' }>) => boolean
   readonly reasoningFoldHint: () => string
   readonly reasoningKey: (id: string) => string | undefined
-  /** The air a framed message keeps around itself, read per render. */
+  /** Read current spacing so hot-reloaded settings do not leave frames using startup gaps. */
   readonly spacing: () => Spacing
   readonly pushWrapped: (lines: string[], text: string, width: number, prefix: string, token: TuiToken) => void
 }
@@ -68,10 +69,9 @@ export class Messages {
   constructor(private readonly context: MessagesContext) {}
 
   /**
-     * The rows one markdown message draws, with the padding pi-tui adds for background styling removed.
-     *
-     * The source is drawn first so the markdown renderer never measures a sequence
-     * it cannot see; its own spans are applied around the result afterwards.
+     * Normalize foreign terminal controls before markdown measures text: sequences
+     * outside the supported SGR subset can corrupt width accounting or trigger
+     * terminal actions.
      */
     private markdownLines(text: string, width: number, live: boolean, face: MarkdownFace, column = 0): string[] {
       return this.context.markdown
@@ -145,11 +145,13 @@ export class Messages {
       const body = (text: string): string => this.context.theme.style('transcript.reasoning.body', text)
       return { name: 'reasoning', base: { color: body }, theme: recessiveMarkdownTheme(body, this.context.theme), transform: false }
     }
-  /** The face a submitted prompt is drawn in: its structure is markdown's, its shade stays the prompt's. */
+  /** Keep submitted prompts in their transcript shade rather than inheriting the live editor’s styling. */
     userFace(): MarkdownFace {
       return { name: 'user', base: { color: text => this.context.theme.style('transcript.user', text) } }
     }
   pushReasoning(lines: string[], entry: Extract<TranscriptEntry, { kind: 'reasoning' }>, width: number, spans: ClickSpan[]): void {
+      // The summary anchors the foldable thought; hiding it removes the detail
+      // and its hit target too, so no body remains detached from its summary.
       if (!this.context.theme.visible('transcript.reasoning.summary')) return
       const start = lines.length
       const open = this.context.reasoningOpen(entry)
@@ -173,10 +175,13 @@ export class Messages {
       if (open && this.context.theme.visible('transcript.reasoning.body')) {
         this.pushMarkdown(lines, entry.body, width, entry.live, this.reasoningFace(), DETAIL_INDENT)
       }
+      // Include the body so an opened thought can be folded where the reader is
+      // reading it. Without a stable key, a click cannot remember this thought
+      // independently, so it remains governed by the view-wide fold policy.
       const key = this.context.reasoningKey(entry.id)
       if (key !== undefined) spans.push({ key, start, end: lines.length, expanded: open })
     }
-  /** The mark and the space that introduce an element, empty when it has none. */
+  /** Keep notice and marker prefixes under their own element policy so hiding one cannot leave an orphan glyph. */
     elementLead(token: TuiToken): string {
       const glyph = this.context.theme.visible(token) ? this.context.theme.glyph(token) : ''
       return glyph === '' ? '' : `${glyph} `

@@ -21,8 +21,8 @@ export const REASONING_CHAR_LIMIT = 20_000
 /**
  * How far a live thought may grow past that budget before its head is dropped.
  *
- * The slice itself is linear, so a burst of slack makes it happen once per
- * thought rather than on every delta that crosses the limit.
+ * The slice itself is linear, so a burst of slack amortizes it across deltas
+ * rather than slicing on every delta that crosses the retained budget.
  */
 const LIVE_THOUGHT_SLACK = 2
 
@@ -48,10 +48,12 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined
 }
 
+/** Keep injected or unknown-source context from being attributed to the reader as a prompt. */
 function sourceKind(data: Record<string, unknown>): string {
   return asRecord(data.source)?.kind === 'user' ? 'user' : 'plugin'
 }
 
+/** Prefer readable failure text, then a code; leave unknown shapes to the caller's fallback instead of dumping objects. */
 function messageOf(value: unknown): string {
   const record = asRecord(value)
   if (record === undefined) return ''
@@ -64,8 +66,8 @@ function messageOf(value: unknown): string {
  * Fold durable session events into readable rows, and hold the in-flight
  * assistant text and reasoning apart from them.
  *
- * Durable events own the transcript: the live stream is decoration that a
- * repaint or a resume can drop without changing what the reader sees. Tool
+ * Keep transient stream state apart from durable rows so in-flight output
+ * can be cleared at turn boundaries without discarding settled history. Tool
  * rows come from the tool's own render intent, so the fold never learns a tool
  * name; the bookkeeping that a tool row's request, dispatch, and result share
  * lives in the call fold this model routes those events to.
@@ -176,7 +178,7 @@ export class TranscriptModel {
     this.reasoningPaintedThisStep = false
   }
 
-  /** Append a surface-local line that is not part of the durable conversation. */
+  /** Keep local command feedback visible without recording it as conversation for the agent or a later resume. */
   notice(text: string): void {
     this.append({ kind: 'notice', text })
   }
@@ -203,10 +205,11 @@ export class TranscriptModel {
         this.reasoningStartedAt ??= this.clock()
         this.liveReasoningId ??= String(++this.thoughtSeq)
         this.liveReasoning += record.text
-        // A live thought is not bounded until the block it belongs to ends, and
-        // every frame re-wraps what this holds: past a burst of slack the head is
-        // dropped in one step, so a runaway thought costs a bounded wrap per frame
-        // instead of a growing one. The recorded text, not this, is what settles.
+        // Keep recent thought text visible as new deltas arrive, rather than
+        // spending the bounded live preview on an opening that no longer changes.
+        // Limit repeated wrapping cost by trimming after a burst of slack.
+        // Streamed thoughts settle from this retained buffer; the recorded
+        // reasoning copy is suppressed once this step has painted a thought.
         if (this.liveReasoning.length > REASONING_CHAR_LIMIT * LIVE_THOUGHT_SLACK) {
           this.liveReasoning = tailGraphemes(this.liveReasoning, REASONING_CHAR_LIMIT)
         }
@@ -256,6 +259,9 @@ export class TranscriptModel {
    */
   private paintReasoning(text: string, ranFor: number | undefined): void {
     const timing = ranFor === undefined ? '' : ` · ${Math.max(1, Math.round(ranFor / 1000))}s`
+    // Keep the beginning for reading a settled thought in order, within the row
+    // budget. Streamed thoughts reach here from an already tail-trimmed buffer;
+    // settling does not recover their discarded opening.
     const kept = sliceGraphemes(text, REASONING_CHAR_LIMIT)
     const cut = kept.length === text.length ? '' : `\n… truncated at ${REASONING_CHAR_LIMIT} chars`
     // The live thought keeps the id the stream gave it; a thought only the

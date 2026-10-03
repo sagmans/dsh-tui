@@ -2,15 +2,15 @@
 //
 // Two `dsh --profile tui` runs can share a working directory, so every read that
 // feeds a write and every write itself happens under an exclusive directory
-// lock: none of them can lose another's entry to a read-modify-write race.
+// lock to coordinate access and reduce lost updates from read-modify-write races.
 // Ownership is recorded in the lock so a lock left by a crashed process is
 // reclaimed rather than wedging the bank forever.
 //
-// Releasing *moves* the lock out of its path with one atomic rename before it
-// judges or deletes it, and reclaiming judges a lock and removes it under a
-// separate claim that only one contender can take. Removing the path on the
-// strength of an earlier look would let a contender delete the live lock that
-// replaced the one it judged, and two writers would then run at once.
+// Release moves the directory aside before checking ownership to avoid deleting
+// through the acquisition path. Reclaimers use a separate claim and recheck the
+// observed identity to reject visible replacements. That claim serializes only
+// reclaimers; the final check and pathname removal are not atomic with release
+// or acquisition, so they cannot guarantee a successor is untouched.
 
 import { createHash } from 'node:crypto'
 import { link, mkdir, rename, rm } from 'node:fs/promises'
@@ -29,21 +29,23 @@ import {
 } from './private-fs.ts'
 import { createNewId } from './schema.ts'
 
+// Space contention polls to limit filesystem work while still noticing a released lock.
 const LOCK_RETRY_MS = 25
+// Bound contention waits for stash commands; filesystem operations can outlast this deadline.
 const LOCK_TIMEOUT_MS = 2000
+// Allow incomplete owner publication before recovery, not a lease on a validated live owner.
 const LOCK_STALE_MS = 30_000
 const LOCK_OWNER_FILE = 'owner.json'
 const LOCK_TAKEOVER_SUFFIX = '.taken'
 /**
  * The name reclaimers link their claim file onto, so exactly one of them wins.
  *
- * A storage directory holds a bank per working directory, so the claim is named
- * after the bank it guards: one crashed reclaimer then stops recovery for that
- * bank alone instead of for every directory that shares the storage. The name is
- * a digest rather than the key itself, because a key at the sanitizer's limit
- * plus a suffix and a token is longer than the longest name a filesystem accepts.
+ * Bank-derived claim names avoid one shared recovery claim for all working
+ * directories in storage. A digest leaves room for suffixes and tokens even
+ * when the bank key reaches the sanitizer's limit.
  */
 const RECLAIM_PREFIX = '.claim-'
+// Truncation leaves room for claim tokens in filenames, at the cost of possible cross-bank collisions.
 const RECLAIM_DIGEST_LENGTH = 16
 const LOCK_CHANGED_MESSAGE = 'stash lock changed before release'
 
@@ -95,7 +97,7 @@ interface LockOwner {
   readonly createdAt: string
 }
 
-/** Take the file lock for a read that must not observe a half-written file. */
+/** Serialize reads that may quarantine the bank with mutations, so recovery cannot race a writer. */
 export function withStashFileLock<Result>(filePath: string, operation: () => Promise<Result>): Promise<Result> {
   return withStashLock(filePath, operation, false)
 }
@@ -150,10 +152,9 @@ async function withStashLock<Result>(
     if (mutation && isPersistedMutation(result)) {
       throw new StashCommittedError(result.result, { phase: 'lock-release', error: releaseError })
     }
-    // A read already has its answer, and the answer cannot be wrong because the
-    // lock outlived it: the next contender reclaims a lock whose owner is gone.
-    // Failing here would throw away what the caller just learned — including the
-    // path of a bank that was quarantined while it was being read.
+    // Preserve the completed read, including any quarantine path, rather than
+    // discard its result over cleanup. A leftover lock can still block writers:
+    // reclamation refuses an owner whose local PID remains alive.
     if (mutation) throw releaseError
   }
   return result
@@ -299,10 +300,9 @@ async function takeLockDirectory(lockDir: string): Promise<string | undefined> {
 /**
  * Put a lock back that turned out to belong to someone else.
  *
- * A fresh lock at the original path means this one can never be restored. It is
- * left where it is rather than deleted: whoever holds it is running, so a lock
- * that is merely hard to find costs a warning on release, while a deleted one
- * costs a second writer in the bank.
+ * A mismatched token does not authorize deleting the displaced directory. If
+ * restoration fails, preserve it and report the failure rather than destroy
+ * another owner's record. This cannot exclude a successor at the original path.
  */
 async function putBackLockDirectory(taken: string, lockDir: string): Promise<void> {
   try {
@@ -328,9 +328,9 @@ function processIsAlive(pid: number): boolean {
  * What a reclaim is allowed to act on: one reading of the lock, with the
  * identity of the directory it was read from.
  *
- * The owner bytes alone are not enough, because the directory that held them can
- * be released and replaced between the reading and the removal. A lock is only
- * removed when both the identity and the token still match what was judged.
+ * Owner bytes alone cannot distinguish a released directory from its replacement.
+ * Identity and token let reclaimers reject a changed observation before removal;
+ * they do not make the later pathname deletion atomic with that check.
  */
 export interface LockObservation {
   readonly owner: LockOwner | undefined
@@ -355,17 +355,15 @@ export async function observeLock(lockDir: string): Promise<LockObservation | un
 /**
  * Reclaim a lock whose owner is gone.
  *
- * Reclaimers serialize on a claim file created by link, which exactly one of
- * them can win, so only one of them ever judges and removes a given lock. The
- * winner looks once, decides from that look, and then removes only if the lock
- * still is the directory it looked at: a holder that released in between would
- * otherwise leave its successor's live lock to be deleted, and both writers
- * would then run at once.
+ * The claim serializes reclaimers so they cannot independently judge and remove
+ * the same lock. Rechecking identity and token rejects replacements visible
+ * before deletion, but acquisition and release do not take this claim: it cannot
+ * exclude a replacement between the final check and pathname removal.
  *
  * A reclaimer killed inside that section leaves the claim file behind, and every
  * later reclaim fails closed at the timeout instead of guessing. That message
- * names the file, because clearing it by hand is the one recovery that cannot
- * cost an update.
+ * names the file so an operator can locate the obstruction. Manual cleanup must
+ * account for active reclaimers; deleting their claim would break coordination.
  */
 async function reclaimAbandonedLock(lockDir: string): Promise<boolean> {
   const mutex = reclaimMutexPath(lockDir)
@@ -376,16 +374,18 @@ async function reclaimAbandonedLock(lockDir: string): Promise<boolean> {
     if (observed === undefined || !isAbandonedLock(observed)) return false
     return await removeObservedLock(lockDir, observed)
   } finally {
+    // Best-effort cleanup preserves the reclaim outcome. A leftover mutex still
+    // blocks later reclamation and requires the manual recovery described above.
     await rm(claim, { force: true }).catch(() => undefined)
     await rm(mutex, { force: true }).catch(() => undefined)
   }
 }
 
 /**
- * Remove the lock a judgement was made about, and nothing that replaced it.
+ * Reject a replacement visible when rechecking the abandoned-lock observation.
  *
- * Exported so the race this exists for can be driven from a test: hold an
- * observation, publish a live lock in its place, and the removal has to refuse.
+ * Identity and token checks reduce stale-observation deletion; they cannot
+ * exclude replacement after the check because removal still uses the pathname.
  */
 export async function removeObservedLock(lockDir: string, observed: LockObservation): Promise<boolean> {
   const current = await observeLock(lockDir)
@@ -398,6 +398,10 @@ export async function removeObservedLock(lockDir: string, observed: LockObservat
 
 /** Whether one observation of a lock shows an owner that can no longer hold it. */
 function isAbandonedLock(observed: LockObservation): boolean {
+  // Missing or malformed ownership cannot support a PID check. Directory age
+  // gives a newly created lock time to publish its owner; it is a grace period,
+  // not proof that publication cannot be delayed beyond it.
+  // A local PID probe cannot establish whether an owner on another host exited.
   if (observed.owner === undefined) return Date.now() - observed.modified > LOCK_STALE_MS
   if (observed.owner.host !== hostname()) return false
   return !processIsAlive(observed.owner.pid)
@@ -417,6 +421,8 @@ async function claimReclaim(mutex: string): Promise<string | undefined> {
     await link(claim, mutex)
     return claim
   } catch (error) {
+    // Preserve the link outcome: EEXIST means another reclaimer holds the claim.
+    // Cleanup failure may leave this contender's private file behind.
     await rm(claim, { force: true }).catch(() => undefined)
     if (hasErrorCode(error, 'EEXIST')) return undefined
     throw error

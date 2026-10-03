@@ -3,6 +3,7 @@ import type { DriverStatus } from './herdr/state.ts'
 /** A dedicated token is explicit consent; generic Moshi pairing credentials are never read. */
 const TOKEN_ENV = 'DSH_TUI_MOSHI_TOKEN'
 const WEBHOOK = 'https://api.getmoshi.app/api/webhook'
+// Bound each request so a stalled endpoint cannot retain the single delivery slot indefinitely.
 const REQUEST_TIMEOUT_MS = 3_000
 const NOTICES = {
   complete: { title: 'DSH finished', message: 'The current session is ready for input.' },
@@ -77,6 +78,7 @@ export function createMoshiReporter(env: NodeJS.ProcessEnv = process.env): Moshi
     flush()
   }
 
+  // Completion means observed work settled without blockers, not task success or a repeated idle event.
   const settle = (): void => {
     if (disposed || session === undefined) return
     if (driverRunning || backgroundRunning) {
@@ -91,6 +93,7 @@ export function createMoshiReporter(env: NodeJS.ProcessEnv = process.env): Moshi
   }
 
   return {
+    // New session facts invalidate queued notices and outstanding delivery for the previous session.
     session(id, status) {
       if (disposed) return
       pending.clear()
@@ -109,6 +112,7 @@ export function createMoshiReporter(env: NodeJS.ProcessEnv = process.env): Moshi
       backgroundRunning = running
       settle()
     },
+    // Several gates may block one episode; only the first needs an attention notice.
     block(key) {
       if (disposed || session === undefined || blocked.has(key)) return
       const first = blocked.size === 0

@@ -12,6 +12,7 @@ import { type TuiTheme } from '../../theme.ts'
 import { displayText } from '../../text.ts'
 import { pushGap } from '../gap.ts'
 
+/** Inset choices, answers, and hints to group them under the question, at the cost of text width. */
 const OPTION_INDENT = '   '
 /** The mark a cursor falls back to when the reader has not set one, so no literal lives in a template. */
 const CURSOR_MARK = '❯'
@@ -21,7 +22,7 @@ const CHECKBOX_ON = '[x]'
 const CHECKBOX_OFF = '[ ]'
 /** An unselected row has no cursor, and a blank column is not a value to configure. */
 const NO_CURSOR = ' '
-/** One row a gate draws: a numbered option, or the free-text row below them. */
+/** Share selection marks and hanging-label wrapping between preset choices and the custom answer. */
 interface GateRow {
   readonly number: number
   readonly label: string
@@ -29,14 +30,16 @@ interface GateRow {
   readonly current: boolean
   readonly selected: boolean
 }
-/** The indent a gate's own detail rows sit under, one step inside the title they explain. */
+/** Inset supporting detail to distinguish question context from another decision, at the cost of text width. */
 const DETAIL_INDENT = '    '
 
+/** Borrow the transcript view's theme and wrapper so gates share its styling and width constraints. */
 export interface GateCardsContext {
   readonly theme: TuiTheme
   readonly pushWrapped: (lines: string[], text: string, width: number, prefix: string, token: TuiToken) => void
 }
 
+/** Honor the shared theme's visibility preferences, not an always-visible gate policy. */
 export class GateCards {
   constructor(private readonly context: GateCardsContext) {}
 
@@ -47,8 +50,8 @@ export class GateCards {
       if (this.context.theme.visible('gate.title')) {
         const glyphToken = gate.kind === 'approval' ? 'gate.glyphApproval' : 'gate.glyphQuestion'
         const glyph = this.context.theme.glyph(glyphToken) || (gate.kind === 'approval' ? APPROVAL_MARK : QUESTION_MARK)
-        // The question is the thing being decided, so it wraps rather than being
-        // cut: a reader cannot answer a sentence they were not shown.
+        // A visible question needs its wording for the decision, so prefer wrapping
+        // within the shared wrapper's width limit; theme visibility can still omit it.
         this.context.pushWrapped(lines, displayText(gate.title, { column: visibleWidth(`${glyph} `) }), width, `${glyph} `, 'gate.title')
       }
       if (this.context.theme.visible('gate.detail')) {
@@ -92,8 +95,8 @@ export class GateCards {
           lines.push(visibleWidth(placed) <= width ? placed : this.context.theme.cut(placed, width, ''))
         }
       }
-      // The keys are how the gate is answered at all, so they wrap rather than
-      // lose their tail at a narrow edge.
+      // Visible key hints help the reader answer, so prefer wrapping within the
+      // shared width limit; hidden hints and widths smaller than the lead can omit text.
       if (this.context.theme.visible('gate.hint')) {
         this.context.pushWrapped(lines, gate.hint, width, OPTION_INDENT, 'gate.hint')
       }
@@ -112,7 +115,7 @@ export class GateCards {
       const box = row.selected ? CHECKBOX_ON : CHECKBOX_OFF
       const lead = `${OPTION_INDENT}${cursor} ${box} ${row.number}. `
       const text = row.description === undefined ? row.label : `${row.label} — ${row.description}`
-      // A choice must expose its original text rather than let controls repaint it.
+      // Expose controls literally so choice text cannot repaint neighboring rows.
       this.context.pushWrapped(lines, displayText(text, { column: visibleWidth(lead) }), width, lead, token)
     }
 }

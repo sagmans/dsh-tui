@@ -7,7 +7,7 @@ import { dirname, isAbsolute, join, relative } from 'node:path'
  * Which files the workspace holds, asked of Git first and walked otherwise.
  *
  * Enumeration is an effect, not a policy: the listing subprocess, its timeout,
- * and the bounded walk that answers when Git is absent or refuses, all change
+ * and the bounded walk allowed only when no ancestor Git marker is found, change
  * for reasons the token grammar the reader types into does not.
  */
 
@@ -17,11 +17,10 @@ const GIT_TIMEOUT_MS = 3_000
 /**
  * The git listing that answers for a workspace.
  *
- * Tracked files and untracked ones that git would add, with ignored paths left
- * out: that is the set the agent itself works on, so a suggestion can never
- * name a build artifact or a secret the repository deliberately ignores. The
- * stage information is asked for too, because it is the only place the listing
- * says which entries are symbolic links.
+ * Include tracked files and untracked files that Git would add, keeping ignored
+ * untracked artifacts out of suggestions. Ignore rules do not exclude files
+ * already tracked, so this listing is not a guarantee against offering secrets.
+ * Stage metadata identifies indexed symbolic links for containment checks.
  *
  * The two sets are asked for apart: an indexed record carries metadata before a
  * tab and an untracked one is a bare path, so a tab inside an untracked name
@@ -48,7 +47,7 @@ const GIT_ERROR_LIMIT = 4_096
 /** The marker git leaves at the root of a worktree, which a walk must respect. */
 const GIT_MARKER = '.git'
 
-/** A path that cannot climb further than this many parents is not mounted anywhere real. */
+/** Bound ancestor checks; exhaustion leaves Git ownership uncertain and therefore forbids a fallback walk. */
 const MAX_PARENT_DIRECTORIES = 40
 
 /** One path git listed, with the type its index mode or the filesystem reports. */
@@ -169,6 +168,8 @@ async function runGit(cwd: string, args: readonly string[], signal: AbortSignal)
   return await new Promise<GitAnswer>(resolve => {
     let settled = false
     let timer: ReturnType<typeof setTimeout> | undefined
+    // Abort, timeout, error, and close can race; settle once and release the
+    // timer and abort listener so completed work cannot trigger cancellation.
     const finish = (value: GitAnswer): void => {
       if (settled) return
       settled = true
@@ -177,6 +178,8 @@ async function runGit(cwd: string, args: readonly string[], signal: AbortSignal)
       resolve(value)
     }
     const child = spawn('git', [...args], { cwd, stdio: ['ignore', 'pipe', 'pipe'] })
+    // Cancel this read-only listing without a graceful-shutdown wait: the menu
+    // has stopped waiting, and timed-out work must not keep running either.
     const onAbort = (): void => {
       child.kill('SIGKILL')
       finish({ kind: 'failed' })
@@ -304,8 +307,9 @@ async function isSymlink(root: string, path: string): Promise<boolean> {
   try {
     return (await lstat(join(root, path))).isSymbolicLink()
   } catch {
-    // A path that vanished between the listing and the stat is offered as the
-    // plain file git saw; there is no link left to follow.
+    // A failed lstat leaves link status unknown, not proven absent. Retain the
+    // listed candidate here; completion's per-offer reachability proof must
+    // still establish that it resolves inside the workspace.
     return false
   }
 }
@@ -325,6 +329,7 @@ async function linkedTarget(canonicalRoot: string, path: string): Promise<boolea
   }
 }
 
+/** A failed canonicalization cannot support a containment proof, so callers must refuse that root rather than guess. */
 export async function canonicalOrUndefined(path: string): Promise<string | undefined> {
   try {
     return await realpath(path)
@@ -333,7 +338,11 @@ export async function canonicalOrUndefined(path: string): Promise<string | undef
   }
 }
 
-/** Walk a tree git does not own, breadth first, stopping at the caps above. */
+/**
+ * Keep capped fallback results near the workspace root by visiting shallow
+ * directories first. This best-effort completion list retains available rows
+ * when a subtree cannot be read, rather than discarding the rest of the tree.
+ */
 export async function walkFiles(cwd: string, signal: AbortSignal): Promise<readonly Candidate[]> {
   if (signal.aborted) return []
   const canonicalRoot = await canonicalOrUndefined(cwd)

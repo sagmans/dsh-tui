@@ -43,13 +43,13 @@ export interface FileIndex {
   reachable(path: string, signal: AbortSignal): Promise<boolean>
 }
 
-/** How long a gathered listing is trusted before the tree is read again. */
+/** Reuse scans across keystrokes without keeping agent-written files out of the menu indefinitely. */
 const INDEX_TTL_MS = 1_000
 
-/** How long one scan may run before the index abandons it, awaited or not. */
+/** Release stalled scan waiters and allow a later request to start fresh listing work. */
 const SCAN_TIMEOUT_MS = 5_000
 
-/** How long proving one row may hold the menu before that row is left out. */
+/** Omit a slow-to-prove row rather than let optional completion wait indefinitely on the filesystem. */
 const ROW_PROOF_TIMEOUT_MS = 500
 
 /** One shared scan: the work, and the deadline signal a waiter may leave on. */
@@ -88,6 +88,8 @@ export function createFileIndex(cwd: string, options: FileIndexOptions = {}): Fi
         }
         return found
       })
+      // Completion is optional: a failed listing leaves the bar usable without
+      // offering unproven rows. No cache refresh occurs, so the next stale read retries.
       .catch(() => [] as readonly Candidate[])
     const entry: Scan = { run, signal: scan.signal }
     pending = entry
@@ -121,6 +123,8 @@ export function createFileIndex(cwd: string, options: FileIndexOptions = {}): Fi
     },
     async reachable(path: string, signal: AbortSignal): Promise<boolean> {
       if (signal.aborted) return false
+      // Share one canonical anchor across row proofs, separate from listing freshness.
+      // A failed resolution also remains cached; listing refreshes do not recover it.
       root ??= canonicalOrUndefined(cwd)
       // Both the root and the row are bound the same way: a filesystem that
       // stopped answering must not hold a menu open, and a proof that did not
@@ -131,6 +135,9 @@ export function createFileIndex(cwd: string, options: FileIndexOptions = {}): Fi
       if (canonical === undefined || signal.aborted) return false
       const target = await withinBound(resolvePath(join(cwd, path)), signal, proofTimeoutMs)
       if (target === undefined) return false
+      // Only descendants qualify for file references; the workspace root is not a row.
+      // This conservative parent-prefix check also omits contained names such as
+      // ..notes, so reachability is stricter than offerablePath spelling validation.
       const inside = relative(canonical, target)
       return inside !== '' && !inside.startsWith('..') && !isAbsolute(inside)
     },

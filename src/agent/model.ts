@@ -89,7 +89,10 @@ export function modelRouteKey(route: { readonly provider: string; readonly model
   return route.provider + ROUTE_KEY_SEPARATOR + route.model
 }
 
-/** Read a route key back; undefined for a string this surface never minted. */
+/**
+ * Decode picker routes without splitting slash-bearing model ids.
+ * Both route components are required; this does not establish key provenance.
+ */
 export function readModelRouteKey(key: string): { provider: string; model: string } | undefined {
   const at = key.indexOf(ROUTE_KEY_SEPARATOR)
   if (at <= 0 || at === key.length - 1) return undefined
@@ -176,7 +179,10 @@ export interface ModelEfforts {
   readonly defaultEffort?: string
 }
 
-/** The model directory, described structurally. */
+/**
+ * Keep discovery tied to picker capabilities, not the service's full API.
+ * Missing model or effort metadata must not erase available provider discovery.
+ */
 interface LlmDirectory {
   listProviders?(): readonly { readonly id?: string; readonly name?: string }[]
   listModels?(provider: string): Promise<readonly { readonly id?: string; readonly name?: string }[]>
@@ -199,9 +205,9 @@ export interface ModelCatalog {
  * Why a composition cannot answer with a model catalog.
  *
  * Both causes leave the catalog undefined, but they ask for different fixes: one
- * means nothing is mounted, the other that the mounted llm predates the directory
- * method, so a reader told only "no llm service" is sent to install what they
- * already run.
+ * means nothing is mounted, the other that the mounted llm cannot list providers.
+ * Reporting both as "no llm service" would ask the reader to install a service
+ * that is already present.
  */
 export type ModelCatalogGap = 'no_llm_service' | 'llm_without_provider_listing'
 
@@ -244,6 +250,10 @@ export function readModelCatalog(ctx: Context): ModelCatalogReading {
   const reading = readLlmService(ctx)
   if (reading.kind === 'gap') return { kind: 'gap', gap: reading.gap }
   const llm = reading.llm
+  // Provider discovery is the catalog gate; model and effort metadata only
+  // enrich the pickers, so absent methods leave those choices empty or unknown.
+  // Rows need string ids to be selectable; a missing display name can use that
+  // same id without inventing a different request value.
   const providers = (): readonly ProviderEntry[] => (llm.listProviders?.() ?? []).flatMap(entry =>
     typeof entry.id === 'string' ? [{ id: entry.id, name: typeof entry.name === 'string' ? entry.name : entry.id }] : [])
   const catalog: ModelCatalog = {

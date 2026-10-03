@@ -15,7 +15,7 @@ export const inject = ['cmdlineArgs']
 
 export { PROFILE_NAME } from './identity.ts'
 
-/** Config id the agent-loop row uses when a profile configures one. */
+/** Align a configured `main` agent with the TUI session; exact-id lookup leaves other agents unchanged. */
 export const MAIN_AGENT_ID = 'main'
 
 /** Context key of the parsed launch service consumed by the tui row. */
@@ -63,6 +63,7 @@ function launchOf(
       newSession: options.new,
     })
   } catch (error) {
+    // Argument mistakes need usage diagnostics; unexpected failures must remain startup failures.
     if (error instanceof LaunchUsageError) {
       program.error(`dsh --profile tui: ${error.message}`)
       return undefined
@@ -106,6 +107,8 @@ export function apply(ctx: Context): void {
     .option('--no-color', 'disable ANSI styling')
     .option('--no-bell', 'do not ring the terminal bell when a long turn finishes')
 
+  // Installation must also work without a TTY: use launcher exit without publishing
+  // tuiStartup, whose consumers would mount the interactive surface.
   program.command('install-skills')
     .description('install or update the bundled skills in ~/.agents/skills/')
     .option('--update', 'replace an existing skill without asking')
@@ -123,6 +126,8 @@ export function apply(ctx: Context): void {
         exit(0)
       }
 
+      // Replacement discards local skill edits, so require --update or affirmative
+      // consent. Both streams must be interactive for the prompt; refusal is the default.
       if (options.update === true) {
         try { install(true) } catch (error) { fail(error) }
         return
@@ -178,6 +183,9 @@ export function apply(ctx: Context): void {
   ) => {
     const launch = launchOf(program, mode, session, options)
     if (launch === undefined) return
+    // Keep an optional configured main agent aligned with the surface's launch identity.
+    // The initial recovery hint must name that same session; it cannot follow later forks
+    // or switches. Terminal shutdown builds its hint from the active session instead.
     ctx.provide(CONFIGURED_AGENT_IDENTITIES_KEY, { [MAIN_AGENT_ID]: launch.identity })
     ctx.provide(TUI_STARTUP_SERVICE, launch.startup)
     ctx.provide('tuiGoodbyeMessage', resumeHint(launch.identity.id, PROFILE_NAME))

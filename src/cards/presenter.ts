@@ -1,23 +1,29 @@
+/**
+ * Adapt tool-owned render intents to terminal cards without coupling the transcript
+ * to tool definitions. Retention belongs here; registry lookup and exception
+ * recovery belong to the agent adapter.
+ */
 import { type CardRow, cardRow, type CardStat, type ToolCard, bound, boundTail, contentLines } from '../cards.ts'
 import { type DiffCallView, type DiffResultView, type FileDiff, type GenericCallView, type GenericResultView, type ReadResultView, type SearchResultView, type TerminalCallView, type TerminalResultView, type ToolCallView, type ToolResultView, type WebResultView } from '@deepseek-ai/dsh-tools'
 import { countTokens, formatTokens } from '../tokens.ts'
 
-/** A text with the newline that only terminates its last line removed. */
+/**
+ * Treat trailing blank lines as padding so text-based volume estimates compare
+ * content rather than newline tails. Reads and diffs share this convention.
+ */
 function withoutTrailingBreaks(text: string): string {
   return text.replace(/\n+$/, '')
 }
 
-/** How many lines a text holds, ignoring the newline that only terminates the last one. */
+/** Keep line counts consistent with the trailing-break normalization used for token estimates. */
 function lineCount(text: string): number {
   const body = withoutTrailingBreaks(text)
   return body === '' ? 0 : body.split('\n').length
 }
 
 /**
- * The size of a text a card presents, in lines and in tokens.
- *
- * A reader deciding whether to open a file cares about both: lines say how tall
- * it is, tokens say what it cost to put in the conversation.
+ * Help readers compare displayed text volume before opening a card. Token sizes
+ * use the shared character-based estimate, not provider billing or the full payload.
  */
 function sizeStats(text: string): readonly CardStat[] {
   const body = withoutTrailingBreaks(text)
@@ -100,12 +106,9 @@ function diffStats(diffs: readonly FileDiff[]): readonly CardStat[] {
 }
 
 /**
- * Render one file change as a bounded unified hunk.
- *
- * Only the changed middle is shown: a presenter has the prior and next text but
- * no hunk list, so trimming the shared prefix and suffix yields the same region
- * a full diff would highlight without paying for a line-diff computation on
- * every frame.
+ * Trim shared edges to avoid a full line-diff computation. Separate edits share
+ * one coarse replacement region, including unchanged interior lines; these rows
+ * also feed change statistics. Card callers, not this helper, enforce retention.
  */
 export function renderFileDiff(diff: FileDiff): CardRow[] {
   const before = diff.oldText === null ? [] : diff.oldText.split('\n')
@@ -183,7 +186,7 @@ function readLine(number: number, text: string): CardRow {
   return { parts: [{ class: 'lineNumber', text: `${number}:` }, { class: 'line', text: ` ${text}` }] }
 }
 
-/** A search hit keeps its location apart from the matching line. */
+/** Let themes distinguish navigation context from matched content through separate styled parts. */
 function searchHit(path: string, lineNumber: number, line: string): CardRow {
   return {
     parts: [
@@ -194,7 +197,11 @@ function searchHit(path: string, lineNumber: number, line: string): CardRow {
   }
 }
 
-/** Map a tool's pending-call intent to a card, falling back to the raw call name. */
+/**
+ * Preserve a tool's call intent within terminal retention limits. Without a view,
+ * only the name is available here; the agent adapter leaves raw-argument fallback
+ * to the transcript instead of using this bare card.
+ */
 export function cardOfCall(view: ToolCallView | undefined, name: string): ToolCard {
   if (view === undefined) {
     return { kind: 'generic', tool: name, title: name, detail: [], failed: false, totalLines: 0 }
@@ -221,6 +228,8 @@ export function cardOfCall(view: ToolCallView | undefined, name: string): ToolCa
     case 'diff': {
       const diff = view as DiffCallView
       const bounded = bound(diff.diffs.flatMap(renderFileDiff))
+      // Anchor the single-row header to the opening diff instead of listing every
+      // path outside the fold. Later paths appear only in retained detail.
       const path = diff.diffs[0]?.path
       if (path === undefined || path === '') {
         return { kind: 'diff', tool: name, title: title(diff, name), detail: bounded.detail, failed: false, totalLines: bounded.totalLines }
@@ -237,6 +246,8 @@ export function cardOfCall(view: ToolCallView | undefined, name: string): ToolCa
     }
     default: {
       const generic = view as GenericCallView
+      // Prefer the tool's UI-facing context; raw input fills an otherwise empty
+      // card rather than duplicating content the presenter already supplied.
       const lines = contentLines(generic.content)
       if (generic.rawInput !== undefined && lines.length === 0) {
         lines.push(typeof generic.rawInput === 'string' ? generic.rawInput : JSON.stringify(generic.rawInput))
@@ -263,7 +274,7 @@ export function cardOfCall(view: ToolCallView | undefined, name: string): ToolCa
   }
 }
 
-/** Map a tool's result intent to a card, falling back to the model-facing text. */
+/** Preserve result context when no view exists by retaining bounded model-facing text. */
 export function cardOfResult(
   view: ToolResultView | undefined,
   input: { readonly name: string; readonly failed: boolean; readonly contentLines: readonly string[] },
@@ -276,8 +287,8 @@ export function cardOfResult(
   switch (view.card) {
     case 'terminal': {
       const terminal = view as TerminalResultView
-      // A terminating newline is the shell's, not a row: keeping it would spend
-      // one slot of the preview window on a blank line the renderer then drops.
+      // Drop trailing newline runs, including blank lines, so a tail preview
+      // spends its slots on output rather than trailing whitespace.
       const raw = (terminal.output ?? '').replace(/\n+$/, '')
       const rows = raw === '' ? [] : raw.split('\n').map(line => cardRow('output', line))
       const status = terminal.signal !== undefined && terminal.signal !== ''
@@ -312,6 +323,8 @@ export function cardOfResult(
     case 'diff': {
       const diff = view as DiffResultView
       const bounded = bound(diff.diffs.flatMap(renderFileDiff))
+      // Anchor the single-row header to the opening diff instead of listing every
+      // path outside the fold. Later paths appear only in retained detail.
       const path = diff.diffs[0]?.path
       const stats = diffStats(diff.diffs)
       if (path === undefined || path === '') {
@@ -338,6 +351,9 @@ export function cardOfResult(
     }
     case 'search': {
       const search = view as SearchResultView
+      // Honor the declared shape: path listings stay compact, while content
+      // hits keep navigation context. The tool's cap marker distinguishes its
+      // partial results from the additional retention limit applied below.
       const rows = search.shape === 'paths'
         ? search.paths.map(path => cardRow('path', path))
         : search.files.flatMap(file => file.matches.map(match => searchHit(file.path, match.lineNumber, match.line)))
@@ -378,6 +394,9 @@ export function cardOfResult(
     case 'web': {
       const web = view as WebResultView
       const rows: CardRow[] = []
+      // Search views carry answers and citation sources. Fetch views carry only
+      // retrieval metadata: their body belongs to raw model-facing content, not
+      // this structured summary, per the tool-owned presentation contract.
       if (web.kind === 'search') {
         if (web.answer !== undefined && web.answer !== '') {
           for (const line of web.answer.split('\n')) rows.push(cardRow('detail', line))
@@ -403,6 +422,8 @@ export function cardOfResult(
     default: {
       const generic = view as GenericResultView
       const lines = contentLines(generic.content)
+      // Tool-supplied UI text may differ from the model payload; use that payload
+      // only when the presenter supplies no text, so generic cards retain context.
       const chosen = lines.length > 0 ? lines : input.contentLines
       const bounded = bound(chosen.map(line => cardRow('detail', line)))
       const head = skillHead(title(generic, input.name), input.name)

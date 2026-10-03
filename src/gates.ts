@@ -21,28 +21,18 @@ export interface GateCard {
    * by typing anyway, so it has no such row to draw.
    */
   readonly custom: GateCustomRow | undefined
-  /**
-   * The editor the answer is written in, drawn under the row that fills it.
-   *
-   * A question says nothing about its answer until someone writes one, so the
-   * rows come from the surface's own editor rather than from text composed
-   * here: the reader gets the cursor movement, deletion, undo, and paste the
-   * prompt bar already has.
-   */
+  /** Keep editing state beside its question so the renderer can place it beneath the active answer row. */
   readonly answerInput: GateInput | undefined
   readonly hint: string
 }
 
-/**
- * The editor a question collects typed text with.
- *
- * These are the editor's own members rather than a vocabulary invented here, so
- * the surface hands in the component the prompt bar already uses and nothing
- * has to adapt it. Every key the gate does not claim — movement, deletion,
- * undo, a pasted block — reaches the answer through this.
- */
+/** Distinguish credential display requests so editors can mask text without changing submitted answers. */
 export type GateInputMode = 'answer' | 'secret'
 
+/**
+ * Use the surface's editor so answers retain prompt-bar editing behavior.
+ * Keys the gate does not claim reach this editor without a separate adapter.
+ */
 export interface GateInput {
   /** The answer as written, with a pasted block expanded back to its text. */
   getExpandedText(): string
@@ -53,13 +43,14 @@ export interface GateInput {
   /** Take a key the gate itself did not claim. */
   handleInput(data: string): void
   /**
-   * How the surface shows the answer it is collecting, absent on an editor
-   * that has no way to hide one.
+   * Let the surface editor mask declared credentials without changing their text.
+   * Masking is an editor display capability, not a prerequisite for collecting answers.
+   * Editors without this hook still accept answers; this interface does not guarantee masking.
    */
   setMode?(mode: GateInputMode): void
 }
 
-/** One selectable row of a question gate. */
+/** Keep navigation separate from chosen labels so moving the cursor does not change a multi-select answer. */
 export interface GateOption {
   readonly label: string
   readonly description: string | undefined
@@ -67,7 +58,7 @@ export interface GateOption {
   readonly selected: boolean
 }
 
-/** The row that answers with typed text instead of a listed label. */
+/** Keep cursor focus separate from retained custom text so leaving this row does not imply the answer is empty. */
 export interface GateCustomRow {
   readonly label: string
   readonly description: string | undefined
@@ -77,6 +68,7 @@ export interface GateCustomRow {
   readonly selected: boolean
 }
 
+/** Keep gate detail compact so empty source lines do not spend screen rows above the choices. */
 export function lines(value: string): string[] {
   return value.split('\n').filter(line => line.trim() !== '')
 }
@@ -133,7 +125,7 @@ export class ApprovalGate {
   }
 }
 
-/** One question as the seam describes it. */
+/** Normalize seam requests into gate-owned questions while retaining ids that associate batch answers with their requests. */
 export interface GateQuestion {
   readonly id: string
   readonly question: string
@@ -143,12 +135,12 @@ export interface GateQuestion {
   readonly multiSelect: boolean
 }
 
-/** One answered question in the batch result. */
+/** Return each decision under its request id so the seam can associate selections and custom text with the right question. */
 export interface GateAnswer {
   readonly id: string
   readonly selected: readonly string[]
   readonly custom?: string
 }
 
-/** The number the free-text row answers for. It sits below the window, so drawn numbering runs 1..n then 0. */
+/** Reserve a shortcut outside the one-based option numbers so free text keeps the same key as the option list changes. */
 export const CUSTOM_ROW_NUMBER = 0

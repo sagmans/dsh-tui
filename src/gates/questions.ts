@@ -13,6 +13,10 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
 /**
  * Read the seam's request into the gate's own vocabulary.
  *
+ * Keep usable siblings available: answers need question ids, and selections
+ * need option labels. Display defaults let those entries reach the gate even
+ * without complete presentation text; this is not full request validation.
+ *
  * A question without options is answered by typing, which is why it becomes an
  * option-less gate rather than a rejected request: the model asked for text.
  */
@@ -67,10 +71,10 @@ export interface PositionedOption {
 /**
  * A pending batch of questions.
  *
- * Answers are collected per question and returned in the seam's shape. An
- * escape skips the current question with an empty selection rather than
- * aborting the batch, so a human who cannot answer one question still returns
- * everything else they decided.
+ * Answers are collected per question and returned in the seam's shape.
+ * Skipping leaves previously chosen labels intact but does not confirm typed
+ * text. It advances rather than aborting the batch, so a human who cannot
+ * answer one question still returns the choices they already made.
  */
 export class QuestionGate {
   private index = 0
@@ -169,7 +173,10 @@ export class QuestionGate {
     return matched[Math.min(this.cursor, Math.max(0, matched.length - 1))]
   }
 
-  /** Take or drop one source option, by single-select replacement or multi-select toggle. */
+  /**
+   * Let a reader withdraw a choice without leaving the question. Single-select
+   * limits simultaneous choices, not the ability to toggle a choice off.
+   */
   private pick(position: number): void {
     const question = this.current
     const option = question?.options[position]
@@ -384,8 +391,8 @@ export class QuestionGate {
   /**
    * The card this gate would draw, assembled as a snapshot for the projector.
    *
-   * The window, the filter, and the chosen labels are read here, once, so the
-   * projector cannot observe a gate that moved on between two of its reads.
+   * Assemble the option window, chosen labels, and editor state together so
+   * the projector does not need separate reads of the gate's mutable state.
    */
   card(): GateCard {
     const question = this.current

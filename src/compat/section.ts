@@ -21,10 +21,11 @@ export interface SectionScope {
   /**
    * Raw opt-outs can precede a valid commit and therefore never reach get() or notifications.
    *
-   * A row the document holds no section for reads as `undefined`, the same as a
-   * row whose section is empty: neither is an opt-out, and the switches a Config
-   * patch or the entry itself declares stand. Only a section the service cannot
-   * describe at all is unreadable, which is a refusal rather than an absence.
+   * Raw-layer observation supplements committed preferences; it cannot promise
+   * opt-out detection without describe() or a matching descriptor. Those cases
+   * leave the caller's existing privacy policy in force. Descriptor errors and
+   * invalid revisions refuse observation, so the caller can disable history
+   * rather than trust an unreadable layer.
    */
   readUser(): { readonly value: unknown; readonly revision: number } | undefined
 }
@@ -81,6 +82,8 @@ export function openSection<T>(service: unknown, request: SectionRequest<T>): Se
     if (!Number.isSafeInteger(descriptor.revision) || descriptor.revision < 0) throw new Error(READ_UNSUPPORTED)
     return { value: descriptor.user, revision: descriptor.revision }
   }
+  // Prefer owner-aware attachment for provider source replacement and appearance-change hooks.
+  // Section APIs retain section persistence and defaults; row Config is a fallback, not a migration.
   if (typeof settings.installSection === 'function') {
     let source: () => unknown = () => request.entry
     // An attach notification precedes the caller receiving its scope.
@@ -129,8 +132,10 @@ export function openSection<T>(service: unknown, request: SectionRequest<T>): Se
         return current === undefined ? config.get() : current.value
       },
       update: async patch => {
+        // Metadata alone can suppress remounts; native references must carry edits to the active surface.
         if (!config.live) throw new Error(CONFIG_NOT_LIVE)
         const current = descriptor()
+        // Require a usable revision so the host can reject changes made after this descriptor was read.
         if (current === undefined || settings.writable === false || typeof settings.update !== 'function'
           || !Number.isSafeInteger(current.revision) || current.revision < 0) return refuseWrite()
         await settings.update(current.ns, patch, current.revision)

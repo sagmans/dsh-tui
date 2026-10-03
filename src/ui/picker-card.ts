@@ -4,7 +4,7 @@ import type { TuiTheme } from '../theme.ts'
 import { canFrame, frameLines, FRAME_COLUMNS } from './frame.ts'
 import type { PickerCard } from './picker.ts'
 
-/** The columns a list's rows are indented by, and the ones a wrapped line under them uses. */
+/** Inset list content beneath the heading; a deeper gutter distinguishes notes and filters from cursor-bearing choices. */
 const ROW_INDENT = '   '
 const TEXT_INDENT = '    '
 /** The mark a cursor falls back to when the reader has not set one, so no literal lives in a template. */
@@ -12,7 +12,7 @@ const CURSOR_MARK = '❯'
 /** An unselected row has no cursor, and a blank column is not a value to configure. */
 const NO_CURSOR = ' '
 
-/** One wrapped block of plain text under a prefix, at the width the card has. */
+/** Align continuation lines beneath the prefixed text so wrapped notes and exit instructions remain readable. */
 function pushWrapped(lines: string[], text: string, width: number, prefix: string, token: TuiToken, theme: TuiTheme): void {
   const lead = visibleWidth(prefix)
   const indent = ' '.repeat(lead)
@@ -46,6 +46,8 @@ export function pickerCardLines(picker: PickerCard, width: number, theme: TuiThe
   if (picker.above > 0 && theme.visible('picker.scrollNewer')) {
     lines.push(theme.style('picker.scrollNewer', theme.cut(`${ROW_INDENT}… ${picker.above} newer`, width, '')))
   }
+  // Each item spends at most one visual row, matching the logical-item window in Picker.card.
+  // Honor the reader's hidden-token choice even for the current row instead of drawing a fallback selection marker.
   for (const row of picker.rows) {
     const token = row.current ? 'picker.rowCurrent' : 'picker.row'
     if (!theme.visible(token)) continue
@@ -59,8 +61,8 @@ export function pickerCardLines(picker: PickerCard, width: number, theme: TuiThe
     lines.push(theme.style('picker.scrollOlder', theme.cut(`${ROW_INDENT}… ${picker.below} older`, width, '')))
   }
   if (theme.visible('picker.hint')) {
-    // The hint names the keys that leave the list, so it folds rather than
-    // being cut: a narrow screen must still be told the way out.
+    // Wrap exit guidance to avoid truncating away the keys on narrow cards;
+    // wrapping cannot preserve it when the overlay clips excess height.
     pushWrapped(lines, picker.hint, width, ROW_INDENT, 'picker.hint', theme)
   }
   return lines
@@ -74,9 +76,9 @@ export function pickerCardLines(picker: PickerCard, width: number, theme: TuiThe
  * chosen, and the editor stays where the reader left it.
  */
 const HEIGHT_PERCENT = 80
-/** Air between the box and the terminal's edge, so the frame never touches one. */
+/** Leave edge space in the requested width; the overlay also applies its own margin clamp. */
 const MARGIN = 1
-/** A box narrower than this cannot name an action and its keys on one row. */
+/** Prefer room for action labels and keys; the overlay may clamp this request on narrower terminals. */
 const MIN_WIDTH = 40
 /** Past this the rows are mostly empty, and a list reads better narrow than stretched. */
 const MAX_WIDTH = 100
@@ -90,7 +92,7 @@ const MIN_ROWS = 3
 /** The same share as the library resolves a percentage SizeValue, so the option and the row budget cannot disagree. */
 export const POPUP_MAX_HEIGHT: SizeValue = `${HEIGHT_PERCENT}%`
 
-/** The columns the box may take on a terminal this wide. */
+/** Request a readable width without stretching long rows; the overlay, not this minimum, enforces available columns and margins. */
 export function popupWidth(columns: number): number {
   return Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, columns - MARGIN * 2))
 }
@@ -109,9 +111,9 @@ export function popupRowBudget(rows: number): number {
  * A list drawn as a box over the surface rather than at the end of it.
  *
  * The box is only a frame: the rows, the filter, and the counts are the card's,
- * which the list builds to whatever budget this component can afford. A screen
- * too short for the whole card shrinks the window rather than the box, because
- * the hint naming the keys that close it is the last thing that may fall off.
+ * which the list builds to the requested row budget. Shrink the list window to
+ * leave room for the frame and exit hint when possible. At the minimum budget,
+ * the card can still overflow, and the overlay's height clamp can cut off the hint.
  */
 export class PickerPopup implements Component {
   constructor(
@@ -144,9 +146,9 @@ export class PickerPopup implements Component {
     let budget = popupRowBudget(rows)
     for (;;) {
       const lines = this.box(this.card(budget), width)
-      // A refusal note can spend rows the budget did not reserve, so a card that
-      // still overflows asks for a shorter window rather than lose its closing
-      // rule to the library's own clamp.
+      // Notes and wrapped hints can exceed the reserved chrome, so reduce list rows
+      // before the overlay clips the card. MIN_ROWS bounds this reduction, not the
+      // rendered height; overflow at that floor remains subject to the overlay clamp.
       if (lines.length <= room || budget <= MIN_ROWS) return lines
       budget = Math.max(MIN_ROWS, budget - (lines.length - room))
     }

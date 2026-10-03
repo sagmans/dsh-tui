@@ -11,16 +11,18 @@ export interface Rgb {
   readonly b: number
 }
 
-/** A parsed colour: an RGB triple, or a palette index. */
+/** Preserve RGB and palette indices separately so capable terminals retain the chosen representation. */
 export type ParsedColour = Rgb | AnsiIndex
 
 /** Which layer an SGR colour code addresses. */
 export type ColourLayer = 'fg' | 'bg'
 
+/** Bound palette indices and RGB channels before they become terminal parameters. */
 const HEX = /^#([0-9a-f]{6})$/iu
 const MAX_INDEX = 255
 const HEX_MAX = 0xff
 const CUBE_LEVELS = 5
+/** Split coloured roles between normal and bright slots without discarding their hue family. */
 const MID_GREY = 128
 
 /** The base SGR codes for a layer, normal and bright. */
@@ -53,11 +55,12 @@ const BRIGHT_WHITE_SLOT = 15
 /**
  * A colour this far from grey keeps its hue family when degraded to 16 colours.
  *
- * A luminance average alone sent the muted green additions to black on a dark
- * terminal, which is the failure this threshold exists to prevent.
+ * Preserve hue distinctions for additions and warnings instead of reducing
+ * every colour to a brightness-only grey. Exact threshold calibration remains
+ * undocumented.
  */
 const GREY_CHROMA = 30
-/** Luma boundaries between the four grey slots a degrade may pick. */
+/** Preserve a receding-to-bright grey hierarchy within four available slots; these are heuristic cutoffs, not contrast guarantees. */
 const GREY_BLACK_MAX = 64
 const GREY_LIGHT_MAX = 160
 const GREY_WHITE_MAX = 224
@@ -79,6 +82,7 @@ export function detectColourMode(env: Record<string, string | undefined>): Colou
   const colorterm = env.COLORTERM ?? ''
   if (colorterm === 'truecolor' || colorterm === '24bit') return 'truecolor'
   if ((env.TERM ?? '').includes('256color')) return '256'
+  // Retain base-palette styling without advertising extended-colour support; this fallback is a policy, not a capability probe.
   return '16'
 }
 
@@ -102,7 +106,7 @@ function slotCode(slot: number, layer: ColourLayer): number {
   return normal
 }
 
-/** The nearest 256-colour cube index for a triple. */
+/** Approximate RGB for indexed terminals; uniform rounding does not guarantee the nearest non-linear xterm shade. */
 function cubeIndex(rgb: Rgb): number {
   const level = (value: number): number => Math.round((value / HEX_MAX) * CUBE_LEVELS)
   return 16 + 36 * level(rgb.r) + 6 * level(rgb.g) + level(rgb.b)
@@ -128,9 +132,8 @@ function indexToRgb(index: number): Rgb {
 /**
  * The hue slot a non-grey triple belongs to.
  *
- * A secondary channel close to the leading one is the mixed hue (amber, sky,
- * pink), which is why the band exists: without it the amber warning read as
- * plain red on a 16-colour terminal.
+ * Keep mixed hue families distinct from a dominant primary channel so warning
+ * amber need not reduce to plain red on a 16-colour terminal.
  */
 function hueSlot(rgb: Rgb): number {
   const max = Math.max(rgb.r, rgb.g, rgb.b)
@@ -145,15 +148,15 @@ function hueSlot(rgb: Rgb): number {
 }
 
 /**
- * The nearest base-palette slot for a triple.
+ * A base-palette approximation for a triple.
  *
- * Greys pick a grey slot, so "recede" survives on a 16-colour terminal, and a
- * colour keeps its hue family so an addition stays green; collapsing both onto
- * black or white is what made the degraded palette unreadable.
+ * Preserve separate roles for receding greys and coloured additions or warnings
+ * rather than reducing every role to black or white.
  */
 function degradeTo16(rgb: Rgb): number {
   const max = Math.max(rgb.r, rgb.g, rgb.b)
   const min = Math.min(rgb.r, rgb.g, rgb.b)
+  // A coarse channel average separates shade levels within the small palette; it is not perceptual luminance.
   const level = Math.round((rgb.r + rgb.g + rgb.b) / 3)
   if (max - min < GREY_CHROMA) {
     if (level >= GREY_WHITE_MAX) return BRIGHT_WHITE_SLOT
@@ -165,7 +168,7 @@ function degradeTo16(rgb: Rgb): number {
   return level >= MID_GREY ? slot + 8 : slot
 }
 
-/** The SGR sequence that starts a colour on one layer, or empty when there is none. */
+/** Ignore invalid colour forms so malformed input cannot become terminal parameters or interrupt text rendering. */
 function colourSgr(spec: string | number, mode: ColourMode, layer: ColourLayer): string {
   if (mode === 'none') return ''
   const parsed = parseColour(spec)
@@ -188,9 +191,9 @@ function colourSgr(spec: string | number, mode: ColourMode, layer: ColourLayer):
 /**
  * The SGR prefix that starts a foreground colour, or empty when colour is off.
  *
- * Degrading a chosen shade to the nearest available slot keeps the reader's
- * intent on a weaker terminal, which matters more for text that is meant to
- * recede than exactness does.
+ * Approximation keeps hue families and receding greys recognizable on weaker
+ * terminals; neither cube rounding nor base-palette heuristics guarantee the
+ * nearest available shade.
  */
 export function sgrPrefix(spec: string | number, mode: ColourMode): string {
   return colourSgr(spec, mode, 'fg')

@@ -2,7 +2,7 @@ import { CUSTOM_ROW_NUMBER, lines, type GateCard, type GateInput, type GateQuest
 import { keyName, keysFor, type Keymap } from '../input/actions.ts'
 import type { PositionedOption } from './questions.ts'
 
-/** The label a question earns for an answer the model did not list. */
+/** Keep an alternative to the listed choices so the reader can answer in their own words. */
 export const CUSTOM_ROW_LABEL = 'other'
 
 /** What the free-text row does, said where the reader decides. */
@@ -78,7 +78,7 @@ export interface QuestionCardView {
   readonly question: GateQuestion | undefined
   /** One-based position of that question among the gate's own. */
   readonly position: number
-  /** How many questions the gate asks; the title admits to it only when it is more than one. */
+  /** Batch size gives the heading progress context; a lone question needs no batch counter. */
   readonly total: number
   /** Labels already chosen on this question. */
   readonly chosen: readonly string[]
@@ -92,7 +92,7 @@ export interface QuestionCardView {
   readonly matched: readonly PositionedOption[]
   /** The slice of those rows the window shows. */
   readonly rows: readonly PositionedOption[]
-  /** One-based row number the window starts at, and where the cursor stands in it. */
+  /** Zero-based indices into matched, so windowing preserves cursor identity; only displayed numbers add one. */
   readonly start: number
   readonly cursor: number
   /** The keys and the editor in force, read per draw so a settings edit lands on the next frame. */
@@ -100,10 +100,11 @@ export interface QuestionCardView {
   readonly input: GateInput
 }
 
-/** The card for one question: its heading, its windowed options, the free-text row, and the answer in view. */
+/** Project a question without owning its lifetime; the modal owner settles answers and removes the gate. */
 export function questionCard(view: QuestionCardView): GateCard {
   const question = view.question
   if (question === undefined) {
+    // A post-decision snapshot must not offer stale choices; this fallback does not keep the modal open.
     return { kind: 'question', title: 'question', detail: [], optionOffset: 0, options: [], custom: undefined, answerInput: undefined, hint: 'finishing' }
   }
   const detail = question.detail === undefined ? [] : lines(question.detail)
@@ -123,6 +124,7 @@ export function questionCard(view: QuestionCardView): GateCard {
       hint: `type or paste an answer · ${namedKeys(view.keys, 'question.confirm', 'confirm')} · ${namedKeys(view.keys, 'question.skip', 'skip')} · ${namedKeys(view.keys, 'question.cancel', 'abandon')}`,
     }
   }
+  // Filter and range context keep a partial list from appearing to exhaust the available choices.
   if (view.typed !== '') detail.push(`filter: ${view.typed}`)
   const secret = declaresSecret(question.id)
   if (view.rows.length < view.matched.length) detail.push(`showing ${view.start + 1}–${view.start + view.rows.length} of ${view.matched.length}`)
@@ -143,6 +145,7 @@ export function questionCard(view: QuestionCardView): GateCard {
       label: secret ? SECRET_ROW_LABEL : CUSTOM_ROW_LABEL,
       description: CUSTOM_ROW_DESCRIPTION,
       current: view.atCustom,
+      // Mark free-text answering in progress, not a submitted answer; retained text stays marked after leaving.
       selected: view.atCustom || view.written,
     },
     // A written answer stays in view whether or not the cursor is on the row,

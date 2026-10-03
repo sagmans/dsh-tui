@@ -25,13 +25,16 @@ import {
   type SessionStartReason,
 } from './constants.ts'
 
+/** Keep pane selection at the transport boundary so lifecycle reports need not depend on ambient process state. */
 export type HerdrEnvironment = Readonly<Record<string, string | undefined>>
 
+/** Bound each best-effort request independently of the reporter's later retries. */
 export interface HerdrClientOptions {
   readonly attempts?: number
   readonly timeoutMs?: number
 }
 
+/** Domain reports keep Herdr wire field names out of lifecycle orchestration. */
 export interface StateReport {
   readonly state: HerdrState
   readonly message: string | undefined
@@ -39,6 +42,7 @@ export interface StateReport {
   readonly sessionId: string | undefined
 }
 
+/** Report session-opening reasons separately so a state change need not infer how the conversation opened. */
 export interface SessionReport {
   readonly sessionId: string
   readonly seq: number
@@ -82,6 +86,7 @@ export interface HerdrClient {
   settle(): Promise<void>
 }
 
+/** Keep pane ownership out of domain reports so lifecycle callers need not supply transport coordinates. */
 interface WireRequest {
   readonly id: string
   readonly method: string
@@ -107,8 +112,8 @@ interface QueuedReport {
  *
  * Requests are serialized instead of racing: state reports are sequenced
  * server-side, and a queue keeps a session's identity arriving before the state
- * that names it. The queue is bounded in practice because states change a
- * handful of times a turn and each attempt is spent against one deadline.
+ * that names it. Pending states coalesce because only the latest pane state
+ * matters; request deadlines bound delivery time, not the queue's length.
  */
 export function createHerdrClient(env: HerdrEnvironment = process.env, options: HerdrClientOptions = {}): HerdrClient {
   const paneId = env[HERDR_PANE_ID_VAR]
@@ -152,6 +157,8 @@ export function createHerdrClient(env: HerdrEnvironment = process.env, options: 
 
   const enqueue = (method: string, params: Record<string, unknown>, coalescing: boolean): Promise<boolean> =>
     new Promise<boolean>(resolve => {
+      // Inactive reporting is settled, not delivered: optional integration must
+      // not make the reporter retry work this client cannot send.
       if (closed || !enabled || paneId === undefined || socketPath === undefined) {
         resolve(true)
         return
@@ -355,6 +362,7 @@ function requestAttempt(path: string, request: WireRequest, timeoutMs: number): 
   })
 }
 
+/** Only a matching result without an error acknowledges this request, not another socket exchange. */
 function answerFor(response: string, requestId: string): WireAnswer {
   try {
     const parsed = JSON.parse(response) as unknown

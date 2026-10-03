@@ -51,19 +51,15 @@ export const name = 'tui'
  * mounts: the host row that provides it applies only once the harness's settings
  * exist, which is after `agents` and `tools` come up, so without it here the
  * surface would refuse to build against a roster that is simply not up yet.
+ * `tuiKeymaps` must exist before appearance captures its catalog and observer;
+ * otherwise the surface mounts without the addon keyboard the profile supplies.
  */
 export const inject = ['agents', 'tools', 'agentPresets', TUI_KEYMAP_SERVICE]
 
-/** The preset registry, asked for a service the agent's own composition holds. */
 interface ServiceFor {
   serviceFor(agent: unknown, name: string): unknown
 }
 
-/**
- * The command registry, described structurally: the surface only lists,
- * looks up, and dispatches human commands, so it does not depend on the
- * command package's full surface.
- */
 interface CommandRegistry {
   list(agent: Agent): readonly { readonly name: string; readonly description: string }[]
   find(agent: Agent, name: string): unknown
@@ -93,6 +89,8 @@ export function assertInteractiveTerminal(): void {
  * the composition rows around it.
  */
 export function apply(ctx: Context, config: unknown): void {
+  // The surface releases its terminal before returning exit ownership to the launcher.
+  // Require that handoff rather than terminating the host from a plugin.
   const appExit = ctx.get('appExit')
   if (appExit === undefined) {
     throw new Error('dsh-tui: the dsh launcher must provide appExit; start this surface with dsh --profile tui')
@@ -205,9 +203,9 @@ export function apply(ctx: Context, config: unknown): void {
     render: () => tui.requestRender(),
   })
   /**
-   * The prompt's own memory, constructed where the box that draws its ghost
-   * already exists; the settings readers stay live because the document is
-   * hot-reloaded.
+   * Build memory first because the editor needs its ghost brush at construction.
+   * Suggestions use the current history snapshot; initial loading may still be
+   * pending. Deferred editor ports permit this order; live settings support reloads.
    */
   const promptMemory = createPromptMemory({
     historyEnabled: appearance.historyEnabled,
@@ -235,9 +233,8 @@ export function apply(ctx: Context, config: unknown): void {
   })
   const ghostBrush = promptMemory.ghostBrush
   /**
-   * The route this session runs with, built before the status facts that report
-   * it and read through ports because the screen, the keyboard and the settings
-   * document that supplies the default all belong to the surface around it.
+   * Read route facts when invoking an addon and reuse the surface picker, so
+   * addon selection shares the built-in modal owner rather than separate UI state.
    */
   const pluginActions = createPluginActions(ctx, {
     statusFacts: () => statusFacts(),
@@ -246,6 +243,7 @@ export function apply(ctx: Context, config: unknown): void {
     notice: message => sessionView.notice(message),
     render: () => tui.requestRender(),
   })
+  // Model choice owns the route that status reports; addon follow-ups receive the confirmed route.
   const modelChoice = createModelChoice(ctx, {
     afterEffort: pluginActions.afterEffort,
     statusFacts: () => statusFacts(),
@@ -289,6 +287,7 @@ export function apply(ctx: Context, config: unknown): void {
     navigate: id => {
       void sessionView.show(SessionId(id))
     },
+    // Both reporters must include work that outlives the parent driver; driver idle alone is not completion.
     backgroundChanged: running => {
       herdr.background(running)
       moshi?.background(running)
@@ -303,6 +302,7 @@ export function apply(ctx: Context, config: unknown): void {
     sessionOpened: () => sessionLifecycle.sessionOpened(),
     turnRunning: () => sessionLifecycle.turnRunning(),
     stopClock: () => sessionLifecycle.stopClock(),
+    // Explicit exit can precede plugin unload; abort notifications before handing exit to the launcher.
     exit: code => {
       moshi?.dispose()
       appExit(code)
@@ -336,8 +336,8 @@ export function apply(ctx: Context, config: unknown): void {
   /**
    * The one modal interaction at a time, and the keyboard it holds.
    *
-   * Built before the transcript view so the view can ask it for a card: the
-   * card a gate or picker draws is read per paint, never copied.
+   * The earlier transcript view reads cards through deferred ports, allowing
+   * this owner to wait for the editor it borrows. Cards stay live per paint.
    */
   const modalInput = createModalInput(ctx, {
     herdr,
@@ -443,14 +443,16 @@ export function apply(ctx: Context, config: unknown): void {
   })
   // A window that outlived the surface would repaint a screen that is gone.
   disposers.push(() => promptInput.disarmChord())
-  // Registered here rather than inside the terminal owner: this is the position
-  // the one teardown list gave the signal seam before the surface was split.
+  // Supervisor signals need the quit-key restoration path while this surface owns
+  // the terminal; shared teardown removes its process listeners when it unloads.
   disposers.push(terminalLifecycle.signalShutdown())
 
   // The whole surface sits inside the reader's margin, so the frames it draws
   // never touch the window's edge; the margin is read per frame, which is why an
   // edit needs no rebuild of the tree it insets.
   tui.setLayoutRoot(surfaceLayout({
+    // Keep new output visible until the reader scrolls away; make the transcript
+    // the wheel fallback so scrolling over the dock still reaches conversation history.
     transcript: new ScrollView(view, { follow: 'end', primary: true, overscroll: 'chain' }),
     dock,
     queue,
@@ -504,6 +506,8 @@ export function apply(ctx: Context, config: unknown): void {
 
   promptInput.attachSubmit()
 
+  // Child navigation changes the viewed transcript, not the driven agent's activity, bell, or queue.
+  // Each owner filters durable events against its own session identity.
   disposers.push(ctx.on('session/event', (session, event) => {
     sessionLifecycle.observe(session, event)
     sessionView.observe(session.id, event)
@@ -522,14 +526,20 @@ export function apply(ctx: Context, config: unknown): void {
 
   disposers.push(...sessionView.agentListeners())
 
+  // Settings select appearance; theme-file edits rebuild the palette through the same appearance owner.
+  // Both subscriptions end with this surface rather than keeping a released screen live.
   disposers.push(appearance.settingsListener())
 
+  // Create the reader's theme directory before watching it, so saving a first theme can update this surface.
   appearance.createThemesHome()
   disposers.push(appearance.watchThemes())
 
-  // Teardown reverses registration order; abort notifications before gates release their waits.
+  // Unload may happen without explicit exit; abort notifications before gates release their waits.
+  // Teardown reverses registration order, and repeated reporter disposal is harmless.
   disposers.push(() => moshi?.dispose())
 
+  // Failed launch validation or session boot leaves no completed startup to serve input.
+  // Restore the terminal and report failure outside the alternate screen rather than retain a partial surface.
   void commands.start().catch((error: unknown) => {
     requestExit(1, error instanceof Error ? error.message : String(error))
   })

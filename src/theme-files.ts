@@ -6,9 +6,10 @@
 // directory the reader is invited to open, and a reader's file cannot take its
 // name. `/theme export` is the sanctioned way across.
 //
-// Everything here is synchronous: the surface reads both directories once when it
-// starts and again whenever one changes, and a theme is a few kilobytes, so a read
-// never costs a frame.
+// Synchronous loading makes the complete library available before settings are
+// applied at startup and after debounced home-directory changes. Both directories
+// are re-read, but only the home directory is watched; filesystem and parsing work
+// can block the surface.
 
 import { mkdirSync, readFileSync, readdirSync, statSync, watch, writeFileSync, type FSWatcher } from 'node:fs'
 import { homedir } from 'node:os'
@@ -38,27 +39,27 @@ export const THEMES_DIR_NAME = 'themes'
  */
 export const DEFAULT_THEME = 'violet-orbit'
 
-/** The extensions a theme file may carry, best first. */
+/** Keep each selectable name bound to one file regardless of directory enumeration
+ * order; the preferred suffix also matches the copies produced by export. */
 const THEME_EXTENSIONS = ['.yaml', '.yml'] as const
 
 /** The only keys a theme file may hold; a misspelled section would otherwise do nothing. */
 const THEME_SECTIONS: ReadonlySet<string> = new Set(['palette', 'tokens'])
 
 /**
- * The largest theme file the surface will read.
+ * Limit obviously oversized inputs before theme parsing.
  *
- * js-yaml bounds neither the size of a document nor how far an alias chain may
- * expand it, so a file small enough to type can still be a bomb. A cap does not
- * stop that on its own — the host parses settings.yaml with the same library, so a
- * theme file adds no exposure that is not already there — but it keeps the crude
- * case away from the parser.
+ * Reject files whose stat size exceeds the cap to limit the obvious large-input
+ * case before reading and parsing. This check does not bound parser resource use
+ * or protect against a file growing between the size check and the read.
  */
 export const MAX_THEME_FILE_BYTES = 64 * 1024
 
 /** How long a burst of writes to the theme directory is allowed to settle. */
 const WATCH_DEBOUNCE_MS = 150
 
-/** One theme, wherever it came from. */
+/** Keep provenance with sparse overrides so settings can merge over this layer
+ * without replacing unspecified shipped defaults. */
 export interface LoadedTheme {
   /** The name it answers to, which is the file's stem. */
   readonly name: string
@@ -72,7 +73,8 @@ export interface LoadedTheme {
   readonly tokens: ThemedSpecs
 }
 
-/** Every theme the surface can draw, plus everything it could not read. */
+/** Share one loaded snapshot between lookup, picker rows, and diagnostics so
+ * consumers agree on which themes are available. */
 export interface ThemeLibrary {
   /** Where the reader's own themes live, whether or not the directory exists. */
   readonly home: string
@@ -86,7 +88,8 @@ export interface ThemeLibrary {
   problems(): readonly string[]
 }
 
-/** What an export wrote, or why it wrote nothing. */
+/** Give command notices both the copy location and its selectable name; expected
+ * export failures become notices rather than ending the session. */
 export type ExportOutcome =
   | { readonly ok: true; readonly path: string; readonly select: string }
   | { readonly ok: false; readonly problem: string }
@@ -122,7 +125,8 @@ export function themesHomeDir(env: NodeJS.ProcessEnv = process.env, home: string
   return path.join(dshHomeDir(env, home), THEMES_DIR_NAME)
 }
 
-/** Create the reader's theme directory if it is missing; empty when it is there. */
+/** Create the editable directory before watching it; return failures for deferred
+ * notices because the alternate screen obscures stderr. */
 export function ensureThemesHome(dir: string): readonly string[] {
   try {
     mkdirSync(dir, { recursive: true })
@@ -194,9 +198,9 @@ export function exportTheme(library: ThemeLibrary, name: string): ExportOutcome 
 /**
  * Read every theme the surface can draw.
  *
- * One broken file never costs the others, and never throws: a reader is editing
- * these by hand, so a save caught mid-write has to leave the screen exactly as it
- * was and say so, rather than take the session down.
+ * Hand-edited files can be malformed during a save. Omit unreadable or invalid
+ * themes and collect notices so other valid themes remain usable; settings can
+ * fall back when the selected theme no longer loads. No previous snapshot is kept.
  */
 export function loadThemes(homeDir: string, builtinDir: string): ThemeLibrary {
   const problems: string[] = []
@@ -221,6 +225,8 @@ export function loadThemes(homeDir: string, builtinDir: string): ThemeLibrary {
     const theme = readThemeFile(file, false, problems)
     if (theme !== undefined) themes.set(theme.name, theme)
   }
+  // Group copyable package starting points before user layers for easier scanning
+  // in pickers and notices. Name ordering serves readers, not cross-locale stability.
   const list = [...themes.values()].sort((left, right) =>
     (left.builtin === right.builtin ? 0 : left.builtin ? -1 : 1) || left.name.localeCompare(right.name))
   return {
@@ -235,9 +241,9 @@ export function loadThemes(homeDir: string, builtinDir: string): ThemeLibrary {
 /**
  * Call `onChange` after a burst of changes settles in a theme directory.
  *
- * Not persistent, because a theme is not a reason to keep a process alive: the
- * terminal owns the session, and a watcher that outlived it would be a handle
- * nobody closes.
+ * The surface owns this watcher through the returned disposer, which closes it
+ * and cancels pending reloads at teardown. The watcher uses Node's default
+ * persistent lifetime, so disposal is needed to release its process handle.
  */
 export function watchThemes(dir: string, onChange: () => void): () => void {
   let pending: NodeJS.Timeout | undefined
@@ -254,8 +260,8 @@ export function watchThemes(dir: string, onChange: () => void): () => void {
       }, WATCH_DEBOUNCE_MS)
     })
   } catch {
-    // A directory that is not there is a session with only built-ins, which is a
-    // normal state rather than a failure to start.
+    // Keep startup usable with the already loaded themes when live reload cannot
+    // start. Setup failures leave that snapshot in place without a watcher or notice.
     return () => {}
   }
   // A directory removed under a running session stops the watcher; reloading once
@@ -271,6 +277,7 @@ export function watchThemes(dir: string, onChange: () => void): () => void {
 function readThemeFiles(dir: string, problems: string[]): ThemeFile[] {
   let names: string[]
   try {
+    // Linked themes can live outside this directory without requiring a local copy.
     names = readdirSync(dir, { withFileTypes: true })
       .filter(entry => entry.isFile() || entry.isSymbolicLink())
       .map(entry => entry.name)
@@ -281,8 +288,11 @@ function readThemeFiles(dir: string, problems: string[]): ThemeFile[] {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') problems.push(`themes: ${dir}: ${message(error)}`)
     return []
   }
+  // Resolve each name once so lookup and preview cannot disagree over duplicate
+  // suffixes; report the unused file without making the chosen file unavailable.
   const byStem = new Map<string, ThemeFile>()
   for (const name of names) {
+    // Keep private dotfiles out of the selectable theme-name namespace.
     if (name.startsWith('.')) continue
     const stem = stemOf(name)
     if (stem === undefined) continue
@@ -318,6 +328,8 @@ function readThemeFile(file: ThemeFile, builtin: boolean, problems: string[]): L
     problems.push(`themes: ${file.path}: ${message(error)}`)
     return undefined
   }
+  // An empty document supplies no overrides: as a valid empty layer it leaves
+  // the shipped appearance and higher-priority settings in force.
   if (document === null || document === undefined) {
     return { name: file.stem, path: file.path, builtin, palette: {}, tokens: {} }
   }
@@ -326,6 +338,9 @@ function readThemeFile(file: ThemeFile, builtin: boolean, problems: string[]): L
     problems.push(`themes: ${file.path}: a theme is a mapping of "palette" and "tokens"`)
     return undefined
   }
+  // Refuse unknown names before shared value validation: the schema preserves
+  // undeclared keys, so typos would otherwise parse without affecting the screen.
+  // Shared validators keep drawable styles consistent with settings.
   const unknownSections = Object.keys(body).filter(key => !THEME_SECTIONS.has(key))
   if (unknownSections.length > 0) {
     problems.push(`themes: ${file.path}: unknown ${plural('section', unknownSections)}: ${unknownSections.join(', ')}`)

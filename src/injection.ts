@@ -8,6 +8,7 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined
 }
 
+// Context summaries measure content, so blank separators must not inflate their line counts.
 function nonBlankLines(text: string): string[] {
   return text.split('\n').filter(line => line.trim() !== '')
 }

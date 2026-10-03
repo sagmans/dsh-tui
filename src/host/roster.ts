@@ -15,7 +15,7 @@ import { loadPresetDefinitions } from './preset-files.ts'
 
 export const name = 'tui-host-roster'
 
-/** The mode a session runs when nobody names one, as the shipped modes order them. */
+/** Prefer program-mediated tool use for unnamed new sessions; picker order is independent. */
 export const DEFAULT_PRESET = 'ptc'
 
 /**
@@ -35,8 +35,8 @@ function whenRosterIsUp(ctx: Context): Promise<void> {
 
 export async function apply(ctx: Context): Promise<void> {
   const { default: registry } = await import('@deepseek-ai/dsh-agent-preset-registry')
-  // The registry takes the fallback mode as its own config field and publishes its
-  // service without the schema step a partial row config would need.
+  // Keep the fallback with the registry so its selected-default setting can
+  // override it. Cordis validates this config before the registry initializes.
   ctx.plugin(registry, { default: DEFAULT_PRESET })
   const { default: preset } = await import('@deepseek-ai/dsh-agent-preset')
   // A mode registers itself inside its own row's apply: awaiting them here is what

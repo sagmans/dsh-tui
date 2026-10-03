@@ -242,8 +242,8 @@ export function createModelChoice(ctx: Context, ports: ModelChoicePorts): ModelC
   /**
    * Offer the levels a route advertises, after the route is already in force.
    *
-   * Cancelling the list is a real choice — the reader keeps the model with the
-   * provider's own default — which is why the route is applied first. The list
+   * Apply the route first so cancellation keeps the selected model and its
+   * compatible carried effort, or the provider default when none carries. The list
    * is read before the picker opens because the rows are the route's own
    * metadata; a menu painted before that arrived could offer a level the
    * request would then be refused for.

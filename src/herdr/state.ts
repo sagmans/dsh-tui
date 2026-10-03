@@ -84,7 +84,8 @@ export interface LifecycleReport {
  *
  * A wait outranks a running driver because an agent that is waiting on a
  * human is not making progress, and the wait is the only thing a reader
- * glancing at a wall of panes can still act on.
+ * glancing at a wall of panes can still act on. Background liveness keeps
+ * driver settlement from announcing completion while delegated work remains.
  */
 export function lifecycleReport(facts: LifecycleFacts): LifecycleReport {
   if (facts.blockedCount > 0) return { state: HERDR_STATES.blocked, message: facts.blockedMessage }
@@ -115,7 +116,7 @@ export function stateLabelFor(report: LifecycleReport): string | undefined {
   return bounded(report.message, MAX_STATE_LABEL_CHARS)
 }
 
-/** One line of text, cut where this surface decides rather than where Herdr does. */
+/** Keep tool titles readable in a sidebar row; bound them here so truncation retains the surface's ellipsis. */
 function bounded(text: string, limit: number): string {
   const trimmed = text.replace(/\s+/gu, ' ').trim()
   return trimmed.length <= limit ? trimmed : `${trimmed.slice(0, limit - 1)}…`
@@ -132,7 +133,7 @@ export function sessionStartReason(input: SessionStartFacts): SessionStartReason
   return input.resumed ? SESSION_START_REASONS.resume : SESSION_START_REASONS.startup
 }
 
-/** Whether a report would say something Herdr is not already showing. */
+/** Suppress redundant pane updates when surface events leave state and message unchanged. */
 export function isReportChange(last: LifecycleReport | undefined, next: LifecycleReport): boolean {
   return last === undefined || last.state !== next.state || last.message !== next.message
 }

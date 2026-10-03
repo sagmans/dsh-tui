@@ -75,13 +75,14 @@ export interface PresetChoice {
  * A mode registers from its own row's apply, and the composition schedules those
  * rows beside this surface rather than before it: the launcher can reach its
  * `--preset NAME` check while the registry it reads is still empty, and a mode
- * this profile really offers must not be refused for that. The wait ends the
- * moment the roster holds anything, so a name that is genuinely unknown is still
- * refused at once, and a profile whose roster is composed elsewhere never waits.
+ * should not be refused merely because registration has not started. Waiting
+ * for the first row reduces that startup race; it does not prove the requested
+ * mode has arrived or registration is complete. The deadline limits retries,
+ * not the duration of an individual roster read.
  */
 const MODE_ARRIVAL_MS = 2_000
 
-/** How often that wait re-reads the roster; short enough to be invisible. */
+/** Yield between empty-roster reads so concurrently applying mode rows can register. */
 const MODE_ARRIVAL_STEP_MS = 10
 
 /**
@@ -97,7 +98,7 @@ const MODE_ARRIVAL_STEP_MS = 10
 export function createPresetChoice(ports: PresetChoicePorts): PresetChoice {
   const requestedPreset = ports.requestedPreset
 
-  /** Wait for the first mode to land, so a name is read against a settled roster. */
+  /** Reduce initially empty startup reads without waiting for every mode to register. */
   const whenRosterHasModes = async (roster: PresetRoster): Promise<void> => {
     const deadline = Date.now() + MODE_ARRIVAL_MS
     while ((await roster.list()).length === 0 && Date.now() < deadline) {
@@ -134,7 +135,7 @@ export function createPresetChoice(ports: PresetChoicePorts): PresetChoice {
     return await ports.openPicker(new PresetPicker(() => presetRows, () => currentId, ports.keymap))
   }
 
-  /** The stored mode's roster row, or undefined when the roster no longer offers it. */
+  /** Allow explicit recovery of an unresolvable stored mode without assuming failure proves removal. */
   const resolveStored = async (id: SessionId, stored: string): Promise<string | undefined> => {
     try {
       return (await ports.agentPresets?.resolve(stored))?.id
@@ -159,15 +160,13 @@ export function createPresetChoice(ports: PresetChoicePorts): PresetChoice {
     if (!resume) return seatMode()
     const stored = await ports.storedPreset(id)
     if (stored === undefined) return seatMode()
-    // Read against a settled roster: a mode's own row registers it beside this
-    // surface, so a resume that ran first would read its own composition as one
-    // this profile no longer offers.
+    // Give concurrent mode registration a chance before resolving the
+    // stored composition; the first row does not prove this mode has arrived.
     await whenRosterHasModes(roster)
     const resolvedStored = await resolveStored(id, stored)
     if (resolvedStored === undefined) {
-      // The composition this session recorded is gone. Naming one explicitly is
-      // the reader's only way forward, so that is the one case an override is
-      // taken for a stored session.
+      // The recorded composition could not be resolved, whether missing or
+      // failing. Only an explicit launch choice permits a replacement here.
       if (requestedPreset !== undefined) return (await roster.resolve(requestedPreset)).id
       throw new Error(
         `session ${id} runs mode "${stored}", which this roster no longer offers; name another with --preset`,
@@ -260,9 +259,8 @@ export function createPresetChoice(ports: PresetChoicePorts): PresetChoice {
   const validateLaunch = async (launch: PresetLaunch): Promise<void> => {
     const roster = ports.agentPresets
     if (requestedPreset !== undefined && roster !== undefined) {
-      // A named mode arrives with its own row, which this surface can outrun: the
-      // wait is what keeps `--preset NAME` from refusing a mode the picker offers
-      // a moment later.
+      // Reduce the empty-roster startup race for a named mode. Another mode
+      // arriving first can still leave this name unresolved.
       await whenRosterHasModes(roster)
       try {
         seat = (await roster.resolve(requestedPreset)).id

@@ -37,6 +37,7 @@ const ATTRIBUTE_OFF: Readonly<Record<Attribute, string>> = {
 
 const SGR_ATTRIBUTE_ON: Readonly<Record<number, Attribute | undefined>> = { 1: 'bold', 2: 'dim', 3: 'italic', 4: 'underline', 7: 'inverse', 9: 'strike' }
 
+// Normalize accepted intensity resets to modeled attributes instead of forwarding SGR 21 to the terminal.
 const SGR_ATTRIBUTE_OFF: Readonly<Record<number, readonly Attribute[] | undefined>> = {
   21: ['bold', 'dim'],
   22: ['bold', 'dim'],
@@ -88,6 +89,7 @@ const GROUND_FG = `${CSI}${FG_DEFAULT}m`
 
 const GROUND_BG = `${CSI}${BG_DEFAULT}m`
 
+/** Capability-normalized colour prefixes let retained cells reuse their style without interpreting foreign parameters during emission. */
 export interface TextStyle {
   readonly fg?: string | undefined
   readonly bg?: string | undefined
@@ -109,7 +111,7 @@ function hasAttribute(style: TextStyle, attribute: Attribute): boolean {
 }
 
 export interface Encoder {
-  /** The codes that move from one style to the next. */
+  /** Retained cells may emit in screen order rather than input order, so transitions compare their stored styles. */
   between(previous: TextStyle, next: TextStyle): string
 }
 
@@ -118,7 +120,8 @@ export interface Encoder {
  *
  * The element's own colour is the ground state rather than a reset, because a
  * tool that ends a coloured run must not clear the colour the card drew it in;
- * a full reset is never emitted, so nothing outside the run is disturbed.
+ * a full reset is never emitted. Inherited attributes are not modeled here,
+ * so targeted attribute resets can still clear attributes from the base.
  */
 export function encoder(color: ColourMode, base: string): Encoder {
   if (color === 'none') return { between: () => '' }
@@ -133,6 +136,8 @@ export function encoder(color: ColourMode, base: string): Encoder {
     between(previous, next) {
       if (previous === next) return ''
       let out = ''
+      // Reset before enabling new attributes so a shared reset cannot erase a newly enabled intensity bit.
+      // Unchanged intensity bits are not reapplied, so reset 22 can still clear one of them.
       for (const attribute of ATTRIBUTES) {
         if (hasAttribute(previous, attribute) && !hasAttribute(next, attribute)) out += ATTRIBUTE_OFF[attribute]
       }
@@ -146,6 +151,7 @@ export function encoder(color: ColourMode, base: string): Encoder {
   }
 }
 
+// Keep known colour operands out of attribute parsing; unknown kinds have no owned operand span.
 function colourFor(params: readonly number[], at: number, color: ColourMode): { readonly code?: string | undefined; readonly next: number } {
   const kind = params[at + 1]
   if (kind === EXTENDED_INDEXED) {
@@ -192,6 +198,7 @@ export function applySgr(style: TextStyle, params: readonly number[], color: Col
     if (param === EXTENDED_FG || param === EXTENDED_BG) {
       const extended = colourFor(params, at, color)
       if (extended.next <= at) break
+      // An unusable colour request returns to the element colour rather than retaining an earlier tool colour.
       next = extended.code === undefined
         ? { ...next, ...(param === EXTENDED_FG ? { fg: undefined } : { bg: undefined }) }
         : { ...next, ...(param === EXTENDED_FG ? { fg: extended.code } : { bg: extended.code }) }

@@ -9,7 +9,7 @@ export interface ForkEvent {
 export interface ForkPoint {
   /** Events the child inherits, counted from the start of the log. */
   readonly inheritedEvents: number
-  /** Seq of the turn/end the cut is anchored to. */
+  /** Boundary label for the fork notice, not the inherited-prefix offset. */
   readonly boundarySeq: number
 }
 
@@ -33,5 +33,7 @@ export function forkPoint(events: readonly ForkEvent[]): ForkPoint | undefined {
   if (boundary < 0) return undefined
   let cut = boundary + 1
   while (cut < events.length && events[cut]?.type !== 'turn/start') cut += 1
+  // The notice still needs a boundary label when seq is absent; only the array
+  // cut determines inheritance, so this index does not stand in for a durable seq.
   return { inheritedEvents: cut, boundarySeq: events[boundary]?.seq ?? boundary }
 }

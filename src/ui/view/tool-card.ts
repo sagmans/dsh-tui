@@ -28,20 +28,13 @@ const SUBCALL_INDENT = '  '
  * preference, so it is not a settings key.
  */
 const COLLAPSED_EDGE_PADDING = 5
-/**
- * The mark that says a call is in flight.
- *
- * The same arrow the dock uses for what is still to do, because it answers the
- * same question — is this work still moving — and a second symbol for it would
- * read as a second state.
- */
-/** A duration below a whole second is not a measurement, so it is not drawn. */
+/** Hide the initial zero-second reading: the fold reports only completed whole seconds. */
 const MIN_ELAPSED_SECONDS = 1
-/** A row that a card's kind does not map draws as generic detail. */
+/** Preserve unmapped presenter text without assigning it a kind-specific meaning; theme visibility still applies. */
 const FALLBACK_ROW_TOKEN: TuiToken = 'tool.detail'
 /** The words an opened card uses when retention, not the fold, dropped rows. */
 const CARD_HINT_RETAINED = 'more lines not shown'
-/** What separates a card's header from its measured facts, and the facts from each other. */
+/** Blank columns distinguish measured facts from the label and argument; dots separate facts and outcomes within that group. */
 const STAT_LEAD = '  '
 const STAT_SEPARATOR = ' · '
 /** The symbol that says what a fact counts; a size needs none. */
@@ -63,6 +56,10 @@ const collapsedEdge = (width: number): number => Math.max(1, width - COLLAPSED_E
 /** The indent a card's own detail rows sit under, one step inside the header above them. */
 const DETAIL_INDENT = '    '
 
+/**
+ * Read current policy and interaction state through callbacks rather than capturing them when the view creates its renderer.
+ * Parent-scoped nested-call keys keep one program's expansion state separate from another's.
+ */
 export interface ToolCardsContext {
   readonly theme: TuiTheme
   readonly keymap: () => Keymap
@@ -323,7 +320,7 @@ export class ToolCards {
         })
         .join('')
     }
-  /** The mark that introduces a card, empty when the theme hides its label. */
+  /** The glyph introduces the label, so hiding that label must not leave an orphaned mark beside arguments or facts. */
     private cardLead(titleToken: TuiToken, glyphToken: TuiToken): string {
       return this.context.theme.visible(titleToken) ? this.context.theme.glyph(glyphToken) : ''
     }
@@ -435,9 +432,8 @@ export class ToolCards {
   /**
      * The measured facts, each in its own colour, or nothing when none is visible.
      *
-     * The lead is a parameter because a header that already carries a title and an
-     * argument separates its facts with the same mark as its outcome, while facts
-     * on a row of their own stand apart with blank columns.
+     * The hidden-line count uses an empty lead because the collapsed header supplies
+     * its separator; adding the usual blank columns would separate it twice.
      */
     private renderStats(stats: readonly CardStat[] | undefined, lead = STAT_LEAD): string {
       if (stats === undefined || stats.length === 0) return ''

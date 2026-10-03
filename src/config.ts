@@ -66,6 +66,7 @@ export function readRowSettings(raw: unknown): unknown {
 /** A composed row whose configuration cannot describe a runnable terminal surface. */
 export class TuiConfigError extends Error {}
 
+/** Avoid changing a session lookup key during row validation; whitespace-only keys still cannot name a session. */
 function requireString(value: unknown, field: string): string {
   if (typeof value !== 'string' || value.trim() === '') {
     throw new TuiConfigError(`${field} must be a non-empty string`)
@@ -73,6 +74,7 @@ function requireString(value: unknown, field: string): string {
   return value
 }
 
+/** Treat selector padding as input whitespace, and a blank selector as leaving the choice to its default. */
 function optionalString(value: unknown, field: string): string | undefined {
   if (value === undefined || value === null) return undefined
   if (typeof value !== 'string') throw new TuiConfigError(`${field} must be a string when present`)
@@ -80,6 +82,10 @@ function optionalString(value: unknown, field: string): string | undefined {
   return trimmed === '' ? undefined : trimmed
 }
 
+/**
+ * Unlike the row's shared appearance fields, stash has only a scope selector.
+ * Reject misspelled keys rather than silently choosing the default shared-directory draft bank.
+ */
 function stashScope(value: unknown): typeof STASH_SCOPES[number] {
   if (value === undefined) return DEFAULT_STASH_SCOPE
   if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new TuiConfigError('stash must be a mapping')

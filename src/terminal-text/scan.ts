@@ -39,7 +39,7 @@ const FIRST_SURROGATE = 0xd800
 
 const LAST_SURROGATE = 0xdfff
 
-/** The bytes a text fragment cannot be drawn with: they are either sequences to read or marks to spell. */
+/** Keep this trigger aligned with scan: the renderer returns unmatched text unchanged. LF alone needs no rewriting. */
 export const NEEDS_READING = /[\u0000-\u0009\u000B-\u001F\u007F-\u009F\u061C\u200E\u200F\u2028\u2029\u202A-\u202E\u2066-\u2069\uD800-\uDFFF]/u
 
 /** Directional overrides and isolates, which reorder a row without drawing anything. */
@@ -93,7 +93,7 @@ export type Token =
   | { readonly kind: 'control' }
   | { readonly kind: 'incomplete' }
 
-/** One recognised piece of the input, with the source text it was read from. */
+/** Raw text lets the editor expose controls that rendering consumes; token kinds keep both policies on the same boundaries. */
 export interface Piece {
   readonly token: Token
   readonly raw: string
@@ -179,7 +179,11 @@ function readEscape(raw: string, at: number): Piece | undefined {
   return undefined
 }
 
-/** The parameters of an SGR sequence, or nothing when it uses a form this module does not model. */
+/**
+ * Only numeric semicolon parameters reach the style policy; unsupported forms
+ * remain consumed sequences rather than drawable terminal instructions. Empty
+ * fields retain SGR reset semantics, including an omitted parameter list.
+ */
 export function parseSgrParams(body: string): readonly number[] | undefined {
   if (body === '') return [RESET]
   const params: number[] = []
@@ -226,6 +230,7 @@ export function scan(raw: string): Piece[] {
         continue
       }
     } else if (code >= FIRST_SURROGATE && code <= LAST_SURROGATE) {
+      // Keep malformed UTF-16 out of the glyph stream that consumers measure and emit.
       text += REPLACEMENT
     } else if (isSpelledControl(code)) {
       flush()

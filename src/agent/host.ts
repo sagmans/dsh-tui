@@ -96,6 +96,10 @@ function absentSession(error: unknown): boolean {
   return error instanceof Error && error.name === 'SessionPersistenceNotFoundError'
 }
 
+/**
+ * Human provenance lets history distinguish terminal prompts from injected
+ * user-role context and notices.
+ */
 function userMessage(text: string) {
   return createUserMessage({ content: [{ type: 'text', text }], source: { kind: 'user' } })
 }
@@ -137,6 +141,8 @@ export async function startAgent(ctx: Context, options: StartAgentOptions): Prom
     submit: text => handle.agent.followup(userMessage(text)),
     steer: text => handle.agent.steer(userMessage(text)),
     interrupt: () => handle.agent.cancel({ kind: 'user' }),
+    // Replacement and surface cleanup share a handle, so claim its teardown attempt
+    // before awaiting it to prevent overlapping calls from starting disposal twice.
     dispose: async () => {
       if (disposed) return
       disposed = true

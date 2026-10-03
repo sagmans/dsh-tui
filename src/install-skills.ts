@@ -20,6 +20,7 @@ function installedSkillsRoot(home: string): string {
   return join(home, AGENTS_DIRECTORY, SKILLS_DIRECTORY)
 }
 
+/** Distinguish collisions so startup can ask for replacement consent instead of reporting a failed copy. */
 export class SkillAlreadyExistsError extends Error {
   constructor(readonly destination: string) {
     super(`skill already exists: ${destination}`)
@@ -154,7 +155,7 @@ function copyBundledSkill(name: string, destination: string): void {
   }
 }
 
-/** Refuse a destination that is not a plain directory before anything is staged. */
+/** Only plain directories may be replaced; a symlink or unrelated file is not an installed skill to update. */
 function requireReplaceable(destination: string): void {
   const entry = lstatSync(destination, { throwIfNoEntry: false })
   if (entry === undefined) return
@@ -162,8 +163,9 @@ function requireReplaceable(destination: string): void {
   if (!entry.isDirectory()) throw new Error(`not a directory: ${destination}`)
 }
 
-/** Stage updates before moving an existing user skill, and restore it if replacement fails. */
+/** Stage before moving the user copy so copy failures leave it intact; restoration after a move is best-effort. */
 function replaceBundledSkill(name: string, destination: string, skills: string): string {
+  // Keep staging and backup under the destination root so replacement renames stay on the same filesystem.
   const workspace = mkdtempSync(join(skills, `.${name}-update-`))
   const staged = join(workspace, 'new')
   const backup = join(workspace, 'previous')
@@ -201,13 +203,13 @@ function replaceBundledSkill(name: string, destination: string, skills: string):
       try {
         renameSync(backup, destination)
       } catch {
-        // The original is still at the backup path; the thrown error names it.
+        // Preserve the update failure; cleanup below may remove the backup if restoration also fails.
       }
     }
     try {
       rmSync(workspace, { recursive: true, force: true })
     } catch {
-      // A leftover staging directory is reported by the error that caused it.
+      // Keep the installation failure primary; workspace removal is only best-effort.
     }
     throw error
   }
@@ -222,8 +224,9 @@ export function installBundledSkill(name: string, home: string = homedir(), upda
 /**
  * Install every bundled skill, or exactly the named ones.
  *
- * Collisions are reported before the first copy, so a run either installs the
- * whole set or leaves the home as it found it.
+ * Check all collisions before copying so a known collision cannot leave earlier
+ * skills installed. Root directories may already be created; later filesystem
+ * failures do not roll back the batch.
  */
 export function installBundledSkills(home: string = homedir(), update = false, names: readonly string[] = bundledSkillNames()): string[] {
   ensureDirectory(home)

@@ -1,10 +1,10 @@
 /**
  * Clipboard writes.
  *
- * OSC 52 is the only clipboard a terminal program has: it asks the terminal to
- * put text on the reader's clipboard, and it works over SSH, where no local
- * clipboard API exists. The payload is base64 by design, so no control
- * character in the copied text can end the sequence early.
+ * OSC 52 lets the terminal receive copied text over SSH without requiring a
+ * clipboard API on the remote host. Base64 keeps copied control characters
+ * from ending the sequence early; clipboard access still depends on the
+ * terminal accepting the request.
  */
 
 const OSC_INTRODUCER = '\u001b]'

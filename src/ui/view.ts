@@ -212,8 +212,6 @@ export class TranscriptView implements Component {
     return { handled: true, render: true }
   }
   invalidate(): void {
-    // The rows are keyed by width and expansion state, so a real change misses
-    // anyway; an explicit invalidate means the caller wants them rebuilt.
     this.document.invalidate()
   }
   /**

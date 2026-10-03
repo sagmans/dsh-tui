@@ -31,11 +31,11 @@ export interface MemoryPicker {
 /**
  * What the prompt's memory needs from the surface that composes it.
  *
- * The history switches are read at call time rather than captured: the
- * settings document is hot-reloaded, and a copy taken here would pin this
- * surface to the settings of the day it loaded. The theme is read through its
- * delegate for the same reason, and the editor and the picker are ports
- * because the widget and the keyboard lifetime are the surface's own.
+ * Recording, ghost suggestions, and reverse search share the live history
+ * opt-in so a readable opt-out stops collection and recall even without a
+ * settings change event. Captured switches would miss that privacy veto.
+ * The theme delegate also keeps hot-reloaded settings live; editor and picker
+ * ports leave the widget and keyboard lifetime with the surface.
  */
 export interface PromptMemoryPorts {
   readonly historyEnabled: () => boolean
@@ -89,9 +89,9 @@ export interface PromptMemory {
  */
 export function createPromptMemory(ports: PromptMemoryPorts): PromptMemory {
   /**
-   * The reader's prompt history: global across projects, recorded from every
-   * submitted line, and offered back as they type. Built before the bar exists
-   * so its first load cannot race the first suggestion.
+   * Build the history owner before the editor because its constructor needs
+   * the ghost brush. Suggestions read the current snapshot; the asynchronous
+   * initial load may still be pending when the editor first asks.
    */
   const promptHistory = createPromptHistory({
     cap: () => ports.historyMaxEntries(),

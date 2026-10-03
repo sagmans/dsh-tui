@@ -12,9 +12,9 @@
  *   every sequence a terminal would *act* on is consumed, so it acts on
  *   nothing. Bytes that are not a sequence are still spelled out rather than
  *   dropped, because silently swallowing text would hide what a tool said.
- * - {@link escapeTerminalText} is for text a buffer or a file will hold: every
- *   control character is spelled out, because an editor cannot draw an escape
- *   and must not execute one.
+ * - {@link escapeTerminalText} keeps controls visible in literal labels,
+ *   questions, and stored text rather than allowing them to repaint content.
+ *   Line feeds preserve rows; callers can expand tabs or keep them for a buffer.
  *
  * Sharing one scanner matters for more than agreement: pi-tui's own escape
  * scanner recognises less than a terminal does (a `\x1b[?25l` left in a drawn
@@ -27,7 +27,7 @@ import type { ColourMode } from './theme-capability.ts'
 import { NEEDS_READING, scan, spellControls, type Piece } from './terminal-text/scan.ts'
 import { GROUND, applySgr, encoder, type Encoder, type TextStyle } from './terminal-text/sgr.ts'
 
-/** Columns between tab stops: the POSIX default, and what every terminal still uses. */
+/** Keep tab widths predictable for wrapping; this surface uses eight-column stops. */
 export const TAB_STOP = 8
 
 /** Whether a tab is drawn on its stop, or kept for a buffer that will hold it. */
@@ -80,12 +80,8 @@ function nextStop(column: number): number {
 }
 
 /**
- * Spell every control character, expanding a tab to the stop the terminal would
- * have used.
- *
- * The column is what makes a tab land where it landed for the tool that wrote
- * it: a row indented by four columns reaches its stop four columns later than
- * the same row at the left edge.
+ * Account for the insertion column so tab expansion stays aligned after layout
+ * indentation. Retained tabs let buffer consumers apply their own stops.
  */
 export function escapeTerminalText(raw: string, options: EscapeTextOptions = {}): string {
   const tab = options.tab ?? 'expand'

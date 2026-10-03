@@ -2,7 +2,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { describeDuration } from './jobs.ts'
 import { stripControlCharacters } from './text.ts'
 
-/** One delegation this session started, as the surface shows it. */
+/** Keep lifecycle identity available for both the live dock and later transcript navigation. */
 export interface SubagentRun {
   readonly runId: string
   readonly provider: string
@@ -14,20 +14,21 @@ export interface SubagentRun {
   readonly finishedAt?: number
 }
 
-/** Child rows the dock lists before the count takes over. */
+/** Bound the collapsed dock height; expansion keeps additional live children accessible. */
 export const DOCK_SUBAGENT_LIMIT = 3
 
-/** Id characters kept in a row, so an id cannot smuggle in a control sequence. */
+/** Keep child rows compact; truncation is not a terminal-safety boundary. */
 const SHORT_ID_LENGTH = 8
 
 /** Maximum task words the dock can show without hiding child status. */
 const MAX_TASK_WORDS = 10
 
+/** Service-event payloads are unknown; field checks must precede trusting lifecycle identifiers. */
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined
 }
 
-/** Short form of a child session id: enough to tell two children apart. */
+/** Use compact IDs for display only; shared prefixes need not identify a unique child. */
 function shortId(id: string): string {
   return id.length <= SHORT_ID_LENGTH ? id : id.slice(0, SHORT_ID_LENGTH)
 }
@@ -76,7 +77,7 @@ export class SubagentRoster {
     })
   }
 
-  /** Settle a run; an end without its start still becomes a row. */
+  /** Retain end-only runs for inspection; their fallback start records observation time, not measured execution time. */
   end(info: unknown): void {
     const record = asRecord(info)
     const runId = record?.runId
@@ -89,16 +90,20 @@ export class SubagentRoster {
       ...(existing?.label === undefined ? {} : { label: existing.label }),
       provider: typeof record?.provider === 'string' ? record.provider : existing?.provider ?? 'subagent',
       startedAt: existing?.startedAt ?? this.now(),
+      // Keep abnormal stops visible in /subagents instead of presenting them as ordinary completion.
+      // This display classification does not prove success when the event omits its reason.
       status: stopReason === undefined || stopReason === 'completed' ? 'completed' : 'failed',
       ...(stopReason === undefined ? {} : { stopReason }),
       finishedAt: this.now(),
     })
   }
 
+  /** Keep recent delegations first so collapsed dock rows show the newest work. */
   list(): readonly SubagentRun[] {
     return [...this.runs.values()].sort((left, right) => right.startedAt - left.startedAt)
   }
 
+  /** Separate work still needing attention from the settled history available through /subagents. */
   running(): readonly SubagentRun[] {
     return this.list().filter(run => run.status === 'running')
   }
@@ -109,7 +114,7 @@ export class SubagentRoster {
   }
 }
 
-/** One delegation as a row. */
+/** Expose provider and live age or settled duration without requiring a visit to each child transcript. */
 export function describeSubagent(run: SubagentRun, now: number): string {
   const age = run.status === 'running'
     ? `running ${describeDuration(now - run.startedAt)}`
@@ -117,7 +122,7 @@ export function describeSubagent(run: SubagentRun, now: number): string {
   return `${shortId(run.id)}${run.label === undefined ? '' : ` · ${run.label}`} · ${run.provider} · ${age}`
 }
 
-/** The whole roster as lines. */
+/** Keep settled delegations inspectable through /subagents after they leave the live dock. */
 export function describeSubagents(runs: readonly SubagentRun[], now: number): string {
   if (runs.length === 0) return 'no subagents have run in this session'
   const running = runs.filter(run => run.status === 'running').length
@@ -125,7 +130,7 @@ export function describeSubagents(runs: readonly SubagentRun[], now: number): st
   return [header, ...runs.map(run => `  ${describeSubagent(run, now)}`)].join('\n')
 }
 
-/** What a `/subagents` argument asks the surface to do. */
+/** Separate reader actions from lifecycle state so parsing does not require a live roster. */
 export type SubagentsCommand =
   | { readonly kind: 'list' }
   | { readonly kind: 'open'; readonly id: string }
@@ -172,7 +177,7 @@ export function resolveRun(runs: readonly SubagentRun[], idOrPrefix: string): Su
   return matches.length === 1 ? matches[0] : undefined
 }
 
-/** The part of the agent registry a stop needs, described structurally. */
+/** Require only lookup and user cancellation; missing capabilities must remain reportable rather than assumed. */
 interface AgentRegistryLike {
   get?(id: string): { cancel?(cause: { kind: 'user' }): unknown } | undefined
 }

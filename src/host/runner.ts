@@ -5,11 +5,8 @@ import type { Context } from '@deepseek-ai/cordis'
  * time — the machinery behind creator mode.
  *
  * Only the Web bundle ships this row, so a terminal profile has to mount it to
- * offer that mode at all. The dependency is plain rather than an alias of its own
- * line: the runner is what reports the hosting runtime version to every row it
- * mounts, so a second copy of the package in a profile — which a per-line alias
- * exists to create — is what makes a host read itself as another release and
- * disable its own rows as incompatible.
+ * offer that mode at all. The plain dependency pins the runner to the supported
+ * harness release; it does not guarantee a single copy in a consumer profile.
  */
 
 export const name = 'tui-host-runner'

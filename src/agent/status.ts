@@ -4,23 +4,23 @@ import type { StatusFacts } from '../ui/status.ts'
 import { AGENT_PRESET_KEY } from './presets.ts'
 import { projectionRecord, projectionString } from './projections.ts'
 
-/** Whether a turn is running and when it started. */
+/** Keep the turn clock with its activity so footer paints can compute elapsed time from the live session. */
 export interface ActivityState {
   readonly running: boolean
   readonly startedAt: number | undefined
 }
 
-/** The default-model directory, described structurally. */
+/** Keep footer reads limited to selection facts; a composition without this optional directory has no default route facts. */
 interface ModelDirectory {
   currentSelection?(): { readonly provider?: string; readonly model?: string; readonly reasoningEffort?: string }
 }
 
-/** The session registry, described structurally. */
+/** Only session lookup belongs here; without it, the footer omits session projections and permission facts. */
 interface SessionRegistry {
   get?(id: SessionId): unknown
 }
 
-/** The permission-preset directory, described structurally. */
+/** Read only the active permission label so footer decoration does not depend on the directory's other operations. */
 interface PresetDirectory {
   current?(session: unknown): string
 }
@@ -57,14 +57,7 @@ function numberOr(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
 
-/**
- * Gather what the footer states.
- *
- * Every service is optional and every read is guarded: the footer is the least
- * important thing on screen, and a composition that omits the model directory or
- * the token meter should cost the reader a segment, not the session.
- */
-/** Where the footer reads its facts from. */
+/** Supply live footer facts without coupling the painter to session services. */
 export interface StatusSources {
   readonly sessionId: () => SessionId
   readonly activity: () => ActivityState
@@ -98,6 +91,11 @@ export interface StatusSources {
   readonly stash?: (() => number | undefined) | undefined
 }
 
+/**
+ * Keep footer decoration usable when optional services are absent.
+ * Failed permission-preset reads become absent facts; other service methods
+ * and source callbacks are not protected from exceptions here.
+ */
 export function createStatusFacts(ctx: Context, sources: StatusSources): () => StatusFacts {
   return () => {
     const override = sources.override?.()

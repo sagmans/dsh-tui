@@ -1,18 +1,18 @@
 // Stash entry + file schema and pure parsing/validation helpers.
 //
-// Every disk format is validated on read, so a corrupt or hand-edited stash file
-// can never crash the editor: an unparseable file is treated as empty and
-// quarantined by the store. Keeping this module free of fs dependencies makes
-// the schema fully unit-testable.
+// Validate persisted drafts before restoring them into the editor. The store
+// owns quarantine and I/O failures; these pure helpers only validate structure
+// and sanitize text, without making filesystem recovery guarantees.
 
 import { randomUUID } from 'node:crypto'
 import { stripControlCharacters } from '../text.ts'
 
 export const STASH_SCHEMA_VERSION = 2
 
-/** A stash longer than this is refused rather than stored. */
+/** Bound the text one newly parked draft adds to the in-memory bank and later editor restore. */
 export const MAX_STASH_ENTRY_BYTES = 1_048_576
 
+// Ids also serve as command selectors; keep them bounded and free of whitespace and terminal controls.
 const ENTRY_ID_MAX_LENGTH = 128
 const ENTRY_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/u
 const NUMERIC_SELECTOR_PATTERN = /^\d+$/u
@@ -27,7 +27,7 @@ export function assertSafeEntryId(value: string): void {
   if (!isSafeEntryId(value)) throw new Error(INVALID_ENTRY_ID_MESSAGE)
 }
 
-/** Refuse one draft that no amount of storage capacity could justify holding. */
+/** Keep the per-draft admission limit separate from the serialized bank-size cap. */
 export function assertSafeStashText(text: string): void {
   if (Buffer.byteLength(text, 'utf8') > MAX_STASH_ENTRY_BYTES) throw new Error(ENTRY_TOO_LARGE_MESSAGE)
 }
@@ -57,8 +57,10 @@ export interface StashFile {
   readonly entries: readonly StashEntry[]
 }
 
+/** Allow timestamp overrides without changing selector recency, which follows insertion rather than wall time. */
 export type Clock = () => number
 
+/** Drafts and lock claims need independently generated identities without a shared counter across surfaces. */
 export const createNewId = (): string => randomUUID()
 
 export function createEmptyStashFile(sessionId: string): StashFile {
@@ -109,6 +111,7 @@ export function parseStashFile(raw: unknown): StashFile | undefined {
   return { version: STASH_SCHEMA_VERSION, sessionId: raw.sessionId, entries }
 }
 
+/** Keep stable identity for later removal and position for user-facing notices. */
 export interface ResolvedEntry {
   readonly entry: StashEntry
   readonly index: number
@@ -130,6 +133,7 @@ export function resolveBySelector(
     const entry = entries[0]
     return entry === undefined ? undefined : { entry, index: 0 }
   }
+  // Numeric ids are valid too; prefer exact identity so position changes cannot retarget an id selector.
   const index = entries.findIndex(entry => entry.id === trimmed)
   if (index >= 0) return { entry: entries[index] as StashEntry, index }
   if (!NUMERIC_SELECTOR_PATTERN.test(trimmed)) return undefined

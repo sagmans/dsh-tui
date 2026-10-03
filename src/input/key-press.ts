@@ -8,7 +8,7 @@ import { Key, isKittyProtocolActive, matchesKey, setKittyProtocolActive, type Ke
  * from the table of actions those presses resolve to.
  */
 
-/** A key the tty answers before the application sees it. */
+/** Reserve the flow-control resume key so bindings do not depend on whether the tty consumes it. */
 export const TERMINAL_OWNED_KEYS: readonly KeyId[] = ['ctrl+q']
 
 /** The key a plain press of Return arrives as. */
@@ -92,9 +92,9 @@ export function normalizeKey(raw: string): KeyId | undefined {
 /**
  * Whether the library can match a key at all.
  *
- * The library answers no modifier on Escape or on a function key, because no
- * terminal reports those, and no modifier beyond plain, shift, and control on
- * Clear. A binding there would be a key the reader could never press.
+ * Reject combinations the installed matcher cannot recognize, rather than
+ * accepting bindings that never dispatch. This restricts modified Escape and
+ * function keys, and modifiers on Clear beyond plain, shift, and control.
  */
 export function isPressable(key: KeyId): boolean {
   const parts = key.split('+')
@@ -165,6 +165,7 @@ function matchPresses(key: KeyId): readonly string[] {
       }
     }
   } finally {
+    // Probing must not change subsequent input matching, even if a probe throws.
     setKittyProtocolActive(wasKitty)
   }
   const answer: readonly string[] = spelled.size === 0 ? [`key:${key}`] : [...spelled]
@@ -178,7 +179,7 @@ export interface PressRow {
   readonly key: KeyId
 }
 
-/** A press more than one row reads: the rows, one spelling of it, and the sequences they share. */
+/** Keep connected collision rows and their shared sequences together for conflict reporting. */
 export interface PressOverlap {
   readonly ids: readonly string[]
   readonly key: KeyId
@@ -186,8 +187,9 @@ export interface PressOverlap {
 }
 
 /**
- * Group the rows one terminal sequence reaches, so a group is a press that cannot
- * be split between them.
+ * Report connected conflicts together so a row shared by multiple collisions
+ * appears in one group. Connections can use different sequences; not every row
+ * in a group necessarily matches the same sequence.
  */
 export function pressOverlaps(rows: readonly PressRow[]): PressOverlap[] {
   const rowAt = (index: number): PressRow => rows[index]!

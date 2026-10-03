@@ -1,7 +1,7 @@
 // User-facing prompt-stash operations, independent of the terminal surface.
 //
-// Every command funnels through one serial queue, so a chord and a typed command
-// can never interleave a read-modify-write on the same bank. The surface is
+// Every command in this instance funnels through one serial queue, so a chord
+// and a typed command cannot interleave their bank operations. The surface is
 // reached through a small host seam, which keeps these operations testable
 // without a terminal and keeps the editor's own text rules — an expanded paste
 // and an empty bar — in exactly one place.
@@ -84,6 +84,8 @@ export interface PromptStashOptions {
   readonly write?: StashWriter | undefined
 }
 
+// Newer-format and oversized banks are refused in place, not treated as corrupt.
+// Mark them unavailable to distinguish an unreadable bank from other command failures.
 function describeFailure(error: unknown): string {
   const detail = error instanceof Error ? error.message : 'unknown error'
   return error instanceof UnsupportedStashSchemaError || error instanceof FileTooLargeError
@@ -110,6 +112,7 @@ export class PromptStash {
   ) {
     this.baseDir = options.baseDir ?? stashBaseDir()
     this.bankScope = options.scope ?? DEFAULT_STASH_SCOPE
+    // Path-scoped drafts belong to the startup directory, even when the surface changes sessions.
     this.directory = path.resolve(options.directory ?? process.cwd())
     this.now = options.now
     this.write = options.write
@@ -187,7 +190,7 @@ export class PromptStash {
     })
   }
 
-  /** Put a draft in an empty editor without removing it. */
+  /** Keep a parked copy available for reuse. */
   apply(selector: string | undefined): Promise<void> {
     const sessionId = this.options.sessionId()
     return this.run(sessionId, async store => {
@@ -215,7 +218,7 @@ export class PromptStash {
     })
   }
 
-  /** Open the list and pop whatever the reader takes. */
+  /** Picker selection takes a parked draft back for editing; /stash-apply keeps a copy for reuse instead. */
   list(sessionLabel: string): Promise<void> {
     const sessionId = this.options.sessionId()
     return this.run(sessionId, async store => {
@@ -244,6 +247,7 @@ export class PromptStash {
         resolved = await store.drop(selector)
       } catch (error) {
         if (!(error instanceof StashCommittedError)) throw error
+        // The deletion committed; implying the draft remains would mislead the reader into retrying.
         resolved = error.result as ResolvedEntry | undefined
         if (resolved === undefined) return
         warning = committedMessage(error, droppedMessage(resolved.index))
@@ -278,6 +282,7 @@ export class PromptStash {
         removed = await store.clear(confirmedIds)
       } catch (error) {
         if (!(error instanceof StashCommittedError)) throw error
+        // The confirmed deletions committed; a later failure does not restore those drafts.
         removed = error.result as number
         warning = committedMessage(error, clearedMessage(removed))
       }
@@ -312,6 +317,7 @@ export class PromptStash {
     }
   }
 
+  /** Restoring a parked prompt must not destroy the unsent draft already in the bar. */
   private editorIsReady(): boolean {
     if (!this.editorIsAvailable()) return false
     if (this.host.getEditorText().trim() === '') return true
@@ -363,6 +369,10 @@ export class PromptStash {
     return `${this.bankScope}:${this.bankScope === 'path' ? this.directory : sessionId}`
   }
 
+  /**
+   * Fire-and-forget command callers need failures reported on the surface.
+   * Even a failed command can change the bank or quarantine data, so its final state must reach the footer.
+   */
   private run(sessionId: string, operation: (store: StashStore) => Promise<void>): Promise<void> {
     return this.enqueue(async () => {
       try {
@@ -394,6 +404,7 @@ export class PromptStash {
 
   private enqueue(operation: () => Promise<void>): Promise<void> {
     const run = this.tail.then(operation, operation)
+    // A failed command must not leave the queue in a rejected state; its caller still receives its own failure.
     this.tail = run.catch(() => undefined)
     return run
   }

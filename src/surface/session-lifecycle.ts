@@ -18,7 +18,7 @@ import { windowTitle } from '../terminal/title.ts'
  * folded from it, and its roster all move together.
  */
 
-/** How often the running-state clock repaints while a turn is open. */
+/** Keep elapsed-time facts fresh at their displayed whole-second precision. */
 const STATUS_TICK_MS = 1000
 
 /** The session this process runs, as much of it as a driven read needs. */
@@ -154,7 +154,8 @@ export function createSessionLifecycle(ctx: Context, ports: SessionLifecyclePort
   // session on screen, because it sits on the editor that submits to that agent.
   const queuedPrompts = (): readonly string[] => pendingPrompts(ctx, ports.liveSession(activeSession))
 
-  // Only a running turn has anything to say over time, so the clock stops with it.
+  // Only an open turn needs elapsed-time repaints; idle turns skip rendering
+  // without removing the interval that later turns share.
   const statusTicker: ReturnType<typeof setInterval> = setInterval(() => {
     if (turnOpen) ports.render()
   }, STATUS_TICK_MS)
@@ -255,6 +256,9 @@ export function createSessionLifecycle(ctx: Context, ports: SessionLifecyclePort
     // A branch inherits the conversation the reader was already reading, so it
     // opens on that history rather than on an empty screen.
     if (fork !== undefined) await ports.fold(id)
+    // Unload must release the driver even without a replacement; the host
+    // guards handles already replaced against a second teardown attempt.
+    // Synchronous cleanup does not await or report disposal failure.
     ports.disposers.push(() => {
       void handle.dispose()
     })
@@ -300,11 +304,9 @@ export function createSessionLifecycle(ctx: Context, ports: SessionLifecyclePort
    * the reader keeps the conversation they were reading.
    */
   const runReloadCommand = (): void => {
-    // A failed reload keeps the outgoing agent driving, and a failed /new or
-    // /fork is the case that leaves none: the command has to stay usable in
-    // both, because the retry is what makes a broken composition file
-    // recoverable, while a surface that has opened no session yet is still
-    // starting.
+    // A failed transition can leave no agent, including a reload that fails
+    // after same-session teardown. Keep retry available after the first open
+    // so a repaired composition can recover; an unopened surface is still starting.
     if (agent === undefined && !sessionOpened) {
       ports.notice('the agent is still starting; try again in a moment')
       ports.render()
@@ -354,8 +356,8 @@ export function createSessionLifecycle(ctx: Context, ports: SessionLifecyclePort
         return
       }
       const childId = SessionId(`tui-session-${randomUUID()}`)
-      // The driven session's log is read from memory, so no other command can
-      // have let the outgoing agent go since the guard that refused an absent one.
+      // Inheritance belongs to the source captured before the read; awaiting
+      // even a memory-backed log does not reserve that source's outgoing handle.
       const previous = letGoOfOutgoing(false)!
       await previous.dispose()
       await openAgent(childId, false, { from: source, events: events.slice(0, point.inheritedEvents) })

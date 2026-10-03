@@ -83,7 +83,7 @@ function message(error: unknown): string {
   return error instanceof Error ? error.message.split('\n')[0] ?? String(error) : String(error)
 }
 
-/** Directory-relative default the reader can find without being told. */
+/** Make default dumps recognizable as harness sessions when browsing the exports directory. */
 export const DEFAULT_EXPORT_PREFIX = 'dsh-session'
 
 /** How the dump marks a nested call that returned an error, which the screen carried as colour. */
@@ -99,7 +99,7 @@ const BACKTICK_RUN = /`+/gu
 const COMMENT_CLOSE = '-->'
 const COMMENT_CLOSE_DEFUSED = '--&gt;'
 
-/** Default file for a dump: the session's own name, in the working directory. */
+/** Associate the default dump with its session; the caller chooses the destination directory. */
 export function defaultExportFile(sessionId: string): string {
   return `${DEFAULT_EXPORT_PREFIX}-${sessionId.replace(UNSAFE_NAME, '_')}.md`
 }

@@ -1,13 +1,9 @@
 /**
- * How well a row answers a fragment, scored the way fzf scores it.
+ * Rank ordered fragment matches by their boundaries, runs, and gaps.
  *
- * A greedy scan can say whether a fragment's characters are all present, but
- * not which of two rows the reader meant. This is the alignment fuzzy finders
- * use, with the constants fzf calibrates in its own source: matching a
- * character is worth a fixed amount, starting a word is worth more, continuing
- * a run is worth more than the gap it avoids, and every skipped character
- * costs — a little inside a run, more when it opens a new gap. A reader typing
- * edtr or srccomp gets a ranking their fingers recognize.
+ * A greedy scan can establish that all characters appear without distinguishing
+ * useful alignments. Boundary and consecutive credit favour segment starts and
+ * compact runs; gap penalties distinguish scattered matches.
  *
  * Classes are read from the original text, so a camel hump keeps its bonus
  * while the comparison itself stays case-insensitive. Matching works in code
@@ -18,18 +14,15 @@
  * different kinds of rows needs that concern in its own bands, and the bands
  * in {@link matchScore} keep an early hit above a late one.
  *
- * One deliberate divergence from fzf: for a one-character fragment fzf stops
- * at the first word boundary it meets, because its scan wants to stay cheap,
- * while this reads every position and keeps the best. A short fragment still
- * deserves the row that matches it best, and a test pins the difference.
+ * A one-character fragment considers every position so a later, stronger
+ * boundary can outrank the first occurrence.
  */
 
 /**
  * Character classes the bonus matrix distinguishes.
  *
- * A delimiter is a character a path or field is built from — fzf treats
- * `/,:;|` as such — because the start of a segment is a boundary a reader
- * aims at even though no whitespace precedes it.
+ * Path and field separators receive a distinct class because a segment start
+ * is a boundary a reader aims at even though no whitespace precedes it.
  */
 const WHITE = 0
 const NON_WORD = 1
@@ -68,11 +61,10 @@ const UPPER_PATTERN = /[A-Z]/
 const NUMBER_PATTERN = /[0-9]/
 
 /**
- * The categories fzf reads a code point outside ASCII by.
+ * Preserve word boundaries for characters outside ASCII.
  *
- * Without them a letter such as é would be read as a word break, so a fragment
- * landing beside it would take a boundary bonus fzf never pays and outrank a
- * text fzf ranks higher.
+ * Treating a letter such as é as punctuation would grant an artificial boundary
+ * bonus to the following letter and distort ranking across scripts.
  */
 const UNICODE_SPACE_PATTERN = /\p{White_Space}/u
 const UNICODE_LOWER_PATTERN = /\p{Ll}/u
@@ -97,10 +89,9 @@ function classOf(character: string): number {
 /**
  * What a character earns given the class before it.
  *
- * The order mirrors fzf's: a word opening after white, a delimiter, or a
- * non-word takes that boundary's bonus; a hump inside a word takes the smaller
- * camel one; and matching the separator itself is still worth something,
- * because a reader who typed it meant it.
+ * Boundary credit takes precedence over camel and digit transitions so an
+ * opening segment is not scored as an internal hump. Separator matches retain
+ * credit because the fragment may name the separator itself.
  */
 function bonusFor(previous: number, current: number): number {
   if (current >= NON_WORD) {
@@ -261,6 +252,8 @@ export function fuzzyScore(needle: string, haystack: string): number | undefined
             credit = Math.max(bonus, BONUS_CONSECUTIVE, chunkStart)
           }
         }
+        // A losing match cannot pass consecutive credit into the next row:
+        // that would reward a run the retained alignment did not choose.
         if (matched + credit < skipped) {
           matched += bonus
           consecutive = 0
@@ -275,8 +268,8 @@ export function fuzzyScore(needle: string, haystack: string): number | undefined
       left = score
       if (index === queryLength - 1 && score > best) best = score
     }
-    // The rows are rebuilt for each character of the fragment, so the arrays
-    // that hold the previous one are replaced rather than copied.
+    // Retain only the previous score and run rows: the next recurrence needs
+    // those rows, not the full alignment table.
     previousRow.set(row)
     previousRuns.set(runs)
   }

@@ -18,5 +18,6 @@ export function shouldRingBell(input: {
   readonly ranForMs: number
   readonly exiting: boolean
 }): boolean {
+  // Keep shutdown quiet instead of announcing a completion while the surface is leaving.
   return input.bell && !input.exiting && input.ranForMs >= BELL_AFTER_MS
 }

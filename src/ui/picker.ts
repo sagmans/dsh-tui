@@ -6,7 +6,7 @@ import type { StoredSession } from '../agent/history.ts'
 import { describeModelRoute, modelRouteKey, type ModelChoice, type ModelRoute } from '../agent/model.ts'
 import { describePreset, type PresetSummary } from '../agent/presets.ts'
 
-/** One selectable row of the picker. */
+/** Presentation stays independent of domain ids; current marks the cursor, not the active domain choice. */
 export interface PickerRow {
   readonly label: string
   readonly description: string | undefined
@@ -27,7 +27,7 @@ export interface PickerCard {
   readonly below: number
 }
 
-/** What one key press asked the picker to do. */
+/** Return intent so the modal owner can validate picks and settle cancellation before domain changes. */
 export type PickerAction =
   | { readonly kind: 'pick'; readonly id: string }
   | { readonly kind: 'cancel' }
@@ -72,6 +72,7 @@ const DAY_MS = 24 * HOUR_MS
 
 /** Human age of a session, so a list of ids becomes a list of moments. */
 export function describeAge(createdAt: number, now: number): string {
+  // Keep age labels nonnegative when a stored timestamp is later than the caller's clock.
   const elapsed = Math.max(0, now - createdAt)
   if (elapsed < MINUTE_MS) return 'just now'
   if (elapsed < HOUR_MS) return `${Math.floor(elapsed / MINUTE_MS)}m ago`
@@ -83,8 +84,8 @@ export function describeAge(createdAt: number, now: number): string {
  * A filtered list the reader moves through by key.
  *
  * The list is the caller's and is re-read on every key and paint, so rows whose
- * text arrives late — a session title read from its log, a roster re-read after
- * a preset was authored — appear without rebuilding the picker. Windowing,
+ * text arrives late — such as a session title read from its log — can appear
+ * without rebuilding the picker when the caller refreshes it. Windowing,
  * filtering, and the keys are the same whatever the rows mean, which is why
  * they live here once instead of in every list a terminal has to choose from.
  */
@@ -160,6 +161,7 @@ export class ListPicker<Row> {
 
   /** Apply one key press; returns an action only when the picker settles. */
   handleKey(data: string): PickerAction | undefined {
+    // Releasing a key must not repeat navigation, confirmation, filter edits, or cursor previews.
     if (releasedKey(data)) return undefined
     const action = this.step(data)
     // A press that settles the list needs no announcement: the row it settled on
@@ -194,6 +196,7 @@ export class ListPicker<Row> {
       const chosen = rows[Math.min(this.cursor, Math.max(0, rows.length - 1))]
       return chosen === undefined ? undefined : { kind: 'pick', id: this.idOf(chosen) }
     }
+    // Keeping endpoint selections stable avoids jumping across the list on repeated movement keys.
     if (matchesAction(keys, 'picker.up', data)) {
       this.cursor = Math.max(0, this.cursor - 1)
       return undefined
@@ -202,6 +205,7 @@ export class ListPicker<Row> {
       this.cursor = Math.min(Math.max(0, rows.length - 1), this.cursor + 1)
       return undefined
     }
+    // Whole-grapheme deletion avoids leaving fragments of emoji or combining sequences in the filter.
     if (matchesKey(data, 'backspace')) {
       this.filter = deleteLastGrapheme(this.filter)
       this.cursor = 0
@@ -212,6 +216,7 @@ export class ListPicker<Row> {
       this.cursor = 0
       return undefined
     }
+    // Shared terminal decoding keeps paste and printable-key input consistent without admitting control bytes.
     const text = typedText(data)
     if (text !== undefined) {
       this.filter += text
@@ -292,8 +297,8 @@ export class SessionPicker extends ListPicker<StoredSession> {
 /**
  * One agent preset chosen by key press.
  *
- * The roster is re-read on every paint, so a preset authored or deleted while
- * the picker is open is present or gone without reopening it.
+ * Caller-owned rows allow refreshed presets to appear without rebuilding the
+ * picker; the surface currently supplies a snapshot taken when it opens.
  */
 export class PresetPicker extends ListPicker<PresetSummary> {
   constructor(
@@ -350,11 +355,12 @@ export class ModelPicker extends ListPicker<ModelRoute> {
  * The pick id that clears an explicit effort.
  *
  * An absent effort is a real choice — it restores the model's own default — so
- * it needs an id, and no adapter-owned effort may be empty.
+ * it needs an id. Advertised effort ids must be nonempty to avoid colliding
+ * with this clearing choice; the catalog conversion does not enforce that.
  */
 export const PROVIDER_DEFAULT_EFFORT_ID = ''
 
-/** One reasoning level a route offers, as the picker shows it. */
+/** Keep the active effort in row text because the card's current marker belongs to the navigation cursor. */
 export interface EffortChoice {
   readonly id: string
   readonly name: string

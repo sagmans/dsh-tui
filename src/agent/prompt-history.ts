@@ -18,14 +18,14 @@ import { displayText } from '../text.ts'
 export const HISTORY_FILE_NAME = 'prompt-history.json'
 /** Schema this build writes; a file that names another positive version is left alone. */
 export const HISTORY_SCHEMA_VERSION = 1
-/** Entries kept when the reader configures nothing. */
+/** Bound retained prompts on mutation, trading older suggestions for smaller snapshots and full-file rewrites. */
 export const DEFAULT_MAX_ENTRIES = 2000
 /** Largest cap a reader may ask for, so a typo cannot grow the file without bound. */
 export const MAX_ENTRIES_LIMIT = 20_000
 
-/** Only the reader can read or write the file. */
+/** Submitted prompts may contain private input; request owner-only file permissions. */
 const PRIVATE_FILE_MODE = 0o600
-/** A created home directory stays private; an existing one is never re-moded. */
+/** Keep newly created history homes private too; leave existing directory permissions unchanged. */
 const PRIVATE_DIR_MODE = 0o700
 /** Suffix of the file that serializes mutations across sessions. */
 const LOCK_SUFFIX = '.lock'
@@ -33,7 +33,7 @@ const LOCK_SUFFIX = '.lock'
 const LOCK_RECLAIM_SUFFIX = '.reclaim'
 /** Suffix of the file a lock is staged in before it is published. */
 const LOCK_TEMP_SUFFIX = '.tmp'
-/** How long a mutation waits for another session's lock before giving up. */
+/** Limit waiting on live lock holders so queued history commands can settle despite contention. */
 const LOCK_WAIT_MS = 2_000
 /** Delay between lock attempts, so a short hold is not a spin. */
 const LOCK_RETRY_MS = 20
@@ -55,10 +55,11 @@ export const BLOCK_DESCRIPTIONS: Record<HistoryBlockReason, string> = {
   unreadable_history: 'unreadable',
 }
 
-/** One recorded prompt, newest first in the file. */
+/** Repeat metadata accompanies one reusable suggestion; list position, not updatedAt, determines recency. */
 export interface PromptEntry {
   readonly text: string
   readonly updatedAt: string
+  /** Let reverse search distinguish reused prompts without duplicating their rows. */
   readonly useCount: number
 }
 
@@ -74,15 +75,15 @@ export type ParsedHistoryFile =
   | { readonly kind: 'ready'; readonly file: PromptHistoryFile }
   | { readonly kind: 'blocked'; readonly reason: HistoryBlockReason }
 
-/** The store the surface holds; mutations are fire-and-forget and serialized. */
+/** The surface shares this store between submission, ghost completion, reverse search, and history commands. */
 export interface PromptHistory {
-  /** Current entries, newest first; the array identity is stable per snapshot. */
+  /** Share a newest-first snapshot so ghost completion and reverse search offer the same recency order. */
   entries(): readonly PromptEntry[]
-  /** Persist one submitted prompt; blank input is ignored. */
+  /** Queue persistence without delaying submission; blank input contributes no suggestion. */
   record(text: string): void
   /** Remove every entry and report how many went. */
   clear(): Promise<number>
-  /** Resolve once every queued mutation has settled; errors are reported, not thrown. */
+  /** Let history commands include their own submitted line; queued mutations settle even when persistence fails. */
   flush(): Promise<void>
   /** Absolute path of the file, for a status line and diagnostics. */
   path(): string
@@ -182,6 +183,8 @@ async function publishLock(lockPath: string, owner: LockOwner): Promise<boolean>
     if (!isAlreadyExists(error)) throw error
     return false
   } finally {
+    // Cleanup must not hide publication success or the original link error;
+    // leftover staging files do not reserve the published lock path.
     await rm(staged, { force: true }).catch(() => {})
   }
 }
@@ -226,6 +229,8 @@ async function reclaimLock(lockPath: string, deadContents: string, waitMs: numbe
 async function releaseLock(lockPath: string, owner: LockOwner): Promise<void> {
   const contents = await readFile(lockPath, 'utf8').catch(() => undefined)
   if (contents !== serializeOwner(owner)) return
+  // Cleanup must not report an already completed mutation as a failure.
+  // A retained live-holder lock can still make later mutations time out.
   await rm(lockPath, { force: true }).catch(() => {})
 }
 
@@ -306,6 +311,10 @@ export function upsertEntry(
   return [next, ...entries.filter(entry => entry.text !== text)].slice(0, Math.max(0, maxEntries))
 }
 
+/**
+ * Keep repeat metadata from moving backward for UTC ISO timestamps with four-digit years.
+ * Persisted timestamps are checked only as strings, so arbitrary stored values have no chronological guarantee.
+ */
 function laterTimestamp(left: string, right: string): string {
   return left >= right ? left : right
 }
@@ -320,6 +329,8 @@ export function createPromptHistory(options: PromptHistoryOptions): PromptHistor
   let blocked: HistoryBlockReason | undefined
   const warned = new Set<string>()
 
+  // Repeated failures should not keep raising notices; distinct block reasons and
+  // write-error details retain separate notices because they can require different repairs.
   const warnOnce = (key: string, message: string): void => {
     if (warned.has(key)) return
     warned.add(key)
@@ -358,6 +369,8 @@ export function createPromptHistory(options: PromptHistoryOptions): PromptHistor
     return run
   }
 
+  // Stage a complete, owner-only document before replacement so readers do not
+  // observe a partial history. Cleanup attempts to avoid leaving another private copy.
   async function write(): Promise<void> {
     const file: PromptHistoryFile = { version: HISTORY_SCHEMA_VERSION, updatedAt: now().toISOString(), entries }
     const tempPath = filePath + '.' + process.pid + '.' + Date.now() + '.tmp'
@@ -382,6 +395,8 @@ export function createPromptHistory(options: PromptHistoryOptions): PromptHistor
       void enqueue(() => withLock(lockPath, options.lockWaitMs ?? LOCK_WAIT_MS, async () => {
         await load()
         if (blocked !== undefined) return
+        // Keep this prompt available to suggestion readers even if persistence fails.
+        // A successful reload replaces the snapshot; memory-only prompts are not a retry queue.
         entries = upsertEntry(entries, prompt, now().toISOString(), options.cap())
         await write()
       })).catch((error: unknown) => {

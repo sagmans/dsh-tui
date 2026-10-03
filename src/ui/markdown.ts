@@ -2,7 +2,7 @@ import { Markdown, wrapTextWithAnsi, type DefaultTextStyle, type MarkdownOptions
 import { displayText } from '../text.ts'
 import type { MermaidTransform } from './mermaid.ts'
 
-/** Parsed messages kept for redraws; everything above this is cold transcript. */
+/** Bound retained parses so redraw reuse does not grow memory with the entire transcript; reuse refreshes eviction order. */
 export const MARKDOWN_CACHE_LIMIT = 64
 const STACK_OVERFLOW_MESSAGE = 'Maximum call stack size exceeded'
 
@@ -54,7 +54,7 @@ export class MarkdownRenderer {
       }
       message = new Markdown(text, 0, 0, face.theme ?? this.theme, face.base, this.options(face, live))
     } else {
-      // Reinserting keeps a message that is still on screen from ageing out.
+      // Refresh eviction priority on reuse to favor recently rendered parses, not transcript positions.
       this.parsed.delete(key)
     }
     this.parsed.set(key, message)

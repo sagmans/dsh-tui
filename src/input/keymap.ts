@@ -4,7 +4,10 @@ import { LIBRARY_KEY_ADDITIONS, isPluginActionId } from './action-catalog.ts'
 import { ENTER_KEY } from './key-press.ts'
 import type { Submission } from './submission.ts'
 
-/** How long an armed chord waits for the key that follows it, in seconds. */
+/**
+ * Limit how long an accidental prefix can reinterpret later typing, while allowing
+ * time for the second key. Settings can opt into sticky chords with zero.
+ */
 export const DEFAULT_PREFIX_WINDOW_S = 2
 
 /** The keys that start a chord when the reader configures nothing. */
@@ -56,12 +59,12 @@ export function chordBindings(map: Keymap): readonly ChordBinding[] {
   return found
 }
 
-/** How the chords read wherever the reader asks for them. */
+/** Derive chord help from the active map so remapped and plugin bindings stay discoverable. */
 export function chordKeysLine(map: Keymap): string {
   return `${keysFor(map, 'chord.prefix').join(', ')} then ${chordBindings(map).map(binding => `${binding.key} ${binding.label}`).join(' · ')}`
 }
 
-/** The keys the surface answers itself, as help lists them. */
+/** Derive surface help from the active catalog and keys rather than advertising shipped defaults. */
 export function surfaceKeysLine(map: Keymap): string {
   const found: string[] = []
   for (const action of catalogOf(map)) {

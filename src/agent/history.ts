@@ -71,8 +71,8 @@ function clip(title: string, limit: number): string {
 /**
  * Name a session, preferring the title the harness derived or the reader set.
  *
- * The durable `session/title` wins because it is what every other surface
- * shows; a session that has none yet falls back to its first human prompt.
+ * Prefer the recorded `session/title` over a prompt-derived name to preserve
+ * explicit naming; a slice with no title falls back to its first human prompt.
  * Injected context and plugin notices also arrive as user-role messages, so
  * only a direct prompt may name a session.
  */
@@ -105,9 +105,9 @@ export function sessionTitle(events: readonly StoredEvent[], limit = TITLE_CHAR_
 /**
  * Title one stored session.
  *
- * The tail is read first because a title is latest-wins and usually written
- * after the first turn; the head is the fallback for a session that has a
- * prompt but no title yet.
+ * Tail-first sampling keeps picker reads bounded while favoring recent titles.
+ * A human prompt in that slice also supplies a name; the head is read only when
+ * the tail supplies neither, so an untitled long log need not use its first prompt.
  */
 export async function readSessionTitle(history: SessionHistory, session: StoredSession): Promise<string | undefined> {
   const end = session.eventCount ?? 0
@@ -125,9 +125,10 @@ export async function readSessionTitle(history: SessionHistory, session: StoredS
  * The creation header names the preset the session STARTED with, and a
  * selection recorded while it was still blank replaced it. The projection's own
  * rule is that the last selection wins over the header, so the tail is read
- * first and the head second: the harness refuses a switch once a turn has run,
- * which puts any selection in the blank prefix. Reading both keeps this correct
- * if that rule ever loosens, and the event count bounds the work either way.
+ * first and the head second. Blank-session switching confines selections to
+ * the pre-turn prefix, but these bounded samples can miss a selection outside
+ * both slices. Unrestricted switching would need a different latest-selection
+ * lookup rather than relying on this picker shortcut.
  */
 export async function presetOfStoredSession(history: SessionHistory, id: string): Promise<string | undefined> {
   const header = await history.header(id)

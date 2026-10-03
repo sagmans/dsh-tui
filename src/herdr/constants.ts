@@ -61,7 +61,7 @@ export const EXIT_RELEASE_TIMEOUT_MS = 250
 /** The CLI to release through when the one Herdr exported cannot be spawned. */
 export const FALLBACK_HERDR_BIN = 'herdr'
 
-/** The first wait before a report Herdr did not acknowledge is sent again. */
+/** Retry without another lifecycle event: a pane that settled during an outage may have no further change to report. */
 export const RETRY_BASE_MS = 250
 
 /** The longest that wait can grow to, so a down socket is still noticed. */
@@ -79,8 +79,9 @@ export const RETRY_MAX_MS = 8_000
  */
 export const RECLAIM_INTERVAL_MS = 15_000
 
-/** Beyond this a response is a surprise, not an answer. */
+/** Cap retained response data so a peer cannot grow the receive buffer indefinitely. */
 export const MAX_RESPONSE_BYTES = 64 * 1024
+/** Frame completion must not depend on packet boundaries or the peer closing its socket. */
 export const RESPONSE_DELIMITER = '\n'
 
 /**
