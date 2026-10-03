@@ -14,6 +14,18 @@ breaking change, and a patch carries only fixes.
 
 ### Fixed
 
+- Transcript exports replace destinations with fresh owner-only files while preserving earlier file readers and unrelated hard-linked paths.
+
+- Growing streaming diagrams retain completed layouts beside them instead of repeatedly rebuilding the current reply.
+
+- Tool preview budgets reserve enough room for expanded tabs at any insertion column, without changing Unicode grapheme boundaries.
+
+- Resume hints preserve whitespace and shell punctuation as literal identity tokens while keeping terminal controls visible.
+
+- Deeply nested recorded content preserves visible text, reasoning separation, and tool-result order without exhausting the call stack.
+
+- Oversized Markdown layouts fall back to readable source when the renderer exceeds its stack limit, preserving retained text across narrow resizes.
+
 - The footer wraps on narrow terminals so session details remain visible instead of being cut to one row.
 
 - Nested tool arguments retain literal control-character evidence in folded and expanded rows while their output keeps terminal repaint semantics.

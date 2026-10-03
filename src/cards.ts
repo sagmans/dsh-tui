@@ -294,7 +294,15 @@ export function cardFromLines(
 export function contentLines(content: unknown): string[] {
   if (!Array.isArray(content)) return []
   const lines: string[] = []
-  for (const block of content) {
+  // Heap-backed iterators retain depth-first order without consuming the JavaScript call stack.
+  const pending: Array<Iterator<unknown>> = [content.values()]
+  while (pending.length > 0) {
+    const item = pending[pending.length - 1]!.next()
+    if (item.done) {
+      pending.pop()
+      continue
+    }
+    const block = item.value
     if (typeof block !== 'object' || block === null) continue
     const record = block as Record<string, unknown>
     // Any block that carries text counts; a tool-result block also holds its
@@ -304,7 +312,7 @@ export function contentLines(content: unknown): string[] {
       for (const line of record.text.split('\n')) lines.push(line)
     }
     if (Array.isArray(record.content)) {
-      for (const line of contentLines(record.content)) lines.push(line)
+      pending.push(record.content.values())
     }
   }
   return lines

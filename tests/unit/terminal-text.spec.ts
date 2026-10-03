@@ -22,6 +22,11 @@ const COMBINING_REPAINT_CASES = [
 ]
 const REPAINT_COLOUR = 'none' as const
 const REPAINT_MARGIN = 4
+const TAB_CLIP_CASES = [
+  { raw: '\tX'.repeat(50), limit: 200 },
+  { raw: '\tX', limit: 5 },
+  { raw: 'a\tb', limit: 9 },
+]
 const CONTROL_CLIP_CASES = [
   { raw: BELL.repeat(3), limit: 3, expected: '…' },
   { raw: BELL.repeat(3), limit: 9, expected: BELL.repeat(2) + '…' },
@@ -212,6 +217,13 @@ describe('renderTerminalText', () => {
 })
 
 describe('clipVisibleGraphemes', () => {
+  it.each(TAB_CLIP_CASES)('keeps expanded tabs within budget at every insertion column: %j', ({ raw, limit }) => {
+    const clipped = clipVisibleGraphemes(raw, limit)
+    for (let column = 0; column < TAB_STOP; column++) {
+      expect(renderTerminalText(clipped, { color: 'none', column }).length).toBeLessThanOrEqual(limit)
+    }
+  })
+
   it.each(CONTROL_CLIP_CASES)('budgets the complete visible spelling of controls: %j', ({ raw, limit, expected }) => {
     const clipped = clipVisibleGraphemes(raw, limit)
     expect(clipped).toBe(expected)

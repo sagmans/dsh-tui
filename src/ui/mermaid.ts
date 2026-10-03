@@ -114,14 +114,18 @@ function warningText(art: MermaidArt): string {
  * out a diagram is the expensive half of drawing it; the other half is styling
  * runs, which stays per call so a theme swap needs no invalidation.
  */
-function artCache(): (source: string) => MermaidArt | null {
+function artCache(): (source: string, retained: ReadonlySet<string>) => MermaidArt | null {
   const drawn = new Map<string, MermaidArt | null>()
-  return source => {
+  return (source, retained) => {
     if (drawn.has(source)) return drawn.get(source) ?? null
     const art = render(source)
     if (drawn.size >= MERMAID_CACHE_LIMIT) {
-      const oldest = drawn.keys().next()
-      if (oldest.done !== true) drawn.delete(oldest.value)
+      // Growing a live fence replaces its obsolete prefix, not completed diagrams still visible beside it.
+      for (const oldest of drawn.keys()) {
+        if (retained.has(oldest)) continue
+        drawn.delete(oldest)
+        break
+      }
     }
     drawn.set(source, art)
     return art
@@ -168,9 +172,10 @@ export function createMermaidTransform(options: MermaidOptions): MermaidTransfor
     after: string,
     availableWidth: number,
     live: boolean,
+    retained: ReadonlySet<string>,
   ): string {
     if (token.text.length > MERMAID_MAX_SOURCE) return token.raw
-    const art = draw(token.text)
+    const art = draw(token.text, retained)
     // A settled drawing that lost part of its source is worth reporting whether
     // or not it would have fit, because the reader is looking at the source.
     if (!live && art !== null && art.warnings.length > 0) {
@@ -195,17 +200,26 @@ export function createMermaidTransform(options: MermaidOptions): MermaidTransfor
     // Lexing is the cost this guard avoids: no fence can be present without the word.
     if (!MERMAID_MENTION.test(markdown)) return markdown
 
+    const tokens = parser.lexer(markdown)
+    const retained = new Set<string>()
+    let retainedFences = 0
+    // Pin only this reply's bounded window; unrelated replies still age out in insertion order.
+    for (const token of tokens) {
+      if (!isMermaidFence(token)) continue
+      if (retainedFences++ >= MERMAID_CACHE_LIMIT) break
+      retained.add(token.text)
+    }
     let out = ''
     let cursor = 0
     let fences = 0
-    for (const token of parser.lexer(markdown)) {
+    for (const token of tokens) {
       const at = markdown.indexOf(token.raw, cursor)
       // A lexer that rewrote its own input cannot be spliced back into it, and
       // the message is worth more than the drawing: it stays as written.
       if (at < 0) return markdown
       // A reply must not evict its own drawing window on every streaming delta; overflow stays readable source.
       const body = isMermaidFence(token) && fences++ < MERMAID_CACHE_LIMIT
-        ? fenceBlock(token, out, markdown.slice(at + token.raw.length), availableWidth, live)
+        ? fenceBlock(token, out, markdown.slice(at + token.raw.length), availableWidth, live, retained)
         : token.raw
       out += markdown.slice(cursor, at) + body
       cursor = at + token.raw.length

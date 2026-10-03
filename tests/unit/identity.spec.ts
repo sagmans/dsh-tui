@@ -1,9 +1,14 @@
+import { execFileSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { LaunchUsageError, identityOf, resolveLaunchIntent, resumeHint } from '@/identity.ts'
 
+const SHELL_FIXTURE = fileURLToPath(new URL('../fixtures/resume-hint.sh', import.meta.url))
+const HINT_PREFIX = 'To resume this session: '
+const SHELL_TOKENS = ['session with spaces', 'session\twith\ttabs', 'session\nwith\nlines', "session'quoted", 'session; printf unexpected', 'session$(printf unexpected)']
 const CONTROL_ID = 'session\x1b]0;title\x07\rhidden\b\x9dtitle\x9c'
 const CONTROL_PROFILE = 'tui\x1b[31m'
-const LITERAL_HINT = String.raw`To resume this session: dsh --profile tui\x1B[31m --resume=session\x1B]0;title\x07\x0Dhidden\x08\x9Dtitle\x9C`
+const LITERAL_HINT = String.raw`To resume this session: dsh --profile 'tui\x1B[31m' --resume='session\x1B]0;title\x07\x0Dhidden\x08\x9Dtitle\x9C'`
 
 const base = { mode: undefined, session: undefined, resumeFlag: undefined, newSession: undefined } as const
 
@@ -50,6 +55,12 @@ describe('identityOf', () => {
 })
 
 describe('resumeHint', () => {
+  it.each(SHELL_TOKENS)('keeps %j as one literal shell argument', id => {
+    const command = resumeHint(id, id).slice(HINT_PREFIX.length)
+    const output = execFileSync('sh', [SHELL_FIXTURE, command], { encoding: 'utf8' })
+    expect(output).toBe(`--profile\n${id}\n--resume=${id}\n`)
+  })
+
   it('spells controls in session and profile tokens instead of issuing terminal commands', () => {
     expect(resumeHint(CONTROL_ID, CONTROL_PROFILE)).toBe(LITERAL_HINT)
   })

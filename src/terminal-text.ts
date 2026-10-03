@@ -59,6 +59,8 @@ function visibleLength(piece: Piece): number {
     }
     // A visible escape is four or six characters, not the one control that produced it.
     case 'control': return spellControls(piece.raw).length
+    // The eventual insertion column is unknown here, so a tab may need a full stop of visible spaces.
+    case 'tab': return TAB_STOP
     case 'sgr':
     case 'consumed':
     case 'incomplete': return 0

@@ -17,7 +17,15 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
 export function contentLinesOf(content: unknown): string[] {
   if (!Array.isArray(content)) return []
   const lines: string[] = []
-  for (const block of content) {
+  // Heap-backed iterators retain depth-first order without consuming the JavaScript call stack.
+  const pending: Array<Iterator<unknown>> = [content.values()]
+  while (pending.length > 0) {
+    const item = pending[pending.length - 1]!.next()
+    if (item.done) {
+      pending.pop()
+      continue
+    }
+    const block = item.value
     const record = asRecord(block)
     if (record === undefined) continue
     // A thought is a row of its own; reading it here would hand the model's
@@ -30,7 +38,7 @@ export function contentLinesOf(content: unknown): string[] {
       for (const line of record.text.split('\n')) lines.push(line)
     }
     if (Array.isArray(record.content)) {
-      for (const line of contentLinesOf(record.content)) lines.push(line)
+      pending.push(record.content.values())
     }
   }
   return lines
@@ -50,13 +58,21 @@ export function textOfContent(content: unknown): string {
 export function reasoningTextsOf(content: unknown): string[] {
   if (!Array.isArray(content)) return []
   const thoughts: string[] = []
-  for (const block of content) {
+  // Heap-backed iterators retain depth-first order without consuming the JavaScript call stack.
+  const pending: Array<Iterator<unknown>> = [content.values()]
+  while (pending.length > 0) {
+    const item = pending[pending.length - 1]!.next()
+    if (item.done) {
+      pending.pop()
+      continue
+    }
+    const block = item.value
     const record = asRecord(block)
     if (record === undefined) continue
     if (record.type === 'reasoning' && typeof record.text === 'string') thoughts.push(record.text)
     // Nested recorded thoughts have the same unbounded block count as visible lines.
     if (Array.isArray(record.content)) {
-      for (const thought of reasoningTextsOf(record.content)) thoughts.push(thought)
+      pending.push(record.content.values())
     }
   }
   return thoughts

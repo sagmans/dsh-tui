@@ -15,12 +15,13 @@ import { theme, COLLAPSED, viewOf, mouse } from './fixtures/transcript-view.ts'
 
 const LARGE_MESSAGE_CHARACTERS = 150_000
 const RESIZE_WIDTHS = [80, 1, 2, 80]
+const LARGE_MESSAGE_PREFIXES = ['', '- ']
 
 describe('TranscriptView text', () => {
-  it('retains a large message and its copy rows across narrow resizes and cached redraws', () => {
+  it.each(LARGE_MESSAGE_PREFIXES)('retains a large %j message and its copy rows across narrow resizes and cached redraws', prefix => {
     const text = 'x'.repeat(LARGE_MESSAGE_CHARACTERS)
     const model = new TranscriptModel()
-    model.apply({ type: 'assistant/message', data: { message: { content: [{ type: 'text', text }] } } })
+    model.apply({ type: 'assistant/message', data: { message: { content: [{ type: 'text', text: prefix + text }] } } })
     const view = viewOf(model)
     for (const width of RESIZE_WIDTHS) {
       const lines = view.render(width)

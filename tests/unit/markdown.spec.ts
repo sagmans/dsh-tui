@@ -4,6 +4,7 @@ import { DEFAULT_PALETTE, DIFF_ADDED_BAND, DIFF_REMOVED_BAND } from '@/theme-def
 import { MARKDOWN_CACHE_LIMIT, MarkdownRenderer } from '@/ui/markdown.ts'
 import { createMermaidTransform } from '@/ui/mermaid.ts'
 
+const LAYOUT_ERRORS = [new Error('layout failed'), new RangeError('invalid width')]
 const theme = createTheme('none')
 const renderer = (): MarkdownRenderer => new MarkdownRenderer(theme.markdown)
 
@@ -13,6 +14,11 @@ describe('MarkdownRenderer', () => {
     expect(lines.join('\n')).toContain('Heading')
     expect(lines.join('\n')).toContain('- one')
     expect(lines.join('\n')).toContain('code')
+  })
+
+  it.each(LAYOUT_ERRORS)('does not hide unrelated layout failures: %s', error => {
+    const markdown = new MarkdownRenderer(theme.markdown, () => { throw error })
+    expect(() => markdown.render('text', 80)).toThrow(error)
   })
 
   it('never asks for less than one column', () => {

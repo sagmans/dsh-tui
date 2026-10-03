@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
+import { chmodSync, closeSync, existsSync, linkSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -34,6 +34,8 @@ const INITIAL_EXPORT_DIR_MODE = 0o755
 const INITIAL_EXPORT_FILE_MODE = 0o644
 const PERMISSION_MASK = 0o777
 const OLD_EXPORT = 'previous export'
+const PRIVATE_EXPORT_NAME = 'dump.md'
+const OLD_EXPORT_ALIAS = 'previous.md'
 const LINKED_EXPORT_DESTINATIONS = ['file', 'directory'] as const
 
 /** The commands the host registry answers with, as completion reads them. */
@@ -701,6 +703,30 @@ describe('createCommands todo', () => {
 })
 
 describe('createCommands export', () => {
+  it('keeps new private contents away from earlier readers and hard links', () => {
+    const given = fixture()
+    given.entries = [{ kind: 'user', text: DRAFT }]
+    const directory = scratch()
+    const path = join(directory, PRIVATE_EXPORT_NAME)
+    const alias = join(directory, OLD_EXPORT_ALIAS)
+    writeFileSync(path, OLD_EXPORT)
+    chmodSync(path, INITIAL_EXPORT_FILE_MODE)
+    linkSync(path, alias)
+    const reader = openSync(path, 'r')
+    try {
+      createCommands(given.ctx, given.ports).runSubmission({ kind: 'export', path })
+      expect(readFileSync(reader, 'utf8')).toBe(OLD_EXPORT)
+      expect(readFileSync(alias, 'utf8')).toBe(OLD_EXPORT)
+      expect(statSync(alias).mode & PERMISSION_MASK).toBe(INITIAL_EXPORT_FILE_MODE)
+      expect(readFileSync(path, 'utf8')).toBe(transcriptToText(given.entries))
+      expect(statSync(path).mode & PERMISSION_MASK).toBe(EXPECTED_EXPORT_FILE_MODE)
+      expect(readdirSync(directory).sort()).toEqual([PRIVATE_EXPORT_NAME, OLD_EXPORT_ALIAS].sort())
+      expect(given.notices).toEqual(['transcript written to ' + path])
+    } finally {
+      closeSync(reader)
+    }
+  })
+
   it.each(EXPORT_DESTINATIONS)('writes the visible transcript privately and tells the reader where; existing=%s', (existing) => {
     const given = fixture()
     given.entries = [{ kind: 'user', text: 'ask' }, { kind: 'assistant', text: 'answer' }]

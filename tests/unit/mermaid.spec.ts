@@ -21,6 +21,9 @@ const OVERFLOW_REPLY = Array.from({ length: MERMAID_CACHE_LIMIT + 1 }, (_, index
   ['```mermaid', 'flowchart TB', `  N${index} --> M${index}`, '```'].join('\n'),
 ).join('\n\n')
 
+const GROWING_REPLY_PREFIX = OVERFLOW_REPLY.split('\n\n').slice(0, MERMAID_CACHE_LIMIT - 1).join('\n\n')
+const GROWING_FENCE = '\n\n```mermaid\nflowchart TB\n  Growing'
+
 /** The token types a message lexes to, so a drawing cannot silently change the structure around it. */
 function lex(markdown: string): string[] {
   return new Marked().lexer(markdown).map(token => token.type)
@@ -165,6 +168,17 @@ describe('the mermaid mode', () => {
 })
 
 describe('a drawn diagram', () => {
+  it('retains completed layouts while the final fence gains streaming edges', () => {
+    const draw = transform()
+    const before = vi.mocked(render).mock.calls.length
+    let reply = GROWING_REPLY_PREFIX + GROWING_FENCE
+    for (let delta = 0; delta < STREAMING_DELTAS; delta++) {
+      reply += ` --> Live${delta}`
+      expect(draw(reply, STREAMING_WIDTH, true)).not.toContain('```mermaid')
+    }
+    expect(vi.mocked(render).mock.calls.length - before).toBe(MERMAID_CACHE_LIMIT - 1 + STREAMING_DELTAS)
+  })
+
   it('keeps overflowing replies within retained layout capacity during streaming', () => {
     const draw = transform()
     const before = vi.mocked(render).mock.calls.length

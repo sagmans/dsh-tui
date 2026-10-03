@@ -2,6 +2,11 @@ import { SessionId } from '@deepseek-ai/dsh-session'
 import type { LauncherAgentIdentity } from '@deepseek-ai/dsh-agent-loop'
 import { escapeTerminalText } from './terminal-text.ts'
 
+const HINT_TEXT_OPTIONS = { tab: 'keep' } as const
+const SHELL_WORD = /^[A-Za-z0-9_./:-]+$/u
+const SHELL_QUOTE = "'"
+const SHELL_QUOTE_ESCAPE = "'\\''"
+
 /** A command line that cannot be resolved into one launch identity. */
 export class LaunchUsageError extends Error {}
 
@@ -60,8 +65,15 @@ export function identityOf(intent: LaunchIntent, uuid: string): LauncherAgentIde
 /** Profile the surface is installed into; only used for the resume hint. */
 export const PROFILE_NAME = 'tui'
 
+/** Pasted recovery commands must retain identity tokens rather than interpreting them as shell syntax. */
+function hintToken(value: string): string {
+  // Quoting already protects whitespace; tab expansion would change the identity being resumed.
+  const text = escapeTerminalText(value, HINT_TEXT_OPTIONS)
+  return SHELL_WORD.test(text) ? text : `${SHELL_QUOTE}${text.replaceAll(SHELL_QUOTE, SHELL_QUOTE_ESCAPE)}${SHELL_QUOTE}`
+}
+
 /** Line printed after the terminal is handed back, so the session is recoverable. */
 export function resumeHint(sessionId: string, profile: string): string {
   // Launch arguments and stored identities must not regain terminal privileges in the shell-facing hint.
-  return escapeTerminalText(`To resume this session: dsh --profile ${profile} --resume=${sessionId}`)
+  return `To resume this session: dsh --profile ${hintToken(profile)} --resume=${hintToken(sessionId)}`
 }
