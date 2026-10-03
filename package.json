@@ -82,13 +82,15 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
-    "test": "vitest run",
-    "coverage": "vitest run --coverage",
+    "test": "pnpm test:golden && pnpm dogfood",
+    "test:golden": "vitest run",
+    "dogfood": "pnpm run build && node tools/dogfood.mjs",
+    "dogfood:paid": "pnpm run build && node tools/dogfood.mjs --paid",
+    "verify": "pnpm typecheck && pnpm test && node tools/pack-smoke.mjs && node tools/harness-matrix.mjs",
     "test:terminal": "pnpm run build && node tools/terminal-behavior.mjs",
-    "test:release": "python3 -m unittest discover -s tests/release -p 'test_*.py'",
     "prepare": "npm run build",
     "prepack": "npm run build",
-    "prepublishOnly": "npm run typecheck && npm test",
+    "prepublishOnly": "npm run typecheck && npm run test:golden",
     "drive": "node tools/pty-drive.mjs"
   },
   "dependencies": {
@@ -164,7 +166,6 @@
     "@deepseek-ai/dsh-user-approval": "0.2.0-rc.2",
     "@deepseek-ai/dsh-user-questions": "0.2.0-rc.2",
     "@types/node": "^24.0.0",
-    "@vitest/coverage-v8": "4.1.11",
     "node-pty": "1.1.0",
     "typescript": "^5.9.0",
     "vitest": "^4.1.0"

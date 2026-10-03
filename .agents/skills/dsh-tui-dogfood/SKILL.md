@@ -4,6 +4,17 @@ description: "Use when a dsh plugin checkout must be tested against a real profi
 ---
 # Dogfood a dsh plugin checkout
 
+For a dsh-tui checkout, run `pnpm verify` after development. It runs golden
+frames and all free dogfood scenarios automatically. `pnpm dogfood` starts the
+installed Harness with the base bundle and worktree in credential-free scratch
+homes. Read `FEATURES.md` in the checkout for scope and evidence rules.
+
+Paid live-model use requires an explicit human request. List scenarios with
+`pnpm dogfood:paid --list`, then select one with `--scenario`, `--home`,
+`--provider`, and `--model`. Use a cloned profile for its credentials and model
+adapter. Never submit a model prompt automatically, even a short smoke prompt.
+
+
 A fresh `DSH_HOME` misses the installed bundles, profile patch, settings, and themes.
 A run against the real home writes real sessions and state. Clone the source
 home and relink only the plugin under test inside the clone.

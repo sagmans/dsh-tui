@@ -8,6 +8,10 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+### Changed
+
+- Replace TypeScript and Python unit suites with actual-use dogfooding. Preserve golden frame snapshots. Free profile checks run automatically without credentials; paid model checks require explicit demand. Feature inventory distinguishes scope from verified behavior.
+
 ### Added
 
 - Optional Moshi completion and attention notifications, enabled only by `DSH_TUI_MOSHI_TOKEN`. Fixed messages exclude conversation content and session identifiers; bounded delivery never blocks agent work.

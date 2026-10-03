@@ -12,23 +12,32 @@ History: [CHANGELOG.md](CHANGELOG.md).
 | Task | Command |
 | --- | --- |
 | Install | `pnpm install --frozen-lockfile` |
-| Typecheck `src` and `tests` | `pnpm run typecheck` |
-| Unit and golden tests | `pnpm test` |
-| Release-helper guards (python3 >= 3.11) | `pnpm test:release` |
+| Typecheck sources and golden fixtures | `pnpm run typecheck` |
+| Golden frames only | `pnpm test:golden` |
+| Golden frames, native PTY, and free real-profile dogfood | `pnpm test` |
+| Automatic free real-profile dogfood | `pnpm dogfood` |
+| Development completion gate | `pnpm verify` |
 | Build `src` into `lib` | `pnpm run build` |
 | Tarball inventory check | `node tools/pack-smoke.mjs` |
 | Native widget PTY invariants | `pnpm test:terminal` |
 | Drive the real surface in a PTY | `node tools/pty-drive.mjs --home <clone> --prompt 'Reply with exactly: pong'` |
 | Dogfood a worktree in a cloned home | `./scripts/dogfood/run-tui-from-worktree.sh <worktree name or path>` |
 
-`.github/workflows/ci.yml` is the completion gate, in this order: `pnpm install
---frozen-lockfile`, `npm audit signatures`, `pnpm typecheck`, `pnpm test`,
-`pnpm test:release`, `node tools/pack-smoke.mjs`, `pnpm test:terminal`,
-`node tools/harness-matrix.mjs`, `node tools/install-smoke.mjs`. The consumer
-install gate needs Docker. The native widget gate checks input, redraw, resize,
-and restoration without credentials.
-It does not prove full-profile composition or hardware input-to-pixel latency.
-Use the cloned-home PTY command above and read its screen for actual profile usage.
+Run `pnpm verify` after every development change. It runs golden frames, native
+PTY checks, and free real-profile dogfood automatically. Do not add unit tests.
+Golden tests and their fixtures remain supported.
+
+CI also checks dependency signatures and consumer installation; the consumer
+gate needs Docker. Free dogfood starts the installed, verified Harness with the
+base bundle and this worktree in credential-free scratch homes. Paid live-model
+scenarios require explicit demand and a cloned profile. Never run them from
+`pnpm test`, CI, or a build hook.
+
+[FEATURES.md](FEATURES.md) and `tools/feature-inventory.json` own feature scope.
+Update inventory and actual-use scenarios together when behavior changes. Read
+current-screen and durable-state evidence; inventory membership, golden frames,
+and a clean boot do not prove a feature works. Report deferred paid or
+emulator-specific checks separately from passed free checks.
 
 ## Map
 
@@ -48,9 +57,9 @@ Use the cloned-home PTY command above and read its screen for actual profile usa
 - `src/stash.ts` answers the parked-draft commands and their chord rows;
   `src/stash/` holds the bank's schema, the private path it is written through,
   and the lock one read-modify-write takes.
-- `tests/unit/*.spec.ts` are the focused specs, `tests/golden/frames.spec.ts`
-  snapshots rendered frames, `tests/release/test_release.py` guards
-  `scripts/npm/release.py`.
+- `tests/golden/` retains rendered-frame snapshots. `tools/dogfood.mjs` drives
+  actual profiles from `tools/dogfood-scenarios.json`; `tools/pty-screen.mjs`
+  decodes current cells so old redraws cannot satisfy assertions.
 - `scripts/dogfood/run-tui-from-worktree.sh` clones the developer's home, points
   the clone's own profile at a worktree, and runs the surface there;
   `.agents/skills/dsh-tui-dogfood/` is the packaged skill an agent loads,

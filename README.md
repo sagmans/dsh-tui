@@ -448,6 +448,8 @@ an action with one, so the surface can be restyled and rebound without touching
 code. On the supported line a preference lives in the active profile's own patch,
 under the TUI entry's `config`; `/theme <name>` writes a chosen theme there for
 you. Use the actual entry ID, normally `tui`, not the legacy `dsh-tui` namespace.
+Merge preferences into the existing `config`; preserve its startup `!!js` fields.
+The verified host replaces `config` wholesale, so a partial replacement loses the launch identity.
 
 ```yaml
 - id: tui
@@ -917,15 +919,18 @@ Use the existing Moshi SSH connection to return to the terminal.
 ## Development
 
 ```sh
-pnpm install
-pnpm run typecheck
-pnpm test
-pnpm run build
+pnpm install --frozen-lockfile
+pnpm verify
 ```
 
 **A linked profile loads the built entry point**, so edits under `src/` are invisible to `dsh --profile tui` until `pnpm run build` runs. The PTY driver rebuilds, checks nested links in the isolated `--home`, and rejects a launcher whose version `dsh.compatibility.dshReleases` does not list.
 
-Clone your configured home with the dogfood helper for realistic runs. A minimal throwaway home can also expose startup failures without touching your real state:
+`pnpm verify` preserves golden snapshots and automatically drives free real-profile
+scenarios without credentials. [FEATURES.md](FEATURES.md) owns feature inventory
+and evidence rules. Unit suites are not maintained.
+
+Paid model use runs only on explicit demand. For those checks, clone your
+configured home with the dogfood helper. These commands include paid model calls:
 
 ```sh
 S=$(mktemp -d)

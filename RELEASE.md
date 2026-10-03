@@ -12,14 +12,14 @@ Applies to maintainers. Current release owner: repository owner ([`LICENSE`](LIC
 
 1. Candidate lands on `main` through a reviewed PR (squash merge).
 2. `verify` CI green on the exact merged SHA.
-3. Locally on that SHA: `pnpm typecheck`, `pnpm test`, `pnpm test:release`, `npm audit signatures`, `node tools/pack-smoke.mjs`.
-4. Dogfooding: install the candidate into a plugin profile and drive a real session in a terminal per [README](README.md#install). Unit tests do not prove the terminal surface.
+3. Locally on that SHA: `pnpm verify`, `npm audit signatures`, `node tools/pack-smoke.mjs`.
+4. Dogfooding: install the candidate into a plugin profile and drive a real session in a terminal per [README](README.md#install). Free checks run automatically; paid live-model checks run only on explicit demand. Golden snapshots do not replace actual use.
 5. README accuracy pass: every documented command and profile path still behaves as written.
 6. `CHANGELOG.md` carries the version being tagged: `Unreleased` holds only what landed after it, the `## [X.Y.Z] - <date>` section names the tag, and the compare links point at that tag.
 7. A publication carries both its `vX.Y.Z` tag and the GitHub release record for that tag. The tag is what `release.yml` publishes from and what a checkout resolves; the record is what a reader finds, and its notes are the version's `CHANGELOG.md` entry. Either half missing leaves the version incomplete: create the missing half from the same signed tag, and never retag and never republish a version already served.
 8. A published npm version is immutable. A broken release is forward-fixed, never unpublished (see [Rollback](#rollback)).
 
-Main/PR `verify` also runs the native terminal gate, offline harness matrix, and consumer install smoke. The tag workflow does not rerun those three gates. Both workflows install before `npm audit signatures`; that audit does not prove lifecycle scripts were disabled. The consumer smoke disables scripts for its direct npm installs, not explicitly for `dsh plugin add`. Keep real-session dogfooding separate from these automated checks.
+Main/PR `verify` also runs the native terminal gate, free actual-profile dogfood, offline harness matrix, and consumer install smoke. The tag workflow reruns native terminal and free dogfood checks, but not the matrix or consumer install gates. Both workflows install before `npm audit signatures`; that audit does not prove lifecycle scripts were disabled. The consumer smoke disables scripts for its direct npm installs, not explicitly for `dsh plugin add`. Keep real-session dogfooding separate from these automated checks.
 
 ## Harness matrix
 
@@ -49,7 +49,7 @@ set -a; . scripts/npm/target.env; set +a
 
 Per-release values are exported for one release only and are never stored in the repository: `PKG_VERSION`, `SOURCE_SHA`, `ARTIFACT`, `ARTIFACT_INTEGRITY`.
 
-The helper is [`scripts/npm/release.py`](scripts/npm/release.py); [`pnpm test:release`](tests/release) exercises its guards through synthetic CLIs, and CI runs that suite on every change. No helper action writes to npm or GitHub without its own `CONFIRM=<action>` value. `DRY_RUN=1` prints the exact mutation instead of running it. Reading this policy, passing preflight, or exporting a variable is not approval.
+The helper is [`scripts/npm/release.py`](scripts/npm/release.py). Unit suites are not maintained. Inspect the real helper through read-only actions or `DRY_RUN=1`; never exercise publication mutations as dogfood. No helper action writes to npm or GitHub without its own `CONFIRM=<action>` value. `DRY_RUN=1` prints the exact mutation instead of running it. Reading this policy, passing preflight, or exporting a variable is not approval.
 
 The helper rejects a redirected registry before it acts: it reads the effective `registry` and `@sagmans:registry` configuration and fails closed unless both resolve to `https://registry.npmjs.org/`. The trust commands refuse unknown flags, so that check replaces pinning the scoped key on the command line.
 

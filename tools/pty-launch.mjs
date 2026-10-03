@@ -42,7 +42,7 @@ export function barePaneEnv(base = process.env) {
 }
 
 /** Keep test writes away from the live home, including symlinked and parent paths. */
-export function preparePtyLaunch({ home, launcher = '' }) {
+export function preparePtyLaunch({ home, launcher = '', env = barePaneEnv() }) {
   if (!home) throw new Error('pty-drive: --home must name an existing isolated directory')
   let selectedHome
   try {
@@ -69,7 +69,7 @@ export function preparePtyLaunch({ home, launcher = '' }) {
     result = spawnSync(command, [...argsPrefix, '--version'], {
       encoding: 'utf8',
       timeout: 5000,
-      env: { ...barePaneEnv(), HOME: probeHome, DSH_HOME: probeHome },
+      env: { ...env, HOME: probeHome, DSH_HOME: probeHome },
     })
   } finally {
     rmSync(probeHome, { recursive: true, force: true })
