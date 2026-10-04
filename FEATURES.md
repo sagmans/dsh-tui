@@ -51,7 +51,11 @@ pnpm dogfood:paid --scenario live-reply --home <clone> --provider <provider> --m
 ```
 
 The clone must contain the chosen model adapter and its required credentials.
+Before delegation or autonomous work, set the cloned catalog default to the approved model and effort.
+Session-only `/model` selection does not constrain child-agent defaults.
 The runner selects the route through `/model` and reads it back through `/status`.
+Use `--effort max` when explicitly requested and advertised by the route.
+The runner confirms model and effort before submitting a billed prompt.
 It refuses paid execution without `--home`, `--provider`, `--model`, and `--scenario`.
 It never reads a model route from an implicit default.
 Paid runs also exclude pane coordinates and notification credentials.
@@ -59,6 +63,8 @@ Notification checks require a separate, explicitly requested development token a
 
 Demand-only scenarios cover replies, rich text, tools, PTC, conversation branching, clipboard transport, questions, approvals, queues, work, jobs, and delegations.
 A model that cannot perform the requested tool workflow fails that scenario.
+Question checks require an advertised question tool. Approval checks require an approval-enabled development session.
+If delegation uses Agent Teams, require explicit human authorization for Agent Teams before running that scenario.
 Do not treat its final text as proof that a tool executed.
 Durable file and transcript checks provide separate evidence where applicable.
 

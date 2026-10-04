@@ -71,9 +71,10 @@ const KEYS = {
   'ctrl+left': '\x1b[1;5D', 'ctrl+right': '\x1b[1;5C', 'alt+d': '\x1b[100;3u', 'shift+enter': '\x1b[13;2u',
   '?': '?', m: 'm', p: 'p', y: 'y', n: 'n', s: 's', l: 'l', e: 'e', u: 'u', r: 'r',
 }
+KEYS['ctrl+b'] = '\x02'
 const SUBMIT_KEYS = new Set(['ctrl+s', 'ctrl+enter', 'alt+enter'])
 const options = process.argv.slice(2)
-const ALLOWED = new Set(['--launcher', '--scenario', '--paid', '--home', '--provider', '--model', '--list'])
+const ALLOWED = new Set(['--launcher', '--scenario', '--paid', '--home', '--provider', '--model', '--effort', '--list'])
 for (let i = 0; i < options.length; i++) {
   if (!ALLOWED.has(options[i])) throw new Error(`dogfood: unknown option ${options[i]}`)
   if (!['--paid', '--list'].includes(options[i])) {
@@ -84,12 +85,14 @@ for (let i = 0; i < options.length; i++) {
 const option = name => options[options.indexOf(name) + 1]
 const supplied = name => options.includes(name)
 const paid = supplied('--paid')
-if (!paid && ['--home', '--provider', '--model'].some(supplied)) throw new Error('dogfood: model credentials and cloned homes require explicit --paid')
+if (!paid && ['--home', '--provider', '--model', '--effort'].some(supplied)) throw new Error('dogfood: model credentials and cloned homes require explicit --paid')
 const selected = (paid ? SCENARIOS.paid : SCENARIOS.free).filter(row => !supplied('--scenario') || row.id === option('--scenario'))
 if (selected.length === 0) throw new Error('dogfood: no matching scenarios')
 if (supplied('--list')) { console.log(selected.map(row => row.id).join('\n')); process.exit(0) }
 if (paid && !['--home', '--provider', '--model', '--scenario'].every(supplied)) throw new Error('dogfood: --paid requires --home, --provider, --model, and --scenario to bound billed work')
 if (paid && ![option('--provider'), option('--model')].every(value => /^[A-Za-z0-9_./:-]+$/u.test(value))) throw new Error('dogfood: invalid paid provider/model identifier')
+
+if (supplied('--effort') && !/^[A-Za-z0-9_-]+$/u.test(option('--effort'))) throw new Error('dogfood: invalid paid effort identifier')
 
 // node-pty's macOS prebuild can lose its execute bit without needing a dependency reinstall.
 if (process.platform === 'darwin') {
@@ -259,10 +262,11 @@ async function run(scenario, reused) {
     snapshot(0)
     if (paid) {
       const route = `${option('--provider')}/${option('--model')}`
-      child.write(`/model ${route}${KEYS['ctrl+s']}`)
+      const effort = supplied('--effort') ? option('--effort') : undefined
+      child.write(`/model ${route}${effort ? `/${effort}` : ''}${KEYS['ctrl+s']}`)
       await wait(() => screen.text().includes(`model set to ${route}`), 'explicit paid model route', generation - 1)
       child.write(`/status${KEYS['ctrl+s']}`)
-      await wait(() => screen.text().includes(`model ${route}`), 'paid model readback', generation - 1)
+      await wait(() => screen.text().replace(/\s+/gu, ' ').includes(`model ${route}${effort ? ` (${effort})` : ''}`), 'paid model and effort readback', generation - 1)
     }
     for (let i = 0; i < scenario.steps.length; i++) {
       const step = scenario.steps[i]

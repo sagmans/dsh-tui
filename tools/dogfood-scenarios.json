@@ -1740,8 +1740,8 @@
       "id": "rich-text",
       "steps": [
         {
-          "prompt": "Write Markdown with a heading formed by joining 'dogfood' and 'rich-ok' with one space. Include a two-row table, a TypeScript code fence, a diff fence replacing old with new, a valid Mermaid flowchart TB with nodes Alpha and Beta, and an invalid Mermaid fence. Do not use tools.",
-          "expect": "dogfood rich-ok",
+          "prompt": "Write Markdown with a heading formed by joining 'dogfood' and 'rich-ok' with one space. Include a two-row table, a code fence labelled typescript, a diff fence replacing old with new, and a valid Mermaid flowchart TB with nodes Alpha and Beta. End with exactly this invalid Mermaid fence: ```mermaid\nflowchart TB\nAlpha -->>\n```. The dangling link must have no target. Do not repair it. Do not use tools.",
+          "expect": "Mermaid diagram not rendered",
           "settled": true
         },
         {
@@ -1749,7 +1749,7 @@
             40,
             18
           ],
-          "expect": "rich-ok"
+          "expect": "Mermaid diagram not rendered"
         },
         {
           "command": "/export answer.md",
@@ -1758,6 +1758,21 @@
         {
           "file": "answer.md",
           "contains": "```mermaid",
+          "unquoted": true
+        },
+        {
+          "file": "answer.md",
+          "contains": "dogfood rich-ok",
+          "unquoted": true
+        },
+        {
+          "file": "answer.md",
+          "contains": "```typescript",
+          "unquoted": true
+        },
+        {
+          "file": "answer.md",
+          "contains": "```diff",
           "unquoted": true
         },
         {
@@ -1886,7 +1901,7 @@
       "steps": [
         {
           "prompt": "Use ask_questions now. Ask which color I prefer, with options teal and amber. Wait for my answer before reporting the selected color.",
-          "expect": "teal"
+          "expect": "type your own answer"
         },
         {
           "key": "down",
@@ -1965,11 +1980,14 @@
         },
         {
           "key": "ctrl+c",
-          "expect": "working"
+          "expect": "1 queued prompt back in the bar",
+          "settled": true
         },
         {
           "key": "ctrl+c",
           "expect": "ready",
+          "absent": "queued-ok",
+          "scope": "editor",
           "settled": true
         },
         {
@@ -2037,7 +2055,7 @@
       "steps": [
         {
           "prompt": "Run one bounded delegation using the available subagent capability. Ask it to inspect only the current scratch directory and report its name, without writing files or using external services. Collect its result, then reply by joining 'dogfood' and 'delegation-ok' with one space.",
-          "expect": "dogfood delegation-ok",
+          "expect": "subagent spawn finished",
           "settled": true
         },
         {
@@ -2051,6 +2069,15 @@
         {
           "key": "ctrl+b",
           "expect": "back to the session"
+        },
+        {
+          "command": "/export delegation.md",
+          "expect": "transcript written to"
+        },
+        {
+          "file": "delegation.md",
+          "contains": "### tool:",
+          "unquoted": true
         },
         {
           "command": "/quit",
