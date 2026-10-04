@@ -42,10 +42,10 @@ function toolResultContent(content: unknown): unknown {
  * so a scope-less lookup sees none of them and every card degrades to a bare
  * generic row — which is how a bash card lost its command.
  */
-export function createToolPresenter(ctx: Context, scope?: () => Agent | undefined): ToolPresenter {
+export function createToolPresenter(ctx: Context, scope: () => Agent | undefined): ToolPresenter {
   const definition = (name: string) => {
     try {
-      return ctx.tools.get(name, scope?.())
+      return ctx.tools.get(name, scope())
     } catch {
       return undefined
     }

@@ -215,9 +215,9 @@ function lockTimeout(lockDir: string): Error {
 /**
  * The claim a reclaimer takes, named after the bank whose lock it guards.
  *
- * Exported because it is the path a timeout tells the reader to clear by hand.
+ * The timeout names this path so the reader can identify the reclaimer blocking recovery.
  */
-export function reclaimMutexPath(lockDir: string): string {
+function reclaimMutexPath(lockDir: string): string {
   const digest = createHash('sha256').update(path.basename(lockDir), 'utf8').digest('hex')
   return path.join(path.dirname(lockDir), `${RECLAIM_PREFIX}${digest.slice(0, RECLAIM_DIGEST_LENGTH)}`)
 }
@@ -332,7 +332,7 @@ function processIsAlive(pid: number): boolean {
  * Identity and token let reclaimers reject a changed observation before removal;
  * they do not make the later pathname deletion atomic with that check.
  */
-export interface LockObservation {
+interface LockObservation {
   readonly owner: LockOwner | undefined
   readonly device: number
   readonly inode: number
@@ -340,7 +340,7 @@ export interface LockObservation {
 }
 
 /** Read a lock and the identity of the directory it was read from, in one pass. */
-export async function observeLock(lockDir: string): Promise<LockObservation | undefined> {
+async function observeLock(lockDir: string): Promise<LockObservation | undefined> {
   let stats: Awaited<ReturnType<typeof assertPrivateDirectory>>
   try {
     stats = await assertPrivateDirectory(lockDir, 'stash lock')
@@ -387,7 +387,7 @@ async function reclaimAbandonedLock(lockDir: string): Promise<boolean> {
  * Identity and token checks reduce stale-observation deletion; they cannot
  * exclude replacement after the check because removal still uses the pathname.
  */
-export async function removeObservedLock(lockDir: string, observed: LockObservation): Promise<boolean> {
+async function removeObservedLock(lockDir: string, observed: LockObservation): Promise<boolean> {
   const current = await observeLock(lockDir)
   if (current === undefined) return false
   if (current.device !== observed.device || current.inode !== observed.inode) return false

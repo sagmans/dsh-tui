@@ -33,7 +33,7 @@ const CATALOG_GAP_MESSAGES: Record<ModelCatalogGap, string> = {
  * name is optional here because an adapter may advertise a route without one,
  * while the id is always the value a request would name.
  */
-export interface ModelListCatalog {
+interface ModelListCatalog {
   providers(): readonly { readonly id: string; readonly name: string }[]
   models(provider: string): Promise<readonly { readonly id: string; readonly name?: string }[]>
 }
@@ -46,7 +46,7 @@ export interface ModelListCatalog {
  * any disagreement with the picker is a catalog disagreement, never a
  * formatting one.
  */
-export async function modelListLines(catalog: ModelListCatalog): Promise<string[]> {
+async function modelListLines(catalog: ModelListCatalog): Promise<string[]> {
   const lines: string[] = []
   for (const provider of catalog.providers()) {
     for (const model of await catalog.models(provider.id)) {

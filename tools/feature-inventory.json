@@ -47,7 +47,7 @@
     },
     {
       "id": "commands",
-      "description": "Local command help, status, dispatch and error receipts",
+      "description": "Local command help, status, exact never-written todo notice, dispatch and error receipts",
       "cost": "free",
       "scenarios": [
         "commands",
@@ -198,10 +198,11 @@
     },
     {
       "id": "history",
-      "description": "History storage, consent refusal, clear and editor up/down recall",
+      "description": "Native consent refusal and editor up/down recall; public consent config proves default-home persistence across restart and clear without stale search entries; repaired/deleted-file recovery remains unverified",
       "cost": "free",
       "scenarios": [
-        "history"
+        "history",
+        "history-consent"
       ],
       "sources": [
         "src/agent/prompt-history.ts",
@@ -222,7 +223,7 @@
     },
     {
       "id": "stash",
-      "description": "Park, apply, pop, list, selector errors, drop and clear confirmation",
+      "description": "Native-clock park, editor-scoped apply/pop, list, selector errors, drop, clear confirmation and persisted restart",
       "cost": "free",
       "scenarios": [
         "stash",
@@ -407,7 +408,7 @@
     },
     {
       "id": "jobs",
-      "description": "List empty/missing jobs and invalid read/kill commands",
+      "description": "List empty jobs; reject missing job ids and read/kill extra arguments before lookup/action",
       "cost": "free",
       "scenarios": [
         "commands",
@@ -600,7 +601,7 @@
     },
     {
       "command": "/todo",
-      "description": "show the list of tasks the agent is keeping",
+      "description": "show tasks or distinguish never-written, empty and turn-cleared todo state",
       "feature": "commands"
     },
     {
@@ -615,7 +616,7 @@
     },
     {
       "command": "/jobs",
-      "description": "list background jobs, read one, or kill one",
+      "description": "list background jobs, read one, or kill one; read/kill accept exactly one job id",
       "feature": "jobs"
     },
     {

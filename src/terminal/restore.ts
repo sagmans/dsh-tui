@@ -1,5 +1,5 @@
 /** One reversible terminal mutation. */
-export type RestoreHook = () => void
+type RestoreHook = () => void
 
 /** Registry that guarantees every registered hook runs exactly once. */
 export interface RestoreRegistry {

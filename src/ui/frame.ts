@@ -47,7 +47,7 @@ export function textRow(text: string, innerWidth: number): string {
  * the way the editor's own scroll indicator does: the same label in the same
  * place, at the same width, so both bars report a fold identically.
  */
-export function frameRule(innerWidth: number, hiddenRows: number): string {
+function frameRule(innerWidth: number, hiddenRows: number): string {
   const width = Math.max(0, innerWidth)
   if (hiddenRows <= 0) return '─'.repeat(width)
   const label = ` ↓ ${hiddenRows} more `
@@ -165,12 +165,12 @@ export function frameLines(lines: readonly string[], width: number, faces: Frame
 /**
  * One block of plain text as a bar draws it.
  *
- * A block without a limit is the prompt itself, which is never cut; the text is
- * wrapped here because nothing upstream knows the frame's own width. The text is
+ * Queued drafts need a bounded preview rather than another full editor; the text
+ * wraps here because only the frame knows its available width. The text is
  * drawn without colour: a frame holds the surface's own drafts, whose styling is
  * the frame's, and a sequence that reached one would fight the frame that owns it.
  */
-export function frameText(text: string, width: number, faces: FrameFaces, limit = Number.POSITIVE_INFINITY): string[] {
+export function frameText(text: string, width: number, faces: FrameFaces, limit: number): string[] {
   const inside = faces.framed ? width - (faces.rail ? RAIL_COLUMNS : FRAME_COLUMNS) : width
   const drawn = renderTerminalText(text, { color: 'none' })
   return frameLines(wrapTextWithAnsi(drawn, textWidth(inside)), width, faces, limit)

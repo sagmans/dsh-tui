@@ -14,7 +14,7 @@
         },
         {
           "command": "/todo",
-          "expect": "todo"
+          "expect": "no todo list has been written in this session"
         },
         {
           "command": "/jobs",
@@ -143,7 +143,8 @@
           "expect": "Applied [0]"
         },
         {
-          "expect": "dogfood-alpha"
+          "expect": "dogfood-alpha",
+          "scope": "editor"
         },
         {
           "key": "ctrl+c",
@@ -155,7 +156,8 @@
           "expect": "Popped [0]"
         },
         {
-          "expect": "dogfood-alpha"
+          "expect": "dogfood-alpha",
+          "scope": "editor"
         },
         {
           "key": "ctrl+c",
@@ -409,6 +411,16 @@
         {
           "command": "/jobs kill",
           "expect": "kill needs a job id"
+        },
+        {
+          "command": "/jobs read missing extra",
+          "expect": "/jobs: read accepts only a job id; use /jobs read <id> or /jobs kill <id>",
+          "absent": "missing: no output yet"
+        },
+        {
+          "command": "/jobs kill missing extra",
+          "expect": "/jobs: kill accepts only a job id; use /jobs read <id> or /jobs kill <id>",
+          "absent": "missing: no such job"
         },
         {
           "command": "/subagents open missing",
@@ -1079,7 +1091,7 @@
       "steps": [
         {
           "command": "/history",
-          "expect": "history"
+          "expect": "0 prompts recorded"
         },
         {
           "command": "/status",
@@ -1096,11 +1108,11 @@
         },
         {
           "key": "ctrl+r",
-          "expect": "prompt history"
+          "expect": "prompt history is disabled in dsh-tui settings"
         },
         {
           "command": "/history clear",
-          "expect": "forgot"
+          "expect": "forgot 0 prompts"
         },
         {
           "command": "/quit",
@@ -1690,10 +1702,53 @@
           "absent": "forgot 0"
         },
         {
+          "key": "ctrl+r",
+          "expect": "no prompt history yet"
+        },
+        {
+          "command": "/rename history-persistent",
+          "expect": "session renamed"
+        },
+        {
           "command": "/quit",
           "exit": true
         }
-      ]
+      ],
+      "continuation": {
+        "steps": [
+          {
+            "key": "ctrl+r",
+            "expect": "prompt history"
+          },
+          {
+            "type": "history-persistent",
+            "expect": "/rename history-persistent"
+          },
+          {
+            "key": "enter",
+            "expect": "/rename history-persistent",
+            "scope": "editor"
+          },
+          {
+            "key": "ctrl+c",
+            "absent": "history-persistent",
+            "scope": "editor"
+          },
+          {
+            "command": "/history clear",
+            "expect": "forgot",
+            "absent": "forgot 0"
+          },
+          {
+            "key": "ctrl+r",
+            "expect": "no prompt history yet"
+          },
+          {
+            "command": "/quit",
+            "exit": true
+          }
+        ]
+      }
     },
     {
       "id": "native-terminal",

@@ -3,7 +3,7 @@ import { displayText } from '../text.ts'
 import type { MermaidTransform } from './mermaid.ts'
 
 /** Bound retained parses so redraw reuse does not grow memory with the entire transcript; reuse refreshes eviction order. */
-export const MARKDOWN_CACHE_LIMIT = 64
+const MARKDOWN_CACHE_LIMIT = 64
 const STACK_OVERFLOW_MESSAGE = 'Maximum call stack size exceeded'
 
 /**
@@ -38,9 +38,9 @@ export const ANSWER_FACE: MarkdownFace = { name: 'answer' }
 export class MarkdownRenderer {
   private readonly parsed = new Map<string, Markdown>()
 
-  constructor(private readonly theme: MarkdownTheme, private readonly mermaid?: MermaidTransform) {}
+  constructor(private readonly theme: MarkdownTheme, private readonly mermaid: MermaidTransform) {}
 
-  render(text: string, width: number, live = false, face: MarkdownFace = ANSWER_FACE): string[] {
+  render(text: string, width: number, live: boolean, face: MarkdownFace): string[] {
     // A streaming reply can settle on the very text it last streamed, and the
     // two renderings are not the same: only a settled one may report what a
     // drawing lost, and a mode may draw one and withhold the other. The flag and
@@ -78,7 +78,7 @@ export class MarkdownRenderer {
    */
   private options(face: MarkdownFace, live: boolean): MarkdownOptions | undefined {
     const mermaid = this.mermaid
-    if (mermaid === undefined || face.transform === false) return undefined
+    if (face.transform === false) return undefined
     return { transform: (markdown, availableWidth) => mermaid(markdown, availableWidth, live) }
   }
 

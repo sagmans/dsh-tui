@@ -9,7 +9,7 @@
  */
 
 import { spawnSync } from 'node:child_process'
-import { createHerdrClient, type HerdrClient, type HerdrEnvironment } from './client.ts'
+import { createHerdrClient, type HerdrEnvironment } from './client.ts'
 import {
   EXIT_RELEASE_TIMEOUT_MS,
   FALLBACK_HERDR_BIN,
@@ -36,32 +36,10 @@ import {
   type LifecycleReport,
 } from './state.ts'
 
-export interface HerdrSessionInput {
+interface HerdrSessionInput {
   readonly id: string
   readonly cwd: string
   readonly reason: SessionStartReason
-}
-
-/**
- * Keep lifecycle reporting independent of the process environment, socket,
- * clock, and exit command so those effects can be supplied independently.
- * The surface uses the defaults for its containing pane.
- */
-export interface HerdrReporterOptions {
-  readonly client?: HerdrClient
-  readonly env?: HerdrEnvironment
-  readonly now?: () => number
-  readonly releaseSync?: () => void
-  /** The first retry wait; a test cannot wait a socket out. */
-  readonly retryBaseMs?: number | undefined
-  /**
-   * How often the pane checks that it still owns its row; zero stops checking.
-   *
-   * The wait only has to be short enough that a reader who looks at the picker
-   * after a multiplexer restart sees the pane rather than nothing, and long
-   * enough that an idle pane is not talking to itself.
-   */
-  readonly reclaimIntervalMs?: number | undefined
 }
 
 export interface HerdrReporter {
@@ -100,14 +78,13 @@ export interface HerdrReporter {
   registerExitRelease(): () => void
 }
 
-export function createHerdrReporter(options: HerdrReporterOptions = {}): HerdrReporter {
-  const env = options.env ?? process.env
-  const client = options.client ?? createHerdrClient(env)
-  const nextSeq = createReportSequence(options.now ?? Date.now)
+export function createHerdrReporter(): HerdrReporter {
+  const env = process.env
+  const client = createHerdrClient(env)
+  const nextSeq = createReportSequence()
   // A fresh sequence rides along: Herdr keeps the newest number per source and
   // drops a release that cannot beat the reports this pane already sent.
-  const release = options.releaseSync ?? ((): void => releaseAgentSync(env, nextSeq()))
-  const retryBaseMs = Math.max(1, options.retryBaseMs ?? RETRY_BASE_MS)
+  const release = (): void => releaseAgentSync(env, nextSeq())
   /**
    * Key waits by slot so replacements do not double-count a decision.
    *
@@ -165,7 +142,7 @@ export function createHerdrReporter(options: HerdrReporterOptions = {}): HerdrRe
   const scheduleRetry = (): void => {
     if (released || retryTimer !== undefined) return
     retryAttempt += 1
-    const wait = Math.min(retryBaseMs * 2 ** (retryAttempt - 1), RETRY_MAX_MS)
+    const wait = Math.min(RETRY_BASE_MS * 2 ** (retryAttempt - 1), RETRY_MAX_MS)
     retryTimer = setTimeout(() => {
       retryTimer = undefined
       flush()
@@ -262,9 +239,7 @@ export function createHerdrReporter(options: HerdrReporterOptions = {}): HerdrRe
 
   const startReclaim = (): void => {
     if (reclaimTimer !== undefined || released || !client.enabled) return
-    const interval = options.reclaimIntervalMs ?? RECLAIM_INTERVAL_MS
-    if (interval <= 0) return
-    reclaimTimer = setInterval(() => void reclaim(), interval)
+    reclaimTimer = setInterval(() => void reclaim(), RECLAIM_INTERVAL_MS)
     // Never a reason for the process to stay alive: the pane's exit is what
     // hands the row back.
     reclaimTimer.unref()
@@ -382,7 +357,7 @@ export function createHerdrReporter(options: HerdrReporterOptions = {}): HerdrRe
  * spawn is silent by design, so the fallback is the only thing standing between
  * an exit and a row that reads as a live agent forever.
  */
-export function releaseAgentSync(env: HerdrEnvironment, seq: number): void {
+function releaseAgentSync(env: HerdrEnvironment, seq: number): void {
   const paneId = env[HERDR_PANE_ID_VAR]
   if (env[HERDR_ENV_VAR] !== HERDR_ENV_FLAG || paneId === undefined || env[HERDR_SOCKET_PATH_VAR] === undefined) return
   const argv = ['pane', 'release-agent', paneId, '--source', HERDR_SOURCE, '--agent', HERDR_AGENT, '--seq', String(seq)]

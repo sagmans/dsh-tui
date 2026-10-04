@@ -98,12 +98,12 @@ export function popupWidth(columns: number): number {
 }
 
 /** The rows the box may occupy, resolved the way the library resolves a percentage. */
-export function popupHeight(rows: number): number {
+function popupHeight(rows: number): number {
   return Math.floor((rows * HEIGHT_PERCENT) / 100)
 }
 
 /** How many list rows fit in that height, with the frame's own rows and the scroll counts reserved. */
-export function popupRowBudget(rows: number): number {
+function popupRowBudget(rows: number): number {
   return Math.max(MIN_ROWS, popupHeight(rows) - CHROME_ROWS - MARKER_ROWS)
 }
 

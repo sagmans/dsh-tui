@@ -31,7 +31,6 @@ import {
 import {
   assertSafeEntryId,
   assertSafeStashText,
-  type Clock,
   createEmptyStashFile,
   createNewId,
   isRecord,
@@ -48,7 +47,7 @@ import {
  * A stash file larger than this is refused, never quarantined: hiding a
  * legitimate bank because it grew past a cap would be worse than refusing it.
  */
-export const MAX_STASH_FILE_BYTES = 16_777_216
+const MAX_STASH_FILE_BYTES = 16_777_216
 
 const DUPLICATE_STASH_ID_MESSAGE = 'duplicate stash id'
 const UNSUPPORTED_SCHEMA_GUIDANCE =
@@ -62,7 +61,7 @@ const FILE_TOO_LARGE_MESSAGE = 'this session has no room left for another draft;
  * past it is refused by every later read, so letting one save through would turn
  * a full bank into an unreadable one.
  */
-export class StashFileTooLargeError extends Error {
+class StashFileTooLargeError extends Error {
   readonly bytes: number
 
   constructor(bytes: number) {
@@ -74,10 +73,6 @@ export class StashFileTooLargeError extends Error {
 
 export interface AddEntryInput {
   readonly text: string
-  /** Caller-supplied id; generated when omitted. */
-  readonly id?: string
-  /** Preserve an explicit timestamp instead of assigning the store clock's current time; ordering remains newest-first insertion. */
-  readonly createdAt?: number
 }
 
 type LoadResult =
@@ -92,32 +87,24 @@ export interface QuarantineRecord {
 }
 
 /** Replacement already landed: report the later failure without inviting a retry of the committed mutation. */
-export interface StashWriteOutcome {
+interface StashWriteOutcome {
   readonly committed: true
   readonly phase: StashFailurePhase
   readonly error: unknown
 }
-
-/** Replacement writers must report landed writes separately from failures, so callers do not retry committed mutations. */
-export type StashWriter = (
-  filePath: string,
-  file: StashFile,
-  syncDirectory?: typeof syncDirectoryEntry,
-  replaceFile?: typeof rename,
-) => Promise<void | StashWriteOutcome>
 
 /** Stash data written by a newer build, which this one must not touch. */
 export class UnsupportedStashSchemaError extends Error {
   readonly detectedVersion: number
   readonly supportedVersion: number
 
-  constructor(detectedVersion: number, supportedVersion: number = STASH_SCHEMA_VERSION) {
+  constructor(detectedVersion: number) {
     super(
-      `stash data uses version ${detectedVersion}; this build supports versions through ${supportedVersion}. ${UNSUPPORTED_SCHEMA_GUIDANCE}`,
+      `stash data uses version ${detectedVersion}; this build supports versions through ${STASH_SCHEMA_VERSION}. ${UNSUPPORTED_SCHEMA_GUIDANCE}`,
     )
     this.name = 'UnsupportedStashSchemaError'
     this.detectedVersion = detectedVersion
-    this.supportedVersion = supportedVersion
+    this.supportedVersion = STASH_SCHEMA_VERSION
   }
 }
 
@@ -126,14 +113,10 @@ export class StashStore {
   private corruptRecovery: QuarantineRecord | undefined
   private readonly filePath: string
   private readonly paths: StashPaths
-  private readonly now: Clock
-  private readonly write: StashWriter
 
-  /** Keep validation and mutation locking here even when callers replace timestamp or persistence behavior. */
-  constructor(paths: StashPaths, loaded: LoadResult, now: Clock = Date.now, write: StashWriter = writeStashFile) {
+  /** Keep validation and mutation locking together so every draft uses the same persistence safeguards. */
+  constructor(paths: StashPaths, loaded: LoadResult) {
     this.paths = paths
-    this.now = now
-    this.write = write
     this.file = loaded.kind === 'ready' ? loaded.file : createEmptyStashFile(paths.sessionId)
     this.corruptRecovery =
       loaded.kind === 'corrupt' && loaded.quarantinedTo !== undefined
@@ -168,8 +151,8 @@ export class StashStore {
   }
 
   async add(input: AddEntryInput): Promise<ResolvedEntry> {
-    const id = input.id ?? createNewId()
-    assertSafeEntryId(id)
+    // Generated UUIDs need no caller-input validation; persisted identities remain validated on reload.
+    const id = createNewId()
     assertSafeStashText(input.text)
     // A draft is stored in the form it is safe to draw again, so no path back to
     // the screen has to remember to strip it.
@@ -178,7 +161,7 @@ export class StashStore {
       await this.reloadFresh()
       // Strict parsing rejects duplicate ids; refuse them before a save makes the bank unreadable.
       if (this.file.entries.some(entry => entry.id === id)) throw new Error(DUPLICATE_STASH_ID_MESSAGE)
-      const entry: StashEntry = { id, text, createdAt: input.createdAt ?? this.now() }
+      const entry: StashEntry = { id, text, createdAt: Date.now() }
       const next: StashFile = { ...this.file, entries: [entry, ...this.file.entries] }
       return this.persistMutation(next, { entry, index: 0 })
     })
@@ -214,11 +197,11 @@ export class StashStore {
    * whatever is on disk instead would delete drafts another surface added while
    * the confirmation was on screen, which is a loss nobody agreed to.
    */
-  async clear(ids?: readonly string[]): Promise<number> {
+  async clear(ids: readonly string[]): Promise<number> {
     return withStashMutationLock(this.filePath, async () => {
       await this.reloadFresh()
-      const confirmed = ids === undefined ? undefined : new Set(ids)
-      const kept = confirmed === undefined ? [] : this.file.entries.filter(entry => !confirmed.has(entry.id))
+      const confirmed = new Set(ids)
+      const kept = this.file.entries.filter(entry => !confirmed.has(entry.id))
       const removed = this.file.entries.length - kept.length
       if (removed === 0) return { didPersist: false, result: 0 }
       const next: StashFile = { ...createEmptyStashFile(this.paths.sessionId), entries: kept }
@@ -238,7 +221,7 @@ export class StashStore {
   }
 
   private async persistMutation<Result>(next: StashFile, result: Result): Promise<StashMutationResult<Result>> {
-    const outcome = await this.write(this.filePath, next)
+    const outcome = await writeStashFile(this.filePath, next)
     // Replacement precedes the directory-sync warning; keep memory aligned with the landed write before reporting its result.
     this.file = next
     if (outcome?.committed === true) {
@@ -264,15 +247,11 @@ export class StashStore {
   }
 }
 
-export async function loadStashStore(
-  paths: StashPaths,
-  now: Clock = Date.now,
-  write: StashWriter = writeStashFile,
-): Promise<StashStore> {
+export async function loadStashStore(paths: StashPaths): Promise<StashStore> {
   // Initial loading can quarantine a bank too; serialize that move with mutations.
   const loaded = await withStashFileLock(paths.file, () => readCurrentStashFile(paths.file, paths.sessionId))
   if (loaded.kind === 'unsupported') throw new UnsupportedStashSchemaError(loaded.version)
-  return new StashStore(paths, loaded, now, write)
+  return new StashStore(paths, loaded)
 }
 
 async function readCurrentStashFile(filePath: string, sessionId: string): Promise<LoadResult> {
@@ -314,11 +293,9 @@ async function quarantineCorrupt(
 }
 
 /** Preserve the replacement boundary with operation overrides: a later directory-sync failure warns about a landed write. */
-export async function writeStashFile(
+async function writeStashFile(
   filePath: string,
   file: StashFile,
-  syncDirectory: typeof syncDirectoryEntry = syncDirectoryEntry,
-  replaceFile: typeof rename = rename,
 ): Promise<void | StashWriteOutcome> {
   const directory = path.dirname(filePath)
   await ensurePrivateDirectory(directory)
@@ -333,7 +310,7 @@ export async function writeStashFile(
   try {
     await writePrivateFileExclusive(tempPath, data)
     tempCreated = true
-    await replaceFile(tempPath, filePath)
+    await rename(tempPath, filePath)
     tempCreated = false
   } catch (error) {
     if (tempCreated) await rm(tempPath, { force: true })
@@ -343,7 +320,7 @@ export async function writeStashFile(
   // directories that name the storage itself were flushed when they were created,
   // so this is the entry the save is actually responsible for.
   try {
-    await syncDirectory(directory)
+    await syncDirectoryEntry(directory)
   } catch (error) {
     return { committed: true, phase: 'directory-sync', error }
   }

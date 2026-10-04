@@ -12,8 +12,6 @@ import type { ForkEvent } from './fork.ts'
 
 /** One closed turn that contains a direct prompt and can be undone as a unit. */
 export interface TurnPoint {
-  /** Harness turn number when available; the fallback ordinal counts undoable turns, not all harness turns. */
-  readonly turn: number
   /** Cut before the prompt's inbox splice when known, otherwise before turn/start, to avoid redelivery on divergence. */
   readonly seedCount: number
   /** The first direct prompt's text, which the composer gets back. */
@@ -93,13 +91,12 @@ function deliveryIndex(events: readonly ForkEvent[]): ReadonlyMap<string, number
 export function turnsOf(events: readonly ForkEvent[]): readonly TurnPoint[] {
   const delivered = deliveryIndex(events)
   const turns: TurnPoint[] = []
-  let open: { turn: number; startIndex: number; seedCount: number; promptText?: string } | undefined
+  let open: { startIndex: number; seedCount: number; promptText?: string } | undefined
   for (let index = 0; index < events.length; index += 1) {
     const event = events[index]
     if (event === undefined) continue
     if (event.type === 'turn/start') {
-      const turn = asRecord(event.data)?.turn
-      open = { turn: typeof turn === 'number' ? turn : turns.length + 1, startIndex: index, seedCount: index }
+      open = { startIndex: index, seedCount: index }
       continue
     }
     if (open === undefined) continue
@@ -117,7 +114,7 @@ export function turnsOf(events: readonly ForkEvent[]): readonly TurnPoint[] {
     }
     if (event.type === 'turn/end') {
       if (open.promptText !== undefined) {
-        turns.push({ turn: open.turn, seedCount: open.seedCount, promptText: open.promptText })
+        turns.push({ seedCount: open.seedCount, promptText: open.promptText })
       }
       open = undefined
     }

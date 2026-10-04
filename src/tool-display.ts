@@ -30,14 +30,14 @@ export const TOOL_DISPLAY_LIMITS = {
 } as const
 
 /** Fold cards and hide output initially so long reads, diffs, and searches do not bury the conversation. */
-export const DEFAULT_TOOL_DISPLAY: ToolDisplaySpec = {
+const DEFAULT_TOOL_DISPLAY: ToolDisplaySpec = {
   collapsed: true,
   output: 'hidden',
   tail: CARD_SHELL_PREVIEW,
 }
 
 /** The one name the block reserves: the row every tool without its own inherits. */
-export const DEFAULT_TOOL_ENTRY = 'default'
+const DEFAULT_TOOL_ENTRY = 'default'
 
 /** The `tools:` block once resolved: the default row, and every tool that named its own. */
 export interface ToolDisplayTable {
@@ -57,7 +57,7 @@ export function toolDisplayFor(table: ToolDisplayTable, tool: string): ToolDispl
  * shipped one, so a reader who writes `default: { output: tail }` keeps that
  * choice for every tool that does not name its own.
  */
-export function resolveToolDisplay(
+function resolveToolDisplay(
   partial: Partial<ToolDisplaySpec> | undefined,
   fallback: ToolDisplaySpec = DEFAULT_TOOL_DISPLAY,
 ): ToolDisplaySpec {

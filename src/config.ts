@@ -64,7 +64,7 @@ export function readRowSettings(raw: unknown): unknown {
 }
 
 /** A composed row whose configuration cannot describe a runnable terminal surface. */
-export class TuiConfigError extends Error {}
+class TuiConfigError extends Error {}
 
 /** Avoid changing a session lookup key during row validation; whitespace-only keys still cannot name a session. */
 function requireString(value: unknown, field: string): string {

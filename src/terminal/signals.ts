@@ -9,7 +9,7 @@
  */
 
 /** Signals whose default action ends the process without unwinding the surface. */
-export const TERMINATING_SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGQUIT'] as const
+const TERMINATING_SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGQUIT'] as const
 
 export type TerminatingSignal = (typeof TERMINATING_SIGNALS)[number]
 

@@ -12,7 +12,6 @@
 // can block the surface.
 
 import { mkdirSync, readFileSync, readdirSync, statSync, watch, writeFileSync, type FSWatcher } from 'node:fs'
-import { homedir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { load as parseYaml } from 'js-yaml'
@@ -25,10 +24,10 @@ import {
   writtenPalette,
   writtenTokens,
 } from './theme-schema.ts'
-import type { PaletteName, StyleSpec, ThemedSpecs } from './theme-tokens.ts'
+import type { PaletteName, ThemedSpecs } from './theme-tokens.ts'
 
 /** The directory under `DSH_HOME` the reader's own themes live in. */
-export const THEMES_DIR_NAME = 'themes'
+const THEMES_DIR_NAME = 'themes'
 
 /**
  * The theme the surface draws until the reader names another.
@@ -53,10 +52,14 @@ const THEME_SECTIONS: ReadonlySet<string> = new Set(['palette', 'tokens'])
  * case before reading and parsing. This check does not bound parser resource use
  * or protect against a file growing between the size check and the read.
  */
-export const MAX_THEME_FILE_BYTES = 64 * 1024
+const MAX_THEME_FILE_BYTES = 64 * 1024
 
 /** How long a burst of writes to the theme directory is allowed to settle. */
 const WATCH_DEBOUNCE_MS = 150
+/** Missing homes are normal before setup; other failures need an actionable deferred notice. */
+const MISSING_THEME_HOME_CODE = 'ENOENT'
+/** Avoid exposing filesystem exception details through the terminal notice. */
+const WATCH_SETUP_NOTICE = 'theme live reload could not start; restart the surface after checking filesystem access and watcher limits'
 
 /** Keep provenance with sparse overrides so settings can merge over this layer
  * without replacing unspecified shipped defaults. */
@@ -121,8 +124,8 @@ export function builtinThemesDir(): string {
  * the same precedence rule — "where is DSH_HOME" has more than one answer in this
  * tree already, and a third would be one more to keep in step.
  */
-export function themesHomeDir(env: NodeJS.ProcessEnv = process.env, home: string = homedir()): string {
-  return path.join(dshHomeDir(env, home), THEMES_DIR_NAME)
+export function themesHomeDir(): string {
+  return path.join(dshHomeDir(), THEMES_DIR_NAME)
 }
 
 /** Create the editable directory before watching it; return failures for deferred
@@ -150,7 +153,7 @@ export function builtinNames(library: ThemeLibrary): string[] {
  * copy of a built-in that has moved on since the first, and the file they have been
  * editing is the one thing that must survive the request.
  */
-export function exportName(name: string, taken: ReadonlySet<string>): string {
+function exportName(name: string, taken: ReadonlySet<string>): string {
   for (let n = 1; ; n += 1) {
     const candidate = `${name}_export_${n}`
     if (!taken.has(candidate)) return candidate
@@ -245,7 +248,7 @@ export function loadThemes(homeDir: string, builtinDir: string): ThemeLibrary {
  * and cancels pending reloads at teardown. The watcher uses Node's default
  * persistent lifetime, so disposal is needed to release its process handle.
  */
-export function watchThemes(dir: string, onChange: () => void): () => void {
+export function watchThemes(dir: string, onChange: () => void, onNotice: (text: string) => void): () => void {
   let pending: NodeJS.Timeout | undefined
   let watcher: FSWatcher
   try {
@@ -259,9 +262,9 @@ export function watchThemes(dir: string, onChange: () => void): () => void {
         onChange()
       }, WATCH_DEBOUNCE_MS)
     })
-  } catch {
-    // Keep startup usable with the already loaded themes when live reload cannot
-    // start. Setup failures leave that snapshot in place without a watcher or notice.
+  } catch (error) {
+    // Keep the loaded snapshot usable; deferred notices remain readable after startup.
+    if (asRecord(error)?.code !== MISSING_THEME_HOME_CODE) onNotice(WATCH_SETUP_NOTICE)
     return () => {}
   }
   // A directory removed under a running session stops the watcher; reloading once

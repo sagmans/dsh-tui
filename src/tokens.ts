@@ -8,7 +8,7 @@
  */
 
 /** Characters a provider bills as roughly one token. */
-export const CHARS_PER_TOKEN = 4
+const CHARS_PER_TOKEN = 4
 
 const THOUSAND = 1000
 const HUNDRED_THOUSAND = 100 * THOUSAND

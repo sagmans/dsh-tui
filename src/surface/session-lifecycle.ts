@@ -22,7 +22,7 @@ import { windowTitle } from '../terminal/title.ts'
 const STATUS_TICK_MS = 1000
 
 /** The session this process runs, as much of it as a driven read needs. */
-export interface LiveSession {
+interface LiveSession {
   /** The events this process holds unflushed, which storage alone does not. */
   readonly snapshotEvents?: () => readonly ForkEvent[]
 }

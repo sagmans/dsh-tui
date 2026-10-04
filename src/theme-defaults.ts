@@ -6,7 +6,7 @@ import type { PaletteName, StyleSpec, TuiToken } from './theme-tokens.ts'
  * terminal maps it to, which on the reader's own phone was close enough to
  * ordinary text that dimming looked like it had not been applied at all.
  */
-export const MUTED_GREY = '#8a8a8a'
+const MUTED_GREY = '#8a8a8a'
 
 /**
  * The shade the reasoning signpost recedes to.
@@ -14,7 +14,7 @@ export const MUTED_GREY = '#8a8a8a'
  * The row naming a thought is a signpost, not the thought: it sits below the
  * muted family so the body it introduces stays the thing being read.
  */
-export const FAINT_GREY = '#666666'
+const FAINT_GREY = '#666666'
 
 /**
  * The shade a tool's argument takes.
@@ -23,7 +23,7 @@ export const FAINT_GREY = '#666666'
  * read as neither the tool's own label (warn) nor ordinary output (the default
  * foreground); a pale blue sits between them without competing for attention.
  */
-export const ARGUMENT_BLUE = '#8db3d9'
+const ARGUMENT_BLUE = '#8db3d9'
 
 /**
  * The shade a submitted prompt takes.
@@ -32,7 +32,7 @@ export const ARGUMENT_BLUE = '#8db3d9'
  * foreground, so telling the two apart meant reading them; a mint keeps them
  * apart at a glance without the pink cast a rose gave every prompt.
  */
-export const USER_PROMPT_MINT = '#27f5c8'
+const USER_PROMPT_MINT = '#27f5c8'
 
 /**
  * The band a changed run sits on inside an added line.
@@ -43,10 +43,10 @@ export const USER_PROMPT_MINT = '#27f5c8'
  * find what moved. An explicit dark shade rather than a palette slot, for the
  * same reason the muted grey is one.
  */
-export const DIFF_ADDED_BAND = '#1e3d24'
+const DIFF_ADDED_BAND = '#1e3d24'
 
 /** The band a changed run sits on inside a removed line; the pair of {@link DIFF_ADDED_BAND}. */
-export const DIFF_REMOVED_BAND = '#472424'
+const DIFF_REMOVED_BAND = '#472424'
 
 /**
  * The shade the frame around an assistant reply is drawn in.
@@ -56,7 +56,7 @@ export const DIFF_REMOVED_BAND = '#472424'
  * into: a warm gold sits apart from the prompt's mint and the brand-blue editor,
  * without borrowing the warning amber that means a state.
  */
-export const ASSISTANT_FRAME_GOLD = '#d6c29a'
+const ASSISTANT_FRAME_GOLD = '#d6c29a'
 
 /** The colours a token can name, so a shade is changed in one place. */
 export const DEFAULT_PALETTE: Readonly<Record<PaletteName, string>> = {

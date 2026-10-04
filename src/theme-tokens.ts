@@ -24,16 +24,8 @@ export interface StyleSpec {
   readonly inherit?: TuiToken
 }
 
-/** Keep terminal-ready styling and visibility separate from author-facing fields so rendering needs no palette interpretation. */
-export interface ResolvedStyle {
-  readonly prefix: string
-  readonly suffix: string
-  readonly glyph: string
-  readonly hidden: boolean
-}
-
 /** A row class a tool card can carry, so styling follows what the row means. */
-export const CARD_ROW_CLASSES = [
+const CARD_ROW_CLASSES = [
   'header', 'hunk', 'added', 'removed', 'line', 'lineNumber', 'path', 'match', 'truncated', 'output', 'cwd', 'status', 'source', 'url', 'detail',
 ] as const
 

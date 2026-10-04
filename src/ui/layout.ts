@@ -7,7 +7,7 @@ import { Gutter } from './gutter.ts'
  * One writable row remains visible even when work summaries compete for space;
  * visual spacing gives up its rows before the input does.
  */
-export const PROMPT_MIN_ROWS = 1
+const PROMPT_MIN_ROWS = 1
 
 /** Separate input from queued prompts and session status without adding typed newlines. */
 const PROMPT_SPACING_ROWS = 1
@@ -73,7 +73,7 @@ function inset(parts: SurfaceParts, margin: MarginColumns): HStack {
  * every other surface: a bar inset on both sides would read as one more card of
  * the transcript rather than as the thing the reader writes into.
  */
-export function surfaceLayout(parts: SurfaceParts, margin: MarginColumns = () => 0): VStack {
+export function surfaceLayout(parts: SurfaceParts, margin: MarginColumns): VStack {
   return new VStack([
     // An empty transcript must not reserve rows that the input needs.
     { component: inset(parts, margin), basis: 0, grow: 1, minSize: 0 },

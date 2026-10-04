@@ -5,6 +5,7 @@ set -euo pipefail
 name="$(basename "${BASH_SOURCE[0]}")"
 TUI_PACKAGE_NAME='@sagmans/dsh-tui'
 ISOLATED_ENV_PREFIXES=('HERDR_' 'DSH_TUI_MOSHI_')
+CLEAN_PREVIEW_PREFIX='would remove'
 # The link policy is shared with the validator, so both read one rule set.
 helper_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 # Default to the caller checkout so this packaged helper is not tied to its install location;
@@ -264,6 +265,11 @@ fi
 if [[ "$action" == "clean" ]]; then
   [[ -d "$home" ]] || { note "nothing at $home"; exit 0; }
   validate_marker
+  # Preview must honor cleanup guards without deleting the state being inspected.
+  if [[ "$dry_run" == 1 ]]; then
+    note "$CLEAN_PREVIEW_PREFIX $home"
+    exit 0
+  fi
   rm -rf "$home"
   note "removed $home"
   exit 0

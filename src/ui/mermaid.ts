@@ -11,14 +11,14 @@ const MERMAID_FENCE_LANG = 'mermaid'
 const MERMAID_MENTION = /mermaid/iu
 
 /** Drawings kept before the oldest is laid out again; a streaming reply redraws per delta. */
-export const MERMAID_CACHE_LIMIT = 32
+const MERMAID_CACHE_LIMIT = 32
 
 /**
  * Bound source size before synchronous layout runs inside a frame.
  * Streaming replies revisit fences on each delta; oversized fences stay readable
  * as source. This limits layout input, not elapsed time or all renderable diagrams.
  */
-export const MERMAID_MAX_SOURCE = 32 * 1024
+const MERMAID_MAX_SOURCE = 32 * 1024
 
 /** What ends a row without starting a paragraph; two trailing spaces are CommonMark's hard break. */
 const HARD_BREAK = '  \n'

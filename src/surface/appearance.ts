@@ -417,7 +417,7 @@ export function createAppearance(ctx: Context, ports: AppearancePorts): Appearan
     // table is rebuilt rather than only repainted.
     applySettings()
     restyle()
-  })
+  }, text => settingsNotice.post(text))
   return {
     theme,
     viewState: () => viewState,

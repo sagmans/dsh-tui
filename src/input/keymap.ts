@@ -13,9 +13,6 @@ export const DEFAULT_PREFIX_WINDOW_S = 2
 /** The keys that start a chord when the reader configures nothing. */
 export const DEFAULT_PREFIX_KEYS: readonly KeyId[] = keysFor(defaultKeymap(), 'chord.prefix')
 
-/** The first shipped prefix, for the places that need one key rather than the list. */
-export const DEFAULT_PREFIX_KEY: KeyId = DEFAULT_PREFIX_KEYS[0]!
-
 /**
  * The command each chord stands for.
  *
@@ -84,7 +81,7 @@ export function surfaceKeysLine(map: Keymap): string {
  * adds a key to is sent for the same reason: the library reads that key itself,
  * so a default the surface only holds on paper would never open the search.
  */
-export function libraryOverrides(map: Keymap): Record<string, KeyId[]> {
+function libraryOverrides(map: Keymap): Record<string, KeyId[]> {
   const overrides: Record<string, KeyId[]> = {}
   for (const action of catalogOf(map)) {
     if (action.layer !== 'library') continue
@@ -151,11 +148,6 @@ export class ChordReader {
     private readonly windowMs: () => number,
     private readonly onExpire: () => void,
   ) {}
-
-  /** Whether a chord is waiting for its next key, which is what the footer says. */
-  get pending(): boolean {
-    return this.armed !== undefined
-  }
 
   /**
    * The armed chord as the footer prints it, or undefined when nothing is armed.

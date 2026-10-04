@@ -7,7 +7,9 @@
 
 The inventory covers session lifecycle, editing, completion, models, modes, history, stashes, appearance, rendering, tools, gates, work, and integrations.
 Each feature names its source owner and its free, paid, or environment-specific scenarios.
-Command, action, and appearance catalog changes fail the gate until the inventory changes.
+Public command, action, token, and palette catalog changes fail the gate until the inventory changes.
+Private card-row membership does not require a production export.
+Actual appearance scenarios remain the behavior proof.
 
 Inventory membership is not verification.
 Action discovery in `/keys` does not prove keyboard dispatch.
@@ -37,6 +39,13 @@ Model prompts require the separate paid mode.
 
 The gate checks current terminal cells, durable exports, private file permissions, persisted restart, actual editor handoff, and terminal restoration.
 Native-widget PTY checks supplement the full-profile runs.
+The command table checks the exact never-written `/todo` notice.
+The guard table checks exact rejection notices for extra `/jobs read` and `/jobs kill` arguments before lookup or action.
+History runs retain native consent refusal.
+The public consent configuration proves default-home restart recall and clear without stale search entries.
+Stash runs use native clocks and filesystem writes.
+Editor-scoped assertions and restart recall prove actual use.
+Repaired/deleted history-file recovery remains unverified: `step.file` supports assertions, not mutations or home paths.
 A status receipt establishes the command plane before keyboard scenarios; the initial ready footer alone is insufficient.
 
 ## Herdr transport

@@ -18,14 +18,14 @@ import { PALETTE_NAMES, TUI_TOKENS, type PaletteName, type StyleSpec } from './t
  * session. A bare number is a terminal's own 256-colour index, which is what
  * makes a theme portable to a palette the surface cannot see.
  */
-export const ColourSchema = z.union([
+const ColourSchema = z.union([
   z.string().pattern(/^#[0-9a-fA-F]{6}$/u),
   z.union([...PALETTE_NAMES]),
   z.number().min(0).max(255),
 ])
 
 /** One element's appearance; every field optional so a writer sets only what they mean. */
-export const StyleSpecSchema = z.object({
+const StyleSpecSchema = z.object({
   fg: ColourSchema,
   bg: ColourSchema,
   bold: z.boolean(),

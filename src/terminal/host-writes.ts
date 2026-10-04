@@ -31,9 +31,7 @@ export interface HostWritable {
 export const HOST_WRITE_LIMIT = 64 * 1024
 
 /** What a reader is told when the held text had to be trimmed. */
-export const HOST_WRITE_DROPPED = '… host output dropped'
-
-const INVALID_HOST_LIMIT = 'host write limit must be a finite non-negative integer'
+const HOST_WRITE_DROPPED = '… host output dropped'
 
 /** The streams a host reaches for when it writes without the surface's help. */
 export const HOST_WRITE_TARGETS: readonly HostWritable[] = [process.stdout, process.stderr]
@@ -48,8 +46,6 @@ export interface HostWriteOptions {
   terminal: HostWritable
   /** The streams the host writes to directly. */
   targets: readonly HostWritable[]
-  /** Per-stream hold budget; the oldest whole write is dropped past it. */
-  limit?: number
 }
 
 /** One stream's held text, and how much of it had to be dropped. */
@@ -72,7 +68,7 @@ interface HeldStream {
  * property, an inherited one disappears again — so a host that patched the
  * stream before this ran keeps its own seam.
  */
-function holdStream(target: HostWritable, held: HeldWrites, isSurfaceWrite: () => boolean, limit: number): HeldStream {
+function holdStream(target: HostWritable, held: HeldWrites, isSurfaceWrite: () => boolean): HeldStream {
   const own = Object.getOwnPropertyDescriptor(target, 'write')
   const original = target.write
   target.write = function (this: unknown, ...args: unknown[]): unknown {
@@ -87,11 +83,11 @@ function holdStream(target: HostWritable, held: HeldWrites, isSurfaceWrite: () =
         : String(chunk)
     const bytes = Buffer.byteLength(text)
     // Cutting a write corrupts diagnostics; an oversized write must be dropped whole, not retained without bound.
-    if (bytes > limit) held.dropped += 1
+    if (bytes > HOST_WRITE_LIMIT) held.dropped += 1
     else if (bytes > 0) {
       held.chunks.push(text)
       held.bytes += bytes
-      while (held.bytes > limit) {
+      while (held.bytes > HOST_WRITE_LIMIT) {
         held.bytes -= Buffer.byteLength(held.chunks.shift() ?? '')
         held.dropped += 1
       }
@@ -167,13 +163,11 @@ function markTerminalCalls(terminal: HostWritable, call: SurfaceCall): () => voi
 }
 
 export function holdHostWrites(options: HostWriteOptions): HostWriteGuard {
-  const limit = options.limit ?? HOST_WRITE_LIMIT
-  if (!Number.isSafeInteger(limit) || limit < 0) throw new RangeError(INVALID_HOST_LIMIT)
   const held = new Map<HostWritable, HeldWrites>()
   for (const target of options.targets) held.set(target, { chunks: [], bytes: 0, dropped: 0 })
   const surface: SurfaceCall = { depth: 0 }
   const restoreTerminal = markTerminalCalls(options.terminal, surface)
-  const streams = options.targets.map(target => holdStream(target, held.get(target)!, () => surface.depth > 0, limit))
+  const streams = options.targets.map(target => holdStream(target, held.get(target)!, () => surface.depth > 0))
   let active = true
   return {
     release() {

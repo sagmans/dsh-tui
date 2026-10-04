@@ -39,7 +39,7 @@ export type PickerAction =
  * list taller than the screen would push its own cursor out of sight. The
  * window stays around the cursor instead, and the counts say what is hidden.
  */
-export const PICKER_WINDOW = 12
+const PICKER_WINDOW = 12
 
 /**
  * The hint lines a list uses when it is empty and when it holds rows.
@@ -266,7 +266,6 @@ export class SessionPicker extends ListPicker<StoredSession> {
   constructor(
     sessions: readonly StoredSession[],
     titles: () => ReadonlyMap<string, string>,
-    now: () => number = () => Date.now(),
     keys: () => Keymap,
   ) {
     const labelOf = (session: StoredSession): string => titles().get(session.id) ?? session.id
@@ -278,7 +277,7 @@ export class SessionPicker extends ListPicker<StoredSession> {
         label: labelOf(session),
         description: [
           session.cwd ?? 'unknown directory',
-          describeAge(session.createdAt, now()),
+          describeAge(session.createdAt, Date.now()),
           ...session.eventCount === undefined ? [] : [`${session.eventCount} events`],
         ].join(' · '),
         // The card marks the row under the cursor, which the list decides.

@@ -21,6 +21,8 @@ import type { Picker } from './modal-input.ts'
 // Adapter errors may contain credentials or request bodies, even in their messages.
 const MODEL_DISCOVERY_FAILURE = 'could not list models; check provider configuration and credentials, then retry /model'
 const PROVIDER_DISCOVERY_FAILURE = 'could not list providers; check provider configuration, then retry /model'
+const EFFORT_DISCOVERY_FAILURE = 'could not read reasoning efforts; check provider configuration, then retry'
+const MODEL_EFFORT_DISCOVERY_FAILURE = `/model: ${EFFORT_DISCOVERY_FAILURE}`
 
 /**
  * What the route owner needs from the surface that composes it.
@@ -147,8 +149,8 @@ export function createModelChoice(ctx: Context, ports: ModelChoicePorts): ModelC
             }
             modelSwitch.choose(choice)
             ports.notice(`model set to ${choice.provider}/${choice.model} (${choice.reasoningEffort}) for the next step`)
-          } catch (error) {
-            ports.notice(`/model: could not read reasoning efforts: ${error instanceof Error ? error.message : String(error)}`)
+          } catch {
+            ports.notice(MODEL_EFFORT_DISCOVERY_FAILURE)
           }
           ports.render()
         })()
@@ -267,8 +269,8 @@ export function createModelChoice(ctx: Context, ports: ModelChoicePorts): ModelC
         applyEffort(route.provider, route.model, picked)
         await ports.afterEffort?.(route)
       }
-    } catch (error) {
-      ports.notice(`could not read reasoning efforts: ${error instanceof Error ? error.message : String(error)}`)
+    } catch {
+      ports.notice(EFFORT_DISCOVERY_FAILURE)
     }
     ports.render()
   }
@@ -352,8 +354,8 @@ export function createModelChoice(ctx: Context, ports: ModelChoicePorts): ModelC
         applyEffort(facts.provider, facts.model, picked)
         await ports.afterEffort?.({ provider: facts.provider, model: facts.model })
       }
-    } catch (error) {
-      ports.notice(`could not read reasoning efforts: ${error instanceof Error ? error.message : String(error)}`)
+    } catch {
+      ports.notice(EFFORT_DISCOVERY_FAILURE)
     } finally {
       openingEfforts = false
       ports.render()

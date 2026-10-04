@@ -15,9 +15,9 @@ import { displayText } from '../text.ts'
  */
 
 /** File name the history is stored under, inside the harness home. */
-export const HISTORY_FILE_NAME = 'prompt-history.json'
+const HISTORY_FILE_NAME = 'prompt-history.json'
 /** Schema this build writes; a file that names another positive version is left alone. */
-export const HISTORY_SCHEMA_VERSION = 1
+const HISTORY_SCHEMA_VERSION = 1
 /** Bound retained prompts on mutation, trading older suggestions for smaller snapshots and full-file rewrites. */
 export const DEFAULT_MAX_ENTRIES = 2000
 /** Largest cap a reader may ask for, so a typo cannot grow the file without bound. */
@@ -64,14 +64,14 @@ export interface PromptEntry {
 }
 
 /** The persisted document, versioned so a future shape can be recognized. */
-export interface PromptHistoryFile {
+interface PromptHistoryFile {
   readonly version: number
   readonly updatedAt: string
   readonly entries: readonly PromptEntry[]
 }
 
 /** A file read reduced to what a caller can act on. */
-export type ParsedHistoryFile =
+type ParsedHistoryFile =
   | { readonly kind: 'ready'; readonly file: PromptHistoryFile }
   | { readonly kind: 'blocked'; readonly reason: HistoryBlockReason }
 
@@ -91,16 +91,11 @@ export interface PromptHistory {
   blockedReason(): HistoryBlockReason | undefined
 }
 
-/** Inputs the surface supplies; every one is a seam a test drives. */
+/** Live settings and notices keep history aligned with the mounted surface. */
 export interface PromptHistoryOptions {
-  /** Resolved harness home; defaults to $DSH_HOME or ~/.dsh. */
-  readonly home?: string
   /** Read per mutation so a settings edit takes effect without a restart. */
   readonly cap: () => number
-  readonly now?: () => Date
   readonly warn?: (message: string) => void
-  /** Lock wait a test can shorten; defaults to LOCK_WAIT_MS. */
-  readonly lockWaitMs?: number
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -250,7 +245,7 @@ function isPositiveInteger(value: unknown): value is number {
 }
 
 /** Read one persisted document, refusing anything this build cannot safely rewrite. */
-export function parseHistoryFile(text: string): ParsedHistoryFile {
+function parseHistoryFile(text: string): ParsedHistoryFile {
   let raw: unknown
   try {
     raw = JSON.parse(text)
@@ -298,7 +293,7 @@ function normalizeEntry(raw: unknown): PromptEntry | undefined {
  * A duplicate is moved rather than copied so a repeated prompt resurfaces as the
  * newest suggestion without ever appearing twice in the list.
  */
-export function upsertEntry(
+function upsertEntry(
   entries: readonly PromptEntry[],
   text: string,
   now: string,
@@ -321,9 +316,8 @@ function laterTimestamp(left: string, right: string): string {
 
 /** Build the store the surface records into and completes from. */
 export function createPromptHistory(options: PromptHistoryOptions): PromptHistory {
-  const now = options.now ?? (() => new Date())
   const warn = options.warn ?? (() => {})
-  const filePath = join(options.home ?? dshHomeDir(), HISTORY_FILE_NAME)
+  const filePath = join(dshHomeDir(), HISTORY_FILE_NAME)
   const lockPath = filePath + LOCK_SUFFIX
   let entries: readonly PromptEntry[] = []
   let blocked: HistoryBlockReason | undefined
@@ -349,7 +343,12 @@ export function createPromptHistory(options: PromptHistoryOptions): PromptHistor
     try {
       text = await readFile(filePath, 'utf8')
     } catch (error) {
-      if (isMissingFile(error)) return
+      if (isMissingFile(error)) {
+        // Deletion is a fresh history, not permission to resurrect the cached prompts.
+        entries = []
+        blocked = undefined
+        return
+      }
       blocked = 'unreadable_history'
       warnOnce('load:unreadable', 'prompt history is unreadable; writes are disabled until it can be read')
       return
@@ -361,6 +360,8 @@ export function createPromptHistory(options: PromptHistoryOptions): PromptHistor
       return
     }
     entries = parsed.file.entries
+    // A repaired file authorizes queued mutations again without restarting the surface.
+    blocked = undefined
   }
 
   function enqueue<Result>(operation: () => Promise<Result>): Promise<Result> {
@@ -372,7 +373,7 @@ export function createPromptHistory(options: PromptHistoryOptions): PromptHistor
   // Stage a complete, owner-only document before replacement so readers do not
   // observe a partial history. Cleanup attempts to avoid leaving another private copy.
   async function write(): Promise<void> {
-    const file: PromptHistoryFile = { version: HISTORY_SCHEMA_VERSION, updatedAt: now().toISOString(), entries }
+    const file: PromptHistoryFile = { version: HISTORY_SCHEMA_VERSION, updatedAt: new Date().toISOString(), entries }
     const tempPath = filePath + '.' + process.pid + '.' + Date.now() + '.tmp'
     await mkdir(dirname(filePath), { recursive: true, mode: PRIVATE_DIR_MODE })
     try {
@@ -392,12 +393,12 @@ export function createPromptHistory(options: PromptHistoryOptions): PromptHistor
     record(text: string): void {
       if (text.trim() === '') return
       const prompt = displayText(text, { tab: 'keep' })
-      void enqueue(() => withLock(lockPath, options.lockWaitMs ?? LOCK_WAIT_MS, async () => {
+      void enqueue(() => withLock(lockPath, LOCK_WAIT_MS, async () => {
         await load()
         if (blocked !== undefined) return
         // Keep this prompt available to suggestion readers even if persistence fails.
         // A successful reload replaces the snapshot; memory-only prompts are not a retry queue.
-        entries = upsertEntry(entries, prompt, now().toISOString(), options.cap())
+        entries = upsertEntry(entries, prompt, new Date().toISOString(), options.cap())
         await write()
       })).catch((error: unknown) => {
         // The reason can name the lock file that must be removed by hand, so it
@@ -407,7 +408,7 @@ export function createPromptHistory(options: PromptHistoryOptions): PromptHistor
       })
     },
     clear(): Promise<number> {
-      return enqueue(() => withLock(lockPath, options.lockWaitMs ?? LOCK_WAIT_MS, async () => {
+      return enqueue(() => withLock(lockPath, LOCK_WAIT_MS, async () => {
         await load()
         // A file that changed under the reader cannot be cleared safely, and
         // reporting a successful clear of nothing would be worse than refusing.

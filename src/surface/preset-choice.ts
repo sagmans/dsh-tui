@@ -136,7 +136,7 @@ export function createPresetChoice(ports: PresetChoicePorts): PresetChoice {
   }
 
   /** Allow explicit recovery of an unresolvable stored mode without assuming failure proves removal. */
-  const resolveStored = async (id: SessionId, stored: string): Promise<string | undefined> => {
+  const resolveStored = async (stored: string): Promise<string | undefined> => {
     try {
       return (await ports.agentPresets?.resolve(stored))?.id
     } catch {
@@ -163,7 +163,7 @@ export function createPresetChoice(ports: PresetChoicePorts): PresetChoice {
     // Give concurrent mode registration a chance before resolving the
     // stored composition; the first row does not prove this mode has arrived.
     await whenRosterHasModes(roster)
-    const resolvedStored = await resolveStored(id, stored)
+    const resolvedStored = await resolveStored(stored)
     if (resolvedStored === undefined) {
       // The recorded composition could not be resolved, whether missing or
       // failing. Only an explicit launch choice permits a replacement here.

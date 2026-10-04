@@ -8,7 +8,7 @@
  */
 
 /** One capability the surface reads, and what to do when it is absent. */
-export interface Capability {
+interface Capability {
   /** Service name as it appears on the Cordis context. */
   readonly service: string
   /** What the surface does with it. */
@@ -18,7 +18,7 @@ export interface Capability {
 }
 
 /** Without these the surface cannot run at all. */
-export const REQUIRED_CAPABILITIES: readonly Capability[] = [
+const REQUIRED_CAPABILITIES: readonly Capability[] = [
   {
     service: 'agents',
     use: 'creating and resuming the agent this terminal drives',
@@ -37,7 +37,7 @@ export const REQUIRED_CAPABILITIES: readonly Capability[] = [
 ]
 
 /** Without these the surface runs, with something switched off. */
-export const OPTIONAL_CAPABILITIES: readonly Capability[] = [
+const OPTIONAL_CAPABILITIES: readonly Capability[] = [
   {
     service: 'tools',
     use: 'presenting each tool call through its own render intent',

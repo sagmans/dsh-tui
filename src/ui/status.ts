@@ -1,6 +1,5 @@
 import { type Component, visibleWidth, wrapTextWithAnsi } from '@earendil-works/pi-tui'
 import { oneRow } from '../text.ts'
-import { renderTerminalText } from '../terminal-text.ts'
 import { formatTokens } from '../tokens.ts'
 import type { TuiToken } from '../theme-tokens.ts'
 import type { TuiTheme } from '../theme.ts'
@@ -68,7 +67,7 @@ interface Segment {
  * A home path keeps every directory between `~` and the leaf. Dropping those
  * away would name a location that does not exist, which is worse than a long one.
  */
-export function shortPath(path: string, home: string | undefined): string {
+function shortPath(path: string, home: string | undefined): string {
   if (home !== undefined && home !== '' && (path === home || path.startsWith(`${home}/`))) {
     const rest = path.slice(home.length).replace(/^\//u, '')
     return rest === '' ? '~/' : `~/${rest}`
@@ -94,7 +93,7 @@ function elapsed(ms: number): string {
  * Each segment is its own element, so a reader can quiet the path without
  * losing the model, and the separator is one too.
  */
-export function formatStatus(facts: StatusFacts, width: number, theme: TuiTheme): string {
+function formatStatus(facts: StatusFacts, width: number, theme: TuiTheme): string {
   const segments: Segment[] = []
   /**
    * A segment is collected as its source wrote it and drawn when the row is

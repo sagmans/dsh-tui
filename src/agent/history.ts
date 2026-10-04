@@ -9,7 +9,7 @@ export interface StoredSession {
 }
 
 /** The persisted header fields this surface reads besides the list columns. */
-export interface StoredHeader {
+interface StoredHeader {
   readonly id: string
   /** Preset the session STARTED with; a later selection is a log event. */
   readonly agentPreset: string | undefined
@@ -17,7 +17,7 @@ export interface StoredHeader {
 }
 
 /** One stored event, reduced to what the transcript fold reads. */
-export interface StoredEvent {
+interface StoredEvent {
   readonly type: string
   readonly data?: unknown
 }
@@ -36,13 +36,13 @@ export interface SessionHistory {
 export const PICKER_LIMIT = 30
 
 /** Events read to title one session: enough to reach its title or first prompt. */
-export const TITLE_EVENT_LIMIT = 40
+const TITLE_EVENT_LIMIT = 40
 
 /** Longest session title the picker shows, before the row can no longer hold it. */
 const TITLE_CHAR_LIMIT = 72
 
 /** Events read to resolve a session's preset: a selection sits in its blank prefix. */
-export const PRESET_EVENT_LIMIT = 40
+const PRESET_EVENT_LIMIT = 40
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined
@@ -76,13 +76,13 @@ function clip(title: string, limit: number): string {
  * Injected context and plugin notices also arrive as user-role messages, so
  * only a direct prompt may name a session.
  */
-export function sessionTitle(events: readonly StoredEvent[], limit = TITLE_CHAR_LIMIT): string | undefined {
+function sessionTitle(events: readonly StoredEvent[]): string | undefined {
   for (let index = events.length - 1; index >= 0; index -= 1) {
     const event = events[index]
     if (event?.type !== 'session/title') continue
     const declared = asRecord(event.data)?.title
     if (typeof declared !== 'string') continue
-    const title = clip(declared, limit)
+    const title = clip(declared, TITLE_CHAR_LIMIT)
     if (title !== '') return title
   }
   for (const event of events) {
@@ -95,7 +95,7 @@ export function sessionTitle(events: readonly StoredEvent[], limit = TITLE_CHAR_
       const text = asRecord(block)?.text
       if (typeof text === 'string') parts.push(text)
     }
-    const title = clip(parts.join(' '), limit)
+    const title = clip(parts.join(' '), TITLE_CHAR_LIMIT)
     if (title === '') continue
     return title
   }

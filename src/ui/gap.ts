@@ -11,14 +11,14 @@
  */
 
 /** How many rows the block opens with. */
-export function leadingBlanks(rows: readonly string[]): number {
+function leadingBlanks(rows: readonly string[]): number {
   let count = 0
   while (count < rows.length && rows[count] === '') count += 1
   return count
 }
 
 /** How many rows the block closes with. */
-export function trailingBlanks(rows: readonly string[]): number {
+function trailingBlanks(rows: readonly string[]): number {
   let count = 0
   while (count < rows.length && rows[rows.length - 1 - count] === '') count += 1
   return count

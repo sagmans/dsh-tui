@@ -26,6 +26,9 @@ export const DOCK_JOB_LIMIT = 2
 /** Output lines a `/jobs read` shows, so a chatty job cannot flood the view. */
 export const JOB_READ_LINES = 20
 
+const JOB_ACTION_ARGUMENT_COUNT = 2
+const JOB_EXTRA_ARGUMENT_REASON = 'accepts only a job id; use /jobs read <id> or /jobs kill <id>'
+
 const SECOND_MS = 1000
 const MINUTE_MS = 60 * SECOND_MS
 const HOUR_MS = 60 * MINUTE_MS
@@ -93,6 +96,8 @@ export function parseJobsArgument(argument: string): JobsCommand | { readonly ki
     return { kind: 'invalid', reason: `unknown action "${verb}" — use /jobs, /jobs read <id>, or /jobs kill <id>` }
   }
   if (id === '') return { kind: 'invalid', reason: `${verb} needs a job id; /jobs lists them` }
+  // Reject ambiguous intent before registry reads consume output or kills stop work.
+  if (parts.length > JOB_ACTION_ARGUMENT_COUNT) return { kind: 'invalid', reason: `${verb} ${JOB_EXTRA_ARGUMENT_REASON}` }
   return verb === 'read' ? { kind: 'read', id } : { kind: 'kill', id }
 }
 

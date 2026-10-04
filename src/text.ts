@@ -15,7 +15,6 @@
 
 import { escapeTerminalText, type EscapeTextOptions } from './terminal-text.ts'
 
-const UNLIMITED_GRAPHEMES = Number.POSITIVE_INFINITY
 
 /**
  * Keep controls visible in literal labels and questions rather than allowing
@@ -89,7 +88,7 @@ export function tailGraphemes(text: string, limit: number): string {
  * with a work budget can stop after the first excess cluster without retaining
  * the rest of an oversized row; callers without a budget still keep every one.
  */
-export function splitGraphemes(text: string, limit = UNLIMITED_GRAPHEMES): string[] {
+export function splitGraphemes(text: string, limit: number): string[] {
   const clusters: string[] = []
   if (limit <= 0) return clusters
   for (const { segment } of GRAPHEMES.segment(text)) {

@@ -82,7 +82,7 @@ const STRING_SUBSTITUTE = '\u001a'
 
 export const RESET = 0
 
-export type Token =
+type Token =
   | { readonly kind: 'text' }
   | { readonly kind: 'lineFeed' }
   | { readonly kind: 'tab' }
@@ -184,7 +184,7 @@ function readEscape(raw: string, at: number): Piece | undefined {
  * remain consumed sequences rather than drawable terminal instructions. Empty
  * fields retain SGR reset semantics, including an omitted parameter list.
  */
-export function parseSgrParams(body: string): readonly number[] | undefined {
+function parseSgrParams(body: string): readonly number[] | undefined {
   if (body === '') return [RESET]
   const params: number[] = []
   for (const part of body.split(';')) {

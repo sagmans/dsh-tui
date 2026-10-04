@@ -14,7 +14,7 @@ import { homedir } from 'node:os'
 import path from 'node:path'
 
 /** Environment variable that moves the harness home, matching the launcher. */
-export const DSH_HOME_ENV = 'DSH_HOME'
+const DSH_HOME_ENV = 'DSH_HOME'
 
 /** The directory `DSH_HOME` points at when the environment names none. */
 const DEFAULT_DSH_HOME_DIR = '.dsh'
@@ -81,7 +81,7 @@ function truncateToUtf8Bytes(value: string, maxBytes: number): string {
   return result
 }
 
-export function sanitizeSessionId(sessionId: string, version: string = SESSION_KEY_FORMAT_VERSION): string {
+function sanitizeSessionId(sessionId: string, version: string): string {
   const keyPrefix = `${version}${SEPARATOR}`
   const readable = sessionId.split('/').filter(Boolean).map(escapeSegment).join(SEPARATOR)
   const digest = createHash(HASH_ALGORITHM).update(sessionId, 'utf8').digest('hex').slice(0, HASH_LENGTH)
@@ -100,8 +100,9 @@ export function sanitizeSessionId(sessionId: string, version: string = SESSION_K
  * working directory would scatter private state into whatever tree the reader
  * happened to start from.
  */
-export function dshHomeDir(env: NodeJS.ProcessEnv = process.env, home: string = homedir()): string {
-  const configured = env[DSH_HOME_ENV]?.trim()
+export function dshHomeDir(): string {
+  const home = homedir()
+  const configured = process.env[DSH_HOME_ENV]?.trim()
   if (configured === undefined || configured === '') return path.join(home, DEFAULT_DSH_HOME_DIR)
   return expandHome(configured, home)
 }
@@ -123,15 +124,15 @@ function expandHome(value: string, home: string): string {
 }
 
 /** The root every bank's stash file sits under. */
-export function stashBaseDir(env: NodeJS.ProcessEnv = process.env, home: string = homedir()): string {
-  return path.join(dshHomeDir(env, home), STASH_DIR_NAME)
+export function stashBaseDir(): string {
+  return path.join(dshHomeDir(), STASH_DIR_NAME)
 }
 
 /**
  * Separate scope namespaces leave drafts in their original banks when the surface changes scope.
- * PromptStash passes its configured scope explicitly; this session default is not the surface default.
+ * PromptStash supplies its configured scope so bank ownership stays with the surface.
  */
-export function resolveStashPaths(sessionId: string, baseDir: string = stashBaseDir(), scope: StashScope = 'session'): StashPaths {
+export function resolveStashPaths(sessionId: string, baseDir: string, scope: StashScope): StashPaths {
   const key = sanitizeSessionId(sessionId, scope === 'path' ? PATH_KEY_FORMAT_VERSION : SESSION_KEY_FORMAT_VERSION)
   return { sessionId, key, file: path.join(baseDir, `${key}.json`) }
 }

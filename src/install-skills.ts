@@ -12,7 +12,7 @@ const SKILLS_DIRECTORY = 'skills'
 const HELPER_EXTENSIONS = ['.sh', '.mjs']
 const EXECUTABLE_MODE = 0o755
 /** The command a drift notice names, so the line it prints is the line that runs. */
-export const SKILL_UPDATE_COMMAND = 'dsh --profile tui install-skills --update'
+const SKILL_UPDATE_COMMAND = 'dsh --profile tui install-skills --update'
 /** Separator the surface's own notices use, so a drift line reads like the rest. */
 const NOTICE_SEPARATOR = ' · '
 
@@ -32,7 +32,8 @@ export class SkillAlreadyExistsError extends Error {
  * listed: a skill a reader can see here is one `install-skills` installs, and
  * adding another never means editing the installer.
  */
-export function bundledSkillNames(bundled: string = SKILLS_ROOT): string[] {
+function bundledSkillNames(): string[] {
+  const bundled = SKILLS_ROOT
   const root = lstatSync(bundled)
   if (!root.isDirectory() || root.isSymbolicLink()) throw new Error(`invalid bundled skills: ${bundled}`)
   const names = readdirSync(bundled, { withFileTypes: true })
@@ -72,16 +73,16 @@ function skillFiles(root: string): Map<string, Buffer> {
  * reader added beside a skill is theirs: one startup line can explain neither,
  * and a line that cries wolf gets read past when it matters.
  */
-export function driftedSkillNames(home: string = homedir(), bundled: string = SKILLS_ROOT): string[] {
-  const skills = installedSkillsRoot(home)
-  return bundledSkillNames(bundled).filter(name => {
+function driftedSkillNames(): string[] {
+  const skills = installedSkillsRoot(homedir())
+  return bundledSkillNames().filter(name => {
     const destination = join(skills, name)
     const entry = lstatSync(destination, { throwIfNoEntry: false })
     // Never installed is not drift - a first install is that command's own
     // prompt - and a symlinked copy is one the installer refuses to replace.
     if (entry === undefined || entry.isSymbolicLink() || !entry.isDirectory()) return false
     const installed = skillFiles(destination)
-    for (const [path, content] of skillFiles(join(bundled, name))) {
+    for (const [path, content] of skillFiles(join(SKILLS_ROOT, name))) {
       const current = installed.get(path)
       if (current === undefined || !current.equals(content)) return true
     }
@@ -96,9 +97,9 @@ export function driftedSkillNames(home: string = homedir(), bundled: string = SK
  * Silence on any failure: a notice is a courtesy, and an unreadable home must
  * not cost a reader the session they launched.
  */
-export function describeSkillDrift(home: string = homedir(), bundled: string = SKILLS_ROOT): string | undefined {
+export function describeSkillDrift(): string | undefined {
   try {
-    const drifted = driftedSkillNames(home, bundled)
+    const drifted = driftedSkillNames()
     if (drifted.length === 0) return undefined
     return `bundled skills changed since they were installed: ${drifted.join(NOTICE_SEPARATOR)}`
       + `${NOTICE_SEPARATOR}run ${SKILL_UPDATE_COMMAND}`
@@ -214,11 +215,6 @@ function replaceBundledSkill(name: string, destination: string, skills: string):
     throw error
   }
   return destination
-}
-
-/** Install one bundled skill, or replace the installed copy when `update`. */
-export function installBundledSkill(name: string, home: string = homedir(), update = false): string {
-  return installBundledSkills(home, update, [name])[0]!
 }
 
 /**

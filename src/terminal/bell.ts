@@ -10,7 +10,7 @@
 export const BELL = '\u0007'
 
 /** How long a turn has to run before its end is worth a bell. */
-export const BELL_AFTER_MS = 10_000
+const BELL_AFTER_MS = 10_000
 
 /** Whether this turn's end should ring. */
 export function shouldRingBell(input: {

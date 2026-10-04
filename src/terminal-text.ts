@@ -25,13 +25,13 @@
 import { visibleWidth } from '@earendil-works/pi-tui'
 import type { ColourMode } from './theme-capability.ts'
 import { NEEDS_READING, scan, spellControls, type Piece } from './terminal-text/scan.ts'
-import { GROUND, applySgr, encoder, type Encoder, type TextStyle } from './terminal-text/sgr.ts'
+import { GROUND, applySgr, encoder, type TextStyle } from './terminal-text/sgr.ts'
 
 /** Keep tab widths predictable for wrapping; this surface uses eight-column stops. */
-export const TAB_STOP = 8
+const TAB_STOP = 8
 
 /** Whether a tab is drawn on its stop, or kept for a buffer that will hold it. */
-export type TabPolicy = 'expand' | 'keep'
+type TabPolicy = 'expand' | 'keep'
 
 export interface EscapeTextOptions {
   /** The column the text starts at, so its first tab lands on the terminal's next stop. */

@@ -33,7 +33,7 @@ import type { PaletteName, StyleSpec, ThemedSpecs, TuiToken } from './theme-toke
 export const TUI_SETTINGS_NAMESPACE = 'dsh-tui'
 
 /** How nested PTC calls draw: nothing beyond the card, or one indented line per dispatched call. */
-export type SubCallDisplay = 'collapsed' | 'inline'
+type SubCallDisplay = 'collapsed' | 'inline'
 
 /** The values the `subcalls` key accepts, declared once for the schema and the refusal message. */
 const SUBCALL_DISPLAYS = ['collapsed', 'inline'] as const
@@ -48,7 +48,7 @@ const SUBCALL_DISPLAYS = ['collapsed', 'inline'] as const
 const DEFAULT_SUBCALL_DISPLAY: SubCallDisplay = 'collapsed'
 
 /** Separate diagram timing from styling so readers can choose live drawings, settled drawings, or the original source fence. */
-export const MERMAID_MODES = ['off', 'final', 'streaming'] as const
+const MERMAID_MODES = ['off', 'final', 'streaming'] as const
 export type MermaidMode = (typeof MERMAID_MODES)[number]
 
 /** Make diagrams part of the arriving answer; readers can choose final for settled drawings instead. */
@@ -215,7 +215,7 @@ function parseTools(raw: unknown): Record<string, WrittenToolDisplay> {
 }
 
 /** The reader-facing shape of the `dsh-tui:` section. */
-export function parseSettings(raw: unknown): TuiSettings {
+function parseSettings(raw: unknown): TuiSettings {
   if (asRecord(raw) === undefined) throw new Error('dsh-tui settings must be a mapping')
   rejectUnknownKeys(raw)
   // Schema normalization must not mutate the immutable section borrowed from SettingsForms.
@@ -293,7 +293,7 @@ function hasAnyField(spec: StyleSpec | undefined): boolean {
 }
 
 /** The prompt-history affordances and the size the reader allows. */
-export interface HistorySettings {
+interface HistorySettings {
   /** Whether prompts are recorded and offered at all. */
   readonly enabled: boolean
   /** Whether the dimmed completion is drawn; reverse search is unaffected. */
@@ -378,7 +378,7 @@ export function themeLayer(overrides: ThemeOverrides): ThemedSpecs | undefined {
 /**
  * One sentence for a section the surface refused.
  *
- * Shared by the stderr fallback and the reader-facing notice so a refusal the
+ * Shared by registration and the reader-facing notice so a refusal the
  * schema makes at registration and one the parser makes on a read read alike.
  */
 export function settingsProblemMessage(error: unknown): string {
@@ -392,15 +392,14 @@ export function settingsProblemMessage(error: unknown): string {
  * opt-out. Startup has no previous appearance, so only then do shipped defaults
  * supply the fallback. Notices stay visible above the alternate screen.
  */
-export function readScope(scope: { get(): unknown }, onProblem?: (message: string) => void, previous?: TuiSettings): TuiSettings {
+export function readScope(scope: { get(): unknown }, onProblem: (message: string) => void, previous?: TuiSettings): TuiSettings {
   let raw: unknown = undefined
   try {
     raw = scope.get()
     return parseSettings(raw)
   } catch (error) {
     const message = settingsProblemMessage(error)
-    if (onProblem === undefined) process.stderr.write(`dsh-tui: ${message}\n`)
-    else onProblem(message)
+    onProblem(message)
     // Last-good appearance and readable opt-outs survive a rejected candidate;
     // a switch that cannot be read must never authorize recording.
     const fallback = previous ?? defaultSettings()

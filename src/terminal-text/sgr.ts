@@ -8,9 +8,9 @@
  */
 
 import { sgrBackgroundPrefix, sgrPrefix, type ColourMode } from '../theme-capability.ts'
-import { ESC, RESET, parseSgrParams, type Token } from './scan.ts'
+import { ESC, RESET } from './scan.ts'
 
-export const CSI = `${ESC}[`
+const CSI = `${ESC}[`
 
 /** The attributes a run may carry, in the order they are emitted. */
 const ATTRIBUTES = ['bold', 'dim', 'italic', 'underline', 'inverse', 'strike'] as const
@@ -125,13 +125,6 @@ export interface Encoder {
  */
 export function encoder(color: ColourMode, base: string): Encoder {
   if (color === 'none') return { between: () => '' }
-  const groundCodes = (style: TextStyle): string => {
-    let out = ''
-    for (const attribute of ATTRIBUTES) if (hasAttribute(style, attribute)) out += ATTRIBUTE_OFF[attribute]
-    if (style.fg !== undefined) out += GROUND_FG + base
-    if (style.bg !== undefined) out += GROUND_BG + base
-    return out
-  }
   return {
     between(previous, next) {
       if (previous === next) return ''

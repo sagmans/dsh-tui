@@ -8,7 +8,7 @@
  */
 
 /** One recorded prompt, as this rule needs it. */
-export interface GhostCandidate {
+interface GhostCandidate {
   readonly text: string
 }
 
@@ -28,7 +28,7 @@ export interface GhostInput {
 }
 
 /** Marks a folded ghost so the reader knows the suggestion continues. */
-export const NEWLINE_MARKER = '\u21b5'
+const NEWLINE_MARKER = '\u21b5'
 
 /**
  * Leading whitespace travels with the word so a partial accept keeps spacing.
