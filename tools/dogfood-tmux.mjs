@@ -30,7 +30,10 @@ const TERMINAL = 'xterm-256color'
 const EXIT_MARKER = 'TMUX_DOGFOOD_EXIT'
 const RESTORED_MARKER = 'TMUX_DOGFOOD_SHELL_RESTORED'
 const KEY_NAMES = { left: 'Left', backspace: 'BSpace', escape: 'Escape', enter: 'Enter', 'ctrl+x': 'C-x', 'ctrl+c': 'C-c' }
-if (process.argv.length > 2) throw new Error('tmux dogfood: no options supported')
+const LAUNCHER_OPTION = '--launcher'
+const options = process.argv.slice(2)
+if (options.length !== 0 && (options.length !== 2 || options[0] !== LAUNCHER_OPTION || !options[1] || options[1].startsWith('--'))) throw new Error('tmux dogfood: only --launcher PATH is supported')
+const launcher = options[1] ?? ''
 const version = spawnSync('tmux', ['-V'], { encoding: 'utf8', timeout: CLI_TIMEOUT_MS })
 if (version.error || version.status !== 0) throw new Error('tmux dogfood: tmux unavailable: ' + (version.error?.message ?? version.stderr))
 const evidence = realpathSync(mkdtempSync(join(tmpdir(), 'dsh-tui-tmux-')))
@@ -87,7 +90,7 @@ try {
   for (const path of [osHome, workspace, temp, join(profile, 'node_modules', '@sagmans')]) mkdirSync(path, { recursive: true, mode: PRIVATE_DIR_MODE })
   writeFileSync(join(profile, 'package.json'), JSON.stringify({ name: 'dsh-tmux-dogfood-profile', private: true, type: 'module', dependencies: { [PACKAGE]: 'link:' + ROOT }, dsh: { profile: { bundles: [BASE, PACKAGE] } } }), { mode: PRIVATE_FILE_MODE })
   symlinkSync(ROOT, join(profile, 'node_modules', '@sagmans', 'dsh-tui'), 'dir')
-  const launch = preparePtyLaunch({ home, env })
+  const launch = preparePtyLaunch({ home, env, launcher })
   const command = ['env', '-i', ...Object.entries(env).map(([name, value]) => name + '=' + value), launch.command, ...launch.argsPrefix, '--profile', PROFILE].map(quote).join(' ')
   const script = join(evidence, 'launch.sh')
   save('launch.sh', '#!/bin/sh\ncd ' + quote(workspace) + ' || exit 1\n' + command + '\ncode=$?\nprintf "%s" "$code" > ' + quote(join(evidence, 'exit-code')) + '\nprintf "\\n' + EXIT_MARKER + ' %s\\n" "$code"\nexec ' + SHELL + '\n')

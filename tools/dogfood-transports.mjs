@@ -50,7 +50,9 @@ export function runFreeTransports({ root, paid, portableFailed, scenario, launch
     try {
       if (probe.error || probe.status !== 0) throw new Error('dogfood: installed tmux version probe failed')
       if (scenario === undefined || scenario === TMUX_SCENARIO) {
-        reports.tmux = collect(spawnSync(process.execPath, [join(root, 'tools/dogfood-tmux.mjs')], { encoding: 'utf8', timeout: DEADLINE_MS, maxBuffer: MAX_OUTPUT_BYTES }), 'tmux')
+        const args = [join(root, 'tools/dogfood-tmux.mjs')]
+        if (launcher !== undefined) args.push('--launcher', launcher)
+        reports.tmux = collect(spawnSync(process.execPath, args, { encoding: 'utf8', timeout: DEADLINE_MS, maxBuffer: MAX_OUTPUT_BYTES }), 'tmux')
       } else reports.tmux = { status: 'not-selected-on-tmux', reason: 'Selected scenario belongs to the portable transport.' }
     } catch (error) { reports.tmux = { status: 'failed', error: error.message }; process.exitCode = 1 }
   }

@@ -194,7 +194,8 @@ async function run(scenario, reused) {
     if (scenario.tool === 'clone-helper') {
       const helper = join(ROOT, '.agents/skills/dsh-tui-dogfood/scripts/run-plugin-from-worktree.sh')
       const clone = join(folder, 'clone')
-      const args = [helper, '--source-home', home, '--home', clone]
+      // A private CI installation must stay selected when nested helpers cannot find dsh on PATH.
+      const args = [helper, '--source-home', home, '--home', clone, ...(supplied('--launcher') ? ['--dsh', option('--launcher')] : [])]
       const options = { cwd: workspace, env: { ...childEnv, DSH_DOGFOOD_DEFAULT_REPO: ROOT, DSH_DOGFOOD_REQUIRE_LISTED: ENABLED_ENV_VALUE, DSH_TUI_MOSHI_TOKEN: ISOLATION_SENTINEL, HERDR_DOGFOOD_SENTINEL: ISOLATION_SENTINEL }, encoding: 'utf8', timeout: DEADLINE_MS * 3 }
       const setup = spawnSync('bash', ['-x', ...args, '--no-launch'], options)
       writeFileSync(join(folder, 'setup.txt'), (setup.stdout ?? '') + (setup.stderr ?? ''), { mode: PRIVATE_FILE_MODE })

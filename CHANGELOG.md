@@ -8,6 +8,10 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+### Fixed
+
+- Private installed Harness selections now remain effective across nested clone-helper and tmux verification, without requiring a global CLI on PATH.
+
 ### Changed
 
 - Available tmux verification now runs automatically with the free gate. Native controllers avoid the caller's shell and use private resources. Genuine Herdr metadata, background work, and attention checks distinguish observed lifecycle effects from accepted input.
