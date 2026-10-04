@@ -47,6 +47,30 @@ A linked profile loads `lib/`, never `src/`, so a run against a stale build
 tests the previous release. `tools/pty-drive.mjs` rebuilds on every run for that
 reason; a profile you launch by hand does not.
 
+## Local static checks
+
+```sh
+pnpm run check:unused
+pnpm run check:deadcode
+pnpm run check:local
+```
+
+`check:unused` uses TypeScript to reject unused locals and parameters without producing build output.
+`check:deadcode` uses Knip in production mode, so test references cannot hide test-only production APIs.
+Published module roots come from package metadata; Cordis-only rows and standalone native helpers use explicit entries.
+Herdr remains an optional host-native executable, not an npm package dependency.
+The optional default-model peer retains the verified RC development pin because wildcard resolution does not safely select that prerelease.
+`pnpm exec knip --no-progress` also checks supported golden fixtures and development-only code.
+Review findings against published module entry points and dynamic Cordis loading before removing code.
+[Knip 6 omits class-member analysis](https://knip.dev/blog/knip-v6#what-about-classmembers).
+Review class methods and test-only customization separately; framework callbacks remain live even without direct method references.
+
+Repository hook scripts live in `.githooks/pre-commit` and `.githooks/pre-push`.
+The commit hook runs the TypeScript check; the push hook runs both checks.
+Git does not activate these scripts automatically. Existing configured hooks must dispatch to them for this repository.
+Preserve signature and DCO enforcement; do not replace global hooks or change Git configuration.
+Global-hook dispatch requires separate approval. These additional checks remain local; GitHub CI stays unchanged.
+
 ## Performance evidence
 
 Use the same machine, Node version, terminal, dimensions, profile, and workload for baseline and treatment.

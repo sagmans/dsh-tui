@@ -10,7 +10,8 @@ breaking change, and a patch carries only fixes.
 
 ### Changed
 
-- Remove obsolete unit-only fixture helpers, unreachable customization and omission paths while keeping live runtime ports.
+- Remove obsolete unit-only fixture helpers, unused development dependencies, and unreachable customization and omission paths while keeping live runtime ports and verified Harness interoperability pins.
+- Extend local dead-code analysis to standalone native dogfood helpers without letting golden fixtures keep production exports alive.
 - Preserve golden frames with fixture-local dates and explicit native renderer ports; strengthen free command/history acceptance with current-screen and restart-state evidence.
 
 - Available tmux verification now runs automatically with the free gate. Native controllers avoid the caller's shell and use private resources. Genuine Herdr metadata, background work, and attention checks distinguish observed lifecycle effects from accepted input.
@@ -97,6 +98,8 @@ breaking change, and a patch carries only fixes.
 ### Added
 
 - Free Herdr dogfood drives real pane keys and checks current terminal cells in disposable named sessions. Private profile homes and owned-resource cleanup keep development checks away from live conversations.
+- Local TypeScript and Knip check commands and repository hook scripts identify unused declarations, files, exports, and dependencies. Hook activation requires approved dispatch through existing Git hooks.
+
 - Optional Moshi completion and attention notifications, enabled only by `DSH_TUI_MOSHI_TOKEN`. Fixed messages exclude conversation content and session identifiers; bounded delivery never blocks agent work.
 
 ## [0.13.0] - 2026-10-01

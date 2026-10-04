@@ -1,0 +1,6 @@
+#!/bin/sh
+# Catch unused declarations before they enter history without running profile or network operations.
+set -eu
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+exec pnpm run check:unused

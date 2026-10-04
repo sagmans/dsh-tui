@@ -1,0 +1,6 @@
+#!/bin/sh
+# Check the complete production module graph before source leaves this checkout.
+set -eu
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+exec pnpm run check:local

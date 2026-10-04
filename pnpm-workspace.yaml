@@ -1,4 +1,6 @@
 # Supply-chain policy for this repository.
+# Keep newly resolved third-party releases outside their first week of exposure.
+minimumReleaseAge: 10080
 #
 # pnpm blocks a dependency's install/build script until it is reviewed here.
 allowBuilds:

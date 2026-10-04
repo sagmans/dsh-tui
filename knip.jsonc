@@ -1,0 +1,17 @@
+{
+  "$schema": "./node_modules/knip/schema.json",
+  // Cordis mounts published rows by module name rather than importing every row from index.
+  "entry": [
+    "src/todo-guard.ts!",
+    "src/host/roster.ts!",
+    "src/host/runner.ts!",
+    "tools/{pack-smoke,terminal-behavior,harness-matrix,install-smoke,pty-drive,dogfood,dogfood-editor,dogfood-herdr,dogfood-tmux}.mjs!"
+  ],
+  // The optional model peer needs the verified RC pin; a wildcard cannot select that prerelease safely.
+  "ignoreDependencies": ["@deepseek-ai/dsh-agent-default-model"],
+  // Herdr is an optional host-native transport, not an npm-owned executable.
+  "ignoreBinaries": ["herdr"],
+  // Production mode keeps test references from making test-only production APIs appear live.
+  "project": ["src/**/*.ts!", "tools/**/*.mjs!", "*.ts", "tests/**/*.ts"],
+  "include": ["files", "dependencies", "optionalPeerDependencies", "binaries", "unlisted", "unresolved", "exports", "nsExports", "types", "nsTypes", "enumMembers", "namespaceMembers", "duplicates", "catalog", "catalogReferences"]
+}
