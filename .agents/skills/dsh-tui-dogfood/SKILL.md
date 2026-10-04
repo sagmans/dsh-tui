@@ -8,7 +8,9 @@ For a dsh-tui checkout, run `pnpm verify` after development. It runs golden
 frames and all free dogfood scenarios automatically. `pnpm dogfood` starts the
 installed Harness with the base bundle and worktree in credential-free scratch
 homes. In a Herdr-managed caller, the same free gate also runs real native-pane workflows in an owned disposable named session.
-Without that prerequisite, native evidence remains `environment-not-run`; portable PTY checks still run.
+Without that prerequisite, Herdr evidence remains `environment-not-run`; portable PTY checks still run.
+When tmux is installed, the free gate also verifies its private server and actual restoration.
+Native controllers do not launch the caller's configured shell or source its startup files.
 Read `FEATURES.md` in the checkout for scope and evidence rules.
 
 Paid live-model use requires an explicit human request. List scenarios with

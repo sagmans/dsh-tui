@@ -2259,12 +2259,12 @@
           "scope": "editor"
         },
         {
-          "outerZoom": false,
+          "paneZoom": false,
           "expect": "resize-retained-中😀",
           "scope": "editor"
         },
         {
-          "outerZoom": true,
+          "paneZoom": true,
           "expect": "resize-retained-中😀",
           "scope": "editor"
         },
@@ -2339,7 +2339,7 @@
           "expect": "commands: /compact"
         },
         {
-          "outerZoom": false,
+          "paneZoom": false,
           "expect": "ready"
         },
         {
@@ -2528,6 +2528,146 @@
         {
           "key": "ctrl+c",
           "absent": "dogfood one tail",
+          "scope": "editor"
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ]
+    },
+    {
+      "id": "herdr-lifecycle",
+      "herdrIntegration": true,
+      "steps": [
+        {
+          "command": "/status",
+          "expect": "tokens in 0 out 0"
+        },
+        {
+          "reporter": "idle"
+        },
+        {
+          "command": "/new dogfood-next",
+          "expect": "started a new session"
+        },
+        {
+          "command": "/status",
+          "expect": "tokens in 0 out 0"
+        },
+        {
+          "reporter": "idle",
+          "changedSession": true
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        },
+        {
+          "reporter": "released"
+        }
+      ]
+    }
+  ],
+  "herdrPaid": [
+    {
+      "id": "herdr-attention",
+      "herdrIntegration": true,
+      "steps": [
+        {
+          "reporter": "idle"
+        },
+        {
+          "prompt": "Do not delegate, use Agent Teams, access external services, or touch any path outside this workspace. Start exactly one background bash job that waits 30 seconds and writes exactly dogfood native-background-ok to native-background.txt. Do not wait for or collect that job. Then reply exactly dogfood native-background-started.",
+          "expect": "dogfood native-background-started",
+          "settled": true
+        },
+        {
+          "reporter": "working"
+        },
+        {
+          "reporter": "idle"
+        },
+        {
+          "file": "native-background.txt",
+          "contains": "dogfood native-background-ok"
+        },
+        {
+          "prompt": "Call ask_user_question once. Ask which color I prefer, with id color and options teal and amber. Wait for my answer before reporting the selected color.",
+          "expect": "type your own answer",
+          "reporter": "blocked"
+        },
+        {
+          "key": "down",
+          "expect": "❯ [ ] 2. amber"
+        },
+        {
+          "key": "up",
+          "expect": "❯ [ ] 1. teal"
+        },
+        {
+          "key": "enter",
+          "expect": "teal",
+          "settled": true
+        },
+        {
+          "command": "/status",
+          "expect": "model zai/glm-5.3-flash (max)"
+        },
+        {
+          "reporter": "idle"
+        },
+        {
+          "command": "/export native-attention.md",
+          "expect": "transcript written to"
+        },
+        {
+          "file": "native-attention.md",
+          "contains": "ask_user_question",
+          "unquoted": true
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        },
+        {
+          "reporter": "released"
+        }
+      ]
+    }
+  ],
+  "tmux": [
+    {
+      "id": "tmux-compatibility",
+      "steps": [
+        {
+          "command": "/status",
+          "expect": "tokens in 0 out 0"
+        },
+        {
+          "type": "dogfood-tmux-λ雪🙂",
+          "expect": "dogfood-tmux-λ雪🙂",
+          "scope": "editor"
+        },
+        {
+          "keys": [
+            "left",
+            "backspace"
+          ],
+          "expect": "dogfood-tmux-λ🙂",
+          "absent": "dogfood-tmux-λ雪🙂",
+          "scope": "editor"
+        },
+        {
+          "command": "/stash dogfood-tmux-stash",
+          "expect": "Stashed [0]"
+        },
+        {
+          "command": "/stash-pop",
+          "expect": "Popped [0]"
+        },
+        {
+          "expect": "dogfood-tmux-stash",
           "scope": "editor"
         },
         {

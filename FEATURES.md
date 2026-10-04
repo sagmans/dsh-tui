@@ -43,8 +43,11 @@ A status receipt establishes the command plane before keyboard scenarios; the in
 
 In a Herdr-managed caller (`HERDR_ENV=1`), the free gate also runs `tools/dogfood-herdr.mjs`.
 The runner uses real `pane send-keys`, current terminal cells, changed geometry, and private scratch profiles.
-A disposable named session and an owned outer pane keep this work separate from live conversations.
-Cleanup verifies session deletion, pane removal, and shell usability.
+A disposable named session and private controlling PTY keep this work separate from live conversations.
+The controller does not launch the caller's configured shell or source its startup files.
+Cleanup verifies named-session deletion, controller exit, and shell usability.
+A free lifecycle scenario reads actual agent idle state, session-change tokens, workspace identity, and released authority.
+Only manager-attested private coordinates enable the reporter; the driver never fabricates agent reports.
 
 Herdr server startup needs the account HOME.
 Its XDG paths and configuration remain private.
@@ -58,6 +61,15 @@ These bindings verify action effects, not delivery of unsupported default key na
 Without a managed caller, the report records `environment-not-run`, not a pass.
 Inside a managed caller, a missing CLI or failed native assertion fails the free gate.
 SIGINT and SIGTERM produce cancellation evidence and independent cleanup attempts for each owned resource.
+
+## tmux transport
+
+When tmux is installed, the free gate also runs `tools/dogfood-tmux.mjs`.
+A private socket, minimal environment, empty config, and non-login shell exclude the operator's server and startup files.
+Native keys prove Unicode editing and stash effects through current cells.
+The runner verifies alternate-screen restoration, successful exit, and a usable shell.
+Cleanup requires the manager-attested server process to exit before removing its stale private socket.
+This proves tmux transport behavior, not physical keyboard delivery or OS clipboard acceptance.
 
 ## Paid live-model verification
 
@@ -100,12 +112,23 @@ Durable file and transcript checks provide separate evidence where applicable.
 An explicit model prompt can incur charges; use it only for requested paid work.
 Never point either driver at the live home.
 
+Native attention and background checks require a separate explicit paid invocation:
+
+```sh
+node tools/dogfood-herdr.mjs --paid --scenario herdr-attention --home <clone> --provider zai --model glm-5.3-flash --effort max
+```
+
+This scenario verifies working state after the foreground settles, successful background file output, blocked question state, and released authority.
+It uses the same private question-tool prerequisite and exact model/effort readback before billing.
+Free native automation never selects this paid case.
+Caller-owned cloned homes remain intact until the caller explicitly cleans them.
+
 ## Evidence and limits
 
 `report.json` records runtime, transport outcomes, prerequisites, cleanup, and the feature-to-scenario matrix.
 Each step records attempted input, stated postconditions, an artifact path, and observed cell changes.
 `postconditions-satisfied` does not prove internal handler invocation or an unspecified keyboard action.
-The matrix keeps portable and Herdr results separate.
+The matrix keeps portable, Herdr, and tmux results separate.
 The runner saves current screens, raw terminal output, CLI output, and failure screens in a private temporary directory.
 Free scratch homes are removed after each scenario.
 Evidence remains available for review.
@@ -123,6 +146,24 @@ Do not report 100% working scope while any required paid, environment, or behavi
 
 Release helper dogfood exercises its real help and invalid-action CLI paths without publication.
 Authenticated read-only and approved release actions remain subject to [RELEASE.md](RELEASE.md).
+
+## Checks requiring human prerequisites
+
+Do not use a production session, clipboard, endpoint, or SSH target for these checks.
+
+- Physical keyboard and clipboard: prepare a cloned profile on a dedicated test desktop.
+  Exercise configured keys and copy a known reply; verify pasted text in a separate test application.
+  Record the terminal, operating system, actions, and actual destination text.
+- SSH: authorize a dedicated development host and its model-free profile first.
+  Launch the linked profile through that real SSH connection; check Unicode, keys, resize, and restoration.
+  Record client/server versions and current terminal evidence.
+- Moshi: provide a separately authorized development endpoint and token.
+  Configure only the scratch profile; trigger a real question and inspect its delivered notification.
+  Revoke the development token after verification.
+- Other Harness releases: name and authorize the exact release before changing the verification matrix.
+  Install only in an isolated consumer environment and run real profile checks before marking it verified.
+
+These checks remain unverified without the specified prerequisites.
 
 ## Change a feature
 

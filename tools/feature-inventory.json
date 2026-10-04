@@ -534,6 +534,8 @@
       "description": "Optional pane lifecycle, status publishing, attention and background-work integration",
       "cost": "environment",
       "scenarios": [
+        "herdr-lifecycle",
+        "herdr-attention",
         "herdr"
       ],
       "sources": [
@@ -556,6 +558,7 @@
       "description": "Physical keys, clipboard acceptance, tmux/SSH and hardware latency",
       "cost": "environment",
       "scenarios": [
+        "tmux-compatibility",
         "emulators"
       ],
       "sources": [

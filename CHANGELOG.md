@@ -10,6 +10,8 @@ breaking change, and a patch carries only fixes.
 
 ### Changed
 
+- Available tmux verification now runs automatically with the free gate. Native controllers avoid the caller's shell and use private resources. Genuine Herdr metadata, background work, and attention checks distinguish observed lifecycle effects from accepted input.
+
 - Paid question and non-Team delegation checks require real tool outcomes and child-written artifacts. Approval checks verify allowed writes and absent rejected or cancelled targets inside private allocations. Inherited provider credentials cannot authorize fallback billing.
 
 - Free development verification automatically includes available Herdr workflows. Reports separate attempted input, postconditions, cell changes, and transport prerequisites. Cancellation preserves owned-resource cleanup evidence.

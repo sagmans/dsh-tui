@@ -28,6 +28,8 @@ PTY checks, and free real-profile dogfood automatically. Do not add unit tests.
 Golden tests and their fixtures remain supported.
 With `HERDR_ENV=1`, the free gate also verifies real pane workflows in an owned disposable named Herdr session.
 Without Herdr, report `environment-not-run`; never replace native behavior proof with successful key dispatch alone.
+When tmux is installed, the free gate also verifies an independent private server and restoration.
+Keep paid native attention checks demand-only; require the exact model and effort before any prompt.
 
 CI also checks dependency signatures and consumer installation; the consumer
 gate needs Docker. Free dogfood starts the installed, verified Harness with the

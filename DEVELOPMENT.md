@@ -24,7 +24,9 @@ Unit tests are not maintained. Golden tests remain visual regression checks, not
 Run `pnpm verify` after development: free real-profile dogfood runs automatically.
 [FEATURES.md](FEATURES.md) defines scope and evidence requirements.
 In a Herdr-managed caller, the same gate also runs real native-pane workflows in a disposable named session.
-Without that prerequisite, the report records unavailable native evidence; portable PTY checks still run.
+Without that prerequisite, the report records unavailable Herdr evidence; portable PTY checks still run.
+When tmux is installed, the same gate also verifies a private server, Unicode editing, stash outcomes, and terminal restoration.
+Private native controllers do not start the caller's shell or source its startup files.
 
 Golden tests do not prove native terminal behaviour. `pnpm test:terminal` checks native widgets in a credential-free PTY.
 It checks ASCII, Unicode, paste, Kitty press/repeat/release, redraw limits, resize, and terminal restoration during styled streaming.
