@@ -64,7 +64,9 @@
       "cost": "free",
       "scenarios": [
         "editor",
-        "editor-actions"
+        "editor-actions",
+        "herdr-editor",
+        "herdr-editor-actions"
       ],
       "sources": [
         "src/ui/editor.ts",
@@ -281,7 +283,8 @@
       "cost": "free",
       "scenarios": [
         "editor",
-        "native-terminal"
+        "native-terminal",
+        "herdr-geometry"
       ],
       "sources": [
         "src/terminal-text.ts",
@@ -455,7 +458,8 @@
       "description": "Viewport paging, semantic jumps, find next/previous and return to bottom",
       "cost": "free",
       "scenarios": [
-        "search"
+        "search",
+        "herdr-search"
       ],
       "sources": [
         "src/fold-cursor.ts",
@@ -479,7 +483,8 @@
       "description": "Suspend terminal, run local editor, recover multiline draft and restore UI",
       "cost": "free",
       "scenarios": [
-        "external-editor"
+        "external-editor",
+        "external-editor-failure"
       ],
       "sources": [
         "src/terminal/external-editor.ts"

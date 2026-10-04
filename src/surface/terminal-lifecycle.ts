@@ -1,4 +1,5 @@
-import { ProcessTerminal } from '@earendil-works/pi-tui'
+import type { ProcessTerminal } from '@earendil-works/pi-tui'
+import { EventSafeTerminal } from '../terminal/input.ts'
 import type { Context } from '@deepseek-ai/cordis'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { createHerdrReporter, type HerdrReporter } from '../herdr/reporter.ts'
@@ -85,7 +86,7 @@ export interface TerminalLifecycle {
  */
 export function createTerminalLifecycle(ctx: Context, ports: TerminalLifecyclePorts): TerminalLifecycle {
   const restore = createRestoreRegistry()
-  const terminal = new ProcessTerminal()
+  const terminal = new EventSafeTerminal()
   const tui = new WarningSafeTui(terminal, { copySelection })
   // A frame that cannot be drawn leaves the last good screen up, so the failure
   // has to reach the transcript: otherwise the surface looks frozen and nothing

@@ -13,6 +13,7 @@ import { ACTION_CATALOG } from '../lib/input/action-catalog.js'
 import { TUI_TOKENS, PALETTE_NAMES, CARD_ROW_CLASSES } from '../lib/theme-tokens.js'
 import { barePaneEnv, preparePtyLaunch } from './pty-launch.mjs'
 import { PtyScreen } from './pty-screen.mjs'
+import { editorText } from './dogfood-observation.mjs'
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const SCENARIOS = JSON.parse(readFileSync(join(ROOT, 'tools/dogfood-scenarios.json'), 'utf8'))
@@ -25,7 +26,7 @@ for (const scenario of [...SCENARIOS.free, ...SCENARIOS.paid]) {
 }
 for (const feature of INVENTORY.features) {
   for (const source of feature.sources) if (!existsSync(join(ROOT, source))) throw new Error(`dogfood: missing feature owner ${source}`)
-  for (const id of feature.scenarios) if (![...SCENARIOS.free, ...SCENARIOS.paid, ...SCENARIOS.manual].some(row => row.id === id)) throw new Error(`dogfood: missing scenario ${id} for ${feature.id}`)
+  for (const id of feature.scenarios) if (![...SCENARIOS.free, ...SCENARIOS.paid, ...SCENARIOS.manual, ...(SCENARIOS.herdr ?? [])].some(row => row.id === id)) throw new Error(`dogfood: missing scenario ${id} for ${feature.id}`)
 }
 for (const scenario of SCENARIOS.free) {
   if (scenario.catalog) scenario.steps = INVENTORY.actions.flatMap(row => [
@@ -67,7 +68,8 @@ const KEYS = {
   'ctrl+r': '\x12', 'ctrl+t': '\x14', 'ctrl+o': '\x0f', 'ctrl+y': '\x19',
   'shift+tab': '\x1b[Z', 'ctrl+shift+f': '\x1b[102;6u',
   pageup: '\x1b[5~', pagedown: '\x1b[6~',
-  f2: '\x1bOQ', f3: '\x1bOR', f4: '\x1bOS',
+  f2: '\x1b[1;1:1Q', f3: '\x1b[1;1:1R', f4: '\x1b[1;1:1S',
+  'f2-release': '\x1b[1;1:3Q',
   'ctrl+left': '\x1b[1;5D', 'ctrl+right': '\x1b[1;5C', 'alt+d': '\x1b[100;3u', 'shift+enter': '\x1b[13;2u',
   '?': '?', m: 'm', p: 'p', y: 'y', n: 'n', s: 's', l: 'l', e: 'e', u: 'u', r: 'r',
 }
@@ -174,7 +176,9 @@ async function run(scenario, reused) {
     : Object.fromEntries(FREE_ENV.flatMap(key => process.env[key] === undefined ? [] : [[key, process.env[key]]]))
   const launch = preparePtyLaunch({ home, launcher: supplied('--launcher') ? option('--launcher') : '', env })
   const childEnv = { ...env, HOME: osHome, DSH_HOME: home, TMPDIR: scratchTemp, TMP: scratchTemp, TEMP: scratchTemp, DSH_PERMISSION_MODE: PERMISSION_MODE, DSH_TELEMETRY_DISABLED: ENABLED_ENV_VALUE, TERM: TERMINAL_NAME }
-  if (scenario.editor) childEnv.VISUAL = `${JSON.stringify(process.execPath)} ${JSON.stringify(join(ROOT, 'tools/dogfood-editor.mjs'))}`
+  if (scenario.editor) childEnv.VISUAL = scenario.editor === 'missing'
+    ? join(workspace, 'missing-editor')
+    : `${JSON.stringify(process.execPath)} ${JSON.stringify(join(ROOT, 'tools/dogfood-editor.mjs'))}`
   if (scenario.invocation) {
     let result
     if (scenario.tool === 'clone-helper') {
@@ -246,7 +250,8 @@ async function run(scenario, reused) {
   const snapshot = index => writeFileSync(join(folder, `${String(index).padStart(3, '0')}.txt`), screen.text() + '\n', { mode: PRIVATE_FILE_MODE })
   let priorScreen
   const checkStep = step => {
-    const text = step.scope === 'editor' ? screen.cells.slice(-4).map(row => row.join('')).join('\n') : screen.text()
+    const text = step.scope === 'editor' ? editorText(screen.text()) : screen.text()
+    if (text === undefined) return false
     const visible = text.replace(/\s+/gu, ' ')
     return (step.expect === undefined || visible.includes(step.expect.replace(/\s+/gu, ' '))) && (step.absent === undefined || !visible.includes(step.absent.replace(/\s+/gu, ' ')))
       && (!step.changed || screen.text() !== priorScreen)

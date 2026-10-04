@@ -75,11 +75,11 @@
         },
         {
           "key": "down",
-          "expect": "stash"
+          "expect": "❯ chord.stashes"
         },
         {
           "key": "up",
-          "expect": "stash"
+          "expect": "❯ chord.stash ="
         },
         {
           "key": "escape",
@@ -1184,7 +1184,9 @@
         },
         {
           "key": "f2",
-          "expect": "dogfood-ab"
+          "expect": "dogfood-ab",
+          "absent": "dogfood-abc",
+          "scope": "editor"
         },
         {
           "key": "ctrl+c",
@@ -1445,6 +1447,12 @@
           "scope": "editor"
         },
         {
+          "key": "f2-release",
+          "expect": "ab",
+          "absent": "cdef",
+          "scope": "editor"
+        },
+        {
           "key": "f2",
           "expect": "abcdef"
         },
@@ -1698,6 +1706,43 @@
       "tool": "clone-helper",
       "invocation": [],
       "expect": "link:"
+    },
+    {
+      "id": "external-editor-failure",
+      "editor": "missing",
+      "steps": [
+        {
+          "type": "retained-draft",
+          "expect": "retained-draft",
+          "scope": "editor"
+        },
+        {
+          "key": "ctrl+x",
+          "expect": "ctrl+x"
+        },
+        {
+          "key": "e",
+          "expect": "could not start"
+        },
+        {
+          "type": "-recovered",
+          "expect": "retained-draft-recovered",
+          "scope": "editor"
+        },
+        {
+          "key": "ctrl+c",
+          "absent": "retained-draft-recovered",
+          "scope": "editor"
+        },
+        {
+          "command": "/status",
+          "expect": "tokens in 0 out 0"
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ]
     }
   ],
   "paid": [
@@ -2106,6 +2151,347 @@
       "prerequisite": "Each supported emulator, tmux and SSH transport, clipboard observation, and timestamped physical input.",
       "checks": [
         "Verify physical modified keys, bracketed paste, OSC52 acceptance, mouse, focus, resize, restoration, and actual input-to-pixel latency. PTY output is not physical-device proof."
+      ]
+    }
+  ],
+  "herdr": [
+    {
+      "id": "herdr-editor",
+      "steps": [
+        {
+          "type": "dogfood-中😀",
+          "expect": "dogfood-中😀"
+        },
+        {
+          "key": "left",
+          "expect": "dogfood-中😀"
+        },
+        {
+          "key": "backspace",
+          "expect": "dogfood-😀"
+        },
+        {
+          "key": "ctrl+c",
+          "absent": "dogfood-😀",
+          "scope": "editor"
+        },
+        {
+          "type": "paste-one\npaste-two",
+          "paste": true,
+          "expect": "paste-two"
+        },
+        {
+          "key": "ctrl+c",
+          "absent": "paste-two",
+          "scope": "editor"
+        },
+        {
+          "type": "/sta",
+          "expect": "/sta"
+        },
+        {
+          "key": "tab",
+          "expect": "/status"
+        },
+        {
+          "key": "ctrl+c",
+          "absent": "/status",
+          "scope": "editor"
+        },
+        {
+          "command": "/status",
+          "expect": "tokens in 0 out 0"
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ]
+    },
+    {
+      "id": "herdr-geometry",
+      "steps": [
+        {
+          "type": "resize-retained-中😀",
+          "expect": "resize-retained-中😀",
+          "scope": "editor"
+        },
+        {
+          "outerZoom": false,
+          "expect": "resize-retained-中😀",
+          "scope": "editor"
+        },
+        {
+          "outerZoom": true,
+          "expect": "resize-retained-中😀",
+          "scope": "editor"
+        },
+        {
+          "key": "ctrl+c",
+          "absent": "resize-retained-中😀",
+          "scope": "editor"
+        },
+        {
+          "command": "/status",
+          "expect": "tokens in 0 out 0"
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ]
+    },
+    {
+      "id": "herdr-search",
+      "steps": [
+        {
+          "command": "/help",
+          "expect": "/stash-pop"
+        },
+        {
+          "command": "/help",
+          "expect": "commands: /compact"
+        },
+        {
+          "command": "/help",
+          "expect": "commands: /compact"
+        },
+        {
+          "command": "/help",
+          "expect": "commands: /compact"
+        },
+        {
+          "command": "/help",
+          "expect": "commands: /compact"
+        },
+        {
+          "command": "/help",
+          "expect": "commands: /compact"
+        },
+        {
+          "command": "/help",
+          "expect": "commands: /compact"
+        },
+        {
+          "command": "/help",
+          "expect": "commands: /compact"
+        },
+        {
+          "command": "/help",
+          "expect": "commands: /compact"
+        },
+        {
+          "command": "/help",
+          "expect": "commands: /compact"
+        },
+        {
+          "command": "/help",
+          "expect": "commands: /compact"
+        },
+        {
+          "command": "/help",
+          "expect": "commands: /compact"
+        },
+        {
+          "command": "/help",
+          "expect": "commands: /compact"
+        },
+        {
+          "outerZoom": false,
+          "expect": "ready"
+        },
+        {
+          "key": "f5",
+          "changed": true
+        },
+        {
+          "key": "f6",
+          "changed": true
+        },
+        {
+          "key": "f7",
+          "expect": "Find in transcript"
+        },
+        {
+          "type": "stash",
+          "expect": "stash",
+          "changed": true
+        },
+        {
+          "key": "enter",
+          "changed": true
+        },
+        {
+          "key": "f8",
+          "changed": true
+        },
+        {
+          "key": "escape",
+          "absent": "Find in transcript"
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ],
+      "config": {
+        "keys": {
+          "tui.altScreen.pageUp": "f5",
+          "tui.altScreen.pageDown": "f6",
+          "tui.altScreen.search": "f7",
+          "tui.altScreen.searchPrevious": "f8"
+        }
+      }
+    },
+    {
+      "id": "herdr-editor-actions",
+      "config": {
+        "keys": {
+          "tui.editor.yank": "f2",
+          "tui.editor.yankPop": "f3",
+          "tui.editor.undo": "f4",
+          "tui.editor.deleteCharForward": "f5",
+          "tui.editor.cursorWordLeft": "f6",
+          "tui.editor.deleteWordForward": "f7",
+          "tui.editor.cursorWordRight": "f8"
+        }
+      },
+      "steps": [
+        {
+          "command": "/keys library",
+          "expect": "library"
+        },
+        {
+          "type": "tui.editor.yank",
+          "expect": "tui.editor.yank = f2"
+        },
+        {
+          "key": "escape",
+          "expect": "ready"
+        },
+        {
+          "type": "dogfood abc",
+          "expect": "dogfood abc"
+        },
+        {
+          "key": "ctrl+a",
+          "expect": "dogfood abc"
+        },
+        {
+          "key": "right",
+          "expect": "dogfood abc"
+        },
+        {
+          "key": "f5",
+          "expect": "dgfood abc"
+        },
+        {
+          "key": "ctrl+c",
+          "absent": "dgfood abc",
+          "scope": "editor"
+        },
+        {
+          "type": "one two three",
+          "expect": "one two three"
+        },
+        {
+          "key": "ctrl+w",
+          "expect": "one two",
+          "absent": "three",
+          "scope": "editor"
+        },
+        {
+          "key": "ctrl+a",
+          "expect": "one two"
+        },
+        {
+          "key": "ctrl+k",
+          "absent": "one two",
+          "scope": "editor"
+        },
+        {
+          "type": "abcdef",
+          "expect": "abcdef"
+        },
+        {
+          "key": "ctrl+a",
+          "expect": "abcdef"
+        },
+        {
+          "key": "right",
+          "expect": "abcdef"
+        },
+        {
+          "key": "right",
+          "expect": "abcdef"
+        },
+        {
+          "key": "ctrl+k",
+          "expect": "ab",
+          "absent": "cdef",
+          "scope": "editor"
+        },
+        {
+          "key": "f2",
+          "expect": "abcdef"
+        },
+        {
+          "key": "f3",
+          "expect": "abone two"
+        },
+        {
+          "key": "ctrl+c",
+          "absent": "abone two",
+          "scope": "editor"
+        },
+        {
+          "type": "dogfood undo",
+          "expect": "dogfood undo"
+        },
+        {
+          "key": "backspace",
+          "expect": "dogfood und"
+        },
+        {
+          "key": "f4",
+          "expect": "dogfood undo"
+        },
+        {
+          "key": "ctrl+c",
+          "absent": "dogfood undo",
+          "scope": "editor"
+        },
+        {
+          "type": "dogfood one two",
+          "expect": "dogfood one two"
+        },
+        {
+          "key": "f6",
+          "expect": "dogfood one two"
+        },
+        {
+          "key": "f7",
+          "expect": "dogfood one",
+          "absent": "two",
+          "scope": "editor"
+        },
+        {
+          "key": "f8",
+          "expect": "dogfood one"
+        },
+        {
+          "type": "tail",
+          "expect": "dogfood one tail"
+        },
+        {
+          "key": "ctrl+c",
+          "absent": "dogfood one tail",
+          "scope": "editor"
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
       ]
     }
   ]

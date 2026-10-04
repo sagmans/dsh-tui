@@ -218,7 +218,8 @@ function parseTools(raw: unknown): Record<string, WrittenToolDisplay> {
 export function parseSettings(raw: unknown): TuiSettings {
   if (asRecord(raw) === undefined) throw new Error('dsh-tui settings must be a mapping')
   rejectUnknownKeys(raw)
-  const section = asRecord(raw)!
+  // Schema normalization must not mutate the immutable section borrowed from SettingsForms.
+  const section = structuredClone(asRecord(raw)!)
   if (section.history !== undefined && asRecord(section.history) === undefined) throw new Error('history must be a mapping')
   const parsed = SECTION(section) as unknown as {
     theme: string | undefined

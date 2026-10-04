@@ -22,6 +22,10 @@ breaking change, and a patch carries only fixes.
 
 ### Fixed
 
+- Unmodified F1–F4 press and repeat events from Herdr reach the pinned terminal decoder without discarding release or modifier metadata. Real editor yank, yank-pop, and undo checks cover this input path.
+
+- Custom viewport bindings remain usable when the host supplies immutable settings. Validation now preserves the borrowed settings section instead of attempting in-place normalization.
+
 - Dogfood launchers exclude inherited Moshi notification tokens and agent-pane coordinates, preventing incidental production notifications during model checks. Real credential-free helper setup, status, and cleanup now run automatically.
 
 - Inline comments explain implementation purposes and constraints without promising unsupported isolation, rollback, event-ordering, or lifecycle guarantees. Executable behavior remains unchanged.

@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { setTimeout as delay } from 'node:timers/promises'
 import yaml from 'js-yaml'
 import { preparePtyLaunch } from './pty-launch.mjs'
+import { editorText } from './dogfood-observation.mjs'
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const SCENARIOS = JSON.parse(readFileSync(join(ROOT, 'tools/dogfood-scenarios.json'), 'utf8'))
@@ -23,7 +24,7 @@ const SETTLE_MS = 100
 const MAX_OUTPUT_BYTES = 64 * 1024 * 1024
 const FREE_ENV = ['PATH', 'LANG', 'LC_ALL', 'SystemRoot', 'USER', 'LOGNAME', 'SHELL']
 const STARTUP_FIELDS = ['sessionId', 'resume', 'resumePicker', 'model', 'provider', 'preset', 'color', 'bell']
-const SUPPORTED = new Set(['commands', 'pickers', 'stash', 'chords', 'guards', 'stash-confirm', 'appearance', 'history', 'bindings', 'external-editor', 'editor-actions', 'completion', 'search', 'history-consent'])
+const SUPPORTED = new Set(['commands', 'pickers', 'stash', 'chords', 'guards', 'stash-confirm', 'appearance', 'history', 'bindings', 'external-editor', 'completion', 'history-consent', 'external-editor-failure'])
 const KEY_NAMES = { escape: 'esc', backspace: 'backspace', pageup: 'pageup', pagedown: 'pagedown' }
 const SUBMIT_KEYS = new Set(['ctrl+s', 'ctrl+enter', 'alt+enter'])
 const ALLOWED = new Set(['--scenario', '--launcher', '--list'])
@@ -34,13 +35,26 @@ const EVIDENCE_PREFIX = '/var/tmp/dsh-tui-herdr-'
 const TERMINAL = 'xterm-256color'
 const PERMISSION_MODE = 'workspace-write'
 const ENABLED = '1'
+const PRIVATE_CONFIG = [
+  'onboarding = false',
+  '[terminal]',
+  'default_shell = "/bin/sh"',
+  'shell_mode = "non_login"',
+  '[experimental]',
+  'allow_nested = true',
+  '[update]',
+  'version_check = false',
+  'manifest_check = false',
+  '[ui.toast]',
+  'delivery = "off"',
+].join('\n') + '\n'
 const options = process.argv.slice(2)
 for (let i = 0; i < options.length; i++) {
   if (!ALLOWED.has(options[i])) throw new Error('herdr dogfood: unknown option ' + options[i])
   if (options[i] !== '--list' && (!options[++i] || options[i].startsWith('--'))) throw new Error('herdr dogfood: option requires a value')
 }
 const option = name => options[options.indexOf(name) + 1]
-const selected = SCENARIOS.free.filter(row => SUPPORTED.has(row.id) && (!options.includes('--scenario') || row.id === option('--scenario')))
+const selected = [...SCENARIOS.free.filter(row => SUPPORTED.has(row.id)), ...(SCENARIOS.herdr ?? [])].filter(row => !options.includes('--scenario') || row.id === option('--scenario'))
 if (!selected.length) throw new Error('herdr dogfood: no supported matching scenarios')
 if (options.includes('--list')) { console.log(selected.map(row => row.id).join('\n')); process.exit(0) }
 if (process.env.HERDR_ENV !== ENABLED) throw new Error('herdr dogfood: requires a Herdr-managed caller pane')
@@ -48,7 +62,7 @@ const evidence = realpathSync(mkdtempSync(EVIDENCE_PREFIX))
 chmodSync(evidence, PRIVATE_DIR_MODE)
 const session = SESSION_PREFIX + evidence.split('-').at(-1).toLowerCase()
 const config = join(evidence, 'herdr.toml')
-writeFileSync(config, '[experimental]\nallow_nested = true\n', { mode: PRIVATE_FILE_MODE })
+writeFileSync(config, PRIVATE_CONFIG, { mode: PRIVATE_FILE_MODE })
 const parentEnv = { ...process.env }
 const serverHome = join(evidence, 'herdr-home')
 mkdirSync(serverHome, { mode: PRIVATE_DIR_MODE })
@@ -126,7 +140,9 @@ async function run(scenario) {
   for (const file of scenario.files ?? []) save(safeFile(file.path), file.content)
   const env = Object.fromEntries(FREE_ENV.flatMap(field => process.env[field] === undefined ? [] : [[field, process.env[field]]]))
   Object.assign(env, { HOME: osHome, DSH_HOME: home, TMPDIR: temp, TMP: temp, TEMP: temp, DSH_PERMISSION_MODE: PERMISSION_MODE, DSH_TELEMETRY_DISABLED: ENABLED, TERM: TERMINAL })
-  if (scenario.editor) env.VISUAL = JSON.stringify(process.execPath) + ' ' + JSON.stringify(join(ROOT, 'tools/dogfood-editor.mjs'))
+  if (scenario.editor) env.VISUAL = scenario.editor === 'missing'
+    ? join(workspace, 'missing-editor')
+    : JSON.stringify(process.execPath) + ' ' + JSON.stringify(join(ROOT, 'tools/dogfood-editor.mjs'))
   const launch = preparePtyLaunch({ home, env, launcher: options.includes('--launcher') ? option('--launcher') : '' })
   const exitFile = join(folder, 'exit-code')
   const script = join(folder, 'launch.sh')
@@ -152,6 +168,14 @@ async function run(scenario) {
       } else if (step.type !== undefined) {
         if (/[\x00-\x08\x0b-\x1f\x7f]/u.test(step.type)) throw new Error('herdr dogfood: unsafe typed input')
         cli(['pane', 'send-text', pane, step.type])
+      } else if (step.outerZoom !== undefined) {
+        const previousRows = json(['pane', 'get', pane]).result.pane.scroll.viewport_rows
+        cli(['pane', 'zoom', outer, step.outerZoom ? '--on' : '--off'], parentEnv)
+        const geometry = await wait(text => {
+          const rows = JSON.parse(text).result.pane.scroll.viewport_rows
+          return rows > 0 && rows !== previousRows
+        }, 'actual terminal geometry change', () => cli(['pane', 'get', pane]))
+        save(join(folder, 'geometry-' + String(i + 1) + '.json'), geometry)
       } else if (step.file !== undefined) {
         const path = safeFile(step.file)
         if (!realpathSync(path).startsWith(workspace + sep) || lstatSync(path).isSymbolicLink()) throw new Error('herdr dogfood: unsafe file assertion')
@@ -163,11 +187,14 @@ async function run(scenario) {
           if (step.contains !== undefined && !content.includes(step.contains)) throw new Error('herdr dogfood: missing durable content')
           if (step.mode !== undefined && (stat.mode & 0o777) !== step.mode) throw new Error('herdr dogfood: wrong private file mode')
         } finally { closeSync(fd) }
-      } else throw new Error('herdr dogfood: unsupported step ' + (i + 1))
+      } else if (Object.keys(step).some(field => !['expect', 'absent', 'scope', 'settled', 'changed'].includes(field))) {
+        throw new Error('herdr dogfood: unsupported step ' + (i + 1))
+      }
       if (step.exit) await wait(text => text.includes(EXIT_MARKER), 'exit receipt')
       else if (step.expect !== undefined || step.absent !== undefined || step.changed) {
         await wait(text => {
-          const scoped = step.scope === 'editor' ? text.trimEnd().split('\n').slice(-4).join('\n') : text
+          const scoped = step.scope === 'editor' ? editorText(text) : text
+          if (scoped === undefined) return false
           const value = normalized(scoped)
           return (step.expect === undefined || value.includes(normalized(step.expect))) && (step.absent === undefined || !value.includes(normalized(step.absent))) && (!step.changed || text !== before) && (!step.settled || text.trimEnd().split('\n').slice(-4).some(line => line.includes('ready')))
         }, JSON.stringify(step.expect ?? step.absent ?? 'changed frame'))
@@ -207,10 +234,14 @@ try {
   cli(['pane', 'run', outer, 'sh ' + quote(nestedScript)], parentEnv)
   started = true
   await wait(text => { try { return JSON.parse(text).result.panes.length > 0 } catch { return false } }, 'named session readiness', () => { try { return cli(['pane', 'list']) } catch { return '' } })
-  pane = json(['pane', 'list']).result.panes[0].pane_id
+  const anchor = json(['pane', 'list']).result.panes[0].pane_id
+  cli(['pane', 'zoom', outer, '--on'], parentEnv)
   for (const scenario of selected) {
     try {
+      pane = json(['pane', 'split', anchor, '--direction', 'down', '--cwd', evidence, '--no-focus']).result.pane.pane_id
+      cli(['pane', 'zoom', pane, '--on'])
       await run(scenario)
+      cli(['pane', 'close', pane])
       results.push({ id: scenario.id, status: 'passed', assertions: scenario.steps.length })
       console.log('herdr dogfood: PASS ' + scenario.id)
     } catch (error) {
