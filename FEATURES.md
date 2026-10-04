@@ -73,17 +73,25 @@ pnpm dogfood:paid --scenario live-reply --home <clone> --provider <provider> --m
 The clone must contain the chosen model adapter and its required credentials.
 Before delegation or autonomous work, set the cloned catalog default to the approved model and effort.
 Session-only `/model` selection does not constrain child-agent defaults.
+For the non-Team `subagent` tool, set `agentOptions.provider`, `agentOptions.model`, and `agentOptions.reasoningEffort` in its cloned config.
+Restate the existing provider, toolName, and backgroundMode because a config replacement does not merge fields.
 The runner selects the route through `/model` and reads it back through `/status`.
 Use `--effort max` when explicitly requested and advertised by the route.
 The runner confirms model and effort before submitting a billed prompt.
 It refuses paid execution without `--home`, `--provider`, `--model`, and `--scenario`.
 It never reads a model route from an implicit default.
-Paid runs also exclude pane coordinates and notification credentials.
+Paid runs also exclude inherited provider credentials, pane coordinates, and notification credentials.
+Keep only the approved credential in the private home.
+The runner uses the same minimal environment whitelist for free and paid processes.
 Notification checks require a separate, explicitly requested development token and direct scratch-profile launch.
 
 Demand-only scenarios cover replies, rich text, tools, PTC, conversation branching, clipboard transport, questions, approvals, queues, work, jobs, and delegations.
 A model that cannot perform the requested tool workflow fails that scenario.
-Question checks require an advertised question tool. Approval checks require an approval-enabled development session.
+Question checks require the advertised `ask_user_question` tool, not only the question service.
+The installed base provides that service but does not enable the opt-in question tool.
+Mount the already-installed `@deepseek-ai/dsh-tool-ask-user` only in the private profile when required.
+Approval checks use an approval-enabled private session and verify allow, reject, and cancel through actual file outcomes.
+Assertions may inspect the runner-owned private parent, never unrelated paths.
 If delegation uses Agent Teams, require explicit human authorization for Agent Teams before running that scenario.
 Do not treat its final text as proof that a tool executed.
 Durable file and transcript checks provide separate evidence where applicable.

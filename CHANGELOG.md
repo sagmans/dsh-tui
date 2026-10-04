@@ -10,6 +10,8 @@ breaking change, and a patch carries only fixes.
 
 ### Changed
 
+- Paid question and non-Team delegation checks require real tool outcomes and child-written artifacts. Approval checks verify allowed writes and absent rejected or cancelled targets inside private allocations. Inherited provider credentials cannot authorize fallback billing.
+
 - Free development verification automatically includes available Herdr workflows. Reports separate attempted input, postconditions, cell changes, and transport prerequisites. Cancellation preserves owned-resource cleanup evidence.
 
 - Paid dogfood can select and verify an explicit reasoning effort before billing. Actual-model fixtures now check visible Mermaid fallback, recovered queued drafts, and child navigation without depending on assistant wording.

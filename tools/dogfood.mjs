@@ -11,7 +11,7 @@ import yaml from 'js-yaml'
 import { LOCAL_COMMANDS } from '../lib/input/submission.js'
 import { ACTION_CATALOG } from '../lib/input/action-catalog.js'
 import { TUI_TOKENS, PALETTE_NAMES, CARD_ROW_CLASSES } from '../lib/theme-tokens.js'
-import { barePaneEnv, preparePtyLaunch } from './pty-launch.mjs'
+import { preparePtyLaunch } from './pty-launch.mjs'
 import { PtyScreen } from './pty-screen.mjs'
 import { editorText } from './dogfood-observation.mjs'
 
@@ -110,7 +110,7 @@ chmodSync(evidence, PRIVATE_DIR_MODE)
 const INPUT_FIELDS = new Set(['command', 'key', 'type', 'prompt', 'paste', 'outerZoom', 'resize', 'signal'])
 const observations = new Map()
 const results = []
-let herdr = { status: paid ? 'paid-not-run' : 'environment-not-run', reason: paid ? 'Paid verification does not automatically bill another transport.' : 'Requires HERDR_ENV=1 and the installed Herdr CLI.' }
+let herdr = { status: paid ? 'paid-not-run' : 'environment-not-run', reason: paid ? 'Paid verification runs only the explicitly selected scenario.' : 'Requires HERDR_ENV=1 and the installed Herdr CLI.' }
 const featureCoverage = () => INVENTORY.features.map(feature => ({
   id: feature.id, cost: feature.cost,
   scope: feature.description,
@@ -169,9 +169,12 @@ async function run(scenario, reused) {
   mkdirSync(osHome, { mode: PRIVATE_DIR_MODE })
   const scratchTemp = join(folder, 'tmp')
   mkdirSync(scratchTemp, { mode: PRIVATE_DIR_MODE })
-  const safeFile = name => {
+  const safeFile = (name, ownedParent = false) => {
+    // Approval effects may cross the workspace boundary, but never the runner's own private allocation.
+    if (ownedParent && (!paid || ownedParent !== true)) throw new Error('dogfood: owned parent assertions require paid approval verification')
+    const scope = ownedParent ? folder : workspace
     const path = resolve(workspace, name)
-    if (!path.startsWith(workspace + sep) || isAbsolute(name)) throw new Error('dogfood: file escaped scratch workspace')
+    if (!path.startsWith(scope + sep) || isAbsolute(name)) throw new Error('dogfood: file escaped scratch scope')
     return path
   }
   for (const file of scenario.files ?? []) {
@@ -180,8 +183,8 @@ async function run(scenario, reused) {
     else if (file.hardlink) linkSync(safeFile(file.hardlink), path)
     else writeFileSync(path, file.content, { mode: file.mode ?? PRIVATE_FILE_MODE })
   }
-  const env = paid ? barePaneEnv()
-    : Object.fromEntries(FREE_ENV.flatMap(key => process.env[key] === undefined ? [] : [[key, process.env[key]]]))
+  // A paid clone owns its one credential; unrelated inherited provider keys must not authorize fallback billing.
+  const env = Object.fromEntries(FREE_ENV.flatMap(key => process.env[key] === undefined ? [] : [[key, process.env[key]]]))
   const launch = preparePtyLaunch({ home, launcher: supplied('--launcher') ? option('--launcher') : '', env })
   const childEnv = { ...env, HOME: osHome, DSH_HOME: home, TMPDIR: scratchTemp, TMP: scratchTemp, TEMP: scratchTemp, DSH_PERMISSION_MODE: PERMISSION_MODE, DSH_TELEMETRY_DISABLED: ENABLED_ENV_VALUE, TERM: TERMINAL_NAME }
   if (scenario.editor) childEnv.VISUAL = scenario.editor === 'missing'
@@ -312,18 +315,29 @@ async function run(scenario, reused) {
         if (!['SIGTERM', 'SIGINT'].includes(step.signal)) throw new Error('dogfood: unsupported shutdown signal')
         process.kill(-child.pid, step.signal)
       } else if (step.file !== undefined) {
-        const path = safeFile(step.file)
-        // Model-created paths must not turn verification into a read of unrelated user data.
-        if (!realpathSync(path).startsWith(workspace + sep) || lstatSync(path).isSymbolicLink()) throw new Error('dogfood: file assertion followed an unsafe link')
-        const fd = openSync(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
-        try {
-          const stat = fstatSync(fd)
-          if (!stat.isFile() || stat.nlink !== 1) throw new Error('dogfood: file assertion requires an unshared regular file')
-          const content = readFileSync(fd, 'utf8')
-          const proof = step.unquoted ? content.split('\n').filter(line => !line.startsWith('>') && !line.startsWith('<!--')).join('\n') : content
-          if (step.contains !== undefined && !proof.includes(step.contains)) throw new Error(`dogfood: missing file content ${step.contains}`)
-          if (step.mode !== undefined && (stat.mode & 0o777) !== step.mode) throw new Error(`dogfood: wrong mode for ${step.file}`)
-        } finally { closeSync(fd) }
+        const path = safeFile(step.file, step.ownedParent)
+        const scope = step.ownedParent ? folder : workspace
+        // Absence counts only in a proven private parent; missing or redirected search domains do not establish rejection.
+        const parent = realpathSync(dirname(path))
+        if (parent !== scope && !parent.startsWith(scope + sep)) throw new Error('dogfood: file assertion followed an unsafe parent')
+        if (step.missing === true) {
+          try {
+            lstatSync(path)
+            throw new Error(`dogfood: unexpected file ${step.file}`)
+          } catch (error) { if (error.code !== 'ENOENT') throw error }
+        } else {
+          // Model-created paths must not turn verification into a read of unrelated user data.
+          if (!realpathSync(path).startsWith(scope + sep) || lstatSync(path).isSymbolicLink()) throw new Error('dogfood: file assertion followed an unsafe link')
+          const fd = openSync(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
+          try {
+            const stat = fstatSync(fd)
+            if (!stat.isFile() || stat.nlink !== 1) throw new Error('dogfood: file assertion requires an unshared regular file')
+            const content = readFileSync(fd, 'utf8')
+            const proof = step.unquoted ? content.split('\n').filter(line => !line.startsWith('>') && !line.startsWith('<!--')).join('\n') : content
+            if (step.contains !== undefined && !proof.includes(step.contains)) throw new Error(`dogfood: missing file content ${step.contains}`)
+            if (step.mode !== undefined && (stat.mode & 0o777) !== step.mode) throw new Error(`dogfood: wrong mode for ${step.file}`)
+          } finally { closeSync(fd) }
+        }
       }
       if (step.exit) await wait(() => status !== undefined, 'clean exit', before)
       else if (step.expect !== undefined || step.absent !== undefined || step.changed) {

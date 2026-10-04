@@ -1945,16 +1945,16 @@
       "id": "questions",
       "steps": [
         {
-          "prompt": "Use ask_questions now. Ask which color I prefer, with options teal and amber. Wait for my answer before reporting the selected color.",
+          "prompt": "Call ask_user_question once. Ask which color I prefer, with id color and options teal and amber. Wait for my answer before reporting the selected color.",
           "expect": "type your own answer"
         },
         {
           "key": "down",
-          "expect": "amber"
+          "expect": "❯ [ ] 2. amber"
         },
         {
           "key": "up",
-          "expect": "teal"
+          "expect": "❯ [ ] 1. teal"
         },
         {
           "key": "enter",
@@ -1971,6 +1971,11 @@
           "unquoted": true
         },
         {
+          "file": "answer.md",
+          "contains": "ask_user_question",
+          "unquoted": true
+        },
+        {
           "command": "/quit",
           "exit": true
         }
@@ -1981,12 +1986,45 @@
       "steps": [
         {
           "prompt": "Use the write tool to create ../approval-target.txt, outside this scratch workspace but inside its private parent. Content must join 'dogfood' and 'approval-ok' with one space. Request sandbox escalation if needed; wait for my approval. Do not use any other path.",
-          "expect": "allow"
+          "expect": "approval needed ·"
         },
         {
           "key": "y",
           "expect": "dogfood approval-ok",
           "settled": true
+        },
+        {
+          "file": "../approval-target.txt",
+          "ownedParent": true,
+          "contains": "dogfood approval-ok"
+        },
+        {
+          "prompt": "Use write once to create ../approval-rejected.txt, only inside this private scratch parent. Content: dogfood reject-target. Request sandbox escalation if needed and wait for approval. If refused, do not retry or use another tool; reply exactly dogfood rejected-ok.",
+          "expect": "approval needed ·"
+        },
+        {
+          "key": "n",
+          "expect": "dogfood rejected-ok",
+          "settled": true
+        },
+        {
+          "file": "../approval-rejected.txt",
+          "ownedParent": true,
+          "missing": true
+        },
+        {
+          "prompt": "Use write once to create ../approval-cancelled.txt, only inside this private scratch parent. Content: dogfood cancel-target. Request sandbox escalation if needed and wait for approval. If cancelled, do not retry or use another tool; reply exactly dogfood cancelled-ok.",
+          "expect": "approval needed ·"
+        },
+        {
+          "key": "escape",
+          "expect": "dogfood cancelled-ok",
+          "settled": true
+        },
+        {
+          "file": "../approval-cancelled.txt",
+          "ownedParent": true,
+          "missing": true
         },
         {
           "command": "/export answer.md",
@@ -2099,9 +2137,13 @@
       "id": "delegation",
       "steps": [
         {
-          "prompt": "Run one bounded delegation using the available subagent capability. Ask it to inspect only the current scratch directory and report its name, without writing files or using external services. Collect its result, then reply by joining 'dogfood' and 'delegation-ok' with one space.",
+          "prompt": "Use only the non-Team subagent tool, never Agent Teams. Spawn exactly one child without overriding its configured model or effort. Ask the child to write delegate-proof.txt in the current scratch directory, containing exactly dogfood child-ok. Only the child may write that file. Collect its successful result, then say dogfood delegation-ok. Do not use external services or any other path.",
           "expect": "subagent spawn finished",
           "settled": true
+        },
+        {
+          "file": "delegate-proof.txt",
+          "contains": "dogfood child-ok"
         },
         {
           "command": "/subagents",
