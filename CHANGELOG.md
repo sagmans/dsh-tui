@@ -10,6 +10,8 @@ breaking change, and a patch carries only fixes.
 
 ### Changed
 
+- Preserve global commit-message, DCO, and signature policy when repository-local hooks add TypeScript and Knip gates.
+
 - Remove obsolete unit-only fixture helpers, unused development dependencies, and unreachable customization and omission paths while keeping live runtime ports and verified Harness interoperability pins.
 - Extend local dead-code analysis to standalone native dogfood helpers without letting golden fixtures keep production exports alive.
 - Preserve golden frames with fixture-local dates and explicit native renderer ports; strengthen free command/history acceptance with current-screen and restart-state evidence.
@@ -98,7 +100,7 @@ breaking change, and a patch carries only fixes.
 ### Added
 
 - Free Herdr dogfood drives real pane keys and checks current terminal cells in disposable named sessions. Private profile homes and owned-resource cleanup keep development checks away from live conversations.
-- Local TypeScript and Knip check commands and repository hook scripts identify unused declarations, files, exports, and dependencies. Hook activation requires approved dispatch through existing Git hooks.
+- Local TypeScript and Knip check commands and repository hook scripts identify unused declarations, files, exports, and dependencies. Approved repository-local activation forwards existing global message, DCO, and signature checks.
 
 - Optional Moshi completion and attention notifications, enabled only by `DSH_TUI_MOSHI_TOKEN`. Fixed messages exclude conversation content and session identifiers; bounded delivery never blocks agent work.
 
