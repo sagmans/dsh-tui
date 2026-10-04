@@ -33,6 +33,8 @@ breaking change, and a patch carries only fixes.
 - Keep background job clocks visible after parent turns settle. Job access now uses session ownership and current registry events; UI reads leave model output untouched.
 - Preserve logged tool durations across replay and view changes. Normalize elapsed labels without early seconds or `60s` remainders; retain unknown child runtimes without fabricated starts.
 
+- Keep background context pruning from appending unnamed `tool` rows after completed PTC programs. Preserve original cards and nested calls during live updates and session resume.
+
 - Private installed Harness selections now remain effective across nested clone-helper and tmux verification, without requiring a global CLI on PATH.
 
 - Unmodified F1–F4 press and repeat events from Herdr reach the pinned terminal decoder without discarding release or modifier metadata. Real editor yank, yank-pop, and undo checks cover this input path.

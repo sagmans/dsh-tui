@@ -75,6 +75,12 @@ const FIXTURE_RUNNING_MS = 12_000
 const FIXTURE_OUTPUT = 'Tests  154 passed (154)'
 const FIXTURE_FILE = 'src/ui/view.ts'
 const FIXTURE_FILE_LINES = ['const expanded = this.viewState.expandCards', 'const preview = cardDetailRows(card, expanded)', '…']
+/** Context-only replacements must not rename or duplicate cards whose results already settled. */
+const FIXTURE_PRUNED_RESULTS = ['c1', 'c2'].map((toolCallId, index) => ({
+  type: 'tool/result',
+  surfaceOp: { op: 'replace', startSeq: index, endSeq: index },
+  data: { message: { toolCallId, content: [{ type: 'text', text: '[pruned]' }], isError: false } },
+}))
 /**
  * Each tool's declared render intent, as the real tools declare it.
  *
@@ -154,6 +160,8 @@ export function fixture(frameTheme = theme): { view: TranscriptView; dock: WorkD
     type: 'tool/result',
     data: { message: { content: [{ type: 'tool-result', toolCallId: 'c2', text: FIXTURE_FILE_LINES.join('\n') }], isError: false } },
   })
+  // Existing snapshots must retain the original headers and output after model-context pruning.
+  for (const replacement of FIXTURE_PRUNED_RESULTS) model.apply(replacement)
   // Pin the history marker beside completed, active, and pending checklist states.
   model.apply({ type: 'compaction/summary', data: { shadowedSeqs: [1, 2, 3], shadowedTokenCount: 4200 } })
   feed({ type: 'plan/mode', data: { active: true } })

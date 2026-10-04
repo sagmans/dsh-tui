@@ -54,6 +54,11 @@ const PRIVATE_DIR_MODE = 0o700
 const PRIVATE_FILE_MODE = 0o600
 const TERMINAL_NAME = 'xterm-256color'
 const ISOLATION_SENTINEL = 'dogfood-isolation-sentinel'
+/** Event fixtures stay tooling-only and mount exclusively in a fresh credential-free allocation. */
+const PRUNING_SCENARIO_TOOL = 'pruning'
+const PRUNING_PLUGIN = 'dogfood-pruning.mjs'
+const PRUNING_PLUGIN_ID = 'dogfood-pruning'
+const PRUNING_ALLOCATION_ERROR = 'dogfood: pruning fixture requires a fresh free profile without overrides'
 const ENABLED_ENV_VALUE = '1'
 const PERMISSION_MODE = 'workspace-write'
 const EVIDENCE_PREFIX = 'dsh-tui-dogfood-'
@@ -164,6 +169,11 @@ async function run(scenario, reused) {
     const startup = STARTUP_FIELDS.map(key => `    ${key}: !!js ctx.tuiStartup.${key}`).join('\n')
     const preferences = yaml.dump(scenario.config).trimEnd().split('\n').map(line => '    ' + line).join('\n')
     writeFileSync(join(home, 'profiles', PROFILE, 'cordis.patch.yml'), `- id: tui\n  config:\n${startup}\n${preferences}\n`, { mode: PRIVATE_FILE_MODE })
+  }
+  if (scenario.tool === PRUNING_SCENARIO_TOOL) {
+    if (paid || reused || scenario.config) throw new Error(PRUNING_ALLOCATION_ERROR)
+    const patch = yaml.dump([{ insert: [{ id: PRUNING_PLUGIN_ID, name: join(ROOT, 'tools', PRUNING_PLUGIN) }] }])
+    writeFileSync(join(home, 'profiles', PROFILE, 'cordis.patch.yml'), patch, { mode: PRIVATE_FILE_MODE })
   }
   for (const link of scenario.homeLinks ?? []) {
     const path = resolve(home, link.path)
