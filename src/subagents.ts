@@ -8,7 +8,7 @@ export interface SubagentRun {
   readonly provider: string
   readonly id: string
   readonly label?: string
-  readonly startedAt: number
+  readonly startedAt: number | undefined
   readonly status: 'running' | 'completed' | 'failed'
   readonly stopReason?: string
   readonly finishedAt?: number
@@ -63,7 +63,7 @@ export class SubagentRoster {
     const record = asRecord(info)
     const runId = record?.runId
     const id = record?.id
-    if (typeof runId !== 'string' || typeof id !== 'string') return
+    if (typeof runId !== 'string' || typeof id !== 'string' || this.runs.has(runId)) return
     const label = this.labels.get(id)
     this.runs.set(runId, {
       runId,
@@ -75,7 +75,7 @@ export class SubagentRoster {
     })
   }
 
-  /** Retain end-only runs for inspection; their fallback start records observation time, not measured execution time. */
+  /** Retain end-only runs without inventing execution time that this process never observed. */
   end(info: unknown): void {
     const record = asRecord(info)
     const runId = record?.runId
@@ -87,18 +87,18 @@ export class SubagentRoster {
       id: typeof record?.id === 'string' ? record.id : existing?.id ?? runId,
       ...(existing?.label === undefined ? {} : { label: existing.label }),
       provider: typeof record?.provider === 'string' ? record.provider : existing?.provider ?? 'subagent',
-      startedAt: existing?.startedAt ?? Date.now(),
+      startedAt: existing?.startedAt,
       // Keep abnormal stops visible in /subagents instead of presenting them as ordinary completion.
       // This display classification does not prove success when the event omits its reason.
       status: stopReason === undefined || stopReason === 'completed' ? 'completed' : 'failed',
       ...(stopReason === undefined ? {} : { stopReason }),
-      finishedAt: Date.now(),
+      finishedAt: existing?.finishedAt ?? Date.now(),
     })
   }
 
   /** Keep recent delegations first so collapsed dock rows show the newest work. */
   list(): readonly SubagentRun[] {
-    return [...this.runs.values()].sort((left, right) => right.startedAt - left.startedAt)
+    return [...this.runs.values()].sort((left, right) => (right.startedAt ?? 0) - (left.startedAt ?? 0))
   }
 
   /** Separate work still needing attention from the settled history available through /subagents. */
@@ -115,8 +115,8 @@ export class SubagentRoster {
 /** Expose provider and live age or settled duration without requiring a visit to each child transcript. */
 export function describeSubagent(run: SubagentRun, now: number): string {
   const age = run.status === 'running'
-    ? `running ${describeDuration(now - run.startedAt)}`
-    : `${run.status}${run.stopReason === undefined || run.stopReason === 'completed' ? '' : ` (${run.stopReason})`} ${describeDuration((run.finishedAt ?? run.startedAt) - run.startedAt)}`
+    ? `running ${describeDuration(run.startedAt === undefined ? Number.NaN : now - run.startedAt)}`
+    : `${run.status}${run.stopReason === undefined || run.stopReason === 'completed' ? '' : ` (${run.stopReason})`} ${run.startedAt === undefined || run.finishedAt === undefined ? 'duration unknown' : describeDuration(run.finishedAt - run.startedAt)}`
   return `${shortId(run.id)}${run.label === undefined ? '' : ` · ${run.label}`} · ${run.provider} · ${age}`
 }
 
@@ -165,7 +165,7 @@ export function resolveRun(runs: readonly SubagentRun[], idOrPrefix: string): Su
   // the shortcut honest even if a caller ever hands them over differently.
   if (idOrPrefix === LAST_RUN) {
     return runs.reduce<SubagentRun | undefined>(
-      (newest, run) => newest === undefined || run.startedAt > newest.startedAt ? run : newest,
+      (newest, run) => newest === undefined || (run.startedAt ?? 0) > (newest.startedAt ?? 0) ? run : newest,
       undefined,
     )
   }

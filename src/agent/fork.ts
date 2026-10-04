@@ -3,6 +3,8 @@ export interface ForkEvent {
   readonly type: string
   readonly data?: unknown
   readonly seq?: number
+  /** Re-folding a log must preserve the clock of its recorded work. */
+  readonly time?: number
 }
 
 /** Where a fork may branch, and how much of the log the child inherits. */

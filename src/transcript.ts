@@ -1,5 +1,6 @@
 import type { ToolCard, ToolPresenter } from './cards.ts'
 import { injectionSummary } from './injection.ts'
+import { describeDuration } from './jobs.ts'
 import { sliceGraphemes, tailGraphemes } from './text.ts'
 import { countTokens } from './tokens.ts'
 import { reasoningTextsOf, textOfContent } from './transcript/message-content.ts'
@@ -40,6 +41,8 @@ function describeTokens(text: string): string {
  * structural keeps this file pure and testable without a live session.
  */
 export interface FoldableEvent {
+  /** Durable event time preserves tool durations when history is folded again. */
+  readonly time?: number
   readonly type: string
   readonly data?: unknown
 }
@@ -127,7 +130,7 @@ export class TranscriptModel {
         // The live row and the row it settles into share an id, so a click made
         // while the model is still thinking survives the thought landing.
         id: this.liveReasoningId ?? '',
-        summary: `reasoning · ${describeTokens(this.liveReasoning)}${ranFor === undefined ? '' : ` · ${Math.max(1, Math.round(ranFor / 1000))}s`} · streaming`,
+        summary: `reasoning · ${describeTokens(this.liveReasoning)}${ranFor === undefined ? '' : ` · ${describeDuration(ranFor)}`} · streaming`,
         body: this.liveReasoning,
         live: true,
       })
@@ -156,6 +159,11 @@ export class TranscriptModel {
    */
   liveCall(callId: string): LiveCallState {
     return this.calls.liveCall(callId)
+  }
+
+  /** A viewed child can own a visible clock without owning the driven turn. */
+  hasLiveTiming(): boolean {
+    return this.liveReasoning !== '' || this.calls.hasLiveCalls()
   }
 
   reset(): void {
@@ -251,7 +259,7 @@ export class TranscriptModel {
    * produced, so reading order still matches the order the model thought in.
    */
   private paintReasoning(text: string, ranFor: number | undefined): void {
-    const timing = ranFor === undefined ? '' : ` · ${Math.max(1, Math.round(ranFor / 1000))}s`
+    const timing = ranFor === undefined ? '' : ` · ${describeDuration(ranFor)}`
     // Keep the beginning for reading a settled thought in order, within the row
     // budget. Streamed thoughts reach here from an already tail-trimmed buffer;
     // settling does not recover their discarded opening.
@@ -368,7 +376,9 @@ export class TranscriptModel {
         // Tool events are the only rows drawn before they are finished, so they
         // are folded where that bookkeeping lives and the rows come back here,
         // where reading order and row indices are owned.
-        this.commit(this.calls.apply(event.type, data, this.settled.length))
+        // Replayed results must measure logged execution, not the speed of this fold.
+        const at = typeof event.time === 'number' && Number.isFinite(event.time) && event.time >= 0 ? event.time : undefined
+        this.commit(this.calls.apply(event.type, data, this.settled.length, at))
         return
       }
       default:

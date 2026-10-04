@@ -65,6 +65,8 @@ export interface SessionLifecyclePorts {
   readonly fold: (id: SessionId) => Promise<number>
   readonly notice: (message: string) => void
   readonly render: () => void
+  /** Viewed tool calls and background work keep time even without a driven turn. */
+  readonly liveDurations: () => boolean
   /** The prompt memory's per-session reset, taken when a session is really opened. */
   readonly promptMemorySessionOpened: () => void
   /** The staged owner's fresh cursor for the session just opened. */
@@ -154,10 +156,9 @@ export function createSessionLifecycle(ctx: Context, ports: SessionLifecyclePort
   // session on screen, because it sits on the editor that submits to that agent.
   const queuedPrompts = (): readonly string[] => pendingPrompts(ctx, ports.liveSession(activeSession))
 
-  // Only an open turn needs elapsed-time repaints; idle turns skip rendering
-  // without removing the interval that later turns share.
+  // Background jobs and viewed child calls outlive parent turns; every visible clock needs repainting.
   const statusTicker: ReturnType<typeof setInterval> = setInterval(() => {
-    if (turnOpen) ports.render()
+    if (turnOpen || ports.liveDurations()) ports.render()
   }, STATUS_TICK_MS)
   ports.disposers.push(() => clearInterval(statusTicker))
 
@@ -409,9 +410,10 @@ export function createSessionLifecycle(ctx: Context, ports: SessionLifecyclePort
       ports.acceptCatalog(event.data)
       ports.render()
     }
-    if (event.type === 'turn/start') {
+    if (event.type === 'turn/start' && !turnOpen) {
       turnOpen = true
-      turnStartedAt = Date.now()
+      // A duplicate notification or delayed observation must not restart an already-running turn.
+      turnStartedAt = typeof event.time === 'number' && Number.isFinite(event.time) && event.time >= 0 ? event.time : Date.now()
       ports.writeTerminal(windowTitle(process.cwd(), 'working'))
     }
     if (event.type === 'turn/end') {

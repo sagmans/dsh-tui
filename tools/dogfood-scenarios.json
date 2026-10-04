@@ -1798,6 +1798,84 @@
           "exit": true
         }
       ]
+    },
+    {
+      "id": "timers",
+      "timerProbe": true,
+      "steps": [
+        {
+          "expect": "timer-probe-job"
+        },
+        {
+          "command": "/jobs read bash-1",
+          "expect": "bash-1 output timer-probe-output"
+        },
+        {
+          "expect": "running 6s",
+          "settled": true
+        },
+        {
+          "command": "/subagents open timer-probe-child",
+          "expect": "~6s"
+        },
+        {
+          "expect": "timer-probe-check-complete"
+        },
+        {
+          "file": "timer-probe.json",
+          "contains": "\"retainedOutput\":\"timer-probe-output\"",
+          "mode": 384
+        },
+        {
+          "file": "timer-probe.json",
+          "contains": "\"rejectsOtherOwner\":true"
+        },
+        {
+          "file": "timer-probe.json",
+          "contains": "\"durations\":[\"0s\",\"1m59s\",\"59m59s\"]"
+        },
+        {
+          "command": "/subagents",
+          "expect": "duration unknown"
+        },
+        {
+          "key": "ctrl+b",
+          "expect": "~4s"
+        },
+        {
+          "command": "/jobs kill bash-1",
+          "expect": "bash-1: stop requested"
+        },
+        {
+          "command": "/jobs",
+          "expect": "bash-1 · killed"
+        },
+        {
+          "command": "/jobs read nonexistent",
+          "expect": "/jobs: unknown job nonexistent"
+        },
+        {
+          "command": "/reload",
+          "expect": "reloaded this session's composition; the transcript was replayed",
+          "absent": "could not reload",
+          "settled": true
+        },
+        {
+          "expect": "~4s",
+          "absent": "could not reload",
+          "settled": true
+        },
+        {
+          "command": "/status",
+          "expect": "tokens in 0 out 0",
+          "absent": "could not reload",
+          "settled": true
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ]
     }
   ],
   "paid": [
@@ -2220,6 +2298,46 @@
           "file": "delegation.md",
           "contains": "### tool:",
           "unquoted": true
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ]
+    },
+    {
+      "id": "timers-live",
+      "steps": [
+        {
+          "prompt": "Use one real bash command exactly: sleep 12; printf dogfood-timer-foreground-ok. Wait for its result before returning. Do not modify files.",
+          "expect": "~12s",
+          "settled": true
+        },
+        {
+          "prompt": "Start exactly one bash command with run_in_background true: printf dogfood-timer-background-start; sleep 45; printf dogfood-timer-background-end. Do not collect, wait for, or stop it. Return immediately. Do not modify files.",
+          "expect": "jobs · 1 running",
+          "settled": true
+        },
+        {
+          "expect": "jobs · 1 running",
+          "settled": true,
+          "changed": true
+        },
+        {
+          "command": "/jobs",
+          "expect": "(1 running)"
+        },
+        {
+          "command": "/reload",
+          "expect": "reloaded this session's composition; the transcript was replayed",
+          "settled": true,
+          "absent": "could not reload"
+        },
+        {
+          "expect": "~12s",
+          "absent": "could not reload",
+          "settled": true,
+          "key": "pageup"
         },
         {
           "command": "/quit",

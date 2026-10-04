@@ -237,7 +237,7 @@ export class WorkDock implements Component {
     this.openBoard(lines)
     // Give recent starts the limited preview slots so new work appears even while older jobs remain live.
     // Older work stays in the overflow count; this ordering does not rank urgency.
-    const ordered = [...live].sort((left, right) => right.startedAt - left.startedAt)
+    const ordered = [...live].sort((left, right) => (right.startedAt ?? 0) - (left.startedAt ?? 0))
     const now = Date.now()
     const rows: string[] = []
     for (const job of ordered.slice(0, DOCK_JOB_LIMIT)) {

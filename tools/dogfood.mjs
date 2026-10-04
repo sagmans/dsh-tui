@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process'
 import { chmodSync, closeSync, constants, existsSync, fstatSync, linkSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { createRequire } from 'node:module'
 import pty from 'node-pty'
 import yaml from 'js-yaml'
@@ -39,6 +39,7 @@ for (const scenario of SCENARIOS.free) {
 const PROFILE = 'tui'
 const PACKAGE = '@sagmans/dsh-tui'
 const BASE = '@deepseek-ai/dsh-base'
+const TIMER_PROBE_PACKAGE = 'dsh-tui-timer-probe'
 const STARTUP_FIELDS = ['sessionId', 'resume', 'resumePicker', 'model', 'provider', 'preset', 'color', 'bell']
 const COLS = 100
 const ROWS = 30
@@ -148,6 +149,15 @@ async function run(scenario, reused) {
   const folder = join(evidence, scenario.id)
   mkdirSync(folder, { recursive: true, mode: PRIVATE_DIR_MODE })
   const home = reused?.home ?? (paid ? realpathSync(option('--home')) : prepareHome(scenario.id))
+  if (scenario.timerProbe) {
+    if (paid || reused) throw new Error('dogfood: timer probe requires a fresh credential-free profile')
+    // The probe stays test-owned; normal profiles never execute synthetic workloads.
+    const module = join(home, 'profiles', PROFILE, 'node_modules', TIMER_PROBE_PACKAGE)
+    mkdirSync(module, { mode: PRIVATE_DIR_MODE })
+    writeFileSync(join(module, 'package.json'), JSON.stringify({ name: TIMER_PROBE_PACKAGE, type: 'module', exports: './index.mjs' }), { mode: PRIVATE_FILE_MODE })
+    writeFileSync(join(module, 'index.mjs'), 'export { apply } from ' + JSON.stringify(pathToFileURL(join(ROOT, 'tests/fixtures/timer-probe.mjs')).href) + '\n', { mode: PRIVATE_FILE_MODE })
+    writeFileSync(join(home, 'profiles', PROFILE, 'cordis.patch.yml'), '- insert:\n    - id: timer-probe\n      name: ' + TIMER_PROBE_PACKAGE + '\n      inject: [tuiStartup, sessions, agents, jobs]\n', { mode: PRIVATE_FILE_MODE })
+  }
   if (scenario.config) {
     if (paid || reused) throw new Error('dogfood: configuration overrides require a fresh free profile')
     // The released patch replaces config wholesale, so preference scenarios must preserve live launch identity.

@@ -408,11 +408,12 @@
     },
     {
       "id": "jobs",
-      "description": "List empty jobs; reject missing job ids and read/kill extra arguments before lookup/action",
+      "description": "Authorize jobs, read without consuming model output, observe lifecycle changes, and reject malformed or inaccessible job commands",
       "cost": "free",
       "scenarios": [
         "commands",
-        "guards"
+        "guards",
+        "timers"
       ],
       "sources": [
         "src/jobs.ts",
@@ -424,7 +425,8 @@
       "description": "Start, read, kill and finish real background work",
       "cost": "paid",
       "scenarios": [
-        "background"
+        "background",
+        "timers-live"
       ],
       "sources": [
         "src/surface/background-work.ts"
@@ -575,6 +577,40 @@
       ],
       "sources": [
         "scripts/npm/"
+      ]
+    },
+    {
+      "id": "duration-indicators",
+      "description": "Keep tool clocks across replay, normalize elapsed labels, and repaint live jobs and children after parent settlement",
+      "cost": "free",
+      "scenarios": [
+        "timers",
+        "native-terminal"
+      ],
+      "sources": [
+        "src/jobs.ts",
+        "src/subagents.ts",
+        "src/transcript.ts",
+        "src/transcript/tool-calls.ts",
+        "src/surface/session-lifecycle.ts",
+        "src/ui/status.ts",
+        "src/agent/history.ts",
+        "src/agent/fork.ts"
+      ]
+    },
+    {
+      "id": "live-duration-indicators",
+      "description": "Verify real foreground duration, post-turn job age advancement, and replay with the explicitly selected paid model",
+      "cost": "paid",
+      "scenarios": [
+        "timers-live"
+      ],
+      "sources": [
+        "src/transcript/tool-calls.ts",
+        "src/surface/session-lifecycle.ts",
+        "src/surface/background-work.ts",
+        "src/agent/history.ts",
+        "src/agent/fork.ts"
       ]
     }
   ],

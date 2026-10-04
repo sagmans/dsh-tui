@@ -19,6 +19,8 @@ interface StoredHeader {
 /** One stored event, reduced to what the transcript fold reads. */
 interface StoredEvent {
   readonly type: string
+  /** Archived folds need the original clock, not their later observation time. */
+  readonly time?: number
   readonly data?: unknown
 }
 
@@ -189,7 +191,11 @@ export function createSessionHistory(ctx: Context): SessionHistory | undefined {
       for (const entry of result.events ?? []) {
         const record = asRecord(entry)
         if (typeof record?.type !== 'string') continue
-        events.push({ type: record.type, data: record.data })
+        events.push({
+          type: record.type,
+          data: record.data,
+          ...(typeof record.time === 'number' && Number.isFinite(record.time) ? { time: record.time } : {}),
+        })
       }
       return events
     } finally {
