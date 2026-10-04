@@ -16,6 +16,8 @@ breaking change, and a patch carries only fixes.
 
 ### Added
 
+- Free Herdr dogfood drives real pane keys and checks current terminal cells in disposable named sessions. Private profile homes and owned-resource cleanup keep development checks away from live conversations.
+
 - Optional Moshi completion and attention notifications, enabled only by `DSH_TUI_MOSHI_TOKEN`. Fixed messages exclude conversation content and session identifiers; bounded delivery never blocks agent work.
 
 ### Fixed
