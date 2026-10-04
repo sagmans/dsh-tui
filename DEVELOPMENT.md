@@ -12,19 +12,33 @@ In this order, because CI runs them in this order:
 pnpm install --frozen-lockfile
 npm audit signatures
 pnpm run typecheck
-pnpm test
-pnpm test:release
+pnpm test:golden
 node tools/pack-smoke.mjs
 pnpm test:terminal
+pnpm dogfood
 node tools/harness-matrix.mjs
 node tools/install-smoke.mjs  # requires Docker with a running daemon
 ```
 
-Unit and golden tests do not prove native terminal behaviour. `pnpm test:terminal` checks native widgets in a credential-free PTY.
+Unit tests are not maintained. Golden tests remain visual regression checks, not actual-use proof.
+Run `pnpm verify` after development: free real-profile dogfood runs automatically.
+[FEATURES.md](FEATURES.md) defines scope and evidence requirements.
+In a Herdr-managed caller, the same gate also runs real native-pane workflows in a disposable named session.
+Without that prerequisite, the report records unavailable Herdr evidence; portable PTY checks still run.
+When tmux is installed, the same gate also verifies a private server, Unicode editing, stash outcomes, and terminal restoration.
+Private native controllers do not start the caller's shell or source its startup files.
+
+Golden tests do not prove native terminal behaviour. `pnpm test:terminal` checks native widgets in a credential-free PTY.
 It checks ASCII, Unicode, paste, Kitty press/repeat/release, redraw limits, resize, and terminal restoration during styled streaming.
 Its receipt reports dispatch-to-output-write timing, not hardware-input-to-pixel latency. Shared CI runners do not enforce timing budgets.
 
-This check does not start a full Cordis profile or contact a model. Run `node tools/pty-drive.mjs --home <clone>`
+The native-widget check does not start a full Cordis profile. `pnpm dogfood`
+starts the installed Harness with the base bundle and this checkout in fresh
+credential-free homes, then checks real command, editor, picker, persistence,
+and shutdown behavior. It retains private screen evidence and fails on missing
+postconditions or terminal restoration. It does not call a model.
+
+For explicit paid verification, run `node tools/pty-drive.mjs --home <clone>`
 and follow the manual acceptance table in the README: the driver verifies the
 installed launcher against the releases the manifest lists, rebuilds, allocates a
 PTY, and prints the screen.

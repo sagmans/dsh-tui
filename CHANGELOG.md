@@ -8,11 +8,35 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+### Fixed
+
+- Private installed Harness selections now remain effective across nested clone-helper and tmux verification, without requiring a global CLI on PATH.
+
+### Changed
+
+- Available tmux verification now runs automatically with the free gate. Native controllers avoid the caller's shell and use private resources. Genuine Herdr metadata, background work, and attention checks distinguish observed lifecycle effects from accepted input.
+
+- Paid question and non-Team delegation checks require real tool outcomes and child-written artifacts. Approval checks verify allowed writes and absent rejected or cancelled targets inside private allocations. Inherited provider credentials cannot authorize fallback billing.
+
+- Free development verification automatically includes available Herdr workflows. Reports separate attempted input, postconditions, cell changes, and transport prerequisites. Cancellation preserves owned-resource cleanup evidence.
+
+- Paid dogfood can select and verify an explicit reasoning effort before billing. Actual-model fixtures now check visible Mermaid fallback, recovered queued drafts, and child navigation without depending on assistant wording.
+
+- Replace TypeScript and Python unit suites with actual-use dogfooding. Preserve golden frame snapshots. Free profile checks run automatically without credentials; paid model checks require explicit demand. Feature inventory distinguishes scope from verified behavior.
+
 ### Added
+
+- Free Herdr dogfood drives real pane keys and checks current terminal cells in disposable named sessions. Private profile homes and owned-resource cleanup keep development checks away from live conversations.
 
 - Optional Moshi completion and attention notifications, enabled only by `DSH_TUI_MOSHI_TOKEN`. Fixed messages exclude conversation content and session identifiers; bounded delivery never blocks agent work.
 
 ### Fixed
+
+- Unmodified F1–F4 press and repeat events from Herdr reach the pinned terminal decoder without discarding release or modifier metadata. Real editor yank, yank-pop, and undo checks cover this input path.
+
+- Custom viewport bindings remain usable when the host supplies immutable settings. Validation now preserves the borrowed settings section instead of attempting in-place normalization.
+
+- Dogfood launchers exclude inherited Moshi notification tokens and agent-pane coordinates, preventing incidental production notifications during model checks. Real credential-free helper setup, status, and cleanup now run automatically.
 
 - Inline comments explain implementation purposes and constraints without promising unsupported isolation, rollback, event-ordering, or lifecycle guarantees. Executable behavior remains unchanged.
 

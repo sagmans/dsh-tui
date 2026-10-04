@@ -38,18 +38,23 @@ jobs:
       # Static contracts and exercised behavior catch different classes of regressions.
       - name: Typecheck
         run: pnpm typecheck
-      - name: Unit and golden tests
-        run: pnpm test
-      # The release guard suite runs on every change because a regression here
-      # would first surface as an unrecoverable registry write.
-      - name: Release helper tests
-        run: pnpm test:release
+      - name: Golden frames
+        run: pnpm test:golden
       # Check the packed consumer artefact, not just source: required exports and assets must survive packaging.
       - name: Package smoke
         run: node tools/pack-smoke.mjs
       # Timing varies across hosts; only key preservation, redraw and restore invariants gate shared runners.
       - name: Native terminal behavior
         run: pnpm test:terminal
+      # Real profile checks reuse the verified host release; no global installation or credentials.
+      - name: Install dogfood host
+        run: |
+          version="$(node -p 'Object.keys(require("./package.json").dsh.compatibility.dshReleases)[0]')"
+          npm install --prefix "$RUNNER_TEMP/dsh-dogfood-host" --ignore-scripts --no-audit --no-fund "@deepseek-ai/dsh@$version"
+          npm audit signatures --prefix "$RUNNER_TEMP/dsh-dogfood-host"
+      # No managed Herdr caller exists here: native evidence stays unavailable, never simulated or marked passed.
+      - name: Free actual-profile dogfood
+        run: pnpm dogfood --launcher "$RUNNER_TEMP/dsh-dogfood-host/node_modules/.bin/dsh"
       # The manifest and the tree it describes must name the same harness
       # release; the registry half of this check runs on schedule.
       - name: Harness matrix

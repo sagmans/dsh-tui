@@ -1,0 +1,2680 @@
+{
+  "schemaVersion": 1,
+  "free": [
+    {
+      "id": "commands",
+      "steps": [
+        {
+          "command": "/help",
+          "expect": "/stash-pop"
+        },
+        {
+          "command": "/status",
+          "expect": "tokens in 0 out 0"
+        },
+        {
+          "command": "/todo",
+          "expect": "todo"
+        },
+        {
+          "command": "/jobs",
+          "expect": "no background jobs"
+        },
+        {
+          "command": "/subagents",
+          "expect": "no subagents have run"
+        },
+        {
+          "command": "/copy",
+          "expect": "nothing to copy yet"
+        },
+        {
+          "command": "/history",
+          "expect": "history"
+        },
+        {
+          "command": "/undo",
+          "expect": "nothing to undo"
+        },
+        {
+          "command": "/redo",
+          "expect": "nothing to redo"
+        },
+        {
+          "command": "/fork",
+          "expect": "nothing to fork yet"
+        },
+        {
+          "command": "/export transcript.md",
+          "expect": "transcript written to"
+        },
+        {
+          "file": "transcript.md",
+          "contains": "session"
+        },
+        {
+          "command": "/clear",
+          "absent": "transcript written to"
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ]
+    },
+    {
+      "id": "pickers",
+      "steps": [
+        {
+          "command": "/keys",
+          "expect": "actions"
+        },
+        {
+          "type": "stash",
+          "expect": "stash"
+        },
+        {
+          "key": "down",
+          "expect": "❯ chord.stashes"
+        },
+        {
+          "key": "up",
+          "expect": "❯ chord.stash ="
+        },
+        {
+          "key": "escape",
+          "absent": "actions"
+        },
+        {
+          "command": "/model",
+          "expect": "model"
+        },
+        {
+          "key": "escape",
+          "absent": "filter"
+        },
+        {
+          "command": "/preset",
+          "expect": "agent preset"
+        },
+        {
+          "key": "escape",
+          "absent": "filter"
+        },
+        {
+          "command": "/theme",
+          "expect": "theme"
+        },
+        {
+          "key": "down",
+          "expect": "theme"
+        },
+        {
+          "key": "up",
+          "expect": "theme"
+        },
+        {
+          "key": "escape",
+          "absent": "built into the package"
+        },
+        {
+          "command": "/resume",
+          "expect": "session"
+        },
+        {
+          "key": "escape",
+          "absent": "filter"
+        },
+        {
+          "command": "/exit",
+          "exit": true
+        }
+      ]
+    },
+    {
+      "id": "stash",
+      "steps": [
+        {
+          "command": "/stash dogfood-alpha",
+          "expect": "Stashed [0]"
+        },
+        {
+          "command": "/stash-apply",
+          "expect": "Applied [0]"
+        },
+        {
+          "expect": "dogfood-alpha"
+        },
+        {
+          "key": "ctrl+c",
+          "absent": "dogfood-alpha",
+          "scope": "editor"
+        },
+        {
+          "command": "/stash-pop",
+          "expect": "Popped [0]"
+        },
+        {
+          "expect": "dogfood-alpha"
+        },
+        {
+          "key": "ctrl+c",
+          "absent": "dogfood-alpha",
+          "scope": "editor"
+        },
+        {
+          "command": "/stash-list",
+          "expect": "no stashed drafts"
+        },
+        {
+          "command": "/stash dogfood-beta",
+          "expect": "Stashed [0]"
+        },
+        {
+          "command": "/stash-list",
+          "expect": "dogfood-beta"
+        },
+        {
+          "key": "escape",
+          "expect": "ready"
+        },
+        {
+          "command": "/stash-drop",
+          "expect": "Dropped [0]"
+        },
+        {
+          "command": "/stash-clear",
+          "expect": "no stashed drafts"
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ]
+    },
+    {
+      "id": "sessions",
+      "steps": [
+        {
+          "command": "/rename dogfood-session",
+          "expect": "session renamed to \"dogfood-session\""
+        },
+        {
+          "command": "/reload",
+          "expect": "the transcript was replayed"
+        },
+        {
+          "command": "/new dogfood-next",
+          "expect": "started a new session"
+        },
+        {
+          "command": "/resume",
+          "expect": "dogfood-session"
+        },
+        {
+          "key": "escape",
+          "expect": "ready"
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ]
+    },
+    {
+      "id": "editor",
+      "steps": [
+        {
+          "type": "dogfood-中😀",
+          "expect": "dogfood-中😀"
+        },
+        {
+          "key": "left",
+          "expect": "dogfood-中😀"
+        },
+        {
+          "key": "backspace",
+          "expect": "dogfood-😀"
+        },
+        {
+          "key": "ctrl+c",
+          "absent": "dogfood-😀",
+          "scope": "editor"
+        },
+        {
+          "type": "paste-one\npaste-two",
+          "paste": true,
+          "expect": "paste-two"
+        },
+        {
+          "key": "ctrl+c",
+          "absent": "paste-two",
+          "scope": "editor"
+        },
+        {
+          "type": "/sta",
+          "expect": "/sta"
+        },
+        {
+          "key": "tab",
+          "expect": "/status"
+        },
+        {
+          "key": "ctrl+c",
+          "absent": "/status",
+          "scope": "editor"
+        },
+        {
+          "command": "/status",
+          "submit": "ctrl+enter",
+          "expect": "tokens in 0 out 0"
+        },
+        {
+          "command": "/status",
+          "submit": "alt+enter",
+          "expect": "tokens in 0 out 0"
+        },
+        {
+          "resize": [
+            40,
+            12
+          ],
+          "expect": "ready"
+        },
+        {
+          "resize": [
+            100,
+            30
+          ],
+          "expect": "ready"
+        },
+        {
+          "key": "ctrl+d",
+          "exit": true
+        }
+      ]
+    },
+    {
+      "id": "chords",
+      "steps": [
+        {
+          "command": "/status",
+          "expect": "tokens in 0 out 0"
+        },
+        {
+          "key": "ctrl+x",
+          "expect": "ctrl+x"
+        },
+        {
+          "key": "?",
+          "expect": "actions"
+        },
+        {
+          "key": "escape",
+          "absent": "actions"
+        },
+        {
+          "key": "ctrl+x",
+          "expect": "ctrl+x"
+        },
+        {
+          "key": "y",
+          "expect": "nothing to copy yet"
+        },
+        {
+          "type": "chord-draft",
+          "expect": "chord-draft"
+        },
+        {
+          "key": "ctrl+x",
+          "expect": "ctrl+x"
+        },
+        {
+          "key": "s",
+          "expect": "Stashed [0]"
+        },
+        {
+          "key": "ctrl+x",
+          "expect": "ctrl+x"
+        },
+        {
+          "key": "l",
+          "expect": "chord-draft"
+        },
+        {
+          "key": "escape",
+          "expect": "ready"
+        },
+        {
+          "key": "ctrl+x",
+          "expect": "ctrl+x"
+        },
+        {
+          "key": "u",
+          "expect": "nothing to undo"
+        },
+        {
+          "key": "ctrl+x",
+          "expect": "ctrl+x"
+        },
+        {
+          "key": "r",
+          "expect": "nothing to redo"
+        },
+        {
+          "key": "ctrl+x",
+          "expect": "ctrl+x"
+        },
+        {
+          "key": "n",
+          "expect": "started a new session"
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ]
+    },
+    {
+      "id": "guards",
+      "steps": [
+        {
+          "command": "/keys invalid",
+          "expect": "unknown layer"
+        },
+        {
+          "command": "/stash",
+          "expect": "usage: /stash"
+        },
+        {
+          "command": "/stash-apply missing",
+          "expect": "no stash matching"
+        },
+        {
+          "command": "/stash-pop missing",
+          "expect": "no stash matching"
+        },
+        {
+          "command": "/stash-drop missing",
+          "expect": "no stash matching"
+        },
+        {
+          "command": "/rename",
+          "expect": "use /rename"
+        },
+        {
+          "command": "/jobs read",
+          "expect": "read needs a job id"
+        },
+        {
+          "command": "/jobs kill",
+          "expect": "kill needs a job id"
+        },
+        {
+          "command": "/subagents open missing",
+          "expect": "no single child matches"
+        },
+        {
+          "command": "/model dogfood-missing/model",
+          "expect": "model set to dogfood-missing/model"
+        },
+        {
+          "command": "/preset dogfood-missing",
+          "expect": "preset"
+        },
+        {
+          "command": "/history clear",
+          "expect": "forgot"
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ]
+    },
+    {
+      "id": "stash-confirm",
+      "steps": [
+        {
+          "command": "/stash confirm-one",
+          "expect": "Stashed [0]"
+        },
+        {
+          "command": "/stash-clear",
+          "expect": "clear stash"
+        },
+        {
+          "key": "enter",
+          "absent": "clear stash"
+        },
+        {
+          "command": "/stash-list",
+          "expect": "confirm-one"
+        },
+        {
+          "key": "escape",
+          "expect": "ready"
+        },
+        {
+          "command": "/stash-clear",
+          "expect": "clear stash"
+        },
+        {
+          "key": "escape",
+          "absent": "clear stash"
+        },
+        {
+          "command": "/stash-list",
+          "expect": "confirm-one"
+        },
+        {
+          "key": "escape",
+          "expect": "ready"
+        },
+        {
+          "command": "/stash-clear",
+          "expect": "clear stash"
+        },
+        {
+          "key": "down",
+          "expect": "delete 1 draft"
+        },
+        {
+          "key": "enter",
+          "expect": "Cleared 1 draft"
+        },
+        {
+          "command": "/stash-list",
+          "expect": "no stashed drafts"
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ]
+    },
+    {
+      "id": "appearance",
+      "steps": [
+        {
+          "command": "/theme tokens",
+          "expect": "editor.ghost"
+        },
+        {
+          "command": "/export tokens.md",
+          "expect": "transcript written to"
+        },
+        {
+          "file": "tokens.md",
+          "contains": "transcript.user ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "transcript.user.border ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "transcript.assistant.border ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "transcript.notice ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "transcript.marker ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "transcript.reasoning.summary ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "transcript.reasoning.body ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "transcript.reasoning.hint ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "tool.title ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "tool.glyph ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "tool.skill ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "tool.args ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "tool.stat.added ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "tool.stat.changed ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "tool.stat.removed ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "tool.stat.size ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "tool.stat.separator ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "tool.detail ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "tool.hint ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "tool.failed.title ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "tool.failed.glyph ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "tool.running.title ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "tool.running.elapsed ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "tool.elapsed.done ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "tool.subcall.title ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "tool.subcall.running ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "tool.subcall.args ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "tool.diff.header ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "tool.diff.hunk ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "tool.diff.added ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "tool.diff.removed ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "tool.read.header ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "tool.read.lineNumber ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "tool.read.line ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "tool.search.path ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "tool.search.lineNumber ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "tool.search.match ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "tool.search.truncated ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "tool.terminal.cwd ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "tool.terminal.status ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "tool.terminal.output ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "tool.web.url ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "tool.web.source ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "tool.web.truncated ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "tool.generic.detail ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "markdown.heading ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "markdown.link ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "markdown.linkUrl ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "markdown.code ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "markdown.codeBlock ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "markdown.codeBlockBorder ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "markdown.quote ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "markdown.quoteBorder ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "markdown.hr ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "markdown.listBullet ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "markdown.bold ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "markdown.italic ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "markdown.strikethrough ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "markdown.underline ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "markdown.diff.header ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "markdown.diff.hunk ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "markdown.diff.context ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "markdown.diff.added ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "markdown.diff.removed ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "markdown.diff.addedEmphasis ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "markdown.diff.removedEmphasis ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "markdown.diagram.border ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "markdown.diagram.text ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "markdown.diagram.edge ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "markdown.diagram.edgeLabel ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "markdown.diagram.title ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "markdown.diagram.warning ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "picker.title ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "picker.glyph ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "picker.note ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "picker.filter ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "picker.row ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "picker.rowCurrent ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "picker.scrollNewer ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "picker.scrollOlder ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "picker.hint ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "picker.cursor ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "picker.border ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "gate.title ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "gate.glyphApproval ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "gate.glyphQuestion ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "gate.detail ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "gate.option ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "gate.optionCurrent ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "gate.cursor ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "gate.hint ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "dock.goal ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "dock.planMode ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "dock.todos.border ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "dock.todos.heading ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "dock.todos.pending ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "dock.todos.inProgress ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "dock.todos.overflow ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "dock.subagents.border ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "dock.subagents.heading ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "dock.subagents.running ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "dock.subagents.overflow ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "dock.jobs.border ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "dock.jobs.heading ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "dock.jobs.running ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "dock.jobs.overflow ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "status.prefix ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "status.back ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "status.activity.working ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "status.activity.ready ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "status.elapsed ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "status.agentPreset ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "status.model ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "status.effort ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "status.permission ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "status.context ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "status.cache ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "status.stash ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "status.cwd ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "status.separator ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "editor.border ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "editor.queued ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "editor.queued.more ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "editor.ghost ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "editor.selectList.selectedPrefix ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "editor.selectList.selectedText ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "editor.selectList.description ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "editor.selectList.scrollInfo ="
+        },
+        {
+          "file": "tokens.md",
+          "contains": "editor.selectList.noMatch ="
+        },
+        {
+          "command": "/theme deepseek-blue",
+          "expect": "deepseek-blue"
+        },
+        {
+          "command": "/theme polar-drift",
+          "expect": "polar-drift"
+        },
+        {
+          "command": "/theme pine-slope",
+          "expect": "pine-slope"
+        },
+        {
+          "command": "/theme wine-thicket",
+          "expect": "wine-thicket"
+        },
+        {
+          "command": "/theme marine-static",
+          "expect": "marine-static"
+        },
+        {
+          "command": "/theme violet-orbit",
+          "expect": "violet-orbit"
+        },
+        {
+          "command": "/theme missing-dogfood-theme",
+          "expect": "theme"
+        },
+        {
+          "command": "/keys library",
+          "expect": "library"
+        },
+        {
+          "key": "escape",
+          "absent": "actions"
+        },
+        {
+          "key": "shift+tab",
+          "expect": "ready"
+        },
+        {
+          "key": "ctrl+t",
+          "expect": "effort"
+        },
+        {
+          "key": "escape",
+          "expect": "ready"
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ]
+    },
+    {
+      "id": "history",
+      "steps": [
+        {
+          "command": "/history",
+          "expect": "history"
+        },
+        {
+          "command": "/status",
+          "expect": "tokens in 0 out 0"
+        },
+        {
+          "key": "up",
+          "expect": "/status"
+        },
+        {
+          "key": "down",
+          "absent": "/status",
+          "scope": "editor"
+        },
+        {
+          "key": "ctrl+r",
+          "expect": "prompt history"
+        },
+        {
+          "command": "/history clear",
+          "expect": "forgot"
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ]
+    },
+    {
+      "id": "startup",
+      "args": [
+        "--new",
+        "--preset",
+        "standard",
+        "--no-color",
+        "--no-bell"
+      ],
+      "absentAnsi": [
+        "\u001b[38;",
+        "\u001b[48;"
+      ],
+      "steps": [
+        {
+          "command": "/status",
+          "expect": "mode standard"
+        },
+        {
+          "command": "/theme tokens",
+          "expect": "editor.ghost"
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ]
+    },
+    {
+      "id": "signals",
+      "steps": [
+        {
+          "command": "/status",
+          "expect": "tokens in 0 out 0"
+        },
+        {
+          "signal": "SIGTERM",
+          "exit": true
+        }
+      ]
+    },
+    {
+      "id": "catalog",
+      "catalog": true
+    },
+    {
+      "id": "bindings",
+      "config": {
+        "keys": {
+          "tui.editor.deleteCharBackward": "f2",
+          "surface.history": "f3"
+        },
+        "history": {
+          "enabled": false,
+          "ghost": false
+        }
+      },
+      "steps": [
+        {
+          "command": "/keys library",
+          "expect": "library"
+        },
+        {
+          "type": "deleteCharBackward",
+          "expect": "f2"
+        },
+        {
+          "key": "escape",
+          "expect": "ready"
+        },
+        {
+          "type": "dogfood-abc",
+          "expect": "dogfood-abc"
+        },
+        {
+          "key": "f2",
+          "expect": "dogfood-ab",
+          "absent": "dogfood-abc",
+          "scope": "editor"
+        },
+        {
+          "key": "ctrl+c",
+          "absent": "dogfood-ab",
+          "scope": "editor"
+        },
+        {
+          "key": "f3",
+          "expect": "prompt history is disabled"
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ]
+    },
+    {
+      "id": "persistence",
+      "steps": [
+        {
+          "command": "/rename dogfood-persistent",
+          "expect": "session renamed"
+        },
+        {
+          "command": "/stash persistent-draft",
+          "expect": "Stashed [0]"
+        },
+        {
+          "command": "/theme deepseek-blue",
+          "expect": "deepseek-blue"
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ],
+      "continuation": {
+        "steps": [
+          {
+            "command": "/stash-list",
+            "expect": "persistent-draft"
+          },
+          {
+            "key": "escape",
+            "expect": "ready"
+          },
+          {
+            "command": "/stash-pop",
+            "expect": "Popped [0]"
+          },
+          {
+            "expect": "persistent-draft"
+          },
+          {
+            "key": "ctrl+c",
+            "expect": "ready"
+          },
+          {
+            "command": "/theme tokens",
+            "expect": "deepseek-blue"
+          },
+          {
+            "command": "/resume",
+            "expect": "dogfood-persistent"
+          },
+          {
+            "key": "escape",
+            "expect": "ready"
+          },
+          {
+            "command": "/quit",
+            "exit": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "external-editor",
+      "editor": true,
+      "steps": [
+        {
+          "type": "original-draft",
+          "expect": "original-draft"
+        },
+        {
+          "key": "ctrl+x",
+          "expect": "ctrl+x"
+        },
+        {
+          "key": "e",
+          "expect": "external-editor-line"
+        },
+        {
+          "key": "ctrl+c",
+          "absent": "external-editor-line",
+          "scope": "editor"
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ]
+    },
+    {
+      "id": "export-security",
+      "files": [
+        {
+          "path": "old.md",
+          "content": "retained-old",
+          "mode": 420
+        },
+        {
+          "path": "alias.md",
+          "hardlink": "old.md"
+        },
+        {
+          "path": "target.md",
+          "content": "untouched-target",
+          "mode": 420
+        },
+        {
+          "path": "link.md",
+          "symlink": "target.md"
+        }
+      ],
+      "steps": [
+        {
+          "command": "/export old.md",
+          "expect": "transcript written to"
+        },
+        {
+          "file": "old.md",
+          "contains": "session",
+          "mode": 384
+        },
+        {
+          "file": "alias.md",
+          "contains": "retained-old",
+          "mode": 420
+        },
+        {
+          "command": "/export link.md",
+          "expect": "could not write"
+        },
+        {
+          "file": "target.md",
+          "contains": "untouched-target",
+          "mode": 420
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ]
+    },
+    {
+      "id": "skills",
+      "invocation": [
+        "install-skills",
+        "--update"
+      ],
+      "expect": "dsh-tui-dogfood"
+    },
+    {
+      "id": "startup-help",
+      "invocation": [
+        "--help"
+      ],
+      "expect": "--resume"
+    },
+    {
+      "id": "release-dry-run",
+      "tool": "release",
+      "invocation": [
+        "--help"
+      ],
+      "expect": "usage:"
+    },
+    {
+      "id": "release-invalid",
+      "tool": "release",
+      "invocation": [
+        "invalid-dogfood-action"
+      ],
+      "expectExit": 2,
+      "expect": "invalid choice"
+    },
+    {
+      "id": "editor-actions",
+      "config": {
+        "keys": {
+          "tui.editor.yank": "f2",
+          "tui.editor.yankPop": "f3",
+          "tui.editor.undo": "f4"
+        }
+      },
+      "steps": [
+        {
+          "type": "dogfood abc",
+          "expect": "dogfood abc"
+        },
+        {
+          "key": "ctrl+a",
+          "expect": "dogfood abc"
+        },
+        {
+          "key": "right",
+          "expect": "dogfood abc"
+        },
+        {
+          "key": "delete",
+          "expect": "dgfood abc"
+        },
+        {
+          "key": "ctrl+c",
+          "absent": "dgfood abc",
+          "scope": "editor"
+        },
+        {
+          "type": "one two three",
+          "expect": "one two three"
+        },
+        {
+          "key": "ctrl+w",
+          "expect": "one two",
+          "absent": "three",
+          "scope": "editor"
+        },
+        {
+          "key": "ctrl+a",
+          "expect": "one two"
+        },
+        {
+          "key": "ctrl+k",
+          "absent": "one two",
+          "scope": "editor"
+        },
+        {
+          "type": "abcdef",
+          "expect": "abcdef"
+        },
+        {
+          "key": "ctrl+a",
+          "expect": "abcdef"
+        },
+        {
+          "key": "right",
+          "expect": "abcdef"
+        },
+        {
+          "key": "right",
+          "expect": "abcdef"
+        },
+        {
+          "key": "ctrl+k",
+          "expect": "ab",
+          "absent": "cdef",
+          "scope": "editor"
+        },
+        {
+          "key": "f2-release",
+          "expect": "ab",
+          "absent": "cdef",
+          "scope": "editor"
+        },
+        {
+          "key": "f2",
+          "expect": "abcdef"
+        },
+        {
+          "key": "f3",
+          "expect": "abone two"
+        },
+        {
+          "key": "ctrl+c",
+          "absent": "abone two",
+          "scope": "editor"
+        },
+        {
+          "type": "dogfood undo",
+          "expect": "dogfood undo"
+        },
+        {
+          "key": "backspace",
+          "expect": "dogfood und"
+        },
+        {
+          "key": "f4",
+          "expect": "dogfood undo"
+        },
+        {
+          "key": "ctrl+c",
+          "absent": "dogfood undo",
+          "scope": "editor"
+        },
+        {
+          "type": "dogfood one two",
+          "expect": "dogfood one two"
+        },
+        {
+          "key": "ctrl+left",
+          "expect": "dogfood one two"
+        },
+        {
+          "key": "alt+d",
+          "expect": "dogfood one",
+          "absent": "two",
+          "scope": "editor"
+        },
+        {
+          "key": "ctrl+right",
+          "expect": "dogfood one"
+        },
+        {
+          "type": "tail",
+          "expect": "dogfood one tail"
+        },
+        {
+          "key": "ctrl+c",
+          "absent": "dogfood one tail",
+          "scope": "editor"
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ]
+    },
+    {
+      "id": "completion",
+      "files": [
+        {
+          "path": "dogfood-reference.txt",
+          "content": "reference",
+          "mode": 384
+        }
+      ],
+      "steps": [
+        {
+          "type": "@dogfood",
+          "expect": "dogfood-reference.txt"
+        },
+        {
+          "key": "tab",
+          "expect": "@dogfood-reference.txt"
+        },
+        {
+          "key": "ctrl+c",
+          "absent": "@dogfood-reference.txt",
+          "scope": "editor"
+        },
+        {
+          "type": "/sta",
+          "expect": "/sta"
+        },
+        {
+          "key": "tab",
+          "expect": "/status"
+        },
+        {
+          "key": "ctrl+c",
+          "absent": "/status",
+          "scope": "editor"
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ]
+    },
+    {
+      "id": "search",
+      "steps": [
+        {
+          "command": "/help",
+          "expect": "/stash-pop"
+        },
+        {
+          "resize": [
+            100,
+            12
+          ],
+          "expect": "ready"
+        },
+        {
+          "key": "pageup",
+          "changed": true
+        },
+        {
+          "key": "pagedown",
+          "changed": true
+        },
+        {
+          "key": "ctrl+shift+f",
+          "expect": "Find in transcript"
+        },
+        {
+          "type": "stash",
+          "expect": "stash",
+          "changed": true
+        },
+        {
+          "key": "enter",
+          "changed": true
+        },
+        {
+          "key": "shift+enter",
+          "changed": true
+        },
+        {
+          "key": "escape",
+          "absent": "Find in transcript"
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ]
+    },
+    {
+      "id": "stash-security",
+      "homeLinks": [
+        {
+          "path": "tui-stash",
+          "target": "stash-target"
+        }
+      ],
+      "steps": [
+        {
+          "command": "/stash retained-private-draft",
+          "expect": "must not be a symbolic link"
+        },
+        {
+          "expect": "retained-private-draft",
+          "scope": "editor"
+        },
+        {
+          "key": "ctrl+c",
+          "absent": "retained-private-draft",
+          "scope": "editor"
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ]
+    },
+    {
+      "id": "history-consent",
+      "config": {
+        "history": {
+          "enabled": true,
+          "ghost": true
+        }
+      },
+      "steps": [
+        {
+          "command": "/status",
+          "expect": "tokens in 0 out 0"
+        },
+        {
+          "type": "/sta",
+          "expect": "/status",
+          "scope": "editor"
+        },
+        {
+          "key": "ctrl+e",
+          "expect": "/status",
+          "scope": "editor"
+        },
+        {
+          "type": "X",
+          "expect": "/statusX",
+          "scope": "editor"
+        },
+        {
+          "key": "ctrl+c",
+          "absent": "/statusX",
+          "scope": "editor"
+        },
+        {
+          "key": "ctrl+r",
+          "expect": "prompt history"
+        },
+        {
+          "type": "/status",
+          "expect": "/status"
+        },
+        {
+          "key": "enter",
+          "expect": "/status"
+        },
+        {
+          "key": "ctrl+c",
+          "absent": "/status",
+          "scope": "editor"
+        },
+        {
+          "command": "/history clear",
+          "expect": "forgot",
+          "absent": "forgot 0"
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ]
+    },
+    {
+      "id": "native-terminal",
+      "tool": "native-terminal",
+      "invocation": [],
+      "expect": "\"failures\": []"
+    },
+    {
+      "id": "clone-helper",
+      "tool": "clone-helper",
+      "invocation": [],
+      "expect": "link:"
+    },
+    {
+      "id": "external-editor-failure",
+      "editor": "missing",
+      "steps": [
+        {
+          "type": "retained-draft",
+          "expect": "retained-draft",
+          "scope": "editor"
+        },
+        {
+          "key": "ctrl+x",
+          "expect": "ctrl+x"
+        },
+        {
+          "key": "e",
+          "expect": "could not start"
+        },
+        {
+          "type": "-recovered",
+          "expect": "retained-draft-recovered",
+          "scope": "editor"
+        },
+        {
+          "key": "ctrl+c",
+          "absent": "retained-draft-recovered",
+          "scope": "editor"
+        },
+        {
+          "command": "/status",
+          "expect": "tokens in 0 out 0"
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ]
+    }
+  ],
+  "paid": [
+    {
+      "id": "live-reply",
+      "steps": [
+        {
+          "prompt": "Join the words 'dogfood' and 'live-ok' with one space. Reply with that line only.",
+          "expect": "dogfood live-ok",
+          "settled": true
+        },
+        {
+          "command": "/export answer.md",
+          "expect": "transcript written to"
+        },
+        {
+          "file": "answer.md",
+          "contains": "dogfood live-ok",
+          "unquoted": true
+        },
+        {
+          "key": "shift+tab",
+          "expect": "ready"
+        },
+        {
+          "key": "ctrl+t",
+          "expect": "effort"
+        },
+        {
+          "key": "escape",
+          "expect": "ready"
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ]
+    },
+    {
+      "id": "rich-text",
+      "steps": [
+        {
+          "prompt": "Write Markdown with a heading formed by joining 'dogfood' and 'rich-ok' with one space. Include a two-row table, a code fence labelled typescript, a diff fence replacing old with new, and a valid Mermaid flowchart TB with nodes Alpha and Beta. End with exactly this invalid Mermaid fence: ```mermaid\nflowchart TB\nAlpha -->>\n```. The dangling link must have no target. Do not repair it. Do not use tools.",
+          "expect": "Mermaid diagram not rendered",
+          "settled": true
+        },
+        {
+          "resize": [
+            40,
+            18
+          ],
+          "expect": "Mermaid diagram not rendered"
+        },
+        {
+          "command": "/export answer.md",
+          "expect": "transcript written to"
+        },
+        {
+          "file": "answer.md",
+          "contains": "```mermaid",
+          "unquoted": true
+        },
+        {
+          "file": "answer.md",
+          "contains": "dogfood rich-ok",
+          "unquoted": true
+        },
+        {
+          "file": "answer.md",
+          "contains": "```typescript",
+          "unquoted": true
+        },
+        {
+          "file": "answer.md",
+          "contains": "```diff",
+          "unquoted": true
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ]
+    },
+    {
+      "id": "tools",
+      "steps": [
+        {
+          "prompt": "Use real file tools to write marker.txt in the current scratch workspace. Its content must join 'dogfood' and 'file-ok' with one space. Read it back, then report only that content. Do not write anywhere else.",
+          "expect": "dogfood file-ok",
+          "settled": true
+        },
+        {
+          "file": "marker.txt",
+          "contains": "dogfood file-ok"
+        },
+        {
+          "key": "ctrl+o",
+          "expect": "marker.txt"
+        },
+        {
+          "command": "/export answer.md",
+          "expect": "transcript written to"
+        },
+        {
+          "file": "answer.md",
+          "contains": "### tool:",
+          "unquoted": true
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ]
+    },
+    {
+      "id": "ptc",
+      "steps": [
+        {
+          "prompt": "Use run_code with the actual write and read tools. Write marker.txt in the current scratch workspace with the words 'dogfood' and 'ptc-ok' joined with a space, then read it back within the same program. Reply with the resulting content. Do not write anywhere else.",
+          "expect": "dogfood ptc-ok",
+          "settled": true
+        },
+        {
+          "file": "marker.txt",
+          "contains": "dogfood ptc-ok"
+        },
+        {
+          "key": "ctrl+y",
+          "expect": "run_code"
+        },
+        {
+          "key": "ctrl+o",
+          "expect": "marker.txt"
+        },
+        {
+          "command": "/export answer.md",
+          "expect": "transcript written to"
+        },
+        {
+          "file": "answer.md",
+          "contains": "run_code",
+          "unquoted": true
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ]
+    },
+    {
+      "id": "conversation",
+      "steps": [
+        {
+          "prompt": "Join 'dogfood' and 'turn-ok' with one space; reply with that line only.",
+          "expect": "dogfood turn-ok",
+          "settled": true
+        },
+        {
+          "command": "/undo",
+          "expect": "prompt hidden"
+        },
+        {
+          "command": "/redo",
+          "expect": "redo"
+        },
+        {
+          "command": "/fork dogfood-branch",
+          "expect": "forked from"
+        },
+        {
+          "command": "/status",
+          "expect": "model"
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ]
+    },
+    {
+      "id": "clipboard",
+      "steps": [
+        {
+          "prompt": "Join 'dogfood' and 'clipboard-ok' with one space; reply with that line only.",
+          "expect": "dogfood clipboard-ok",
+          "settled": true
+        },
+        {
+          "command": "/copy",
+          "expect": "copied",
+          "osc52": true
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ]
+    },
+    {
+      "id": "questions",
+      "steps": [
+        {
+          "prompt": "Call ask_user_question once. Ask which color I prefer, with id color and options teal and amber. Wait for my answer before reporting the selected color.",
+          "expect": "type your own answer"
+        },
+        {
+          "key": "down",
+          "expect": "❯ [ ] 2. amber"
+        },
+        {
+          "key": "up",
+          "expect": "❯ [ ] 1. teal"
+        },
+        {
+          "key": "enter",
+          "expect": "teal",
+          "settled": true
+        },
+        {
+          "command": "/export answer.md",
+          "expect": "transcript written to"
+        },
+        {
+          "file": "answer.md",
+          "contains": "teal",
+          "unquoted": true
+        },
+        {
+          "file": "answer.md",
+          "contains": "ask_user_question",
+          "unquoted": true
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ]
+    },
+    {
+      "id": "approval",
+      "steps": [
+        {
+          "prompt": "Use the write tool to create ../approval-target.txt, outside this scratch workspace but inside its private parent. Content must join 'dogfood' and 'approval-ok' with one space. Request sandbox escalation if needed; wait for my approval. Do not use any other path.",
+          "expect": "approval needed ·"
+        },
+        {
+          "key": "y",
+          "expect": "dogfood approval-ok",
+          "settled": true
+        },
+        {
+          "file": "../approval-target.txt",
+          "ownedParent": true,
+          "contains": "dogfood approval-ok"
+        },
+        {
+          "prompt": "Use write once to create ../approval-rejected.txt, only inside this private scratch parent. Content: dogfood reject-target. Request sandbox escalation if needed and wait for approval. If refused, do not retry or use another tool; reply exactly dogfood rejected-ok.",
+          "expect": "approval needed ·"
+        },
+        {
+          "key": "n",
+          "expect": "dogfood rejected-ok",
+          "settled": true
+        },
+        {
+          "file": "../approval-rejected.txt",
+          "ownedParent": true,
+          "missing": true
+        },
+        {
+          "prompt": "Use write once to create ../approval-cancelled.txt, only inside this private scratch parent. Content: dogfood cancel-target. Request sandbox escalation if needed and wait for approval. If cancelled, do not retry or use another tool; reply exactly dogfood cancelled-ok.",
+          "expect": "approval needed ·"
+        },
+        {
+          "key": "escape",
+          "expect": "dogfood cancelled-ok",
+          "settled": true
+        },
+        {
+          "file": "../approval-cancelled.txt",
+          "ownedParent": true,
+          "missing": true
+        },
+        {
+          "command": "/export answer.md",
+          "expect": "transcript written to"
+        },
+        {
+          "file": "answer.md",
+          "contains": "dogfood approval-ok",
+          "unquoted": true
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ]
+    },
+    {
+      "id": "queue",
+      "steps": [
+        {
+          "prompt": "Count from 1 to 500, one number per line, without tools.",
+          "expect": "working"
+        },
+        {
+          "type": "unsent-dogfood-draft",
+          "expect": "unsent-dogfood-draft"
+        },
+        {
+          "key": "ctrl+c",
+          "absent": "unsent-dogfood-draft",
+          "scope": "editor"
+        },
+        {
+          "prompt": "After the current turn, join 'dogfood' and 'queued-ok' with one space and reply with that line only.",
+          "expect": "queued-ok"
+        },
+        {
+          "key": "ctrl+c",
+          "expect": "1 queued prompt back in the bar",
+          "settled": true
+        },
+        {
+          "key": "ctrl+c",
+          "expect": "ready",
+          "absent": "queued-ok",
+          "scope": "editor",
+          "settled": true
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ]
+    },
+    {
+      "id": "work",
+      "steps": [
+        {
+          "prompt": "Use todo_write to make two tasks named dogfood-one and dogfood-two, one in_progress and one pending. Then create a goal to inspect only this scratch workspace, with max_goal_rounds 1, and complete it. Join 'dogfood' and 'work-ok' with one space in your final reply. Do not modify files or use external services.",
+          "expect": "dogfood work-ok",
+          "settled": true
+        },
+        {
+          "command": "/todo",
+          "expect": "dogfood-one"
+        },
+        {
+          "command": "/export answer.md",
+          "expect": "transcript written to"
+        },
+        {
+          "file": "answer.md",
+          "contains": "dogfood work-ok",
+          "unquoted": true
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ]
+    },
+    {
+      "id": "background",
+      "steps": [
+        {
+          "prompt": "Start a real background bash job in the current scratch workspace: print 'dogfood background-ok', then wait briefly and print done. Read its output using job_output, and stop it if it remains running. Reply by joining 'dogfood' and 'background-ok' with one space. Do not write files or access external services.",
+          "expect": "dogfood background-ok",
+          "settled": true
+        },
+        {
+          "command": "/jobs",
+          "expect": "jobs"
+        },
+        {
+          "command": "/export answer.md",
+          "expect": "transcript written to"
+        },
+        {
+          "file": "answer.md",
+          "contains": "dogfood background-ok",
+          "unquoted": true
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ]
+    },
+    {
+      "id": "delegation",
+      "steps": [
+        {
+          "prompt": "Use only the non-Team subagent tool, never Agent Teams. Spawn exactly one child without overriding its configured model or effort. Ask the child to write delegate-proof.txt in the current scratch directory, containing exactly dogfood child-ok. Only the child may write that file. Collect its successful result, then say dogfood delegation-ok. Do not use external services or any other path.",
+          "expect": "subagent spawn finished",
+          "settled": true
+        },
+        {
+          "file": "delegate-proof.txt",
+          "contains": "dogfood child-ok"
+        },
+        {
+          "command": "/subagents",
+          "expect": "subagents"
+        },
+        {
+          "command": "/subagents open last",
+          "expect": "viewing"
+        },
+        {
+          "key": "ctrl+b",
+          "expect": "back to the session"
+        },
+        {
+          "command": "/export delegation.md",
+          "expect": "transcript written to"
+        },
+        {
+          "file": "delegation.md",
+          "contains": "### tool:",
+          "unquoted": true
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ]
+    }
+  ],
+  "manual": [
+    {
+      "id": "herdr",
+      "prerequisite": "An explicitly requested Herdr development pane.",
+      "checks": [
+        "Observe lifecycle registration, mode/status updates, attention, job status, and cleanup. Never borrow the current agent pane."
+      ]
+    },
+    {
+      "id": "moshi",
+      "prerequisite": "An explicitly supplied development Moshi token and observable test endpoint.",
+      "checks": [
+        "Exercise completion/attention success and bounded delivery failure. Confirm payload excludes conversation content and session identifiers."
+      ]
+    },
+    {
+      "id": "emulators",
+      "prerequisite": "Each supported emulator, tmux and SSH transport, clipboard observation, and timestamped physical input.",
+      "checks": [
+        "Verify physical modified keys, bracketed paste, OSC52 acceptance, mouse, focus, resize, restoration, and actual input-to-pixel latency. PTY output is not physical-device proof."
+      ]
+    }
+  ],
+  "herdr": [
+    {
+      "id": "herdr-editor",
+      "steps": [
+        {
+          "type": "dogfood-中😀",
+          "expect": "dogfood-中😀"
+        },
+        {
+          "key": "left",
+          "expect": "dogfood-中😀"
+        },
+        {
+          "key": "backspace",
+          "expect": "dogfood-😀"
+        },
+        {
+          "key": "ctrl+c",
+          "absent": "dogfood-😀",
+          "scope": "editor"
+        },
+        {
+          "type": "paste-one\npaste-two",
+          "paste": true,
+          "expect": "paste-two"
+        },
+        {
+          "key": "ctrl+c",
+          "absent": "paste-two",
+          "scope": "editor"
+        },
+        {
+          "type": "/sta",
+          "expect": "/sta"
+        },
+        {
+          "key": "tab",
+          "expect": "/status"
+        },
+        {
+          "key": "ctrl+c",
+          "absent": "/status",
+          "scope": "editor"
+        },
+        {
+          "command": "/status",
+          "expect": "tokens in 0 out 0"
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ]
+    },
+    {
+      "id": "herdr-geometry",
+      "steps": [
+        {
+          "type": "resize-retained-中😀",
+          "expect": "resize-retained-中😀",
+          "scope": "editor"
+        },
+        {
+          "paneZoom": false,
+          "expect": "resize-retained-中😀",
+          "scope": "editor"
+        },
+        {
+          "paneZoom": true,
+          "expect": "resize-retained-中😀",
+          "scope": "editor"
+        },
+        {
+          "key": "ctrl+c",
+          "absent": "resize-retained-中😀",
+          "scope": "editor"
+        },
+        {
+          "command": "/status",
+          "expect": "tokens in 0 out 0"
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ]
+    },
+    {
+      "id": "herdr-search",
+      "steps": [
+        {
+          "command": "/help",
+          "expect": "/stash-pop"
+        },
+        {
+          "command": "/help",
+          "expect": "commands: /compact"
+        },
+        {
+          "command": "/help",
+          "expect": "commands: /compact"
+        },
+        {
+          "command": "/help",
+          "expect": "commands: /compact"
+        },
+        {
+          "command": "/help",
+          "expect": "commands: /compact"
+        },
+        {
+          "command": "/help",
+          "expect": "commands: /compact"
+        },
+        {
+          "command": "/help",
+          "expect": "commands: /compact"
+        },
+        {
+          "command": "/help",
+          "expect": "commands: /compact"
+        },
+        {
+          "command": "/help",
+          "expect": "commands: /compact"
+        },
+        {
+          "command": "/help",
+          "expect": "commands: /compact"
+        },
+        {
+          "command": "/help",
+          "expect": "commands: /compact"
+        },
+        {
+          "command": "/help",
+          "expect": "commands: /compact"
+        },
+        {
+          "command": "/help",
+          "expect": "commands: /compact"
+        },
+        {
+          "paneZoom": false,
+          "expect": "ready"
+        },
+        {
+          "key": "f5",
+          "changed": true
+        },
+        {
+          "key": "f6",
+          "changed": true
+        },
+        {
+          "key": "f7",
+          "expect": "Find in transcript"
+        },
+        {
+          "type": "stash",
+          "expect": "stash",
+          "changed": true
+        },
+        {
+          "key": "enter",
+          "changed": true
+        },
+        {
+          "key": "f8",
+          "changed": true
+        },
+        {
+          "key": "escape",
+          "absent": "Find in transcript"
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ],
+      "config": {
+        "keys": {
+          "tui.altScreen.pageUp": "f5",
+          "tui.altScreen.pageDown": "f6",
+          "tui.altScreen.search": "f7",
+          "tui.altScreen.searchPrevious": "f8"
+        }
+      }
+    },
+    {
+      "id": "herdr-editor-actions",
+      "config": {
+        "keys": {
+          "tui.editor.yank": "f2",
+          "tui.editor.yankPop": "f3",
+          "tui.editor.undo": "f4",
+          "tui.editor.deleteCharForward": "f5",
+          "tui.editor.cursorWordLeft": "f6",
+          "tui.editor.deleteWordForward": "f7",
+          "tui.editor.cursorWordRight": "f8"
+        }
+      },
+      "steps": [
+        {
+          "command": "/keys library",
+          "expect": "library"
+        },
+        {
+          "type": "tui.editor.yank",
+          "expect": "tui.editor.yank = f2"
+        },
+        {
+          "key": "escape",
+          "expect": "ready"
+        },
+        {
+          "type": "dogfood abc",
+          "expect": "dogfood abc"
+        },
+        {
+          "key": "ctrl+a",
+          "expect": "dogfood abc"
+        },
+        {
+          "key": "right",
+          "expect": "dogfood abc"
+        },
+        {
+          "key": "f5",
+          "expect": "dgfood abc"
+        },
+        {
+          "key": "ctrl+c",
+          "absent": "dgfood abc",
+          "scope": "editor"
+        },
+        {
+          "type": "one two three",
+          "expect": "one two three"
+        },
+        {
+          "key": "ctrl+w",
+          "expect": "one two",
+          "absent": "three",
+          "scope": "editor"
+        },
+        {
+          "key": "ctrl+a",
+          "expect": "one two"
+        },
+        {
+          "key": "ctrl+k",
+          "absent": "one two",
+          "scope": "editor"
+        },
+        {
+          "type": "abcdef",
+          "expect": "abcdef"
+        },
+        {
+          "key": "ctrl+a",
+          "expect": "abcdef"
+        },
+        {
+          "key": "right",
+          "expect": "abcdef"
+        },
+        {
+          "key": "right",
+          "expect": "abcdef"
+        },
+        {
+          "key": "ctrl+k",
+          "expect": "ab",
+          "absent": "cdef",
+          "scope": "editor"
+        },
+        {
+          "key": "f2",
+          "expect": "abcdef"
+        },
+        {
+          "key": "f3",
+          "expect": "abone two"
+        },
+        {
+          "key": "ctrl+c",
+          "absent": "abone two",
+          "scope": "editor"
+        },
+        {
+          "type": "dogfood undo",
+          "expect": "dogfood undo"
+        },
+        {
+          "key": "backspace",
+          "expect": "dogfood und"
+        },
+        {
+          "key": "f4",
+          "expect": "dogfood undo"
+        },
+        {
+          "key": "ctrl+c",
+          "absent": "dogfood undo",
+          "scope": "editor"
+        },
+        {
+          "type": "dogfood one two",
+          "expect": "dogfood one two"
+        },
+        {
+          "key": "f6",
+          "expect": "dogfood one two"
+        },
+        {
+          "key": "f7",
+          "expect": "dogfood one",
+          "absent": "two",
+          "scope": "editor"
+        },
+        {
+          "key": "f8",
+          "expect": "dogfood one"
+        },
+        {
+          "type": "tail",
+          "expect": "dogfood one tail"
+        },
+        {
+          "key": "ctrl+c",
+          "absent": "dogfood one tail",
+          "scope": "editor"
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ]
+    },
+    {
+      "id": "herdr-lifecycle",
+      "herdrIntegration": true,
+      "steps": [
+        {
+          "command": "/status",
+          "expect": "tokens in 0 out 0"
+        },
+        {
+          "reporter": "idle"
+        },
+        {
+          "command": "/new dogfood-next",
+          "expect": "started a new session"
+        },
+        {
+          "command": "/status",
+          "expect": "tokens in 0 out 0"
+        },
+        {
+          "reporter": "idle",
+          "changedSession": true
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        },
+        {
+          "reporter": "released"
+        }
+      ]
+    }
+  ],
+  "herdrPaid": [
+    {
+      "id": "herdr-attention",
+      "herdrIntegration": true,
+      "steps": [
+        {
+          "reporter": "idle"
+        },
+        {
+          "prompt": "Do not delegate, use Agent Teams, access external services, or touch any path outside this workspace. Start exactly one background bash job that waits 30 seconds and writes exactly dogfood native-background-ok to native-background.txt. Do not wait for or collect that job. Then reply exactly dogfood native-background-started.",
+          "expect": "dogfood native-background-started",
+          "settled": true
+        },
+        {
+          "reporter": "working"
+        },
+        {
+          "reporter": "idle"
+        },
+        {
+          "file": "native-background.txt",
+          "contains": "dogfood native-background-ok"
+        },
+        {
+          "prompt": "Call ask_user_question once. Ask which color I prefer, with id color and options teal and amber. Wait for my answer before reporting the selected color.",
+          "expect": "type your own answer",
+          "reporter": "blocked"
+        },
+        {
+          "key": "down",
+          "expect": "❯ [ ] 2. amber"
+        },
+        {
+          "key": "up",
+          "expect": "❯ [ ] 1. teal"
+        },
+        {
+          "key": "enter",
+          "expect": "teal",
+          "settled": true
+        },
+        {
+          "command": "/status",
+          "expect": "model zai/glm-5.3-flash (max)"
+        },
+        {
+          "reporter": "idle"
+        },
+        {
+          "command": "/export native-attention.md",
+          "expect": "transcript written to"
+        },
+        {
+          "file": "native-attention.md",
+          "contains": "ask_user_question",
+          "unquoted": true
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        },
+        {
+          "reporter": "released"
+        }
+      ]
+    }
+  ],
+  "tmux": [
+    {
+      "id": "tmux-compatibility",
+      "steps": [
+        {
+          "command": "/status",
+          "expect": "tokens in 0 out 0"
+        },
+        {
+          "type": "dogfood-tmux-λ雪🙂",
+          "expect": "dogfood-tmux-λ雪🙂",
+          "scope": "editor"
+        },
+        {
+          "keys": [
+            "left",
+            "backspace"
+          ],
+          "expect": "dogfood-tmux-λ🙂",
+          "absent": "dogfood-tmux-λ雪🙂",
+          "scope": "editor"
+        },
+        {
+          "command": "/stash dogfood-tmux-stash",
+          "expect": "Stashed [0]"
+        },
+        {
+          "command": "/stash-pop",
+          "expect": "Popped [0]"
+        },
+        {
+          "expect": "dogfood-tmux-stash",
+          "scope": "editor"
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ]
+    }
+  ]
+}

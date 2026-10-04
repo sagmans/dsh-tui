@@ -87,7 +87,7 @@ const option = (name, fallback) => {
   const index = args.indexOf(`--${name}`)
   return index >= 0 && args[index + 1] !== undefined ? args[index + 1] : fallback
 }
-const prompt = option('prompt', 'Reply with exactly: pong')
+const prompt = option('prompt', '')
 /**
  * Reach child modes without shell evaluation; --args accepts only space-separated
  * tokens, so quoting cannot preserve spaces within an argument.
@@ -345,7 +345,7 @@ function finish() {
   console.log(`--- raw log: ${keep} (${raw.length} bytes) ---`)
   // A run that fails the application must fail the harness: a screen that looks
   // right is not the contract, a clean exit is part of it.
-  const problems = []
+  const problems = missing.map(name => `terminal restoration missing: ${name}`)
   const code = exitInfo?.exitCode
   if (code !== expectExit) {
     problems.push(`expected exit ${expectExit}, got ${code ?? 'no exit before the grace deadline'}`)

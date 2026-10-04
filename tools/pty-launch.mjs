@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { problems } from '../.agents/skills/dsh-tui-dogfood/scripts/clone-links.mjs'
 
 const PROJECT_ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
+const ISOLATED_ENV_PREFIXES = ['HERDR_', 'DSH_TUI_MOSHI_']
 
 /**
  * The releases a dogfood run may be driven against.
@@ -35,14 +36,15 @@ function contains(parent, path) {
  * surface that inherits them claims that pane's agent row for the test run and
  * hands it back on the way out — which takes the row away from the agent really
  * running in the pane. Stripping the coordinates is what keeps a reproduction
- * from touching the pane it borrows.
+ * from touching the pane it borrows. Notification credentials must also stay out
+ * so paid-model dogfood cannot send incidental production alerts.
  */
 export function barePaneEnv(base = process.env) {
-  return Object.fromEntries(Object.entries(base).filter(([name]) => !name.startsWith('HERDR_')))
+  return Object.fromEntries(Object.entries(base).filter(([name]) => !ISOLATED_ENV_PREFIXES.some(prefix => name.startsWith(prefix))))
 }
 
 /** Keep test writes away from the live home, including symlinked and parent paths. */
-export function preparePtyLaunch({ home, launcher = '' }) {
+export function preparePtyLaunch({ home, launcher = '', env = barePaneEnv() }) {
   if (!home) throw new Error('pty-drive: --home must name an existing isolated directory')
   let selectedHome
   try {
@@ -69,7 +71,7 @@ export function preparePtyLaunch({ home, launcher = '' }) {
     result = spawnSync(command, [...argsPrefix, '--version'], {
       encoding: 'utf8',
       timeout: 5000,
-      env: { ...barePaneEnv(), HOME: probeHome, DSH_HOME: probeHome },
+      env: { ...env, HOME: probeHome, DSH_HOME: probeHome },
     })
   } finally {
     rmSync(probeHome, { recursive: true, force: true })
