@@ -6,6 +6,11 @@ const SESSION_EVENT = 'session/event'
 const SEED_TITLE = 'dogfood-pruning-seed'
 const PRUNE_TITLE = 'dogfood-pruning-apply'
 const FINISH_TITLE = 'dogfood-pruning-finish'
+/** End-only metadata exposes an inactive persisted session without creating a child agent. */
+const VIEW_TITLE_PREFIX = 'dogfood-pruning-view:'
+const STORED_SESSION_PATTERN = /^tui-session-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/u
+const SUBAGENT_END_EVENT = 'subagent/end'
+const COMPLETED_STOP = 'completed'
 const TURN = 1
 const FIRST_STEP = 1
 const NEXT_STEP = 2
@@ -46,6 +51,8 @@ const FIXTURE_ERRORS = {
   unseeded: 'dogfood-pruning: session was not seeded',
   pruned: 'dogfood-pruning: session already pruned',
   unfinished: 'dogfood-pruning: finish preceded pruning',
+  invalidStoredSession: 'dogfood-pruning: invalid stored session identity',
+  activeStoredSession: 'dogfood-pruning: stored session is already active',
 }
 
 /** Ordinary completions need stable identities so later rewrites can change content without impersonating another result. */
@@ -69,9 +76,19 @@ function startCall(session, callId, description, step) {
 export function apply(ctx) {
   const states = new Map()
   ctx.on(SESSION_EVENT, (session, event) => {
-    if (event.type !== TITLE_EVENT || ![SEED_TITLE, PRUNE_TITLE, FINISH_TITLE].includes(event.data.title)) return
+    if (event.type !== TITLE_EVENT) return
+    const title = event.data.title
+    const storedId = typeof title === 'string' && title.startsWith(VIEW_TITLE_PREFIX) ? title.slice(VIEW_TITLE_PREFIX.length) : undefined
+    if (storedId === undefined && ![SEED_TITLE, PRUNE_TITLE, FINISH_TITLE].includes(title)) return
     // Session append refuses reentrant publication, so the fixture waits until the rename event finishes notifying subscribers.
     queueMicrotask(() => {
+      if (storedId !== undefined) {
+        if (!STORED_SESSION_PATTERN.test(storedId)) throw new Error(FIXTURE_ERRORS.invalidStoredSession)
+        if (storedId === session.id || ctx.get('sessions')?.get(storedId) !== undefined) throw new Error(FIXTURE_ERRORS.activeStoredSession)
+        // The public child-navigation command needs roster metadata, not a live child or model dispatch.
+        void ctx.emit(SUBAGENT_END_EVENT, { runId: randomUUID(), id: storedId, provider: PROVIDER, local: false, stopReason: COMPLETED_STOP })
+        return
+      }
       if (event.data.title === SEED_TITLE) {
         if (states.has(session.id)) throw new Error(FIXTURE_ERRORS.seeded)
         session.append(EVENTS.turnStart, { turn: TURN })

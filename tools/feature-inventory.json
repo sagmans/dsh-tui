@@ -354,6 +354,7 @@
       ],
       "sources": [
         "src/transcript.ts",
+        "src/agent/history.ts",
         "src/transcript/tool-calls.ts",
         "src/ui/view.ts"
       ]
