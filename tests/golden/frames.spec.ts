@@ -4,10 +4,15 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { WIDTHS, fixture, parkedStatus, mermaidFixture, markdownMessages, busyDock, queued, pickerCard, modelPickerCard, stashPickerCard, gateCard, runningFrame, dispatchedFrame } from './fixtures/frames.ts'
+import { WIDTHS, fixture, elapsedStatus, parkedStatus, mermaidFixture, markdownMessages, busyDock, queued, pickerCard, modelPickerCard, stashPickerCard, gateCard, runningFrame, dispatchedFrame } from './fixtures/frames.ts'
 
 
 describe('golden frames', () => {
+  for (const width of WIDTHS) {
+    it(`renders normalized elapsed boundaries at ${width} columns`, () => {
+      expect(elapsedStatus().map(status => status.render(width))).toMatchSnapshot()
+    })
+  }
   for (const width of WIDTHS) {
       it(`renders the transcript at ${width} columns`, () => {
         expect(fixture().view.render(width)).toMatchSnapshot()

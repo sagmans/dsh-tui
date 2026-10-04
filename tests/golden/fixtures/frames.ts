@@ -37,6 +37,8 @@ import { WorkFold } from '@/work.ts'
 export const WIDTHS = [80, 40]
 /** Existing non-diagram frames pin source text rather than a diagram-mode change. */
 const GOLDEN_MERMAID_MODE = 'off' as const
+/** Zero and carry boundaries must never imply time that has not elapsed. */
+const ELAPSED_BOUNDARIES_MS = [0, 59_500, 119_500, 3_599_500, 3_600_000]
 // Keep baseline layout independent of terminal colour capabilities; callers can supply a styled theme.
 const theme = createTheme('none')
 /** Keep route, usage, and directory facts populated and fixed to pin footer wrapping at both widths. */
@@ -58,6 +60,11 @@ const STATUS_FACTS: StatusFacts = {
   cwd: '/Users/dev/source/opensource/deepseek-harness/master',
   home: '/Users/dev',
 }
+/** Freeze elapsed boundary rows so normalized clock labels stay reviewable as actual frames. */
+export function elapsedStatus(): StatusBar[] {
+  return ELAPSED_BOUNDARIES_MS.map(elapsedMs => new StatusBar(() => ({ ...STATUS_FACTS, activity: 'working', elapsedMs }), theme))
+}
+
 /** The terminal the gate's bar renders against; a golden frame reads its rows only. */
 const STUB_TUI = { requestRender: () => {}, terminal: { rows: 24, columns: 80 } } as unknown as TUI
 /** The rows this frame pins: a shell command whose output waits behind its fold, and a file read. */

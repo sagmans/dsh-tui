@@ -41,6 +41,8 @@ export interface BackgroundWork {
   readonly roster: SubagentRoster
   readonly jobs: () => readonly JobSummary[]
   readonly refresh: () => void
+  /** Background work must keep its age visible after the parent turn ends. */
+  readonly running: () => boolean
   /** Fold the parent's durable catalog, which is where a child's task name lives. */
   readonly acceptCatalog: (info: unknown) => void
   readonly resetRoster: () => void
@@ -70,8 +72,10 @@ export function createBackgroundWork(ctx: Context, ports: BackgroundWorkPorts): 
   const subagentControl = createSubagentControl(ctx)
   let pendingIdle: ReturnType<typeof setImmediate> | undefined
 
+  const running = (): boolean => roster.running().length > 0 || jobs.some(job => isLive(job.status))
+
   const reportBackground = (): void => {
-    const live = roster.running().length > 0 || jobs.some(job => isLive(job.status))
+    const live = running()
     if (live) {
       if (pendingIdle !== undefined) clearImmediate(pendingIdle)
       pendingIdle = undefined
@@ -83,7 +87,7 @@ export function createBackgroundWork(ctx: Context, ports: BackgroundWorkPorts): 
     // wakes the parent; let that handoff finish before claiming the pane idle.
     pendingIdle = setImmediate(() => {
       pendingIdle = undefined
-      ports.backgroundChanged(roster.running().length > 0 || jobs.some(job => isLive(job.status)))
+      ports.backgroundChanged(running())
     })
   }
 
@@ -97,7 +101,7 @@ export function createBackgroundWork(ctx: Context, ports: BackgroundWorkPorts): 
       return
     }
     try {
-      jobs = jobDirectory.list(agent.agent)
+      jobs = jobDirectory.list(ports.activeSession())
     } catch (error) {
       // Keep list failures visible without aborting the command or job watch.
       // Clearing this projection removes job-derived liveness; it does not prove jobs stopped.
@@ -160,34 +164,40 @@ export function createBackgroundWork(ctx: Context, ports: BackgroundWorkPorts): 
       ports.render()
       return
     }
-    const command = parseJobsArgument(argument)
-    switch (command.kind) {
-      case 'list':
-        refresh()
-        ports.notice(describeJobs(jobs, Date.now()))
-        ports.render()
-        return
-      case 'read': {
-        const result = jobDirectory.read(agent.agent, command.id)
-        const text = result?.text.trim() ?? ''
-        ports.notice(text === ''
-          ? `${command.id}: no output yet`
-          : `${command.id} output\n${text.split('\n').slice(-JOB_READ_LINES).join('\n')}`)
-        refresh()
-        return
+    // Missing or inaccessible jobs are command failures, never uncaught terminal input errors.
+    try {
+      const command = parseJobsArgument(argument)
+      switch (command.kind) {
+        case 'list':
+          refresh()
+          ports.notice(describeJobs(jobs, Date.now()))
+          ports.render()
+          return
+        case 'read': {
+          const result = jobDirectory.read(ports.activeSession(), command.id)
+          const text = result?.text.trim() ?? ''
+          ports.notice(text === ''
+            ? `${command.id}: no output yet`
+            : `${command.id} output\n${text.split('\n').slice(-JOB_READ_LINES).join('\n')}`)
+          refresh()
+          return
+        }
+        case 'kill': {
+          const outcome = jobDirectory.kill(ports.activeSession(), command.id)
+          ports.notice(outcome === undefined
+            ? `${command.id}: no such job`
+            : outcome === 'requested' ? `${command.id}: stop requested` : `${command.id} had already finished`)
+          refresh()
+          return
+        }
+        case 'invalid':
+          ports.notice(`/jobs: ${command.reason}`)
+          ports.render()
+          return
       }
-      case 'kill': {
-        const outcome = jobDirectory.kill(agent.agent, command.id)
-        ports.notice(outcome === undefined
-          ? `${command.id}: no such job`
-          : outcome === 'requested' ? `${command.id}: stop requested` : `${command.id} had already finished`)
-        refresh()
-        return
-      }
-      case 'invalid':
-        ports.notice(`/jobs: ${command.reason}`)
-        ports.render()
-        return
+    } catch (error) {
+      ports.notice(`/jobs: ${error instanceof Error ? error.message : String(error)}`)
+      ports.render()
     }
   }
 
@@ -204,6 +214,7 @@ export function createBackgroundWork(ctx: Context, ports: BackgroundWorkPorts): 
     roster,
     jobs: () => jobs,
     refresh,
+    running,
     acceptCatalog: info => roster.catalog(info),
     // Both projections belong to the outgoing agent; do not carry its work into the next session.
     resetRoster: () => {
@@ -235,7 +246,7 @@ export function createBackgroundWork(ctx: Context, ports: BackgroundWorkPorts): 
     ],
     // The board is live state: watch it directly rather than folding events.
     watchJobs: () => jobDirectory?.watch(owner => {
-      if (owner !== undefined && (owner as { id?: string }).id !== ports.activeSession()) return
+      if (owner !== undefined && owner !== ports.activeSession()) return
       refresh()
     }) ?? (() => {}),
   }

@@ -78,19 +78,24 @@ export class ToolCallFold {
   ) {}
 
   /** Fold one tool event, which is the only family of events that owns cross-event state. */
-  apply(type: string, data: Record<string, unknown>, landingIndex: number): ToolCallOutcome {
+  apply(type: string, data: Record<string, unknown>, landingIndex: number, at = this.clock()): ToolCallOutcome {
     switch (type) {
       case 'tool/call':
-        return this.rootCall(data, landingIndex)
+        return this.rootCall(data, landingIndex, at)
       case 'tool/ptc-dispatch-start':
         return this.subCall(data, false)
       case 'tool/ptc-dispatch':
         return this.subCall(data, true)
       case 'tool/result':
-        return this.settleResult(data)
+        return this.settleResult(data, at)
       default:
         return NOTHING
     }
+  }
+
+  /** Pending calls require time-only repaints even when their parent is idle. */
+  hasLiveCalls(): boolean {
+    return this.pending.size > 0
   }
 
   /**
@@ -119,17 +124,17 @@ export class ToolCallFold {
   }
 
   /**
-   * Whole seconds since a moment the fold read the clock at.
+   * Whole elapsed seconds preserve the original request clock across folds.
    *
    * Floored, not rounded: a duration that claims a second it has not waited yet
    * would tick up before the call has been waiting that long.
    */
-  private secondsSince(startedAt: number): number {
-    return Math.max(0, Math.floor((this.clock() - startedAt) / SECOND_MS))
+  private secondsSince(startedAt: number, now = this.clock()): number {
+    return Math.max(0, Math.floor((now - startedAt) / SECOND_MS))
   }
 
   /** The row a requested call draws, which is the row its result later replaces. */
-  private rootCall(data: Record<string, unknown>, landingIndex: number): ToolCallOutcome {
+  private rootCall(data: Record<string, unknown>, landingIndex: number, at: number): ToolCallOutcome {
     const name = typeof data.name === 'string' ? data.name : 'tool'
     const argumentsJson = typeof data.arguments === 'string' ? data.arguments : ''
     const callId = typeof data.callId === 'string' ? data.callId : ''
@@ -142,7 +147,7 @@ export class ToolCallFold {
       // Without a presenter the row still has to say what ran and with what.
       card: card ?? cardFromLines('generic', name, name, argumentsJson === '' ? [] : argumentsJson.split('\n'), false),
     }
-    if (callId !== '') this.pending.set(callId, { name, argumentsJson, index: landingIndex, startedAt: this.clock(), subs: [] })
+    if (callId !== '') this.pending.set(callId, { name, argumentsJson, index: landingIndex, startedAt: at, subs: [] })
     return { appends: [entry], replacements: [] }
   }
 
@@ -231,7 +236,7 @@ export class ToolCallFold {
   }
 
   /** The row a call's result settles into: the card it drew, restated with what answered it. */
-  private settleResult(data: Record<string, unknown>): ToolCallOutcome {
+  private settleResult(data: Record<string, unknown>, at: number): ToolCallOutcome {
     const message = asRecord(data.message)
     const callId = toolCallIdOf(message)
     const pending = callId === '' ? undefined : this.pending.get(callId)
@@ -239,7 +244,7 @@ export class ToolCallFold {
     // The length of the run is readable here and nowhere else: the surface saw
     // the call logged and now sees it answered, and this is the only moment the
     // fold holds both readings of the clock.
-    const ranFor = pending === undefined ? undefined : this.secondsSince(pending.startedAt)
+    const ranFor = pending === undefined ? undefined : this.secondsSince(pending.startedAt, at)
     /** The card that reports this result, carrying the seconds the call took. */
     const finished = (card: ToolCard): ToolCard => (ranFor === undefined ? card : { ...card, elapsed: ranFor })
     // The root is done dispatching, so its bookkeeping goes with it; the rows it

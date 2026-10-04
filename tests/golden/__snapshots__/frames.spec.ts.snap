@@ -191,6 +191,76 @@ exports[`golden frames > renders a question gate collecting a typed answer at 80
 ]
 `;
 
+exports[`golden frames > renders normalized elapsed boundaries at 40 columns 1`] = `
+[
+  [
+    "▶ working 0s · standard ·",
+    "zai-coding-cn/glm-5.3 (max) ·",
+    "workspace-write · ctx 17.5k/1.0M · cache",
+    "87% ·",
+    "~/source/opensource/deepseek-harness/mas",
+    "ter",
+  ],
+  [
+    "▶ working 59s · standard ·",
+    "zai-coding-cn/glm-5.3 (max) ·",
+    "workspace-write · ctx 17.5k/1.0M · cache",
+    "87% ·",
+    "~/source/opensource/deepseek-harness/mas",
+    "ter",
+  ],
+  [
+    "▶ working 1m59s · standard ·",
+    "zai-coding-cn/glm-5.3 (max) ·",
+    "workspace-write · ctx 17.5k/1.0M · cache",
+    "87% ·",
+    "~/source/opensource/deepseek-harness/mas",
+    "ter",
+  ],
+  [
+    "▶ working 59m59s · standard ·",
+    "zai-coding-cn/glm-5.3 (max) ·",
+    "workspace-write · ctx 17.5k/1.0M · cache",
+    "87% ·",
+    "~/source/opensource/deepseek-harness/mas",
+    "ter",
+  ],
+  [
+    "▶ working 1h00m · standard ·",
+    "zai-coding-cn/glm-5.3 (max) ·",
+    "workspace-write · ctx 17.5k/1.0M · cache",
+    "87% ·",
+    "~/source/opensource/deepseek-harness/mas",
+    "ter",
+  ],
+]
+`;
+
+exports[`golden frames > renders normalized elapsed boundaries at 80 columns 1`] = `
+[
+  [
+    "▶ working 0s · standard · zai-coding-cn/glm-5.3 (max) · workspace-write · ctx",
+    "17.5k/1.0M · cache 87% · ~/source/opensource/deepseek-harness/master",
+  ],
+  [
+    "▶ working 59s · standard · zai-coding-cn/glm-5.3 (max) · workspace-write · ctx",
+    "17.5k/1.0M · cache 87% · ~/source/opensource/deepseek-harness/master",
+  ],
+  [
+    "▶ working 1m59s · standard · zai-coding-cn/glm-5.3 (max) · workspace-write · ctx",
+    "17.5k/1.0M · cache 87% · ~/source/opensource/deepseek-harness/master",
+  ],
+  [
+    "▶ working 59m59s · standard · zai-coding-cn/glm-5.3 (max) · workspace-write ·",
+    "ctx 17.5k/1.0M · cache 87% · ~/source/opensource/deepseek-harness/master",
+  ],
+  [
+    "▶ working 1h00m · standard · zai-coding-cn/glm-5.3 (max) · workspace-write · ctx",
+    "17.5k/1.0M · cache 87% · ~/source/opensource/deepseek-harness/master",
+  ],
+]
+`;
+
 exports[`golden frames > renders the dock at 40 columns 1`] = `
 [
   "",

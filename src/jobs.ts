@@ -1,4 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { describeAge } from './ui/picker.ts'
 
 /** Lifecycle states a background job can be in. */
@@ -10,7 +11,7 @@ export interface JobSummary {
   readonly kind: string
   readonly label: string
   readonly status: JobStatus
-  readonly startedAt: number
+  readonly startedAt: number | undefined
   readonly finishedAt: number | undefined
 }
 
@@ -27,6 +28,8 @@ export const DOCK_JOB_LIMIT = 2
 export const JOB_READ_LINES = 20
 
 const JOB_ACTION_ARGUMENT_COUNT = 2
+/** UI reads start at retained history rather than advancing the model's cursor. */
+const JOB_OUTPUT_START_OFFSET = 0
 const JOB_EXTRA_ARGUMENT_REASON = 'accepts only a job id; use /jobs read <id> or /jobs kill <id>'
 
 const SECOND_MS = 1000
@@ -40,10 +43,11 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
 
 /** How long a job ran, or has been running, in the reader's units. */
 export function describeDuration(ms: number): string {
-  // A positive whole-second minimum keeps subsecond work from displaying as no time spent.
-  const elapsed = Math.max(0, ms)
-  if (elapsed < MINUTE_MS) return `${Math.max(1, Math.round(elapsed / SECOND_MS))}s`
-  if (elapsed < HOUR_MS) return `${Math.floor(elapsed / MINUTE_MS)}m${String(Math.round((elapsed % MINUTE_MS) / SECOND_MS)).padStart(2, '0')}s`
+  // Whole elapsed seconds never claim time that has not passed or produce a 60-second remainder.
+  if (!Number.isFinite(ms)) return 'unknown'
+  const elapsed = Math.floor(Math.max(0, ms) / SECOND_MS) * SECOND_MS
+  if (elapsed < MINUTE_MS) return `${elapsed / SECOND_MS}s`
+  if (elapsed < HOUR_MS) return `${Math.floor(elapsed / MINUTE_MS)}m${String((elapsed % MINUTE_MS) / SECOND_MS).padStart(2, '0')}s`
   return `${Math.floor(elapsed / HOUR_MS)}h${String(Math.floor((elapsed % HOUR_MS) / MINUTE_MS)).padStart(2, '0')}m`
 }
 
@@ -54,8 +58,9 @@ export function isLive(status: JobStatus): boolean {
 
 /** When a settled job ended, in the reader's units. */
 function describeFinished(job: JobSummary, now: number): string {
-  // Missing finish metadata still permits an age label, but its fallback measures age since start, not completion.
-  const finishedAt = job.finishedAt ?? job.startedAt
+  // A missing completion timestamp cannot establish when the job actually settled.
+  const finishedAt = job.finishedAt
+  if (finishedAt === undefined) return 'time unknown'
   const elapsed = Math.max(0, now - finishedAt)
   if (elapsed < SECOND_MS) return 'just now'
   return elapsed < MINUTE_MS ? `${describeDuration(elapsed)} ago` : describeAge(finishedAt, now)
@@ -64,7 +69,7 @@ function describeFinished(job: JobSummary, now: number): string {
 /** One job as a single row, with its duration and where it ended up. */
 export function describeJob(job: JobSummary, now: number): string {
   const time = isLive(job.status)
-    ? `${job.status} ${describeDuration(now - job.startedAt)}`
+    ? `${job.status} ${job.startedAt === undefined ? 'duration unknown' : describeDuration(now - job.startedAt)}`
     : `${job.status} ${describeFinished(job, now)}`
   const label = job.label.trim() === '' ? job.kind : job.label
   return `${job.id} · ${time} — ${label}`
@@ -76,7 +81,7 @@ export function describeJobs(jobs: readonly JobSummary[], now: number): string {
   const live = jobs.filter(job => isLive(job.status)).length
   const header = `jobs · ${jobs.length}${live === 0 ? '' : ` (${live} running)`}`
   const rows = [...jobs]
-    .sort((left, right) => right.startedAt - left.startedAt)
+    .sort((left, right) => (right.startedAt ?? 0) - (left.startedAt ?? 0))
     .slice(0, JOB_READ_LINES)
     .map(job => `  ${describeJob(job, now)}`)
   return [header, ...rows].join('\n')
@@ -104,10 +109,11 @@ export function parseJobsArgument(argument: string): JobsCommand | { readonly ki
 /** The part of the job registry this surface uses, described structurally. */
 // Listing remains useful without action or watch capabilities, so those methods are optional.
 interface JobRegistryLike {
-  list?(caller?: unknown): readonly unknown[]
-  read?(id: string, caller?: unknown): unknown
-  kill?(id: string, caller?: unknown, reason?: string): unknown
-  onJobsChanged?(listener: (owner?: unknown) => void): () => void
+  list?(caller: SessionId): readonly unknown[]
+  get?(id: string, caller: SessionId): unknown
+  readAt?(id: string, from: number, caller: SessionId): unknown
+  kill?(id: string, caller: SessionId, reason?: string): unknown
+  readonly events?: { subscribe(filter: { readonly owners: 'all' }, listener: (event: unknown) => void): () => void }
 }
 
 // Keep identifiable jobs visible without display metadata; fallback timestamps do not establish actual job times.
@@ -121,19 +127,19 @@ function toSummary(value: unknown): JobSummary | undefined {
     kind: typeof record?.kind === 'string' ? record.kind : 'job',
     label: typeof record?.label === 'string' ? record.label : '',
     status: status as JobStatus,
-    // Use epoch rather than refresh time so missing metadata does not make a job appear newly started.
-    startedAt: typeof record?.startedAt === 'number' ? record.startedAt : 0,
-    finishedAt: typeof record?.finishedAt === 'number' ? record.finishedAt : undefined,
+    // Missing or invalid timestamps cannot establish a duration or completion age.
+    startedAt: typeof record?.startedAt === 'number' && Number.isFinite(record.startedAt) ? record.startedAt : undefined,
+    finishedAt: typeof record?.finishedAt === 'number' && Number.isFinite(record.finishedAt) ? record.finishedAt : undefined,
   }
 }
 
 /** The background-job registry, when the composition mounts one. */
 export interface JobDirectory {
-  list(caller: unknown): readonly JobSummary[]
-  read(caller: unknown, id: string): { readonly text: string; readonly snapshot: JobSummary | undefined } | undefined
-  kill(caller: unknown, id: string): 'requested' | 'already-finished' | undefined
+  list(caller: SessionId): readonly JobSummary[]
+  read(caller: SessionId, id: string): { readonly text: string; readonly snapshot: JobSummary | undefined } | undefined
+  kill(caller: SessionId, id: string): 'requested' | 'already-finished' | undefined
   /** Watch for changes; the callback receives the owner the change belongs to. */
-  watch(listener: (owner: unknown) => void): () => void
+  watch(listener: (owner: SessionId | undefined) => void): () => void
 }
 
 /**
@@ -143,8 +149,8 @@ export interface JobDirectory {
  * part of the surface a resume cannot reconstruct: the dock shows what this
  * run started, and says so by simply being empty afterwards.
  *
- * Forward the driving agent as caller so the registry decides which jobs that
- * agent may access. Preserve change owners so the watcher can ignore other
+ * Forward the driven session ID because the registry authorizes callers by
+ * session, not Agent identity. Preserve change owners so the watcher ignores other
  * sessions without losing ownerless refreshes.
  */
 export function createJobDirectory(ctx: Context): JobDirectory | undefined {
@@ -156,11 +162,13 @@ export function createJobDirectory(ctx: Context): JobDirectory | undefined {
       return summary === undefined ? [] : [summary]
     }),
     read: (caller, id) => {
-      const result = asRecord(registry.read?.(id, caller))
+      // UI reads must not advance the model's output cursor or consume its completion result.
+      const result = asRecord(registry.readAt?.(id, JOB_OUTPUT_START_OFFSET, caller))
       if (result === undefined) return undefined
+      const chunks = Array.isArray(result.chunks) ? result.chunks : []
       return {
-        text: typeof result.text === 'string' ? result.text : '',
-        snapshot: toSummary(result.snapshot),
+        text: chunks.map(chunk => asRecord(chunk)?.text).filter((text): text is string => typeof text === 'string').join(''),
+        snapshot: toSummary(registry.get?.(id, caller)),
       }
     },
     kill: (caller, id) => {
@@ -168,8 +176,12 @@ export function createJobDirectory(ctx: Context): JobDirectory | undefined {
       return outcome === 'requested' || outcome === 'already-finished' ? outcome : undefined
     },
     watch: listener => {
-      if (typeof registry.onJobsChanged !== 'function') return () => {}
-      return registry.onJobsChanged(listener)
+      if (typeof registry.events?.subscribe !== 'function') return () => {}
+      return registry.events.subscribe({ owners: 'all' }, event => {
+        const record = asRecord(event)
+        const owner = record?.owner ?? asRecord(record?.job)?.owner
+        if (owner === undefined || typeof owner === 'string') listener(owner as SessionId | undefined)
+      })
     },
   }
 }

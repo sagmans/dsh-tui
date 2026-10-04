@@ -421,6 +421,7 @@ export function apply(ctx: Context, config: unknown): void {
     acceptCatalog: info => backgroundWork.acceptCatalog(info),
     resetRoster: () => backgroundWork.resetRoster(),
     refreshJobs: () => backgroundWork.refresh(),
+    liveDurations: () => backgroundWork.running() || sessionView.model.hasLiveTiming(),
     herdr,
     moshi,
     writeTerminal,

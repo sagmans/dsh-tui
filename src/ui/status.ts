@@ -1,5 +1,6 @@
 import { type Component, visibleWidth, wrapTextWithAnsi } from '@earendil-works/pi-tui'
 import { oneRow } from '../text.ts'
+import { describeDuration } from '../jobs.ts'
 import { formatTokens } from '../tokens.ts'
 import type { TuiToken } from '../theme-tokens.ts'
 import type { TuiTheme } from '../theme.ts'
@@ -36,8 +37,6 @@ export interface StatusFacts {
   readonly home: string | undefined
 }
 
-const SECOND_MS = 1000
-const MINUTE_MS = 60 * SECOND_MS
 /** Path segments kept for a directory outside the home; a terminal row is not a file browser. */
 const PATH_SEGMENTS = 2
 /** What sits between two facts that do not qualify each other. */
@@ -78,15 +77,6 @@ function shortPath(path: string, home: string | undefined): string {
 }
 
 /**
- * Whole seconds keep the running-time cue compact; the minimum avoids a zero-time label for an active turn.
- * This is an approximate footer cue, not a normalized duration: minute-boundary rounding can leave a 60s remainder.
- */
-function elapsed(ms: number): string {
-  if (ms < MINUTE_MS) return `${Math.max(1, Math.round(ms / SECOND_MS))}s`
-  return `${Math.floor(ms / MINUTE_MS)}m${String(Math.round((ms % MINUTE_MS) / SECOND_MS)).padStart(2, '0')}s`
-}
-
-/**
  * One line of state, ordered by what a reader asks first: is it working, what is
  * it, how full is the context, and where am I.
  *
@@ -114,7 +104,7 @@ function formatStatus(facts: StatusFacts, width: number, theme: TuiTheme): strin
     push('status.activity.working', `${WORKING_MARK} working`)
     // Elapsed carries its own token so it can be toned apart from the activity,
     // but it qualifies that activity, so it attaches rather than standing alone.
-    if (facts.elapsedMs !== undefined) push('status.elapsed', ` ${elapsed(facts.elapsedMs)}`, true)
+    if (facts.elapsedMs !== undefined) push('status.elapsed', ` ${describeDuration(facts.elapsedMs)}`, true)
   } else {
     push('status.activity.ready', `${READY_MARK} ready`)
   }

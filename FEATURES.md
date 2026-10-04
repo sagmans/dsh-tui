@@ -16,6 +16,14 @@ Action discovery in `/keys` does not prove keyboard dispatch.
 Golden frames remain visual regression checks.
 Neither snapshots nor a clean boot prove full feature behavior.
 
+## Duration indicators
+
+The free `timers` scenario mounts a test-owned workload in a credential-free profile.
+It verifies registry ownership, non-consuming UI reads, job cancellation, and clock repainting after parent settlement.
+It also checks tool duration after replay, duplicate child starts, and unknown runtimes for end-only children.
+Golden frames pin zero, minute, and hour boundaries without rounding time forward.
+Paid model usage and physical window focus checks remain demand-only.
+
 ## Free verification after development
 
 1. Run `pnpm verify` after every development change.
