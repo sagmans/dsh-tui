@@ -8,6 +8,8 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-10-04
+
 ### Changed
 
 - Preserve global commit-message, DCO, and signature policy when repository-local hooks add TypeScript and Knip gates.
@@ -1223,7 +1225,8 @@ Not published: release signature verification failed. Its changes ship in 0.12.1
 - Publication through npm OIDC trusted publishing, with the first version
   bootstrapped by hand ([#5](https://github.com/sagmans/dsh-tui/pull/5)).
 
-[Unreleased]: https://github.com/sagmans/dsh-tui/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/sagmans/dsh-tui/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/sagmans/dsh-tui/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/sagmans/dsh-tui/compare/v0.12.1...v0.13.0
 [0.12.1]: https://github.com/sagmans/dsh-tui/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/sagmans/dsh-tui/compare/v0.11.2...v0.12.0
