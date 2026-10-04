@@ -35,6 +35,7 @@ const EVIDENCE_PREFIX = '/var/tmp/dsh-tui-herdr-'
 const TERMINAL = 'xterm-256color'
 const PERMISSION_MODE = 'workspace-write'
 const ENABLED = '1'
+const SIGNAL_EXIT_CODES = { SIGINT: 130, SIGTERM: 143 }
 const PRIVATE_CONFIG = [
   'onboarding = false',
   '[terminal]',
@@ -76,11 +77,19 @@ sessionEnv.HERDR_ENV = ENABLED
 sessionEnv.HERDR_CONFIG_PATH = config
 sessionEnv.HERDR_SESSION = session
 const quote = value => "'" + String(value).replaceAll("'", "'\"'\"'") + "'"
+const INPUT_FIELDS = new Set(['command', 'key', 'type', 'prompt', 'paste', 'outerZoom', 'resize', 'signal'])
+const observations = new Map()
 const results = []
 let outer
 let pane
 let started = false
 let cleanup = 'not-started'
+let cancelled
+let cleaning = false
+const cleanupErrors = []
+const signalHandlers = Object.fromEntries(Object.keys(SIGNAL_EXIT_CODES).map(signal => [signal, () => { cancelled ??= signal }]))
+for (const [signal, handler] of Object.entries(signalHandlers)) process.on(signal, handler)
+const herdrVersion = cli(['--version'], parentEnv).trim()
 
 /** Nonzero transport exits must never masquerade as successful key dispatch. */
 function cli(args, env = sessionEnv) {
@@ -99,6 +108,7 @@ async function wait(predicate, label, read = visible) {
   const deadline = Date.now() + DEADLINE_MS
   let last = ''
   while (Date.now() < deadline) {
+    if (cancelled && !cleaning) throw new Error('herdr dogfood: cancelled by ' + cancelled)
     last = read()
     if (predicate(last)) {
       await delay(SETTLE_MS)
@@ -118,6 +128,8 @@ function clean(path) {
 }
 
 async function run(scenario) {
+  const steps = []
+  observations.set(scenario.id, steps)
   const folder = join(evidence, scenario.id)
   const home = join(folder, 'home')
   const workspace = join(folder, 'workspace')
@@ -156,6 +168,9 @@ async function run(scenario) {
     save(join(folder, '000.txt'), visible())
     for (let i = 0; i < scenario.steps.length; i++) {
       const step = scenario.steps[i]
+      // Retain attempts as distinct from postconditions so a transport receipt cannot inflate behavior proof.
+      const observation = { index: i + 1, status: 'attempted', input: Object.fromEntries(Object.entries(step).filter(([name]) => INPUT_FIELDS.has(name))), postconditions: Object.fromEntries(Object.entries(step).filter(([name]) => !INPUT_FIELDS.has(name))), artifact: scenario.id + '/' + String(i + 1).padStart(3, '0') + '.txt' }
+      steps.push(observation)
       const before = visible()
       if (step.command !== undefined) {
         if (/[\x00-\x1f\x7f]/u.test(step.command) || !INVENTORY.commands.some(row => row.command === step.command.split(' ')[0])) throw new Error('herdr dogfood: nonlocal or unsafe command')
@@ -199,7 +214,9 @@ async function run(scenario) {
           return (step.expect === undefined || value.includes(normalized(step.expect))) && (step.absent === undefined || !value.includes(normalized(step.absent))) && (!step.changed || text !== before) && (!step.settled || text.trimEnd().split('\n').slice(-4).some(line => line.includes('ready')))
         }, JSON.stringify(step.expect ?? step.absent ?? 'changed frame'))
       } else if (step.file === undefined) throw new Error('herdr dogfood: missing postcondition')
-      save(join(folder, String(i + 1).padStart(3, '0') + '.txt'), visible())
+      const observed = visible()
+      save(join(folder, String(i + 1).padStart(3, '0') + '.txt'), observed)
+      Object.assign(observation, { status: 'postconditions-satisfied', frameChanged: observed !== before })
     }
     if (!existsSync(exitFile)) { key('ctrl+c'); key('ctrl+u'); cli(['pane', 'send-text', pane, '/quit']); key('ctrl+s') }
     await wait(() => existsSync(exitFile), 'durable process exit')
@@ -208,7 +225,7 @@ async function run(scenario) {
     await wait(text => text.includes(SHELL_MARKER), 'usable shell restoration')
     save(join(folder, 'final.txt'), visible())
   } catch (error) {
-    save(join(folder, 'failed.txt'), visible())
+    try { save(join(folder, 'failed.txt'), visible()) } catch (observationError) { console.error(observationError.message) }
     throw error
   } finally {
     if (existsSync(exitFile)) clean(home)
@@ -216,10 +233,12 @@ async function run(scenario) {
 }
 
 const report = () => save(join(evidence, 'report.json'), JSON.stringify({
-  transport: 'herdr', session, cleanup,
+  transport: 'herdr', session, resources: { outer, pane, started }, cleanup, cleanupErrors, cancelled: cancelled ?? null,
+  runtime: { node: process.version, platform: process.platform, arch: process.arch },
+  preconditions: { managedCaller: process.env.HERDR_ENV === ENABLED, credentials: 'excluded', profileHome: 'private', shell: 'non_login', serverHome: 'account HOME; private XDG; remote update checks disabled' },
   revision: spawnSync('git', ['rev-parse', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).stdout.trim(),
   dirty: spawnSync('git', ['status', '--porcelain'], { cwd: ROOT, encoding: 'utf8' }).stdout.trim() !== '',
-  herdrVersion: cli(['--version'], parentEnv).trim(), scenarios: results,
+  herdrVersion, scenarios: results.map(row => ({ ...row, steps: observations.get(row.id) ?? [] })),
   featureCoverage: INVENTORY.features.map(feature => ({ id: feature.id, scenarios: feature.scenarios.map(id => ({ id, status: results.find(row => row.id === id)?.status ?? 'not-run-on-herdr' })) })),
   limits: ['Current pane cells and durable effects only; no physical keyboard or hardware-latency proof.', 'Shell usability is restoration evidence; standalone PTY gate owns raw escape restoration assertions.'],
 }, null, 2) + '\n')
@@ -253,29 +272,45 @@ try {
     report()
   }
 } catch (error) {
-  if (outer) save(join(evidence, 'startup-failed.txt'), cli(['pane', 'read', outer, '--source', 'recent', '--lines', '80', '--format', 'text'], parentEnv))
+  if (outer) {
+    try { save(join(evidence, 'startup-failed.txt'), cli(['pane', 'read', outer, '--source', 'recent', '--lines', '80', '--format', 'text'], parentEnv)) }
+    catch (observationError) { console.error(observationError.message) }
+  }
   console.error(error.message); process.exitCode = 1
 } finally {
-  try {
-    if (started) {
+  cleaning = true
+  // One failed cleanup must not strand independently owned panes or credential-free homes.
+  const attempt = operation => {
+    try { operation() } catch (error) { cleanupErrors.push(error.message); console.error(error.message) }
+  }
+  if (started) {
+    let owned
+    attempt(() => {
       const current = json(['session', 'list', '--json'])
-      const owned = (Array.isArray(current) ? current : current.sessions)?.find(row => row.name === session)
-      if (owned?.running) cli(['session', 'stop', session, '--json'])
-      if (owned) cli(['session', 'delete', session, '--json'])
+      owned = (Array.isArray(current) ? current : current.sessions)?.find(row => row.name === session)
+    })
+    if (owned?.running) attempt(() => cli(['session', 'stop', session, '--json']))
+    if (owned) attempt(() => cli(['session', 'delete', session, '--json']))
+    attempt(() => {
       const listed = json(['session', 'list', '--json'])
       const sessions = Array.isArray(listed) ? listed : listed.sessions
       if (!Array.isArray(sessions) || sessions.some(row => row.name === session)) throw new Error('herdr dogfood: owned session survived cleanup')
-    }
-    if (outer) {
-      cli(['pane', 'close', outer], parentEnv)
+    })
+  }
+  if (outer) {
+    attempt(() => cli(['pane', 'close', outer], parentEnv))
+    attempt(() => {
       if (json(['pane', 'list'], parentEnv).result.panes.some(row => row.pane_id === outer)) throw new Error('herdr dogfood: outer pane survived cleanup')
-    }
-    for (const scenario of selected) {
-      const home = join(evidence, scenario.id, 'home')
-      if (existsSync(home)) clean(home)
-    }
-    cleanup = 'verified'
-  } catch (error) { cleanup = 'failed'; console.error(error.message); process.exitCode = 1 }
+    })
+  }
+  for (const scenario of selected) {
+    const home = join(evidence, scenario.id, 'home')
+    if (existsSync(home)) attempt(() => clean(home))
+  }
+  cleanup = cleanupErrors.length ? 'failed' : 'verified'
+  if (cleanupErrors.length) process.exitCode = 1
+  if (cancelled) process.exitCode = SIGNAL_EXIT_CODES[cancelled]
   report()
+  for (const [signal, handler] of Object.entries(signalHandlers)) process.removeListener(signal, handler)
 }
 console.log('herdr dogfood: ' + results.filter(row => row.status === 'passed').length + '/' + selected.length + ' passed; cleanup ' + cleanup)

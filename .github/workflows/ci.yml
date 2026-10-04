@@ -52,6 +52,7 @@ jobs:
           version="$(node -p 'Object.keys(require("./package.json").dsh.compatibility.dshReleases)[0]')"
           npm install --prefix "$RUNNER_TEMP/dsh-dogfood-host" --ignore-scripts --no-audit --no-fund "@deepseek-ai/dsh@$version"
           npm audit signatures --prefix "$RUNNER_TEMP/dsh-dogfood-host"
+      # No managed Herdr caller exists here: native evidence stays unavailable, never simulated or marked passed.
       - name: Free actual-profile dogfood
         run: pnpm dogfood --launcher "$RUNNER_TEMP/dsh-dogfood-host/node_modules/.bin/dsh"
       # The manifest and the tree it describes must name the same harness

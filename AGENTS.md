@@ -26,6 +26,8 @@ History: [CHANGELOG.md](CHANGELOG.md).
 Run `pnpm verify` after every development change. It runs golden frames, native
 PTY checks, and free real-profile dogfood automatically. Do not add unit tests.
 Golden tests and their fixtures remain supported.
+With `HERDR_ENV=1`, the free gate also verifies real pane workflows in an owned disposable named Herdr session.
+Without Herdr, report `environment-not-run`; never replace native behavior proof with successful key dispatch alone.
 
 CI also checks dependency signatures and consumer installation; the consumer
 gate needs Docker. Free dogfood starts the installed, verified Harness with the

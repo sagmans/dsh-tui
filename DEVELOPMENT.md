@@ -23,6 +23,8 @@ node tools/install-smoke.mjs  # requires Docker with a running daemon
 Unit tests are not maintained. Golden tests remain visual regression checks, not actual-use proof.
 Run `pnpm verify` after development: free real-profile dogfood runs automatically.
 [FEATURES.md](FEATURES.md) defines scope and evidence requirements.
+In a Herdr-managed caller, the same gate also runs real native-pane workflows in a disposable named session.
+Without that prerequisite, the report records unavailable native evidence; portable PTY checks still run.
 
 Golden tests do not prove native terminal behaviour. `pnpm test:terminal` checks native widgets in a credential-free PTY.
 It checks ASCII, Unicode, paste, Kitty press/repeat/release, redraw limits, resize, and terminal restoration during styled streaming.

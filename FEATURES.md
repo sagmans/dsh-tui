@@ -39,6 +39,26 @@ The gate checks current terminal cells, durable exports, private file permission
 Native-widget PTY checks supplement the full-profile runs.
 A status receipt establishes the command plane before keyboard scenarios; the initial ready footer alone is insufficient.
 
+## Herdr transport
+
+In a Herdr-managed caller (`HERDR_ENV=1`), the free gate also runs `tools/dogfood-herdr.mjs`.
+The runner uses real `pane send-keys`, current terminal cells, changed geometry, and private scratch profiles.
+A disposable named session and an owned outer pane keep this work separate from live conversations.
+Cleanup verifies session deletion, pane removal, and shell usability.
+
+Herdr server startup needs the account HOME.
+Its XDG paths and configuration remain private.
+A non-login `/bin/sh` avoids account shell startup files; remote update checks remain disabled.
+Profile processes still use private HOME and DSH_HOME without copied credentials.
+
+Herdr 0.9.1 refuses native `delete`, `pageup`, and `pagedown` key names.
+Native editing and search scenarios use explicit custom bindings where necessary.
+These bindings verify action effects, not delivery of unsupported default key names.
+
+Without a managed caller, the report records `environment-not-run`, not a pass.
+Inside a managed caller, a missing CLI or failed native assertion fails the free gate.
+SIGINT and SIGTERM produce cancellation evidence and independent cleanup attempts for each owned resource.
+
 ## Paid live-model verification
 
 Paid work requires explicit human demand.
@@ -74,7 +94,10 @@ Never point either driver at the live home.
 
 ## Evidence and limits
 
-`report.json` records scenario outcomes and the feature-to-scenario matrix.
+`report.json` records runtime, transport outcomes, prerequisites, cleanup, and the feature-to-scenario matrix.
+Each step records attempted input, stated postconditions, an artifact path, and observed cell changes.
+`postconditions-satisfied` does not prove internal handler invocation or an unspecified keyboard action.
+The matrix keeps portable and Herdr results separate.
 The runner saves current screens, raw terminal output, CLI output, and failure screens in a private temporary directory.
 Free scratch homes are removed after each scenario.
 Evidence remains available for review.

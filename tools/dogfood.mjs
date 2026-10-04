@@ -53,6 +53,9 @@ const PRIVATE_FILE_MODE = 0o600
 const TERMINAL_NAME = 'xterm-256color'
 const ISOLATION_SENTINEL = 'dogfood-isolation-sentinel'
 const ENABLED_ENV_VALUE = '1'
+const HERDR_GATE_TIMEOUT_MS = 15 * 60 * 1000
+const HERDR_RUNNER = join(ROOT, 'tools/dogfood-herdr.mjs')
+const HERDR_EVIDENCE = /evidence (\S+)/u
 const PERMISSION_MODE = 'workspace-write'
 const EVIDENCE_PREFIX = 'dsh-tui-dogfood-'
 const READY = 'ready'
@@ -104,16 +107,19 @@ if (process.platform === 'darwin') {
 }
 const evidence = realpathSync(mkdtempSync(join(tmpdir(), EVIDENCE_PREFIX)))
 chmodSync(evidence, PRIVATE_DIR_MODE)
+const INPUT_FIELDS = new Set(['command', 'key', 'type', 'prompt', 'paste', 'outerZoom', 'resize', 'signal'])
+const observations = new Map()
 const results = []
+let herdr = { status: paid ? 'paid-not-run' : 'environment-not-run', reason: paid ? 'Paid verification does not automatically bill another transport.' : 'Requires HERDR_ENV=1 and the installed Herdr CLI.' }
 const featureCoverage = () => INVENTORY.features.map(feature => ({
   id: feature.id, cost: feature.cost,
   scope: feature.description,
-  scenarios: feature.scenarios.map(id => ({ id, status: results.find(row => row.id === id)?.status ?? (SCENARIOS.paid.some(row => row.id === id) ? 'paid-not-run' : SCENARIOS.manual.some(row => row.id === id) ? 'environment-not-run' : 'not-run') })),
+  scenarios: feature.scenarios.map(id => ({ id, status: results.find(row => row.id === id)?.status ?? herdr.scenarios?.find(row => row.id === id)?.status ?? (SCENARIOS.paid.some(row => row.id === id) ? 'paid-not-run' : SCENARIOS.manual.some(row => row.id === id) || SCENARIOS.herdr?.some(row => row.id === id) ? 'environment-not-run' : 'not-run'), transports: { pty: results.find(row => row.id === id)?.status ?? 'not-run', herdr: herdr.scenarios?.find(row => row.id === id)?.status ?? (herdr.status === 'passed' ? 'not-selected-on-herdr' : herdr.status) } })),
 }))
 const report = () => writeFileSync(join(evidence, 'report.json'), JSON.stringify({
   revision: spawnSync('git', ['rev-parse', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).stdout.trim(),
   dirty: spawnSync('git', ['status', '--porcelain'], { cwd: ROOT, encoding: 'utf8' }).stdout.trim() !== '',
-  paid, featureCoverage: featureCoverage(), note: 'Scenario success is not exhaustive permutation or physical-device proof. Catalog visibility is not dispatch proof.', scenarios: results, deferredPaid: paid ? [] : SCENARIOS.paid.map(row => row.id),
+  paid, runtime: { node: process.version, platform: process.platform, arch: process.arch }, transports: { pty: 'real-installed-profile', herdr }, featureCoverage: featureCoverage(), note: 'Scenario success is not exhaustive permutation or physical-device proof. Catalog visibility is not dispatch proof.', scenarios: results.map(row => ({ ...row, steps: observations.get(row.id) ?? [] })), deferredPaid: paid ? [] : SCENARIOS.paid.map(row => row.id),
 }, null, 2) + '\n', { mode: PRIVATE_FILE_MODE })
 
 /** Only paths exclusively allocated by this run are eligible for recursive cleanup. */
@@ -138,6 +144,8 @@ function prepareHome(id) {
 
 /** A scenario passes only after its visible or durable postconditions and terminal restoration pass. */
 async function run(scenario, reused) {
+  const steps = []
+  observations.set(scenario.id, steps)
   const folder = join(evidence, scenario.id)
   mkdirSync(folder, { recursive: true, mode: PRIVATE_DIR_MODE })
   const home = reused?.home ?? (paid ? realpathSync(option('--home')) : prepareHome(scenario.id))
@@ -275,6 +283,9 @@ async function run(scenario, reused) {
     }
     for (let i = 0; i < scenario.steps.length; i++) {
       const step = scenario.steps[i]
+      // Retain attempts as distinct from postconditions so a transport receipt cannot inflate behavior proof.
+      const observation = { index: i + 1, status: 'attempted', input: Object.fromEntries(Object.entries(step).filter(([name]) => INPUT_FIELDS.has(name))), postconditions: Object.fromEntries(Object.entries(step).filter(([name]) => !INPUT_FIELDS.has(name))), artifact: scenario.id + '/' + String(i + 1).padStart(3, '0') + '.txt' }
+      steps.push(observation)
       const before = generation
       priorScreen = screen.text()
       const rawBefore = raw.length
@@ -321,6 +332,7 @@ async function run(scenario, reused) {
       } else if (step.file === undefined) throw new Error(`dogfood: step ${i + 1} has no postcondition`)
       if (step.osc52 && !raw.slice(rawBefore).includes(OSC52_PREFIX)) throw new Error('dogfood: no OSC52 transport after copy')
       snapshot(i + 1)
+      Object.assign(observation, { status: 'postconditions-satisfied', frameChanged: screen.text() !== priorScreen })
     }
     if (status === undefined) {
       child.write(KEYS['ctrl+c'] + KEYS['ctrl+u'] + '/quit' + KEYS['ctrl+s'])
@@ -366,4 +378,30 @@ for (const scenario of selected) {
   }
   report()
 }
+// The portable gate always runs; native Herdr checks add independent evidence only in a managed caller.
+if (!paid && !process.exitCode && process.env.HERDR_ENV === ENABLED_ENV_VALUE) {
+  try {
+    const list = spawnSync(process.execPath, [HERDR_RUNNER, '--list'], { encoding: 'utf8', timeout: HERDR_GATE_TIMEOUT_MS, maxBuffer: MAX_RAW_BYTES })
+    if (list.error || list.status !== 0) throw new Error('dogfood: Herdr scenario discovery failed')
+    const available = list.stdout.trim().split('\n')
+    if (!supplied('--scenario') || available.includes(option('--scenario'))) {
+      const args = [HERDR_RUNNER]
+      for (const name of ['--scenario', '--launcher']) if (supplied(name)) args.push(name, option(name))
+      const native = spawnSync(process.execPath, args, { encoding: 'utf8', timeout: HERDR_GATE_TIMEOUT_MS, maxBuffer: MAX_RAW_BYTES })
+      process.stdout.write(native.stdout ?? '')
+      process.stderr.write(native.stderr ?? '')
+      const path = HERDR_EVIDENCE.exec(native.stdout ?? '')?.[1]
+      if (path === undefined) throw new Error('dogfood: Herdr evidence path missing')
+      const nativeReport = JSON.parse(readFileSync(join(path, 'report.json'), 'utf8'))
+      herdr = { status: native.status === 0 && !native.error ? 'passed' : 'failed', evidence: path, ...nativeReport }
+      if (native.error || native.status !== 0 || nativeReport.cleanup !== 'verified') throw new Error('dogfood: Herdr gate failed')
+    } else herdr = { status: 'not-selected-on-herdr', reason: 'Selected scenario belongs to the portable transport.' }
+  } catch (error) {
+    herdr = { ...herdr, status: 'failed', error: error.message }
+    console.error(error.message)
+    process.exitCode = 1
+  }
+} else if (!paid && process.exitCode) herdr = { status: 'not-run', reason: 'Portable profile verification failed first.' }
+report()
+console.log('dogfood: Herdr ' + herdr.status + (herdr.reason ? '; ' + herdr.reason : ''))
 console.log(`dogfood: ${results.filter(row => row.status === 'passed').length}/${selected.length} scenarios passed; paid scenarios ${paid ? 'requested' : 'not run'}`)

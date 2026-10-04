@@ -10,6 +10,8 @@ breaking change, and a patch carries only fixes.
 
 ### Changed
 
+- Free development verification automatically includes available Herdr workflows. Reports separate attempted input, postconditions, cell changes, and transport prerequisites. Cancellation preserves owned-resource cleanup evidence.
+
 - Paid dogfood can select and verify an explicit reasoning effort before billing. Actual-model fixtures now check visible Mermaid fallback, recovered queued drafts, and child navigation without depending on assistant wording.
 
 - Replace TypeScript and Python unit suites with actual-use dogfooding. Preserve golden frame snapshots. Free profile checks run automatically without credentials; paid model checks require explicit demand. Feature inventory distinguishes scope from verified behavior.
