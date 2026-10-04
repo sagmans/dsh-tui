@@ -43,6 +43,10 @@ Each profile composes the installed base bundle and the current worktree.
 The runner creates private homes and workspaces without copying credentials or live state.
 Its environment excludes model credentials, existing agent-pane coordinates, and notification credentials.
 Free input submits only local surface commands.
+The pruning scenario mounts a scratch-only event fixture and publishes native session events without executing tools or billing a model.
+It checks retained PTC cards, nested calls, subsequent ordinary results, and durable exports before and after restart.
+A fresh-process stored-child view separately checks the persistence adapter, where reconstructed events can lose replacement metadata.
+These checks prove live, resumed, and stored-session presentation, not model reasoning or tool dispatch.
 Model prompts require the separate paid mode.
 
 The gate checks current terminal cells, durable exports, private file permissions, persisted restart, actual editor handoff, and terminal restoration.

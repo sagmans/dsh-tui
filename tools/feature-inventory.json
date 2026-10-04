@@ -346,12 +346,15 @@
     },
     {
       "id": "ptc",
-      "description": "Nested call summary, expansion, dispatch order, failures and program results",
+      "description": "Nested call summary, expansion, dispatch order, failures, program results and context-only pruning",
       "cost": "paid",
       "scenarios": [
+        "ptc-result-pruning",
         "ptc"
       ],
       "sources": [
+        "src/transcript.ts",
+        "src/agent/history.ts",
         "src/transcript/tool-calls.ts",
         "src/ui/view.ts"
       ]

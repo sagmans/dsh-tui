@@ -2,6 +2,165 @@
   "schemaVersion": 1,
   "free": [
     {
+      "id": "ptc-result-pruning",
+      "tool": "pruning",
+      "steps": [
+        {
+          "command": "/rename dogfood-pruning-seed",
+          "expect": "active PTC result",
+          "changed": true
+        },
+        {
+          "expect": "retained PTC result"
+        },
+        {
+          "key": "ctrl+y",
+          "expect": "marker.txt"
+        },
+        {
+          "command": "/rename dogfood-pruning-apply",
+          "expect": "active PTC result",
+          "absent": "tool tool",
+          "changed": true
+        },
+        {
+          "expect": "retained PTC result"
+        },
+        {
+          "expect": "marker.txt"
+        },
+        {
+          "command": "/rename dogfood-pruning-finish",
+          "expect": "active PTC result",
+          "absent": "tool tool",
+          "changed": true
+        },
+        {
+          "command": "/export pruning.md",
+          "expect": "transcript written to"
+        },
+        {
+          "file": "pruning.md",
+          "contains": "retained-program-output"
+        },
+        {
+          "file": "pruning.md",
+          "contains": "active-program-output"
+        },
+        {
+          "file": "pruning.md",
+          "contains": "- read marker.txt"
+        },
+        {
+          "file": "pruning.md",
+          "excludes": "[pruned-context-only]"
+        },
+        {
+          "file": "pruning.md",
+          "excludes": "### tool: tool"
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ],
+      "continuation": {
+        "steps": [
+          {
+            "command": "/status",
+            "expect": "retained PTC result",
+            "absent": "tool tool"
+          },
+          {
+            "expect": "active PTC result"
+          },
+          {
+            "key": "ctrl+y",
+            "expect": "marker.txt"
+          },
+          {
+            "command": "/export resumed.md",
+            "expect": "transcript written to"
+          },
+          {
+            "file": "resumed.md",
+            "contains": "retained-program-output"
+          },
+          {
+            "file": "resumed.md",
+            "contains": "active-program-output"
+          },
+          {
+            "file": "resumed.md",
+            "contains": "- read marker.txt"
+          },
+          {
+            "file": "resumed.md",
+            "excludes": "[pruned-context-only]"
+          },
+          {
+            "file": "resumed.md",
+            "excludes": "### tool: tool"
+          },
+          {
+            "command": "/quit",
+            "exit": true
+          }
+        ],
+        "continuation": {
+          "newSession": true,
+          "steps": [
+            {
+              "command": "/rename dogfood-pruning-view:{sessionId}",
+              "expect": "subagent dogfood finished",
+              "changed": true
+            },
+            {
+              "command": "/subagents open last",
+              "expect": "viewing {sessionId}",
+              "changed": true
+            },
+            {
+              "key": "ctrl+y",
+              "expect": "marker.txt"
+            },
+            {
+              "command": "/export stored.md",
+              "expect": "transcript written to"
+            },
+            {
+              "file": "stored.md",
+              "contains": "retained-program-output"
+            },
+            {
+              "file": "stored.md",
+              "contains": "active-program-output"
+            },
+            {
+              "file": "stored.md",
+              "contains": "- read"
+            },
+            {
+              "file": "stored.md",
+              "contains": "marker.txt"
+            },
+            {
+              "file": "stored.md",
+              "excludes": "[pruned-context-only]"
+            },
+            {
+              "file": "stored.md",
+              "excludes": "### tool: tool"
+            },
+            {
+              "command": "/quit",
+              "exit": true
+            }
+          ]
+        }
+      }
+    },
+    {
       "id": "commands",
       "steps": [
         {

@@ -54,6 +54,19 @@ const PRIVATE_DIR_MODE = 0o700
 const PRIVATE_FILE_MODE = 0o600
 const TERMINAL_NAME = 'xterm-256color'
 const ISOLATION_SENTINEL = 'dogfood-isolation-sentinel'
+/** Event fixtures stay tooling-only and mount exclusively in a fresh credential-free allocation. */
+const PRUNING_SCENARIO_TOOL = 'pruning'
+const PRUNING_PLUGIN = 'dogfood-pruning.mjs'
+const PRUNING_PLUGIN_ID = 'dogfood-pruning'
+const PRUNING_ALLOCATION_ERROR = 'dogfood: pruning fixture requires a fresh free profile without overrides'
+/** Continuations need the persisted identity without loading that session into the next process. */
+const SESSION_ID_PLACEHOLDER = '{sessionId}'
+const SESSION_ID_FIELDS = ['command', 'expect']
+const SESSION_ID_PATTERN = /^tui-session-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/u
+const SESSION_ID_ERROR = 'dogfood: invalid continuation session identity'
+const FRESH_SESSION_ERROR = 'dogfood: stored view requires a different driven session'
+const RESTART_SUFFIX = '-restart'
+const STORED_VIEW_SUFFIX = '-stored'
 const ENABLED_ENV_VALUE = '1'
 const PERMISSION_MODE = 'workspace-write'
 const EVIDENCE_PREFIX = 'dsh-tui-dogfood-'
@@ -164,6 +177,11 @@ async function run(scenario, reused) {
     const startup = STARTUP_FIELDS.map(key => `    ${key}: !!js ctx.tuiStartup.${key}`).join('\n')
     const preferences = yaml.dump(scenario.config).trimEnd().split('\n').map(line => '    ' + line).join('\n')
     writeFileSync(join(home, 'profiles', PROFILE, 'cordis.patch.yml'), `- id: tui\n  config:\n${startup}\n${preferences}\n`, { mode: PRIVATE_FILE_MODE })
+  }
+  if (scenario.tool === PRUNING_SCENARIO_TOOL) {
+    if (paid || reused || scenario.config) throw new Error(PRUNING_ALLOCATION_ERROR)
+    const patch = yaml.dump([{ insert: [{ id: PRUNING_PLUGIN_ID, name: join(ROOT, 'tools', PRUNING_PLUGIN) }] }])
+    writeFileSync(join(home, 'profiles', PROFILE, 'cordis.patch.yml'), patch, { mode: PRIVATE_FILE_MODE })
   }
   for (const link of scenario.homeLinks ?? []) {
     const path = resolve(home, link.path)
@@ -281,6 +299,7 @@ async function run(scenario, reused) {
   let failed
   try {
     await wait(() => screen.text().includes(READY) && screen.text().includes('tui-session-'), 'ready session')
+    if (scenario.newSession && screen.text().includes(reused?.sessionId)) throw new Error(FRESH_SESSION_ERROR)
     // A ready footer precedes late settings application; a status receipt proves the command plane settled before chords.
     const bootstrapGeneration = generation
     child.write(`/status${KEYS['ctrl+s']}`)
@@ -295,7 +314,12 @@ async function run(scenario, reused) {
       await wait(() => screen.text().replace(/\s+/gu, ' ').includes(`model ${route}${effort ? ` (${effort})` : ''}`), 'paid model and effort readback', generation - 1)
     }
     for (let i = 0; i < scenario.steps.length; i++) {
-      const step = scenario.steps[i]
+      const step = { ...scenario.steps[i] }
+      for (const field of SESSION_ID_FIELDS) {
+        if (!step[field]?.includes(SESSION_ID_PLACEHOLDER)) continue
+        if (!SESSION_ID_PATTERN.test(reused?.sessionId ?? '')) throw new Error(SESSION_ID_ERROR)
+        step[field] = step[field].replaceAll(SESSION_ID_PLACEHOLDER, reused.sessionId)
+      }
       // Retain attempts as distinct from postconditions so a transport receipt cannot inflate behavior proof.
       const observation = { index: i + 1, status: 'attempted', input: Object.fromEntries(Object.entries(step).filter(([name]) => INPUT_FIELDS.has(name))), postconditions: Object.fromEntries(Object.entries(step).filter(([name]) => !INPUT_FIELDS.has(name))), artifact: scenario.id + '/' + String(i + 1).padStart(3, '0') + '.txt' }
       steps.push(observation)
@@ -345,6 +369,7 @@ async function run(scenario, reused) {
             const content = readFileSync(fd, 'utf8')
             const proof = step.unquoted ? content.split('\n').filter(line => !line.startsWith('>') && !line.startsWith('<!--')).join('\n') : content
             if (step.contains !== undefined && !proof.includes(step.contains)) throw new Error(`dogfood: missing file content ${step.contains}`)
+            if (step.excludes !== undefined && proof.includes(step.excludes)) throw new Error(`dogfood: forbidden file content ${step.excludes}`)
             if (step.mode !== undefined && (stat.mode & 0o777) !== step.mode) throw new Error(`dogfood: wrong mode for ${step.file}`)
           } finally { closeSync(fd) }
         }
@@ -368,8 +393,10 @@ async function run(scenario, reused) {
     for (const escape of scenario.absentAnsi ?? []) if (raw.includes(escape)) throw new Error(`dogfood: forbidden styling ${JSON.stringify(escape)}`)
     if (scenario.continuation) {
       const id = screen.text().match(/tui-session-[a-f0-9-]+/u)?.[0]
-      if (!id) throw new Error('dogfood: no resume identity after shutdown')
-      await run({ ...scenario.continuation, id: scenario.id + '-restart', args: ['--resume', id] }, { home, workspace })
+      if (!id || !SESSION_ID_PATTERN.test(id)) throw new Error(SESSION_ID_ERROR)
+      const next = scenario.continuation
+      // A fresh driver leaves the old session inactive, forcing child navigation through durable storage.
+      await run({ ...next, id: scenario.id + (next.newSession ? STORED_VIEW_SUFFIX : RESTART_SUFFIX), args: next.newSession ? [] : ['--resume', id] }, { home, workspace, sessionId: id })
     }
     if (!paid && /tokens in [1-9]|out [1-9]/u.test(screen.text())) throw new Error('dogfood: free run unexpectedly used model tokens')
   } catch (error) {

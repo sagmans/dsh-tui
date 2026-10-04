@@ -16,12 +16,13 @@ interface StoredHeader {
   readonly eventCount: number | undefined
 }
 
-/** One stored event, reduced to what the transcript fold reads. */
+/** Stored replay needs live presentation metadata so context rewrites never masquerade as new execution. */
 interface StoredEvent {
   readonly type: string
   /** Archived folds need the original clock, not their later observation time. */
   readonly time?: number
   readonly data?: unknown
+  readonly surfaceOp?: unknown
 }
 
 /** The part of the persistence seam this surface uses, described structurally. */
@@ -194,6 +195,7 @@ export function createSessionHistory(ctx: Context): SessionHistory | undefined {
         events.push({
           type: record.type,
           data: record.data,
+          surfaceOp: record.surfaceOp,
           ...(typeof record.time === 'number' && Number.isFinite(record.time) ? { time: record.time } : {}),
         })
       }

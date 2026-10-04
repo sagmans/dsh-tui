@@ -45,7 +45,13 @@ export interface FoldableEvent {
   readonly time?: number
   readonly type: string
   readonly data?: unknown
+  /** Legacy logs omit this marker; current context rewrites must not become new visible tool calls. */
+  readonly surfaceOp?: unknown
 }
+
+/** Result rewrites preserve execution history, so their event type and operation distinguish context changes from completions. */
+const TOOL_RESULT_EVENT = 'tool/result'
+const SURFACE_REPLACEMENT = 'replace'
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined
@@ -372,7 +378,9 @@ export class TranscriptModel {
       case 'tool/call':
       case 'tool/ptc-dispatch-start':
       case 'tool/ptc-dispatch':
-      case 'tool/result': {
+      case TOOL_RESULT_EVENT: {
+        // Pruning replaces model-facing history after its calls settled; rendering those rewrites creates orphan cards.
+        if (event.type === TOOL_RESULT_EVENT && asRecord(event.surfaceOp)?.op === SURFACE_REPLACEMENT) return
         // Tool events are the only rows drawn before they are finished, so they
         // are folded where that bookkeeping lives and the rows come back here,
         // where reading order and row indices are owned.
