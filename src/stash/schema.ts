@@ -10,7 +10,7 @@ import { stripControlCharacters } from '../text.ts'
 export const STASH_SCHEMA_VERSION = 2
 
 /** Bound the text one newly parked draft adds to the in-memory bank and later editor restore. */
-export const MAX_STASH_ENTRY_BYTES = 1_048_576
+const MAX_STASH_ENTRY_BYTES = 1_048_576
 
 // Ids also serve as command selectors; keep them bounded and free of whitespace and terminal controls.
 const ENTRY_ID_MAX_LENGTH = 128
@@ -19,7 +19,7 @@ const NUMERIC_SELECTOR_PATTERN = /^\d+$/u
 const INVALID_ENTRY_ID_MESSAGE = 'invalid stash entry id'
 const ENTRY_TOO_LARGE_MESSAGE = 'stashed draft is too large'
 
-export function isSafeEntryId(value: string): boolean {
+function isSafeEntryId(value: string): boolean {
   return value.length <= ENTRY_ID_MAX_LENGTH && ENTRY_ID_PATTERN.test(value)
 }
 
@@ -57,9 +57,6 @@ export interface StashFile {
   readonly entries: readonly StashEntry[]
 }
 
-/** Allow timestamp overrides without changing selector recency, which follows insertion rather than wall time. */
-export type Clock = () => number
-
 /** Drafts and lock claims need independently generated identities without a shared counter across surfaces. */
 export const createNewId = (): string => randomUUID()
 
@@ -75,7 +72,7 @@ function isValidTimestamp(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && !Number.isNaN(new Date(value).getTime())
 }
 
-export function normalizeEntry(raw: unknown): StashEntry | undefined {
+function normalizeEntry(raw: unknown): StashEntry | undefined {
   if (!isRecord(raw)) return undefined
   const { id, text, createdAt } = raw
   if (typeof id !== 'string' || !isSafeEntryId(id)) return undefined

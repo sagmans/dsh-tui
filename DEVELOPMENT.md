@@ -47,6 +47,42 @@ A linked profile loads `lib/`, never `src/`, so a run against a stale build
 tests the previous release. `tools/pty-drive.mjs` rebuilds on every run for that
 reason; a profile you launch by hand does not.
 
+## Local static checks
+
+```sh
+pnpm run check:unused
+pnpm run check:deadcode
+pnpm run check:local
+```
+
+`check:unused` uses TypeScript to reject unused locals and parameters without producing build output.
+`check:deadcode` uses Knip in production mode, so test references cannot hide test-only production APIs.
+Published module roots come from package metadata; Cordis-only rows and standalone native helpers use explicit entries.
+Herdr remains an optional host-native executable, not an npm package dependency.
+The optional default-model peer retains the verified RC development pin because wildcard resolution does not safely select that prerelease.
+`pnpm exec knip --no-progress` also checks supported golden fixtures and development-only code.
+Review findings against published module entry points and dynamic Cordis loading before removing code.
+[Knip 6 omits class-member analysis](https://knip.dev/blog/knip-v6#what-about-classmembers).
+Review class methods and test-only customization separately; framework callbacks remain live even without direct method references.
+
+Repository hooks live in `.githooks`. The commit hook runs the TypeScript check.
+The message hooks call the existing global hooks to retain message structure and DCO policy.
+The push hook runs the global signature/DCO check before TypeScript and Knip.
+Forwarders preserve arguments, standard input, and failure status; missing or recursive global hooks stop the operation.
+
+Activate these hooks only with repository-level approval:
+
+```bash
+git config --local core.hooksPath "$(git rev-parse --show-toplevel)/.githooks"
+```
+
+Git uses this absolute directory for this repository and its linked worktrees.
+The absolute path preserves global-policy forwarding when another worktree does not contain `.githooks`.
+Other worktrees must support the local check commands; otherwise those checks stop the operation.
+Before removing the hook-owning worktree, move this local setting to a maintained checkout that contains the hooks.
+The forwarders read `core.hooksPath` from included global configuration; global files and configuration stay unchanged.
+These additional checks remain local; GitHub CI stays unchanged.
+
 ## Performance evidence
 
 Use the same machine, Node version, terminal, dimensions, profile, and workload for baseline and treatment.

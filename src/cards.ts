@@ -31,7 +31,7 @@ export type ToolCardKind = 'generic' | 'terminal' | 'diff' | 'search' | 'read' |
  * line — so a row carries fragments rather than one string. Anything else
  * would make the line-number styles into settings that never apply.
  */
-export interface CardPart {
+interface CardPart {
   readonly class: CardRowClass
   readonly text: string
 }
@@ -216,7 +216,7 @@ export const CARD_DETAIL_MAX = 200
  * cells may carry three times it on purpose. Bounding the sum instead would
  * starve the later cells of a row whose first cell already spent the budget.
  */
-export const CARD_PART_LIMIT = 200
+const CARD_PART_LIMIT = 200
 
 /**
  * Cut text to a character budget, marking the cut.

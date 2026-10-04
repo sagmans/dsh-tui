@@ -174,7 +174,7 @@ export class ModelSwitch {
 }
 
 /** The reasoning levels one exact route offers, described structurally. */
-export interface ModelEfforts {
+interface ModelEfforts {
   readonly efforts: readonly { readonly id: string; readonly name: string; readonly description?: string }[]
   readonly defaultEffort?: string
 }
@@ -244,7 +244,7 @@ function readLlmService(ctx: Context): { readonly kind: 'ready'; readonly llm: L
  * Read the advisory catalog of routes this composition can reach.
  *
  * The reason travels beside the catalog so a caller that refuses can say which
- * cause it met; a caller that only wants routes reads `createModelCatalog`.
+ * cause it met instead of treating every unavailable catalog as the same failure.
  */
 export function readModelCatalog(ctx: Context): ModelCatalogReading {
   const reading = readLlmService(ctx)
@@ -283,10 +283,4 @@ export function readModelCatalog(ctx: Context): ModelCatalogReading {
     },
   }
   return { kind: 'ready', catalog }
-}
-
-/** The catalog alone, for a caller that has no refusal to word. */
-export function createModelCatalog(ctx: Context): ModelCatalog | undefined {
-  const reading = readModelCatalog(ctx)
-  return reading.kind === 'ready' ? reading.catalog : undefined
 }

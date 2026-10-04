@@ -22,7 +22,7 @@ import { load as parseYaml } from 'js-yaml'
  */
 
 /** Modes this bundle ships, in the order the picker lists them. */
-export const PRESET_FILES = ['standard', 'ptc', 'minimal', 'cordis'] as const
+const PRESET_FILES = ['standard', 'ptc', 'minimal', 'cordis'] as const
 
 /** Where a packed install keeps them: beside `lib`, as the manifest declares. */
 const presetDirectory = new URL('../../presets/', import.meta.url)

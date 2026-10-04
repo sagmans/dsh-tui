@@ -8,11 +8,13 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
-### Fixed
-
-- Private installed Harness selections now remain effective across nested clone-helper and tmux verification, without requiring a global CLI on PATH.
-
 ### Changed
+
+- Preserve global commit-message, DCO, and signature policy when repository-local hooks add TypeScript and Knip gates.
+
+- Remove obsolete unit-only fixture helpers, unused development dependencies, and unreachable customization and omission paths while keeping live runtime ports and verified Harness interoperability pins.
+- Extend local dead-code analysis to standalone native dogfood helpers without letting golden fixtures keep production exports alive.
+- Preserve golden frames with fixture-local dates and explicit native renderer ports; strengthen free command/history acceptance with current-screen and restart-state evidence.
 
 - Available tmux verification now runs automatically with the free gate. Native controllers avoid the caller's shell and use private resources. Genuine Herdr metadata, background work, and attention checks distinguish observed lifecycle effects from accepted input.
 
@@ -24,19 +26,24 @@ breaking change, and a patch carries only fixes.
 
 - Replace TypeScript and Python unit suites with actual-use dogfooding. Preserve golden frame snapshots. Free profile checks run automatically without credentials; paid model checks require explicit demand. Feature inventory distinguishes scope from verified behavior.
 
-### Added
-
-- Free Herdr dogfood drives real pane keys and checks current terminal cells in disposable named sessions. Private profile homes and owned-resource cleanup keep development checks away from live conversations.
-
-- Optional Moshi completion and attention notifications, enabled only by `DSH_TUI_MOSHI_TOKEN`. Fixed messages exclude conversation content and session identifiers; bounded delivery never blocks agent work.
+- Removed unused internal helpers and declarations, including test-only clock and writer customization. Published module entry points remain unchanged.
 
 ### Fixed
+
+- Private installed Harness selections now remain effective across nested clone-helper and tmux verification, without requiring a global CLI on PATH.
 
 - Unmodified F1–F4 press and repeat events from Herdr reach the pinned terminal decoder without discarding release or modifier metadata. Real editor yank, yank-pop, and undo checks cover this input path.
 
 - Custom viewport bindings remain usable when the host supplies immutable settings. Validation now preserves the borrowed settings section instead of attempting in-place normalization.
 
 - Dogfood launchers exclude inherited Moshi notification tokens and agent-pane coordinates, preventing incidental production notifications during model checks. Real credential-free helper setup, status, and cleanup now run automatically.
+- Dry-run cleanup preserves scratch homes; job commands reject extra arguments; file references recover after failed workspace-root checks.
+
+- Prompt history resumes writes after repair and drops stale suggestions after deletion. Theme watcher setup failures produce deferred notices.
+
+- Question prompts require matching agent identity. Model-effort failure notices omit upstream exception text.
+
+- Todo descriptions distinguish never-written, explicitly empty, and turn-cleared lists without changing dock visibility.
 
 - Inline comments explain implementation purposes and constraints without promising unsupported isolation, rollback, event-ordering, or lifecycle guarantees. Executable behavior remains unchanged.
 
@@ -89,6 +96,13 @@ breaking change, and a patch carries only fixes.
 - Long carriage-return and backspace repaints remain responsive without changing Unicode cells, tab gaps, or output styling.
 
 - Commands and approval choices retain literal control-character evidence while tool output keeps terminal repaint semantics.
+
+### Added
+
+- Free Herdr dogfood drives real pane keys and checks current terminal cells in disposable named sessions. Private profile homes and owned-resource cleanup keep development checks away from live conversations.
+- Local TypeScript and Knip check commands and repository hook scripts identify unused declarations, files, exports, and dependencies. Approved repository-local activation forwards existing global message, DCO, and signature checks.
+
+- Optional Moshi completion and attention notifications, enabled only by `DSH_TUI_MOSHI_TOKEN`. Fixed messages exclude conversation content and session identifiers; bounded delivery never blocks agent work.
 
 ## [0.13.0] - 2026-10-01
 

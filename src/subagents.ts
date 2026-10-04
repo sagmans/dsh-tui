@@ -44,8 +44,6 @@ export class SubagentRoster {
   private readonly runs = new Map<string, SubagentRun>()
   private readonly labels = new Map<string, string>()
 
-  constructor(private readonly now: () => number = () => Date.now()) {}
-
   /** Catalog entries precede starts normally; keep them for either event order. */
   catalog(info: unknown): void {
     const record = asRecord(info)
@@ -72,7 +70,7 @@ export class SubagentRoster {
       id,
       ...(label === undefined ? {} : { label }),
       provider: typeof record?.provider === 'string' ? record.provider : 'subagent',
-      startedAt: this.now(),
+      startedAt: Date.now(),
       status: 'running',
     })
   }
@@ -89,12 +87,12 @@ export class SubagentRoster {
       id: typeof record?.id === 'string' ? record.id : existing?.id ?? runId,
       ...(existing?.label === undefined ? {} : { label: existing.label }),
       provider: typeof record?.provider === 'string' ? record.provider : existing?.provider ?? 'subagent',
-      startedAt: existing?.startedAt ?? this.now(),
+      startedAt: existing?.startedAt ?? Date.now(),
       // Keep abnormal stops visible in /subagents instead of presenting them as ordinary completion.
       // This display classification does not prove success when the event omits its reason.
       status: stopReason === undefined || stopReason === 'completed' ? 'completed' : 'failed',
       ...(stopReason === undefined ? {} : { stopReason }),
-      finishedAt: this.now(),
+      finishedAt: Date.now(),
     })
   }
 

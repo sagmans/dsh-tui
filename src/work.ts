@@ -1,5 +1,20 @@
 import type { FoldableEvent } from './transcript.ts'
 
+/** Keep provenance separate from rendering so empty boards do not claim an unwritten history. */
+const TODO_STATES = {
+  neverWritten: 'never-written',
+  written: 'written',
+  turnCleared: 'turn-cleared',
+} as const
+/** A turn boundary is not an explicit empty write; the command must name the actual cause. */
+const TODO_EMPTY_DESCRIPTIONS = {
+  [TODO_STATES.neverWritten]: 'no todo list has been written in this session',
+  [TODO_STATES.written]: 'the todo list is empty',
+  [TODO_STATES.turnCleared]: 'the todo list was cleared when this turn started',
+} as const
+
+type TodoState = typeof TODO_STATES[keyof typeof TODO_STATES]
+
 /** Share the surface's content/status contract between the durable fold, dock, and guard without importing the agent-owned tool. */
 export interface TodoEntry {
   readonly content: string
@@ -25,10 +40,12 @@ export interface GoalState {
 export interface WorkState {
   readonly planMode: boolean
   readonly todos: readonly TodoEntry[] | undefined
+  /** Retain why the board is absent so commands cannot mistake a turn boundary for unwritten history. */
+  readonly todoState: TodoState
   readonly goal: GoalState | undefined
 }
 
-const EMPTY: WorkState = { planMode: false, todos: undefined, goal: undefined }
+const EMPTY: WorkState = { planMode: false, todos: undefined, todoState: TODO_STATES.neverWritten, goal: undefined }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined
@@ -58,14 +75,16 @@ const TODO_GLYPHS: Readonly<Record<TodoEntry['status'], string>> = {
 }
 
 /** What the reader most needs to see first: work in flight, then work left. */
-export function orderTodos(todos: readonly TodoEntry[]): readonly TodoEntry[] {
+function orderTodos(todos: readonly TodoEntry[]): readonly TodoEntry[] {
   const rank: Record<TodoEntry['status'], number> = { in_progress: 0, pending: 1, completed: 2 }
   return [...todos].sort((left, right) => rank[left.status] - rank[right.status])
 }
 
 /** The todo list as plain lines, for a reader who asked for it by name. */
-export function describeTodos(todos: readonly TodoEntry[] | undefined): string {
-  if (todos === undefined || todos.length === 0) return 'no todo list has been written in this session'
+export function describeTodos(todos: readonly TodoEntry[] | undefined, todoState: TodoState): string {
+  if (todos === undefined || todos.length === 0) {
+    return TODO_EMPTY_DESCRIPTIONS[todoState]
+  }
   const done = todos.filter(todo => todo.status === 'completed').length
   const rows = orderTodos(todos).map(todo => `  ${TODO_GLYPHS[todo.status]} ${todo.content}`)
   return [`todos · ${done}/${todos.length} done`, ...rows].join('\n')
@@ -86,12 +105,12 @@ export interface PlanModeState {
 }
 
 /** The plan controller, described structurally so the surface needs no import of it. */
-export interface PlanModeController {
+interface PlanModeController {
   get(agent: unknown): unknown
 }
 
 /** The name the plan package registers under, in the container and in a preset scope. */
-export const PLAN_SERVICE = 'planMode'
+const PLAN_SERVICE = 'planMode'
 
 /**
  * Where the surface asks for a service.
@@ -162,17 +181,19 @@ export function planToggleLine(active: boolean): string {
 export class WorkFold {
   private planMode = false
   private todos: readonly TodoEntry[] | undefined
+  private todoState: TodoState = TODO_STATES.neverWritten
   private goal: GoalState | undefined
 
   state(): WorkState {
-    return this.planMode || this.todos !== undefined || this.goal !== undefined
-      ? { planMode: this.planMode, todos: this.todos, goal: this.goal }
+    return this.planMode || this.todoState !== TODO_STATES.neverWritten || this.goal !== undefined
+      ? { planMode: this.planMode, todos: this.todos, todoState: this.todoState, goal: this.goal }
       : EMPTY
   }
 
   reset(): void {
     this.planMode = false
     this.todos = undefined
+    this.todoState = TODO_STATES.neverWritten
     this.goal = undefined
   }
 
@@ -187,13 +208,14 @@ export class WorkFold {
         // because a new task must not inherit the previous turn's checklist; the
         // fold follows the same rule or every surface disagrees.
         this.todos = undefined
+        // A boundary cannot clear a checklist that this session never wrote.
+        if (this.todoState !== TODO_STATES.neverWritten) this.todoState = TODO_STATES.turnCleared
         return
       case 'todo/write': {
         const entries = todoEntries(data.todos)
-        // An empty checklist contributes no work-board row. This display state
-        // loses whether a list was written; it cannot establish the history
-        // claimed by describeTodos' empty-state wording.
+        // Keep the existing board projection; provenance prevents commands from mistaking emptiness for no writes.
         this.todos = entries.length === 0 ? undefined : entries
+        this.todoState = TODO_STATES.written
         return
       }
       case 'goal/change': {

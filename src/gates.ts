@@ -27,7 +27,7 @@ export interface GateCard {
 }
 
 /** Distinguish credential display requests so editors can mask text without changing submitted answers. */
-export type GateInputMode = 'answer' | 'secret'
+type GateInputMode = 'answer' | 'secret'
 
 /**
  * Use the surface's editor so answers retain prompt-bar editing behavior.
@@ -51,7 +51,7 @@ export interface GateInput {
 }
 
 /** Keep navigation separate from chosen labels so moving the cursor does not change a multi-select answer. */
-export interface GateOption {
+interface GateOption {
   readonly label: string
   readonly description: string | undefined
   readonly current: boolean
@@ -59,7 +59,7 @@ export interface GateOption {
 }
 
 /** Keep cursor focus separate from retained custom text so leaving this row does not imply the answer is empty. */
-export interface GateCustomRow {
+interface GateCustomRow {
   readonly label: string
   readonly description: string | undefined
   /** Whether the cursor is on this row, which is what makes typing the answer. */
@@ -89,10 +89,6 @@ export class ApprovalGate {
     /** The keys in force, read per press so a settings edit lands on the next key. */
     private readonly keys: () => Keymap,
   ) {}
-
-  get resolved(): boolean {
-    return this.outcome !== undefined
-  }
 
   /** Apply one key press; returns the outcome the first time it settles. */
   handleKey(data: string): ApprovalOutcome | undefined {

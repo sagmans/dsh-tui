@@ -1,6 +1,6 @@
 import { questionCard } from './question-card.ts'
-import { type GateCard, type GateInput, lines, type GateQuestion, type GateAnswer, CUSTOM_ROW_NUMBER } from '../gates.ts'
-import { CUSTOM_ROW_LABEL, CUSTOM_ROW_DESCRIPTION, CUSTOM_ROW_SHORTHAND, namedKeys, customRowExits, customHint, SECRET_ROW_LABEL, declaresSecret } from './question-card.ts'
+import { type GateCard, type GateInput, type GateQuestion, type GateAnswer, CUSTOM_ROW_NUMBER } from '../gates.ts'
+import { declaresSecret } from './question-card.ts'
 import { matchesKey } from '@earendil-works/pi-tui'
 import { matchesAction, type Keymap } from '../input/actions.ts'
 import { deleteLastGrapheme, pastedText, releasedKey, typedText } from '../input.ts'
@@ -121,10 +121,6 @@ export class QuestionGate {
   private resetInput(): void {
     this.input.setText('')
     this.input.setMode?.(this.current !== undefined && declaresSecret(this.current.id) ? 'secret' : 'answer')
-  }
-
-  get resolved(): boolean {
-    return this.finished
   }
 
   /**

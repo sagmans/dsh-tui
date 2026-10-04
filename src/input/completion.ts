@@ -5,7 +5,7 @@ import {
   type SlashCommand,
 } from '@earendil-works/pi-tui'
 import { atToken, atValue, offerableCandidate, rankFilesAsync, SUGGESTION_LIMIT, type Candidate } from './file-search.ts'
-import { createFileIndex, type FileIndex } from './file-index.ts'
+import { type FileIndex } from './file-index.ts'
 import { LOCAL_COMMANDS, LOCAL_COMMAND_DESCRIPTIONS } from './submission.ts'
 import { renderTerminalText } from '../terminal-text.ts'
 
@@ -22,7 +22,7 @@ export interface RegisteredCommand {
  * registry's follow: a reader typing a slash wants to see what this session can
  * actually run, not what a build happened to ship.
  */
-export function commandMenu(registered: readonly RegisteredCommand[]): SlashCommand[] {
+function commandMenu(registered: readonly RegisteredCommand[]): SlashCommand[] {
   const local = LOCAL_COMMANDS.map(name => ({
     // The menu shows and completes the bare name; the slash is already typed.
     name: name.slice(1),
@@ -42,7 +42,7 @@ export function commandMenu(registered: readonly RegisteredCommand[]): SlashComm
 export function createCompletionProvider(
   registered: readonly RegisteredCommand[],
   cwd: string,
-  index: FileIndex = createFileIndex(cwd),
+  index: FileIndex,
 ): CombinedAutocompleteProvider {
   return new WorkspaceFileProvider(commandMenu(registered), cwd, index)
 }
@@ -58,7 +58,7 @@ export function createCompletionProvider(
  */
 export function createAnswerCompletionProvider(
   cwd: string,
-  index: FileIndex = createFileIndex(cwd),
+  index: FileIndex,
 ): CombinedAutocompleteProvider {
   // No commands is the whole difference: the base class looks a slash up in the
   // list it was handed, so an empty one leaves both the menu and the confirm key

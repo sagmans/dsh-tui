@@ -11,19 +11,6 @@ import { isAbsolute, join, relative } from 'node:path'
  * both the ranking that decides what to offer and the walk that lists it.
  */
 
-/** One source of workspace rows: a git listing, or a walk when git cannot answer. */
-export type FileLister = (cwd: string, signal: AbortSignal) => Promise<readonly Candidate[]>
-
-/** What a caller may replace when it needs a different workspace or clock. */
-export interface FileIndexOptions {
-  readonly list?: FileLister
-  readonly now?: () => number
-  readonly ttlMs?: number
-  readonly scanTimeoutMs?: number
-  readonly resolve?: (path: string) => Promise<string>
-  readonly proofTimeoutMs?: number
-}
-
 /**
  * The workspace rows, gathered once and reused for a short window.
  *
@@ -59,13 +46,7 @@ interface Scan {
 }
 
 /** A listing cache with a window, so a keystroke does not become a scan. */
-export function createFileIndex(cwd: string, options: FileIndexOptions = {}): FileIndex {
-  const list = options.list ?? listWorkspaceFiles
-  const now = options.now ?? Date.now
-  const ttlMs = options.ttlMs ?? INDEX_TTL_MS
-  const scanTimeoutMs = options.scanTimeoutMs ?? SCAN_TIMEOUT_MS
-  const resolvePath = options.resolve ?? realpath
-  const proofTimeoutMs = options.proofTimeoutMs ?? ROW_PROOF_TIMEOUT_MS
+export function createFileIndex(cwd: string): FileIndex {
   let cached: readonly Candidate[] | undefined
   let cachedAt = 0
   let pending: Scan | undefined
@@ -77,14 +58,14 @@ export function createFileIndex(cwd: string, options: FileIndexOptions = {}): Fi
     // is still waiting on. It runs under its own bound and leaves its answer for
     // the readers that follow.
     const scan = new AbortController()
-    const run = list(cwd, scan.signal)
+    const run = listWorkspaceFiles(cwd, scan.signal)
       .then(found => {
         // An answer that arrives after the deadline is the one the waiting
         // readers were told to stop waiting for; keeping it would serve a
         // listing the scan had already given up on.
         if (!scan.signal.aborted) {
           cached = found
-          cachedAt = now()
+          cachedAt = Date.now()
         }
         return found
       })
@@ -98,7 +79,7 @@ export function createFileIndex(cwd: string, options: FileIndexOptions = {}): Fi
       // A caller arriving after the deadline starts fresh work instead of
       // joining a scan that outlived its bound.
       if (pending === entry) pending = undefined
-    }, scanTimeoutMs)
+    }, SCAN_TIMEOUT_MS)
     void run.finally(() => {
       clearTimeout(timer)
       // A settled scan is no longer pending even when its listing was refused
@@ -113,7 +94,7 @@ export function createFileIndex(cwd: string, options: FileIndexOptions = {}): Fi
       // A caller that has already looked away is answered from what the index
       // holds, without starting work it would not wait for.
       if (signal.aborted) return cached ?? []
-      if (cached !== undefined && now() - cachedAt < ttlMs) return cached
+      if (cached !== undefined && Date.now() - cachedAt < INDEX_TTL_MS) return cached
       const entry = pending ?? startScan()
       // The deadline releases a waiter even when the work beneath it cannot be
       // interrupted, which is the only way a blocked filesystem call stops
@@ -123,17 +104,19 @@ export function createFileIndex(cwd: string, options: FileIndexOptions = {}): Fi
     },
     async reachable(path: string, signal: AbortSignal): Promise<boolean> {
       if (signal.aborted) return false
-      // Share one canonical anchor across row proofs, separate from listing freshness.
-      // A failed resolution also remains cached; listing refreshes do not recover it.
-      root ??= canonicalOrUndefined(cwd)
+      // Share a proven anchor, but let transient filesystem failures recover on later attempts.
+      root ??= canonicalOrUndefined(cwd).then(canonical => {
+        if (canonical === undefined) root = undefined
+        return canonical
+      })
       // Both the root and the row are bound the same way: a filesystem that
       // stopped answering must not hold a menu open, and a proof that did not
       // arrive in time is a proof that never happened.
-      const canonical = await withinBound(root, signal, proofTimeoutMs)
+      const canonical = await withinBound(root, signal, ROW_PROOF_TIMEOUT_MS)
       // The caller may have looked away while the root was being proven, and row
       // work started behind its back would have nothing left to answer for it.
       if (canonical === undefined || signal.aborted) return false
-      const target = await withinBound(resolvePath(join(cwd, path)), signal, proofTimeoutMs)
+      const target = await withinBound(realpath(join(cwd, path)), signal, ROW_PROOF_TIMEOUT_MS)
       if (target === undefined) return false
       // Only descendants qualify for file references; the workspace root is not a row.
       // This conservative parent-prefix check also omits contained names such as

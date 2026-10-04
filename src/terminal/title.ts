@@ -27,7 +27,7 @@ const TITLE_CODE = '0'
 const TITLE_BREAKS = /[\t\n]/gu
 
 /** Keep tab labels compact without spending their directory budget on shared path prefixes. */
-export const TITLE_DIR_LIMIT = 40
+const TITLE_DIR_LIMIT = 40
 
 /**
  * Build the title sequence.
@@ -36,7 +36,7 @@ export const TITLE_DIR_LIMIT = 40
  * escaped: this is a window label, and a hostile directory name has no business
  * reaching the terminal as a control character.
  */
-export function titleSequence(title: string): string {
+function titleSequence(title: string): string {
   return `${OSC_INTRODUCER}${TITLE_CODE};${stripControlCharacters(title).replace(TITLE_BREAKS, '')}${STRING_TERMINATOR}`
 }
 

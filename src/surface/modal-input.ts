@@ -330,7 +330,8 @@ export function createModalInput(ctx: Context, ports: ModalInputPorts): ModalInp
       }),
       ctx.on('user-questions/request', (request, next) => {
         const agentId = (request as { agent?: { id?: string } }).agent?.id
-        if (agentId !== undefined && agentId !== ports.activeSession()) return next()
+        // Only the active agent may borrow this terminal; unidentified callers belong to another handler.
+        if (agentId === undefined || agentId !== ports.activeSession()) return next()
         const questions = toGateQuestions(request)
         if (questions.length === 0) return next()
         if (occupied()) return Promise.resolve<AskUserQuestionAnswer>({ answers: [] })

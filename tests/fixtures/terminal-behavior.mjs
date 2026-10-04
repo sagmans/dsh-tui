@@ -5,8 +5,11 @@ import { WarningSafeTui } from '../../lib/terminal/warning-screen.js'
 import { TranscriptModel } from '../../lib/transcript.js'
 import { contentLines } from '../../lib/cards.js'
 import { cardOfResult } from '../../lib/cards/presenter.js'
-import { TranscriptView } from '../../lib/ui/view.js'
+import { DEFAULT_VIEW_STATE, TranscriptView } from '../../lib/ui/view.js'
+import { DEFAULT_SPACING } from '../../lib/spacing.js'
+import { toolDisplayTable } from '../../lib/tool-display.js'
 import { MarkdownRenderer } from '../../lib/ui/markdown.js'
+import { createMermaidTransform } from '../../lib/ui/mermaid.js'
 import { BoxedEditor } from '../../lib/ui/editor.js'
 import { PromptBar } from '../../lib/ui/prompt.js'
 import { ListPicker } from '../../lib/ui/picker.js'
@@ -14,6 +17,10 @@ import { surfaceLayout } from '../../lib/ui/layout.js'
 import { createTheme } from '../../lib/theme.js'
 import { defaultKeymap } from '../../lib/input/actions.js'
 
+// Native fixture rows use the same explicit layout and view ports as the mounted surface.
+const FIXTURE_MERMAID_MODE = 'off'
+const FIXTURE_MARGIN_COLUMNS = 0
+const FIXTURE_TOOL_DISPLAY = toolDisplayTable().default
 const READY = 'terminal-behavior-ready'
 const RECEIPT = 'terminal-behavior-receipt:'
 const QUIT_KEY = 'ctrl+c'
@@ -106,10 +113,15 @@ const picker = new ListPicker(
   row => ({ label: row.label, description: undefined, current: false }), row => row.label,
   { empty: () => PICKER_TITLE, listed: () => PICKER_TITLE }, defaultKeymap,
 )
-const view = new TranscriptView(model, theme, new MarkdownRenderer(theme.markdown), {
+const view = new TranscriptView(model, theme, new MarkdownRenderer(theme.markdown, createMermaidTransform({ theme, mode: () => FIXTURE_MERMAID_MODE })), {
+  state: () => DEFAULT_VIEW_STATE,
+  gate: () => undefined,
   picker: () => pickerOpen ? picker.card() : undefined,
+  keys: defaultKeymap,
+  toolDisplay: () => FIXTURE_TOOL_DISPLAY,
+  spacing: () => DEFAULT_SPACING,
 })
-const editor = new BoxedEditor(tui, theme.editor)
+const editor = new BoxedEditor(tui, theme.editor, defaultKeymap)
 const empty = { render: () => [], invalidate: () => {} }
 // Readiness belongs in frame output so the driver waits for native writes, not process startup.
 // Width receipts record render calls; they do not independently prove that every frame reached the terminal.
@@ -176,7 +188,7 @@ tui.addInputListener(data => {
 tui.setLayoutRoot(surfaceLayout({
   transcript: new ScrollView(view, SCROLL_POLICY),
   dock: empty, queue: empty, prompt: new PromptBar(editor), status,
-}))
+}, () => FIXTURE_MARGIN_COLUMNS))
 tui.setFocus(editor)
 tui.start()
 enteredRawMode = process.stdin.isRaw

@@ -15,7 +15,6 @@ import {
   loadStashStore,
   UnsupportedStashSchemaError,
   type StashStore,
-  type StashWriter,
 } from './stash/store.ts'
 
 const EDITOR_BLOCKED_MESSAGE = 'clear or stash the current draft before applying or popping'
@@ -76,12 +75,6 @@ export interface PromptStashOptions {
   readonly sessionId: () => string
   /** Share a bank by absolute directory, or keep one bank per session. */
   readonly scope?: StashScope | undefined
-  /** Override the working directory captured at construction; tests avoid changing process cwd. */
-  readonly directory?: string | undefined
-  /** Override the storage root; tests keep it inside a scratch directory. */
-  readonly baseDir?: string | undefined
-  readonly now?: (() => number) | undefined
-  readonly write?: StashWriter | undefined
 }
 
 // Newer-format and oversized banks are refused in place, not treated as corrupt.
@@ -97,8 +90,6 @@ export class PromptStash {
   private readonly baseDir: string
   private readonly bankScope: StashScope
   private readonly directory: string
-  private readonly now: (() => number) | undefined
-  private readonly write: StashWriter | undefined
   private store: StashStore | undefined
   /** Bank identity prevents a session switch from showing another bank's count. */
   private scope: string | undefined
@@ -110,12 +101,10 @@ export class PromptStash {
     private readonly host: StashHost,
     private readonly options: PromptStashOptions,
   ) {
-    this.baseDir = options.baseDir ?? stashBaseDir()
+    this.baseDir = stashBaseDir()
     this.bankScope = options.scope ?? DEFAULT_STASH_SCOPE
     // Path-scoped drafts belong to the startup directory, even when the surface changes sessions.
-    this.directory = path.resolve(options.directory ?? process.cwd())
-    this.now = options.now
-    this.write = options.write
+    this.directory = path.resolve(process.cwd())
   }
 
   /** How many drafts the active bank holds, as last read. */
@@ -355,7 +344,7 @@ export class PromptStash {
     const bankId = this.bankId(sessionId)
     if (this.store !== undefined && this.scope === bankId) return this.store
     const owner = this.bankScope === 'path' ? this.directory : sessionId
-    const store = await loadStashStore(resolveStashPaths(owner, this.baseDir, this.bankScope), this.now, this.write)
+    const store = await loadStashStore(resolveStashPaths(owner, this.baseDir, this.bankScope))
     this.store = store
     this.scope = bankId
     return store

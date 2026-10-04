@@ -22,7 +22,7 @@ const GHOST_CURSOR_PREFIX = '\u001b[7m'
  * in, the vetting of a pick, and how long a list may hold the keyboard stay
  * with the modal owner, which is why they arrive as a port.
  */
-export interface MemoryPicker {
+interface MemoryPicker {
   handleKey(data: string): PickerAction | undefined
   card(window?: number): PickerCard
   setNote(text: string | undefined): void

@@ -3,13 +3,13 @@ import { keyName, keysFor, type Keymap } from '../input/actions.ts'
 import type { PositionedOption } from './questions.ts'
 
 /** Keep an alternative to the listed choices so the reader can answer in their own words. */
-export const CUSTOM_ROW_LABEL = 'other'
+const CUSTOM_ROW_LABEL = 'other'
 
 /** What the free-text row does, said where the reader decides. */
-export const CUSTOM_ROW_DESCRIPTION = 'type your own answer'
+const CUSTOM_ROW_DESCRIPTION = 'type your own answer'
 
 /** How the list hint names that row, which the row itself already labels. */
-export const CUSTOM_ROW_SHORTHAND = `${CUSTOM_ROW_NUMBER} answer freely`
+const CUSTOM_ROW_SHORTHAND = `${CUSTOM_ROW_NUMBER} answer freely`
 
 /**
  * How a hint names the keys of one action.
@@ -17,7 +17,7 @@ export const CUSTOM_ROW_SHORTHAND = `${CUSTOM_ROW_NUMBER} answer freely`
  * A hint is prose about what a key does here, so the word comes from the card
  * rather than from the catalog row, which has to read well out of context too.
  */
-export function namedKeys(map: Keymap, id: string, verb: string): string {
+function namedKeys(map: Keymap, id: string, verb: string): string {
   // One verb for the action, however many keys reach it: a hint that repeated
   // the word would read as two actions rather than two ways to do one.
   return `${keysFor(map, id).map(keyName).join('/')} ${verb}`
@@ -33,7 +33,7 @@ export function namedKeys(map: Keymap, id: string, verb: string): string {
  * than filtering. The arrows stay one token because they are pinned together
  * rather than listed one direction at a time.
  */
-export function customRowExits(map: Keymap): string {
+function customRowExits(map: Keymap): string {
   const names = ['↑↓']
   for (const id of ['question.up', 'question.down']) {
     for (const key of keysFor(map, id)) {
@@ -45,7 +45,7 @@ export function customRowExits(map: Keymap): string {
 }
 
 /** The keys that answer the free-text row, where typing is the answer rather than a filter. */
-export function customHint(map: Keymap): string {
+function customHint(map: Keymap): string {
   return `type or paste an answer · ${namedKeys(map, 'question.confirm', 'confirm')} · ${namedKeys(map, 'question.cancel', 'abandon')} · ${customRowExits(map)} or esc to options`
 }
 
@@ -55,10 +55,10 @@ export function customHint(map: Keymap): string {
  * declaration rather than the wording: ids are caller-owned, and a question
  * that merely mentions a key must still show the answer its author meant read.
  */
-export const SECRET_ID_SUFFIX = ':secret'
+const SECRET_ID_SUFFIX = ':secret'
 
 /** The free-text row's label when the answer is a credential, so the reader sees what they hand over. */
-export const SECRET_ROW_LABEL = 'API KEY'
+const SECRET_ROW_LABEL = 'API KEY'
 
 /** Whether a question declares its typed answer a credential through its id. */
 export function declaresSecret(id: string): boolean {

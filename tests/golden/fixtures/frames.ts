@@ -4,13 +4,15 @@
  */
 
 import { type TUI } from '@earendil-works/pi-tui'
-import { it } from 'vitest'
+import { afterEach, beforeEach, it, vi } from 'vitest'
 import { type Context } from '@deepseek-ai/cordis'
 import { createToolPresenter } from '@/agent/present.ts'
 import { cardOfCall, cardOfResult } from '@/cards/presenter.ts'
 import { contentLines } from '@/cards.ts'
 import { type GateCard } from '@/gates.ts'
 import { defaultKeymap } from '@/input/actions.ts'
+import { DEFAULT_SPACING } from '@/spacing.ts'
+import { toolDisplayTable } from '@/tool-display.ts'
 import { createTheme } from '@/theme.ts'
 import { TranscriptModel } from '@/transcript.ts'
 import { MarkdownRenderer } from '@/ui/markdown.ts'
@@ -24,7 +26,7 @@ import { StashPicker } from '@/ui/stash-picker.ts'
 import { QueueBar } from '@/ui/queue.ts'
 import { WorkFold } from '@/work.ts'
 
-export /**
+/**
  * Golden frames.
  *
  * The projection is pure, so a fixed transcript at a fixed width is a stable
@@ -32,10 +34,12 @@ export /**
  * CI. Both a comfortable and a cramped width are pinned, because wrapping and
  * truncation are where a terminal surface usually breaks.
  */
-const WIDTHS = [80, 40]
+export const WIDTHS = [80, 40]
+/** Existing non-diagram frames pin source text rather than a diagram-mode change. */
+const GOLDEN_MERMAID_MODE = 'off' as const
 // Keep baseline layout independent of terminal colour capabilities; callers can supply a styled theme.
-export const theme = createTheme('none')
-export /** Keep route, usage, and directory facts populated and fixed to pin footer wrapping at both widths. */
+const theme = createTheme('none')
+/** Keep route, usage, and directory facts populated and fixed to pin footer wrapping at both widths. */
 const STATUS_FACTS: StatusFacts = {
   chord: undefined,
   back: undefined,
@@ -54,17 +58,17 @@ const STATUS_FACTS: StatusFacts = {
   cwd: '/Users/dev/source/opensource/deepseek-harness/master',
   home: '/Users/dev',
 }
-export /** The terminal the gate's bar renders against; a golden frame reads its rows only. */
+/** The terminal the gate's bar renders against; a golden frame reads its rows only. */
 const STUB_TUI = { requestRender: () => {}, terminal: { rows: 24, columns: 80 } } as unknown as TUI
-export /** The rows this frame pins: a shell command whose output waits behind its fold, and a file read. */
+/** The rows this frame pins: a shell command whose output waits behind its fold, and a file read. */
 const FIXTURE_COMMAND = 'pnpm test'
-export /** A fixed request time and a fixed wait, so a running row's duration is a constant. */
+/** A fixed request time and a fixed wait, so a running row's duration is a constant. */
 const FIXTURE_STARTED_AT = 1_000_000
-export const FIXTURE_RUNNING_MS = 12_000
-export const FIXTURE_OUTPUT = 'Tests  154 passed (154)'
-export const FIXTURE_FILE = 'src/ui/view.ts'
-export const FIXTURE_FILE_LINES = ['const expanded = this.viewState.expandCards', 'const preview = cardDetailRows(card, expanded)', '…']
-export /**
+const FIXTURE_RUNNING_MS = 12_000
+const FIXTURE_OUTPUT = 'Tests  154 passed (154)'
+const FIXTURE_FILE = 'src/ui/view.ts'
+const FIXTURE_FILE_LINES = ['const expanded = this.viewState.expandCards', 'const preview = cardDetailRows(card, expanded)', '…']
+/**
  * Each tool's declared render intent, as the real tools declare it.
  *
  * A frame built without a presenter would fold a plain generic card and pin a
@@ -100,7 +104,7 @@ function fixturePresenter(): ReturnType<typeof createToolPresenter> {
       }),
     },
   } as Record<string, unknown>
-  return createToolPresenter({ tools: { get: (name: string) => tools[name] } } as unknown as Context)
+  return createToolPresenter({ tools: { get: (name: string) => tools[name] } } as unknown as Context, () => undefined)
 }
 /**
  * Keep transcript and dock projections on the same scenario by sharing their durable events.
@@ -154,31 +158,34 @@ export function fixture(frameTheme = theme): { view: TranscriptView; dock: WorkD
   // The shipped default is the folded view for both, so the frame pins what a
   // reader actually gets rather than a state they would have to ask for.
   const state = DEFAULT_VIEW_STATE
-  const view = new TranscriptView(model, frameTheme, new MarkdownRenderer(frameTheme.markdown), {
+  const view = new TranscriptView(model, frameTheme, new MarkdownRenderer(frameTheme.markdown, createMermaidTransform({ theme: frameTheme, mode: () => GOLDEN_MERMAID_MODE })), {
+    keys: defaultKeymap,
+    toolDisplay: () => FIXTURE_TOOL_DISPLAY,
+    spacing: () => DEFAULT_SPACING,
     state: () => state,
     gate: () => undefined,
     picker: () => undefined,
   })
   return {
     view,
-    dock: new WorkDock(() => work.state(), frameTheme),
+    dock: new WorkDock(() => work.state(), frameTheme, () => [], () => [], () => {}),
     status: new StatusBar(() => STATUS_FACTS, frameTheme),
   }
 }
-export /**
+/**
  * The footer with drafts parked.
  *
  * Nothing is trimmed: the row carries the running numbers a real session shows,
  * so the frame proves the count survives beside facts it is ranked above.
  */
-function parkedStatus(count: number, frameTheme = theme): StatusBar {
+export function parkedStatus(count: number, frameTheme = theme): StatusBar {
   return new StatusBar(() => ({
     ...STATUS_FACTS,
     cwd: '/Users/dev/src/app',
     stashed: count,
   }), frameTheme)
 }
-export /**
+/**
  * A reply whose diagram is the answer at a comfortable width and the source at
  * a cramped one: the drawing is 43 columns, which is exactly the boundary a
  * terminal can be on either side of.
@@ -193,28 +200,31 @@ const FIXTURE_DIAGRAM = [
   '```',
 ].join('\n')
 export function mermaidFixture(frameTheme = theme): TranscriptView {
-  const model = new TranscriptModel()
+  const model = new TranscriptModel(fixturePresenter())
   model.apply({
     type: 'assistant/message',
     data: { message: { content: [{ type: 'text', text: `The fold keeps a session small.\n\n${FIXTURE_DIAGRAM}\n\nSettled rows are cached.` }] } },
   })
   const mermaid = createMermaidTransform({ theme: frameTheme, mode: () => 'streaming' })
   return new TranscriptView(model, frameTheme, new MarkdownRenderer(frameTheme.markdown, mermaid), {
+    keys: defaultKeymap,
+    toolDisplay: () => FIXTURE_TOOL_DISPLAY,
+    spacing: () => DEFAULT_SPACING,
     state: () => DEFAULT_VIEW_STATE,
     gate: () => undefined,
     picker: () => undefined,
   })
 }
-export /** A prompt and a thought that carry markdown, with the thought opened. */
+/** A prompt and a thought that carry markdown, with the thought opened. */
 const MARKDOWN_PROMPT = 'summarize this:\n\n- first item\n- second item\n\n```ts\nconst x = 1\n```'
-export const MARKDOWN_THOUGHT = '**weigh** the options\n\n1. keep the parser\n2. drop the cache'
+const MARKDOWN_THOUGHT = '**weigh** the options\n\n1. keep the parser\n2. drop the cache'
 export /**
  * The frame owns the prompt's markdown width and the thought's indent, so these
  * frames pin where a list and a fence land inside the box, and that an opened
  * thought's markdown stays in its own shade rather than the answer's.
  */
 function markdownMessages(frameTheme = theme): TranscriptView {
-  const model = new TranscriptModel()
+  const model = new TranscriptModel(fixturePresenter())
   model.apply({ type: 'user/message', data: { content: [{ type: 'text', text: MARKDOWN_PROMPT }], source: { kind: 'user' } } })
   model.apply({ type: 'step/start', data: { turn: 1, step: 1 } })
   model.apply({
@@ -228,14 +238,29 @@ function markdownMessages(frameTheme = theme): TranscriptView {
       },
     },
   })
-  return new TranscriptView(model, frameTheme, new MarkdownRenderer(frameTheme.markdown), {
+  return new TranscriptView(model, frameTheme, new MarkdownRenderer(frameTheme.markdown, createMermaidTransform({ theme: frameTheme, mode: () => GOLDEN_MERMAID_MODE })), {
+    keys: defaultKeymap,
+    toolDisplay: () => FIXTURE_TOOL_DISPLAY,
+    spacing: () => DEFAULT_SPACING,
     state: () => ({ expandCards: false, expandReasoning: true, expandSubCalls: false }),
     gate: () => undefined,
     picker: () => undefined,
   })
 }
-export /** One frozen moment, so a frame with elapsed times is still a stable artefact. */
+/** One frozen moment, so a frame with elapsed times is still a stable artefact. */
 const NOW = 1_700_000_000_000
+// The public policy parser owns defaults; golden callers must not expose its private constants.
+const FIXTURE_TOOL_DISPLAY = toolDisplayTable().default
+const GOLDEN_TIMER_APIS: ['Date'] = ['Date']
+
+// Golden ages and elapsed labels must stay fixed without creating test-only production clocks.
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: GOLDEN_TIMER_APIS })
+  vi.setSystemTime(NOW)
+})
+
+// Other suites retain native dates and timer behavior after each rendered-frame contract.
+afterEach(() => vi.useRealTimers())
 /**
  * Combine replayable plan and goal state with live jobs and delegations to pin a busy dock.
  * Include a completed delegation to pin its omission from work in flight.
@@ -255,9 +280,9 @@ export function busyDock(frameTheme = theme): WorkDock {
     { runId: 'r1', provider: 'spawn', id: 'c000cfa3-1111-2222', startedAt: NOW - 4_000, status: 'running' as const },
     { runId: 'r2', provider: 'fork', id: 'f05abce2-3333-4444', startedAt: NOW - 30_000, status: 'completed' as const, finishedAt: NOW - 28_000 },
   ]
-  return new WorkDock(() => work.state(), frameTheme, () => jobs, () => runs, () => NOW)
+  return new WorkDock(() => work.state(), frameTheme, () => jobs, () => runs, () => {})
 }
-export /**
+/**
  * The queue a running turn leaves behind: prompts the agent has not taken yet.
  *
  * The second is longer than one row at the cramped width, so the frame, the
@@ -278,7 +303,6 @@ export function pickerCard(): SessionPicker {
       { id: 'tui-session-f38b6841-9229-4c2f-8c82-0ced1eee68ea', cwd: '/Users/dev/source/opensource/deepseek-harness/master', createdAt: NOW - 900_000, eventCount: 41 },
     ],
     () => new Map([['tui-session-33e6ddc3-c871-4534-aae1-8c38f7cf69a2', 'dock polish']]),
-    () => NOW,
     defaultKeymap,
   )
 }
@@ -303,7 +327,6 @@ function stashPickerCard(): StashPicker {
     ],
     'tui-session-87c1e0d2',
     defaultKeymap,
-    () => NOW,
   )
 }
 export /**
@@ -315,7 +338,7 @@ export /**
  */
 function gateCard(typed = ''): TranscriptView {
   const typing = typed !== ''
-  const bar = new BoxedEditor(STUB_TUI, theme.editor)
+  const bar = new BoxedEditor(STUB_TUI, theme.editor, defaultKeymap)
   // Match the borrowed question editor so its answer uses dialog framing, not conversation rails.
   bar.disableSubmit = true
   bar.setText(typed)
@@ -334,7 +357,10 @@ function gateCard(typed = ''): TranscriptView {
       ? 'type or paste an answer · enter confirm · ↑↓/ctrl+p/ctrl+n or esc back to options'
       : 'space select · digits pick · 0 answer freely · type to filter · enter confirm · esc skip',
   }
-  return new TranscriptView(new TranscriptModel(), theme, new MarkdownRenderer(theme.markdown), {
+  return new TranscriptView(new TranscriptModel(fixturePresenter()), theme, new MarkdownRenderer(theme.markdown, createMermaidTransform({ theme, mode: () => GOLDEN_MERMAID_MODE })), {
+    keys: defaultKeymap,
+    toolDisplay: () => FIXTURE_TOOL_DISPLAY,
+    spacing: () => DEFAULT_SPACING,
     state: () => DEFAULT_VIEW_STATE,
     gate: () => gate,
     picker: () => undefined,
@@ -348,12 +374,15 @@ export /**
  * every run and pin nothing.
  */
 function runningFrame(frameTheme = theme): TranscriptView {
-  let clock = FIXTURE_STARTED_AT
-  const model = new TranscriptModel(fixturePresenter(), () => clock)
+  vi.setSystemTime(FIXTURE_STARTED_AT)
+  const model = new TranscriptModel(fixturePresenter())
   model.apply({ type: 'user/message', data: { content: [{ type: 'text', text: 'run the suite' }], source: { kind: 'user' } } })
   model.apply({ type: 'tool/call', data: { name: 'bash', arguments: `{"command":"${FIXTURE_COMMAND}"}`, callId: 'c1' } })
-  clock = FIXTURE_STARTED_AT + FIXTURE_RUNNING_MS
-  return new TranscriptView(model, frameTheme, new MarkdownRenderer(frameTheme.markdown), {
+  vi.setSystemTime(FIXTURE_STARTED_AT + FIXTURE_RUNNING_MS)
+  return new TranscriptView(model, frameTheme, new MarkdownRenderer(frameTheme.markdown, createMermaidTransform({ theme: frameTheme, mode: () => GOLDEN_MERMAID_MODE })), {
+    keys: defaultKeymap,
+    toolDisplay: () => FIXTURE_TOOL_DISPLAY,
+    spacing: () => DEFAULT_SPACING,
     state: () => DEFAULT_VIEW_STATE,
     gate: () => undefined,
     picker: () => undefined,
@@ -366,8 +395,8 @@ export /**
  * frame is the only place the three marks are seen together on one card.
  */
 function dispatchedFrame(frameTheme = theme): TranscriptView {
-  let clock = FIXTURE_STARTED_AT
-  const model = new TranscriptModel(fixturePresenter(), () => clock)
+  vi.setSystemTime(FIXTURE_STARTED_AT)
+  const model = new TranscriptModel(fixturePresenter())
   model.apply({ type: 'user/message', data: { content: [{ type: 'text', text: 'check the tree' }], source: { kind: 'user' } } })
   model.apply({ type: 'tool/call', data: { name: 'run_code', arguments: '{"description":"check the tree"}', callId: 'root' } })
   const commands = ['git status', 'exit 3', 'pnpm test']
@@ -391,14 +420,17 @@ function dispatchedFrame(frameTheme = theme): TranscriptView {
       },
     })
   })
-  clock = FIXTURE_STARTED_AT + FIXTURE_RUNNING_MS
-  return new TranscriptView(model, frameTheme, new MarkdownRenderer(frameTheme.markdown), {
+  vi.setSystemTime(FIXTURE_STARTED_AT + FIXTURE_RUNNING_MS)
+  return new TranscriptView(model, frameTheme, new MarkdownRenderer(frameTheme.markdown, createMermaidTransform({ theme: frameTheme, mode: () => GOLDEN_MERMAID_MODE })), {
+    keys: defaultKeymap,
+    toolDisplay: () => FIXTURE_TOOL_DISPLAY,
+    spacing: () => DEFAULT_SPACING,
     state: () => ({ ...DEFAULT_VIEW_STATE, expandSubCalls: true }),
     gate: () => undefined,
     picker: () => undefined,
   })
 }
-export /**
+/**
  * A tool row a terminal would have acted on: a tab on its stop, a colour run,
  * and a carriage return that rewrites the row it sits on.
  *
@@ -420,7 +452,10 @@ export function terminalTextFrame(frameTheme = theme): TranscriptView {
     type: 'tool/result',
     data: { message: { content: [{ type: 'tool-result', toolCallId: 'c1', text: TERMINAL_TEXT_OUTPUT }], isError: false } },
   })
-  return new TranscriptView(model, frameTheme, new MarkdownRenderer(frameTheme.markdown), {
+  return new TranscriptView(model, frameTheme, new MarkdownRenderer(frameTheme.markdown, createMermaidTransform({ theme: frameTheme, mode: () => GOLDEN_MERMAID_MODE })), {
+    keys: defaultKeymap,
+    toolDisplay: () => FIXTURE_TOOL_DISPLAY,
+    spacing: () => DEFAULT_SPACING,
     state: () => ({ expandCards: true, expandReasoning: false, expandSubCalls: false }),
     gate: () => undefined,
     picker: () => undefined,

@@ -23,8 +23,8 @@ export interface MoshiReporter {
 }
 
 /** Best-effort notifications must never hold the terminal or become an agent dependency. */
-export function createMoshiReporter(env: NodeJS.ProcessEnv = process.env): MoshiReporter | undefined {
-  const token = env[TOKEN_ENV]?.trim()
+export function createMoshiReporter(): MoshiReporter | undefined {
+  const token = process.env[TOKEN_ENV]?.trim()
   if (!token) return undefined
 
   let session: string | undefined

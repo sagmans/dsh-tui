@@ -16,7 +16,7 @@ export type TranscriptEntry =
   | { readonly kind: 'step' }
 
 /** Reasoning kept per settled block, so one runaway thought cannot grow the transcript without bound. */
-export const REASONING_CHAR_LIMIT = 20_000
+const REASONING_CHAR_LIMIT = 20_000
 
 /**
  * How far a live thought may grow past that budget before its head is dropped.
@@ -96,16 +96,9 @@ export class TranscriptModel {
   /** The call-to-row bookkeeping tool events share, told the clock and the rows this model holds. */
   private readonly calls: ToolCallFold
 
-  constructor(
-    presenter?: ToolPresenter,
-    /**
-     * Clock for "how long has this been thinking or running"; injected so a test
-     * can pin it and reachable through {@link now} so a renderer keys its rows
-     * to the same one.
-     */
-    private readonly clock: () => number = () => Date.now(),
-  ) {
-    this.calls = new ToolCallFold(presenter, clock, index => this.cardAt(index))
+  constructor(presenter: ToolPresenter) {
+    // Tool calls and renderer cache keys share the model's duration owner.
+    this.calls = new ToolCallFold(presenter, () => this.now(), index => this.cardAt(index))
   }
 
   /**
@@ -116,7 +109,7 @@ export class TranscriptModel {
    * only way for the number on screen and the cache key to agree.
    */
   now(): number {
-    return this.clock()
+    return Date.now()
   }
 
   /** Renderers retain a document until its folded content changes, independent of keyboard frames. */
@@ -128,7 +121,7 @@ export class TranscriptModel {
   entries(): readonly TranscriptEntry[] {
     const entries = [...this.settled]
     if (this.liveReasoning !== '') {
-      const ranFor = this.reasoningStartedAt === undefined ? undefined : this.clock() - this.reasoningStartedAt
+      const ranFor = this.reasoningStartedAt === undefined ? undefined : this.now() - this.reasoningStartedAt
       entries.push({
         kind: 'reasoning',
         // The live row and the row it settles into share an id, so a click made
@@ -202,7 +195,7 @@ export class TranscriptModel {
       case 'reasoning-delta':
         if (typeof record.text !== 'string') return
         this.contentRevision++
-        this.reasoningStartedAt ??= this.clock()
+        this.reasoningStartedAt ??= this.now()
         this.liveReasoningId ??= String(++this.thoughtSeq)
         this.liveReasoning += record.text
         // Keep recent thought text visible as new deltas arrive, rather than
@@ -281,7 +274,7 @@ export class TranscriptModel {
   private settleReasoning(): void {
     if (this.liveReasoning === '') return
     const text = this.liveReasoning
-    const ranFor = this.reasoningStartedAt === undefined ? undefined : this.clock() - this.reasoningStartedAt
+    const ranFor = this.reasoningStartedAt === undefined ? undefined : this.now() - this.reasoningStartedAt
     this.liveReasoning = ''
     this.reasoningStartedAt = undefined
     this.paintReasoning(text, ranFor)

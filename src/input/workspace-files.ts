@@ -343,7 +343,7 @@ export async function canonicalOrUndefined(path: string): Promise<string | undef
  * directories first. This best-effort completion list retains available rows
  * when a subtree cannot be read, rather than discarding the rest of the tree.
  */
-export async function walkFiles(cwd: string, signal: AbortSignal): Promise<readonly Candidate[]> {
+async function walkFiles(cwd: string, signal: AbortSignal): Promise<readonly Candidate[]> {
   if (signal.aborted) return []
   const canonicalRoot = await canonicalOrUndefined(cwd)
   if (canonicalRoot === undefined) return []

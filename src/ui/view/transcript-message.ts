@@ -14,7 +14,7 @@ import { type TuiTheme } from '../../theme.ts'
 import { codeBlockLines } from '../diff.ts'
 import { canFrame, frameBlock, RAIL_COLUMNS, textWidth, type FrameRow } from '../frame.ts'
 import { gapRows } from '../gap.ts'
-import { ANSWER_FACE, type MarkdownFace, type MarkdownRenderer } from '../markdown.ts'
+import { type MarkdownFace, type MarkdownRenderer } from '../markdown.ts'
 import { type ClickSpan } from '../view.ts'
 
 const DETAIL_INDENT = '    '
@@ -89,8 +89,8 @@ export class Messages {
       text: string,
       width: number,
       live: boolean,
-      face: MarkdownFace = ANSWER_FACE,
-      indent = '',
+      face: MarkdownFace,
+      indent: string,
     ): void {
       const lead = visibleWidth(indent)
       for (const line of this.markdownLines(text, Math.max(1, width - lead), live, face, lead)) {

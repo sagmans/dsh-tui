@@ -138,7 +138,7 @@ export function createSessionPicker(ctx: Context, ports: SessionPickerPorts): Se
   const askForSession = async (history: SessionHistory, sessions: readonly StoredSession[]): Promise<SessionId | undefined> => {
     const titles = new Map<string, string>()
     void loadTitles(history, sessions, titles)
-    const picked = await ports.openPicker(new SessionPicker(sessions, () => titles, undefined, ports.keymap), refuseReason)
+    const picked = await ports.openPicker(new SessionPicker(sessions, () => titles, ports.keymap), refuseReason)
     return picked === undefined ? undefined : SessionId(picked)
   }
 

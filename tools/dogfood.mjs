@@ -10,7 +10,7 @@ import pty from 'node-pty'
 import yaml from 'js-yaml'
 import { LOCAL_COMMANDS } from '../lib/input/submission.js'
 import { ACTION_CATALOG } from '../lib/input/action-catalog.js'
-import { TUI_TOKENS, PALETTE_NAMES, CARD_ROW_CLASSES } from '../lib/theme-tokens.js'
+import { TUI_TOKENS, PALETTE_NAMES } from '../lib/theme-tokens.js'
 import { preparePtyLaunch } from './pty-launch.mjs'
 import { runFreeTransports } from './dogfood-transports.mjs'
 import { PtyScreen } from './pty-screen.mjs'
@@ -21,7 +21,7 @@ const SCENARIOS = JSON.parse(readFileSync(join(ROOT, 'tools/dogfood-scenarios.js
 const INVENTORY = JSON.parse(readFileSync(join(ROOT, 'tools/feature-inventory.json'), 'utf8'))
 if (JSON.stringify(INVENTORY.commands.map(row => row.command).sort()) !== JSON.stringify([...LOCAL_COMMANDS].sort())) throw new Error('dogfood: command inventory drifted')
 if (JSON.stringify(INVENTORY.actions.map(row => [row.id, row.defaultKeys])) !== JSON.stringify(ACTION_CATALOG.map(row => [row.id, row.defaultKeys]))) throw new Error('dogfood: action inventory drifted')
-if (JSON.stringify(INVENTORY.appearance.tokens) !== JSON.stringify(TUI_TOKENS) || JSON.stringify(INVENTORY.appearance.paletteNames) !== JSON.stringify(PALETTE_NAMES) || JSON.stringify(INVENTORY.appearance.cardRowClasses) !== JSON.stringify(CARD_ROW_CLASSES)) throw new Error('dogfood: appearance inventory drifted')
+if (JSON.stringify(INVENTORY.appearance.tokens) !== JSON.stringify(TUI_TOKENS) || JSON.stringify(INVENTORY.appearance.paletteNames) !== JSON.stringify(PALETTE_NAMES)) throw new Error('dogfood: appearance inventory drifted')
 for (const scenario of [...SCENARIOS.free, ...SCENARIOS.paid]) {
   if (!/^[a-z][a-z0-9-]*$/u.test(scenario.id)) throw new Error('dogfood: invalid scenario id')
 }

@@ -149,10 +149,10 @@ export function isReportChange(last: LifecycleReport | undefined, next: Lifecycl
  * keeps numbers moving forward anyway — a clock that steps backwards must not
  * hand Herdr a number it has already seen.
  */
-export function createReportSequence(now: () => number): () => number {
+export function createReportSequence(): () => number {
   let sequence = 0
   return () => {
-    sequence = Math.max(sequence + 1, now() * SEQ_TIME_SCALE)
+    sequence = Math.max(sequence + 1, Date.now() * SEQ_TIME_SCALE)
     return sequence
   }
 }

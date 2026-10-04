@@ -2,8 +2,8 @@ import { stripTerminalSequences, truncateToWidth, type EditorTheme, type Markdow
 import { codeBlockLines, plainCodeLines } from './ui/diff.ts'
 import { oneRow } from './text.ts'
 import { renderTerminalText } from './terminal-text.ts'
-import { detectColourMode, type ColourMode } from './theme-capability.ts'
-import { DEFAULT_PALETTE, DEFAULT_TOKENS } from './theme-defaults.ts'
+import { type ColourMode } from './theme-capability.ts'
+import { DEFAULT_PALETTE } from './theme-defaults.ts'
 import { resolveToken, type ResolvedStyle } from './theme-resolver.ts'
 import type { TuiToken } from './theme-tokens.ts'
 import { themeLayer, type ThemeOverrides } from './theme-settings.ts'
@@ -20,7 +20,7 @@ const NO_OVERRIDES: ThemeOverrides = { palette: DEFAULT_PALETTE, tokens: new Map
 let themeRevision = 0
 
 /** What a drawn fragment needs to know: the element it belongs to, and where it starts. */
-export interface RichTextOptions {
+interface RichTextOptions {
   /** The element the fragment is drawn inside, whose colour is the ground it returns to. */
   readonly token?: TuiToken
   /** The column the fragment starts at, so its first tab lands on the terminal's next stop. */
@@ -109,7 +109,7 @@ function editorTheme(
 
 /** Cache each token on first use so rows sharing a token do not repeat palette
  * and inheritance resolution within this theme. */
-export function createTheme(mode: ColourMode = detectColourMode(process.env), overrides: ThemeOverrides = NO_OVERRIDES): TuiTheme {
+export function createTheme(mode: ColourMode, overrides: ThemeOverrides = NO_OVERRIDES): TuiTheme {
   const resolved = new Map<TuiToken, ResolvedStyle>()
   // Looked up once: a theme is one layer of every token's answer, not a
   // per-token decision, and a repaint asks for all of them.

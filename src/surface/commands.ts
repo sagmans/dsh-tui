@@ -184,7 +184,8 @@ export function createCommands(ctx: Context, ports: CommandsPorts): Commands {
 
   /** Inspect the visible todo projection locally, without asking the agent to start another turn. */
   const runTodoCommand = (): void => {
-    ports.transcript.notice(describeTodos(ports.transcript.workState().todos))
+    const work = ports.transcript.workState()
+    ports.transcript.notice(describeTodos(work.todos, work.todoState))
     ports.render()
   }
 

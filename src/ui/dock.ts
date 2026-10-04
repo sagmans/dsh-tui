@@ -7,7 +7,7 @@ import type { TodoEntry, WorkState } from '../work.ts'
 import { pushGap } from './gap.ts'
 
 /** Bound the todo preview so a growing plan does not consume the conversation; overflow remains counted. */
-export const DOCK_TODO_LIMIT = 4
+const DOCK_TODO_LIMIT = 4
 
 const GOAL_MARK = '◎'
 const PLAN_MODE_MARK = '⏸'
@@ -95,13 +95,11 @@ export class WorkDock implements Component {
     private readonly state: () => WorkState,
     private readonly theme: TuiTheme,
     /** Live background jobs: process state, not something a resume can replay. */
-    private readonly jobs: () => readonly JobSummary[] = () => [],
+    private readonly jobs: () => readonly JobSummary[],
     /** Delegations this session started; also live state. */
-    private readonly subagents: () => readonly SubagentRun[] = () => [],
-    /** Clock for elapsed times, so a frame can be pinned in a test. */
-    private readonly now: () => number = () => Date.now(),
+    private readonly subagents: () => readonly SubagentRun[],
     /** A child opens through the same read-only transcript path as /subagents open. */
-    private readonly openSubagent?: (id: string) => void,
+    private readonly openSubagent: (id: string) => void,
   ) {}
 
   invalidate(): void {
@@ -115,7 +113,6 @@ export class WorkDock implements Component {
     const row = event.y - this.openLeadRows
     const text = this.subagentTexts.get(row)
     if (text !== undefined && event.x >= visibleWidth(SUBAGENT_ROW_INDENT) && event.x < text.endX) {
-      if (this.openSubagent === undefined) return undefined
       this.openSubagent(text.id)
       return { handled: true, render: true }
     }
@@ -210,7 +207,7 @@ export class WorkDock implements Component {
     const start = lines.length
     const headingRows = this.theme.visible('dock.subagents.heading') ? 1 : 0
     const limit = this.subagentsExpanded ? running.length : DOCK_SUBAGENT_LIMIT
-    const now = this.now()
+    const now = Date.now()
     const rows: string[] = []
     for (const run of running.slice(0, limit)) {
       if (!this.theme.visible('dock.subagents.running')) continue
@@ -241,7 +238,7 @@ export class WorkDock implements Component {
     // Give recent starts the limited preview slots so new work appears even while older jobs remain live.
     // Older work stays in the overflow count; this ordering does not rank urgency.
     const ordered = [...live].sort((left, right) => right.startedAt - left.startedAt)
-    const now = this.now()
+    const now = Date.now()
     const rows: string[] = []
     for (const job of ordered.slice(0, DOCK_JOB_LIMIT)) {
       if (!this.theme.visible('dock.jobs.running')) continue

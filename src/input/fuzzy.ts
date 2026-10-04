@@ -56,8 +56,6 @@ const INITIAL_CLASS = WHITE
 const DELIMITER_CHARACTERS = '/,:;|'
 const WHITE_CHARACTERS = ' \t\n\v\f\r\u0085\u00a0'
 
-const LOWER_PATTERN = /[a-z]/
-const UPPER_PATTERN = /[A-Z]/
 const NUMBER_PATTERN = /[0-9]/
 
 /**

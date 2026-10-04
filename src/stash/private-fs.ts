@@ -75,7 +75,6 @@ export class FileTooLargeError extends Error {
 export async function ensurePrivateDirectory(
   directory: string,
   label = 'storage directory',
-  syncDirectory: typeof syncDirectoryEntry = syncDirectoryEntry,
 ): Promise<void> {
   await assertTrustedAncestors(directory, label)
   const { created, namingParents } = await createPrivateDirectory(directory)
@@ -87,7 +86,7 @@ export async function ensurePrivateDirectory(
     } finally {
       await handle.close()
     }
-    for (const parent of namingParents) await syncDirectory(parent)
+    for (const parent of namingParents) await syncDirectoryEntry(parent)
   } catch (error) {
     // Deepest first, so a directory is only removed once nothing is named by it.
     for (const entry of created) {
@@ -236,7 +235,7 @@ export async function assertPrivateDirectory(directory: string, label: string): 
   }
 }
 
-export async function syncPrivateDirectory(directory: string, label = 'storage directory'): Promise<void> {
+async function syncPrivateDirectory(directory: string, label = 'storage directory'): Promise<void> {
   const handle = await openValidatedDirectory(directory, label)
   try {
     await handle.sync()
@@ -311,7 +310,6 @@ export async function quarantinePrivateFile(
   filePath: string,
   identity: FileIdentity,
   label: string,
-  syncDirectory: typeof syncPrivateDirectory = syncPrivateDirectory,
 ): Promise<QuarantineResult> {
   for (let attempt = 0; attempt < MAX_QUARANTINE_ATTEMPTS; attempt += 1) {
     const candidate = `${filePath}.${label}${attempt === 0 ? '' : `-${attempt}`}`
@@ -330,7 +328,7 @@ export async function quarantinePrivateFile(
       await unlink(filePath)
       moved = true
       try {
-        await syncDirectory(path.dirname(filePath))
+        await syncPrivateDirectory(path.dirname(filePath))
       } catch (error) {
         // The bytes are already under the recovery name and the original is
         // gone, so the path is the one thing the reader must still be told.
@@ -388,7 +386,7 @@ function assertDirectory(stats: Stats, label: string): void {
   if (!stats.isDirectory()) throw new Error(`${label} must be a directory`)
 }
 
-export function assertRegularOwnedFile(stats: Stats, label: string): void {
+function assertRegularOwnedFile(stats: Stats, label: string): void {
   if (stats.isSymbolicLink()) throw new Error(`${label} must not be a symbolic link`)
   if (!stats.isFile()) throw new Error(`${label} must be a regular file`)
   assertCurrentUserOwns(stats, label)
@@ -411,7 +409,7 @@ function identityOf(stats: Stats): FileIdentity {
   return { dev: stats.dev, ino: stats.ino }
 }
 
-export async function pathExists(target: string): Promise<boolean> {
+async function pathExists(target: string): Promise<boolean> {
   try {
     await lstat(target)
     return true

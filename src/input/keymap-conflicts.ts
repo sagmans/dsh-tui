@@ -19,7 +19,7 @@ import { type KeyId } from '@earendil-works/pi-tui'
  * action the reader could never reach — and the surface answers these layers
  * itself, first row first, so two rows sharing one byte is one row that loses.
  */
-export function refuseMatcherClashes(effective: Readonly<Record<string, readonly KeyId[]>>, catalog: readonly Action[] = ACTION_CATALOG): void {
+export function refuseMatcherClashes(effective: Readonly<Record<string, readonly KeyId[]>>, catalog: readonly Action[]): void {
   for (const layer of ['surface', 'chord', 'gate', 'question', 'picker'] as const) {
     const rows: PressRow[] = []
     for (const action of catalog) {
@@ -42,7 +42,7 @@ export function refuseMatcherClashes(effective: Readonly<Record<string, readonly
  * press they arrive as rather than by every byte the matcher folds, so moving
  * send onto Ctrl+J stays possible.
  */
-export function refusePromptClashes(effective: Readonly<Record<string, readonly KeyId[]>>, catalog: readonly Action[] = ACTION_CATALOG): void {
+export function refusePromptClashes(effective: Readonly<Record<string, readonly KeyId[]>>, catalog: readonly Action[]): void {
   const owner = new Map<string, string>()
   for (const action of catalog) {
     if (action.layer !== 'prompt') continue
@@ -64,7 +64,7 @@ export function refusePromptClashes(effective: Readonly<Record<string, readonly 
  * that is also a surface key would not shadow that action while a chord is
  * armed: it would remove it for the whole session.
  */
-export function refusePrefixTakingKeys(effective: Readonly<Record<string, readonly KeyId[]>>, catalog: readonly Action[] = ACTION_CATALOG): void {
+export function refusePrefixTakingKeys(effective: Readonly<Record<string, readonly KeyId[]>>, catalog: readonly Action[]): void {
   const owners = catalog.filter(action => action.layer === 'surface' || action.layer === 'prompt')
   for (const key of effective['chord.prefix'] ?? []) {
     for (const owner of owners) {
@@ -276,7 +276,7 @@ function viewportPairs(rows: Readonly<Record<string, readonly KeyId[]>>): Viewpo
  * reader wrote, and both are a binding that does nothing, so both are refused
  * apart from the overlap the library already ships.
  */
-export function refuseViewportTakingKeys(effective: Readonly<Record<string, readonly KeyId[]>>, written: ReadonlySet<string>, catalog: readonly Action[] = ACTION_CATALOG): void {
+export function refuseViewportTakingKeys(effective: Readonly<Record<string, readonly KeyId[]>>, written: ReadonlySet<string>, catalog: readonly Action[]): void {
   const pairKey = (pair: ViewportPair): string => `${pair.viewport}\u0000${pair.other}\u0000${pair.spellings.join('|')}`
   const shipped = new Set(viewportPairs(shippedRows()).map(pairKey))
   // A prompt row is read through a library row of the bar's own, so the reader's

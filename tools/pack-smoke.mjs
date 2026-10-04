@@ -187,19 +187,19 @@ try {
   } finally {
     standalone.deregister()
   }
-  const { installBundledSkill } = await import(pathToFileURL(join(unpacked, 'package', 'lib', 'install-skills.js')).href)
-  const destination = installBundledSkill(SKILL_NAME, join(out, 'home'))
+  const { installBundledSkills } = await import(pathToFileURL(join(unpacked, 'package', 'lib', 'install-skills.js')).href)
+  const [destination] = installBundledSkills(join(out, 'home'), undefined, [SKILL_NAME])
   const helper = lstatSync(join(destination, SKILL_HELPER))
   if (!helper.isFile() || helper.isSymbolicLink() || (helper.mode & 0o111) === 0) {
     problems.push('installed dogfood helper is not executable')
   }
   // Replacement must discard stale skill files while retaining executable helpers.
   writeFileSync(join(destination, 'stale.txt'), 'old copy')
-  const updated = installBundledSkill(SKILL_NAME, join(out, 'home'), true)
+  const [updated] = installBundledSkills(join(out, 'home'), true, [SKILL_NAME])
   if (updated !== destination || readdirSync(updated).includes('stale.txt')) {
     problems.push('updating the packaged skill left an old file behind')
   }
-  const modelSkill = installBundledSkill(MODEL_SKILL_NAME, join(out, 'home'))
+  const [modelSkill] = installBundledSkills(join(out, 'home'), undefined, [MODEL_SKILL_NAME])
   if (!readFileSync(join(modelSkill, 'SKILL.md'), 'utf8').includes('name: ' + MODEL_SKILL_NAME)) {
     problems.push('the packaged model skill is not the one install-skills installs')
   }

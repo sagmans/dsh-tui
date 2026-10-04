@@ -1,6 +1,5 @@
-import { type Component, ScrollView } from '@earendil-works/pi-tui'
+import { ScrollView } from '@earendil-works/pi-tui'
 import type { Context } from '@deepseek-ai/cordis'
-import type { Agent } from '@deepseek-ai/dsh-agent'
 import { createSessionHistory, presetOfStoredSession } from './agent/history.ts'
 import { createPresetRoster } from './agent/presets.ts'
 import type { ForkEvent } from './agent/fork.ts'
@@ -9,7 +8,6 @@ import { describeMissingOptional, describeMissingRequired, probeComposition } fr
 import { hasLiveRowSettings, readRowSettings, resolveConfig } from './config.ts'
 export { Config } from './config.ts'
 import { describeSkillDrift } from './install-skills.ts'
-import { windowTitle } from './terminal/title.ts'
 import { toolDisplayFor } from './tool-display.ts'
 import { runModelList } from './model-list.ts'
 import { createMoshiReporter } from './moshi.ts'
@@ -55,18 +53,6 @@ export const name = 'tui'
  * otherwise the surface mounts without the addon keyboard the profile supplies.
  */
 export const inject = ['agents', 'tools', 'agentPresets', TUI_KEYMAP_SERVICE]
-
-interface ServiceFor {
-  serviceFor(agent: unknown, name: string): unknown
-}
-
-interface CommandRegistry {
-  list(agent: Agent): readonly { readonly name: string; readonly description: string }[]
-  find(agent: Agent, name: string): unknown
-  execute(agent: Agent, line: string, attachments: readonly unknown[], signal: AbortSignal): Promise<
-    { readonly result: { readonly kind: 'success' | 'error'; readonly text?: string } } | undefined
-  >
-}
 
 /**
  * Refuse to run without a real terminal.
@@ -396,7 +382,7 @@ export function apply(ctx: Context, config: unknown): void {
     stash: () => stash?.entryCount,
   })
   const statusBar = new StatusBar(statusFacts, theme)
-  const dock = new WorkDock(() => sessionView.workState(), theme, () => backgroundWork.jobs(), () => backgroundWork.roster.list(), undefined, id => {
+  const dock = new WorkDock(() => sessionView.workState(), theme, () => backgroundWork.jobs(), () => backgroundWork.roster.list(), id => {
     void sessionView.show(SessionId(id))
   })
   const queue = new QueueBar(() => sessionLifecycle.queuedPrompts(), theme)

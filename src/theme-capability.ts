@@ -2,20 +2,20 @@
 export type ColourMode = 'truecolor' | '256' | '16' | 'none'
 
 /** An ANSI palette index, 0-255. */
-export type AnsiIndex = number
+type AnsiIndex = number
 
 /** An RGB triple. */
-export interface Rgb {
+interface Rgb {
   readonly r: number
   readonly g: number
   readonly b: number
 }
 
 /** Preserve RGB and palette indices separately so capable terminals retain the chosen representation. */
-export type ParsedColour = Rgb | AnsiIndex
+type ParsedColour = Rgb | AnsiIndex
 
 /** Which layer an SGR colour code addresses. */
-export type ColourLayer = 'fg' | 'bg'
+type ColourLayer = 'fg' | 'bg'
 
 /** Bound palette indices and RGB channels before they become terminal parameters. */
 const HEX = /^#([0-9a-f]{6})$/iu

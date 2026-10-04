@@ -10,7 +10,7 @@ import {
   type TuiMouseEvent,
   type TuiMouseEventResult,
 } from '@earendil-works/pi-tui'
-import { defaultKeymap, type Keymap } from '../input/actions.ts'
+import { type Keymap } from '../input/actions.ts'
 import { ENTER_KEY } from '../input/key-press.ts'
 import { ghostDisplayLine, ghostGraphemes, isCursorAtTextEnd, nextGhostWord, type EditorCursor } from '../input/ghost.ts'
 import { promptKeys } from '../input/keymap.ts'
@@ -69,10 +69,10 @@ const GHOST_ACCEPT_ALL_KEY = 'ctrl+e'
 const GHOST_WORD_RIGHT_ACTION = 'tui.editor.cursorWordRight'
 
 /** Which run of a ghost is being drawn: the cursor cell, or the text after it. */
-export type GhostCell = 'cursor' | 'rest'
+type GhostCell = 'cursor' | 'rest'
 
 /** What the bar knows when it asks for a suggestion. */
-export interface GhostRequest {
+interface GhostRequest {
   readonly text: string
   readonly lines: readonly string[]
   readonly cursor: EditorCursor
@@ -118,7 +118,7 @@ export class BoxedEditor extends Editor {
   constructor(
     tui: TUI,
     theme: EditorTheme,
-    private readonly keymap: () => Keymap = defaultKeymap,
+    private readonly keymap: () => Keymap,
     private readonly ghost?: GhostBrush,
   ) {
     super(tui, theme, { paddingX: PADDING_X })

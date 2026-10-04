@@ -110,7 +110,7 @@ function diffStats(diffs: readonly FileDiff[]): readonly CardStat[] {
  * one coarse replacement region, including unchanged interior lines; these rows
  * also feed change statistics. Card callers, not this helper, enforce retention.
  */
-export function renderFileDiff(diff: FileDiff): CardRow[] {
+function renderFileDiff(diff: FileDiff): CardRow[] {
   const before = diff.oldText === null ? [] : diff.oldText.split('\n')
   const after = diff.newText.split('\n')
   let head = 0
@@ -174,7 +174,7 @@ function skillHead(shown: string, name: string): { label: string; skill?: string
   return skill === undefined || skill === '' ? { label: shown } : { label: SKILL_TOOL, skill }
 }
 
-export function title(view: { title?: string }, fallback: string): string {
+function title(view: { title?: string }, fallback: string): string {
   const declared = view.title?.trim() ?? ''
   const lead = REDUNDANT_TITLE_LEADS.find(prefix => declared.startsWith(prefix))
   const shown = lead === undefined ? declared : declared.slice(lead.length).trim()

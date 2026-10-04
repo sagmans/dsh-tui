@@ -27,7 +27,7 @@ function stashHints(keys: () => Keymap, verb: string): PickerHints {
  * A picker row is a single line, so line feeds and runs of whitespace collapse;
  * a draft whose only line is blank still has to name itself.
  */
-export function stashLabel(text: string): string {
+function stashLabel(text: string): string {
   const line = text.split('\n').find(candidate => candidate.trim() !== '')?.trim().replace(/\s+/gu, ' ')
   if (line === undefined || line === '') return EMPTY_LABEL
   return line.length <= LABEL_LENGTH ? line : `${line.slice(0, LABEL_LENGTH - 1)}${ELLIPSIS}`
@@ -47,7 +47,6 @@ export class StashPicker extends ListPicker<ResolvedEntry> {
     entries: readonly ResolvedEntry[],
     bankLabel: string,
     keys: () => Keymap,
-    now: () => number = () => Date.now(),
   ) {
     super(
       () => entries,
@@ -55,7 +54,7 @@ export class StashPicker extends ListPicker<ResolvedEntry> {
       row => row.entry.id,
       (row): PickerRow => ({
         label: `[${row.index}] ${stashLabel(row.entry.text)}`,
-        description: describeAge(row.entry.createdAt, now()),
+        description: describeAge(row.entry.createdAt, Date.now()),
         // The card marks the row under the cursor, which the list decides.
         current: false,
       }),
@@ -67,7 +66,7 @@ export class StashPicker extends ListPicker<ResolvedEntry> {
 }
 
 /** The choice that clears the bank, as opposed to leaving it alone. */
-export const STASH_CLEAR_CHOICE = 'clear'
+const STASH_CLEAR_CHOICE = 'clear'
 const STASH_CANCEL_CHOICE = 'cancel'
 
 interface ConfirmChoice {

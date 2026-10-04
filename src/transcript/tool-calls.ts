@@ -71,7 +71,7 @@ export class ToolCallFold {
   private readonly pendingSub = new Map<string, { readonly rootIndex: number; readonly childIndex: number }>()
 
   constructor(
-    private readonly presenter: ToolPresenter | undefined,
+    private readonly presenter: ToolPresenter,
     private readonly clock: () => number,
     /** Reads back the card a settled row holds, so a dispatch or a result restates the row it drew. */
     private readonly cardAt: (index: number) => ToolCard | undefined,
@@ -133,7 +133,7 @@ export class ToolCallFold {
     const name = typeof data.name === 'string' ? data.name : 'tool'
     const argumentsJson = typeof data.arguments === 'string' ? data.arguments : ''
     const callId = typeof data.callId === 'string' ? data.callId : ''
-    const card = this.presenter?.call(name, argumentsJson)
+    const card = this.presenter.call(name, argumentsJson)
     const entry: TranscriptEntry = {
       kind: 'tool',
       // The id is what keeps a reader's click on this message after the
@@ -165,7 +165,7 @@ export class ToolCallFold {
     const argumentsJson = argumentsJsonOf(data.arguments)
     // The call's own view is asked for once: it names the row and it is what the
     // row shows of the call itself, so two asks could disagree about one call.
-    const view = this.presenter?.call(name, argumentsJson)
+    const view = this.presenter.call(name, argumentsJson)
     const isError = data.isError === true
     const result = settled ? this.subCallResult(name, argumentsJson, data, view) : undefined
     const output = result === undefined ? undefined : subCallRows(result)
@@ -226,7 +226,7 @@ export class ToolCallFold {
     view: ToolCard | undefined,
   ): ToolCard {
     const failed = data.isError === true
-    return this.presenter?.result(name, { argumentsJson, content: data.content, isError: failed, meta: data.meta })
+    return this.presenter.result(name, { argumentsJson, content: data.content, isError: failed, meta: data.meta })
       ?? cardFromLines(view?.kind ?? 'generic', name, view?.title ?? name, contentLinesOf(data.content), failed)
   }
 
@@ -247,7 +247,7 @@ export class ToolCallFold {
     if (pending !== undefined) for (const sub of pending.subs) this.pendingSub.delete(sub)
     const name = pending?.name ?? 'tool'
     const isError = message?.isError === true
-    const result = this.presenter?.result(name, {
+    const result = this.presenter.result(name, {
       argumentsJson: pending?.argumentsJson ?? '',
       content: message?.content,
       isError,

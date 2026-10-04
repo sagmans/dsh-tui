@@ -28,14 +28,8 @@ import {
 /** Keep pane selection at the transport boundary so lifecycle reports need not depend on ambient process state. */
 export type HerdrEnvironment = Readonly<Record<string, string | undefined>>
 
-/** Bound each best-effort request independently of the reporter's later retries. */
-export interface HerdrClientOptions {
-  readonly attempts?: number
-  readonly timeoutMs?: number
-}
-
 /** Domain reports keep Herdr wire field names out of lifecycle orchestration. */
-export interface StateReport {
+interface StateReport {
   readonly state: HerdrState
   readonly message: string | undefined
   readonly seq: number
@@ -43,7 +37,7 @@ export interface StateReport {
 }
 
 /** Report session-opening reasons separately so a state change need not infer how the conversation opened. */
-export interface SessionReport {
+interface SessionReport {
   readonly sessionId: string
   readonly seq: number
   readonly reason: SessionStartReason
@@ -56,7 +50,7 @@ export interface SessionReport {
  * with no row is one this surface has to claim again, while a pane Herdr could
  * not be asked about is one it has to leave alone.
  */
-export type PaneRow = 'ours' | 'other' | 'none' | 'unknown'
+type PaneRow = 'ours' | 'other' | 'none' | 'unknown'
 
 export interface HerdrClient {
   /** Whether Herdr started this process and asked to be told about it. */
@@ -115,14 +109,12 @@ interface QueuedReport {
  * that names it. Pending states coalesce because only the latest pane state
  * matters; request deadlines bound delivery time, not the queue's length.
  */
-export function createHerdrClient(env: HerdrEnvironment = process.env, options: HerdrClientOptions = {}): HerdrClient {
+export function createHerdrClient(env: HerdrEnvironment = process.env): HerdrClient {
   const paneId = env[HERDR_PANE_ID_VAR]
   const socketPath = env[HERDR_SOCKET_PATH_VAR]
   // Herdr exports all three together; requiring each keeps a half-configured
   // environment from producing reports that name no pane.
   const enabled = env[HERDR_ENV_VAR] === HERDR_ENV_FLAG && paneId !== undefined && socketPath !== undefined
-  const attempts = Math.max(1, options.attempts ?? DEFAULT_ATTEMPTS)
-  const timeoutMs = Math.max(1, options.timeoutMs ?? DEFAULT_TIMEOUT_MS)
   let requestNumber = 0
   let queued: QueuedReport[] = []
   let pumping = false
@@ -138,7 +130,7 @@ export function createHerdrClient(env: HerdrEnvironment = process.env, options: 
   const deliver = async (request: WireRequest): Promise<boolean> =>
     socketPath === undefined
       ? true
-      : sendWithRetry(socketPath, request, attempts, timeoutMs, () => closed)
+      : sendWithRetry(socketPath, request, DEFAULT_ATTEMPTS, DEFAULT_TIMEOUT_MS, () => closed)
 
   const pump = async (): Promise<void> => {
     if (pumping) return
@@ -187,7 +179,7 @@ export function createHerdrClient(env: HerdrEnvironment = process.env, options: 
         id: `${HERDR_SOURCE}:${String(process.pid)}:${String(++requestNumber)}`,
         method: 'pane.get',
         params: { pane_id: paneId },
-      }, attempts, timeoutMs, () => closed)
+      }, DEFAULT_ATTEMPTS, DEFAULT_TIMEOUT_MS, () => closed)
       if (!answer.ok) return 'unknown'
       const agent = paneAgent(answer.result)
       if (agent === undefined) return 'unknown'
@@ -269,7 +261,7 @@ function acceptedTokens(tokens: Readonly<Record<string, string | undefined>>): R
 }
 
 /** Herdr's socket is a named pipe on Windows. */
-export function socketEndpoint(path: string): string {
+function socketEndpoint(path: string): string {
   return process.platform === 'win32' ? `\\\\.\\pipe\\${path}` : path
 }
 

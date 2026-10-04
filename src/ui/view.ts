@@ -6,12 +6,12 @@ import { type FrameRow } from './frame.ts'
 import { gapRows, pushGap } from './gap.ts'
 import { type TuiTheme } from '../theme.ts'
 import { type TuiToken } from '../theme-tokens.ts'
-import { DEFAULT_TOOL_DISPLAY, type ToolDisplaySpec } from '../tool-display.ts'
-import { DEFAULT_SPACING, type Spacing } from '../spacing.ts'
+import { type ToolDisplaySpec } from '../tool-display.ts'
+import { type Spacing } from '../spacing.ts'
 import { SECOND_MS } from '../transcript/tool-calls.ts'
 import { type TranscriptEntry, type TranscriptModel } from '../transcript.ts'
 import { type GateCard } from '../gates.ts'
-import { defaultKeymap, hintKeys, type Keymap } from '../input/actions.ts'
+import { hintKeys, type Keymap } from '../input/actions.ts'
 import { type Component, type TuiMouseEvent, type TuiMouseEventResult, visibleWidth, wrapTextWithAnsi } from '@earendil-works/pi-tui'
 import { GateCards } from './view/gate-card.ts'
 import { Messages } from './view/transcript-message.ts'
@@ -28,7 +28,7 @@ export interface ViewState {
   readonly expandSubCalls: boolean
 }
 /**
- * The state a reader gets before opening anything, and the view's own fallback.
+ * The state a reader gets before opening anything.
  *
  * Thoughts start folded because they can be long enough to push the answer off
  * the screen. Cards start from the reader's own `tools:` settings, which ship
@@ -76,9 +76,9 @@ const nestedCallsClickKey = (id: string): string | undefined => (id === '' ? und
  */
 /** What sits below the transcript while the reader is being asked something. */
 export interface TranscriptViewOptions {
-  readonly state?: () => ViewState
-  readonly gate?: () => GateCard | undefined
-  readonly picker?: () => PickerCard | undefined
+  readonly state: () => ViewState
+  readonly gate: () => GateCard | undefined
+  readonly picker: () => PickerCard | undefined
   /**
    * The keys in force, read live.
    *
@@ -86,21 +86,21 @@ export interface TranscriptViewOptions {
    * be drawn from the same table the press is matched against — including after
    * a settings edit moved the key.
    */
-  readonly keys?: () => Keymap
+  readonly keys: () => Keymap
   /**
    * Mutable tool policies require invalidate() when changed.
    *
    * Callback identity cannot describe live configuration, so entry and
    * document caches must refresh together. The settings composition already does this.
    */
-  readonly toolDisplay?: (tool: string) => ToolDisplaySpec
+  readonly toolDisplay: (tool: string) => ToolDisplaySpec
   /**
    * The air the surface keeps, read per render.
    *
    * The settings document is hot-reloaded, so captured counts would keep
    * drawing the gaps the session happened to start with.
    */
-  readonly spacing?: () => Spacing
+  readonly spacing: () => Spacing
 }
 
 export class TranscriptView implements Component {
@@ -116,7 +116,7 @@ export class TranscriptView implements Component {
     private readonly model: TranscriptModel,
     private readonly theme: TuiTheme,
     private readonly markdown: MarkdownRenderer,
-    private readonly options: TranscriptViewOptions = {},
+    private readonly options: TranscriptViewOptions,
   ) {
     this.cards = new ToolCards({ theme: this.theme, keymap: () => this.keymap(), toolDisplay: tool => this.toolDisplay(tool), expansionOf: entry => this.expansionOf(entry), subCallsOpen: entry => this.subCallsOpen(entry), liveCall: callId => this.model.liveCall(callId), cardOpenHint: () => hintKeys(this.keymap(), 'surface.toolDetail') || CARD_OPEN_FALLBACK, toolKey: id => toolClickKey(id), subCallsKey: id => nestedCallsClickKey(id), subCallKey: (parentId, id) => subCallClickKey(parentId, id), subCallOpen: (parentId, id) => this.subCallOpen(parentId, id) })
     this.messages = new Messages({ theme: this.theme, markdown: this.markdown, reasoningOpen: entry => this.reasoningOpen(entry), reasoningFoldHint: () => this.reasoningFoldHint(), reasoningKey: id => reasoningClickKey(id), spacing: () => this.air(), pushWrapped: (lines, text, width, prefix, token) => this.pushWrapped(lines, text, width, prefix, token) })
@@ -129,15 +129,15 @@ export class TranscriptView implements Component {
     })
   }
   private get viewState(): ViewState {
-    return this.options.state?.() ?? DEFAULT_VIEW_STATE
+    return this.options.state()
   }
 /** The display the reader configured for a tool, or the shipped one. */
   private toolDisplay(tool: string): ToolDisplaySpec {
-    return this.options.toolDisplay?.(tool) ?? DEFAULT_TOOL_DISPLAY
+    return this.options.toolDisplay(tool)
   }
   /** The air in force, or the shipped spacing for a caller that lent none. */
   private air(): Spacing {
-    return this.options.spacing?.() ?? DEFAULT_SPACING
+    return this.options.spacing()
   }
   /**
    * Whether one tool message draws open.
@@ -238,7 +238,7 @@ export class TranscriptView implements Component {
   }
 /** The live map, or the shipped one for a caller that did not lend one. */
   private keymap(): Keymap {
-    return this.options.keys?.() ?? defaultKeymap()
+    return this.options.keys()
   }
   private reasoningFoldHint(): string {
     return hintKeys(this.keymap(), 'surface.reasoning') || REASONING_FOLD_FALLBACK
@@ -322,8 +322,8 @@ export class TranscriptView implements Component {
     // Width, folds, theme, spacing, and key hints can change without a transcript event.
     const base = `${width}|${state.expandCards ? 'c' : '-'}${state.expandReasoning ? 'r' : '-'}${state.expandSubCalls ? 'p' : '-'}|${this.theme.revision}|${gaps.messages}:${gaps.steps}|${hintKeys(keys, 'surface.toolDetail')}|${hintKeys(keys, 'surface.reasoning')}`
     const retained = this.document.render(width, base, this.presentationRevision)
-    const picker = this.options.picker?.()
-    const gate = this.options.gate?.()
+    const picker = this.options.picker()
+    const gate = this.options.gate()
     // pi-tui requires string[] but borrows child rows; the native PTY gate protects this pinned boundary.
     if (picker === undefined && gate === undefined) return retained as string[]
     // Overlays have independent mutable state and must never enter the retained conversation.

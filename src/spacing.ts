@@ -23,7 +23,7 @@ export interface Spacing {
  * Past a few rows the break stops reading as air between two things and starts
  * reading as a hole the reader has to scroll past on every message.
  */
-export const MAX_SPACING = 3
+const MAX_SPACING = 3
 
 /**
  * The shipped spacing: one column at the edges and one row at a break.

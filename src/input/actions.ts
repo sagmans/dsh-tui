@@ -173,7 +173,7 @@ let shippedMap: Keymap | undefined
 const WINNING_LAYERS: readonly ActionLayer[] = ['chord', 'surface']
 
 /** Potential chord and surface overlaps with library actions, in listener order. */
-export function shadowsOf(map: Keymap): readonly Shadow[] {
+function shadowsOf(map: Keymap): readonly Shadow[] {
   const library = catalogOf(map).filter(action => action.layer === 'library')
   const found: Shadow[] = []
   for (const layer of WINNING_LAYERS) {

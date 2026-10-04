@@ -24,7 +24,7 @@ import { stripControlCharacters } from '../text.ts'
  * distinction a surface that gives up the whole screen cares about; a reader
  * who set only one of them still gets it.
  */
-export const EDITOR_ENV_KEYS = ['VISUAL', 'EDITOR'] as const
+const EDITOR_ENV_KEYS = ['VISUAL', 'EDITOR'] as const
 
 /** The buffer's name, so the editor's filetype, syntax, and wrap settings see prose. */
 const DRAFT_FILE_NAME = 'draft.md'
@@ -34,7 +34,7 @@ const DRAFT_FILE_MODE = 0o600
 const DRAFT_DIR_PREFIX = 'dsh-tui-draft-'
 
 /** A draft larger than this is left where it is rather than handed to the bar. */
-export const MAX_DRAFT_BYTES = 1_048_576
+const MAX_DRAFT_BYTES = 1_048_576
 
 /** The same budget as a word, so the notice reads as a size and cannot drift from it. */
 const MAX_DRAFT_LABEL = `${Math.round(MAX_DRAFT_BYTES / 1024 / 1024)} MiB`
@@ -50,7 +50,7 @@ const MINUTE_MS = 60 * SECOND_MS
  * child after the stop request, and its saved draft is read back after exit
  * so timing out does not itself discard saved work.
  */
-export const EDITOR_TIMEOUT_MS = 30 * MINUTE_MS
+const EDITOR_TIMEOUT_MS = 30 * MINUTE_MS
 
 const NO_EDITOR_MESSAGE = 'no editor configured: set $VISUAL or $EDITOR to open the draft in one'
 const launchFailureMessage = (command: string, error: Error): string => `could not start ${command}: ${error.message}`
@@ -84,7 +84,7 @@ const SEPARATORS: ReadonlySet<string> = new Set([' ', '\t', '\n', '\r'])
  * rather than refusing the whole binding: a missing quote should not leave
  * the reader with no editor at all.
  */
-export function parseEditorCommand(value: string): readonly string[] | undefined {
+function parseEditorCommand(value: string): readonly string[] | undefined {
   const argv: string[] = []
   let token = ''
   let started = false
@@ -114,9 +114,9 @@ export function parseEditorCommand(value: string): readonly string[] | undefined
 }
 
 /** The editor this environment configures, or undefined when none is usable. */
-export function resolveEditorCommand(env: NodeJS.ProcessEnv = process.env): readonly string[] | undefined {
+function resolveEditorCommand(): readonly string[] | undefined {
   for (const name of EDITOR_ENV_KEYS) {
-    const configured = env[name]
+    const configured = process.env[name]
     if (configured === undefined) continue
     const argv = parseEditorCommand(configured)
     if (argv !== undefined) return argv
@@ -138,44 +138,11 @@ export interface EditorTerminalHost {
   notice(message: string): void
 }
 
-/** The slice of a spawned child this module waits on. */
-export interface EditorChild {
-  on(event: 'error', listener: (error: Error) => void): void
-  on(event: 'exit', listener: (code: number | null, signal: string | null) => void): void
-  kill(signal?: NodeJS.Signals): boolean
-}
-
-export interface EditorSpawnOptions {
-  readonly stdio: 'inherit'
-  readonly cwd: string
-  readonly env: NodeJS.ProcessEnv
-}
-
-/** The one process call this module makes, so a spec can drive it without a terminal. */
-export type EditorSpawn = (file: string, args: readonly string[], options: EditorSpawnOptions) => EditorChild
-
-/**
- * The real spawn, wrapped rather than passed.
- *
- * `child_process.spawn` carries overloads that do not narrow to a single
- * callable signature, and a wrapper keeps the injectable seam honest about
- * which call this module actually makes.
- */
-const SPAWN: EditorSpawn = (file, args, options) => spawn(file, [...args], options)
-
 /** What one bounded read of the editor's file produced. */
 type DraftRead =
   | { readonly kind: 'text'; readonly text: string }
   | { readonly kind: 'too-large' }
   | { readonly kind: 'not-a-file' }
-
-/** How the handoff runs; every part a spec would otherwise have to fake is overridable. */
-export interface ExternalEditorOptions {
-  readonly env?: NodeJS.ProcessEnv | undefined
-  /** Where the scratch directory is made; tests keep theirs out of the real tmpdir. */
-  readonly tempRoot?: string | undefined
-  readonly spawn?: EditorSpawn | undefined
-}
 
 /**
  * The reader's editor, opened over one draft.
@@ -185,25 +152,15 @@ export interface ExternalEditorOptions {
  * because the caller is a key press with nowhere to put an error.
  */
 export class ExternalEditor {
-  private readonly env: NodeJS.ProcessEnv
-  private readonly tempRoot: string
-  private readonly spawn: EditorSpawn
   /** Whether a child holds the terminal; a second handoff would stop it twice. */
   private running = false
 
-  constructor(
-    private readonly host: EditorTerminalHost,
-    options: ExternalEditorOptions = {},
-  ) {
-    this.env = options.env ?? process.env
-    this.tempRoot = options.tempRoot ?? tmpdir()
-    this.spawn = options.spawn ?? SPAWN
-  }
+  constructor(private readonly host: EditorTerminalHost) {}
 
   /** Edit `text` in the reader's editor, and return what was saved, or undefined to keep the bar. */
   async edit(text: string): Promise<string | undefined> {
     if (this.running) return undefined
-    const argv = resolveEditorCommand(this.env)
+    const argv = resolveEditorCommand()
     const command = argv?.[0]
     if (argv === undefined || command === undefined) {
       this.host.notice(NO_EDITOR_MESSAGE)
@@ -226,7 +183,7 @@ export class ExternalEditor {
       return undefined
     }
     try {
-      directory = await mkdtemp(join(this.tempRoot, DRAFT_DIR_PREFIX))
+      directory = await mkdtemp(join(tmpdir(), DRAFT_DIR_PREFIX))
       // mkdtemp makes the directory owner-only on POSIX; setting it here makes
       // the guarantee this module's rather than the platform's.
       await chmod(directory, DRAFT_DIR_MODE)
@@ -320,10 +277,10 @@ export class ExternalEditor {
   private run(command: string, args: readonly string[], file: string): Promise<Error | undefined> {
     return new Promise(resolve => {
       // Keep the session's project context and editor environment, not the scratch directory's context.
-      const child = this.spawn(command, [...args, file], {
+      const child = spawn(command, [...args, file], {
         stdio: 'inherit',
         cwd: process.cwd(),
-        env: this.env,
+        env: process.env,
       })
       // Armed before the wait so no exit can slip past between the two, and
       // cleared by whichever event settles it, because a pending timer would

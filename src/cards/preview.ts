@@ -1,5 +1,4 @@
 import { type CardRow, type ToolCard, CARD_DETAIL_MAX } from '../cards.ts'
-import { title } from './presenter.ts'
 
 /**
  * Output rows a folded card keeps on screen when a tool configures a tail.

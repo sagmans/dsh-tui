@@ -1,5 +1,4 @@
 import { type ToolSubCall, type ToolSubCallRows, type ToolCard, clipLine } from '../cards.ts'
-import { title } from './presenter.ts'
 
 /**
  * Nested calls retained on one PTC card.

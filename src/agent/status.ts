@@ -5,7 +5,7 @@ import { AGENT_PRESET_KEY } from './presets.ts'
 import { projectionRecord, projectionString } from './projections.ts'
 
 /** Keep the turn clock with its activity so footer paints can compute elapsed time from the live session. */
-export interface ActivityState {
+interface ActivityState {
   readonly running: boolean
   readonly startedAt: number | undefined
 }
@@ -31,7 +31,7 @@ interface PresetDirectory {
  * The unit projects `{ totals, last }` — a flat usage object is the wrong shape
  * and reading it silently yields nothing, so the reader is pinned by a test.
  */
-export function usageTotals(state: unknown): Record<string, unknown> | undefined {
+function usageTotals(state: unknown): Record<string, unknown> | undefined {
   return asRecord(asRecord(state)?.totals)
 }
 
@@ -41,7 +41,7 @@ export function usageTotals(state: unknown): Record<string, unknown> | undefined
  * Read tokens against the uncached ones: a hit rate is what a reader can act on
  * (it is what caching buys), while the raw counts belong in `/status`.
  */
-export function cacheRate(usage: Record<string, unknown> | undefined): number | undefined {
+function cacheRate(usage: Record<string, unknown> | undefined): number | undefined {
   const read = numberOr(usage?.cacheReadTokens)
   const uncached = numberOr(usage?.uncachedInputTokens)
   if (read === undefined || uncached === undefined) return undefined

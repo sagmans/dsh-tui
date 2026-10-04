@@ -1,5 +1,4 @@
 import { closeSync, constants, fchmodSync, lstatSync, mkdirSync, mkdtempSync, openSync, renameSync, rmdirSync, rmSync, writeFileSync } from 'node:fs'
-import { homedir } from 'node:os'
 import path from 'node:path'
 import { rowText } from './cards.ts'
 import { dshHomeDir } from './stash/paths.ts'
@@ -27,7 +26,7 @@ function documentText(raw: string): string {
 }
 
 /** The directory under the harness home a dump with no destination lands in. */
-export const EXPORTS_DIR_NAME = 'exports'
+const EXPORTS_DIR_NAME = 'exports'
 
 /**
  * Where a dump with no destination is written.
@@ -36,8 +35,8 @@ export const EXPORTS_DIR_NAME = 'exports'
  * belongs to `/theme export` and the surface watches it for edits, so a
  * dump written there would sit among the reader's themes and be re-read as one.
  */
-export function exportsHomeDir(env: NodeJS.ProcessEnv = process.env, home: string = homedir()): string {
-  return path.join(dshHomeDir(env, home), EXPORTS_DIR_NAME)
+export function exportsHomeDir(): string {
+  return path.join(dshHomeDir(), EXPORTS_DIR_NAME)
 }
 
 /** Owner-only storage keeps dumps private even when the harness home can be traversed. */
@@ -84,7 +83,7 @@ function message(error: unknown): string {
 }
 
 /** Make default dumps recognizable as harness sessions when browsing the exports directory. */
-export const DEFAULT_EXPORT_PREFIX = 'dsh-session'
+const DEFAULT_EXPORT_PREFIX = 'dsh-session'
 
 /** How the dump marks a nested call that returned an error, which the screen carried as colour. */
 const SUBCALL_FAILED_SUFFIX = ' (failed)'

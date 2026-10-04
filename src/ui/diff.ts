@@ -8,7 +8,7 @@ import { splitGraphemes } from '../text.ts'
  * library's plain code path, because guessing from the +/- signs would recolour a
  * diff-shaped fragment of some other text as a change it is not.
  */
-export const DIFF_FENCE_LANGUAGES = ['diff', 'patch'] as const
+const DIFF_FENCE_LANGUAGES = ['diff', 'patch'] as const
 
 /**
  * How much text two paired rows must share before their difference is an edit.
@@ -17,7 +17,7 @@ export const DIFF_FENCE_LANGUAGES = ['diff', 'patch'] as const
  * banding the middle of both would mark nearly the whole row as changed — the one
  * outcome that reads worse than no emphasis at all.
  */
-export const DIFF_MIN_SHARED_GRAPHEMES = 4
+const DIFF_MIN_SHARED_GRAPHEMES = 4
 
 /**
  * The longest pair this draws run by run.
@@ -26,7 +26,7 @@ export const DIFF_MIN_SHARED_GRAPHEMES = 4
  * of text into clusters twice per pair buys nothing a reader can see: past this
  * the pair draws whole-row, which is how a replacement looks anyway.
  */
-export const DIFF_EMPHASIS_MAX_GRAPHEMES = 2048
+const DIFF_EMPHASIS_MAX_GRAPHEMES = 2048
 /** One excess cluster proves the row needs whole-row drawing without scanning its remaining clusters. */
 const DIFF_EMPHASIS_SCAN_LIMIT = DIFF_EMPHASIS_MAX_GRAPHEMES + 1
 
@@ -89,7 +89,7 @@ export interface FenceLook {
 }
 
 /** A look for a block this surface draws itself, where the plain path is never reached. */
-export type DiffLook = Omit<FenceLook, 'plain'>
+type DiffLook = Omit<FenceLook, 'plain'>
 
 /** The first word of a fence's info string, lowercased: an info string may carry more than the language. */
 function fenceLanguage(lang: string | undefined): string {
@@ -97,7 +97,7 @@ function fenceLanguage(lang: string | undefined): string {
 }
 
 /** Whether a fence names a unified diff. */
-export function isDiffFence(lang: string | undefined): boolean {
+function isDiffFence(lang: string | undefined): boolean {
   return (DIFF_FENCE_LANGUAGES as readonly string[]).includes(fenceLanguage(lang))
 }
 
@@ -222,7 +222,7 @@ function emphasisByRow(lines: readonly string[], kinds: readonly DiffRowKind[]):
 }
 
 /** One fenced diff, row by row, in the diff elements: headers and hunks recede and a changed run is banded. */
-export function renderDiffBlock(code: string, look: DiffLook): string[] {
+function renderDiffBlock(code: string, look: DiffLook): string[] {
   const lines = code.split('\n')
   const kinds: DiffRowKind[] = []
   let inHunk = false
