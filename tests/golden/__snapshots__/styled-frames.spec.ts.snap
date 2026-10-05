@@ -148,3 +148,178 @@ exports[`terminal text > draws the colour when the terminal has one, and no esca
     [38;2;138;138;138mprogress 100%[0m
     [38;2;138;138;138mexit 0[0m"
 `;
+
+exports[`terminal text > preserves software cursor cells through Unicode, ghosts, masking, and focus 1`] = `
+{
+  "combining grapheme / 10 / hidden": [
+    "│ draft _pi:cä ",
+  ],
+  "combining grapheme / 10 / visible": [
+    "│ draft _pi:c[7mä[0m ",
+  ],
+  "combining grapheme / 24 / hidden": [
+    "│ draft _pi:cä               ",
+  ],
+  "combining grapheme / 24 / visible": [
+    "│ draft _pi:c[7mä[0m               ",
+  ],
+  "empty / 10 / hidden": [
+    "│ _pi:c        ",
+  ],
+  "empty / 10 / visible": [
+    "│ _pi:c[7m [0m       ",
+  ],
+  "empty / 24 / hidden": [
+    "│ _pi:c                      ",
+  ],
+  "empty / 24 / visible": [
+    "│ _pi:c[7m [0m                     ",
+  ],
+  "end padding / 10 / hidden": [
+    "│ draft_pi:c   ",
+  ],
+  "end padding / 10 / visible": [
+    "│ draft_pi:c[7m [0m  ",
+  ],
+  "end padding / 24 / hidden": [
+    "│ draft_pi:c                 ",
+  ],
+  "end padding / 24 / visible": [
+    "│ draft_pi:c[7m [0m                ",
+  ],
+  "ghost / 10 / hidden": [
+    "│ deploy _pi:c ",
+  ],
+  "ghost / 10 / visible": [
+    "│ deploy _pi:c[7m [0m",
+  ],
+  "ghost / 24 / hidden": [
+    "│ deploy _pi:c中 staging     ",
+  ],
+  "ghost / 24 / visible": [
+    "│ deploy _pi:c[7m中[0m staging     ",
+  ],
+  "joined emoji / 10 / hidden": [
+    "│ draft   ",
+    "│ _pi:c👩‍💻      ",
+  ],
+  "joined emoji / 10 / visible": [
+    "│ draft   ",
+    "│ _pi:c[7m👩‍💻[0m      ",
+  ],
+  "joined emoji / 24 / hidden": [
+    "│ draft _pi:c👩‍💻              ",
+  ],
+  "joined emoji / 24 / visible": [
+    "│ draft _pi:c[7m👩‍💻[0m              ",
+  ],
+  "masked answer / 10 / hidden": [
+    "╭────────╮",
+    "│ abcdPR │",
+    "│ IVATE_pi:cV │",
+    "│ ALUEwx │",
+    "│ yz     │",
+    "╰────────╯",
+  ],
+  "masked answer / 10 / visible": [
+    "╭────────╮",
+    "│ abcdPR │",
+    "│ IVATE_pi:c[7mV[0m │",
+    "│ ALUEwx │",
+    "│ yz     │",
+    "╰────────╯",
+  ],
+  "masked answer / 24 / hidden": [
+    "╭──────────────────────╮",
+    "│ abcd*******_pi:c*****wxyz │",
+    "╰──────────────────────╯",
+  ],
+  "masked answer / 24 / visible": [
+    "╭──────────────────────╮",
+    "│ abcd*******_pi:c[7m*[0m****wxyz │",
+    "╰──────────────────────╯",
+  ],
+  "native / unfocused": [
+    "│ unfocused             ",
+  ],
+  "question / 10 / hidden": [
+    "╭────────╮",
+    "│ custom │",
+    "│        │",
+    "│ answer_pi:c │",
+    "╰────────╯",
+  ],
+  "question / 10 / visible": [
+    "╭────────╮",
+    "│ custom │",
+    "│        │",
+    "│ answer_pi:c[7m [0m│",
+    "╰────────╯",
+  ],
+  "question / 24 / hidden": [
+    "╭──────────────────────╮",
+    "│ custom answer_pi:c        │",
+    "╰──────────────────────╯",
+  ],
+  "question / 24 / visible": [
+    "╭──────────────────────╮",
+    "│ custom answer_pi:c[7m [0m       │",
+    "╰──────────────────────╯",
+  ],
+  "software / unfocused": [
+    "│ unfocused             ",
+  ],
+  "styled ghost / 10 / hidden": [
+    "[38;2;138;138;138m│[0m deploy _pi:c ",
+  ],
+  "styled ghost / 10 / visible": [
+    "[38;2;138;138;138m│[0m deploy _pi:c[7m [0m",
+  ],
+  "styled ghost / 24 / hidden": [
+    "[38;2;138;138;138m│[0m deploy _pi:c[2m中[0m[2m staging[0m     ",
+  ],
+  "styled ghost / 24 / visible": [
+    "[38;2;138;138;138m│[0m deploy _pi:c[7m[2m中[0m[0m[2m staging[0m     ",
+  ],
+  "wide grapheme / 10 / hidden": [
+    "│ draft   ",
+    "│ _pi:c中      ",
+  ],
+  "wide grapheme / 10 / visible": [
+    "│ draft   ",
+    "│ _pi:c[7m中[0m      ",
+  ],
+  "wide grapheme / 24 / hidden": [
+    "│ draft _pi:c中              ",
+  ],
+  "wide grapheme / 24 / visible": [
+    "│ draft _pi:c[7m中[0m              ",
+  ],
+  "wrapped line / 10 / hidden": [
+    "│ one     ",
+    "│ two     ",
+    "│ three   ",
+    "│ four    ",
+    "│ five    ",
+    "│ six 中  ",
+    "│ ä_pi:c       ",
+  ],
+  "wrapped line / 10 / visible": [
+    "│ one     ",
+    "│ two     ",
+    "│ three   ",
+    "│ four    ",
+    "│ five    ",
+    "│ six 中  ",
+    "│ ä_pi:c[7m [0m      ",
+  ],
+  "wrapped line / 24 / hidden": [
+    "│ one two three four    ",
+    "│ five six 中 ä_pi:c         ",
+  ],
+  "wrapped line / 24 / visible": [
+    "│ one two three four    ",
+    "│ five six 中 ä_pi:c[7m [0m        ",
+  ],
+}
+`;

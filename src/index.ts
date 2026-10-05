@@ -297,7 +297,7 @@ export function apply(ctx: Context, config: unknown): void {
     draftBorrowed: () => promptBar.isBorrowed(),
     holdDraft: text => promptBar.replaceHeld(text),
     writeDraft: text => editor.setText(text),
-  })
+  }, resolved.cursorMode)
   const { terminal, tui, herdr, disposers, writeTerminal, requestExit, exited } = terminalLifecycle
 
   const view = new TranscriptView(sessionView.model, theme, markdown, {
@@ -314,7 +314,7 @@ export function apply(ctx: Context, config: unknown): void {
   // send the library submits on by default. A settings document read after this
   // point installs over it, which is why the bar reads the map per press.
   promptInput.installBindings()
-  const editor = new GateInputBar(tui, theme.editor, appearance.keymap, ghostBrush)
+  const editor = new GateInputBar(tui, theme.editor, appearance.keymap, ghostBrush, tui.cursor)
   // Answers are written in the reader's own editor, which is why a question
   // borrows the bar instead of drawing a second one beside it.
   const promptBar = new PromptBar(editor)

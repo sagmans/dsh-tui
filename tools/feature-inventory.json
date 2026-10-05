@@ -285,13 +285,19 @@
       "scenarios": [
         "editor",
         "native-terminal",
+        "cursor-software",
+        "cursor-native",
+        "cursor-invalid",
         "herdr-geometry"
       ],
       "sources": [
         "src/terminal-text.ts",
         "src/terminal-text/",
         "src/ui/frame.ts",
-        "src/ui/layout.ts"
+        "src/ui/layout.ts",
+        "src/ui/editor.ts",
+        "src/terminal/cursor.ts",
+        "src/terminal/warning-screen.ts"
       ]
     },
     {

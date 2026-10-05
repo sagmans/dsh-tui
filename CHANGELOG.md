@@ -8,6 +8,10 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+### Fixed
+
+- Keep the editing cursor blinking during reasoning and streamed output with an independently timed software block. Preserve native cursor mode for terminal shape and IME compatibility.
+
 ## [0.14.0] - 2026-10-04
 
 ### Changed

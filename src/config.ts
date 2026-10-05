@@ -3,11 +3,13 @@ import { DEFAULT_STASH_SCOPE, STASH_SCOPES } from './stash/paths.ts'
 import z from '@deepseek-ai/schemastery'
 import { TuiSettingsSchema } from './theme-settings.ts'
 import type { TuiRowConfig } from './contracts.ts'
+import { CURSOR_MODES, SOFTWARE_CURSOR_MODE, type CursorMode } from './terminal/cursor.ts'
 
 /** Native references distinguish live Config from ordinary released schema output. */
 const VOLATILE_REFERENCE = Symbol.for('cosmokit.volatile.write')
 const PREFERENCE_SCHEMA = TuiSettingsSchema.dict!
 const PREFERENCE_FIELDS = Object.keys(PREFERENCE_SCHEMA)
+const CURSOR_MODE_ERROR = 'cursorMode must be software or native'
 const CONFIG_HISTORY = z.object({
   // A source host imports legacy settings after activation; absence is not consent.
   enabled: z.boolean(),
@@ -25,6 +27,7 @@ export const Config = z.object({
   preset: z.string(),
   color: z.boolean().default(true),
   bell: z.boolean().default(true),
+  cursorMode: z.union([...CURSOR_MODES]).default(SOFTWARE_CURSOR_MODE),
   stash: z.object({ scope: z.union([...STASH_SCOPES]).default(DEFAULT_STASH_SCOPE) }).default({ scope: DEFAULT_STASH_SCOPE }),
   ...Object.fromEntries(Object.entries(PREFERENCE_SCHEMA).map(([key, schema]) => {
     const field = new z((key === 'history' ? CONFIG_HISTORY : schema).toJSON())
@@ -103,6 +106,13 @@ function optionalBoolean(value: unknown, field: string, fallback: boolean): bool
   return value
 }
 
+/** Manual row configs bypass schema defaults, so their compatibility mode still needs validation. */
+function cursorMode(value: unknown): CursorMode {
+  if (value === undefined) return SOFTWARE_CURSOR_MODE
+  if (!CURSOR_MODES.some(mode => mode === value)) throw new TuiConfigError(CURSOR_MODE_ERROR)
+  return value as CursorMode
+}
+
 /**
  * Validate the row's configuration into the runtime shape.
  *
@@ -124,6 +134,7 @@ export function resolveConfig(raw: unknown): TuiRowConfig {
     preset: optionalString(record.preset, 'preset'),
     theme: optionalString(preferenceValue(record.theme), 'theme'),
     stashScope: stashScope(record.stash),
+    cursorMode: cursorMode(record.cursorMode),
     color: optionalBoolean(record.color, 'color', true),
     bell: optionalBoolean(record.bell, 'bell', true),
   }

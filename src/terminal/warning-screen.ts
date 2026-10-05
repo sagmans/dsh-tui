@@ -1,12 +1,14 @@
 import { Buffer } from 'node:buffer'
-import { TuiAltScreen, type TuiAltScreenOptions, type Terminal, type TuiStopOptions, type TuiInputListener } from '@earendil-works/pi-tui'
+import { Editor, TuiAltScreen, type TuiAltScreenOptions, type Terminal, type TuiStopOptions, type TuiInputListener, type Component } from '@earendil-works/pi-tui'
+import { createCursorController, SOFTWARE_CURSOR_MODE, NATIVE_CURSOR_MODE, type CursorController, type CursorMode } from './cursor.ts'
 import { holdHostWrites, HOST_WRITE_LIMIT, HOST_WRITE_TARGETS, type HostWriteGuard } from './host-writes.ts'
 
 const FOCUS_IN = '\x1b[I'
 const FOCUS_OUT = '\x1b[O'
-/** Preserve shell preferences without changing cursor shape or scheduling blink frames. */
+/** Preserve shell preferences across both cursor presentations without changing the native shape. */
 const SAVE_CURSOR_MODES = '\x1b[?12s\x1b[?1004s'
 const ENABLE_CURSOR_MODES = '\x1b[?12h\x1b[?1004h'
+const ENABLE_FOCUS_REPORTS = '\x1b[?1004h'
 const RESTORE_CURSOR_MODES = '\x1b[?1004r\x1b[?12r'
 const WARNING_EVENT = 'warning'
 const FATAL_EVENT = 'uncaughtExceptionMonitor'
@@ -128,17 +130,20 @@ export class WarningSafeTui extends TuiAltScreen {
     }
   }
 
+  /** The terminal lifetime owns the clock; editors only consume its presentation. */
+  readonly cursor: CursorController
+
   /** Each failure episode deserves a report, but repeated retries must not flood the surface. */
   onFrameError: ((error: unknown) => void) | undefined
 
   /**
    * The screen as this surface runs it, with the framework's other two parameters
-   * out of the way: the terminal keeps its own hardware cursor and the surface
-   * writes no drawing log of its own, so the options are the only thing a caller
-   * ever has to name.
+   * out of the way: this owner supplies cursor presentation and writes no
+   * drawing log of its own. Native mode remains available for shape and IME compatibility.
    */
-  constructor(terminal: Terminal, options?: TuiAltScreenOptions) {
-    super(terminal, true, undefined, options)
+  constructor(terminal: Terminal, options?: TuiAltScreenOptions, cursorMode: CursorMode = SOFTWARE_CURSOR_MODE) {
+    super(terminal, cursorMode === NATIVE_CURSOR_MODE, undefined, options)
+    this.cursor = createCursorController(cursorMode, () => this.requestRender())
     // The pinned stdin buffer splits legacy text into UTF-16 units; filters must receive complete Unicode scalars.
     this.addInputListener(data => {
       if (HIGH_SURROGATE.test(data)) {
@@ -159,10 +164,17 @@ export class WarningSafeTui extends TuiAltScreen {
     if (this.applicationListenersReady) return super.addInputListener(listener)
     return super.addInputListener(data => {
       if (this.cursorModesActive && (data === FOCUS_IN || data === FOCUS_OUT)) {
-        this.setShowHardwareCursor(data === FOCUS_IN)
+        this.cursor.setTerminalFocused(data === FOCUS_IN)
+        if (this.cursor.mode === NATIVE_CURSOR_MODE) this.setShowHardwareCursor(data === FOCUS_IN)
       }
       return listener(data)
     })
+  }
+
+  /** Editing focus can disappear while a picker owns input, without losing terminal focus. */
+  override setFocus(component: Component | null): void {
+    super.setFocus(component)
+    this.cursor.setEditorFocused(component instanceof Editor && component.focused)
   }
 
   override start(): void {
@@ -173,9 +185,10 @@ export class WarningSafeTui extends TuiAltScreen {
         this.cursorModesActive = true
         process.on(FATAL_EVENT, this.restoreAfterCrash)
         process.on(EXIT_EVENT, this.restoreAfterCrash)
-        this.terminal.write(SAVE_CURSOR_MODES + ENABLE_CURSOR_MODES)
+        this.terminal.write(SAVE_CURSOR_MODES + (this.cursor.mode === NATIVE_CURSOR_MODE ? ENABLE_CURSOR_MODES : ENABLE_FOCUS_REPORTS))
       }
-      this.setShowHardwareCursor(true)
+      this.setShowHardwareCursor(this.cursor.mode === NATIVE_CURSOR_MODE)
+      this.cursor.start()
       super.start()
     } catch (error) {
       this.stop({ preserveScreen: true })
@@ -209,6 +222,8 @@ export class WarningSafeTui extends TuiAltScreen {
   }
 
   override stop(options?: TuiStopOptions): void {
+    // Cancel before any final frame or child-editor handoff can relinquish terminal ownership.
+    this.cursor.stop()
     // A stopped or restarting owner must leave no fatal hooks pointing at its former terminal.
     process.removeListener(FATAL_EVENT, this.restoreAfterCrash)
     process.removeListener(EXIT_EVENT, this.restoreAfterCrash)

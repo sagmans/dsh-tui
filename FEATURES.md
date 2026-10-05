@@ -16,6 +16,19 @@ Action discovery in `/keys` does not prove keyboard dispatch.
 Golden frames remain visual regression checks.
 Neither snapshots nor a clean boot prove full feature behavior.
 
+## Editing cursor
+
+The free native-terminal scenario runs both software and native cursor modes under continuous streamed output.
+It checks current inverse-video cells, Unicode retention, focus, borrowed questions, resize, silent stop/start handoff, and fatal-error restoration.
+The software phase must alternate across transcript updates without further typing.
+The cursor-software and cursor-native scenarios check hardware visibility in real configured profiles.
+The cursor-invalid scenario checks configuration rejection before surface startup.
+Golden frames pin both phases for ghost suggestions, Unicode graphemes, padding, questions, and masked answers.
+
+These checks do not simulate an emulator's pixels or IME candidate window.
+Ghostty, Herdr, and iOS/Moshi visual results require separate evidence.
+Use cursorMode: native when terminal shape or IME behavior requires the native cursor.
+
 ## Duration indicators
 
 The free `timers` scenario mounts a test-owned workload in a credential-free profile.

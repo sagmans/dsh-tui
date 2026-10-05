@@ -123,6 +123,7 @@ export function createModalInput(ctx: Context, ports: ModalInputPorts): ModalInp
     // being answered, so the hardware cursor belongs to it while it is borrowed.
     // It is set after the focus is cleared, which unmarks the component it left.
     ports.editor.focused = next.kind === 'question'
+    ports.tui.cursor.setEditorFocused(ports.editor.focused)
     ports.tui.requestRender()
   }
 

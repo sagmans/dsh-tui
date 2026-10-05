@@ -35,6 +35,8 @@ export interface TuiStartup {
  * the launcher.
  */
 export interface TuiRowConfig extends TuiStartup {
+  /** Native mode preserves terminal shape and IME behavior when a software block is unsuitable. */
+  readonly cursorMode: import('./terminal/cursor.ts').CursorMode
   /** Select a shared directory bank or a private session bank for parked drafts. */
   readonly stashScope: import('./stash/paths.ts').StashScope
   /**

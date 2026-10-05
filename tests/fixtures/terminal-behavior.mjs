@@ -1,6 +1,7 @@
 /** Real widgets expose decoder and terminal-owner regressions without a model or profile credentials. */
 import { performance } from 'node:perf_hooks'
 import { ProcessTerminal, ScrollView, matchesKey } from '@earendil-works/pi-tui'
+import { SOFTWARE_CURSOR_MODE } from '../../lib/terminal/cursor.js'
 import { WarningSafeTui } from '../../lib/terminal/warning-screen.js'
 import { TranscriptModel } from '../../lib/transcript.js'
 import { contentLines } from '../../lib/cards.js'
@@ -24,7 +25,18 @@ const FIXTURE_TOOL_DISPLAY = toolDisplayTable().default
 const READY = 'terminal-behavior-ready'
 const RECEIPT = 'terminal-behavior-receipt:'
 const QUIT_KEY = 'ctrl+c'
+const CURSOR_MODE_ARG_INDEX = 2
+const CURSOR_MODE = process.argv[CURSOR_MODE_ARG_INDEX] ?? SOFTWARE_CURSOR_MODE
 const PICKER_KEY = 'ctrl+p'
+const BORROW_KEY = 'ctrl+b'
+const HANDOFF_KEY = 'ctrl+e'
+const REPLACE_DRAFT_KEY = 'ctrl+d'
+const CRASH_KEY = 'ctrl+g'
+const CRASH_MESSAGE = 'terminal-behavior-forced-crash'
+// The fixture owns an observation window longer than either software cursor phase.
+const HANDOFF_MS = 1000
+const SUSPENDED = 'terminal-behavior-suspended'
+const RESUMED = 'terminal-behavior-resumed'
 const SETTLED_MESSAGES = 100
 const FOLD_LINE_COUNT = 150_000
 const FOLD_DEPTH = 10_000
@@ -66,7 +78,7 @@ const EXIT_SUCCESS = 0
 const EXIT_FAILURE = 1
 
 const terminal = new ProcessTerminal()
-const tui = new WarningSafeTui(terminal)
+const tui = new WarningSafeTui(terminal, undefined, CURSOR_MODE)
 const theme = createTheme(COLOR_MODE)
 // Missing tool views must still preserve result counts through the production generic-card fallback.
 const model = new TranscriptModel({
@@ -78,6 +90,8 @@ const latency = []
 const failures = []
 const renderedWidths = new Set()
 let pickerOpen = false
+let borrowed = false
+let resumeTimer
 let ended = false
 let enteredRawMode = false
 let stream
@@ -121,7 +135,7 @@ const view = new TranscriptView(model, theme, new MarkdownRenderer(theme.markdow
   toolDisplay: () => FIXTURE_TOOL_DISPLAY,
   spacing: () => DEFAULT_SPACING,
 })
-const editor = new BoxedEditor(tui, theme.editor, defaultKeymap)
+const editor = new BoxedEditor(tui, theme.editor, defaultKeymap, undefined, tui.cursor)
 const empty = { render: () => [], invalidate: () => {} }
 // Readiness belongs in frame output so the driver waits for native writes, not process startup.
 // Width receipts record render calls; they do not independently prove that every frame reached the terminal.
@@ -138,6 +152,7 @@ function finish() {
   if (ended) return
   ended = true
   clearInterval(stream)
+  clearTimeout(resumeTimer)
   tui.stop({ preserveScreen: true })
   const sorted = latency.toSorted((left, right) => left - right)
   const receipt = {
@@ -168,6 +183,11 @@ tui.onFrameError = error => {
 // Picker bytes must not also edit the draft: the driver checks both decoders independently
 // with Kitty events, Unicode, and paste, leaving ordinary input to the focused editor.
 tui.addInputListener(data => {
+  if (matchesKey(data, CRASH_KEY)) {
+    // A real uncaught failure must restore the native tty before Node reports it.
+    setImmediate(() => { throw new Error(CRASH_MESSAGE) })
+    return { consume: true }
+  }
   if (matchesKey(data, QUIT_KEY)) {
     finish()
     return { consume: true }
@@ -175,7 +195,43 @@ tui.addInputListener(data => {
   pending.push(performance.now())
   if (matchesKey(data, PICKER_KEY)) {
     pickerOpen = !pickerOpen
+    tui.setFocus(pickerOpen ? null : editor)
     tui.requestImmediateRender()
+    return { consume: true }
+  }
+  if (matchesKey(data, REPLACE_DRAFT_KEY)) {
+    // Real global submission/history handlers replace drafts without calling editor.handleInput.
+    editor.setText(editor.getExpandedText())
+    tui.requestRender()
+    return { consume: true }
+  }
+  if (matchesKey(data, BORROW_KEY)) {
+    borrowed = !borrowed
+    editor.disableSubmit = borrowed
+    tui.setFocus(borrowed ? null : editor)
+    if (borrowed) {
+      // Questions deliberately borrow focus outside TUI's focused-component slot.
+      editor.focused = true
+      tui.cursor.setEditorFocused(true)
+    }
+    tui.requestImmediateRender()
+    return { consume: true }
+  }
+  if (matchesKey(data, HANDOFF_KEY)) {
+    clearInterval(stream)
+    tui.stop({ preserveScreen: true })
+    process.stdout.write(SUSPENDED + '\n')
+    // Leave more than one caret phase for the driver to observe a silent borrowed terminal.
+    resumeTimer = setTimeout(() => {
+      process.stdout.write(RESUMED + '\n')
+      tui.start()
+      startStreaming()
+    }, HANDOFF_MS)
+    return { consume: true }
+  }
+  if (borrowed) {
+    editor.handleInput(data)
+    tui.requestRender()
     return { consume: true }
   }
   if (pickerOpen) {
@@ -192,8 +248,11 @@ tui.setLayoutRoot(surfaceLayout({
 tui.setFocus(editor)
 tui.start()
 enteredRawMode = process.stdin.isRaw
-// Redraws must continue during typing and focus changes for the driver's screen-clear and cursor-visibility checks.
-stream = setInterval(() => {
-  model.applyStreamChunk({ type: TEXT_DELTA, text: STREAM_TEXT })
-  tui.requestRender()
-}, STREAM_INTERVAL_MS)
+/** Streaming pressure must return after a real stop/start handoff, without a second producer. */
+function startStreaming() {
+  stream = setInterval(() => {
+    model.applyStreamChunk({ type: TEXT_DELTA, text: STREAM_TEXT })
+    tui.requestRender()
+  }, STREAM_INTERVAL_MS)
+}
+startStreaming()

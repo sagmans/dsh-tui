@@ -1,4 +1,5 @@
 import type { ProcessTerminal } from '@earendil-works/pi-tui'
+import { SOFTWARE_CURSOR_MODE, type CursorMode } from '../terminal/cursor.ts'
 import { EventSafeTerminal } from '../terminal/input.ts'
 import type { Context } from '@deepseek-ai/cordis'
 import type { SessionId } from '@deepseek-ai/dsh-session'
@@ -84,10 +85,10 @@ export interface TerminalLifecycle {
  * know that the reader's own editor holds the tty. The composer keeps the
  * widgets; this owner keeps every byte written to the terminal.
  */
-export function createTerminalLifecycle(ctx: Context, ports: TerminalLifecyclePorts): TerminalLifecycle {
+export function createTerminalLifecycle(ctx: Context, ports: TerminalLifecyclePorts, cursorMode: CursorMode = SOFTWARE_CURSOR_MODE): TerminalLifecycle {
   const restore = createRestoreRegistry()
   const terminal = new EventSafeTerminal()
-  const tui = new WarningSafeTui(terminal, { copySelection })
+  const tui = new WarningSafeTui(terminal, { copySelection }, cursorMode)
   // A frame that cannot be drawn leaves the last good screen up, so the failure
   // has to reach the transcript: otherwise the surface looks frozen and nothing
   // on screen can say why.
