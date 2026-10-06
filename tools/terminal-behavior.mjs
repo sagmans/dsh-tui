@@ -94,7 +94,13 @@ async function verifyMode(cursorMode) {
   })
   const watchdog = setTimeout(() => {
     if (!exited) child.kill()
-    deadline.reject(new Error('terminal-behavior: ready/exit deadline exceeded'))
+    // Shared-runner failures must identify the stalled ownership boundary, not suggest extending the deadline.
+    deadline.reject(new Error('terminal-behavior: ready/exit deadline exceeded', { cause: {
+      cursorMode, cursorChecks, phases: cursorProbe?.phases, frameWaiting: frameWaiter !== undefined,
+      suspended: output.includes(SUSPENDED), resumed: output.includes(RESUMED),
+      hardwareCursorVisible: screen.hardwareCursorVisible(), inverse: screen.inverseAt(screen.x, screen.y),
+      cursor: { x: screen.x, y: screen.y }, cursorRow: screen.cells[screen.y]?.join(''),
+    } }))
   }, TIMEOUT_MS)
   child.onData(data => {
     output += data
