@@ -35,11 +35,14 @@
       "cost": "free",
       "scenarios": [
         "profiling-quit",
+        "profiling-rejected-exit",
+        "profiling-cli-rejection",
         "profiling-off",
         "profiling-sigterm",
         "profiling-sigint",
         "profiling-startup-failure",
         "profiling-help",
+        "profiling-usage-error",
         "profiling-write-failure",
         "profiling-session-switch",
         "profiling-resume",
@@ -49,6 +52,7 @@
       ],
       "sources": [
         "src/profiling.ts",
+        "src/agent/host.ts",
         "src/startup.ts",
         "src/surface/startup.ts",
         "src/surface/session-lifecycle.ts",
@@ -56,8 +60,10 @@
         "src/terminal/warning-screen.ts",
         "src/terminal/input.ts",
         "tools/profiling-evidence.mjs",
+        "tools/profiling-retention.mjs",
         "src/surface/session-picker.ts",
-        "tools/dogfood-profiling-crash.mjs"
+        "tools/dogfood-profiling-crash.mjs",
+        "tools/dogfood-profiling-exit.mjs"
       ]
     },
     {

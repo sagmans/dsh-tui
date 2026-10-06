@@ -14,6 +14,8 @@ breaking change, and a patch carries only fixes.
 
 ### Fixed
 
+- Keep lifecycle profiling accurate across session replacement by timing each agent's first disposal attempt, and preserve failed profiling evidence for diagnosis. Clarify that CLI usage errors produce no report.
+
 - Keep the editing cursor blinking during reasoning and streamed output with an independently timed software block. Preserve native cursor mode for terminal shape and IME compatibility.
 
 ## [0.14.0] - 2026-10-04

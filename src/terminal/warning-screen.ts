@@ -1,5 +1,5 @@
 import { Buffer } from 'node:buffer'
-import { PROFILE_CATEGORY, PROFILE_EXIT_REASON, profileSync, PROFILE_PHASE, PROFILE_MILESTONE, type LifecycleProfiler } from '../profiling.ts'
+import { PROFILE_CATEGORY, PROFILE_EXIT_REASON, profileSync, PROFILE_PHASE, PROFILE_MILESTONE, terminalStopCategory, type LifecycleProfiler } from '../profiling.ts'
 import { Editor, TuiAltScreen, type TuiAltScreenOptions, type Terminal, type TuiStopOptions, type TuiInputListener, type Component } from '@earendil-works/pi-tui'
 import { createCursorController, SOFTWARE_CURSOR_MODE, NATIVE_CURSOR_MODE, type CursorController, type CursorMode } from './cursor.ts'
 import { holdHostWrites, HOST_WRITE_LIMIT, HOST_WRITE_TARGETS, type HostWriteGuard } from './host-writes.ts'
@@ -243,19 +243,19 @@ export class WarningSafeTui extends TuiAltScreen {
     const ownedScreen = this.terminalRunning
     this.terminalRunning = false
     profileSync(this.profiling, PROFILE_PHASE.terminalStop, () => this.stopOwnedTerminal(options),
-      this.profiling?.category === PROFILE_CATEGORY.shutdown ? PROFILE_CATEGORY.shutdown : PROFILE_CATEGORY.handoff)
+      terminalStopCategory(this.profiling))
     if (ownedScreen && this.profiling?.category === PROFILE_CATEGORY.shutdown) this.profiling.mark(PROFILE_MILESTONE.terminalRestored)
   }
 
   /** Native hooks isolate transcript export from raw-mode cleanup without duplicating pi-tui internals. */
   protected override beforeTerminalStop(options: TuiStopOptions): void {
     profileSync(this.profiling, PROFILE_PHASE.terminalCleanup, () => super.beforeTerminalStop(options),
-      this.profiling?.category === PROFILE_CATEGORY.shutdown ? PROFILE_CATEGORY.shutdown : PROFILE_CATEGORY.handoff)
+      terminalStopCategory(this.profiling))
   }
 
   protected override afterTerminalStop(options: TuiStopOptions): void {
     profileSync(this.profiling, PROFILE_PHASE.transcript, () => super.afterTerminalStop(options),
-      this.profiling?.category === PROFILE_CATEGORY.shutdown ? PROFILE_CATEGORY.shutdown : PROFILE_CATEGORY.handoff)
+      terminalStopCategory(this.profiling))
   }
 
   private stopOwnedTerminal(options?: TuiStopOptions): void {
@@ -277,7 +277,7 @@ export class WarningSafeTui extends TuiAltScreen {
         if (this.cursorModesActive) {
           this.cursorModesActive = false
           profileSync(this.profiling, PROFILE_PHASE.cursorRestore, () => this.terminal.write(RESTORE_CURSOR_MODES),
-            this.profiling?.category === PROFILE_CATEGORY.shutdown ? PROFILE_CATEGORY.shutdown : PROFILE_CATEGORY.handoff)
+            terminalStopCategory(this.profiling))
         }
       } finally {
         // Replay warnings before releasing host writes, so direct host-stream output
@@ -288,7 +288,7 @@ export class WarningSafeTui extends TuiAltScreen {
         let warningFailure: { readonly error: unknown } | undefined
         try {
           profileSync(this.profiling, PROFILE_PHASE.warnings, () => release?.(),
-            this.profiling?.category === PROFILE_CATEGORY.shutdown ? PROFILE_CATEGORY.shutdown : PROFILE_CATEGORY.handoff)
+            terminalStopCategory(this.profiling))
         } catch (error) {
           // A listener that throws must not strand the host's own writing: the
           // hold below is the terminal's, and it goes back on every path out of
@@ -298,7 +298,7 @@ export class WarningSafeTui extends TuiAltScreen {
         const writes = this.hostWrites
         this.hostWrites = undefined
         profileSync(this.profiling, PROFILE_PHASE.hostWrites, () => writes?.release(),
-          this.profiling?.category === PROFILE_CATEGORY.shutdown ? PROFILE_CATEGORY.shutdown : PROFILE_CATEGORY.handoff)
+          terminalStopCategory(this.profiling))
         if (warningFailure !== undefined) throw warningFailure.error
       }
     }

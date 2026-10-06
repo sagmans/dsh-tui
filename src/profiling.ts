@@ -90,6 +90,11 @@ export interface LifecycleProfiler {
   afterExitRestoration(): void
 }
 
+/** Editor handoffs restore the same terminal state as shutdown without ending the invocation. */
+export function terminalStopCategory(profiling: LifecycleProfiler | undefined): ProfileCategory {
+  return profiling?.category === PROFILE_CATEGORY.shutdown ? PROFILE_CATEGORY.shutdown : PROFILE_CATEGORY.handoff
+}
+
 /** Async boundaries retain failures without replacing the original rejection or awaiting extra work. */
 export async function profileAsync<T>(profiling: LifecycleProfiler | undefined, name: ProfilePhase, work: () => Promise<T>, category?: ProfileCategory): Promise<T> {
   const finish = profiling?.begin(name, category)

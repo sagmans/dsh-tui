@@ -1,5 +1,5 @@
 /** Actual process exit and private artifacts prove profiling without a test-only runtime seam. */
-import { lstatSync, readFileSync, readdirSync } from 'node:fs'
+import { closeSync, constants, fstatSync, ftruncateSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const MISSING_DIRECTORY_CODE = 'ENOENT'
@@ -36,6 +36,7 @@ const MISSING_LIFETIME_ERROR = 'dogfood: missing process lifetime'
 const PHASE_CLOCK_ERROR = 'dogfood: invalid profiling phase status or clock'
 const INCOMPLETE_PHASE_ERROR = 'dogfood: incomplete phase claimed completion'
 const PHASE_DURATION_ERROR = 'dogfood: inconsistent profiling phase duration'
+const PHASE_COUNT_ERROR = 'dogfood: wrong profiling phase count '
 const EXIT_PATH_ERROR = 'dogfood: wrong profiling exit path'
 const MISSING_READINESS_ERROR = 'dogfood: profiled surface never became ready'
 const MISSING_PATH_ERROR = 'dogfood: profiling report path was not printed'
@@ -55,16 +56,95 @@ const INCOMPLETE = 'incomplete'
 const PHASE_STATUSES = new Set([COMPLETE, FAILED, INCOMPLETE])
 const REQUIRED_TIMES = ['processLifetimeMs', 'firstFrameMs', 'inputReadyMs', 'startupMs', 'shutdownMs']
 const CLOCK_TOLERANCE_MS = 0.001
+const EVIDENCE_DIRECTORY = 'profiling'
+const EVIDENCE_LATEST = 'profiling.json'
+const FILE_START = 0
+const EXISTING_PATH_CODE = 'EEXIST'
+const READ_FLAGS = constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK
+const WRITE_FLAGS = constants.O_WRONLY | constants.O_CREAT | constants.O_NOFOLLOW | constants.O_NONBLOCK
+const MODE_ERROR = 'dogfood: unsafe profiling evidence directory'
 const REPORT_FILENAME = /^[^/\\]+_\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.\d{3}Z\.json$/u
 
-/** Reports must describe observed events, not merely exist beside a successful quit. */
+/** Failure artifacts can contain rejected private content, so output must never follow links or widen access. */
+function privateDirectory(directory) {
+  const stat = lstatSync(directory)
+  if (!stat.isDirectory() || stat.isSymbolicLink() || (stat.mode & MODE_MASK) !== PRIVATE_DIRECTORY_MODE) throw new Error(MODE_ERROR)
+}
+
+/** Descriptor checks prevent swapped links, shared files, and special files from becoming evidence inputs or outputs. */
+function privateFile(stat) {
+  if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== SINGLE_LINK_COUNT || (stat.mode & MODE_MASK) !== PRIVATE_FILE_MODE) {
+    throw new Error(UNSAFE_FILE_ERROR)
+  }
+}
+
+/** Keep every original receipt plus the latest alias without normalizing malformed JSON or its bytes. */
+export function saveProfilingEvidence(folder, contents, name) {
+  privateDirectory(folder)
+  const paths = []
+  if (name !== undefined) {
+    if (!REPORT_FILENAME.test(name)) throw new Error(INVALID_FILENAME_ERROR)
+    const directory = join(folder, EVIDENCE_DIRECTORY)
+    try { mkdirSync(directory, { mode: PRIVATE_DIRECTORY_MODE }) } catch (error) {
+      if (error.code !== EXISTING_PATH_CODE) throw error
+    }
+    privateDirectory(directory)
+    paths.push(join(directory, name))
+  }
+  paths.push(join(folder, EVIDENCE_LATEST))
+  for (const path of paths) {
+    const fd = openSync(path, WRITE_FLAGS, PRIVATE_FILE_MODE)
+    try {
+      privateFile(fstatSync(fd))
+      // Truncation must wait until the opened file, not only its pathname, passes the safety checks.
+      ftruncateSync(fd, FILE_START)
+      writeFileSync(fd, contents)
+    } finally { closeSync(fd) }
+  }
+}
+
+/** Reports must describe observed events, but rejected receipts must outlive scratch-home cleanup too. */
 export function verifyProfilingEvidence(home, expected, raw, exitCode, evidence, initialSessionId) {
   const directory = join(home, ...REPORT_PARTS)
-  let names
-  try { names = readdirSync(directory).filter(name => name.endsWith(REPORT_SUFFIX)) } catch (error) {
-    if (error.code !== MISSING_DIRECTORY_CODE) throw error
-    names = []
+  let names = []
+  try {
+    // Check each owned parent before listing; a safe-looking leaf must not redirect reads into another home.
+    let parent = home
+    for (const part of ['', ...REPORT_PARTS]) {
+      parent = join(parent, part)
+      const stat = lstatSync(parent)
+      if (!stat.isDirectory() || stat.isSymbolicLink() || (parent === directory && (stat.mode & MODE_MASK) !== PRIVATE_DIRECTORY_MODE)) {
+        throw new Error(DIRECTORY_PRIVACY_ERROR)
+      }
+    }
+    names = readdirSync(directory).filter(name => name.endsWith(REPORT_SUFFIX))
+  } catch (error) {
+    // A refused output directory is the intentional write-failure scenario; never inspect its target.
+    if (error.code !== MISSING_DIRECTORY_CODE && !(expected?.failure && error.message === DIRECTORY_PRIVACY_ERROR)) throw error
   }
+  names.sort((left, right) => left.slice(-TIMESTAMP_SUFFIX_LENGTH).localeCompare(right.slice(-TIMESTAMP_SUFFIX_LENGTH)))
+  const reports = []
+  let unsafeReport
+  for (const name of names) {
+    const file = join(directory, name)
+    let contents
+    try {
+      if (!REPORT_FILENAME.test(name)) throw new Error(INVALID_FILENAME_ERROR)
+      privateFile(lstatSync(file))
+      const fd = openSync(file, READ_FLAGS)
+      try {
+        privateFile(fstatSync(fd))
+        contents = readFileSync(fd)
+      } finally { closeSync(fd) }
+    } catch (error) {
+      // One unsafe candidate must not erase safe siblings that explain a count or schema failure.
+      unsafeReport ??= error
+      continue
+    }
+    evidence(contents, name)
+    reports.push({ name, file, contents })
+  }
+  if (unsafeReport) throw unsafeReport
   if (expected === false) {
     if (names.length !== EMPTY_REPORT_COUNT) throw new Error(FLAGLESS_REPORT_ERROR)
     return
@@ -73,23 +153,12 @@ export function verifyProfilingEvidence(home, expected, raw, exitCode, evidence,
     if (names.length !== EMPTY_REPORT_COUNT || !raw.includes(REPORT_FAILURE)) {
       throw new Error(WRITE_FAILURE_ERROR)
     }
-    evidence({ status: WRITE_FAILURE_STATUS, exitCode })
+    evidence(Buffer.from(JSON.stringify({ status: WRITE_FAILURE_STATUS, exitCode }) + '\n'))
     return
   }
-  names.sort((left, right) => left.slice(-TIMESTAMP_SUFFIX_LENGTH).localeCompare(right.slice(-TIMESTAMP_SUFFIX_LENGTH)))
   if (names.length !== (expected.count ?? DEFAULT_REPORT_COUNT)) throw new Error(COUNT_ERROR + names.length)
-  const name = names.at(LATEST_REPORT_INDEX)
-  if (!REPORT_FILENAME.test(name)) throw new Error(INVALID_FILENAME_ERROR)
-  const file = join(directory, name)
-  const stat = lstatSync(file)
-  if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== SINGLE_LINK_COUNT || (stat.mode & MODE_MASK) !== PRIVATE_FILE_MODE) {
-    throw new Error(UNSAFE_FILE_ERROR)
-  }
-  const directoryStat = lstatSync(directory)
-  if (!directoryStat.isDirectory() || directoryStat.isSymbolicLink() || (directoryStat.mode & MODE_MASK) !== PRIVATE_DIRECTORY_MODE) {
-    throw new Error(DIRECTORY_PRIVACY_ERROR)
-  }
-  const contents = readFileSync(file, ENCODING)
+  const { name, file, contents: bytes } = reports.at(LATEST_REPORT_INDEX)
+  const contents = bytes.toString(ENCODING)
   const report = JSON.parse(contents)
   if (expected.stableLaunch && report.sessionId !== initialSessionId) throw new Error(INVOCATION_ID_ERROR)
   for (const excluded of expected.excluded ?? []) {
@@ -132,6 +201,11 @@ export function verifyProfilingEvidence(home, expected, raw, exitCode, evidence,
       throw new Error(COMPLETE_CATEGORY_ERROR + expectedPhase.category + CATEGORY_PHASE_SEPARATOR + expectedPhase.name)
     }
   }
+  for (const expectedPhase of expected.phaseCounts ?? []) {
+    // Count incomplete and failed spans too: a completed duplicate must not conceal an extra lifecycle attempt.
+    const count = report.phases.filter(row => row.name === expectedPhase.name && row.category === expectedPhase.category).length
+    if (count !== expectedPhase.count) throw new Error(PHASE_COUNT_ERROR + expectedPhase.category + CATEGORY_PHASE_SEPARATOR + expectedPhase.name + ': ' + count)
+  }
   if (expected.reason && report.exit.reason !== expected.reason) throw new Error(EXIT_PATH_ERROR)
   for (const phase of expected.failedPhases ?? []) {
     if (!report.phases.some(row => row.name === phase && row.status === FAILED)) throw new Error(FAILED_PHASE_ERROR + phase)
@@ -146,6 +220,4 @@ export function verifyProfilingEvidence(home, expected, raw, exitCode, evidence,
   if (raw.includes(ENTER_ALTERNATE_SCREEN) && (!raw.includes(EXIT_ALTERNATE_SCREEN) || raw.indexOf(REPORT_PREFIX) <= raw.lastIndexOf(EXIT_ALTERNATE_SCREEN))) {
     throw new Error(RESTORATION_ORDER_ERROR)
   }
-  // Keep a copy outside scratch-home cleanup so a reviewer can inspect the exact receipt.
-  evidence(report)
 }

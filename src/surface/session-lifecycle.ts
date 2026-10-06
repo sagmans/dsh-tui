@@ -264,7 +264,7 @@ export function createSessionLifecycle(ctx: Context, ports: SessionLifecyclePort
     // guards handles already replaced against a second teardown attempt.
     // Synchronous cleanup does not await or report disposal failure.
     ports.disposers.push(() => {
-      void profileAsync(profiling, PROFILE_PHASE.agentDisposal, () => handle.dispose())
+      void handle.dispose()
     })
     ports.installCompletion()
     profiling?.mark(PROFILE_MILESTONE.agentReady)

@@ -7,6 +7,7 @@
         "--profiling"
       ],
       "profiling": {
+        "retentionProof": true,
         "ready": true,
         "phases": [
           "cli-parse",
@@ -37,6 +38,32 @@
         }
       ],
       "alias": true
+    },
+    {
+      "id": "profiling-rejected-exit",
+      "args": ["--profiling"],
+      "expectExit": 1,
+      "profiling": {
+        "expectedFailure": {
+          "message": "dogfood: exit code 0",
+          "exitCode": 0
+        }
+      },
+      "steps": [{ "command": "/quit", "exit": true }]
+    },
+    {
+      "id": "profiling-cli-rejection",
+      "tool": "cli",
+      "cliExitProbe": true,
+      "invocation": ["--profiling"],
+      "expectExit": 1,
+      "expect": "",
+      "profiling": {
+        "expectedFailure": {
+          "message": "dogfood: profiling-cli-rejection: CLI failed:",
+          "exitCode": 0
+        }
+      }
     },
     {
       "id": "profiling-off",
@@ -121,6 +148,18 @@
       "expect": "--profiling"
     },
     {
+      "id": "profiling-usage-error",
+      "tool": "cli",
+      "invocation": [
+        "--profiling",
+        "--new",
+        "--resume"
+      ],
+      "profiling": false,
+      "expectExit": 1,
+      "expect": "--new cannot be combined with a resume session id or mode"
+    },
+    {
       "id": "profiling-write-failure",
       "args": [
         "--profiling"
@@ -149,6 +188,28 @@
       "profiling": {
         "ready": true,
         "stableLaunch": true,
+        "categories": [
+          {
+            "name": "agent-disposal",
+            "category": "session"
+          },
+          {
+            "name": "agent-disposal",
+            "category": "shutdown"
+          }
+        ],
+        "phaseCounts": [
+          {
+            "name": "agent-disposal",
+            "category": "session",
+            "count": 1
+          },
+          {
+            "name": "agent-disposal",
+            "category": "shutdown",
+            "count": 1
+          }
+        ],
         "phases": [
           "agent-start",
           "surface-disposal"

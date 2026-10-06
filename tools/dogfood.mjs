@@ -14,7 +14,8 @@ import { TUI_TOKENS, PALETTE_NAMES } from '../lib/theme-tokens.js'
 import { preparePtyLaunch } from './pty-launch.mjs'
 import { runFreeTransports } from './dogfood-transports.mjs'
 import { PtyScreen } from './pty-screen.mjs'
-import { verifyProfilingEvidence } from './profiling-evidence.mjs'
+import { saveProfilingEvidence, verifyProfilingEvidence } from './profiling-evidence.mjs'
+import { verifyProfilingFailure, verifyProfilingRetention } from './profiling-retention.mjs'
 import { editorText } from './dogfood-observation.mjs'
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
@@ -44,8 +45,9 @@ const PACKAGE = '@sagmans/dsh-tui'
 const BASE = '@deepseek-ai/dsh-base'
 const TIMER_PROBE_PACKAGE = 'dsh-tui-timer-probe'
 const PROFILING_CRASH_PLUGIN = 'dogfood-profiling-crash.mjs'
-const PROFILING_CRASH_ID = 'profiling-crash-probe'
-const CRASH_PROBE_CONFIGURATION_ERROR = 'dogfood: crash probe requires a fresh credential-free profile'
+const PROFILING_EXIT_PLUGIN = 'dogfood-profiling-exit.mjs'
+const PROFILING_PROBE_ID = 'profiling-probe'
+const PROFILING_PROBE_CONFIGURATION_ERROR = 'dogfood: profiling probe requires a fresh credential-free profile'
 const INITIAL_SESSION_ID = /tui-session-[a-f0-9-]+/u
 const STARTUP_FIELDS = ['sessionId', 'resume', 'resumePicker', 'model', 'provider', 'preset', 'color', 'bell']
 const COLS = 100
@@ -169,6 +171,8 @@ async function run(scenario, reused) {
   observations.set(scenario.id, steps)
   const folder = join(evidence, scenario.id)
   mkdirSync(folder, { recursive: true, mode: PRIVATE_DIR_MODE })
+  // CLI and PTY failures need the same private byte sink before either path removes its scratch home.
+  const profilingEvidence = (contents, name) => saveProfilingEvidence(folder, contents, name)
   const home = reused?.home ?? (paid ? realpathSync(option('--home')) : prepareHome(scenario.id))
   if (scenario.timerProbe) {
     if (paid || reused) throw new Error('dogfood: timer probe requires a fresh credential-free profile')
@@ -191,9 +195,9 @@ async function run(scenario, reused) {
     const patch = yaml.dump([{ insert: [{ id: PRUNING_PLUGIN_ID, name: join(ROOT, 'tools', PRUNING_PLUGIN) }] }])
     writeFileSync(join(home, 'profiles', PROFILE, 'cordis.patch.yml'), patch, { mode: PRIVATE_FILE_MODE })
   }
-  if (scenario.crashProbe) {
-    if (paid || reused || scenario.config) throw new Error(CRASH_PROBE_CONFIGURATION_ERROR)
-    const patch = yaml.dump([{ insert: [{ id: PROFILING_CRASH_ID, name: join(ROOT, 'tools', PROFILING_CRASH_PLUGIN) }] }])
+  if (scenario.crashProbe || scenario.cliExitProbe) {
+    if (paid || reused || scenario.config) throw new Error(PROFILING_PROBE_CONFIGURATION_ERROR)
+    const patch = yaml.dump([{ insert: [{ id: PROFILING_PROBE_ID, name: join(ROOT, 'tools', scenario.cliExitProbe ? PROFILING_EXIT_PLUGIN : PROFILING_CRASH_PLUGIN) }] }])
     writeFileSync(join(home, 'profiles', PROFILE, 'cordis.patch.yml'), patch, { mode: PRIVATE_FILE_MODE })
   }
   for (const link of scenario.homeLinks ?? []) {
@@ -252,9 +256,13 @@ async function run(scenario, reused) {
       : spawnSync(launch.command, [...launch.argsPrefix, '--profile', PROFILE, ...scenario.invocation], { cwd: workspace, env: childEnv, encoding: 'utf8', timeout: DEADLINE_MS })
     const output = (result.stdout ?? '') + (result.stderr ?? '')
     writeFileSync(join(folder, 'cli.txt'), output, { mode: PRIVATE_FILE_MODE })
-    if (scenario.profiling !== undefined) verifyProfilingEvidence(home, scenario.profiling, output, result.status, () => undefined)
-    if (!paid && !reused) clean(home)
-    if (result.error || result.status !== (scenario.expectExit ?? 0) || !output.includes(scenario.expect)) throw new Error(`dogfood: ${scenario.id}: CLI failed: ${result.error?.message ?? output}`)
+    try {
+      if (scenario.profiling !== undefined) verifyProfilingEvidence(home, scenario.profiling, output, result.status, profilingEvidence)
+      if (result.error || result.status !== (scenario.expectExit ?? 0) || !output.includes(scenario.expect)) throw new Error(`dogfood: ${scenario.id}: CLI failed: ${result.error?.message ?? output}`)
+    } finally {
+      // CLI failures need the same bounded cleanup as PTY runs, after private raw receipts have been retained.
+      if (!paid && !reused) clean(home)
+    }
     return
   }
   const screen = new PtyScreen(COLS, ROWS)
@@ -321,9 +329,7 @@ async function run(scenario, reused) {
       if (scenario.profiling !== undefined) {
         await wait(() => status !== undefined, 'failed launch exit')
         if (status.exitCode !== scenario.expectExit) throw new Error(`dogfood: rejected launch exited ${status.exitCode}`)
-        verifyProfilingEvidence(home, scenario.profiling, raw, status.exitCode, report => {
-          writeFileSync(join(folder, 'profiling.json'), JSON.stringify(report, null, 2) + '\n', { mode: PRIVATE_FILE_MODE })
-        })
+        verifyProfilingEvidence(home, scenario.profiling, raw, status.exitCode, profilingEvidence)
       }
       return
     }
@@ -426,9 +432,7 @@ async function run(scenario, reused) {
     const enteredAt = raw.lastIndexOf('\x1b[?1049h')
     for (const sequence of RESTORE) if (raw.lastIndexOf(sequence) <= enteredAt) throw new Error(`dogfood: missing terminal restoration ${JSON.stringify(sequence)}`)
     for (const escape of scenario.absentAnsi ?? []) if (raw.includes(escape)) throw new Error(`dogfood: forbidden styling ${JSON.stringify(escape)}`)
-    if (scenario.profiling !== undefined) verifyProfilingEvidence(home, scenario.profiling, raw, status.exitCode, report => {
-      writeFileSync(join(folder, 'profiling.json'), JSON.stringify(report, null, 2) + '\n', { mode: PRIVATE_FILE_MODE })
-    }, initialSessionId)
+    if (scenario.profiling !== undefined) verifyProfilingEvidence(home, scenario.profiling, raw, status.exitCode, profilingEvidence, initialSessionId)
     if (scenario.continuation) {
       const id = screen.text().match(INITIAL_SESSION_ID)?.[0]
       if (!id || !SESSION_ID_PATTERN.test(id)) throw new Error(SESSION_ID_ERROR)
@@ -449,6 +453,11 @@ async function run(scenario, reused) {
     }
     writeFileSync(join(folder, 'terminal.ansi'), raw, { mode: PRIVATE_FILE_MODE })
     writeFileSync(join(folder, 'final.txt'), screen.text() + '\n', { mode: PRIVATE_FILE_MODE })
+    if (failed && scenario.profiling !== undefined) {
+      try { verifyProfilingEvidence(home, scenario.profiling, raw, status?.exitCode, profilingEvidence) } catch {
+        // Capture follows child shutdown; secondary validation must not replace the original PTY failure.
+      }
+    }
     if (!paid && !reused) clean(home)
   }
   if (failed) throw failed
@@ -457,7 +466,11 @@ async function run(scenario, reused) {
 console.log(`dogfood: ${paid ? 'PAID (explicit demand)' : 'free, credential-free'}; evidence ${evidence}`)
 for (const scenario of selected) {
   try {
-    await run(scenario)
+    let failure
+    try { await run(scenario) } catch (error) { failure = error }
+    if (scenario.profiling?.expectedFailure) verifyProfilingFailure(join(evidence, scenario.id), failure, scenario.profiling.expectedFailure)
+    else if (failure) throw failure
+    if (scenario.profiling?.retentionProof) verifyProfilingRetention(join(evidence, scenario.id))
     results.push({ id: scenario.id, status: 'passed', assertions: scenario.steps?.length ?? 1 })
     console.log(`dogfood: PASS ${scenario.id}`)
   } catch (error) {

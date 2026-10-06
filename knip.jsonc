@@ -5,7 +5,7 @@
     "src/todo-guard.ts!",
     "src/host/roster.ts!",
     "src/host/runner.ts!",
-    "tools/{pack-smoke,terminal-behavior,harness-matrix,install-smoke,pty-drive,dogfood,dogfood-editor,dogfood-pruning,dogfood-profiling-crash,dogfood-herdr,dogfood-tmux}.mjs!"
+    "tools/{pack-smoke,terminal-behavior,harness-matrix,install-smoke,pty-drive,dogfood,dogfood-editor,dogfood-pruning,dogfood-profiling-crash,dogfood-profiling-exit,dogfood-herdr,dogfood-tmux}.mjs!"
   ],
   // The optional model peer needs the verified RC pin; a wildcard cannot select that prerelease safely.
   "ignoreDependencies": ["@deepseek-ai/dsh-agent-default-model"],

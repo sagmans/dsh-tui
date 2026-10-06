@@ -191,6 +191,8 @@ Startup includes aggregate time before this plugin loads, CLI parsing, surface c
 `startupMs` ends when launcher readiness, input readiness, and the first successful frame have all occurred.
 History-picker input readiness does not wait for a human selection. Picker waiting has its own `user-wait` category.
 Shutdown separates terminal cleanup, raw-mode restoration, transcript export, warning replay, pane release, surface disposal, and agent disposal.
+The profiler records agent disposal once per handle, when its first disposal attempt starts.
+Session replacement records disposal in the `session` category. Later cleanup calls do not create duplicate spans.
 Editor handoffs appear separately and do not finalize the report.
 
 Phase spans can overlap or nest; do not add their durations to calculate total startup or shutdown time.
@@ -200,7 +202,8 @@ It stores no prompts, drafts, transcript text, credentials, or error messages. F
 The final measurement ends at Node's `exit` callback, before JSON serialization and the final disk write.
 It does not measure shell command dispatch, OS process reaping, or terminal-emulator painting.
 Early Harness failures before flag parsing and uncatchable termination, such as `SIGKILL`, cannot produce a completed report.
-Report-write failure does not change the app's exit status. Help does not create a report.
+Report-write failure does not change the app's exit status. Help and CLI usage errors do not create reports.
+This includes conflicting arguments, such as `--new --resume`. The CLI rejects these arguments before a launch identity exists.
 Path and failure diagnostics print only when the TUI observed safe terminal ownership.
 A forced unload during an editor handoff can save a report without printing into the child editor.
 
