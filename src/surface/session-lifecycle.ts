@@ -10,6 +10,7 @@ import { driverReportFor, sessionStartReason } from '../herdr/state.ts'
 import { pendingPrompts } from '../queue.ts'
 import { BELL, shouldRingBell } from '../terminal/bell.ts'
 import { windowTitle } from '../terminal/title.ts'
+import { TUI_PROFILING_SERVICE, profileAsync, PROFILE_PHASE, PROFILE_MILESTONE } from '../profiling.ts'
 
 /**
  * The agent this terminal drives: its identity, its activity, and every
@@ -141,6 +142,7 @@ export interface SessionLifecycle {
 }
 
 export function createSessionLifecycle(ctx: Context, ports: SessionLifecyclePorts): SessionLifecycle {
+  const profiling = ctx.get(TUI_PROFILING_SERVICE)
   /** The session this surface drives: commands, approvals, and the bell belong to it. */
   let activeSession = ports.initialSession
   /** The agent in service, or undefined while a transition creates the next one. */
@@ -193,26 +195,26 @@ export function createSessionLifecycle(ctx: Context, ports: SessionLifecyclePort
   const openAgent = async (id: SessionId, resume: boolean, fork?: ForkInheritance): Promise<TuiAgent> => {
     // Settled before the transcript is touched, so a refusal leaves neither a
     // half-replayed session nor a half-composed agent behind.
-    const preset = await ports.presetFor(id, resume, fork)
+    const preset = await profileAsync(profiling, PROFILE_PHASE.preset, () => ports.presetFor(id, resume, fork))
     // A session already in service still owns its write handle, and the host refuses
     // a second one: reopening the very session the reader is driving — a reload, or a
     // pick of the session already on screen — has to let that agent go before its
     // replacement is asked for. Every other open settles first, which is what keeps a
     // refusal from taking the reader's agent away with it.
     if (agent !== undefined && agent.sessionId === id) await disposeOutgoing()
-    const handle = await startAgent(ctx, {
+    const handle = await profileAsync(profiling, PROFILE_PHASE.agent, () => startAgent(ctx, {
       sessionId: id,
       resume,
       model: ports.model,
       provider: ports.provider,
       cwd: process.cwd(),
       preset,
-      setup: async agentCtx => {
+      setup: agentCtx => profileAsync(profiling, PROFILE_PHASE.setup, async () => {
         ports.installModelChoice(agentCtx)
         if (preset !== undefined) await ports.mountPreset(agentCtx, preset)
-      },
+      }),
       ...(fork === undefined ? {} : { fork }),
-    })
+    }))
     // The new session's agent is accepted before the outgoing one is let go:
     // the settled questions above are where an open is refused, and a refusal
     // has to find the reader's own agent still driving an untouched screen.
@@ -220,6 +222,7 @@ export function createSessionLifecycle(ctx: Context, ports: SessionLifecyclePort
     // with none installed.
     if (agent !== undefined) await disposeOutgoing()
     sessionOpened = true
+    profiling?.sessionOpened(String(handle.sessionId))
     activeSession = id
     ports.setViewed(id)
     agent = handle
@@ -253,7 +256,7 @@ export function createSessionLifecycle(ctx: Context, ports: SessionLifecyclePort
     // degraded each replayed card to a bare generic row. The agent's loop is
     // live by now, so the fold and the stream race over the same events; the
     // durable sequence number is what keeps one event from landing twice.
-    if (resume) await ports.replay(id)
+    if (resume) await profileAsync(profiling, PROFILE_PHASE.replay, () => ports.replay(id))
     // A branch inherits the conversation the reader was already reading, so it
     // opens on that history rather than on an empty screen.
     if (fork !== undefined) await ports.fold(id)
@@ -261,9 +264,10 @@ export function createSessionLifecycle(ctx: Context, ports: SessionLifecyclePort
     // guards handles already replaced against a second teardown attempt.
     // Synchronous cleanup does not await or report disposal failure.
     ports.disposers.push(() => {
-      void handle.dispose()
+      void profileAsync(profiling, PROFILE_PHASE.agentDisposal, () => handle.dispose())
     })
     ports.installCompletion()
+    profiling?.mark(PROFILE_MILESTONE.agentReady)
     ports.notice(`session ${handle.sessionId}${resume ? ' (resumed)' : ''}`)
     ports.render()
     // Returned so a caller that replaced the handle can send through the new

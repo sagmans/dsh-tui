@@ -1,4 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis'
+import { TUI_PROFILING_SERVICE, profileAsync, PROFILE_PHASE } from '../profiling.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import {
   PICKER_LIMIT,
@@ -99,7 +100,7 @@ export function createSessionPicker(ctx: Context, ports: SessionPickerPorts): Se
       return undefined
     }
     try {
-      const sessions = await history.list(PICKER_LIMIT)
+      const sessions = await profileAsync(ctx.get(TUI_PROFILING_SERVICE), PROFILE_PHASE.historyList, () => history.list(PICKER_LIMIT))
       if (sessions.length === 0) {
         ports.notice('no stored sessions to resume')
         ports.render()

@@ -30,6 +30,37 @@
       ]
     },
     {
+      "id": "lifecycle-profiling",
+      "description": "Opt-in invocation startup and shutdown phase reports, private files, observed exit and restoration boundaries",
+      "cost": "free",
+      "scenarios": [
+        "profiling-quit",
+        "profiling-off",
+        "profiling-sigterm",
+        "profiling-sigint",
+        "profiling-startup-failure",
+        "profiling-help",
+        "profiling-write-failure",
+        "profiling-session-switch",
+        "profiling-resume",
+        "profiling-picker",
+        "profiling-handoff",
+        "profiling-crash"
+      ],
+      "sources": [
+        "src/profiling.ts",
+        "src/startup.ts",
+        "src/surface/startup.ts",
+        "src/surface/session-lifecycle.ts",
+        "src/surface/terminal-lifecycle.ts",
+        "src/terminal/warning-screen.ts",
+        "src/terminal/input.ts",
+        "tools/profiling-evidence.mjs",
+        "src/surface/session-picker.ts",
+        "tools/dogfood-profiling-crash.mjs"
+      ]
+    },
+    {
       "id": "shutdown",
       "description": "Quit, exit, Ctrl+D, SIGTERM, restoration, resume hint",
       "cost": "free",

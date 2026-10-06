@@ -2,6 +2,323 @@
   "schemaVersion": 1,
   "free": [
     {
+      "id": "profiling-quit",
+      "args": [
+        "--profiling"
+      ],
+      "profiling": {
+        "ready": true,
+        "phases": [
+          "cli-parse",
+          "surface-construction",
+          "launch-validation",
+          "terminal-start",
+          "first-frame",
+          "agent-start",
+          "terminal-stop",
+          "transcript-and-screen-restore",
+          "surface-disposal"
+        ],
+        "excluded": [
+          "profiling-private-draft"
+        ]
+      },
+      "steps": [
+        {
+          "type": "profiling-private-draft",
+          "expect": "profiling-private-draft"
+        },
+        {
+          "expect": "session tui-session-"
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ],
+      "alias": true
+    },
+    {
+      "id": "profiling-off",
+      "profiling": false,
+      "steps": [
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ]
+    },
+    {
+      "id": "profiling-sigterm",
+      "alias": true,
+      "args": [
+        "--profiling"
+      ],
+      "profiling": {
+        "ready": true,
+        "phases": [
+          "terminal-stop",
+          "surface-disposal"
+        ]
+      },
+      "steps": [
+        {
+          "signal": "SIGTERM",
+          "exit": true
+        }
+      ]
+    },
+    {
+      "id": "profiling-sigint",
+      "args": [
+        "--profiling"
+      ],
+      "expectExit": 130,
+      "profiling": {
+        "ready": true,
+        "phases": [
+          "terminal-stop",
+          "surface-disposal"
+        ]
+      },
+      "steps": [
+        {
+          "signal": "SIGINT",
+          "exit": true
+        }
+      ]
+    },
+    {
+      "id": "profiling-startup-failure",
+      "args": [
+        "--profiling",
+        "--preset",
+        "profiling-missing-mode"
+      ],
+      "startupError": "mode \"profiling-missing-mode\" is not one this profile offers",
+      "expectExit": 1,
+      "profiling": {
+        "failedPhases": [
+          "launch-validation"
+        ],
+        "missing": [
+          "terminalActive",
+          "firstFrame",
+          "agentReady",
+          "inputReady"
+        ]
+      },
+      "steps": []
+    },
+    {
+      "id": "profiling-help",
+      "tool": "cli",
+      "invocation": [
+        "--profiling",
+        "--help"
+      ],
+      "profiling": false,
+      "expect": "--profiling"
+    },
+    {
+      "id": "profiling-write-failure",
+      "args": [
+        "--profiling"
+      ],
+      "homeLinks": [
+        {
+          "path": "profiles/tui/profiling",
+          "target": "profiling-symlink-target"
+        }
+      ],
+      "profiling": {
+        "failure": true
+      },
+      "steps": [
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ]
+    },
+    {
+      "id": "profiling-session-switch",
+      "args": [
+        "--profiling"
+      ],
+      "profiling": {
+        "ready": true,
+        "stableLaunch": true,
+        "phases": [
+          "agent-start",
+          "surface-disposal"
+        ]
+      },
+      "steps": [
+        {
+          "command": "/new profiling-replacement",
+          "expect": "profiling-replacement",
+          "changed": true
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ]
+    },
+    {
+      "id": "profiling-resume",
+      "args": [
+        "--profiling"
+      ],
+      "profiling": {
+        "ready": true
+      },
+      "steps": [
+        {
+          "command": "/rename profiling-resume-title",
+          "expect": "profiling-resume-title"
+        }
+      ],
+      "continuation": {
+        "args": [
+          "--profiling"
+        ],
+        "profiling": {
+          "count": 2,
+          "ready": true,
+          "phases": [
+            "history-replay",
+            "agent-start"
+          ]
+        },
+        "steps": [
+          {
+            "command": "/status",
+            "expect": "tokens in 0 out 0"
+          },
+          {
+            "command": "/quit",
+            "exit": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "profiling-picker",
+      "args": [
+        "--profiling"
+      ],
+      "profiling": {
+        "ready": true
+      },
+      "steps": [
+        {
+          "command": "/rename profiling-picker-title",
+          "expect": "profiling-picker-title"
+        }
+      ],
+      "continuation": {
+        "args": [
+          "--profiling"
+        ],
+        "initialPicker": true,
+        "profiling": {
+          "count": 2,
+          "ready": true,
+          "phases": [
+            "history-picker-wait",
+            "history-replay"
+          ]
+        },
+        "steps": [
+          {
+            "command": "/quit",
+            "exit": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "profiling-handoff",
+      "editor": true,
+      "steps": [
+        {
+          "type": "original-draft",
+          "expect": "original-draft"
+        },
+        {
+          "key": "ctrl+x",
+          "expect": "ctrl+x"
+        },
+        {
+          "key": "e",
+          "expect": "external-editor-line"
+        },
+        {
+          "key": "ctrl+c",
+          "absent": "external-editor-line",
+          "scope": "editor"
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ],
+      "args": [
+        "--profiling"
+      ],
+      "profiling": {
+        "ready": true,
+        "categories": [
+          {
+            "name": "terminal-start",
+            "category": "startup"
+          },
+          {
+            "name": "terminal-start",
+            "category": "handoff"
+          },
+          {
+            "name": "terminal-stop",
+            "category": "handoff"
+          },
+          {
+            "name": "terminal-stop",
+            "category": "shutdown"
+          }
+        ],
+        "excluded": [
+          "original-draft",
+          "external-editor-line"
+        ]
+      }
+    },
+    {
+      "id": "profiling-crash",
+      "args": [
+        "--profiling"
+      ],
+      "crashProbe": true,
+      "expectExit": 1,
+      "profiling": {
+        "ready": true,
+        "reason": "fatal-error",
+        "phases": [
+          "terminal-stop"
+        ],
+        "excluded": [
+          "profiling-private-fatal-marker"
+        ]
+      },
+      "steps": [
+        {
+          "command": "/rename profiling-crash-request",
+          "exit": true
+        }
+      ]
+    },
+    {
       "id": "ptc-result-pruning",
       "tool": "pruning",
       "steps": [
@@ -1912,21 +2229,39 @@
     {
       "id": "cursor-software",
       "steps": [
-        { "command": "/status", "expect": "tokens in", "hardwareCursorVisible": false },
-        { "command": "/quit", "exit": true }
+        {
+          "command": "/status",
+          "expect": "tokens in",
+          "hardwareCursorVisible": false
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
       ]
     },
     {
       "id": "cursor-native",
-      "config": { "cursorMode": "native" },
+      "config": {
+        "cursorMode": "native"
+      },
       "steps": [
-        { "command": "/status", "expect": "tokens in", "hardwareCursorVisible": true },
-        { "command": "/quit", "exit": true }
+        {
+          "command": "/status",
+          "expect": "tokens in",
+          "hardwareCursorVisible": true
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
       ]
     },
     {
       "id": "cursor-invalid",
-      "config": { "cursorMode": "invalid" },
+      "config": {
+        "cursorMode": "invalid"
+      },
       "startupError": "$.cursorMode expected"
     },
     {

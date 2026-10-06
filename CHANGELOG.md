@@ -8,6 +8,10 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+### Added
+
+- Opt-in `dsh tui --profiling` writes private per-invocation startup and shutdown phase reports under `$DSH_HOME/profiles/tui/profiling/`. Reports distinguish first-frame readiness, agent setup, terminal restoration, transcript export, and host disposal without recording conversation content.
+
 ### Fixed
 
 - Keep the editing cursor blinking during reasoning and streamed output with an independently timed software block. Preserve native cursor mode for terminal shape and IME compatibility.

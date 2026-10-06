@@ -14,6 +14,7 @@ import { TUI_TOKENS, PALETTE_NAMES } from '../lib/theme-tokens.js'
 import { preparePtyLaunch } from './pty-launch.mjs'
 import { runFreeTransports } from './dogfood-transports.mjs'
 import { PtyScreen } from './pty-screen.mjs'
+import { verifyProfilingEvidence } from './profiling-evidence.mjs'
 import { editorText } from './dogfood-observation.mjs'
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
@@ -42,6 +43,10 @@ const PROFILE = 'tui'
 const PACKAGE = '@sagmans/dsh-tui'
 const BASE = '@deepseek-ai/dsh-base'
 const TIMER_PROBE_PACKAGE = 'dsh-tui-timer-probe'
+const PROFILING_CRASH_PLUGIN = 'dogfood-profiling-crash.mjs'
+const PROFILING_CRASH_ID = 'profiling-crash-probe'
+const CRASH_PROBE_CONFIGURATION_ERROR = 'dogfood: crash probe requires a fresh credential-free profile'
+const INITIAL_SESSION_ID = /tui-session-[a-f0-9-]+/u
 const STARTUP_FIELDS = ['sessionId', 'resume', 'resumePicker', 'model', 'provider', 'preset', 'color', 'bell']
 const COLS = 100
 const ROWS = 30
@@ -73,6 +78,7 @@ const ENABLED_ENV_VALUE = '1'
 const PERMISSION_MODE = 'workspace-write'
 const EVIDENCE_PREFIX = 'dsh-tui-dogfood-'
 const READY = 'ready'
+const STARTUP_PICKER = 'resume a session'
 const RESTORE = ['\x1b[?1049l', '\x1b[?25h', '\x1b[?1006l']
 const FREE_ENV = ['PATH', 'TMPDIR', 'TMP', 'TEMP', 'LANG', 'LC_ALL', 'SystemRoot']
 const KEYS = {
@@ -185,6 +191,11 @@ async function run(scenario, reused) {
     const patch = yaml.dump([{ insert: [{ id: PRUNING_PLUGIN_ID, name: join(ROOT, 'tools', PRUNING_PLUGIN) }] }])
     writeFileSync(join(home, 'profiles', PROFILE, 'cordis.patch.yml'), patch, { mode: PRIVATE_FILE_MODE })
   }
+  if (scenario.crashProbe) {
+    if (paid || reused || scenario.config) throw new Error(CRASH_PROBE_CONFIGURATION_ERROR)
+    const patch = yaml.dump([{ insert: [{ id: PROFILING_CRASH_ID, name: join(ROOT, 'tools', PROFILING_CRASH_PLUGIN) }] }])
+    writeFileSync(join(home, 'profiles', PROFILE, 'cordis.patch.yml'), patch, { mode: PRIVATE_FILE_MODE })
+  }
   for (const link of scenario.homeLinks ?? []) {
     const path = resolve(home, link.path)
     const target = resolve(home, link.target)
@@ -241,12 +252,13 @@ async function run(scenario, reused) {
       : spawnSync(launch.command, [...launch.argsPrefix, '--profile', PROFILE, ...scenario.invocation], { cwd: workspace, env: childEnv, encoding: 'utf8', timeout: DEADLINE_MS })
     const output = (result.stdout ?? '') + (result.stderr ?? '')
     writeFileSync(join(folder, 'cli.txt'), output, { mode: PRIVATE_FILE_MODE })
+    if (scenario.profiling !== undefined) verifyProfilingEvidence(home, scenario.profiling, output, result.status, () => undefined)
     if (!paid && !reused) clean(home)
     if (result.error || result.status !== (scenario.expectExit ?? 0) || !output.includes(scenario.expect)) throw new Error(`dogfood: ${scenario.id}: CLI failed: ${result.error?.message ?? output}`)
     return
   }
   const screen = new PtyScreen(COLS, ROWS)
-  const child = pty.spawn(launch.command, [...launch.argsPrefix, '--profile', PROFILE, ...(scenario.args ?? [])], {
+  const child = pty.spawn(launch.command, [...launch.argsPrefix, ...(scenario.alias ? [PROFILE] : ['--profile', PROFILE]), ...(scenario.args ?? [])], {
     name: TERMINAL_NAME, cols: COLS, rows: ROWS, cwd: workspace,
     env: childEnv,
   })
@@ -306,9 +318,22 @@ async function run(scenario, reused) {
       await wait(() => screen.text().includes(scenario.startupError), 'rejected startup')
       if (raw.includes(ENTER_ALTERNATE_SCREEN)) throw new Error(REJECTED_STARTUP_SCREEN_ERROR)
       snapshot(0)
+      if (scenario.profiling !== undefined) {
+        await wait(() => status !== undefined, 'failed launch exit')
+        if (status.exitCode !== scenario.expectExit) throw new Error(`dogfood: rejected launch exited ${status.exitCode}`)
+        verifyProfilingEvidence(home, scenario.profiling, raw, status.exitCode, report => {
+          writeFileSync(join(folder, 'profiling.json'), JSON.stringify(report, null, 2) + '\n', { mode: PRIVATE_FILE_MODE })
+        })
+      }
       return
     }
+    if (scenario.initialPicker) {
+      await wait(() => screen.text().includes(STARTUP_PICKER), 'startup history picker')
+      snapshot(0)
+      child.write(KEYS.enter)
+    }
     await wait(() => screen.text().includes(READY) && screen.text().includes('tui-session-'), 'ready session')
+    const initialSessionId = screen.text().match(INITIAL_SESSION_ID)?.[0]
     if (scenario.newSession && screen.text().includes(reused?.sessionId)) throw new Error(FRESH_SESSION_ERROR)
     // A ready footer precedes late settings application; a status receipt proves the command plane settled before chords.
     const bootstrapGeneration = generation
@@ -401,12 +426,15 @@ async function run(scenario, reused) {
     const enteredAt = raw.lastIndexOf('\x1b[?1049h')
     for (const sequence of RESTORE) if (raw.lastIndexOf(sequence) <= enteredAt) throw new Error(`dogfood: missing terminal restoration ${JSON.stringify(sequence)}`)
     for (const escape of scenario.absentAnsi ?? []) if (raw.includes(escape)) throw new Error(`dogfood: forbidden styling ${JSON.stringify(escape)}`)
+    if (scenario.profiling !== undefined) verifyProfilingEvidence(home, scenario.profiling, raw, status.exitCode, report => {
+      writeFileSync(join(folder, 'profiling.json'), JSON.stringify(report, null, 2) + '\n', { mode: PRIVATE_FILE_MODE })
+    }, initialSessionId)
     if (scenario.continuation) {
-      const id = screen.text().match(/tui-session-[a-f0-9-]+/u)?.[0]
+      const id = screen.text().match(INITIAL_SESSION_ID)?.[0]
       if (!id || !SESSION_ID_PATTERN.test(id)) throw new Error(SESSION_ID_ERROR)
       const next = scenario.continuation
       // A fresh driver leaves the old session inactive, forcing child navigation through durable storage.
-      await run({ ...next, id: scenario.id + (next.newSession ? STORED_VIEW_SUFFIX : RESTART_SUFFIX), args: next.newSession ? [] : ['--resume', id] }, { home, workspace, sessionId: id })
+      await run({ ...next, id: scenario.id + (next.newSession ? STORED_VIEW_SUFFIX : RESTART_SUFFIX), args: next.initialPicker ? ['--resume', ...(next.args ?? [])] : [...(next.newSession ? [] : ['--resume', id]), ...(next.args ?? [])] }, { home, workspace, sessionId: id })
     }
     if (!paid && /tokens in [1-9]|out [1-9]/u.test(screen.text())) throw new Error('dogfood: free run unexpectedly used model tokens')
   } catch (error) {
