@@ -1910,6 +1910,26 @@
       }
     },
     {
+      "id": "cursor-software",
+      "steps": [
+        { "command": "/status", "expect": "tokens in", "hardwareCursorVisible": false },
+        { "command": "/quit", "exit": true }
+      ]
+    },
+    {
+      "id": "cursor-native",
+      "config": { "cursorMode": "native" },
+      "steps": [
+        { "command": "/status", "expect": "tokens in", "hardwareCursorVisible": true },
+        { "command": "/quit", "exit": true }
+      ]
+    },
+    {
+      "id": "cursor-invalid",
+      "config": { "cursorMode": "invalid" },
+      "startupError": "$.cursorMode expected"
+    },
+    {
       "id": "native-terminal",
       "tool": "native-terminal",
       "invocation": [],

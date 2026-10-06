@@ -17,6 +17,8 @@ import { PtyScreen } from './pty-screen.mjs'
 import { editorText } from './dogfood-observation.mjs'
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
+const ENTER_ALTERNATE_SCREEN = '\x1b[?1049h'
+const REJECTED_STARTUP_SCREEN_ERROR = 'dogfood: rejected configuration entered the alternate screen'
 const SCENARIOS = JSON.parse(readFileSync(join(ROOT, 'tools/dogfood-scenarios.json'), 'utf8'))
 const INVENTORY = JSON.parse(readFileSync(join(ROOT, 'tools/feature-inventory.json'), 'utf8'))
 if (JSON.stringify(INVENTORY.commands.map(row => row.command).sort()) !== JSON.stringify([...LOCAL_COMMANDS].sort())) throw new Error('dogfood: command inventory drifted')
@@ -293,11 +295,19 @@ async function run(scenario, reused) {
     if (text === undefined) return false
     const visible = text.replace(/\s+/gu, ' ')
     return (step.expect === undefined || visible.includes(step.expect.replace(/\s+/gu, ' '))) && (step.absent === undefined || !visible.includes(step.absent.replace(/\s+/gu, ' ')))
+      && (step.hardwareCursorVisible === undefined || screen.hardwareCursorVisible() === step.hardwareCursorVisible)
       && (!step.changed || screen.text() !== priorScreen)
       && (!step.settled || screen.cells.slice(-4).some(row => row.join('').includes(READY)))
   }
   let failed
   try {
+    if (scenario.startupError) {
+      // Cordis reports rejected activation without exiting the host; cleanup still owns that private process.
+      await wait(() => screen.text().includes(scenario.startupError), 'rejected startup')
+      if (raw.includes(ENTER_ALTERNATE_SCREEN)) throw new Error(REJECTED_STARTUP_SCREEN_ERROR)
+      snapshot(0)
+      return
+    }
     await wait(() => screen.text().includes(READY) && screen.text().includes('tui-session-'), 'ready session')
     if (scenario.newSession && screen.text().includes(reused?.sessionId)) throw new Error(FRESH_SESSION_ERROR)
     // A ready footer precedes late settings application; a status receipt proves the command plane settled before chords.

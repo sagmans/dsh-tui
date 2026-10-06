@@ -10,6 +10,7 @@ import {
   type TuiMouseEvent,
   type TuiMouseEventResult,
 } from '@earendil-works/pi-tui'
+import { NATIVE_CURSOR_PRESENTATION, SOFTWARE_CURSOR_MODE, type CursorPresentation } from '../terminal/cursor.ts'
 import { type Keymap } from '../input/actions.ts'
 import { ENTER_KEY } from '../input/key-press.ts'
 import { ghostDisplayLine, ghostGraphemes, isCursorAtTextEnd, nextGhostWord, type EditorCursor } from '../input/ghost.ts'
@@ -51,6 +52,11 @@ const LEGACY_ALT_ENTER = '\u001b\r'
  */
 const KITTY_ALT_ENTER = '\u001b[13;3u'
 const KITTY_CTRL_J = '\u001b[106;5u'
+/** Both phases share the ghost's first grapheme without changing its stored text. */
+const GHOST_CURSOR_CELL = 'cursor'
+const GHOST_REST_CELL = 'rest'
+/** Removing reversal must preserve the grapheme and its independent position marker. */
+const CURSOR_TEXT_REPLACEMENT = '$1'
 
 /**
  * The cell the base editor draws for a cursor parked past the last character.
@@ -120,8 +126,18 @@ export class BoxedEditor extends Editor {
     theme: EditorTheme,
     private readonly keymap: () => Keymap,
     private readonly ghost?: GhostBrush,
+    private readonly cursor: CursorPresentation = NATIVE_CURSOR_PRESENTATION,
   ) {
     super(tui, theme, { paddingX: PADDING_X })
+  }
+
+  /** Submission, history, and draft restores consume chords before handleInput, but still move the editing caret. */
+  override setText(text: string): void {
+    const previous = this.getExpandedText()
+    const before = this.getCursor()
+    super.setText(text)
+    const after = this.getCursor()
+    if (previous !== this.getExpandedText() || before.line !== after.line || before.col !== after.col) this.cursor.activity()
   }
 
   /**
@@ -134,6 +150,8 @@ export class BoxedEditor extends Editor {
    * keys belong to whoever borrowed it.
    */
   override handleInput(data: string): void {
+    // Only editor-dispatched input restarts blinking; stream and status redraws never enter here.
+    this.cursor.activity()
     if (this.disableSubmit) {
       super.handleInput(data)
       return
@@ -215,7 +233,7 @@ export class BoxedEditor extends Editor {
    * row; the suffix takes that cell plus the padding after it, so the row keeps
    * exactly its width and the cursor stays where the reader is typing.
    */
-  private ghostRow(row: string, suffix: string | undefined): string {
+  private ghostRow(row: string, suffix: string | undefined, showCursor: boolean): string {
     const brush = this.ghost
     if (brush === undefined || suffix === undefined) return row
     const cursorAt = row.indexOf(CURSOR_AT_END)
@@ -238,7 +256,7 @@ export class BoxedEditor extends Editor {
     if (drawn === '') return row
     const [first = '', ...rest] = ghostGraphemes(drawn)
     const spaces = ' '.repeat(Math.max(0, room - used))
-    return before + brush.paint(first, 'rest') + brush.paint(rest.join(''), 'rest') + spaces
+    return before + brush.paint(first, showCursor ? GHOST_CURSOR_CELL : GHOST_REST_CELL) + brush.paint(rest.join(''), GHOST_REST_CELL) + spaces
   }
 
   /**
@@ -264,6 +282,7 @@ export class BoxedEditor extends Editor {
   }
 
   override render(width: number): string[] {
+    const showCursor = this.focused && this.cursor.mode === SOFTWARE_CURSOR_MODE && this.cursor.visible()
     // Borrowed question editors remain dialog furniture, not conversation messages.
     const enclosed = this.disableSubmit
     const minimum = enclosed ? MIN_BOX_WIDTH : MIN_RAIL_WIDTH
@@ -277,7 +296,7 @@ export class BoxedEditor extends Editor {
     // An unfamiliar base layout must not receive guessed pointer offsets.
     if (closing < 0) {
       this.mapped = false
-      return rows.map(row => row.replace(CLOSING_TAG, ''))
+      return rows.map(row => this.decorateText((showCursor ? row : row.replace(SYNTHETIC_CURSOR, CURSOR_TEXT_REPLACEMENT)).replace(CLOSING_TAG, '')))
     }
     const menu = rows.slice(closing + 1)
     const text = rows.slice(1, closing)
@@ -292,7 +311,11 @@ export class BoxedEditor extends Editor {
       this.borderColor(open + stripTerminalSequences(row) + close)
     if (boxed) lines.push(edge(FRAME_GLYPHS.topLeft, rows[0] ?? '', FRAME_GLYPHS.topRight))
     else if (this.hiddenAbove > 0) lines.push(indicator('↑', this.hiddenAbove))
-    for (const row of text) lines.push(side + this.decorateText(this.ghostRow(row, ghost).replace(SYNTHETIC_CURSOR, '$1')) + (boxed ? side : ''))
+    for (const row of text) {
+      const painted = this.ghostRow(row, ghost, showCursor)
+      // Mask after styling so the visible cursor cannot reveal a protected answer grapheme.
+      lines.push(side + this.decorateText(showCursor ? painted : painted.replace(SYNTHETIC_CURSOR, CURSOR_TEXT_REPLACEMENT)) + (boxed ? side : ''))
+    }
     if (boxed) lines.push(edge(FRAME_GLYPHS.bottomLeft, rows[closing]!.replace(CLOSING_TAG, ''), FRAME_GLYPHS.bottomRight))
     else if (this.hiddenBelow > 0) lines.push(indicator('↓', this.hiddenBelow))
     return lines
@@ -308,11 +331,18 @@ export class BoxedEditor extends Editor {
    * back before that hit test can say what it hit.
    */
   override handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
-    if (!this.mapped) return super.handleMouse(event)
-    const width = event.width - this.railColumns
-    if (event.y < this.menuRows) {
-      return super.handleMouse({ ...event, width, y: event.y + this.textRows + 2 })
+    const before = this.getCursor()
+    let translated = event
+    if (this.mapped) {
+      const width = event.width - this.railColumns
+      translated = event.y < this.menuRows
+        ? { ...event, width, y: event.y + this.textRows + 2 }
+        : { ...event, width, x: event.x - (this.railColumns > 0 ? RAIL_COLUMNS : 0), y: event.y - this.menuRows + 1 - this.topIndicatorRows }
     }
-    return super.handleMouse({ ...event, width, x: event.x - (this.railColumns > 0 ? RAIL_COLUMNS : 0), y: event.y - this.menuRows + 1 - this.topIndicatorRows })
+    const result = super.handleMouse(translated)
+    const after = this.getCursor()
+    // Pointer motion over other rows must not restart the editing caret.
+    if (before.line !== after.line || before.col !== after.col) this.cursor.activity()
+    return result
   }
 }

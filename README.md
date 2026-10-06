@@ -317,6 +317,26 @@ While a turn runs, a prompt submitted into the editor waits in the agent's own i
 
 Copying is read back through what the surface drew rather than through the screen, so a selection is the words alone: dragging across a message takes its box with it on screen, and the surface takes its own frame back out before the text reaches the clipboard — the sides, the padding beside them, and the rules above and below. A selection that covers a whole message, two of them, or a part of one is read the same way, and a row the transcript did not draw — the editor's own bar, a picker's card — is copied exactly as it read, and a selection that was nothing but frame is handed back as the reader made it, because a copy is never emptied. The frame still comes back in a copy taken with the terminal's own selection — Shift held while dragging, or a terminal that keeps selection to itself — which is the one path no program can filter.
 
+### Editing cursor
+
+The default software cursor is a reverse-video block over the current grapheme.
+Its visible and hidden phases each last 500 ms, independent of reasoning, status updates, and streamed output.
+Editor input and cursor movement restart the visible phase.
+Terminal focus loss, modal input ownership, and external-editor handoff suspend it.
+Reverse video remains available with color disabled.
+
+Software mode replaces the terminal's selected cursor shape and blink settings.
+To retain previous native cursor behavior and IME compatibility, merge this field into the existing TUI row's config:
+
+~~~yaml
+cursorMode: native
+~~~
+
+Preserve the row's startup mappings; a profile override replaces its whole config.
+Restart the surface after changing the mode.
+Native mode retains the previous blink request to the terminal; continuous output can still prevent blinking.
+The software cursor retains the terminal position marker; IME behavior must still be checked with your emulator.
+
 When prompt history is enabled, each submitted line is kept in a global history at
 `$DSH_HOME/prompt-history.json`. Typing the start of a prompt that was sent
 before draws the rest of the newest match after the cursor in a faint shade.

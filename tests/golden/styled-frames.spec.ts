@@ -6,10 +6,14 @@
 
 import { describe, expect, it } from 'vitest'
 import { createTheme } from '@/theme.ts'
+import { cursorFrames } from './fixtures/cursor.ts'
 import { WIDTHS, fixture, parkedStatus, busyDock, queued, terminalTextFrame, mermaidFixture, markdownMessages } from './fixtures/frames.ts'
 
 
 describe('terminal text', () => {
+  it('preserves software cursor cells through Unicode, ghosts, masking, and focus', () => {
+    expect(cursorFrames()).toMatchSnapshot()
+  })
   for (const width of WIDTHS) {
       it(`draws a tab, a colour, and a carriage return at ${width} columns`, () => {
         expect(terminalTextFrame().render(width)).toMatchSnapshot()
