@@ -14,6 +14,7 @@ import { WarningSafeTui } from '../terminal/warning-screen.ts'
 import { cleanCopied } from '../ui/copy.ts'
 import { escapeTerminalText } from '../terminal-text.ts'
 import type { FrameRow } from '../ui/frame.ts'
+import { TUI_PROFILING_SERVICE, PROFILE_CATEGORY, PROFILE_EXIT_REASON, profileAsync, PROFILE_PHASE, PROFILE_MILESTONE } from '../profiling.ts'
 
 /**
  * What the terminal's owner needs from the surface that composes it.
@@ -86,9 +87,10 @@ export interface TerminalLifecycle {
  * widgets; this owner keeps every byte written to the terminal.
  */
 export function createTerminalLifecycle(ctx: Context, ports: TerminalLifecyclePorts, cursorMode: CursorMode = SOFTWARE_CURSOR_MODE): TerminalLifecycle {
+  const profiling = ctx.get(TUI_PROFILING_SERVICE)
   const restore = createRestoreRegistry()
-  const terminal = new EventSafeTerminal()
-  const tui = new WarningSafeTui(terminal, { copySelection }, cursorMode)
+  const terminal = new EventSafeTerminal(profiling)
+  const tui = new WarningSafeTui(terminal, { copySelection }, cursorMode, profiling)
   // A frame that cannot be drawn leaves the last good screen up, so the failure
   // has to reach the transcript: otherwise the surface looks frozen and nothing
   // on screen can say why.
@@ -99,6 +101,7 @@ export function createTerminalLifecycle(ctx: Context, ports: TerminalLifecyclePo
   let disposed = false
   /** An exit asked for while a child owned the terminal, run once the screen is ours again. */
   let deferredExit: { readonly code: number; readonly reason: string | undefined } | undefined
+  let finishDeferredExit: (() => void) | undefined
   /** Whether the exit has begun, which is when nothing may start another. */
   let exited = false
   /**
@@ -141,6 +144,8 @@ export function createTerminalLifecycle(ctx: Context, ports: TerminalLifecyclePo
   ctx.effect(() => () => {
     // A surface the host unloads owns no screen and keeps no listeners, so a
     // child still running in another process must not be handed a start().
+    profiling?.shutdown(PROFILE_EXIT_REASON.hostUnload)
+    const finishDisposal = profiling?.begin(PROFILE_PHASE.disposal, PROFILE_CATEGORY.shutdown)
     disposed = true
     // The pane stops being an agent before the process that claimed it unwinds:
     // a release that ran after the reports were unregistered would race them,
@@ -150,31 +155,38 @@ export function createTerminalLifecycle(ctx: Context, ports: TerminalLifecyclePo
     // would otherwise claim the row back. The promise is returned so a host that
     // waits for teardown waits for the row too, and the exit listener outlives
     // the wait, so one that does not still hands the row back synchronously.
-    const released = herdr.release().catch(() => undefined)
+    const released = profileAsync(profiling, PROFILE_PHASE.herdr, () => herdr.release(), PROFILE_CATEGORY.shutdown).catch(() => undefined)
     restore.restore()
     for (const dispose of disposers.reverse()) dispose()
-    return released.finally(unregisterExit)
+    return released.finally(() => {
+      unregisterExit()
+      finishDisposal?.()
+      profiling?.mark(PROFILE_MILESTONE.surfaceDisposed)
+    })
   })
 
   const requestExit = (code: number, reason?: string): void => {
     if (exited) return
+    profiling?.shutdown(reason === undefined ? PROFILE_EXIT_REASON.quit : code === 1 ? PROFILE_EXIT_REASON.startupFailure : PROFILE_EXIT_REASON.interrupted)
     // A child owns the terminal: restoring it here would leave the reader a
     // shell behind an editor that is still running, and would put its tty back
     // into cooked mode under it. The exit waits for the screen to come back.
     if (handedOver) {
+      finishDeferredExit ??= profiling?.begin(PROFILE_PHASE.deferredExit, PROFILE_CATEGORY.shutdown)
       deferredExit = { code, reason }
       return
     }
     exited = true
+    const finishPreparation = profiling?.begin(PROFILE_PHASE.exitPreparation, PROFILE_CATEGORY.shutdown)
     ports.stopClock()
     // The screen goes back at once, so leaving feels like leaving; the row goes
     // back behind it. Reports already on the wire are settled first, because
     // Herdr ignores the release of a pane nothing has claimed yet — the report
     // that followed it would otherwise claim the row back during shutdown.
     terminal.write(CLEAR_TITLE)
+    finishPreparation?.()
     restore.restore()
-    void herdr
-      .release()
+    void profileAsync(profiling, PROFILE_PHASE.herdr, () => herdr.release(), PROFILE_CATEGORY.shutdown)
       // Nobody is left to report a release that failed on the way out, and a
       // row that could not be cleared is not a reason to keep the process.
       .catch(() => undefined)
@@ -189,6 +201,7 @@ export function createTerminalLifecycle(ctx: Context, ports: TerminalLifecyclePo
         // the identity it was launched with names no log, so pointing at it
         // would send the reader to a conversation that does not exist.
         if (ports.sessionOpened()) terminal.write(`\n${resumeHint(String(ports.activeSession()), PROFILE_NAME)}\n`)
+        profiling?.mark(PROFILE_MILESTONE.launcherExit)
         ports.exit(code)
       })
   }
@@ -269,6 +282,8 @@ export function createTerminalLifecycle(ctx: Context, ports: TerminalLifecyclePo
       }
       const pendingExit = deferredExit
       deferredExit = undefined
+      finishDeferredExit?.()
+      finishDeferredExit = undefined
       if (pendingExit !== undefined) requestExit(pendingExit.code, pendingExit.reason)
     })
   }

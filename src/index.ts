@@ -37,6 +37,7 @@ import { QueueBar } from './ui/queue.ts'
 import { StatusBar } from './ui/status.ts'
 import { TranscriptView } from './ui/view.ts'
 import type { PromptStash } from './stash.ts'
+import { TUI_PROFILING_SERVICE, PROFILE_PHASE, PROFILE_MILESTONE } from './profiling.ts'
 
 export const name = 'tui'
 
@@ -75,6 +76,8 @@ export function assertInteractiveTerminal(): void {
  * the composition rows around it.
  */
 export function apply(ctx: Context, config: unknown): void {
+  const profiling = ctx.get(TUI_PROFILING_SERVICE)
+  const finishSurface = profiling?.begin(PROFILE_PHASE.surface)
   // The surface releases its terminal before returning exit ownership to the launcher.
   // Require that handoff rather than terminating the host from a plugin.
   const appExit = ctx.get('appExit')
@@ -524,6 +527,9 @@ export function apply(ctx: Context, config: unknown): void {
   // Unload may happen without explicit exit; abort notifications before gates release their waits.
   // Teardown reverses registration order, and repeated reporter disposal is harmless.
   disposers.push(() => moshi?.dispose())
+
+  finishSurface?.()
+  profiling?.mark(PROFILE_MILESTONE.surfaceMounted)
 
   // Failed launch validation or session boot leaves no completed startup to serve input.
   // Restore the terminal and report failure outside the alternate screen rather than retain a partial surface.

@@ -16,6 +16,21 @@ Action discovery in `/keys` does not prove keyboard dispatch.
 Golden frames remain visual regression checks.
 Neither snapshots nor a clean boot prove full feature behavior.
 
+## Lifecycle profiling
+
+The free `profiling-*` scenarios exercise the real `dsh tui --profiling` alias and profile launcher.
+They check quit, SIGTERM, SIGINT, startup rejection, help, usage errors, flagless runs, session replacement, explicit resume, and the startup history picker.
+Session replacement must record one completed disposal in the `session` category and one in `shutdown`, without duplicate spans from retained cleanup callbacks.
+A real editor subprocess checks stop/start handoff. A scratch-only exception checks fatal restoration and private error exclusion.
+They inspect private JSON files, observed exit codes, monotonic durations, missing milestones, and restoration before report-path output.
+A symlinked report directory must fail without writing a report or changing exit status.
+A private draft must not appear in the report. Reports remain in the evidence directory after scratch-home cleanup.
+The quit scenario replays its real receipt with malformed JSON, invalid schema or timing, excluded content, duplicate files, and duplicate disposal spans.
+Each rejection must preserve private, byte-identical evidence after its scratch home is deleted.
+Unsafe source and output files must not expose or overwrite the scratch credential sentinel.
+Intentional CLI and PTY outcome rejections must retain the original report after actual runner cleanup.
+These checks measure in-process lifecycle boundaries, not terminal-emulator painting or OS process reaping.
+
 ## Editing cursor
 
 The free native-terminal scenario runs both software and native cursor modes under continuous streamed output.

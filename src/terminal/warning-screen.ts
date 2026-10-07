@@ -1,4 +1,5 @@
 import { Buffer } from 'node:buffer'
+import { PROFILE_CATEGORY, PROFILE_EXIT_REASON, profileSync, PROFILE_PHASE, PROFILE_MILESTONE, terminalStopCategory, type LifecycleProfiler } from '../profiling.ts'
 import { Editor, TuiAltScreen, type TuiAltScreenOptions, type Terminal, type TuiStopOptions, type TuiInputListener, type Component } from '@earendil-works/pi-tui'
 import { createCursorController, SOFTWARE_CURSOR_MODE, NATIVE_CURSOR_MODE, type CursorController, type CursorMode } from './cursor.ts'
 import { holdHostWrites, HOST_WRITE_LIMIT, HOST_WRITE_TARGETS, type HostWriteGuard } from './host-writes.ts'
@@ -116,6 +117,8 @@ export class WarningSafeTui extends TuiAltScreen {
   private releaseWarnings: (() => void) | undefined
   private hostWrites: HostWriteGuard | undefined
   private frameFailed = false
+  /** Native render can return without painting before start; only an owned screen can prove a first frame. */
+  private terminalRunning = false
   private highSurrogate: string | undefined
   /** A stopped surface must never alter the cursor of an external editor. */
   private cursorModesActive = false
@@ -123,6 +126,7 @@ export class WarningSafeTui extends TuiAltScreen {
   private readonly applicationListenersReady = true
   /** Fatal cleanup must preserve Node's original diagnostic and nonzero exit rather than claiming the exception. */
   private readonly restoreAfterCrash = (): void => {
+    this.profiling?.shutdown(PROFILE_EXIT_REASON.processExit)
     try {
       this.stop({ preserveScreen: true })
     } catch {
@@ -141,7 +145,7 @@ export class WarningSafeTui extends TuiAltScreen {
    * out of the way: this owner supplies cursor presentation and writes no
    * drawing log of its own. Native mode remains available for shape and IME compatibility.
    */
-  constructor(terminal: Terminal, options?: TuiAltScreenOptions, cursorMode: CursorMode = SOFTWARE_CURSOR_MODE) {
+  constructor(terminal: Terminal, options?: TuiAltScreenOptions, cursorMode: CursorMode = SOFTWARE_CURSOR_MODE, private readonly profiling?: LifecycleProfiler) {
     super(terminal, cursorMode === NATIVE_CURSOR_MODE, undefined, options)
     this.cursor = createCursorController(cursorMode, () => this.requestRender())
     // The pinned stdin buffer splits legacy text into UTF-16 units; filters must receive complete Unicode scalars.
@@ -178,6 +182,15 @@ export class WarningSafeTui extends TuiAltScreen {
   }
 
   override start(): void {
+    profileSync(this.profiling, PROFILE_PHASE.terminalStart, () => this.startOwnedTerminal(),
+      this.profiling?.has(PROFILE_MILESTONE.terminalActive) ? PROFILE_CATEGORY.handoff : PROFILE_CATEGORY.startup)
+    this.terminalRunning = true
+    this.profiling?.mark(PROFILE_MILESTONE.terminalActive)
+    // Fatal/exit restoration registered during start must precede synchronous report finalization.
+    this.profiling?.afterExitRestoration()
+  }
+
+  private startOwnedTerminal(): void {
     this.releaseWarnings ??= deferWarnings()
     this.hostWrites ??= holdHostWrites({ terminal: this.terminal, targets: HOST_WRITE_TARGETS })
     try {
@@ -206,10 +219,15 @@ export class WarningSafeTui extends TuiAltScreen {
    * component fails again is the same news, and repeating it would only loop.
    */
   override doRender(): void {
+    const finishFrame = this.terminalRunning && this.profiling?.has(PROFILE_MILESTONE.firstFrame) === false
+      ? this.profiling.begin(PROFILE_PHASE.firstFrame) : undefined
     try {
       super.doRender()
+      finishFrame?.()
+      if (this.terminalRunning) this.profiling?.mark(PROFILE_MILESTONE.firstFrame)
       this.frameFailed = false
     } catch (error) {
+      finishFrame?.(true)
       if (this.frameFailed) return
       this.frameFailed = true
       try {
@@ -222,6 +240,25 @@ export class WarningSafeTui extends TuiAltScreen {
   }
 
   override stop(options?: TuiStopOptions): void {
+    const ownedScreen = this.terminalRunning
+    this.terminalRunning = false
+    profileSync(this.profiling, PROFILE_PHASE.terminalStop, () => this.stopOwnedTerminal(options),
+      terminalStopCategory(this.profiling))
+    if (ownedScreen && this.profiling?.category === PROFILE_CATEGORY.shutdown) this.profiling.mark(PROFILE_MILESTONE.terminalRestored)
+  }
+
+  /** Native hooks isolate transcript export from raw-mode cleanup without duplicating pi-tui internals. */
+  protected override beforeTerminalStop(options: TuiStopOptions): void {
+    profileSync(this.profiling, PROFILE_PHASE.terminalCleanup, () => super.beforeTerminalStop(options),
+      terminalStopCategory(this.profiling))
+  }
+
+  protected override afterTerminalStop(options: TuiStopOptions): void {
+    profileSync(this.profiling, PROFILE_PHASE.transcript, () => super.afterTerminalStop(options),
+      terminalStopCategory(this.profiling))
+  }
+
+  private stopOwnedTerminal(options?: TuiStopOptions): void {
     // Cancel before any final frame or child-editor handoff can relinquish terminal ownership.
     this.cursor.stop()
     // A stopped or restarting owner must leave no fatal hooks pointing at its former terminal.
@@ -239,7 +276,8 @@ export class WarningSafeTui extends TuiAltScreen {
         // Native stop disables focus reporting; restore saved modes only after its final write.
         if (this.cursorModesActive) {
           this.cursorModesActive = false
-          this.terminal.write(RESTORE_CURSOR_MODES)
+          profileSync(this.profiling, PROFILE_PHASE.cursorRestore, () => this.terminal.write(RESTORE_CURSOR_MODES),
+            terminalStopCategory(this.profiling))
         }
       } finally {
         // Replay warnings before releasing host writes, so direct host-stream output
@@ -249,7 +287,8 @@ export class WarningSafeTui extends TuiAltScreen {
         this.releaseWarnings = undefined
         let warningFailure: { readonly error: unknown } | undefined
         try {
-          release?.()
+          profileSync(this.profiling, PROFILE_PHASE.warnings, () => release?.(),
+            terminalStopCategory(this.profiling))
         } catch (error) {
           // A listener that throws must not strand the host's own writing: the
           // hold below is the terminal's, and it goes back on every path out of
@@ -258,7 +297,8 @@ export class WarningSafeTui extends TuiAltScreen {
         }
         const writes = this.hostWrites
         this.hostWrites = undefined
-        writes?.release()
+        profileSync(this.profiling, PROFILE_PHASE.hostWrites, () => writes?.release(),
+          terminalStopCategory(this.profiling))
         if (warningFailure !== undefined) throw warningFailure.error
       }
     }

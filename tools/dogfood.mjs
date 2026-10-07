@@ -14,6 +14,8 @@ import { TUI_TOKENS, PALETTE_NAMES } from '../lib/theme-tokens.js'
 import { preparePtyLaunch } from './pty-launch.mjs'
 import { runFreeTransports } from './dogfood-transports.mjs'
 import { PtyScreen } from './pty-screen.mjs'
+import { saveProfilingEvidence, verifyProfilingEvidence } from './profiling-evidence.mjs'
+import { verifyProfilingFailure, verifyProfilingRetention } from './profiling-retention.mjs'
 import { editorText } from './dogfood-observation.mjs'
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
@@ -42,6 +44,11 @@ const PROFILE = 'tui'
 const PACKAGE = '@sagmans/dsh-tui'
 const BASE = '@deepseek-ai/dsh-base'
 const TIMER_PROBE_PACKAGE = 'dsh-tui-timer-probe'
+const PROFILING_CRASH_PLUGIN = 'dogfood-profiling-crash.mjs'
+const PROFILING_EXIT_PLUGIN = 'dogfood-profiling-exit.mjs'
+const PROFILING_PROBE_ID = 'profiling-probe'
+const PROFILING_PROBE_CONFIGURATION_ERROR = 'dogfood: profiling probe requires a fresh credential-free profile'
+const INITIAL_SESSION_ID = /tui-session-[a-f0-9-]+/u
 const STARTUP_FIELDS = ['sessionId', 'resume', 'resumePicker', 'model', 'provider', 'preset', 'color', 'bell']
 const COLS = 100
 const ROWS = 30
@@ -73,6 +80,7 @@ const ENABLED_ENV_VALUE = '1'
 const PERMISSION_MODE = 'workspace-write'
 const EVIDENCE_PREFIX = 'dsh-tui-dogfood-'
 const READY = 'ready'
+const STARTUP_PICKER = 'resume a session'
 const RESTORE = ['\x1b[?1049l', '\x1b[?25h', '\x1b[?1006l']
 const FREE_ENV = ['PATH', 'TMPDIR', 'TMP', 'TEMP', 'LANG', 'LC_ALL', 'SystemRoot']
 const KEYS = {
@@ -163,6 +171,8 @@ async function run(scenario, reused) {
   observations.set(scenario.id, steps)
   const folder = join(evidence, scenario.id)
   mkdirSync(folder, { recursive: true, mode: PRIVATE_DIR_MODE })
+  // CLI and PTY failures need the same private byte sink before either path removes its scratch home.
+  const profilingEvidence = (contents, name) => saveProfilingEvidence(folder, contents, name)
   const home = reused?.home ?? (paid ? realpathSync(option('--home')) : prepareHome(scenario.id))
   if (scenario.timerProbe) {
     if (paid || reused) throw new Error('dogfood: timer probe requires a fresh credential-free profile')
@@ -183,6 +193,11 @@ async function run(scenario, reused) {
   if (scenario.tool === PRUNING_SCENARIO_TOOL) {
     if (paid || reused || scenario.config) throw new Error(PRUNING_ALLOCATION_ERROR)
     const patch = yaml.dump([{ insert: [{ id: PRUNING_PLUGIN_ID, name: join(ROOT, 'tools', PRUNING_PLUGIN) }] }])
+    writeFileSync(join(home, 'profiles', PROFILE, 'cordis.patch.yml'), patch, { mode: PRIVATE_FILE_MODE })
+  }
+  if (scenario.crashProbe || scenario.cliExitProbe) {
+    if (paid || reused || scenario.config) throw new Error(PROFILING_PROBE_CONFIGURATION_ERROR)
+    const patch = yaml.dump([{ insert: [{ id: PROFILING_PROBE_ID, name: join(ROOT, 'tools', scenario.cliExitProbe ? PROFILING_EXIT_PLUGIN : PROFILING_CRASH_PLUGIN) }] }])
     writeFileSync(join(home, 'profiles', PROFILE, 'cordis.patch.yml'), patch, { mode: PRIVATE_FILE_MODE })
   }
   for (const link of scenario.homeLinks ?? []) {
@@ -241,12 +256,17 @@ async function run(scenario, reused) {
       : spawnSync(launch.command, [...launch.argsPrefix, '--profile', PROFILE, ...scenario.invocation], { cwd: workspace, env: childEnv, encoding: 'utf8', timeout: DEADLINE_MS })
     const output = (result.stdout ?? '') + (result.stderr ?? '')
     writeFileSync(join(folder, 'cli.txt'), output, { mode: PRIVATE_FILE_MODE })
-    if (!paid && !reused) clean(home)
-    if (result.error || result.status !== (scenario.expectExit ?? 0) || !output.includes(scenario.expect)) throw new Error(`dogfood: ${scenario.id}: CLI failed: ${result.error?.message ?? output}`)
+    try {
+      if (scenario.profiling !== undefined) verifyProfilingEvidence(home, scenario.profiling, output, result.status, profilingEvidence)
+      if (result.error || result.status !== (scenario.expectExit ?? 0) || !output.includes(scenario.expect)) throw new Error(`dogfood: ${scenario.id}: CLI failed: ${result.error?.message ?? output}`)
+    } finally {
+      // CLI failures need the same bounded cleanup as PTY runs, after private raw receipts have been retained.
+      if (!paid && !reused) clean(home)
+    }
     return
   }
   const screen = new PtyScreen(COLS, ROWS)
-  const child = pty.spawn(launch.command, [...launch.argsPrefix, '--profile', PROFILE, ...(scenario.args ?? [])], {
+  const child = pty.spawn(launch.command, [...launch.argsPrefix, ...(scenario.alias ? [PROFILE] : ['--profile', PROFILE]), ...(scenario.args ?? [])], {
     name: TERMINAL_NAME, cols: COLS, rows: ROWS, cwd: workspace,
     env: childEnv,
   })
@@ -306,9 +326,20 @@ async function run(scenario, reused) {
       await wait(() => screen.text().includes(scenario.startupError), 'rejected startup')
       if (raw.includes(ENTER_ALTERNATE_SCREEN)) throw new Error(REJECTED_STARTUP_SCREEN_ERROR)
       snapshot(0)
+      if (scenario.profiling !== undefined) {
+        await wait(() => status !== undefined, 'failed launch exit')
+        if (status.exitCode !== scenario.expectExit) throw new Error(`dogfood: rejected launch exited ${status.exitCode}`)
+        verifyProfilingEvidence(home, scenario.profiling, raw, status.exitCode, profilingEvidence)
+      }
       return
     }
+    if (scenario.initialPicker) {
+      await wait(() => screen.text().includes(STARTUP_PICKER), 'startup history picker')
+      snapshot(0)
+      child.write(KEYS.enter)
+    }
     await wait(() => screen.text().includes(READY) && screen.text().includes('tui-session-'), 'ready session')
+    const initialSessionId = screen.text().match(INITIAL_SESSION_ID)?.[0]
     if (scenario.newSession && screen.text().includes(reused?.sessionId)) throw new Error(FRESH_SESSION_ERROR)
     // A ready footer precedes late settings application; a status receipt proves the command plane settled before chords.
     const bootstrapGeneration = generation
@@ -401,12 +432,13 @@ async function run(scenario, reused) {
     const enteredAt = raw.lastIndexOf('\x1b[?1049h')
     for (const sequence of RESTORE) if (raw.lastIndexOf(sequence) <= enteredAt) throw new Error(`dogfood: missing terminal restoration ${JSON.stringify(sequence)}`)
     for (const escape of scenario.absentAnsi ?? []) if (raw.includes(escape)) throw new Error(`dogfood: forbidden styling ${JSON.stringify(escape)}`)
+    if (scenario.profiling !== undefined) verifyProfilingEvidence(home, scenario.profiling, raw, status.exitCode, profilingEvidence, initialSessionId)
     if (scenario.continuation) {
-      const id = screen.text().match(/tui-session-[a-f0-9-]+/u)?.[0]
+      const id = screen.text().match(INITIAL_SESSION_ID)?.[0]
       if (!id || !SESSION_ID_PATTERN.test(id)) throw new Error(SESSION_ID_ERROR)
       const next = scenario.continuation
       // A fresh driver leaves the old session inactive, forcing child navigation through durable storage.
-      await run({ ...next, id: scenario.id + (next.newSession ? STORED_VIEW_SUFFIX : RESTART_SUFFIX), args: next.newSession ? [] : ['--resume', id] }, { home, workspace, sessionId: id })
+      await run({ ...next, id: scenario.id + (next.newSession ? STORED_VIEW_SUFFIX : RESTART_SUFFIX), args: next.initialPicker ? ['--resume', ...(next.args ?? [])] : [...(next.newSession ? [] : ['--resume', id]), ...(next.args ?? [])] }, { home, workspace, sessionId: id })
     }
     if (!paid && /tokens in [1-9]|out [1-9]/u.test(screen.text())) throw new Error('dogfood: free run unexpectedly used model tokens')
   } catch (error) {
@@ -421,6 +453,11 @@ async function run(scenario, reused) {
     }
     writeFileSync(join(folder, 'terminal.ansi'), raw, { mode: PRIVATE_FILE_MODE })
     writeFileSync(join(folder, 'final.txt'), screen.text() + '\n', { mode: PRIVATE_FILE_MODE })
+    if (failed && scenario.profiling !== undefined) {
+      try { verifyProfilingEvidence(home, scenario.profiling, raw, status?.exitCode, profilingEvidence) } catch {
+        // Capture follows child shutdown; secondary validation must not replace the original PTY failure.
+      }
+    }
     if (!paid && !reused) clean(home)
   }
   if (failed) throw failed
@@ -429,7 +466,11 @@ async function run(scenario, reused) {
 console.log(`dogfood: ${paid ? 'PAID (explicit demand)' : 'free, credential-free'}; evidence ${evidence}`)
 for (const scenario of selected) {
   try {
-    await run(scenario)
+    let failure
+    try { await run(scenario) } catch (error) { failure = error }
+    if (scenario.profiling?.expectedFailure) verifyProfilingFailure(join(evidence, scenario.id), failure, scenario.profiling.expectedFailure)
+    else if (failure) throw failure
+    if (scenario.profiling?.retentionProof) verifyProfilingRetention(join(evidence, scenario.id))
     results.push({ id: scenario.id, status: 'passed', assertions: scenario.steps?.length ?? 1 })
     console.log(`dogfood: PASS ${scenario.id}`)
   } catch (error) {

@@ -2,6 +2,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { SessionLogOffset, type SessionEvent, type SessionId } from '@deepseek-ai/dsh-session'
 import { ReasoningEffortId, createUserMessage } from '@deepseek-ai/dsh-llm'
+import { TUI_PROFILING_SERVICE, PROFILE_PHASE, profileAsync } from '../profiling.ts'
 
 /** Everything the terminal surface needs to own one interactive agent. */
 export interface TuiAgent {
@@ -112,6 +113,7 @@ function userMessage(text: string) {
  * session is not an error the user should see, so creation is the fallback.
  */
 export async function startAgent(ctx: Context, options: StartAgentOptions): Promise<TuiAgent> {
+  const profiling = ctx.get(TUI_PROFILING_SERVICE)
   const agentOptions = agentRoute(ctx, options)
   const meta = { cwd: options.cwd }
   const setup = options.setup === undefined ? {} : { setup: options.setup }
@@ -146,7 +148,8 @@ export async function startAgent(ctx: Context, options: StartAgentOptions): Prom
     dispose: async () => {
       if (disposed) return
       disposed = true
-      await handle.dispose()
+      // Only the first attempt owns disposal cost; retained surface callbacks can revisit replaced handles.
+      await profileAsync(profiling, PROFILE_PHASE.agentDisposal, () => handle.dispose())
     },
   }
 }

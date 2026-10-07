@@ -154,6 +154,7 @@ dsh --profile tui --preset minimal          # start in a shipped mode other than
 dsh --profile tui --model deepseek-chat
 dsh --profile tui --no-color
 dsh --profile tui --no-bell            # do not ring when a long turn finishes
+dsh tui --profiling                   # save startup and shutdown phase timings
 dsh --profile tui list-models          # print every provider/model the picker can reach
 ```
 
@@ -165,6 +166,48 @@ alternate screen, and exits 0 after printing at least one route. When the
 profile has no llm service, when the provider listing cannot be read, or when
 nothing is configured to advertise a model, it names the reason on stderr and
 exits 1.
+
+### Lifecycle profiling
+
+`dsh tui --profiling` measures one TUI invocation. `dsh --profile tui --profiling` is equivalent.
+After shutdown, it saves a private JSON report and prints its path on stderr:
+
+```text
+$DSH_HOME/profiles/tui/profiling/<session-id>_<timestamp>.json
+```
+
+`DSH_HOME` defaults to `~/.dsh`. The UTC timestamp replaces colons with hyphens for filesystem compatibility.
+The filename names the first session opened, including a session chosen in the history picker.
+A failed startup uses its launch identity. Session switches do not rename the report; `finalSessionId` identifies the last session opened.
+
+The report contains:
+
+- `timing`: process lifetime, first-frame time, input-ready time, startup time, and shutdown time, in milliseconds.
+- `milestones`: independent launcher, screen, picker, agent, restoration, and exit observations. Missing observations are `null`.
+- `phases`: start, end, duration, category, and completion status for each measured operation. Interrupted operations remain `incomplete`.
+- `exit`: the observed exit code and the shutdown path.
+
+Startup includes aggregate time before this plugin loads, CLI parsing, surface construction, launch validation, terminal activation, agent setup, and history replay.
+`startupMs` ends when launcher readiness, input readiness, and the first successful frame have all occurred.
+History-picker input readiness does not wait for a human selection. Picker waiting has its own `user-wait` category.
+Shutdown separates terminal cleanup, raw-mode restoration, transcript export, warning replay, pane release, surface disposal, and agent disposal.
+The profiler records agent disposal once per handle, when its first disposal attempt starts.
+Session replacement records disposal in the `session` category. Later cleanup calls do not create duplicate spans.
+Editor handoffs appear separately and do not finalize the report.
+
+Phase spans can overlap or nest; do not add their durations to calculate total startup or shutdown time.
+The report retains at most 512 phase spans and counts omitted spans in `droppedPhases`.
+It stores no prompts, drafts, transcript text, credentials, or error messages. Files use mode `0600`; new profiling directories use `0700`.
+
+The final measurement ends at Node's `exit` callback, before JSON serialization and the final disk write.
+It does not measure shell command dispatch, OS process reaping, or terminal-emulator painting.
+Early Harness failures before flag parsing and uncatchable termination, such as `SIGKILL`, cannot produce a completed report.
+Report-write failure does not change the app's exit status. Help and CLI usage errors do not create reports.
+This includes conflicting arguments, such as `--new --resume`. The CLI rejects these arguments before a launch identity exists.
+Path and failure diagnostics print only when the TUI observed safe terminal ownership.
+A forced unload during an editor handoff can save a report without printing into the child editor.
+
+### Keyboard and commands
 
 Every key below is a shipped default. `/keys` opens every action the surface
 and its library can perform as a list you filter as you type, with the keys in

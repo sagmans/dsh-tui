@@ -1,4 +1,7 @@
 import { randomUUID } from 'node:crypto'
+import { performance } from 'node:perf_hooks'
+import { TUI_PROFILING_SERVICE, createLifecycleProfiler, PROFILE_PHASE, PROFILE_MILESTONE } from './profiling.ts'
+import { dshHomeDir } from './stash/paths.ts'
 import { createInterface } from 'node:readline/promises'
 import { Command } from 'commander'
 import type { Context } from '@deepseek-ai/cordis'
@@ -9,6 +12,13 @@ import { LaunchUsageError, PROFILE_NAME, identityOf, resolveLaunchIntent, resume
 import { installBundledSkills, SkillAlreadyExistsError } from './install-skills.ts'
 
 export const name = 'tui-startup'
+
+/** Aggregate process-to-module timing remains available even though flag parsing occurs later. */
+const MODULE_LOADED_AT_MS = performance.now()
+const PROFILING_FLAG = '--profiling'
+const PROFILE_CONTEXT_SERVICE = 'profileContext'
+const APP_READY_SERVICE = 'appReady'
+const PROFILING_HELP = 'save startup and shutdown phase timings for this invocation'
 
 /** The launcher owns the arguments; this row only reads its own snapshot. */
 export const inject = ['cmdlineArgs']
@@ -39,6 +49,7 @@ interface LaunchOptions {
   readonly preset?: string
   readonly color?: boolean
   readonly bell?: boolean
+  readonly profiling?: boolean
 }
 
 /**
@@ -93,6 +104,7 @@ function launchOf(
  * this service never activates and the launcher exits with the parser's code.
  */
 export function apply(ctx: Context): void {
+  const cliStartedAtMs = performance.now()
   const program = new Command()
     .name('dsh --profile tui')
     .description('Interactive terminal session over DeepSeek Harness')
@@ -106,6 +118,7 @@ export function apply(ctx: Context): void {
     .option('--preset <preset>', 'agent preset (mode) the new session runs')
     .option('--no-color', 'disable ANSI styling')
     .option('--no-bell', 'do not ring the terminal bell when a long turn finishes')
+    .option(PROFILING_FLAG, PROFILING_HELP)
 
   // Installation must also work without a TTY: use launcher exit without publishing
   // tuiStartup, whose consumers would mount the interactive surface.
@@ -183,12 +196,24 @@ export function apply(ctx: Context): void {
   ) => {
     const launch = launchOf(program, mode, session, options)
     if (launch === undefined) return
+    if (options.profiling === true) {
+      const profileContext = ctx.get(PROFILE_CONTEXT_SERVICE) as { home?: string } | undefined
+      const profiling = createLifecycleProfiler({
+        home: profileContext?.home ?? dshHomeDir(),
+        sessionId: String(launch.identity.id), cliStartedAtMs, moduleLoadedAtMs: MODULE_LOADED_AT_MS,
+      })
+      // Publish before startup consumers mount so pre-terminal failures still leave a report.
+      ctx.provide(TUI_PROFILING_SERVICE, profiling)
+      ctx.get(APP_READY_SERVICE)?.onReady(() => profiling.mark(PROFILE_MILESTONE.launcherReady))
+    }
     // Keep an optional configured main agent aligned with the surface's launch identity.
     // The initial recovery hint must name that same session; it cannot follow later forks
     // or switches. Terminal shutdown builds its hint from the active session instead.
+    const finishPublication = ctx.get(TUI_PROFILING_SERVICE)?.begin(PROFILE_PHASE.publication)
     ctx.provide(CONFIGURED_AGENT_IDENTITIES_KEY, { [MAIN_AGENT_ID]: launch.identity })
     ctx.provide(TUI_STARTUP_SERVICE, launch.startup)
     ctx.provide('tuiGoodbyeMessage', resumeHint(launch.identity.id, PROFILE_NAME))
+    finishPublication?.()
   })
 
   parseCmdline(ctx, program)

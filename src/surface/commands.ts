@@ -11,7 +11,8 @@ import { LOCAL_COMMANDS, type Submission } from '../input/submission.ts'
 import { KEYMAP_LAYERS, keymapLayer } from '../keys-command.ts'
 import type { PromptStash } from '../stash.ts'
 import { clipboardSequence } from '../terminal/clipboard.ts'
-import { windowTitle } from '../terminal/title.ts'
+import { createSurfaceStart } from './startup.ts'
+import { TUI_PROFILING_SERVICE, PROFILE_CATEGORY, profileAsync, PROFILE_PHASE, PROFILE_MILESTONE } from '../profiling.ts'
 import { formatTokens } from '../tokens.ts'
 import { KeymapPicker } from '../ui/keymap-picker.ts'
 import type { StatusFacts } from '../ui/status.ts'
@@ -447,7 +448,16 @@ export function createCommands(ctx: Context, ports: CommandsPorts): Commands {
       if (ports.preset === undefined || ports.presetRoster === undefined) return
       await ports.modes.presetFor(SessionId(id), true, undefined)
     },
-    openPicker: (picker, vet) => ports.modals.openPicker(picker, vet),
+    openPicker: (picker, vet) => {
+      const profiling = ctx.get(TUI_PROFILING_SERVICE)
+      const result = ports.modals.openPicker(picker, vet)
+      if (profiling !== undefined && ports.launch.resumePicker && !profiling.has(PROFILE_MILESTONE.inputReady)) {
+        profiling?.mark(PROFILE_MILESTONE.pickerReady)
+        profiling.mark(PROFILE_MILESTONE.inputReady)
+        return profileAsync(profiling, PROFILE_PHASE.picker, () => result, PROFILE_CATEGORY.userWait)
+      }
+      return result
+    },
   })
 
   /**
@@ -460,7 +470,7 @@ export function createCommands(ctx: Context, ports: CommandsPorts): Commands {
    */
   const boot = async (): Promise<void> => {
     if (!ports.launch.resumePicker) {
-      await ports.session.openAgent(ports.launch.sessionId, ports.launch.resume)
+      await profileAsync(ctx.get(TUI_PROFILING_SERVICE), PROFILE_PHASE.boot, () => ports.session.openAgent(ports.launch.sessionId, ports.launch.resume))
       return
     }
     const picked = await sessionPicker.chooseSession()
@@ -468,42 +478,10 @@ export function createCommands(ctx: Context, ports: CommandsPorts): Commands {
       ports.terminal.requestExit(0)
       return
     }
-    await ports.session.openAgent(picked, true)
+    await profileAsync(ctx.get(TUI_PROFILING_SERVICE), PROFILE_PHASE.boot, () => ports.session.openAgent(picked, true))
   }
 
-  /**
-   * Take the screen, then open the session this run was launched for.
-   *
-   * A mode named on the command line is resolved FIRST: the alt screen swallows
-   * the launcher's own error output, so a mode this roster does not offer has to
-   * be answered while the shell still owns the terminal.
-   */
-  const start = async (): Promise<void> => {
-    // A composition row that is missing is a degradation the reader has to be
-    // told about, and this is the last moment before the alt screen closes over
-    // the shell's own output.
-    const missing = ports.missingOptional()
-    if (missing !== undefined) ports.transcript.notice(missing)
-    // A skill an agent loads from ~/.agents/skills is this package's own text,
-    // so a stale copy teaches the old wiring; naming it here is cheaper than
-    // debugging the profile it misdescribes.
-    const drift = ports.skillDrift()
-    if (drift !== undefined) ports.transcript.notice(drift)
-    // A named mode that disagrees with the one this session recorded is refused
-    // here as well as at the open, because the alternate screen closes over
-    // whatever was painted on it: the reader would see the failure, not the
-    // reason.
-    await ports.modes.validateLaunch(ports.launch)
-    ports.terminal.tui.start()
-    ports.terminal.writeTerminal(windowTitle(process.cwd(), 'ready'))
-    // Claiming the pane's agent row does not wait for a session: the pane is
-    // already on screen and already idle, and a session may still be chosen.
-    ports.terminal.herdr.publish()
-    // A refused settings edit is only visible now that the surface owns the
-    // screen; whatever the scope found before this point prints here instead.
-    ports.appearance.openNotices(message => ports.transcript.notice(message))
-    await boot()
-  }
+  const start = createSurfaceStart(ctx, ports, boot)
 
   return {
     runSubmission,
