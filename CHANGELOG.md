@@ -12,6 +12,10 @@ breaking change, and a patch carries only fixes.
 
 - Opt-in `dsh tui --profiling` writes private per-invocation startup and shutdown phase reports under `$DSH_HOME/profiles/tui/profiling/`. Reports distinguish first-frame readiness, agent setup, terminal restoration, transcript export, and host disposal without recording conversation content.
 
+### Changed
+
+- Dependabot now proposes weekly updates for the SHA-pinned GitHub Actions, so CI pins keep receiving security fixes without manual tracking.
+
 ### Fixed
 
 - Keep lifecycle profiling accurate across session replacement by timing each agent's first disposal attempt, and preserve failed profiling evidence for diagnosis. Clarify that CLI usage errors produce no report.
