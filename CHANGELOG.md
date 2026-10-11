@@ -20,6 +20,8 @@ breaking change, and a patch carries only fixes.
 
 - Keep lifecycle profiling accurate across session replacement by timing each agent's first disposal attempt, and preserve failed profiling evidence for diagnosis. Clarify that CLI usage errors produce no report.
 
+- Draw the screen again after a terminal handoff resumes. pi-tui's `stop()` cancels a pending render without clearing its request flag, so a resume that raced a queued frame stayed blank until restart; this was the intermittent `terminal-behavior: ready/exit deadline exceeded` CI failure.
+
 - Keep the editing cursor blinking during reasoning and streamed output with an independently timed software block. Preserve native cursor mode for terminal shape and IME compatibility.
 
 ## [0.14.0] - 2026-10-04
