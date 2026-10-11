@@ -213,6 +213,8 @@ async function verifyMode(cursorMode) {
     await waitForFrame(() => output.includes(RESUMED, handoffOffset))
     const suspendedOffset = output.indexOf(SUSPENDED, handoffOffset)
     const resumedOffset = output.indexOf(RESUMED, handoffOffset)
+    // A restarted owner must draw again; a render request cancelled by stop() once left the screen blank.
+    await waitForFrame(() => output.includes(READY, resumedOffset))
     assert.notEqual(suspendedOffset, -1, CURSOR_ERRORS.handoff)
     assert.equal(output.slice(suspendedOffset + SUSPENDED.length, resumedOffset).trim(), '', CURSOR_ERRORS.stopped)
     if (cursorMode === SOFTWARE_CURSOR_MODE) await expectBlink()

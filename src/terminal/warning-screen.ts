@@ -203,6 +203,12 @@ export class WarningSafeTui extends TuiAltScreen {
       this.setShowHardwareCursor(this.cursor.mode === NATIVE_CURSOR_MODE)
       this.cursor.start()
       super.start()
+      // pi-tui's stop() cancels a pending render timer but leaves its request flag set,
+      // and requestRender() deduplicates against that flag, so after a handoff the
+      // restarted screen would wait forever for a frame that was cancelled. A forced
+      // request bypasses that flag and clears it once the frame is drawn; the reset it
+      // implies costs nothing because start() has just cleared the alternate screen.
+      this.requestRender(true)
     } catch (error) {
       this.stop({ preserveScreen: true })
       throw error
