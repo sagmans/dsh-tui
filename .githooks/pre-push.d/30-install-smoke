@@ -1,0 +1,30 @@
+#!/bin/sh
+# Installs the packed artefact in a clean container the way a consumer would.
+# It needs Docker (DOCKER_HOST / DOCKER_CONTEXT pass the dispatcher's guarded
+# allowlist). Without Docker the push fails, unless HOOK_SKIP_INSTALL_SMOKE=1
+# is set for that push, which skips it with a loud warning.
+set -eu
+DSH_TELEMETRY_DISABLED=1
+export DSH_TELEMETRY_DISABLED
+
+checks() {
+	if ! command -v docker >/dev/null 2>&1 || ! docker info >/dev/null 2>&1; then
+		if [ "${HOOK_SKIP_INSTALL_SMOKE:-}" = 1 ]; then
+			echo "pre-push: WARNING: consumer install smoke SKIPPED (HOOK_SKIP_INSTALL_SMOKE=1, Docker unavailable)" >&2
+			return 0
+		fi
+		echo "pre-push: Docker is unavailable, so the consumer install smoke cannot run." >&2
+		echo "Start Docker (DOCKER_HOST / DOCKER_CONTEXT are passed through), or push with HOOK_SKIP_INSTALL_SMOKE=1 to skip it on purpose." >&2
+		return 1
+	fi
+	node tools/install-smoke.mjs || return 1
+}
+
+# Shared helpers (staged_git, pushed_shas, at_sha, darwin_only) from the dotf
+# dispatcher, which also scrubs git's repository-local variables first.
+# shellcheck source=/dev/null
+. "${HOOK_HELPERS:?HOOK_HELPERS is not set: run this hook through the dotf git hooks dispatcher}"
+# Repository helpers, loaded relative to this script (the reviewed copy).
+# shellcheck source=../_lib/prepush.sh
+. "$(dirname -- "$0")/../_lib/prepush.sh"
+run_pushed

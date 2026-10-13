@@ -1,17 +1,13 @@
 # Supply-chain policy for this repository.
-# Keep newly resolved third-party releases outside their first week of exposure.
+# Newly resolved releases stay out for their first week (minutes), with no
+# exceptions.
 minimumReleaseAge: 10080
 #
-# pnpm blocks a dependency's install/build script until it is reviewed here.
+# Only reviewed packages may run install or build scripts: exact names, no
+# globs. Any other package with a build script fails the install instead of
+# being skipped silently.
 allowBuilds:
-  # The PTY dogfood harness needs node-pty's native addon.
+  # The PTY dogfood harness needs node-pty's native addon (node-pty is pinned
+  # to an exact version in package.json).
   node-pty: true
-
-# Allow consumed harness releases to install before the general release-age window elapses.
-# The dsh wildcard covers every matching version, not just the pinned release;
-# the Cordis entries are version-specific. Neither scope proves release safety.
-minimumReleaseAgeExclude:
-  - '@deepseek-ai/dsh-*'
-  - '@deepseek-ai/cordis@4.0.2'
-  # Keep this Cordis exception version-specific rather than exempting future releases.
-  - '@deepseek-ai/cordis@4.0.4'
+strictDepBuilds: true
