@@ -1,20 +1,13 @@
 #!/bin/sh
 # Type-checks for unused locals and parameters when staged TypeScript changed.
-# The staged content of the whole project is checked (copied from the index
-# into a temporary tree), never the working tree.
+# The whole project is checked (working tree), which is accepted for speed.
 set -eu
 
-# Shared helpers (staged_git, pushed_shas, at_sha, darwin_only) from the dotf
-# dispatcher, which also scrubs git's repository-local variables first.
+# Helpers (staged_git, pushed_shas, at_sha, darwin_only) from .githooks/lib.
 # shellcheck source=/dev/null
-. "${HOOK_HELPERS:?HOOK_HELPERS is not set: run this hook through the dotf git hooks dispatcher}"
-# Repository helpers, loaded relative to this script (the reviewed copy).
-# shellcheck source=../_lib/staged.sh
-. "$(dirname -- "$0")/../_lib/staged.sh"
+. "${HOOK_HELPERS:?run from .githooks (scripts/setup-hooks)}"
 
 if staged_git diff --cached --quiet --diff-filter=ACMR -- '*.ts' '*.tsx' '*.mts' '*.cts'; then
 	exit 0
 fi
-staged_tree
-cd "$st_tree"
-./node_modules/.bin/tsc -p tsconfig.json --noEmit --noUnusedLocals --noUnusedParameters
+pnpm run check:unused
