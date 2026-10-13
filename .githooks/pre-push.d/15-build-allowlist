@@ -31,7 +31,7 @@ policy_at() {
 
 # Read the ref lines into a variable and loop in this shell: an exit inside a
 # piped `| while` loop would only leave its subshell.
-: "${HOOK_STDIN_FILE:?HOOK_STDIN_FILE is not set: run this hook through the dotf git hooks dispatcher}"
+: "${HOOK_STDIN_FILE:?run from .githooks (scripts/setup-hooks)}"
 # Tag lines are skipped (grep exits 1 when only tags are pushed); a read
 # error blocks the push.
 ba_lines=$(grep -v -e '^refs/tags/' <"$HOOK_STDIN_FILE") || [ $? -eq 1 ] || {

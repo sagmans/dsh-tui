@@ -66,12 +66,12 @@ Review findings against published module entry points and dynamic Cordis loading
 Review class methods and test-only customization separately; framework callbacks remain live even without direct method references.
 
 Repository hooks live in `.githooks` and replace the push/PR CI workflow.
-The global dotf hooks run the global check of the same name first (sign-off, message format, signed push), then `.githooks/<hook>.d/*`.
+The generic checks run first (sign-off, message format, secret scan, signed push), then `.githooks/<hook>.d/*`.
 `pre-commit` runs `pnpm run check:unused` and a staged whitespace check.
 `pre-push` runs signatures, `check:local`, typecheck, golden frames, pack smoke, terminal behavior, the harness matrix, and the consumer install smoke, each on the pushed commit.
 The install smoke needs Docker; without it the push fails unless `HOOK_SKIP_INSTALL_SMOKE=1` is set for that push.
 A pushed change to `pnpm-workspace.yaml`'s build policy, or a lockfile change to a package allowed to build (`node-pty`), fails `pre-push` until a commit in the push carries a `Build-Review: policy` or `Build-Review: node-pty@<version>` trailer, added after a human review.
-The scripts live in `.githooks/<hook>.d/` and run through the global dotf hooks: the global check runs first, then each script in name order. There is no per-clone setup and no repo-local `core.hooksPath`; if an older setup left one, remove it with `git config --local --unset core.hooksPath`. Repository hooks run only after you review this clone's `.githooks` and trust it with `githooks-trust`; until then only the global checks run. Pre-push checks test exactly each pushed commit: in place only when it is the clean, unmodified checkout, otherwise in a temporary worktree of that commit. Never bypass hooks with `--no-verify`.
+Run `scripts/setup-hooks` once after cloning; it points this clone's `core.hooksPath` at `.githooks`. Each hook runs the generic checks first (sign-off and commit message format, a gitleaks secret scan, and signed, signed-off commits on push), then this repository's checks in `.githooks/<hook>.d/` in name order. Install [gitleaks](https://github.com/gitleaks/gitleaks) first. Every check must pass before you push; never use `--no-verify`. Pre-push checks test exactly each pushed commit: in place only when it is the clean, unmodified checkout, otherwise in a temporary worktree of that commit. Never bypass hooks with `--no-verify`.
 
 ## Performance evidence
 

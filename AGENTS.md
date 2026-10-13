@@ -183,4 +183,4 @@ with `DRY_RUN=1`.
 
 ## Git hooks
 
-Checks run in `.githooks/`, not in push/PR CI (see DEVELOPMENT.md). The global dotf hooks run `.githooks/<hook>.d/` once a human trusts the clone with `githooks-trust`; agents never write the trust store or drive `githooks-trust`. Never bypass hooks with `--no-verify`.
+Checks run in `.githooks/`, not in push/PR CI (see DEVELOPMENT.md). Run `scripts/setup-hooks` after cloning. All checks must pass before you push. Never use `--no-verify`.
