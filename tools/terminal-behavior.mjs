@@ -3,6 +3,8 @@
 import assert from 'node:assert/strict'
 import { setTimeout as delay } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
+import { createRequire } from 'node:module'
+import { chmodSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import pty from 'node-pty'
 import { PtyScreen } from './pty-screen.mjs'
@@ -11,6 +13,20 @@ import { CURSOR_MODES, NATIVE_CURSOR_MODE, SOFTWARE_CURSOR_MODE } from '../lib/t
 import { CARD_DETAIL_MAX } from '../lib/cards.js'
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
+
+// node-pty 1.1.0 ships its macOS spawn-helper prebuild without the execute
+// bit, so every spawn fails with posix_spawnp on a Mac install. Repair it the
+// way tools/pty-drive.mjs and tools/dogfood.mjs do; Linux builds from source.
+if (process.platform === 'darwin') {
+  const require = createRequire(import.meta.url)
+  const helper = join(dirname(require.resolve('node-pty/package.json')), 'prebuilds', `${process.platform}-${process.arch}`, 'spawn-helper')
+  try {
+    const mode = statSync(helper).mode
+    if ((mode & 0o111) === 0) chmodSync(helper, mode | 0o755)
+  } catch {
+    // Best effort, as in pty-drive: a failed spawn still reports the real error.
+  }
+}
 const CHILD = join(ROOT, 'tests/fixtures/terminal-behavior.mjs')
 const READY = 'terminal-behavior-ready'
 const RECEIPT = 'terminal-behavior-receipt:'
