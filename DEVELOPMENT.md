@@ -65,23 +65,19 @@ Review findings against published module entry points and dynamic Cordis loading
 [Knip 6 omits class-member analysis](https://knip.dev/blog/knip-v6#what-about-classmembers).
 Review class methods and test-only customization separately; framework callbacks remain live even without direct method references.
 
-Repository hooks live in `.githooks`. The commit hook runs the TypeScript check.
-The message hooks call the existing global hooks to retain message structure and DCO policy.
-The push hook runs the global signature/DCO check before TypeScript and Knip.
-Forwarders preserve arguments, standard input, and failure status; missing or recursive global hooks stop the operation.
+Repository hooks live in `.githooks` and replace the push/PR CI workflow.
+Each hook runs the global hook of the same name first (sign-off, message format, signed push), then `<hook>.d/*`.
+`pre-commit` runs `pnpm run check:unused` and a staged whitespace check.
+`pre-push` runs signatures, `check:local`, typecheck, golden frames, pack smoke, terminal behavior, the harness matrix, and the consumer install smoke when Docker is available.
 
-Activate these hooks only with repository-level approval:
+Enable once per clone:
 
 ```bash
-git config --local core.hooksPath "$(git rev-parse --show-toplevel)/.githooks"
+sh scripts/setup-hooks.sh
 ```
 
-Git uses this absolute directory for this repository and its linked worktrees.
-The absolute path preserves global-policy forwarding when another worktree does not contain `.githooks`.
-Other worktrees must support the local check commands; otherwise those checks stop the operation.
-Before removing the hook-owning worktree, move this local setting to a maintained checkout that contains the hooks.
-The forwarders read `core.hooksPath` from included global configuration; global files and configuration stay unchanged.
-These additional checks remain local; GitHub CI stays unchanged.
+The script installs a router in the Git common directory and sets an absolute `core.hooksPath` to it, so branches and worktrees that predate `.githooks` still run the global hooks.
+Global files and configuration stay unchanged. Never bypass hooks with `--no-verify`.
 
 ## Performance evidence
 

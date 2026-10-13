@@ -180,3 +180,7 @@ If a tag or signature is missing or invalid, stop and ask the maintainer; do not
 invent a source commit from current `main`. Forward-fix broken packages as
 `RELEASE.md` directs. Helper mutations require `CONFIRM=<action>`; preview
 with `DRY_RUN=1`.
+
+## Git hooks
+
+Checks run in `.githooks/`, not in push/PR CI (see DEVELOPMENT.md). Run `sh scripts/setup-hooks.sh` once per clone; never bypass hooks with `--no-verify`.

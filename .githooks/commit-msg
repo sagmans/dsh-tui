@@ -1,12 +1,5 @@
 #!/bin/sh
-# Repository routing must preserve the existing global policy without maintaining a second copy.
-set -eu
-readonly HOOK_FAILURE_STATUS=1
-readonly GLOBAL_HOOK_ERROR='Required global commit-msg hook is unavailable or recursive.'
-global_hooks=$(git config --global --includes --path --get core.hooksPath)
-global_hook="$global_hooks/commit-msg"
-if [ ! -x "$global_hook" ] || [ "$global_hook" -ef "$0" ]; then
-  printf '%s\n' "$GLOBAL_HOOK_ERROR" >&2
-  exit "$HOOK_FAILURE_STATUS"
-fi
-exec "$global_hook" "$@"
+# Git runs hooks by file name only. This wrapper forwards its own name and
+# arguments to the shared runner, which runs the global hook and then this
+# hook's project-specific scripts in the matching .d directory.
+exec "$(dirname -- "$0")/_lib/run-hook.sh" "$(basename -- "$0")" "$@"

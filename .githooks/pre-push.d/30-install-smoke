@@ -1,0 +1,12 @@
+#!/bin/sh
+# Installs the packed artefact inside a clean container the way a consumer
+# would. It needs a container runtime, so hosts without one print a skip
+# notice instead of blocking the push.
+set -eu
+CONTAINER_CLI='docker'
+cd "$(git rev-parse --show-toplevel)"
+if ! command -v "$CONTAINER_CLI" >/dev/null 2>&1 || ! "$CONTAINER_CLI" info >/dev/null 2>&1; then
+	echo "pre-push: skipped consumer install smoke ($CONTAINER_CLI unavailable)" >&2
+	exit 0
+fi
+node tools/install-smoke.mjs

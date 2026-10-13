@@ -1,0 +1,11 @@
+#!/bin/sh
+# Runs the gates hosted CI ran on every push (signatures, typecheck, golden frames, pack smoke, terminal behavior, harness matrix) plus the dead-code check from the old pre-push hook. The release workflow still runs the real-profile dogfood before publish.
+set -eu
+cd "$(git rev-parse --show-toplevel)"
+npm audit signatures
+pnpm run check:local
+pnpm typecheck
+pnpm test:golden
+node tools/pack-smoke.mjs
+pnpm test:terminal
+node tools/harness-matrix.mjs
