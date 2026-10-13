@@ -1,0 +1,79 @@
+#!/bin/sh
+# Flags pushed lockfile changes that touch a package allowed to run install or
+# build scripts (pnpm-workspace.yaml allowBuilds: true), and any change to the
+# build policy itself. Those packages run native code on every machine that
+# installs, so such a push fails until a commit in the pushed range carries the
+# trailer "Build-Review: <package>@<version>" for every touched package (or
+# "Build-Review: policy" for a policy change), recorded after a human review.
+set -eu
+LOCK='pnpm-lock.yaml'
+POLICY='pnpm-workspace.yaml'
+Z40=0000000000000000000000000000000000000000
+# Second layer behind the dispatcher's central scrub: drop the repository-local
+# variables Git exports to hooks (GIT_DIR, GIT_INDEX_FILE, ...) so nothing below
+# can act on this repository by accident, for example a test suite running
+# `git init` or `git config`. `git -c` overrides (GIT_CONFIG_*) are kept.
+vars=$(git rev-parse --local-env-vars) || exit 1
+for var in $vars; do
+	case "$var" in
+	GIT_CONFIG_PARAMETERS | GIT_CONFIG_COUNT | GIT_CONFIG_KEY_* | GIT_CONFIG_VALUE_*) ;;
+	*) unset -v "$var" ;;
+	esac
+done
+
+# Packages allowed to build at commit $1 (exact names, "name: true").
+allowed_at() {
+	git show "$1:$POLICY" 2>/dev/null | awk '
+		/^allowBuilds:/ { on = 1; next }
+		on && /^[^ #]/ { on = 0 }
+		on && /^  [^ #].*: *true *$/ { sub(/^  /, ""); sub(/: *true *$/, ""); gsub(/\x27|"/, ""); print }'
+}
+# Lockfile entries for package $2 at commit $1: the package and snapshot
+# blocks plus the importer lines, which change whenever its version does.
+blocks_at() {
+	git show "$1:$LOCK" 2>/dev/null | awk -v p="$2" '
+		/^  [^ ]/ { name = $0; gsub(/^  \x27?|\x27?:$/, "", name); on = (index(name, p "@") == 1) }
+		on { print; next }
+		$0 ~ "^      \x27?" p "\x27?:$" { imp = 3 }
+		imp > 0 { print; imp-- }'
+}
+policy_at() {
+	git show "$1:$POLICY" 2>/dev/null | grep -E '^(allowBuilds|strictDepBuilds|minimumReleaseAge|  [^ #])' || true
+}
+
+# Read the ref lines into a variable and loop in this shell: an exit inside a
+# piped `| while` loop would only leave its subshell.
+ba_lines=$(grep -v -e '^refs/tags/' <"${HOOK_STDIN_FILE:-/dev/stdin}" || true)
+while read -r ba_ref ba_local ba_remote_ref ba_remote; do
+	[ -n "$ba_ref" ] || continue
+	[ "$ba_local" != "$Z40" ] || continue
+	if [ "$ba_remote" != "$Z40" ] && git cat-file -e "$ba_remote^{commit}" 2>/dev/null; then
+		base=$ba_remote
+	else
+		base=$(git merge-base "$ba_local" refs/remotes/origin/HEAD 2>/dev/null ||
+			git merge-base "$ba_local" refs/remotes/origin/main 2>/dev/null || true)
+	fi
+	if [ -z "$base" ]; then
+		echo "pre-push: $(basename -- "$0"): no base to compare $ba_ref against; fetch origin first" >&2
+		exit 1
+	fi
+	trailers=$(git log --format='%(trailers:key=Build-Review,valueonly)' "$base..$ba_local")
+	need=''
+	if [ "$(policy_at "$base")" != "$(policy_at "$ba_local")" ]; then
+		need="policy"
+	fi
+	for pkg in $( (allowed_at "$base"; allowed_at "$ba_local") | sort -u); do
+		[ "$(blocks_at "$base" "$pkg")" != "$(blocks_at "$ba_local" "$pkg")" ] || continue
+		ver=$(blocks_at "$ba_local" "$pkg" | awk -v p="$pkg" 'index($0, "  " p "@") == 1 || index($0, "  \x27" p "@") == 1 { sub(/^  \x27?[^@]*@/, ""); sub(/[:(\x27].*/, ""); print; exit }')
+		need="$need $pkg@${ver:-removed}"
+	done
+	for item in $need; do
+		if ! printf '%s\n' "$trailers" | grep -qx "$item"; then
+			echo "pre-push: $ba_ref changes an allowed-build package or the build policy ($item)." >&2
+			echo "Review the change, then add the trailer \"Build-Review: $item\" to a commit in the push." >&2
+			exit 1
+		fi
+	done
+done <<EOF
+$ba_lines
+EOF
