@@ -8,6 +8,8 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-10-13
+
 ### Added
 
 - Opt-in `dsh tui --profiling` writes private per-invocation startup and shutdown phase reports under `$DSH_HOME/profiles/tui/profiling/`. Reports distinguish first-frame readiness, agent setup, terminal restoration, transcript export, and host disposal without recording conversation content.
@@ -1241,7 +1243,8 @@ Not published: release signature verification failed. Its changes ship in 0.12.1
 - Publication through npm OIDC trusted publishing, with the first version
   bootstrapped by hand ([#5](https://github.com/sagmans/dsh-tui/pull/5)).
 
-[Unreleased]: https://github.com/sagmans/dsh-tui/compare/v0.14.0...HEAD
+[Unreleased]: https://github.com/sagmans/dsh-tui/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/sagmans/dsh-tui/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/sagmans/dsh-tui/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/sagmans/dsh-tui/compare/v0.12.1...v0.13.0
 [0.12.1]: https://github.com/sagmans/dsh-tui/compare/v0.12.0...v0.12.1
