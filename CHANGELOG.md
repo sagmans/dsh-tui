@@ -8,6 +8,10 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+### Compatibility
+
+- Support Node.js 22, 24 and 26: `engines.node` is now `>=22.19.0`, and typecheck plus the golden suite and free dogfood scenarios run on Node 22.19.0, 24.21.0 and 26.11.1. Development types move to `@types/node` 26.6.4.
+
 ## [0.15.0] - 2026-10-13
 
 ### Added

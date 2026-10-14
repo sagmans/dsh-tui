@@ -59,7 +59,7 @@
   "homepage": "https://github.com/sagmans/dsh-tui#readme",
   "bugs": "https://github.com/sagmans/dsh-tui/issues",
   "engines": {
-    "node": ">=22.19"
+    "node": ">=22.19.0"
   },
   "publishConfig": {
     "access": "public",
@@ -167,7 +167,7 @@
     "@deepseek-ai/dsh-tools": "0.2.0-rc.2",
     "@deepseek-ai/dsh-user-approval": "0.2.0-rc.2",
     "@deepseek-ai/dsh-user-questions": "0.2.0-rc.2",
-    "@types/node": "^24.0.0",
+    "@types/node": "^26.6.4",
     "knip": "6.37.0",
     "node-pty": "1.1.0",
     "typescript": "^5.9.0",
