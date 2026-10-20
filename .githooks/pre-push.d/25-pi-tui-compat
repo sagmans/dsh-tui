@@ -1,0 +1,62 @@
+#!/bin/sh
+# shellcheck disable=SC3043  # `local` is supported by every sh we target
+# Runs the gates again on the newest pi-tui release in the supported range.
+# The shipped pin is the range floor, which 20-verify proves; this run installs
+# compat/pi-tui's committed manifest and lockfile instead, so a release inside
+# the range that changes what the surface draws blocks the push before a user
+# on that release sees it. Dogfood stays out, as in 20-verify: it needs a
+# verified harness launcher on PATH.
+set -eu
+DSH_TELEMETRY_DISABLED=1
+export DSH_TELEMETRY_DISABLED
+
+# Same gates as 20-verify minus the ones that do not read pi-tui: signatures and
+# local checks cover the root lockfile, pack smoke the shipped pin, and the
+# harness matrix only harness packages.
+checks() {
+	pnpm typecheck || return 1
+	pnpm test:golden || return 1
+	pnpm test:terminal || return 1
+}
+
+# The compat run overwrites the manifest and lockfile, so it runs in its own
+# throwaway worktree and never in the clone or its node_modules. pnpm still
+# installs only from the committed lockfile and runs only the allowed builds.
+run_compat() {
+	node tools/pi-tui-compat.mjs check || return 1
+	cp compat/pi-tui/package.json package.json || return 1
+	cp compat/pi-tui/pnpm-lock.yaml pnpm-lock.yaml || return 1
+	pnpm install --frozen-lockfile >/dev/null || return 1
+	node tools/pi-tui-compat.mjs report || return 1
+	checks || return 1
+}
+
+compat_at() {
+	local sha tmp rc
+	sha=$1
+	tmp=$(mktemp -d "${TMPDIR:-/tmp}/pi-tui-compat.XXXXXX") || return 1
+	git worktree add -q --detach "$tmp/wt" "$sha" || { rmdir "$tmp"; return 1; }
+	rc=0
+	# git's per-repo variables would point the run back at the pushing worktree.
+	(cd "$tmp/wt" && unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE && run_compat) || rc=$?
+	git worktree remove --force "$tmp/wt" >/dev/null 2>&1 || true
+	# Only the mktemp directory this call created, never a computed parent.
+	case "$tmp" in
+	*/pi-tui-compat.*) rm -rf -- "$tmp" ;;
+	esac
+	return "$rc"
+}
+
+# Helpers (staged_git, pushed_shas, at_sha, darwin_only) from .githooks/lib.
+# shellcheck source=/dev/null
+. "${HOOK_HELPERS:?run from .githooks (scripts/setup-hooks)}"
+
+# A for loop, never `| while`, so a failure blocks the push.
+shas=$(pushed_shas <"$HOOK_STDIN_FILE") || exit 1
+for pp_commit in $shas; do
+	echo "pre-push: $(basename -- "$0"): checking $pp_commit" >&2
+	if ! compat_at "$pp_commit"; then
+		echo "pre-push: $(basename -- "$0"): pi-tui compatibility run failed for $pp_commit" >&2
+		exit 1
+	fi
+done

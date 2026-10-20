@@ -1,0 +1,176 @@
+{
+  "name": "@sagmans/dsh-tui",
+  "version": "0.15.0",
+  "description": "Terminal (CLI TUI) surface for DeepSeek Harness: interactive dsh in a terminal, no browser required",
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "plugin",
+    "tui",
+    "terminal",
+    "cordis"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./keymaps": {
+      "types": "./lib/keymaps.d.ts",
+      "default": "./lib/keymaps.js"
+    },
+    "./startup": {
+      "types": "./lib/startup.d.ts",
+      "default": "./lib/startup.js"
+    },
+    "./todo-guard": {
+      "types": "./lib/todo-guard.d.ts",
+      "default": "./lib/todo-guard.js"
+    },
+    "./host/roster": {
+      "types": "./lib/host/roster.d.ts",
+      "default": "./lib/host/roster.js"
+    },
+    "./host/runner": {
+      "types": "./lib/host/runner.d.ts",
+      "default": "./lib/host/runner.js"
+    },
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "presets",
+    ".agents/skills/dsh-tui-dogfood",
+    ".agents/skills/dsh-tui-update-models",
+    "themes",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sagmans/dsh-tui.git"
+  },
+  "homepage": "https://github.com/sagmans/dsh-tui#readme",
+  "bugs": "https://github.com/sagmans/dsh-tui/issues",
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "compatibility": {
+      "dsh": ">=0.2.1-rc.2 <0.3.0-0",
+      "dshReleases": {
+        "0.2.1-rc.2": "compatible"
+      },
+      "profiles": [
+        "tui"
+      ]
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
+    "test": "pnpm test:golden && pnpm dogfood",
+    "test:golden": "vitest run",
+    "dogfood": "pnpm run build && node tools/dogfood.mjs",
+    "dogfood:paid": "pnpm run build && node tools/dogfood.mjs --paid",
+    "verify": "pnpm typecheck && pnpm test && node tools/pack-smoke.mjs && node tools/harness-matrix.mjs",
+    "check:unused": "tsc -p tsconfig.json --noEmit --noUnusedLocals --noUnusedParameters",
+    "check:deadcode": "knip --production --no-progress",
+    "check:local": "pnpm run check:unused && pnpm run check:deadcode",
+    "test:terminal": "pnpm run build && node tools/terminal-behavior.mjs",
+    "prepare": "npm run build",
+    "prepack": "npm run build",
+    "prepublishOnly": "npm run typecheck && npm run test:golden",
+    "drive": "node tools/pty-drive.mjs"
+  },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "3.18.4",
+    "@earendil-works/pi-tui": ">=0.85.1 <1.4.0-0",
+    "@deepseek-ai/dsh-agent-preset": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-agent-preset-registry": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-cordis-host-runner": "0.2.1-rc.2",
+    "commander": "^15.0.0",
+    "js-yaml": "4.3.2",
+    "lovely-mermaid": "0.3.3"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-agent": "*",
+    "@deepseek-ai/dsh-agent-default-model": "*",
+    "@deepseek-ai/dsh-agent-loop": "*",
+    "@deepseek-ai/dsh-cmdline": "*",
+    "@deepseek-ai/dsh-commands": "*",
+    "@deepseek-ai/dsh-llm": "*",
+    "@deepseek-ai/dsh-session": "*",
+    "@deepseek-ai/dsh-tools": "*",
+    "@deepseek-ai/dsh-user-approval": "*",
+    "@deepseek-ai/dsh-user-questions": "*"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh-agent": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-agent-default-model": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-agent-loop": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-cmdline": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-commands": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-llm": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-session": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-tools": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-user-approval": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-user-questions": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-agent": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-agent-default-model": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-agent-loop": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-cmdline": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-commands": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-llm": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-sandbox": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-scope": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-session": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-settings": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-system-prompt": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-tools": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-user-approval": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-user-questions": "0.2.1-rc.2",
+    "@types/node": "^26.6.4",
+    "knip": "6.37.0",
+    "node-pty": "1.1.0",
+    "typescript": "^5.9.0",
+    "vitest": "^4.1.0"
+  }
+}
