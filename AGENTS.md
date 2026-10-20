@@ -118,7 +118,7 @@ registers: duplicate registrations can fail with "already registered". Do not
 disable those profile-owned rows from this surface bundle.
 
 **The declared harness range is not the verified list.** The manifest declares
-`>=0.2.0-rc.2 <0.3.0-0`, but lists only `0.2.0-rc.2` as verified. Mounted and
+`>=0.2.1-rc.2 <0.3.0-0`, but lists only `0.2.1-rc.2` as verified. Mounted and
 development harness dependencies pin that release; harness peers are open (`*`)
 and optional. These declarations do not guarantee consumer deduplication.
 `node tools/harness-matrix.mjs` checks manifest consistency, not installed

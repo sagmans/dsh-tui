@@ -70,9 +70,9 @@
       "patch": "./cordis.patch.yml"
     },
     "compatibility": {
-      "dsh": ">=0.2.0-rc.2 <0.3.0-0",
+      "dsh": ">=0.2.1-rc.2 <0.3.0-0",
       "dshReleases": {
-        "0.2.0-rc.2": "compatible"
+        "0.2.1-rc.2": "compatible"
       },
       "profiles": [
         "tui"
@@ -99,9 +99,9 @@
   "dependencies": {
     "@deepseek-ai/schemastery": "3.18.4",
     "@earendil-works/pi-tui": "0.85.1",
-    "@deepseek-ai/dsh-agent-preset": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-agent-preset-registry": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-cordis-host-runner": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-agent-preset": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-agent-preset-registry": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-cordis-host-runner": "0.2.1-rc.2",
     "commander": "^15.0.0",
     "js-yaml": "4.3.2",
     "lovely-mermaid": "0.3.3"
@@ -153,20 +153,20 @@
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
-    "@deepseek-ai/dsh-agent": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-agent-default-model": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-agent-loop": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-cmdline": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-commands": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-llm": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-sandbox": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-scope": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-session": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-settings": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-system-prompt": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-tools": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-user-approval": "0.2.0-rc.2",
-    "@deepseek-ai/dsh-user-questions": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-agent": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-agent-default-model": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-agent-loop": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-cmdline": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-commands": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-llm": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-sandbox": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-scope": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-session": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-settings": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-system-prompt": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-tools": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-user-approval": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-user-questions": "0.2.1-rc.2",
     "@types/node": "^26.6.4",
     "knip": "6.37.0",
     "node-pty": "1.1.0",
