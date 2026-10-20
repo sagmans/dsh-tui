@@ -10,7 +10,9 @@ updates:
     open-pull-requests-limit: 5
     cooldown:
       # minimumReleaseAge: 10080 in pnpm-workspace.yaml, expressed in days. The
-      # workspace grants no exceptions, so neither does the cooldown.
+      # workspace exempts only a temporary list of exact versions already in the
+      # lockfile; the bot must never propose a new release from that list early,
+      # so the cooldown takes no exception.
       default-days: 7
     groups:
       # The harness matrix guard requires every harness pin, mounted or compiled

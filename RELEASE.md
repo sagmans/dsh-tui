@@ -23,7 +23,7 @@ Main/PR `verify` also runs the native terminal gate, free actual-profile dogfood
 
 ## Harness matrix
 
-The manifest declares `dsh.compatibility.dsh` as `>=0.2.0-rc.2 <0.3.0`. Its `dsh.compatibility.dshReleases` lists only `0.2.0-rc.2` as verified. Do not treat the rest of the declared range as tested. Mounted harness dependencies and harness development dependencies name that exact release; harness peers are open (`*`) and optional. These declarations do not guarantee deduplication in a consumer tree.
+The manifest declares `dsh.compatibility.dsh` as `>=0.2.1-rc.2 <0.3.0-0`. The upper bound stops below the next line's first prerelease: dsh judges plugin version ranges with prereleases included, and read that way `<0.3.0` admits `0.3.0` release candidates. `node tools/harness-matrix.mjs` requires that ceiling. Its `dsh.compatibility.dshReleases` lists only `0.2.1-rc.2` as verified. Do not treat the rest of the declared range as tested. Mounted harness dependencies and harness development dependencies name that exact release; harness peers are open (`*`) and optional. These declarations do not guarantee deduplication in a consumer tree.
 
 `verify` runs `node tools/harness-matrix.mjs` to check manifest consistency offline. It checks release bounds and line, mounted dependency declarations without aliases, allowed peer declarations, and one listed development dependency version. It does not compile sources, inspect installed package versions, run a profile, or independently verify the release list. Typecheck and runtime gates supply separate evidence.
 
