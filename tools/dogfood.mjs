@@ -73,6 +73,20 @@ const SESSION_ID_PLACEHOLDER = '{sessionId}'
 const SESSION_ID_FIELDS = ['command', 'expect']
 const SESSION_ID_PATTERN = /^tui-session-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/u
 const SESSION_ID_ERROR = 'dogfood: invalid continuation session identity'
+/**
+ * The jobs registry mints job ids (sequential before dsh 0.2.1, random from it
+ * on), so a scenario names its job by label and later steps read the id the
+ * dock actually drew rather than one the runner guessed.
+ */
+const JOB_ID_PLACEHOLDER = '{jobId}'
+const JOB_ID_FIELDS = ['command', 'expect']
+const JOB_ID_PATTERN = /^[a-z]+-[a-z0-9]+$/u
+const JOB_ID_ERROR = 'dogfood: no visible job id for the named label'
+const JOB_ID_UNSET_ERROR = 'dogfood: job id placeholder used before a step captured it'
+/** A dock row reads `▸ <id> · <state> — <label>`; only these separators bound the id. */
+const JOB_ROW_MARKER = '▸ '
+const JOB_ROW_SEPARATOR = ' · '
+const JOB_LABEL_SEPARATOR = ' — '
 const FRESH_SESSION_ERROR = 'dogfood: stored view requires a different driven session'
 const RESTART_SUFFIX = '-restart'
 const STORED_VIEW_SUFFIX = '-stored'
@@ -130,6 +144,17 @@ if (process.platform === 'darwin') {
 const evidence = realpathSync(mkdtempSync(join(tmpdir(), EVIDENCE_PREFIX)))
 chmodSync(evidence, PRIVATE_DIR_MODE)
 const INPUT_FIELDS = new Set(['command', 'key', 'type', 'prompt', 'paste', 'paneZoom', 'resize', 'signal'])
+
+/** The id the jobs dock draws for a label, read from current cells so an older frame cannot supply it. */
+function visibleJobId(text, label) {
+  for (const line of text.split('\n')) {
+    const start = line.indexOf(JOB_ROW_MARKER)
+    if (start < 0 || !line.includes(JOB_LABEL_SEPARATOR + label)) continue
+    const id = line.slice(start + JOB_ROW_MARKER.length).split(JOB_ROW_SEPARATOR)[0]
+    if (JOB_ID_PATTERN.test(id)) return id
+  }
+  return undefined
+}
 const observations = new Map()
 const results = []
 let herdr = { status: paid ? 'paid-not-run' : 'environment-not-run', reason: paid ? 'Paid verification runs only the explicitly selected scenario.' : 'Requires HERDR_ENV=1 and the installed Herdr CLI.' }
@@ -354,12 +379,18 @@ async function run(scenario, reused) {
       child.write(`/status${KEYS['ctrl+s']}`)
       await wait(() => screen.text().replace(/\s+/gu, ' ').includes(`model ${route}${effort ? ` (${effort})` : ''}`), 'paid model and effort readback', generation - 1)
     }
+    let jobId
     for (let i = 0; i < scenario.steps.length; i++) {
       const step = { ...scenario.steps[i] }
       for (const field of SESSION_ID_FIELDS) {
         if (!step[field]?.includes(SESSION_ID_PLACEHOLDER)) continue
         if (!SESSION_ID_PATTERN.test(reused?.sessionId ?? '')) throw new Error(SESSION_ID_ERROR)
         step[field] = step[field].replaceAll(SESSION_ID_PLACEHOLDER, reused.sessionId)
+      }
+      for (const field of JOB_ID_FIELDS) {
+        if (!step[field]?.includes(JOB_ID_PLACEHOLDER)) continue
+        if (jobId === undefined) throw new Error(JOB_ID_UNSET_ERROR)
+        step[field] = step[field].replaceAll(JOB_ID_PLACEHOLDER, jobId)
       }
       // Retain attempts as distinct from postconditions so a transport receipt cannot inflate behavior proof.
       const observation = { index: i + 1, status: 'attempted', input: Object.fromEntries(Object.entries(step).filter(([name]) => INPUT_FIELDS.has(name))), postconditions: Object.fromEntries(Object.entries(step).filter(([name]) => !INPUT_FIELDS.has(name))), artifact: scenario.id + '/' + String(i + 1).padStart(3, '0') + '.txt' }
@@ -421,6 +452,11 @@ async function run(scenario, reused) {
           step.file === undefined && (step.command || step.key || step.type || step.resize) ? before : -1)
       } else if (step.file === undefined) throw new Error(`dogfood: step ${i + 1} has no postcondition`)
       if (step.osc52 && !raw.slice(rawBefore).includes(OSC52_PREFIX)) throw new Error('dogfood: no OSC52 transport after copy')
+      // Captured only after the step's postconditions hold, so the id comes from the frame that proved the job exists.
+      if (step.jobId !== undefined) {
+        jobId = visibleJobId(screen.text(), step.jobId)
+        if (jobId === undefined) throw new Error(JOB_ID_ERROR)
+      }
       snapshot(i + 1)
       Object.assign(observation, { status: 'postconditions-satisfied', frameChanged: screen.text() !== priorScreen })
     }
