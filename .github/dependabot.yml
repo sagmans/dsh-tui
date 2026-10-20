@@ -17,6 +17,9 @@ updates:
       # against, to name one verified release. The line therefore moves in one
       # pull request, which must also add that release to dshReleases (RELEASE.md).
       # Listed first because a dependency joins the first group it matches.
+      # Dependabot offers a prerelease only on the pinned release's own x.y.z, so
+      # from an rc pin it never offers the next line's alpha builds, and it never
+      # offers the next line's rc either: that move stays a manual RELEASE.md step.
       harness:
         patterns: ['@deepseek-ai/dsh', '@deepseek-ai/dsh-*']
       # One pull request for the toolchain that verifies the plugin, so review
@@ -30,6 +33,11 @@ updates:
       # deliberate runtime move. Types must never lead the engine.
       - dependency-name: '@types/node'
         update-types: ['version-update:semver-major']
+      # Pi 1.4.0 and later are outside the Pi line this plugin supports, so no
+      # update may land there. A version range, unlike update-types, also binds
+      # security updates, so an advisory cannot pull the pin past the line either.
+      - dependency-name: '@earendil-works/*'
+        versions: ['>=1.4.0']
 
   # Every action is pinned by commit SHA, and nothing else raises those pins.
   - package-ecosystem: github-actions
