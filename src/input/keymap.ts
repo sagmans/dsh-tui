@@ -1,6 +1,6 @@
 import { KeybindingsManager, TUI_KEYBINDINGS, matchesKey, setKeybindings, type KeyId } from '@earendil-works/pi-tui'
 import { defaultKeymap, keysFor, catalogOf, type Keymap } from './actions.ts'
-import { LIBRARY_KEY_ADDITIONS, isPluginActionId } from './action-catalog.ts'
+import { LIBRARY_KEY_ADDITIONS, LIBRARY_KEY_PINS, isPluginActionId } from './action-catalog.ts'
 import { ENTER_KEY } from './key-press.ts'
 import type { Submission } from './submission.ts'
 
@@ -80,12 +80,14 @@ export function surfaceKeysLine(map: Keymap): string {
  * library's defaults even when the reader never wrote them. A row this surface
  * adds a key to is sent for the same reason: the library reads that key itself,
  * so a default the surface only holds on paper would never open the search.
+ * A pinned row is sent because the library's own default for it differs
+ * between the pi-tui releases this surface supports.
  */
 function libraryOverrides(map: Keymap): Record<string, KeyId[]> {
   const overrides: Record<string, KeyId[]> = {}
   for (const action of catalogOf(map)) {
     if (action.layer !== 'library') continue
-    if (!map.written.has(action.id) && LIBRARY_KEY_ADDITIONS[action.id] === undefined) continue
+    if (!map.written.has(action.id) && LIBRARY_KEY_ADDITIONS[action.id] === undefined && LIBRARY_KEY_PINS[action.id] === undefined) continue
     overrides[action.id] = [...keysFor(map, action.id)]
   }
   overrides['tui.input.submit'] = [...keysFor(map, 'prompt.submit')]

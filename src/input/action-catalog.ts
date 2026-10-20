@@ -140,6 +140,25 @@ export const LIBRARY_KEY_ADDITIONS: Readonly<Record<string, readonly KeyId[]>> =
 }
 
 /**
+ * Library rows whose shipped keys this surface holds still across pi-tui releases.
+ *
+ * pi-tui 1.1 swapped Home and End between the viewport and the editor: before it
+ * Home and End scroll the transcript (the viewport reads them first) and
+ * ctrl+home and ctrl+end move along the line; 1.1 and later ship the reverse.
+ * The supported pi-tui line spans both, so a reader's keys would otherwise
+ * change with a dependency bump they never chose. These rows keep the earlier
+ * keys, which is what the catalog, `/keys`, the clash guards, and the installed
+ * bindings all read; a reader who prefers the newer layout writes it in
+ * settings like any other key.
+ */
+export const LIBRARY_KEY_PINS: Readonly<Record<string, readonly KeyId[]>> = {
+  'tui.editor.cursorLineStart': ['home', 'ctrl+home', 'ctrl+a'],
+  'tui.editor.cursorLineEnd': ['end', 'ctrl+end', 'ctrl+e'],
+  'tui.altScreen.top': ['home'],
+  'tui.altScreen.bottom': ['end'],
+}
+
+/**
  * Library ids whose meaning this surface owns.
  *
  * The prompt bar reads both through its own actions, because it adds a guard
@@ -158,7 +177,7 @@ function libraryActions(): readonly Action[] {
   return Object.entries(TUI_KEYBINDINGS)
     .filter(([id]) => KEYMAP_ALIASES[id] === undefined)
     .map(([id, definition]) => {
-      const defaults = Array.isArray(definition.defaultKeys) ? definition.defaultKeys : [definition.defaultKeys]
+      const defaults = LIBRARY_KEY_PINS[id] ?? (Array.isArray(definition.defaultKeys) ? definition.defaultKeys : [definition.defaultKeys])
       return {
         id,
         layer: 'library' as const,

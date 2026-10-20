@@ -1,4 +1,4 @@
-import { type ActionLayer, type Action, type SurfaceActionId, SURFACE_ACTIONS, LIBRARY_KEY_ADDITIONS, KEYMAP_ALIASES, ACTION_CATALOG, actionOf, shippedKeys, isPluginActionId } from './action-catalog.ts'
+import { type ActionLayer, type Action, type SurfaceActionId, SURFACE_ACTIONS, LIBRARY_KEY_ADDITIONS, LIBRARY_KEY_PINS, KEYMAP_ALIASES, ACTION_CATALOG, actionOf, shippedKeys, isPluginActionId } from './action-catalog.ts'
 import { TERMINAL_OWNED_KEYS, normalizeKey, isPressable, isSimpleChord, isBareCharacter } from './key-press.ts'
 import { refuseMatcherClashes, refusePromptClashes, refusePrefixTakingKeys, refuseLibraryClashes, refuseViewportTakingKeys } from './keymap-conflicts.ts'
 import { matchesKey, type KeyId } from '@earendil-works/pi-tui'
@@ -132,9 +132,9 @@ export function readKeys(action: Action, value: string | readonly string[]): rea
  * that costs them the whole section.
  */
 export function resolveKeymap(overrides: KeymapOverrides, catalog: readonly Action[] = ACTION_CATALOG): Keymap {
-  // An addition naming a row the library no longer draws would silently drop
-  // the key, so it is refused while the startup still has somewhere to say so.
-  for (const id of Object.keys(LIBRARY_KEY_ADDITIONS)) {
+  // An addition or pin naming a row the library no longer draws would silently
+  // drop the key, so it is refused while the startup still has somewhere to say so.
+  for (const id of [...Object.keys(LIBRARY_KEY_ADDITIONS), ...Object.keys(LIBRARY_KEY_PINS)]) {
     if (actionOf(id)?.layer !== 'library') throw new Error(`key additions name ${id}, which is not a library action this surface can bind`)
   }
   const effective: Record<string, readonly KeyId[]> = {}
