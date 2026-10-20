@@ -184,3 +184,4 @@ with `DRY_RUN=1`.
 ## Git hooks
 
 Checks run in `.githooks/`, not in push/PR CI (see DEVELOPMENT.md). Run `scripts/setup-hooks` after cloning. All checks must pass before you push. Never use `--no-verify`.
+`pre-push` also warns, without blocking, when a push changes the build policy in `pnpm-workspace.yaml` or the lockfile entry of a package allowed to build. List each warned item in the PR description so the reviewer reviews it before approving the merge. Never add a commit trailer other than `Signed-off-by`.

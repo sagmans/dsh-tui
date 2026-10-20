@@ -2,12 +2,20 @@
 # Flags pushed lockfile changes that touch a package allowed to run install or
 # build scripts (pnpm-workspace.yaml allowBuilds: true), and any change to the
 # build policy itself. Those packages run native code on every machine that
-# installs, so such a push fails until a commit in the pushed range carries the
-# trailer "Build-Review: <package>@<version>" for every touched package (or
-# "Build-Review: policy" for a policy change), recorded after a human review.
+# installs, so a human must review each such change before it lands.
+#
+# The check warns and lets the push continue. The owner rule allows no commit
+# trailer except Signed-off-by, so the review is not recorded in a commit: it
+# happens when the PR reviewer approves the merge. The warning names every
+# touched package and the policy, so the author can call them out in the PR and
+# the reviewer knows exactly what to check. Only real errors block the push
+# (the pushed refs cannot be read, or there is no base to compare against),
+# because then nothing was checked at all.
 set -eu
 LOCK='pnpm-lock.yaml'
 POLICY='pnpm-workspace.yaml'
+# Marks a build-policy change among the package@version items in the warning.
+POLICY_ITEM='policy'
 Z40=0000000000000000000000000000000000000000
 # Packages allowed to build at commit $1 (exact names, "name: true").
 allowed_at() {
@@ -33,8 +41,10 @@ policy_at() {
 # piped `| while` loop would only leave its subshell.
 : "${HOOK_STDIN_FILE:?run from .githooks (scripts/setup-hooks)}"
 # Tag lines are skipped (grep exits 1 when only tags are pushed); a read
-# error blocks the push.
-ba_lines=$(grep -v -e '^refs/tags/' <"$HOOK_STDIN_FILE") || [ $? -eq 1 ] || {
+# error blocks the push. The file is opened by grep itself, not by a shell
+# redirect, because a failed redirect also exits 1 and would pass as "only
+# tags pushed", skipping the check without a word.
+ba_lines=$(grep -v -e '^refs/tags/' -- "$HOOK_STDIN_FILE") || [ $? -eq 1 ] || {
 	echo "pre-push: $(basename -- "$0"): cannot read the pushed refs" >&2
 	exit 1
 }
@@ -51,23 +61,27 @@ while read -r ba_ref ba_local ba_remote_ref ba_remote; do
 		echo "pre-push: $(basename -- "$0"): no base to compare $ba_ref against; fetch origin first" >&2
 		exit 1
 	fi
-	trailers=$(git log --format='%(trailers:key=Build-Review,valueonly)' "$base..$ba_local") || exit 1
 	need=''
 	if [ "$(policy_at "$base")" != "$(policy_at "$ba_local")" ]; then
-		need="policy"
+		need=$POLICY_ITEM
 	fi
 	for pkg in $( (allowed_at "$base"; allowed_at "$ba_local") | sort -u); do
 		[ "$(blocks_at "$base" "$pkg")" != "$(blocks_at "$ba_local" "$pkg")" ] || continue
 		ver=$(blocks_at "$ba_local" "$pkg" | awk -v p="$pkg" 'index($0, "  " p "@") == 1 || index($0, "  \x27" p "@") == 1 { sub(/^  \x27?[^@]*@/, ""); sub(/[:(\x27].*/, ""); print; exit }')
 		need="$need $pkg@${ver:-removed}"
 	done
+	# A warning, not a failure: the review belongs to the PR merge approval (see
+	# the header), so the author only needs to know what to put in front of it.
+	[ -n "$need" ] || continue
+	echo "pre-push: warning: $ba_ref changes what runs on every install:" >&2
 	for item in $need; do
-		if ! printf '%s\n' "$trailers" | grep -qx "$item"; then
-			echo "pre-push: $ba_ref changes an allowed-build package or the build policy ($item)." >&2
-			echo "Review the change, then add the trailer \"Build-Review: $item\" to a commit in the push." >&2
-			exit 1
+		if [ "$item" = "$POLICY_ITEM" ]; then
+			echo "  - build policy in $POLICY" >&2
+		else
+			echo "  - $item in $LOCK (a package allowed to run install or build scripts)" >&2
 		fi
 	done
+	echo "pre-push: list these in the PR description; the PR reviewer must review them before approving the merge." >&2
 done <<EOF
 $ba_lines
 EOF

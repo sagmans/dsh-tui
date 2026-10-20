@@ -70,7 +70,8 @@ The generic checks run first (sign-off, message format, secret scan, signed push
 `pre-commit` runs `pnpm run check:unused` and a staged whitespace check.
 `pre-push` runs signatures, `check:local`, typecheck, golden frames, pack smoke, terminal behavior, the harness matrix, and the consumer install smoke, each on the pushed commit.
 The install smoke needs Docker; without it the push fails unless `HOOK_SKIP_INSTALL_SMOKE=1` is set for that push.
-A pushed change to `pnpm-workspace.yaml`'s build policy, or a lockfile change to a package allowed to build (`node-pty`), fails `pre-push` until a commit in the push carries a `Build-Review: policy` or `Build-Review: node-pty@<version>` trailer, added after a human review.
+A pushed change to `pnpm-workspace.yaml`'s build policy, or a lockfile change to a package allowed to build (`node-pty`), makes `pre-push` print a warning that names each change.
+The push continues. List those changes in the PR description: the PR reviewer must review them before approving the merge. Commits carry no trailer other than `Signed-off-by`.
 Run `scripts/setup-hooks` once after cloning; it points this clone's `core.hooksPath` at `.githooks`. Each hook runs the generic checks first (sign-off and commit message format, a gitleaks secret scan, and signed, signed-off commits on push), then this repository's checks in `.githooks/<hook>.d/` in name order. Install [gitleaks](https://github.com/gitleaks/gitleaks) first. Every check must pass before you push; never use `--no-verify`. Pre-push checks test exactly each pushed commit: in place only when it is the clean, unmodified checkout, otherwise in a temporary worktree of that commit. Never bypass hooks with `--no-verify`.
 
 ## Performance evidence
