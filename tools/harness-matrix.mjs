@@ -19,17 +19,26 @@ const manifest = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
 const compatibility = manifest.dsh?.compatibility?.dsh
 const releases = Object.keys(manifest.dsh?.compatibility?.dshReleases ?? {})
 const problems = []
+// The lowest SemVer prerelease. dsh judges plugin version ranges with
+// prereleases included; read that way, an upper bound of "<0.3.0" still admits
+// 0.3.0-rc builds of the next line, and "<0.3.0-0" stops before the first of them.
+const LOWEST_PRERELEASE = '0'
 
 /** Numeric prerelease-aware bounds keep verified RCs inside the declared compatibility range. */
 function compareVersions(left, right) {
   // Bounds need an ordering this comparator can represent; unsupported version forms
   // must fail rather than produce a misleading compatibility result.
   const parse = (value) => {
-    const match = /^(\d+)\.(\d+)\.(\d+)(?:-([a-z]+)\.(\d+))?$/u.exec(value ?? '')
+    const match = /^(\d+)\.(\d+)\.(\d+)(?:-(?:([a-z]+)\.(\d+)|(0)))?$/u.exec(value ?? '')
     if (match === null) throw new Error('unsupported version: ' + String(value))
+    // An empty tag sorts before every named tag, as SemVer orders a numeric
+    // identifier before an alphanumeric one, so X.Y.Z-0 precedes X.Y.Z-alpha.1.
+    const prerelease = match[4] !== undefined
+      ? [match[4], Number(match[5])]
+      : match[6] === undefined ? null : ['', Number(match[6])]
     return {
       numbers: [Number(match[1]), Number(match[2]), Number(match[3])],
-      prerelease: match[4] === undefined ? null : [match[4], Number(match[5])],
+      prerelease,
     }
   }
   const a = parse(left)
@@ -54,6 +63,14 @@ if (releases.length === 0) {
 }
 const supportedLine = range === null ? '' : lineOf(range[1])
 if (range !== null) {
+  // The range ends just below the next line's first prerelease, so it covers one
+  // line and no build of the next one, final or prerelease.
+  const [major, minor] = supportedLine.split('.').map(Number)
+  const ceiling = major + '.' + (minor + 1) + '.0-' + LOWEST_PRERELEASE
+  if (range[2] !== ceiling) {
+    problems.push('the compatible range must end at <' + ceiling + ', below every ' + lineOf(ceiling)
+      + ' prerelease, found <' + range[2])
+  }
   for (const release of releases) {
     if (compareVersions(release, range[1]) < 0 || compareVersions(release, range[2]) >= 0) {
       problems.push('verified release ' + release + ' lies outside the compatible range ' + compatibility)

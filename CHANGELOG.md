@@ -14,6 +14,7 @@ breaking change, and a patch carries only fixes.
 - Support pi-tui 1.2 and 1.3 next to the 0.85.1 baseline: the editor's cursor cell, which pi-tui 1.2 started to draw with private markers, renders, blinks, hides when the bar loses focus, and hosts ghost text as before.
 - Keep `home`/`end` scrolling the transcript and `ctrl+home`/`ctrl+end` moving along the line on every supported pi-tui release. pi-tui 1.1 and later ship the two pairs swapped, so a dependency bump would otherwise move the reader's keys; the newer layout is one `keys` entry away (see [Keys](README.md#keys)).
 - Development checks are ready for TypeScript 7 and js-yaml 5: the test type check no longer sets `baseUrl`, which TypeScript 7 removes, and the dogfood runners import js-yaml by name, since js-yaml 5 has no default export. The `timers` dogfood scenario reads the background job id the dock shows, because dsh 0.2.1 mints random job ids.
+- The declared harness range now ends at `<0.3.0-0`, below every `0.3.0` prerelease: dsh judges plugin version ranges with prereleases included, and read that way `<0.3.0` admitted `0.3.0` release candidates of the next line. `node tools/harness-matrix.mjs` enforces that ceiling.
 
 ## [0.15.0] - 2026-10-13
 

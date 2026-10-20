@@ -108,7 +108,7 @@ The profile then keeps `@deepseek-ai/dsh-base` and no application, so `dsh --pro
 
 ### Use the installed Harness launcher
 
-The manifest declares `>=0.2.0-rc.2 <0.3.0`, but lists only `0.2.0-rc.2` as a verified release. Range membership alone does not prove compatibility. Run `dsh --version` and use that installed release for dogfooding. `pnpm dsh` from a Harness source checkout runs a development host, not the verified installed release. It can migrate `settings.yaml`; do not use it for TUI dogfooding.
+The manifest declares `>=0.2.0-rc.2 <0.3.0-0`, but lists only `0.2.0-rc.2` as a verified release. Range membership alone does not prove compatibility. Run `dsh --version` and use that installed release for dogfooding. `pnpm dsh` from a Harness source checkout runs a development host, not the verified installed release. It can migrate `settings.yaml`; do not use it for TUI dogfooding.
 
 The surface probes required and optional services at startup, and selects settings APIs by capability. These checks do not validate the host version or prove full-profile behavior. The dogfood helper and PTY driver separately check the launcher against the manifest's verified releases.
 
