@@ -1020,6 +1020,16 @@ import into matching profile entries. Rejected sections remain only in
 `settings.yaml.imported`. Use the active profile patch for current preferences,
 or the dogfood clone above when a run needs your own composition.
 
+**Supported pi-tui range.** The package pins `@earendil-works/pi-tui` to `0.85.1`
+and supports `>=0.85.1 <1.4.0-0`, declared in
+[`compat/pi-tui/package.json`](compat/pi-tui/package.json). That manifest's
+committed lockfile resolves the newest release in the range that has passed the
+one-week release-age window, and `pre-push` reruns typecheck, golden frames and
+terminal behavior on it. When `pre-push` warns that a newer release in the range
+has matured, refresh both files with `node tools/pi-tui-compat.mjs lock` and
+commit them. To widen the range, change the ceiling in that manifest, run `lock`,
+and move the Dependabot `@earendil-works/*` ignore to the same line.
+
 Test specs import plugin sources through the `@/` alias. Under this test runner the spec file is resolved with a root-relative id, so parent-relative imports (`../src/...`) do not resolve; the alias and its matching `tsconfig.test.json` path mapping avoid that.
 
 The development guide — the gate, the dogfood script, and the difference between

@@ -38,6 +38,7 @@ updates:
       # Pi 1.4.0 and later are outside the Pi line this plugin supports, so no
       # update may land there. A version range, unlike update-types, also binds
       # security updates, so an advisory cannot pull the pin past the line either.
+      # Keep it on the ceiling of the range in compat/pi-tui/package.json.
       - dependency-name: '@earendil-works/*'
         versions: ['>=1.4.0']
 

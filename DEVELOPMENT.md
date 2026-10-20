@@ -69,6 +69,7 @@ Repository hooks live in `.githooks` and replace the push/PR CI workflow.
 The generic checks run first (sign-off, message format, secret scan, signed push), then `.githooks/<hook>.d/*`.
 `pre-commit` runs `pnpm run check:unused` and a staged whitespace check.
 `pre-push` runs signatures, `check:local`, typecheck, golden frames, pack smoke, terminal behavior, the harness matrix, and the consumer install smoke, each on the pushed commit.
+It also reruns typecheck, golden frames and terminal behavior on the newest pi-tui release in the supported range. That run installs from `compat/pi-tui/package.json` and its lockfile in a temporary worktree, names the release it resolved, and warns when a newer release in the range has passed the release-age window; `node tools/pi-tui-compat.mjs lock` refreshes both files.
 The install smoke needs Docker; without it the push fails unless `HOOK_SKIP_INSTALL_SMOKE=1` is set for that push.
 A pushed change to `pnpm-workspace.yaml`'s build policy, or a lockfile change to a package allowed to build (`node-pty`), makes `pre-push` print a warning that names each change.
 The push continues. List those changes in the PR description: the PR reviewer must review them before approving the merge. Commits carry no trailer other than `Signed-off-by`.
