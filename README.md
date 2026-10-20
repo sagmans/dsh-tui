@@ -240,6 +240,7 @@ force, and the `keys:` section moves any of them — see [Keys](#keys).
 | `@` | open the workspace file menu, narrowed as you type; a path then Tab still completes a file reference |
 | `ctrl+shift+f` | search the transcript (`enter` next, `shift+enter` previous, `esc` or Ctrl+C close) |
 | `home` / `end` | jump to the start or the end of the transcript |
+| `ctrl+home` / `ctrl+end` | move to the start or the end of the line in the bar |
 | `ctrl+down` | jump to the next prompt |
 | `ctrl+b` | leave a child's conversation and return to this session (the status line names the key you have now) |
 | mouse wheel, drag | scroll, and copy a selection through OSC 52 |
@@ -806,6 +807,14 @@ picker, a question's options, and the editor's completion menu. They are
 ordinary rows: `picker.up`, `picker.down`, `question.up`, `question.down`,
 and the library's `tui.select.up`/`tui.select.down` take other keys, or more
 of them, like any other row.
+
+`home` and `end` scroll the transcript and `ctrl+home` and `ctrl+end` move along
+the line on every supported pi-tui release. pi-tui 1.1 and later ship the two
+pairs swapped; the surface keeps the earlier layout so an upgrade does not move
+your keys. To use the newer layout, write it in `keys`:
+`tui.altScreen.top: ctrl+home`, `tui.altScreen.bottom: ctrl+end`,
+`tui.editor.cursorLineStart: [home, ctrl+a]`, and
+`tui.editor.cursorLineEnd: [end, ctrl+e]`.
 
 Refused, with the reason in a notice and the shipped map left in force: an
 action the surface does not have, a key no terminal reports, `ctrl+q` (the
