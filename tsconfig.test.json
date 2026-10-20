@@ -6,8 +6,8 @@
     // Sources and specs belong to one check, outside the production-only src root.
     "rootDir": ".",
     // Mirror Vitest's source alias so checking and execution resolve the same modules;
-    // parent-relative traversal is unreliable under that runner.
-    "baseUrl": ".",
+    // parent-relative traversal is unreliable under that runner. Targets resolve from
+    // this file without baseUrl, which TypeScript 7 removes.
     "paths": {
       "@/*": [
         "./src/*"

@@ -7,7 +7,8 @@ import { dirname, isAbsolute, join, resolve, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { createRequire } from 'node:module'
 import pty from 'node-pty'
-import yaml from 'js-yaml'
+// A named import: js-yaml 5 drops the default export that 4.x also offered.
+import { dump as dumpYaml } from 'js-yaml'
 import { LOCAL_COMMANDS } from '../lib/input/submission.js'
 import { ACTION_CATALOG } from '../lib/input/action-catalog.js'
 import { TUI_TOKENS, PALETTE_NAMES } from '../lib/theme-tokens.js'
@@ -212,17 +213,17 @@ async function run(scenario, reused) {
     if (paid || reused) throw new Error('dogfood: configuration overrides require a fresh free profile')
     // The released patch replaces config wholesale, so preference scenarios must preserve live launch identity.
     const startup = STARTUP_FIELDS.map(key => `    ${key}: !!js ctx.tuiStartup.${key}`).join('\n')
-    const preferences = yaml.dump(scenario.config).trimEnd().split('\n').map(line => '    ' + line).join('\n')
+    const preferences = dumpYaml(scenario.config).trimEnd().split('\n').map(line => '    ' + line).join('\n')
     writeFileSync(join(home, 'profiles', PROFILE, 'cordis.patch.yml'), `- id: tui\n  config:\n${startup}\n${preferences}\n`, { mode: PRIVATE_FILE_MODE })
   }
   if (scenario.tool === PRUNING_SCENARIO_TOOL) {
     if (paid || reused || scenario.config) throw new Error(PRUNING_ALLOCATION_ERROR)
-    const patch = yaml.dump([{ insert: [{ id: PRUNING_PLUGIN_ID, name: join(ROOT, 'tools', PRUNING_PLUGIN) }] }])
+    const patch = dumpYaml([{ insert: [{ id: PRUNING_PLUGIN_ID, name: join(ROOT, 'tools', PRUNING_PLUGIN) }] }])
     writeFileSync(join(home, 'profiles', PROFILE, 'cordis.patch.yml'), patch, { mode: PRIVATE_FILE_MODE })
   }
   if (scenario.crashProbe || scenario.cliExitProbe) {
     if (paid || reused || scenario.config) throw new Error(PROFILING_PROBE_CONFIGURATION_ERROR)
-    const patch = yaml.dump([{ insert: [{ id: PROFILING_PROBE_ID, name: join(ROOT, 'tools', scenario.cliExitProbe ? PROFILING_EXIT_PLUGIN : PROFILING_CRASH_PLUGIN) }] }])
+    const patch = dumpYaml([{ insert: [{ id: PROFILING_PROBE_ID, name: join(ROOT, 'tools', scenario.cliExitProbe ? PROFILING_EXIT_PLUGIN : PROFILING_CRASH_PLUGIN) }] }])
     writeFileSync(join(home, 'profiles', PROFILE, 'cordis.patch.yml'), patch, { mode: PRIVATE_FILE_MODE })
   }
   for (const link of scenario.homeLinks ?? []) {

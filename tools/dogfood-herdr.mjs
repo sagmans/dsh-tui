@@ -5,7 +5,8 @@ import { chmodSync, closeSync, constants, existsSync, fstatSync, lstatSync, mkdi
 import { dirname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { setTimeout as delay } from 'node:timers/promises'
-import yaml from 'js-yaml'
+// A named import: js-yaml 5 drops the default export that 4.x also offered.
+import { dump as dumpYaml } from 'js-yaml'
 import pty from 'node-pty'
 import { preparePtyLaunch } from './pty-launch.mjs'
 import { editorText } from './dogfood-observation.mjs'
@@ -162,7 +163,7 @@ async function run(scenario) {
   if (paid && scenario.config) throw new Error('herdr dogfood: configuration overrides require a fresh free profile')
   if (scenario.config) {
     const startup = STARTUP_FIELDS.map(field => '    ' + field + ': !!js ctx.tuiStartup.' + field).join('\n')
-    const preferences = yaml.dump(scenario.config).trimEnd().split('\n').map(line => '    ' + line).join('\n')
+    const preferences = dumpYaml(scenario.config).trimEnd().split('\n').map(line => '    ' + line).join('\n')
     save(join(profile, 'cordis.patch.yml'), '- id: tui\n  config:\n' + startup + '\n' + preferences + '\n')
   }
   const safeFile = name => {
