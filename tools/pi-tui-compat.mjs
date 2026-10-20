@@ -116,7 +116,8 @@ async function report() {
   // push on a registry read or on a release published after the last `lock`.
   let times
   try {
-    const response = await fetch(REGISTRY + PACKAGE.replace('/', '%2f'))
+    // The registry takes a scoped name as one encoded path segment.
+    const response = await fetch(REGISTRY + encodeURIComponent(PACKAGE))
     if (!response.ok) throw new Error('HTTP ' + response.status)
     times = (await response.json()).time ?? {}
   } catch (error) {
