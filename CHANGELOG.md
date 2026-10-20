@@ -11,6 +11,7 @@ breaking change, and a patch carries only fixes.
 ### Compatibility
 
 - Support Node.js 22, 24 and 26: `engines.node` is now `>=22.19.0`, and typecheck plus the golden suite and free dogfood scenarios run on Node 22.19.0, 24.21.0 and 26.11.1. Development types move to `@types/node` 26.6.4.
+- Support pi-tui 1.2 and 1.3 next to the 0.85.1 baseline: the editor's cursor cell, which pi-tui 1.2 started to draw with private markers, renders, blinks, hides when the bar loses focus, and hosts ghost text as before.
 
 ## [0.15.0] - 2026-10-13
 

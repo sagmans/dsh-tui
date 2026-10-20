@@ -70,6 +70,19 @@ const CURSOR_TEXT_REPLACEMENT = '$1'
 const CURSOR_AT_END = '\u001b[7m \u001b[0m'
 /** Typed text contains no escapes, so only the base editor's cursor cell can match. */
 const SYNTHETIC_CURSOR = /\u001b\[7m([^\u001b]*)\u001b\[0m/gu
+/**
+ * The cursor cell pi-tui 1.2 and later draw instead of the reverse-video cell.
+ *
+ * From 1.2 the base editor wraps the cursor grapheme in zero-width APC markers
+ * and leaves its own TUI to resolve them at paint time. This surface reads that
+ * cell before the TUI does (ghost text, masking, the blink phase), and the
+ * library exports no constant for the markers, so the newer spelling is named here
+ * and folded back into the older cell. The closing marker may be missing when a
+ * row was cut right after the cursor, which the library tolerates the same way.
+ */
+const FAKE_CURSOR_CELL = /\u001b_pi:fc\u0007([^\u001b]*)(?:\u001b_pi:\/fc\u0007|$)/gu
+/** The older cursor cell every later pass in this file matches. */
+const LEGACY_CURSOR_CELL = '\u001b[7m$1\u001b[0m'
 /** Only acceptance chords need a live consent projection before changing the draft. */
 const GHOST_ACCEPT_ALL_KEY = 'ctrl+e'
 const GHOST_WORD_RIGHT_ACTION = 'tui.editor.cursorWordRight'
@@ -291,7 +304,9 @@ export class BoxedEditor extends Editor {
     const boxed = enclosed && this.railColumns > 0
     const inside = width - this.railColumns
     const ghost = this.disableSubmit ? undefined : this.currentGhostSuffix()
-    const rows = super.render(inside)
+    // One cursor spelling across the supported pi-tui line, so the ghost, mask,
+    // and blink passes below never see a marker they were not written for.
+    const rows = super.render(inside).map(row => row.replace(FAKE_CURSOR_CELL, LEGACY_CURSOR_CELL))
     const closing = rows.findIndex(row => row.includes(CLOSING_TAG))
     // An unfamiliar base layout must not receive guessed pointer offsets.
     if (closing < 0) {
