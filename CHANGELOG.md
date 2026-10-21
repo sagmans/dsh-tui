@@ -23,6 +23,10 @@ breaking change, and a patch carries only fixes.
 - The package compiles with TypeScript 7.0.2. The emitted JavaScript differs from the TypeScript 5.9 build only in import quote style, and the declaration files only in the order of union members.
 - The golden frame suite runs on Vitest 5.0.4. Every frame snapshot matches unchanged, and no snapshot is obsolete.
 
+### Security
+
+- The test toolchain now resolves vite 8.3.4, which bundles the fixed launch-editor. vite 8.2.2 was affected by GHSA-698v-4r3x-3vcv, GHSA-r825-w8mm-5pxw and GHSA-587h-7wmj-h5pm. vite runs only the test suite and is not part of the published package.
+
 ## [0.15.0] - 2026-10-13
 
 ### Added
