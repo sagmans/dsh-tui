@@ -61,3 +61,10 @@ allowBuilds:
   # to an exact version in package.json).
   node-pty: true
 strictDepBuilds: true
+#
+# Security floors for transitive dependencies. Each entry only matches the
+# vulnerable range, so a release that already ships the fix resolves untouched
+# and the entry can be dropped then.
+#   GHSA-698v-4r3x-3vcv, GHSA-r825-w8mm-5pxw, GHSA-587h-7wmj-h5pm  vite (bundled launch-editor)
+overrides:
+  'vite@<8.3.3': ^8.3.3
