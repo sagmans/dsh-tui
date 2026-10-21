@@ -23,6 +23,7 @@ breaking change, and a patch carries only fixes.
 - The package compiles with TypeScript 7.0.2. The emitted JavaScript differs from the TypeScript 5.9 build only in import quote style, and the declaration files only in the order of union members.
 - The golden frame suite runs on Vitest 5.0.4. Every frame snapshot matches unchanged, and no snapshot is obsolete.
 - Development tooling moves to `@deepseek-ai/cordis` 4.0.4 and `knip` 6.41.0, in both the root and the `compat/pi-tui` lockfiles.
+- Theme and preset files are read with js-yaml 5.4.3, which ships its own types. Theme files read as before: an empty or comment-only file is still a valid empty theme, and merge keys (`<<`) still apply, although js-yaml 5 changed both by default. A theme file with more than one YAML document is still refused, now with a message that says so.
 
 ### Security
 
