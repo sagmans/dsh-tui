@@ -18,6 +18,10 @@ breaking change, and a patch carries only fixes.
 - Verified harness release moves to dsh `0.2.1-rc.2`, the release npm now serves as `latest`. Mounted and development harness packages follow it, and the declared range becomes `>=0.2.1-rc.2 <0.3.0-0`: a build mounted against one harness release disables the other release's tool presentation, so PTC result cards would lose their titles on a mismatched host. The 0.2.1-rc.2 harness packages are still inside the one-week release-age window, so `pnpm-workspace.yaml` exempts exactly those versions until 2026-10-24 08:37 UTC; the exemption must be removed after that time.
 - Declare the supported pi-tui range as `>=0.85.1 <1.4.0-0` and test its newest release on every push. The package still pins `0.85.1`, but users can resolve a later release in the range, so `pre-push` reruns typecheck, golden frames and terminal behavior on the newest release that has passed the release-age window, installed from the committed `compat/pi-tui` manifest and lockfile. It resolves `1.2.0` today.
 
+### Changed
+
+- Theme and preset files are read with js-yaml 5.4.3, which ships its own types. Theme files read as before: an empty or comment-only file is still a valid empty theme, and merge keys (`<<`) still apply, although js-yaml 5 changed both by default. A theme file with more than one YAML document is still refused, now with a message that says so.
+
 ## [0.15.0] - 2026-10-13
 
 ### Added

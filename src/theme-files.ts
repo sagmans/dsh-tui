@@ -14,7 +14,7 @@
 import { mkdirSync, readFileSync, readdirSync, statSync, watch, writeFileSync, type FSWatcher } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { load as parseYaml } from 'js-yaml'
+import { CORE_SCHEMA, loadAll as parseYamlDocuments, mergeTag } from 'js-yaml'
 import { dshHomeDir } from './stash/paths.ts'
 import {
   asRecord,
@@ -53,6 +53,18 @@ const THEME_SECTIONS: ReadonlySet<string> = new Set(['palette', 'tokens'])
  * or protect against a file growing between the size check and the read.
  */
 const MAX_THEME_FILE_BYTES = 64 * 1024
+
+/**
+ * The tag set theme files are read with.
+ *
+ * js-yaml 5 left merge keys out of its default schema. A reader's theme that
+ * shares colours through `<<: *anchor` must keep reading as it did on js-yaml 4,
+ * not turn `<<` into an unknown token name.
+ */
+const THEME_YAML_SCHEMA = CORE_SCHEMA.withTags(mergeTag)
+
+/** A theme file holds a single document; more is a mistake the reader must see. */
+const MAX_THEME_DOCUMENTS = 1
 
 /** How long a burst of writes to the theme directory is allowed to settle. */
 const WATCH_DEBOUNCE_MS = 150
@@ -324,13 +336,22 @@ function readThemeFile(file: ThemeFile, builtin: boolean, problems: string[]): L
     problems.push(`themes: ${file.path}: ${message(error)}`)
     return undefined
   }
-  let document: unknown
+  let documents: unknown[]
   try {
-    document = parseYaml(source)
+    // The multi-document reader, because js-yaml 5's single-document `load`
+    // throws on a file with no document at all (empty or only comments), which
+    // must stay the valid empty layer below.
+    documents = parseYamlDocuments(source, { schema: THEME_YAML_SCHEMA })
   } catch (error) {
     problems.push(`themes: ${file.path}: ${message(error)}`)
     return undefined
   }
+  // One file is one theme: a second document would otherwise be dropped unseen.
+  if (documents.length > MAX_THEME_DOCUMENTS) {
+    problems.push(`themes: ${file.path}: a theme is one YAML document, found ${documents.length}`)
+    return undefined
+  }
+  const document = documents[0]
   // An empty document supplies no overrides: as a valid empty layer it leaves
   // the shipped appearance and higher-priority settings in force.
   if (document === null || document === undefined) {
