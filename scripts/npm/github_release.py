@@ -10,20 +10,23 @@ ACTION = "setup-github-release"
 HOST = "github.com"
 # RepositoryRole 5 limits release-tag rule bypass to repository administrators.
 ADMIN_ROLE_ID = 5
-# Keep names and reviewer logins within the helper's conservative identity subset.
+# Keep names within the helper's conservative identity subset.
 SAFE_NAME = r"[A-Za-z0-9][A-Za-z0-9._-]*"
-REVIEWER_PATTERN = r"[A-Za-z0-9][A-Za-z0-9-]{0,38}"
+# Custom tag policies surface as this one protection rule; any other rule (a required reviewer, a wait
+# timer, an app gate) is a control this helper did not create, so it is reported rather than accepted.
+EXPECTED_PROTECTIONS = frozenset({"branch_policy"})
 # Constrain tag authority to literal paths or a trailing wildcard rather than broader ruleset pattern syntax.
 TAG_PATTERN = r"[A-Za-z0-9._/-]+\*?"
 
 
 def setup_github(target):
-    """Bind approval to the verified reviewer and environment without administrator approval bypass.
+    """Make the admin-only signed tag push the publication approval, with no second reviewer gate.
 
-    Keep administrator release-tag authority separate from the environment's publication approval.
+    The environment admits only matching tags and the named ruleset admits only administrators to create
+    them, so the tag push is the one human release decision. Re-adding a required reviewer is the rollback,
+    and this helper then reports that environment as conflicting rather than accepting it silently.
     """
     _, environment = target.workflow()
-    reviewer = setting("REVIEWER", REVIEWER_PATTERN)
     tag = setting("TAG_PATTERN", TAG_PATTERN)
     require(".." not in tag and "//" not in tag and not tag.startswith("/"), "invalid TAG_PATTERN")
     ruleset_name = setting("RULESET_NAME", SAFE_NAME)
@@ -59,17 +62,12 @@ def setup_github(target):
     require(isinstance(repo, dict) and repo.get("full_name") == target.repo
             and isinstance(repo.get("permissions"), dict) and repo["permissions"].get("admin") is True,
             "expected repository administration access not verified")
-    user = get(f"users/{reviewer}")
-    require(isinstance(user, dict) and user.get("login", "").lower() == reviewer.lower()
-            and type(user.get("id")) is int and user["id"] > 0, "reviewer identity not verified")
-    reviewer_id = user["id"]
     environment_endpoint = f"repos/{target.repo}/environments/{environment}"
     policies_endpoint = f"{environment_endpoint}/deployment-branch-policies"
     rulesets_endpoint = f"repos/{target.repo}/rulesets"
     branch_policy = {"protected_branches": False, "custom_branch_policies": True}
     environment_payload = {
         "can_admins_bypass": False,
-        "reviewers": [{"type": "User", "id": reviewer_id}],
         "deployment_branch_policy": branch_policy,
     }
     ruleset_payload = {
@@ -89,14 +87,8 @@ def setup_github(target):
             protections = current.get("protection_rules", [])
             require(isinstance(protections, list) and all(isinstance(rule, dict) for rule in protections),
                     "unexpected environment protections")
-            reviews = [rule for rule in protections if rule.get("type") == "required_reviewers"]
-            require(len(reviews) == 1, "existing reviewer controls conflict")
-            reviewers = reviews[0].get("reviewers", [])
-            require(len(reviewers) == 1 and isinstance(reviewers[0], dict)
-                    and reviewers[0].get("type") == "User"
-                    and isinstance(reviewers[0].get("reviewer"), dict)
-                    and reviewers[0]["reviewer"].get("id") == reviewer_id,
-                    "existing reviewer controls conflict")
+            require(all(rule.get("type") in EXPECTED_PROTECTIONS for rule in protections),
+                    "existing environment protections conflict; expected tag policy only")
             policies = pages(policies_endpoint, "branch_policies")
             require(len(policies) <= 1 and all(policy.get("name") == tag and policy.get("type") == "tag" for policy in policies),
                     "existing deployment policies conflict; branch and tag policies are distinct")

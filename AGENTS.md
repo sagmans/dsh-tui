@@ -160,8 +160,8 @@ and each remote release action; never publish on your own initiative.
    release tag; require GitHub to verify the signature after the approved push.
 3. Push only that tag with `git push origin "vX.Y.Z"` after approval.
    `.github/workflows/release.yml` checks tag/version agreement and publishes through npm
-   OIDC trusted publishing after the `npm-release` environment approval.
-   Wait for success; never substitute a local `npm publish`. The documented
+   OIDC trusted publishing on the `npm-release` environment with no further approval:
+   the admin-only tag push is the release approval. Wait for success; never substitute a local `npm publish`. The documented
    first-publication bootstrap is a maintainer-only exception, not a retry path.
 4. After publication succeeds, create the GitHub release from the existing tag:
    `gh release create "vX.Y.Z" --verify-tag --title "vX.Y.Z" --notes-file <notes-file>`.
