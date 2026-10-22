@@ -10,7 +10,7 @@ breaking change, and a patch carries only fixes.
 
 ### Compatibility
 
-- Support Node.js 22, 24 and 26: `engines.node` is now `>=22.19.0`, and typecheck plus the golden suite and free dogfood scenarios run on Node 22.19.0, 24.21.0 and 26.11.1. Development types move to `@types/node` 26.6.4.
+- Support Node.js 22, 24 and 26: `engines.node` is now `>=22.19.0`, and typecheck plus the golden suite and free dogfood scenarios run on Node 22.19.0, 24.21.0 and 26.11.1. Development types move to `@types/node` 26.6.5.
 - Support pi-tui 1.2 and 1.3 next to the 0.85.1 baseline: the editor's cursor cell, which pi-tui 1.2 started to draw with private markers, renders, blinks, hides when the bar loses focus, and hosts ghost text as before.
 - Keep `home`/`end` scrolling the transcript and `ctrl+home`/`ctrl+end` moving along the line on every supported pi-tui release. pi-tui 1.1 and later ship the two pairs swapped, so a dependency bump would otherwise move the reader's keys; the newer layout is one `keys` entry away (see [Keys](README.md#keys)).
 - Development checks are ready for TypeScript 7 and js-yaml 5: the test type check no longer sets `baseUrl`, which TypeScript 7 removes, and the dogfood runners import js-yaml by name, since js-yaml 5 has no default export. The `timers` dogfood scenario reads the background job id the dock shows, because dsh 0.2.1 mints random job ids.
@@ -22,6 +22,12 @@ breaking change, and a patch carries only fixes.
 
 - The package compiles with TypeScript 7.0.2. The emitted JavaScript differs from the TypeScript 5.9 build only in import quote style, and the declaration files only in the order of union members.
 - The golden frame suite runs on Vitest 5.0.4. Every frame snapshot matches unchanged, and no snapshot is obsolete.
+- Development tooling moves to `@deepseek-ai/cordis` 4.0.4 and `knip` 6.41.0, in both the root and the `compat/pi-tui` lockfiles.
+- Theme and preset files are read with js-yaml 5.4.3, which ships its own types. Theme files read as before: an empty or comment-only file is still a valid empty theme, and merge keys (`<<`) still apply, although js-yaml 5 changed both by default. A theme file with more than one YAML document is still refused, now with a message that says so.
+
+### Security
+
+- The test toolchain now resolves vite 8.3.4, which bundles the fixed launch-editor. vite 8.2.2 was affected by GHSA-698v-4r3x-3vcv, GHSA-r825-w8mm-5pxw and GHSA-587h-7wmj-h5pm. vite runs only the test suite and is not part of the published package.
 
 ## [0.15.0] - 2026-10-13
 
