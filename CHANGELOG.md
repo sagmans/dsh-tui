@@ -8,6 +8,8 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-10-22
+
 ### Compatibility
 
 - Support Node.js 22, 24 and 26: `engines.node` is now `>=22.19.0`, and typecheck plus the golden suite and free dogfood scenarios run on Node 22.19.0, 24.21.0 and 26.11.1. Development types move to `@types/node` 26.6.5.
@@ -1264,7 +1266,8 @@ Not published: release signature verification failed. Its changes ship in 0.12.1
 - Publication through npm OIDC trusted publishing, with the first version
   bootstrapped by hand ([#5](https://github.com/sagmans/dsh-tui/pull/5)).
 
-[Unreleased]: https://github.com/sagmans/dsh-tui/compare/v0.15.0...HEAD
+[Unreleased]: https://github.com/sagmans/dsh-tui/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/sagmans/dsh-tui/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/sagmans/dsh-tui/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/sagmans/dsh-tui/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/sagmans/dsh-tui/compare/v0.12.1...v0.13.0
