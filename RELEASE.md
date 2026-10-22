@@ -99,7 +99,7 @@ DRY_RUN=1 python3 scripts/npm/release.py harden-publishing
 CONFIRM=harden-publishing python3 scripts/npm/release.py harden-publishing
 ```
 
-- `setup-github-release` creates the approval-gated `npm-release` environment and an admin-only `v*` tag ruleset. It refuses to overwrite conflicting existing controls.
+- `setup-github-release` creates the `npm-release` environment, which admits only `v*` tags and has no required reviewer, and an admin-only `v*` tag ruleset. The ruleset makes the signed tag push the release approval. It refuses to overwrite conflicting existing controls, and it reports any environment protection other than the tag policy, including a required reviewer, as a conflict.
 - `configure-trust` binds publication to this repository's `release.yml` on the `npm-release` environment. The registry answers a publish grant with stage publish included, so that pair is the accepted configuration; a stage-only grant carries no publish authority and is refused, as is any conflicting existing trust.
 - `harden-publishing` requires two-factor authentication for publication and disallows traditional tokens, so the OIDC flow is the only publish path. Confirm the package settings on npmjs.com afterwards; the helper does not claim MFA readback.
 
@@ -119,7 +119,7 @@ git tag -s -a "v${PKG_VERSION}" -m "v${PKG_VERSION}" <merged-sha>
 git push origin "v${PKG_VERSION}"
 ```
 
-The tag push runs `release.yml`: it checks tag/version agreement and reruns its candidate gates, not tag-signature verification, then the publish job waits for the release owner's approval on the `npm-release` environment before publishing through OIDC trusted publishing with automatic provenance. Create the GitHub release from the tag using the drafted notes once publication succeeds — the record is part of the release, not follow-up work, so a version that reaches the registry without it is finished by creating it from that same tag. A version already published before this rule is completed the same way.
+The tag push runs `release.yml`: it checks tag/version agreement and reruns its candidate gates, not tag-signature verification, then the publish job publishes through OIDC trusted publishing with automatic provenance. No reviewer waits on the `npm-release` environment: only an admin can push a `v*` tag, so that signed tag push is the release approval, and publication starts automatically once the gates pass. Push the tag only when the version is ready to publish. Create the GitHub release from the tag using the drafted notes once publication succeeds — the record is part of the release, not follow-up work, so a version that reaches the registry without it is finished by creating it from that same tag. A version already published before this rule is completed the same way.
 
 ## Rollback
 
@@ -128,4 +128,5 @@ The tag push runs `release.yml`: it checks tag/version agreement and reruns its 
   npm deprecate "@sagmans/dsh-tui@<version>" "<reason>; use @sagmans/dsh-tui@<replacement> instead"
   ```
 - **Bad terminal behaviour:** patch release; never disable a running profile or rewrite a user's stored conversations.
+- **Restore a publication reviewer:** add a required reviewer to the `npm-release` environment in the repository settings. The publish job then waits for that reviewer again. `setup-github-release` reports the reviewer as a conflict until its expected controls change to match.
 - **Broken trust configuration:** fix it with `configure-trust` after inspecting `npm trust list`; revoking credentials or changing account security needs separate approval.

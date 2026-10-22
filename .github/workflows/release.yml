@@ -39,7 +39,7 @@ jobs:
       # Reject resolution drift from the reviewed lockfile before building the release artefact.
       - run: pnpm install --frozen-lockfile --config.node-linker="$PNPM_NODE_LINKER"
       # The released artefact is built from this tree, so its registry signatures
-      # are checked before the tag can reach the approval gate.
+      # are checked before the tag can reach the publish job.
       - name: Dependency signatures
         run: npm audit signatures
       # RELEASE.md requires the tag and package.json version to match; fail the
@@ -68,8 +68,9 @@ jobs:
     # per RELEASE.md.
     if: github.ref_name != 'v0.1.0'
     runs-on: ubuntu-latest
-    # Bind publication to npm-release so configured environment protections can gate it.
-    # Required-reviewer enforcement depends on repository settings, not this name alone.
+    # Bind publication to npm-release: npm trusts only this environment, and the environment
+    # admits only v* tags, which the admin-only ruleset lets administrators alone push. The
+    # signed tag push is therefore the release approval; no reviewer waits here (RELEASE.md).
     environment: npm-release
     # Bound runner time if release installation or the registry publish stalls; timeout is not rollback.
     timeout-minutes: 15

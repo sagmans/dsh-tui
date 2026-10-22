@@ -8,6 +8,10 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+### Changed
+
+- A signed `v*` tag push by a repository admin now publishes automatically through npm OIDC trusted publishing. The `npm-release` environment no longer waits for a reviewer, because the admin-only tag ruleset already makes the tag push the release approval. `setup-github-release` creates the environment without a reviewer and reports any reviewer it finds as a conflict. To restore the wait, add a required reviewer to the environment ([RELEASE.md](RELEASE.md#rollback)).
+
 ## [0.16.0] - 2026-10-22
 
 ### Compatibility
