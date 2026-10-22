@@ -587,7 +587,7 @@ A section-provider limit remains: after an absent user section, rejected scalar
 sections can produce identical public descriptors. TUI cannot detect that transition
 without host validity metadata, so section-provider defaults remain active.
 
-The verified `0.2.0-rc.2` settings service has no legacy import alias from `dsh-tui` to `tui`.
+The verified `0.2.1-rc.2` settings service has no legacy import alias from `dsh-tui` to `tui`.
 Exporting Config does not resolve that namespace mismatch. The service renames
 `settings.yaml` to `settings.yaml.imported` before import completes.
 TUI does not retry or restore that file automatically. Preserve current privacy
@@ -1014,7 +1014,7 @@ node tools/pty-drive.mjs --home "$S" --seconds 20 --prompt ''
 node tools/pty-drive.mjs --home "$S" --prompt 'Run: echo hi' --click 20:12
 ```
 
-A minimal home starts on the shipped defaults. On verified `0.2.0-rc.2`, the
+A minimal home starts on the shipped defaults. On verified `0.2.1-rc.2`, the
 settings service renames legacy `settings.yaml` before attempting a one-time
 import into matching profile entries. Rejected sections remain only in
 `settings.yaml.imported`. Use the active profile patch for current preferences,
