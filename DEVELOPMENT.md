@@ -150,7 +150,7 @@ variable, and cloning that is never what a developer meant.
 
 Use the active model in the current session for dogfooding. Configure its adapter
 and `agent-default-model` route in the clone's profile patch. `settings.yaml` is
-legacy input on verified `0.2.0-rc.2`, not a live route overlay. Do not rely on launch flags
+legacy input on verified `0.2.1-rc.2`, not a live route overlay. Do not rely on launch flags
 `--model` and `--provider` alone for a resumed session; check `/status` and
 select `/model` before sending a prompt. A route with no credit
 stops at `error: Insufficient Balance`
@@ -162,7 +162,7 @@ under test.
 | Entry | Why it decides what you see |
 | --- | --- |
 | `.credentials.yaml` | the run cannot answer without it |
-| `settings.yaml` (+ `.imported`) | legacy migration input; live Config-backed settings belong to profile entries on verified `0.2.0-rc.2` |
+| `settings.yaml` (+ `.imported`) | legacy migration input; live Config-backed settings belong to profile entries on verified `0.2.1-rc.2` |
 | `themes/` | the surface writes and watches this directory at start-up |
 | `prompt-history.json` | history recall in the editor |
 | `tui-stash/` | the parked-draft bank and its lock |

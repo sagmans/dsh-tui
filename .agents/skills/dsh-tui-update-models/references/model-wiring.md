@@ -12,7 +12,7 @@ Companion to [SKILL.md](../SKILL.md): exact fields, files, and checks.
 4. The model directory a profile sees is owned by whichever row is enabled:
    `llm-pi-ai` (additive provider config), `dsh-provider-extra` (owned catalog),
    or both, if the profile is not using exclusive ownership.
-5. On verified `0.2.0-rc.2`, settings forms read and update Config-backed
+5. On verified `0.2.1-rc.2`, settings forms read and update Config-backed
    profile entries. `$DSH_HOME/settings.yaml` is legacy input, not a live adapter
    overlay. Migration renames it to `.imported` before a one-time import; rejected
    sections remain only in that renamed file. Edit adapter and catalog config in

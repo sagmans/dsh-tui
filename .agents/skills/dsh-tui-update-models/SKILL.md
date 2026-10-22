@@ -13,7 +13,7 @@ the ctx gauge. Find the owner first; then edit exactly one place.
 | Where the wiring is | What it owns |
 | --- | --- |
 | `~/.dsh/profiles/<profile>/cordis.patch.yml` | The patch layer: applied after every bundle layer, last entry wins. Holds the catalog or `llm-pi-ai` config a developer actually edits. |
-| `~/.dsh/settings.yaml`, `settings.yaml.imported` | Legacy input, not a live overlay on verified `0.2.0-rc.2`. Settings migration renames the file before attempting a one-time import into matching profile entries. Configure adapter rows in the active profile patch. Keep catalog edits in that patch and consult the installed catalog documentation. |
+| `~/.dsh/settings.yaml`, `settings.yaml.imported` | Legacy input, not a live overlay on verified `0.2.1-rc.2`. Settings migration renames the file before attempting a one-time import into matching profile entries. Configure adapter rows in the active profile patch. Keep catalog edits in that patch and consult the installed catalog documentation. |
 | `~/.dsh/profiles/<profile>/package.json` | Bundles and their dependency specs (`link:` for a checkout, a range for a release). |
 | `node_modules/<bundle>/cordis.patch.yml` | The bundle's own defaults: disabled base rows, inserted rows, default config. |
 | `node_modules/@earendil-works/pi-ai/dist/providers/data/<source>.json` | Installed per-provider catalog: ids, and the cost/context/effort data a template clone or a `filter` match inherits. |
