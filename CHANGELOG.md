@@ -21,6 +21,7 @@ breaking change, and a patch carries only fixes.
 ### Changed
 
 - The package compiles with TypeScript 7.0.2. The emitted JavaScript differs from the TypeScript 5.9 build only in import quote style, and the declaration files only in the order of union members.
+- The golden frame suite runs on Vitest 5.0.4. Every frame snapshot matches unchanged, and no snapshot is obsolete.
 
 ## [0.15.0] - 2026-10-13
 
