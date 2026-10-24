@@ -2,8 +2,9 @@
 # Newly resolved releases stay out for their first week (minutes). The only
 # exceptions are the exact versions listed below.
 minimumReleaseAge: 10080
-# TEMPORARY, owner-approved exception. Remove this whole list after
-# 2026-10-24 08:37 UTC, when every entry has aged past the window above.
+# TEMPORARY, owner-approved exception. Remove the harness entries after
+# 2026-10-24 08:37 UTC, when every one has aged past the window above. The
+# security fix entry at the end carries its own removal date.
 # Why: the harness moved its `latest` to 0.2.1-rc.2, and a build mounted against
 # one harness release disables the other release's tool presentation, so PTC
 # result cards lose their titles on a mismatched host. Mounting the release the
@@ -52,6 +53,11 @@ minimumReleaseAgeExclude:
   - '@deepseek-ai/dsh-util-values@0.2.1-rc.2'
   - '@deepseek-ai/dsh-working-directory@0.2.1-rc.2'
   - '@deepseek-ai/schemastery@3.18.5'
+  # Security fix that cannot wait out the window: the only fast-uri 3.x release
+  # that clears GHSA-333x-w4r6-6crp, GHSA-w74x-v6f9-j3xg, GHSA-wjr9-j795-jxcr,
+  # and GHSA-xhq7-xmqj-769h. Remove after 2026-10-26 23:06 UTC (published
+  # 2026-10-19 23:05 UTC).
+  - 'fast-uri@3.1.9'
 #
 # Only reviewed packages may run install or build scripts: exact names, no
 # globs. Any other package with a build script fails the install instead of
@@ -61,3 +67,12 @@ allowBuilds:
   # to an exact version in package.json).
   node-pty: true
 strictDepBuilds: true
+#
+# Security floors for transitive dependencies the harness pulls in. Each entry
+# only matches the vulnerable range, so a harness release that already ships the
+# fix resolves untouched and the entry can be dropped then. These floors reach
+# this repository's installs only: a consumer of the published bundle resolves
+# the harness's own pins.
+#   GHSA-mrhx-c7xc-m3w5  zod (the harness pins 4.4.3 exactly)
+overrides:
+  'zod@>=4.0.0 <4.6.6': ^4.6.7
