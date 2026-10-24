@@ -103,7 +103,7 @@
     "@deepseek-ai/dsh-agent-preset-registry": "0.2.1-rc.2",
     "@deepseek-ai/dsh-cordis-host-runner": "0.2.1-rc.2",
     "commander": "^15.0.0",
-    "js-yaml": "5.4.3",
+    "js-yaml": "5.5.0",
     "lovely-mermaid": "0.3.3"
   },
   "peerDependencies": {
