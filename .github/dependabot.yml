@@ -41,6 +41,12 @@ updates:
       # Keep it on the ceiling of the range in compat/pi-tui/package.json.
       - dependency-name: '@earendil-works/*'
         versions: ['>=1.4.0']
+      # The root pi-tui pin is the floor of the supported range, not a version to
+      # keep current: the gates prove the floor, and compat/pi-tui proves the
+      # newest release in the range (.githooks/pre-push.d/25-pi-tui-compat).
+      # Raising the floor drops support for older Pi releases, so it is a
+      # deliberate support change made by hand, never a bot update.
+      - dependency-name: '@earendil-works/pi-tui'
 
   # Every action is pinned by commit SHA, and nothing else raises those pins.
   - package-ecosystem: github-actions
