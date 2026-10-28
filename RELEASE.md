@@ -6,12 +6,12 @@ Applies to maintainers. Current release owner: repository owner ([`LICENSE`](LIC
 
 [SemVer](https://semver.org). While at 0.x, minor bumps may contain breaking changes; patch bumps are fixes only. The git tag (`vX.Y.Z`) and `package.json` `version` must always match. The tag workflow fails before publish when they do not.
 
-[`CHANGELOG.md`](CHANGELOG.md) records what shipped, in [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) form. A change lands under `Unreleased` in the PR that makes it; the release PR moves that section to `## [X.Y.Z] - <date>` and repoints the compare links.
+[`CHANGELOG.md`](CHANGELOG.md) records what shipped, in [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) form. A change lands under `Unreleased` in the commit that makes it; the release commit moves that section to `## [X.Y.Z] - <date>` and repoints the compare links.
 
 ## Gates — all required before tagging
 
-1. Candidate lands on `main` through a reviewed PR (squash merge).
-2. `verify` CI green on the exact merged SHA.
+1. Candidate lands on `main` as a signed push.
+2. `pre-push` passed on the exact pushed SHA.
 3. Locally on that SHA: `pnpm verify`, `npm audit signatures`, `node tools/pack-smoke.mjs`.
 4. Dogfooding: install the candidate into a plugin profile and drive a real session in a terminal per [README](README.md#install). Free checks run automatically; paid live-model checks run only on explicit demand. Golden snapshots do not replace actual use.
 5. README accuracy pass: every documented command and profile path still behaves as written.
@@ -19,7 +19,7 @@ Applies to maintainers. Current release owner: repository owner ([`LICENSE`](LIC
 7. A publication carries both its `vX.Y.Z` tag and the GitHub release record for that tag. The tag is what `release.yml` publishes from and what a checkout resolves; the record is what a reader finds, and its notes are the version's `CHANGELOG.md` entry. Either half missing leaves the version incomplete: create the missing half from the same signed tag, and never retag and never republish a version already served.
 8. A published npm version is immutable. A broken release is forward-fixed, never unpublished (see [Rollback](#rollback)).
 
-Main/PR `verify` also runs the native terminal gate, free actual-profile dogfood, offline harness matrix, and consumer install smoke. The tag workflow reruns native terminal and free dogfood checks, but not the matrix or consumer install gates. Both workflows install before `npm audit signatures`; that audit does not prove lifecycle scripts were disabled. The consumer smoke disables scripts for its direct npm installs, not explicitly for `dsh plugin add`. Keep real-session dogfooding separate from these automated checks.
+`pre-push` also runs the native terminal gate, offline harness matrix, and consumer install smoke; free actual-profile dogfood runs in `pnpm verify` (gate 3). The tag workflow reruns native terminal and free dogfood checks, but not the matrix or consumer install gates. Both workflows install before `npm audit signatures`; that audit does not prove lifecycle scripts were disabled. The consumer smoke disables scripts for its direct npm installs, not explicitly for `dsh plugin add`. Keep real-session dogfooding separate from these automated checks.
 
 ## Harness matrix
 
@@ -37,7 +37,7 @@ An unlisted `latest` requires investigation, not automatic verification. A verif
 2. Prepare a candidate with matching harness development and mounted dependency versions. Update the declared range if needed. A proposed `dshReleases` entry is not verification evidence until the gates pass.
 3. `pnpm install`, then run every gate in [Gates](#gates--all-required-before-tagging).
 4. Dogfood a real session against the new release before it ships: install the candidate into a scratch profile and drive the terminal per [README](README.md#install). Keep the verified entry only after successful checks and dogfooding.
-5. Land the bump through a reviewed PR and ship it with the next patch release.
+5. Push the bump to `main` and ship it with the next patch release.
 
 ## Release identity and authority
 

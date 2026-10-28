@@ -1109,7 +1109,7 @@ The automated checks drive a real PTY, but they run on this machine's terminal. 
 
 Published artefacts carry a provenance attestation, which only a CI provider can issue, so releases ship from the tag workflow rather than a laptop.
 
-1. Bump `version` in `package.json` and move `CHANGELOG.md`'s `Unreleased` section to that version, land both on `main` through a reviewed PR, and wait for CI to pass on the merged SHA.
+1. Bump `version` in `package.json` and move `CHANGELOG.md`'s `Unreleased` section to that version, and push both to `main` once `pre-push` passes on that commit.
 2. Tag that SHA with a signed tag and push it. The tag ruleset admits repository admins only.
 3. `.github/workflows/release.yml` re-runs typecheck, tests, and the package smoke; the publish job then publishes with OIDC trusted publishing and automatic provenance. No reviewer waits on the `npm-release` environment: the admin-only tag push is the release approval.
 
