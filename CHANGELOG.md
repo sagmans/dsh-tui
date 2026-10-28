@@ -11,6 +11,7 @@ breaking change, and a patch carries only fixes.
 ### Changed
 
 - A signed `v*` tag push by a repository admin now publishes automatically through npm OIDC trusted publishing. The `npm-release` environment no longer waits for a reviewer, because the admin-only tag ruleset already makes the tag push the release approval. `setup-github-release` creates the environment without a reviewer and reports any reviewer it finds as a conflict. To restore the wait, add a required reviewer to the environment ([RELEASE.md](RELEASE.md#rollback)).
+- Changes land by a signed push to `main` instead of through a pull request, and the `main` ruleset no longer requires one. Signatures, linear history, the CodeQL and code-quality gates, and the bans on force-push and deletion still apply. [AGENTS.md](AGENTS.md) now tells agents to commit on `main`, and to name build-policy changes to the maintainer before the push because `pre-push` only warns about them.
 - Theme and preset files are read with js-yaml 5.5.0, and the bundle declares `@deepseek-ai/schemastery` 3.18.5, the release the harness already resolves, so installs keep one copy. js-yaml 5.5.0 rejects a block plain scalar that starts with `,`, `]`, or `}` and reports more exact error positions; every shipped theme and preset parses as before. Development checks run on `@deepseek-ai/cordis` 4.0.5 and Vitest 5.0.5, and the pi-tui compatibility lockfile takes the same updates.
 
 ### Security

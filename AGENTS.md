@@ -138,24 +138,24 @@ non-obvious constraint exists is the part that prevents future drift.
   `pnpm-workspace.yaml`** (`allowBuilds`, `minimumReleaseAgeExclude`). Ask before
   adding a dependency or allowlisting a build.
 - **Commits are Conventional Commits with a scope** (`feat(tui): …`,
-  `fix(gates): …`, `docs(readme): …`), signed and DCO-signed. Work on a branch and
-  land through a PR.
-- **Every PR carries its `CHANGELOG.md` entry** under `## [Unreleased]`, in the
+  `fix(gates): …`, `docs(readme): …`), signed and DCO-signed. Commit on `main`
+  and push `main`; the local hooks are the gate before `origin`.
+- **Every change carries its `CHANGELOG.md` entry** under `## [Unreleased]`, in the
   section that fits (`Added`, `Changed`, `Fixed`, …). The entry is part of the
-  change, not a follow-up, and its absence makes the PR incomplete.
+  change, not a follow-up, and its absence makes the change incomplete.
 
 ## Release and publication
 
 Read [RELEASE.md](RELEASE.md) before preparing a version, pushing a release tag,
-publishing, or repairing a release record. Shipping a documentation or code PR
+publishing, or repairing a release record. Pushing a documentation or code change
 is not approval to publish. Require explicit maintainer approval for publication
 and each remote release action; never publish on your own initiative.
 
-1. Land the candidate through a reviewed PR to `main`. Match `package.json`
+1. Land the candidate on `main`. Match `package.json`
    `version`, the `vX.Y.Z` tag, and the versioned `CHANGELOG.md` entry.
-   Pass the release gates in `RELEASE.md` on the exact merged commit.
+   Pass the release gates in `RELEASE.md` on the exact pushed commit.
 2. Create an annotated, signed tag on that commit:
-   `git tag -s -a "vX.Y.Z" -m "vX.Y.Z" <merged-sha>`.
+   `git tag -s -a "vX.Y.Z" -m "vX.Y.Z" <candidate-sha>`.
    Verify it with `git verify-tag "vX.Y.Z"`. Never use a lightweight or unsigned
    release tag; require GitHub to verify the signature after the approved push.
 3. Push only that tag with `git push origin "vX.Y.Z"` after approval.
@@ -184,4 +184,4 @@ with `DRY_RUN=1`.
 ## Git hooks
 
 Checks run in `.githooks/`, not in push/PR CI (see DEVELOPMENT.md). Run `scripts/setup-hooks` after cloning. All checks must pass before you push. Never use `--no-verify`.
-`pre-push` also warns, without blocking, when a push changes the build policy in `pnpm-workspace.yaml` or the lockfile entry of a package allowed to build. List each warned item in the PR description so the reviewer reviews it before approving the merge. Never add a commit trailer other than `Signed-off-by`.
+`pre-push` also warns, without blocking, when a push changes the build policy in `pnpm-workspace.yaml` or the lockfile entry of a package allowed to build. Because the push does not wait, name each such change to the maintainer and get approval before you push it. Never add a commit trailer other than `Signed-off-by`.
