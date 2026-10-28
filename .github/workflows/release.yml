@@ -19,6 +19,7 @@ env:
 
 jobs:
   verify:
+    name: Verify release candidate
     # Bound runner time if installation or candidate verification stalls before publication.
     timeout-minutes: 20
     runs-on: ubuntu-latest
@@ -38,7 +39,10 @@ jobs:
           # verifies or publishes on a Node 24 build that lacks security fixes.
           # Both jobs move together with each Node 24 security release.
           node-version: '24.22.1'
-          cache: pnpm
+          # A release must not restore state another run saved: a poisoned
+          # dependency store would run inside the verified and published build.
+          # Every release installs from the registry against the reviewed lockfile.
+          package-manager-cache: false
       # Reject resolution drift from the reviewed lockfile before building the release artefact.
       - run: pnpm install --frozen-lockfile --config.node-linker="$PNPM_NODE_LINKER"
       # The released artefact is built from this tree, so its registry signatures
@@ -65,6 +69,7 @@ jobs:
       - run: node tools/pack-smoke.mjs
 
   publish:
+    name: Publish to npm
     needs: verify
     # npm requires a package to exist before trusted publishing can be
     # configured, so the first tag is verified here and bootstrapped by hand
@@ -79,8 +84,7 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
-      # Mints the OIDC token npm exchanges for a short-lived publish credential.
-      id-token: write
+      id-token: write # Mints the OIDC token npm exchanges for a short-lived publish credential.
     steps:
       # Commit pins prevent a moved action tag from changing the release machinery.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -95,9 +99,14 @@ jobs:
         with:
           node-version: '24.22.1'
           registry-url: 'https://registry.npmjs.org'
+          # The job holds the publish credential, so it never restores a cache
+          # another run could have written, even if packageManager is added later.
+          package-manager-cache: false
       # devDependencies supply tsc for the prepack build that npm publish runs.
       # Reject resolution drift from the reviewed lockfile before building the release artefact.
       - run: pnpm install --frozen-lockfile --config.node-linker="$PNPM_NODE_LINKER"
       # --provenance keeps the attestation explicit and fails loudly if the
-      # trusted-publisher match is misconfigured.
-      - run: npm publish --provenance --access public
+      # trusted-publisher match is misconfigured. zizmor's use-trusted-publishing
+      # cannot see that this npm publish already authenticates through OIDC
+      # trusted publishing (id-token above, no stored token), so it is ignored here.
+      - run: npm publish --provenance --access public # zizmor: ignore[use-trusted-publishing]
