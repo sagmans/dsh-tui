@@ -19,9 +19,6 @@ breaking change, and a patch carries only fixes.
 ### Security
 
 - Development installs, and the pi-tui compatibility run, resolve `zod` `4.6.7` and `fast-uri` `3.1.9`, clearing GHSA-mrhx-c7xc-m3w5 (oversized constrained collections exhaust memory during validation) and GHSA-333x-w4r6-6crp, GHSA-w74x-v6f9-j3xg, GHSA-wjr9-j795-jxcr, and GHSA-xhq7-xmqj-769h (scheme injection, scheme spoofing, host confusion, and path equivalence in URI handling). The harness pins `zod` `4.4.3` exactly, so a scoped `pnpm-workspace.yaml` override moves it up a minor within the same major; `fast-uri` needed only a lockfile refresh. The override does not reach consumers: the published bundle's harness dependencies still pin `zod` `4.4.3` until a harness release ships the fix.
-
-### Security
-
 - The daily harness-matrix job runs on Node.js `22.23.4` (was the runner's floating `22`), and both release jobs run on `24.22.1` (was the floating `24`). These are the 22.x and 24.x security releases that fix CVE-2026-111497 (Brotli decoder out-of-bounds write) and CVE-2026-105483 and CVE-2026-106069 (TLS hostname check bypass). An exact pin means the release can no longer verify or publish on an unpatched cached runtime. Checks and tests pass on both versions. The published package is unchanged.
 - The release workflow no longer restores the GitHub Actions dependency cache in either job, so a cache entry written by another run cannot reach the verified or published build. Every release installs from the registry against the reviewed lockfile, which makes the verify job slower. Release and harness-matrix jobs now have display names. The workflows pass zizmor's auditor persona with one documented exception: its trusted-publishing hint, because the publish job already uses npm OIDC trusted publishing. The published package is unchanged.
 
