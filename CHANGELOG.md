@@ -20,6 +20,7 @@ breaking change, and a patch carries only fixes.
 ### Security
 
 - The daily harness-matrix job runs on Node.js `22.23.4` (was the runner's floating `22`), and both release jobs run on `24.22.1` (was the floating `24`). These are the 22.x and 24.x security releases that fix CVE-2026-111497 (Brotli decoder out-of-bounds write) and CVE-2026-105483 and CVE-2026-106069 (TLS hostname check bypass). An exact pin means the release can no longer verify or publish on an unpatched cached runtime. Checks and tests pass on both versions. The published package is unchanged.
+- The release workflow no longer restores the GitHub Actions dependency cache in either job, so a cache entry written by another run cannot reach the verified or published build. Every release installs from the registry against the reviewed lockfile, which makes the verify job slower. Release and harness-matrix jobs now have display names. The workflows pass zizmor's auditor persona with one documented exception: its trusted-publishing hint, because the publish job already uses npm OIDC trusted publishing. The published package is unchanged.
 
 ## [0.16.0] - 2026-10-22
 
