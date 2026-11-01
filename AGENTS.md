@@ -12,6 +12,7 @@ History: [CHANGELOG.md](CHANGELOG.md).
 | Task | Command |
 | --- | --- |
 | Install | `pnpm install --frozen-lockfile` |
+| Lint and format check (Biome) | `pnpm run lint` (`pnpm run lint:fix` repairs) |
 | Typecheck sources and golden fixtures | `pnpm run typecheck` |
 | Golden frames only | `pnpm test:golden` |
 | Golden frames, native PTY, and free real-profile dogfood | `pnpm test` |

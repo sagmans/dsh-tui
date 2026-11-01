@@ -64,12 +64,16 @@ const SHIPPED_GLOSS: Readonly<Record<string, string>> = {
  */
 export function describePreset(preset: PresetSummary, currentId: string | undefined): PickerRow {
   const gloss = SHIPPED_GLOSS[preset.id]
-  const described = preset.broken !== undefined
-    ? `cannot start: ${preset.broken}`
-    : [gloss ?? preset.name, gloss === undefined ? preset.description : undefined,
-        preset.trust === 'user' ? 'authored here' : undefined]
-        .filter(part => part !== undefined && part !== '')
-        .join(' · ')
+  const described =
+    preset.broken !== undefined
+      ? `cannot start: ${preset.broken}`
+      : [
+          gloss ?? preset.name,
+          gloss === undefined ? preset.description : undefined,
+          preset.trust === 'user' ? 'authored here' : undefined,
+        ]
+          .filter((part) => part !== undefined && part !== '')
+          .join(' · ')
   return {
     label: preset.id,
     description: described === '' ? undefined : described,
@@ -126,7 +130,9 @@ interface RosterService {
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null ? value as Record<string, unknown> : undefined
+  return typeof value === 'object' && value !== null
+    ? (value as Record<string, unknown>)
+    : undefined
 }
 
 function textOr(value: unknown): string | undefined {
@@ -175,14 +181,16 @@ export function createPresetRoster(ctx: Context): PresetRoster | undefined {
       return textOr(service.defaultId) ?? fallbackId
     },
     list: async () => {
-      const rows = await service.list?.() ?? []
-      return rows.flatMap(row => toSummary(row) ?? [])
+      const rows = (await service.list?.()) ?? []
+      return rows.flatMap((row) => toSummary(row) ?? [])
     },
-    resolve: async id => {
+    resolve: async (id) => {
       const resolved = await service.resolve?.(id)
       const summary = toSummary(resolved)
       if (summary === undefined) {
-        throw new Error(`agentPresets: the roster resolved ${id === undefined ? 'its default' : `"${id}"`} to nothing usable`)
+        throw new Error(
+          `agentPresets: the roster resolved ${id === undefined ? 'its default' : `"${id}"`} to nothing usable`,
+        )
       }
       return summary
     },
@@ -191,11 +199,12 @@ export function createPresetRoster(ctx: Context): PresetRoster | undefined {
     },
     select: async (agent, id) => {
       const select = service.select
-      if (typeof select !== 'function') throw new Error('agentPresets: this roster cannot switch a session')
+      if (typeof select !== 'function')
+        throw new Error('agentPresets: this roster cannot switch a session')
       return await select.call(service, agent, id)
     },
-    current: session => projectionString(ctx, session, AGENT_PRESET_KEY),
-    started: session => {
+    current: (session) => projectionString(ctx, session, AGENT_PRESET_KEY),
+    started: (session) => {
       const boundary = projectionRecord(ctx, session, TURN_BOUNDARY_KEY)
       if (boundary === undefined) return false
       const open = boundary.openTurnStartSeq

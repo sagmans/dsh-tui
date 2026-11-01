@@ -1,16 +1,16 @@
 #!/usr/bin/env node
 /** Credential-free native PTY proof protects input and terminal ownership without host-dependent timing budgets. */
 import assert from 'node:assert/strict'
+import { chmodSync, statSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import { dirname, join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
-import { createRequire } from 'node:module'
-import { chmodSync, statSync } from 'node:fs'
-import { dirname, join } from 'node:path'
 import pty from 'node-pty'
-import { PtyScreen } from './pty-screen.mjs'
-import { barePaneEnv } from './pty-launch.mjs'
-import { CURSOR_MODES, NATIVE_CURSOR_MODE, SOFTWARE_CURSOR_MODE } from '../lib/terminal/cursor.js'
 import { CARD_DETAIL_MAX } from '../lib/cards.js'
+import { CURSOR_MODES, NATIVE_CURSOR_MODE, SOFTWARE_CURSOR_MODE } from '../lib/terminal/cursor.js'
+import { barePaneEnv } from './pty-launch.mjs'
+import { PtyScreen } from './pty-screen.mjs'
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 
@@ -19,7 +19,12 @@ const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 // way tools/pty-drive.mjs and tools/dogfood.mjs do; Linux builds from source.
 if (process.platform === 'darwin') {
   const require = createRequire(import.meta.url)
-  const helper = join(dirname(require.resolve('node-pty/package.json')), 'prebuilds', `${process.platform}-${process.arch}`, 'spawn-helper')
+  const helper = join(
+    dirname(require.resolve('node-pty/package.json')),
+    'prebuilds',
+    `${process.platform}-${process.arch}`,
+    'spawn-helper',
+  )
   try {
     const mode = statSync(helper).mode
     if ((mode & 0o111) === 0) chmodSync(helper, mode | 0o755)
@@ -81,14 +86,14 @@ const REQUIRED_CURSOR_PHASES = 3
 const REQUIRED_STREAM_UPDATES = 2
 /** Current-cell faults need stable ownership diagnostics, not historical terminal dumps. */
 const CURSOR_ERRORS = {
-  "blink": "terminal-behavior: software cursor did not blink during continuous streaming",
-  "hardware": "software mode exposed the hardware cursor",
-  "returnedHardware": "software mode exposed hardware cursor after focus return",
-  "blurred": "blurred editor retained a software cursor",
-  "pickerHardware": "picker retained the hardware cursor",
-  "pickerEditing": "picker retained an editing cursor",
-  "handoff": "terminal handoff did not suspend",
-  "stopped": "stopped owner wrote while terminal was borrowed"
+  blink: 'terminal-behavior: software cursor did not blink during continuous streaming',
+  hardware: 'software mode exposed the hardware cursor',
+  returnedHardware: 'software mode exposed hardware cursor after focus return',
+  blurred: 'blurred editor retained a software cursor',
+  pickerHardware: 'picker retained the hardware cursor',
+  pickerEditing: 'picker retained an editing cursor',
+  handoff: 'terminal handoff did not suspend',
+  stopped: 'stopped owner wrote while terminal was borrowed',
 }
 
 /** Both modes must retain native input and terminal ownership under the same workload. */
@@ -106,19 +111,33 @@ async function verifyMode(cursorMode) {
   const exit = Promise.withResolvers()
   const deadline = Promise.withResolvers()
   const child = pty.spawn(process.execPath, [CHILD, cursorMode], {
-    name: TERM, cols: COLS, rows: ROWS, cwd: ROOT, env: barePaneEnv(),
+    name: TERM,
+    cols: COLS,
+    rows: ROWS,
+    cwd: ROOT,
+    env: barePaneEnv(),
   })
   const watchdog = setTimeout(() => {
     if (!exited) child.kill()
     // Shared-runner failures must identify the stalled ownership boundary, not suggest extending the deadline.
-    deadline.reject(new Error('terminal-behavior: ready/exit deadline exceeded', { cause: {
-      cursorMode, cursorChecks, phases: cursorProbe?.phases, frameWaiting: frameWaiter !== undefined,
-      suspended: output.includes(SUSPENDED), resumed: output.includes(RESUMED),
-      hardwareCursorVisible: screen.hardwareCursorVisible(), inverse: screen.inverseAt(screen.x, screen.y),
-      cursor: { x: screen.x, y: screen.y }, cursorRow: screen.cells[screen.y]?.join(''),
-    } }))
+    deadline.reject(
+      new Error('terminal-behavior: ready/exit deadline exceeded', {
+        cause: {
+          cursorMode,
+          cursorChecks,
+          phases: cursorProbe?.phases,
+          frameWaiting: frameWaiter !== undefined,
+          suspended: output.includes(SUSPENDED),
+          resumed: output.includes(RESUMED),
+          hardwareCursorVisible: screen.hardwareCursorVisible(),
+          inverse: screen.inverseAt(screen.x, screen.y),
+          cursor: { x: screen.x, y: screen.y },
+          cursorRow: screen.cells[screen.y]?.join(''),
+        },
+      }),
+    )
   }, TIMEOUT_MS)
-  child.onData(data => {
+  child.onData((data) => {
     output += data
     screen.write(data)
     if (frameWaiter && !screen.synchronized && frameWaiter.predicate()) frameWaiter.resolve()
@@ -130,7 +149,11 @@ async function verifyMode(cursorMode) {
         if (phases.at(-1)?.visible !== visible) phases.push({ visible, updates: 0 })
         if (text !== cursorProbe.text) phases.at(-1).updates++
         cursorProbe.text = text
-        if (phases.length >= REQUIRED_CURSOR_PHASES && phases.every(phase => phase.updates >= REQUIRED_STREAM_UPDATES)) cursorProbe.resolve()
+        if (
+          phases.length >= REQUIRED_CURSOR_PHASES &&
+          phases.every((phase) => phase.updates >= REQUIRED_STREAM_UPDATES)
+        )
+          cursorProbe.resolve()
       }
     }
     if (restoreOffset !== undefined && output.includes(READY, restoreOffset)) restored.resolve()
@@ -139,26 +162,42 @@ async function verifyMode(cursorMode) {
       ready.resolve()
     }
   })
-  child.onExit(status => {
+  child.onExit((status) => {
     exited = true
     restored.resolve()
     exit.resolve(status)
-    if (readyOffset === undefined) ready.reject(new Error(`terminal-behavior: child exited before readiness (${status.exitCode})`))
+    if (readyOffset === undefined)
+      ready.reject(
+        new Error(`terminal-behavior: child exited before readiness (${status.exitCode})`),
+      )
   })
 
   /** Await observable output rather than guessing when a focus or input event reached the renderer. */
   async function waitForFrame(predicate) {
     const wait = Promise.withResolvers()
     frameWaiter = { predicate, resolve: wait.resolve }
-    try { await Promise.race([wait.promise, deadline.promise]) } finally { frameWaiter = undefined }
+    try {
+      await Promise.race([wait.promise, deadline.promise])
+    } finally {
+      frameWaiter = undefined
+    }
   }
 
   /** Reuse current-cell evidence after each change of editing ownership. */
   async function expectBlink() {
     const probe = Promise.withResolvers()
     cursorProbe = { phases: [], text: screen.text(), resolve: probe.resolve }
-    const probeDeadline = setTimeout(() => probe.reject(new Error(CURSOR_ERRORS.blink)), CURSOR_PROBE_TIMEOUT_MS)
-    try { await Promise.race([probe.promise, deadline.promise]); cursorChecks++ } finally { clearTimeout(probeDeadline); cursorProbe = undefined }
+    const probeDeadline = setTimeout(
+      () => probe.reject(new Error(CURSOR_ERRORS.blink)),
+      CURSOR_PROBE_TIMEOUT_MS,
+    )
+    try {
+      await Promise.race([probe.promise, deadline.promise])
+      cursorChecks++
+    } finally {
+      clearTimeout(probeDeadline)
+      cursorProbe = undefined
+    }
   }
 
   try {
@@ -184,19 +223,31 @@ async function verifyMode(cursorMode) {
     child.write(PASTE_START + PASTE_TEXT + PASTE_END)
     await delay(DRAIN_MS)
     // Streaming continues while focus changes, so subsequent frames must respect terminal focus.
-    if (cursorMode === NATIVE_CURSOR_MODE) assert.ok(output.includes(BLINK_ENABLED), 'native cursor blinking was not requested')
+    if (cursorMode === NATIVE_CURSOR_MODE)
+      assert.ok(output.includes(BLINK_ENABLED), 'native cursor blinking was not requested')
     else assert.equal(screen.hardwareCursorVisible(), false, CURSOR_ERRORS.hardware)
     child.write(FOCUS_OUT)
     await delay(DRAIN_MS)
-    assert.ok(output.lastIndexOf(CURSOR_HIDE) > output.lastIndexOf(CURSOR_SHOW), 'background redraw showed the cursor')
+    assert.ok(
+      output.lastIndexOf(CURSOR_HIDE) > output.lastIndexOf(CURSOR_SHOW),
+      'background redraw showed the cursor',
+    )
     assert.equal(screen.inverseAt(screen.x, screen.y), false, CURSOR_ERRORS.blurred)
     child.write(FOCUS_IN)
     await delay(DRAIN_MS)
-    if (cursorMode === NATIVE_CURSOR_MODE) assert.ok(output.lastIndexOf(CURSOR_SHOW) > output.lastIndexOf(CURSOR_HIDE), 'focus return did not restore the cursor')
+    if (cursorMode === NATIVE_CURSOR_MODE)
+      assert.ok(
+        output.lastIndexOf(CURSOR_SHOW) > output.lastIndexOf(CURSOR_HIDE),
+        'focus return did not restore the cursor',
+      )
     else assert.equal(screen.hardwareCursorVisible(), false, CURSOR_ERRORS.returnedHardware)
     if (cursorMode === SOFTWARE_CURSOR_MODE) await expectBlink()
     child.write(BORROW_BYTES)
-    await waitForFrame(() => cursorMode === SOFTWARE_CURSOR_MODE ? screen.inverseAt(screen.x, screen.y) : screen.hardwareCursorVisible())
+    await waitForFrame(() =>
+      cursorMode === SOFTWARE_CURSOR_MODE
+        ? screen.inverseAt(screen.x, screen.y)
+        : screen.hardwareCursorVisible(),
+    )
     if (cursorMode === SOFTWARE_CURSOR_MODE) {
       await expectBlink()
       await waitForFrame(() => !screen.inverseAt(screen.x, screen.y))
@@ -211,19 +262,32 @@ async function verifyMode(cursorMode) {
 
     child.write(PICKER_BYTES)
     await delay(DRAIN_MS)
-    for (const data of [KITTY_PRESS, KITTY_REPEAT, KITTY_RELEASE, KITTY_COMMAND, UNICODE_TEXT, PASTE_START + PASTE_TEXT + PASTE_END]) {
+    for (const data of [
+      KITTY_PRESS,
+      KITTY_REPEAT,
+      KITTY_RELEASE,
+      KITTY_COMMAND,
+      UNICODE_TEXT,
+      PASTE_START + PASTE_TEXT + PASTE_END,
+    ]) {
       child.write(data)
       await delay(DRAIN_MS)
     }
     // Byte encoding replaces lone surrogates; component tests, not a fabricated PTY claim, prove malformed scalar behavior.
-    assert.equal(output.slice(typingOffset).match(ERASE_DISPLAY)?.length ?? 0, 0, 'typing must not clear the whole screen')
+    assert.equal(
+      output.slice(typingOffset).match(ERASE_DISPLAY)?.length ?? 0,
+      0,
+      'typing must not clear the whole screen',
+    )
     assert.equal(screen.hardwareCursorVisible(), false, CURSOR_ERRORS.pickerHardware)
     assert.equal(screen.inverseAt(screen.x, screen.y), false, CURSOR_ERRORS.pickerEditing)
     child.write(PICKER_BYTES)
     await delay(DRAIN_MS)
     // Focus reports cannot be read while stdin belongs to another terminal owner.
     child.write(FOCUS_OUT)
-    await waitForFrame(() => !screen.hardwareCursorVisible() && !screen.inverseAt(screen.x, screen.y))
+    await waitForFrame(
+      () => !screen.hardwareCursorVisible() && !screen.inverseAt(screen.x, screen.y),
+    )
     const handoffOffset = output.length
     child.write(HANDOFF_BYTES)
     await waitForFrame(() => output.includes(RESUMED, handoffOffset))
@@ -232,7 +296,11 @@ async function verifyMode(cursorMode) {
     // A restarted owner must draw again; a render request cancelled by stop() once left the screen blank.
     await waitForFrame(() => output.includes(READY, resumedOffset))
     assert.notEqual(suspendedOffset, -1, CURSOR_ERRORS.handoff)
-    assert.equal(output.slice(suspendedOffset + SUSPENDED.length, resumedOffset).trim(), '', CURSOR_ERRORS.stopped)
+    assert.equal(
+      output.slice(suspendedOffset + SUSPENDED.length, resumedOffset).trim(),
+      '',
+      CURSOR_ERRORS.stopped,
+    )
     if (cursorMode === SOFTWARE_CURSOR_MODE) await expectBlink()
     for (const height of TINY_HEIGHTS) {
       screen.resize(COLS, height)
@@ -245,22 +313,67 @@ async function verifyMode(cursorMode) {
     const receiptOffset = output.lastIndexOf(RECEIPT)
     assert.notEqual(receiptOffset, -1, 'terminal receipt missing')
     const receipt = JSON.parse(output.slice(receiptOffset + RECEIPT.length).split(/\r?\n/)[0])
-    assert.equal(receipt.draft, ASCII_KEY.repeat(ASCII_COUNT) + UNICODE_TEXT + PASTE_TEXT, 'draft lost native input')
-    assert.equal(receipt.filter, ASCII_KEY.repeat(ACCEPTED_KITTY_EVENTS) + UNICODE_TEXT + PASTE_TEXT, 'Kitty release/command leaked into the filter')
+    assert.equal(
+      receipt.draft,
+      ASCII_KEY.repeat(ASCII_COUNT) + UNICODE_TEXT + PASTE_TEXT,
+      'draft lost native input',
+    )
+    assert.equal(
+      receipt.filter,
+      ASCII_KEY.repeat(ACCEPTED_KITTY_EVENTS) + UNICODE_TEXT + PASTE_TEXT,
+      'Kitty release/command leaked into the filter',
+    )
     assert.equal(receipt.enteredRawMode, true, 'native TTY never entered raw mode')
     assert.equal(receipt.rawMode, false, 'terminal stayed in raw mode')
     assert.deepEqual(receipt.failures, [], 'native frame failed')
     assert.equal(receipt.foldedNotice, true, 'large injected message did not reach the transcript')
-    assert.equal(receipt.toolFoldLines, receipt.foldLineCount, 'large tool result lost its full line count')
-    assert.equal(receipt.toolFoldRows, CARD_DETAIL_MAX, 'large tool result exceeded its retained row budget')
-    for (const width of RESIZE_WIDTHS) assert.ok(receipt.renderedWidths.includes(width), `native frame width ${width} was not rendered`)
-    assert.ok(output.slice(0, readyOffset).includes(ENTER_SCREEN), 'alternate screen was not entered')
-    assert.ok(output.slice(0, receiptOffset).includes(EXIT_SCREEN), 'alternate screen was not restored')
-    assert.ok(output.slice(0, receiptOffset).includes(CURSOR_MODES_RESTORED), 'cursor modes were not restored')
+    assert.equal(
+      receipt.toolFoldLines,
+      receipt.foldLineCount,
+      'large tool result lost its full line count',
+    )
+    assert.equal(
+      receipt.toolFoldRows,
+      CARD_DETAIL_MAX,
+      'large tool result exceeded its retained row budget',
+    )
+    for (const width of RESIZE_WIDTHS)
+      assert.ok(
+        receipt.renderedWidths.includes(width),
+        `native frame width ${width} was not rendered`,
+      )
+    assert.ok(
+      output.slice(0, readyOffset).includes(ENTER_SCREEN),
+      'alternate screen was not entered',
+    )
+    assert.ok(
+      output.slice(0, receiptOffset).includes(EXIT_SCREEN),
+      'alternate screen was not restored',
+    )
+    assert.ok(
+      output.slice(0, receiptOffset).includes(CURSOR_MODES_RESTORED),
+      'cursor modes were not restored',
+    )
     // Require dispatch-to-native-write instrumentation, not a timing threshold;
     // samples do not measure hardware input or visible pixels.
     assert.ok(receipt.outputSamples > 0, 'no native output latency samples')
-    console.log(JSON.stringify({ cursorMode, cursorChecks, platform: process.platform, node: process.version, cols: COLS, rows: ROWS, tinyHeights: TINY_HEIGHTS, resizeWidths: RESIZE_WIDTHS, ...receipt }, null, 2))
+    console.log(
+      JSON.stringify(
+        {
+          cursorMode,
+          cursorChecks,
+          platform: process.platform,
+          node: process.version,
+          cols: COLS,
+          rows: ROWS,
+          tinyHeights: TINY_HEIGHTS,
+          resizeWidths: RESIZE_WIDTHS,
+          ...receipt,
+        },
+        null,
+        2,
+      ),
+    )
   } finally {
     clearTimeout(watchdog)
     if (!exited) child.kill()
@@ -272,7 +385,11 @@ async function verifyCrash(cursorMode) {
   const screen = new PtyScreen(COLS, ROWS)
   const exit = Promise.withResolvers()
   const child = pty.spawn(process.execPath, [CHILD, cursorMode], {
-    name: TERM, cols: COLS, rows: ROWS, cwd: ROOT, env: barePaneEnv(),
+    name: TERM,
+    cols: COLS,
+    rows: ROWS,
+    cwd: ROOT,
+    env: barePaneEnv(),
   })
   let output = ''
   let triggered = false
@@ -281,7 +398,7 @@ async function verifyCrash(cursorMode) {
     child.kill()
     exit.reject(new Error(CRASH_MESSAGE))
   }, TIMEOUT_MS)
-  child.onData(data => {
+  child.onData((data) => {
     output += data
     screen.write(data)
     if (!triggered && !screen.synchronized && screen.text().includes(READY)) {
@@ -289,12 +406,21 @@ async function verifyCrash(cursorMode) {
       child.write(CRASH_BYTES)
     }
   })
-  child.onExit(status => { exited = true; exit.resolve(status) })
+  child.onExit((status) => {
+    exited = true
+    exit.resolve(status)
+  })
   try {
     const status = await exit.promise
     assert.equal(status.exitCode, EXIT_FAILURE, output.slice(-DIAGNOSTIC_TAIL_CHARACTERS))
-    assert.ok(triggered && output.includes(CRASH_MESSAGE), output.slice(-DIAGNOSTIC_TAIL_CHARACTERS))
-    assert.ok(output.includes(EXIT_SCREEN) && output.includes(CURSOR_MODES_RESTORED), CURSOR_ERRORS.stopped)
+    assert.ok(
+      triggered && output.includes(CRASH_MESSAGE),
+      output.slice(-DIAGNOSTIC_TAIL_CHARACTERS),
+    )
+    assert.ok(
+      output.includes(EXIT_SCREEN) && output.includes(CURSOR_MODES_RESTORED),
+      CURSOR_ERRORS.stopped,
+    )
     assert.equal(screen.hardwareCursorVisible(), true, CURSOR_ERRORS.hardware)
     console.log(JSON.stringify({ cursorMode, fatalRestoration: true }))
   } finally {

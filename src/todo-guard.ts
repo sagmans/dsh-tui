@@ -1,10 +1,10 @@
 import type { Context } from '@deepseek-ai/cordis'
-import z from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed, MessageSource } from '@deepseek-ai/dsh-llm'
+import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { UserMessage } from '@deepseek-ai/dsh-session'
 import type { PostToolDecision, ToolExecution, ToolExecutionResult } from '@deepseek-ai/dsh-tools'
+import z from '@deepseek-ai/schemastery'
 import { projectionRead } from './agent/projections.ts'
 import type { TodoEntry } from './work.ts'
 
@@ -106,9 +106,18 @@ function positiveInteger(field: string, value: number): number {
 export function resolveTodoGuardConfig(config: Partial<TodoGuardConfig> = {}): TodoGuardConfig {
   return {
     staleSteps: positiveInteger('staleSteps', config.staleSteps ?? TODO_GUARD_DEFAULTS.staleSteps),
-    missingListSteps: positiveInteger('missingListSteps', config.missingListSteps ?? TODO_GUARD_DEFAULTS.missingListSteps),
-    maxRemindersPerTurn: positiveInteger('maxRemindersPerTurn', config.maxRemindersPerTurn ?? TODO_GUARD_DEFAULTS.maxRemindersPerTurn),
-    previewItems: positiveInteger('previewItems', config.previewItems ?? TODO_GUARD_DEFAULTS.previewItems),
+    missingListSteps: positiveInteger(
+      'missingListSteps',
+      config.missingListSteps ?? TODO_GUARD_DEFAULTS.missingListSteps,
+    ),
+    maxRemindersPerTurn: positiveInteger(
+      'maxRemindersPerTurn',
+      config.maxRemindersPerTurn ?? TODO_GUARD_DEFAULTS.maxRemindersPerTurn,
+    ),
+    previewItems: positiveInteger(
+      'previewItems',
+      config.previewItems ?? TODO_GUARD_DEFAULTS.previewItems,
+    ),
   }
 }
 
@@ -128,13 +137,17 @@ export interface TodoReminder {
 }
 
 /** The stale-list reminder: the plan aged, so it is now describing earlier work. */
-export function staleReminder(open: readonly OpenTodo[], steps: number, previewItems: number): TodoReminder {
+export function staleReminder(
+  open: readonly OpenTodo[],
+  steps: number,
+  previewItems: number,
+): TodoReminder {
   const shown = open.slice(0, previewItems)
   const omitted = open.length - shown.length
   return {
     text: [
       `Your todo list is stale: ${steps} step${steps === 1 ? '' : 's'} have passed without a todo_write, and ${open.length} item${open.length === 1 ? '' : 's'} ${open.length === 1 ? 'is' : 'are'} still open:`,
-      ...shown.map(todo => `  ${OPEN_GLYPHS[todo.status]} ${todo.content}`),
+      ...shown.map((todo) => `  ${OPEN_GLYPHS[todo.status]} ${todo.content}`),
       ...(omitted > 0 ? [`  … ${omitted} more`] : []),
       'Update it now: mark finished items completed, mark the item you are working on in_progress, and add work you discovered. Do not leave the list describing earlier work.',
     ].join('\n'),
@@ -220,17 +233,20 @@ export class TodoGuard {
     // a `false` answer, so only a definite "not in plan mode" lets it speak.
     if (observation.planActive !== false) return undefined
     if (observation.todos.kind === 'unavailable') return undefined
-    if (counters.remindedThisStep || counters.reminders >= this.config.maxRemindersPerTurn) return undefined
+    if (counters.remindedThisStep || counters.reminders >= this.config.maxRemindersPerTurn)
+      return undefined
     // A written list with no open work owes no update; suggest a first list only
     // when the projection says none was written, not when its work is finished.
-    const open = observation.todos.kind === 'listed' ? observation.todos.todos.filter(isOpenTodo) : []
-    const reminder = open.length > 0
-      ? counters.steps >= this.config.staleSteps
-        ? staleReminder(open, counters.steps, this.config.previewItems)
-        : undefined
-      : observation.todos.kind === 'absent' && counters.steps >= this.config.missingListSteps
-        ? missingListReminder(counters.steps)
-        : undefined
+    const open =
+      observation.todos.kind === 'listed' ? observation.todos.todos.filter(isOpenTodo) : []
+    const reminder =
+      open.length > 0
+        ? counters.steps >= this.config.staleSteps
+          ? staleReminder(open, counters.steps, this.config.previewItems)
+          : undefined
+        : observation.todos.kind === 'absent' && counters.steps >= this.config.missingListSteps
+          ? missingListReminder(counters.steps)
+          : undefined
     if (reminder === undefined) return undefined
     // Space reminders with a fresh cooldown; steps now measure time since a
     // committed write or reminder, not total age since the last write.
@@ -254,8 +270,11 @@ export class TodoGuard {
  * Prepend the guard's context while preserving every downstream context's own
  * source, and carry it on a block as well so a denied call still reads it.
  */
-export function foldReminder(reminder: UserMessage, downstream: PostToolDecision): PostToolDecision {
-  const contexts = [reminder, ...downstream.additionalContexts ?? []]
+export function foldReminder(
+  reminder: UserMessage,
+  downstream: PostToolDecision,
+): PostToolDecision {
+  const contexts = [reminder, ...(downstream.additionalContexts ?? [])]
   if (downstream.kind === 'block') {
     return { kind: 'block', feedback: downstream.feedback, additionalContexts: contexts }
   }
@@ -263,7 +282,9 @@ export function foldReminder(reminder: UserMessage, downstream: PostToolDecision
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null ? value as Record<string, unknown> : undefined
+  return typeof value === 'object' && value !== null
+    ? (value as Record<string, unknown>)
+    : undefined
 }
 
 const TODO_STATUSES: ReadonlySet<string> = new Set(['pending', 'in_progress', 'completed'])
@@ -329,25 +350,40 @@ export function apply(ctx: Context, config: Partial<TodoGuardConfig> = {}): void
   const resolved = resolveTodoGuardConfig(config)
   const guard = new TodoGuard(resolved)
 
-  ctx.on('session/event', (session, event) => { guard.onEvent(session, event.type) })
-
-  ctx.on('tools/post-execute', async (exec: ToolExecution, result: Readonly<ToolExecutionResult>, next): Promise<PostToolDecision> => {
-    const agent = exec.agent
-    // Observe before delegating so a downstream block cannot hide the fact that
-    // the step happened; the reminder then rides whatever decision comes back.
-    // A concluding result ends the turn at this step, so a context here would
-    // only buy one more step after the tools have already wound down.
-    const reminder = agent === undefined || result.concludesTurn === true ? undefined : guard.observe(agent.session, {
-      toolName: exec.name,
-      hasTodoTool: todoToolAvailable(ctx, agent),
-      planActive: readPlanActive(ctx, agent.session),
-      todos: readTodos(ctx, agent.session),
-    })
-    const downstream = await next()
-    if (reminder === undefined) return downstream
-    return foldReminder(createUserMessage({
-      content: [{ type: 'text', text: reminder.text }],
-      source: { ...PLUGIN_SOURCE, form: 'notice', summary: reminder.summary },
-    }), downstream)
+  ctx.on('session/event', (session, event) => {
+    guard.onEvent(session, event.type)
   })
+
+  ctx.on(
+    'tools/post-execute',
+    async (
+      exec: ToolExecution,
+      result: Readonly<ToolExecutionResult>,
+      next,
+    ): Promise<PostToolDecision> => {
+      const agent = exec.agent
+      // Observe before delegating so a downstream block cannot hide the fact that
+      // the step happened; the reminder then rides whatever decision comes back.
+      // A concluding result ends the turn at this step, so a context here would
+      // only buy one more step after the tools have already wound down.
+      const reminder =
+        agent === undefined || result.concludesTurn === true
+          ? undefined
+          : guard.observe(agent.session, {
+              toolName: exec.name,
+              hasTodoTool: todoToolAvailable(ctx, agent),
+              planActive: readPlanActive(ctx, agent.session),
+              todos: readTodos(ctx, agent.session),
+            })
+      const downstream = await next()
+      if (reminder === undefined) return downstream
+      return foldReminder(
+        createUserMessage({
+          content: [{ type: 'text', text: reminder.text }],
+          source: { ...PLUGIN_SOURCE, form: 'notice', summary: reminder.summary },
+        }),
+        downstream,
+      )
+    },
+  )
 }

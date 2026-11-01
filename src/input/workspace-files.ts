@@ -1,7 +1,8 @@
-import { type Candidate, offerablePath, depthOf } from './file-search.ts'
 import { spawn } from 'node:child_process'
+import type { Dirent } from 'node:fs'
 import { lstat, readdir, realpath, stat } from 'node:fs/promises'
 import { dirname, isAbsolute, join, relative } from 'node:path'
+import { type Candidate, depthOf, offerablePath } from './file-search.ts'
 
 /**
  * Which files the workspace holds, asked of Git first and walked otherwise.
@@ -94,7 +95,10 @@ const MAX_WALK_DEPTH = 12
  * The rows of a workspace, from git when it owns the directory and from a walk
  * when it does not.
  */
-export async function listWorkspaceFiles(cwd: string, signal: AbortSignal): Promise<readonly Candidate[]> {
+export async function listWorkspaceFiles(
+  cwd: string,
+  signal: AbortSignal,
+): Promise<readonly Candidate[]> {
   if (signal.aborted) return []
   const listing = await gitFiles(cwd, signal)
   if (signal.aborted) return []
@@ -155,17 +159,25 @@ async function gitFiles(cwd: string, signal: AbortSignal): Promise<GitListing> {
   if (tracked.kind === 'listed' && untracked.kind === 'listed') {
     return {
       kind: 'listed',
-      entries: [...parseTrackedListing(tracked.records), ...parseUntrackedListing(untracked.records)],
+      entries: [
+        ...parseTrackedListing(tracked.records),
+        ...parseUntrackedListing(untracked.records),
+      ],
     }
   }
-  if (tracked.kind === 'not-a-repository' || untracked.kind === 'not-a-repository') return { kind: 'not-a-repository' }
+  if (tracked.kind === 'not-a-repository' || untracked.kind === 'not-a-repository')
+    return { kind: 'not-a-repository' }
   return { kind: 'failed' }
 }
 
 /** Ask git one question, and read its exit as a meaning rather than a number. */
-async function runGit(cwd: string, args: readonly string[], signal: AbortSignal): Promise<GitAnswer> {
+async function runGit(
+  cwd: string,
+  args: readonly string[],
+  signal: AbortSignal,
+): Promise<GitAnswer> {
   if (signal.aborted) return { kind: 'failed' }
-  return await new Promise<GitAnswer>(resolve => {
+  return await new Promise<GitAnswer>((resolve) => {
     let settled = false
     let timer: ReturnType<typeof setTimeout> | undefined
     // Abort, timeout, error, and close can race; settle once and release the
@@ -202,7 +214,7 @@ async function runGit(cwd: string, args: readonly string[], signal: AbortSignal)
       if (stderr.length < GIT_ERROR_LIMIT) stderr += chunk
     })
     child.on('error', () => finish({ kind: 'failed' }))
-    child.on('close', code => {
+    child.on('close', (code) => {
       if (code === 0) {
         finish({ kind: 'listed', records: stdout.split('\0') })
         return
@@ -277,7 +289,7 @@ async function candidatesFrom(
     // here rather than walking the rest of a tree nobody waits for.
     if (signal.aborted) return []
     if (!offerablePath(entry.path)) continue
-    const linked = entry.symlink || (entry.untracked && await isSymlink(root, entry.path))
+    const linked = entry.symlink || (entry.untracked && (await isSymlink(root, entry.path)))
     let isDirectory = entry.submodule
     if (linked) {
       const target = await linkedTarget(canonicalRoot, join(root, entry.path))
@@ -352,15 +364,17 @@ async function walkFiles(cwd: string, signal: AbortSignal): Promise<readonly Can
   while (queue.length > 0) {
     if (signal.aborted) return []
     const directory = queue.shift() ?? ''
-    let entries
+    let entries: Dirent[]
     try {
-      entries = await readdir(directory === '' ? cwd : join(cwd, directory), { withFileTypes: true })
+      entries = await readdir(directory === '' ? cwd : join(cwd, directory), {
+        withFileTypes: true,
+      })
     } catch {
       continue
     }
     for (const entry of entries) {
       if (found.length >= MAX_WALK_ENTRIES) return found
-      const path = directory === '' ? entry.name : directory + '/' + entry.name
+      const path = directory === '' ? entry.name : `${directory}/${entry.name}`
       if (!offerablePath(path)) continue
       if (entry.isSymbolicLink()) {
         const target = await linkedTarget(canonicalRoot, join(cwd, path))

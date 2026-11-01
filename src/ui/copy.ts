@@ -51,7 +51,11 @@ function byText(rows: readonly FrameRow[]): ReadonlyMap<string, FrameRow> {
 }
 
 /** One copied line as the row it came from says it should read, or nothing when it came from the frame. */
-function readLine(line: string, rows: readonly FrameRow[], whole: ReadonlyMap<string, FrameRow>): string | undefined {
+function readLine(
+  line: string,
+  rows: readonly FrameRow[],
+  whole: ReadonlyMap<string, FrameRow>,
+): string | undefined {
   // A blank line is a blank line: no row of a frame reads as nothing, so there is
   // nothing here to recognise, and nothing to take away.
   if (line === '') return line
@@ -69,7 +73,11 @@ function readLine(line: string, rows: readonly FrameRow[], whole: ReadonlyMap<st
     const end = hit.column + visibleWidth(line)
     return hit.column === 0 || end >= visibleWidth(drawn) ? undefined : line
   }
-  const own = sliceByColumn(drawn, frame.lead, Math.max(0, visibleWidth(drawn) - frame.lead - frame.trail))
+  const own = sliceByColumn(
+    drawn,
+    frame.lead,
+    Math.max(0, visibleWidth(drawn) - frame.lead - frame.trail),
+  )
   // A drag selects columns, so the first and last rows of a selection arrive as
   // fragments. Reading the fragment's own columns back out of the row it came from
   // is what takes the frame columns with it: the span the fragment spends inside the
@@ -89,7 +97,11 @@ function readLine(line: string, rows: readonly FrameRow[], whole: ReadonlyMap<st
  * avoids interpreting it as a fragment of another; collisions still use the
  * first match and can remove text under the wrong frame interpretation.
  */
-function locate(line: string, rows: readonly FrameRow[], whole: ReadonlyMap<string, FrameRow>): Hit | undefined {
+function locate(
+  line: string,
+  rows: readonly FrameRow[],
+  whole: ReadonlyMap<string, FrameRow>,
+): Hit | undefined {
   const exact = whole.get(line)
   if (exact !== undefined) return { row: exact, column: 0, whole: true }
   for (const row of rows) {

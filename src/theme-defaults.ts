@@ -1,4 +1,5 @@
 import type { PaletteName, StyleSpec, TuiToken } from './theme-tokens.ts'
+
 /**
  * The muted shade every receding element shares.
  *

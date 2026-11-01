@@ -52,7 +52,9 @@ export function projectionRecord(
   key: string,
 ): Record<string, unknown> | undefined {
   const state = projectionState(ctx, session, key)
-  return typeof state === 'object' && state !== null ? state as Record<string, unknown> : undefined
+  return typeof state === 'object' && state !== null
+    ? (state as Record<string, unknown>)
+    : undefined
 }
 
 /**

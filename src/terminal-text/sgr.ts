@@ -7,7 +7,7 @@
  * this surface owns, not a property of either.
  */
 
-import { sgrBackgroundPrefix, sgrPrefix, type ColourMode } from '../theme-capability.ts'
+import { type ColourMode, sgrBackgroundPrefix, sgrPrefix } from '../theme-capability.ts'
 import { ESC, RESET } from './scan.ts'
 
 const CSI = `${ESC}[`
@@ -35,7 +35,14 @@ const ATTRIBUTE_OFF: Readonly<Record<Attribute, string>> = {
   strike: `${CSI}29m`,
 }
 
-const SGR_ATTRIBUTE_ON: Readonly<Record<number, Attribute | undefined>> = { 1: 'bold', 2: 'dim', 3: 'italic', 4: 'underline', 7: 'inverse', 9: 'strike' }
+const SGR_ATTRIBUTE_ON: Readonly<Record<number, Attribute | undefined>> = {
+  1: 'bold',
+  2: 'dim',
+  3: 'italic',
+  4: 'underline',
+  7: 'inverse',
+  9: 'strike',
+}
 
 // Normalize accepted intensity resets to modeled attributes instead of forwarding SGR 21 to the terminal.
 const SGR_ATTRIBUTE_OFF: Readonly<Record<number, readonly Attribute[] | undefined>> = {
@@ -99,9 +106,14 @@ export interface TextStyle {
 
 export const GROUND: TextStyle = { attributes: 0 }
 
-function withAttributes(style: TextStyle, on: Attribute | undefined, off: readonly Attribute[] | undefined): TextStyle {
+function withAttributes(
+  style: TextStyle,
+  on: Attribute | undefined,
+  off: readonly Attribute[] | undefined,
+): TextStyle {
   let attributes = style.attributes
-  if (off !== undefined) for (const attribute of off) attributes &= ~(1 << ATTRIBUTES.indexOf(attribute))
+  if (off !== undefined)
+    for (const attribute of off) attributes &= ~(1 << ATTRIBUTES.indexOf(attribute))
   if (on !== undefined) attributes |= 1 << ATTRIBUTES.indexOf(on)
   return attributes === style.attributes ? style : { ...style, attributes }
 }
@@ -132,10 +144,12 @@ export function encoder(color: ColourMode, base: string): Encoder {
       // Reset before enabling new attributes so a shared reset cannot erase a newly enabled intensity bit.
       // Unchanged intensity bits are not reapplied, so reset 22 can still clear one of them.
       for (const attribute of ATTRIBUTES) {
-        if (hasAttribute(previous, attribute) && !hasAttribute(next, attribute)) out += ATTRIBUTE_OFF[attribute]
+        if (hasAttribute(previous, attribute) && !hasAttribute(next, attribute))
+          out += ATTRIBUTE_OFF[attribute]
       }
       for (const attribute of ATTRIBUTES) {
-        if (!hasAttribute(previous, attribute) && hasAttribute(next, attribute)) out += ATTRIBUTE_ON[attribute]
+        if (!hasAttribute(previous, attribute) && hasAttribute(next, attribute))
+          out += ATTRIBUTE_ON[attribute]
       }
       if (next.fg !== previous.fg) out += next.fg ?? GROUND_FG + base
       if (next.bg !== previous.bg) out += next.bg ?? GROUND_BG + base
@@ -145,28 +159,39 @@ export function encoder(color: ColourMode, base: string): Encoder {
 }
 
 // Keep known colour operands out of attribute parsing; unknown kinds have no owned operand span.
-function colourFor(params: readonly number[], at: number, color: ColourMode): { readonly code?: string | undefined; readonly next: number } {
+function colourFor(
+  params: readonly number[],
+  at: number,
+  color: ColourMode,
+): { readonly code?: string | undefined; readonly next: number } {
   const kind = params[at + 1]
   if (kind === EXTENDED_INDEXED) {
     const index = params[at + 2]
     if (index === undefined) return { next: params.length }
-    const code = params[at] === EXTENDED_FG ? sgrPrefix(index, color) : sgrBackgroundPrefix(index, color)
+    const code =
+      params[at] === EXTENDED_FG ? sgrPrefix(index, color) : sgrBackgroundPrefix(index, color)
     return { code: code === '' ? undefined : code, next: at + 3 }
   }
   if (kind === EXTENDED_RGB) {
     const r = params[at + 2]
     const g = params[at + 3]
     const b = params[at + 4]
-    const spec = r === undefined || g === undefined || b === undefined ? undefined : rgbSpec(r, g, b)
+    const spec =
+      r === undefined || g === undefined || b === undefined ? undefined : rgbSpec(r, g, b)
     if (spec === undefined) return { next: at + 2 + RGB_COMPONENTS }
-    const code = params[at] === EXTENDED_FG ? sgrPrefix(spec, color) : sgrBackgroundPrefix(spec, color)
+    const code =
+      params[at] === EXTENDED_FG ? sgrPrefix(spec, color) : sgrBackgroundPrefix(spec, color)
     return { code: code === '' ? undefined : code, next: at + 2 + RGB_COMPONENTS }
   }
   return { next: at + 1 }
 }
 
 /** Apply an SGR sequence to the state a cell is written with. */
-export function applySgr(style: TextStyle, params: readonly number[], color: ColourMode): TextStyle {
+export function applySgr(
+  style: TextStyle,
+  params: readonly number[],
+  color: ColourMode,
+): TextStyle {
   let next = style
   let at = 0
   while (at < params.length) {
@@ -192,9 +217,10 @@ export function applySgr(style: TextStyle, params: readonly number[], color: Col
       const extended = colourFor(params, at, color)
       if (extended.next <= at) break
       // An unusable colour request returns to the element colour rather than retaining an earlier tool colour.
-      next = extended.code === undefined
-        ? { ...next, ...(param === EXTENDED_FG ? { fg: undefined } : { bg: undefined }) }
-        : { ...next, ...(param === EXTENDED_FG ? { fg: extended.code } : { bg: extended.code }) }
+      next =
+        extended.code === undefined
+          ? { ...next, ...(param === EXTENDED_FG ? { fg: undefined } : { bg: undefined }) }
+          : { ...next, ...(param === EXTENDED_FG ? { fg: extended.code } : { bg: extended.code }) }
       at = extended.next
       continue
     }
@@ -221,7 +247,7 @@ function rgbSpec(r: number, g: number, b: number): string | undefined {
   for (const value of [r, g, b]) {
     if (!Number.isInteger(value) || value < 0 || value > COLOUR_MAX) return undefined
   }
-  return HEX_PREFIX + [r, g, b].map(value => value.toString(16).padStart(HEX_PAD, '0')).join('')
+  return HEX_PREFIX + [r, g, b].map((value) => value.toString(16).padStart(HEX_PAD, '0')).join('')
 }
 
 function slotColour(slot: number, color: ColourMode, layer: 'fg' | 'bg'): string | undefined {

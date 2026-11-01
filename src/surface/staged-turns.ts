@@ -7,11 +7,11 @@ import {
   NO_UNDO,
   redoStep,
   resetUndo,
+  type TurnPoint,
   turnsOf,
   UNDO_TURN_SETTLE_MS,
-  undoStep,
-  type TurnPoint,
   type UndoState,
+  undoStep,
 } from '../agent/undo.ts'
 
 /**
@@ -51,7 +51,11 @@ export interface StagedTurnPorts {
    */
   readonly disposeOutgoing: () => Promise<void>
   /** Start the agent for a session, which is what a replacement joins. */
-  readonly openSession: (id: SessionId, resume: boolean, fork?: ForkInheritance) => Promise<TuiAgent>
+  readonly openSession: (
+    id: SessionId,
+    resume: boolean,
+    fork?: ForkInheritance,
+  ) => Promise<TuiAgent>
   /** The prompts queued on the driven agent, which an interrupt would drop. */
   readonly queuedPrompts: () => readonly string[]
   /** Whether a bank exists to park into, which is how the reader's words survive. */
@@ -117,7 +121,7 @@ export function createStagedTurns(ports: StagedTurnPorts): StagedTurns {
 
   /** Wait for the interrupted turn to close, bounded so undo can give up honestly. */
   const waitForTurnEnd = (timeoutMs: number): Promise<boolean> =>
-    new Promise(resolve => {
+    new Promise((resolve) => {
       const timer = setTimeout(() => {
         settled = undefined
         resolve(false)
@@ -221,8 +225,13 @@ export function createStagedTurns(ports: StagedTurnPorts): StagedTurns {
       ports.writeDraft(next.lastRestored)
       // The parking count rides the undo notice: a notice of its own would be
       // replaced before the frame could show it.
-      const parkedNote = parked === 0 ? '' : ` · ${parked} queued prompt${parked === 1 ? '' : 's'} parked in the stash`
-      ports.notice(`undo · ${next.hidden} prompt${next.hidden === 1 ? '' : 's'} hidden${parkedNote} · prefix r redo`)
+      const parkedNote =
+        parked === 0
+          ? ''
+          : ` · ${parked} queued prompt${parked === 1 ? '' : 's'} parked in the stash`
+      ports.notice(
+        `undo · ${next.hidden} prompt${next.hidden === 1 ? '' : 's'} hidden${parkedNote} · prefix r redo`,
+      )
       ports.render()
     })()
       .catch((error: unknown) => {
@@ -259,9 +268,11 @@ export function createStagedTurns(ports: StagedTurnPorts): StagedTurns {
       await redrawStaged()
       // A composer the reader edited is theirs; only text this state wrote is replaced.
       if (before === restored) ports.writeDraft(next.lastRestored)
-      ports.notice(next.hidden === 0
-        ? 'redo · back at the newest prompt'
-        : `redo · ${next.hidden} prompt${next.hidden === 1 ? '' : 's'} hidden`)
+      ports.notice(
+        next.hidden === 0
+          ? 'redo · back at the newest prompt'
+          : `redo · ${next.hidden} prompt${next.hidden === 1 ? '' : 's'} hidden`,
+      )
       ports.render()
     })().catch((error: unknown) => {
       ports.notice(`redo failed: ${error instanceof Error ? error.message : String(error)}`)
@@ -300,7 +311,11 @@ export function createStagedTurns(ports: StagedTurnPorts): StagedTurns {
       // The source log preserves the undone turns, not this agent; disposal is
       // not rolled back if the child cannot open, so a send failure can leave no driver.
       await ports.disposeOutgoing()
-      const opened = await ports.openSession(childId, false, seed.length === 0 ? undefined : { from: source, events: seed })
+      const opened = await ports.openSession(
+        childId,
+        false,
+        seed.length === 0 ? undefined : { from: source, events: seed },
+      )
       ports.notice(`continuing in a new branch · ${source} keeps the undone turns`)
       opened.submit(text)
     } catch (error) {
@@ -312,7 +327,7 @@ export function createStagedTurns(ports: StagedTurnPorts): StagedTurns {
   return {
     stagedCutoff: () => cut,
     cursor: () => cursor,
-    sessionOpened: id => {
+    sessionOpened: (id) => {
       cursor = resetUndo(id)
       cut = undefined
     },

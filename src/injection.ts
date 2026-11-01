@@ -5,12 +5,14 @@ const LIST_MAX = 3
 const PREVIEW_MAX = 72
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined
+  return typeof value === 'object' && value !== null
+    ? (value as Record<string, unknown>)
+    : undefined
 }
 
 // Context summaries measure content, so blank separators must not inflate their line counts.
 function nonBlankLines(text: string): string[] {
-  return text.split('\n').filter(line => line.trim() !== '')
+  return text.split('\n').filter((line) => line.trim() !== '')
 }
 
 function countLines(text: string): string {
@@ -24,12 +26,18 @@ function previewOf(text: string): string {
 
 function recordsOf(value: unknown): Record<string, unknown>[] {
   if (!Array.isArray(value)) return []
-  return value.map(asRecord).filter((record): record is Record<string, unknown> => record !== undefined)
+  return value
+    .map(asRecord)
+    .filter((record): record is Record<string, unknown> => record !== undefined)
 }
 
 /** Render a bounded name list; a row is worth reading only while it stays one line. */
 function listOf(values: readonly unknown[]): string {
-  const names = [...new Set(values.filter((value): value is string => typeof value === 'string' && value !== ''))]
+  const names = [
+    ...new Set(
+      values.filter((value): value is string => typeof value === 'string' && value !== ''),
+    ),
+  ]
   if (names.length <= LIST_MAX) return names.join(', ')
   return `${names.slice(0, LIST_MAX).join(', ')} +${names.length - LIST_MAX} more`
 }
@@ -42,12 +50,12 @@ function listOf(values: readonly unknown[]): string {
  */
 function instructionLabel(source: Record<string, unknown>, text: string): string {
   const changes = recordsOf(source.changes)
-  const paths = listOf(changes.map(change => change.path))
-  if (changes.length > 0 && changes.every(change => change.action === 'remove')) {
-    return ['injected instructions removed', paths].filter(part => part !== '').join(' · ')
+  const paths = listOf(changes.map((change) => change.path))
+  if (changes.length > 0 && changes.every((change) => change.action === 'remove')) {
+    return ['injected instructions removed', paths].filter((part) => part !== '').join(' · ')
   }
   const head = source.baseline === true ? 'injected instructions' : 'injected instructions updated'
-  return [head, paths, countLines(text)].filter(part => part !== '').join(' · ')
+  return [head, paths, countLines(text)].filter((part) => part !== '').join(' · ')
 }
 
 /** Name the skill whose body was injected. */
@@ -66,21 +74,27 @@ function catalogLabel(source: Record<string, unknown>, text: string): string {
   const entries = Array.isArray(source.entries) ? source.entries : undefined
   const count = entries === undefined ? '' : `${entries.length} skills`
   const head = source.update === true ? 'injected skills updated' : 'injected skills'
-  return [head, count, countLines(text)].filter(part => part !== '').join(' · ')
+  return [head, count, countLines(text)].filter((part) => part !== '').join(' · ')
 }
 
 /** Name the sections one runtime snapshot assembled. */
 function snapshotLabel(source: Record<string, unknown>, text: string): string {
-  const producer = typeof source.plugin === 'string' && source.plugin !== '' ? source.plugin : 'plugin'
-  const names = listOf(recordsOf(source.sections).map(section => section.name))
-  return [`injected ${producer}`, names, countLines(text)].filter(part => part !== '').join(' · ')
+  const producer =
+    typeof source.plugin === 'string' && source.plugin !== '' ? source.plugin : 'plugin'
+  const names = listOf(recordsOf(source.sections).map((section) => section.name))
+  return [`injected ${producer}`, names, countLines(text)].filter((part) => part !== '').join(' · ')
 }
 
 /** Count the sessions a cross-session recall lifted. */
 function recallLabel(source: Record<string, unknown>, text: string): string {
   const references = Array.isArray(source.references) ? source.references : undefined
-  const count = references === undefined ? '' : `${references.length} session${references.length === 1 ? '' : 's'}`
-  return ['injected session recall', count, countLines(text)].filter(part => part !== '').join(' · ')
+  const count =
+    references === undefined
+      ? ''
+      : `${references.length} session${references.length === 1 ? '' : 's'}`
+  return ['injected session recall', count, countLines(text)]
+    .filter((part) => part !== '')
+    .join(' · ')
 }
 
 /** Name the continuation round a goal message opened. */
@@ -103,7 +117,10 @@ function relayLabel(text: string): string {
  */
 function legacyLabel(source: Record<string, unknown>, text: string): string {
   const plugin = typeof source.plugin === 'string' && source.plugin !== '' ? source.plugin : ''
-  const kind = typeof source.kind === 'string' && source.kind !== '' && source.kind !== 'plugin' ? source.kind : ''
+  const kind =
+    typeof source.kind === 'string' && source.kind !== '' && source.kind !== 'plugin'
+      ? source.kind
+      : ''
   const preview = previewOf(text)
   return `injected ${plugin !== '' ? plugin : kind !== '' ? kind : 'plugin'} · ${countLines(text)}${preview === '' ? '' : ` — ${preview}`}`
 }

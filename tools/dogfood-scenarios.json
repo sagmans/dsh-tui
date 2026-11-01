@@ -3,9 +3,7 @@
   "free": [
     {
       "id": "profiling-quit",
-      "args": [
-        "--profiling"
-      ],
+      "args": ["--profiling"],
       "profiling": {
         "retentionProof": true,
         "ready": true,
@@ -20,9 +18,7 @@
           "transcript-and-screen-restore",
           "surface-disposal"
         ],
-        "excluded": [
-          "profiling-private-draft"
-        ]
+        "excluded": ["profiling-private-draft"]
       },
       "steps": [
         {
@@ -78,15 +74,10 @@
     {
       "id": "profiling-sigterm",
       "alias": true,
-      "args": [
-        "--profiling"
-      ],
+      "args": ["--profiling"],
       "profiling": {
         "ready": true,
-        "phases": [
-          "terminal-stop",
-          "surface-disposal"
-        ]
+        "phases": ["terminal-stop", "surface-disposal"]
       },
       "steps": [
         {
@@ -97,16 +88,11 @@
     },
     {
       "id": "profiling-sigint",
-      "args": [
-        "--profiling"
-      ],
+      "args": ["--profiling"],
       "expectExit": 130,
       "profiling": {
         "ready": true,
-        "phases": [
-          "terminal-stop",
-          "surface-disposal"
-        ]
+        "phases": ["terminal-stop", "surface-disposal"]
       },
       "steps": [
         {
@@ -117,53 +103,33 @@
     },
     {
       "id": "profiling-startup-failure",
-      "args": [
-        "--profiling",
-        "--preset",
-        "profiling-missing-mode"
-      ],
+      "args": ["--profiling", "--preset", "profiling-missing-mode"],
       "startupError": "mode \"profiling-missing-mode\" is not one this profile offers",
       "expectExit": 1,
       "profiling": {
-        "failedPhases": [
-          "launch-validation"
-        ],
-        "missing": [
-          "terminalActive",
-          "firstFrame",
-          "agentReady",
-          "inputReady"
-        ]
+        "failedPhases": ["launch-validation"],
+        "missing": ["terminalActive", "firstFrame", "agentReady", "inputReady"]
       },
       "steps": []
     },
     {
       "id": "profiling-help",
       "tool": "cli",
-      "invocation": [
-        "--profiling",
-        "--help"
-      ],
+      "invocation": ["--profiling", "--help"],
       "profiling": false,
       "expect": "--profiling"
     },
     {
       "id": "profiling-usage-error",
       "tool": "cli",
-      "invocation": [
-        "--profiling",
-        "--new",
-        "--resume"
-      ],
+      "invocation": ["--profiling", "--new", "--resume"],
       "profiling": false,
       "expectExit": 1,
       "expect": "--new cannot be combined with a resume session id or mode"
     },
     {
       "id": "profiling-write-failure",
-      "args": [
-        "--profiling"
-      ],
+      "args": ["--profiling"],
       "homeLinks": [
         {
           "path": "profiles/tui/profiling",
@@ -182,9 +148,7 @@
     },
     {
       "id": "profiling-session-switch",
-      "args": [
-        "--profiling"
-      ],
+      "args": ["--profiling"],
       "profiling": {
         "ready": true,
         "stableLaunch": true,
@@ -210,10 +174,7 @@
             "count": 1
           }
         ],
-        "phases": [
-          "agent-start",
-          "surface-disposal"
-        ]
+        "phases": ["agent-start", "surface-disposal"]
       },
       "steps": [
         {
@@ -229,9 +190,7 @@
     },
     {
       "id": "profiling-resume",
-      "args": [
-        "--profiling"
-      ],
+      "args": ["--profiling"],
       "profiling": {
         "ready": true
       },
@@ -242,16 +201,11 @@
         }
       ],
       "continuation": {
-        "args": [
-          "--profiling"
-        ],
+        "args": ["--profiling"],
         "profiling": {
           "count": 2,
           "ready": true,
-          "phases": [
-            "history-replay",
-            "agent-start"
-          ]
+          "phases": ["history-replay", "agent-start"]
         },
         "steps": [
           {
@@ -267,9 +221,7 @@
     },
     {
       "id": "profiling-picker",
-      "args": [
-        "--profiling"
-      ],
+      "args": ["--profiling"],
       "profiling": {
         "ready": true
       },
@@ -280,17 +232,12 @@
         }
       ],
       "continuation": {
-        "args": [
-          "--profiling"
-        ],
+        "args": ["--profiling"],
         "initialPicker": true,
         "profiling": {
           "count": 2,
           "ready": true,
-          "phases": [
-            "history-picker-wait",
-            "history-replay"
-          ]
+          "phases": ["history-picker-wait", "history-replay"]
         },
         "steps": [
           {
@@ -326,9 +273,7 @@
           "exit": true
         }
       ],
-      "args": [
-        "--profiling"
-      ],
+      "args": ["--profiling"],
       "profiling": {
         "ready": true,
         "categories": [
@@ -349,28 +294,19 @@
             "category": "shutdown"
           }
         ],
-        "excluded": [
-          "original-draft",
-          "external-editor-line"
-        ]
+        "excluded": ["original-draft", "external-editor-line"]
       }
     },
     {
       "id": "profiling-crash",
-      "args": [
-        "--profiling"
-      ],
+      "args": ["--profiling"],
       "crashProbe": true,
       "expectExit": 1,
       "profiling": {
         "ready": true,
         "reason": "fatal-error",
-        "phases": [
-          "terminal-stop"
-        ],
-        "excluded": [
-          "profiling-private-fatal-marker"
-        ]
+        "phases": ["terminal-stop"],
+        "excluded": ["profiling-private-fatal-marker"]
       },
       "steps": [
         {
@@ -814,17 +750,11 @@
           "expect": "tokens in 0 out 0"
         },
         {
-          "resize": [
-            40,
-            12
-          ],
+          "resize": [40, 12],
           "expect": "ready"
         },
         {
-          "resize": [
-            100,
-            30
-          ],
+          "resize": [100, 30],
           "expect": "ready"
         },
         {
@@ -1659,17 +1589,8 @@
     },
     {
       "id": "startup",
-      "args": [
-        "--new",
-        "--preset",
-        "standard",
-        "--no-color",
-        "--no-bell"
-      ],
-      "absentAnsi": [
-        "\u001b[38;",
-        "\u001b[48;"
-      ],
+      "args": ["--new", "--preset", "standard", "--no-color", "--no-bell"],
+      "absentAnsi": ["\u001b[38;", "\u001b[48;"],
       "steps": [
         {
           "command": "/status",
@@ -1893,33 +1814,24 @@
     },
     {
       "id": "skills",
-      "invocation": [
-        "install-skills",
-        "--update"
-      ],
+      "invocation": ["install-skills", "--update"],
       "expect": "dsh-tui-dogfood"
     },
     {
       "id": "startup-help",
-      "invocation": [
-        "--help"
-      ],
+      "invocation": ["--help"],
       "expect": "--resume"
     },
     {
       "id": "release-dry-run",
       "tool": "release",
-      "invocation": [
-        "--help"
-      ],
+      "invocation": ["--help"],
       "expect": "usage:"
     },
     {
       "id": "release-invalid",
       "tool": "release",
-      "invocation": [
-        "invalid-dogfood-action"
-      ],
+      "invocation": ["invalid-dogfood-action"],
       "expectExit": 2,
       "expect": "invalid choice"
     },
@@ -2114,10 +2026,7 @@
           "expect": "/stash-pop"
         },
         {
-          "resize": [
-            100,
-            12
-          ],
+          "resize": [100, 12],
           "expect": "ready"
         },
         {
@@ -2499,10 +2408,7 @@
           "settled": true
         },
         {
-          "resize": [
-            40,
-            18
-          ],
+          "resize": [40, 18],
           "expect": "Mermaid diagram not rendered"
         },
         {
@@ -3399,10 +3305,7 @@
           "scope": "editor"
         },
         {
-          "keys": [
-            "left",
-            "backspace"
-          ],
+          "keys": ["left", "backspace"],
           "expect": "dogfood-tmux-λ🙂",
           "absent": "dogfood-tmux-λ雪🙂",
           "scope": "editor"

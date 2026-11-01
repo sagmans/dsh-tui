@@ -1,18 +1,22 @@
-import {
-  isKeyRelease,
-  matchesKey,
-  type CombinedAutocompleteProvider,
-  type KeyId,
-} from '@earendil-works/pi-tui'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 // Type-only: the command registry publishes the change event this surface
 // listens to, and the event map is declaration-merged by that package.
 import type {} from '@deepseek-ai/dsh-commands'
-import { surfaceBindings, type Keymap } from '../input/actions.ts'
+import {
+  type CombinedAutocompleteProvider,
+  isKeyRelease,
+  type KeyId,
+  matchesKey,
+} from '@earendil-works/pi-tui'
 import type { SurfaceActionId } from '../input/action-catalog.ts'
+import { type Keymap, surfaceBindings } from '../input/actions.ts'
 import { cancelStep, quitStep } from '../input/cancel.ts'
-import { createAnswerCompletionProvider, createCompletionProvider, type RegisteredCommand } from '../input/completion.ts'
+import {
+  createAnswerCompletionProvider,
+  createCompletionProvider,
+  type RegisteredCommand,
+} from '../input/completion.ts'
 import { createFileIndex } from '../input/file-index.ts'
 import { ChordReader, chordBindings, installKeybindings } from '../input/keymap.ts'
 import { classifySubmission, type Submission } from '../input/submission.ts'
@@ -189,7 +193,9 @@ export function createPromptInput(ctx: Context, ports: PromptInputPorts): Prompt
           // means "stop" must not be the key that loses the reader's own prompts.
           ports.interrupt()
           ports.editor().setText(queued.join('\n'))
-          ports.notice(`interrupt requested · ${queued.length} queued ${queued.length === 1 ? 'prompt' : 'prompts'} back in the bar`)
+          ports.notice(
+            `interrupt requested · ${queued.length} queued ${queued.length === 1 ? 'prompt' : 'prompts'} back in the bar`,
+          )
           ports.tui().requestRender()
           return true
         case 'interrupt-turn':
@@ -207,7 +213,13 @@ export function createPromptInput(ctx: Context, ports: PromptInputPorts): Prompt
     quit: () => {
       // The only key that leaves. Text in the bar keeps it for the editor, so
       // the library's delete forward is never taken from a reader who is editing.
-      switch (quitStep({ barHasText: barHasText(), overlayOpen: ports.tui().hasOverlay(), turnRunning: ports.turnRunning() })) {
+      switch (
+        quitStep({
+          barHasText: barHasText(),
+          overlayOpen: ports.tui().hasOverlay(),
+          turnRunning: ports.turnRunning(),
+        })
+      ) {
         case 'cancel-then-quit':
           // An exit that waits on a tool call is not an exit, so the turn is
           // asked to stop and the leave does not wait for the answer.
@@ -269,37 +281,38 @@ export function createPromptInput(ctx: Context, ports: PromptInputPorts): Prompt
     applyCompletion,
     installCompletion,
     commandListeners: () => [ctx.on('commands/change', () => installCompletion())],
-    inputListener: () => ports.tui().addInputListener(data => {
-      // A key arrives as a press and a release once the surface asks the terminal
-      // to report key events, and this library drops the release only for the
-      // focused component: a listener sees both halves, so an arrow key that is
-      // acted on twice steps a picker two rows and answers a question two options
-      // on. Falls through rather than consuming, which leaves a component that
-      // asked for releases its own half.
-      if (isKeyRelease(data)) return undefined
-      if (ports.modalHandleKey(data)) return { consume: true }
-      // A chord is the surface's second key: the prefix is consumed and the
-      // footer names what may follow, while a key that finishes nothing is handed
-      // on. Detail the reader asked for is always available, even mid-turn: the
-      // collapsed view is a default, not the only state.
-      const chorded = keyChord.handle(data)
-      if (chorded !== undefined) {
-        if (chorded.kind === 'action') ports.runSubmission(chorded.binding.submission)
-        ports.tui().requestRender()
-        return { consume: true }
-      }
-      for (const binding of surfaceBindings(ports.keymap())) {
-        if (!matchesKey(data, binding.key)) continue
-        if (binding.action === 'plugin') {
-          ports.runSubmission({ kind: 'plugin-action', id: binding.id })
+    inputListener: () =>
+      ports.tui().addInputListener((data) => {
+        // A key arrives as a press and a release once the surface asks the terminal
+        // to report key events, and this library drops the release only for the
+        // focused component: a listener sees both halves, so an arrow key that is
+        // acted on twice steps a picker two rows and answers a question two options
+        // on. Falls through rather than consuming, which leaves a component that
+        // asked for releases its own half.
+        if (isKeyRelease(data)) return undefined
+        if (ports.modalHandleKey(data)) return { consume: true }
+        // A chord is the surface's second key: the prefix is consumed and the
+        // footer names what may follow, while a key that finishes nothing is handed
+        // on. Detail the reader asked for is always available, even mid-turn: the
+        // collapsed view is a default, not the only state.
+        const chorded = keyChord.handle(data)
+        if (chorded !== undefined) {
+          if (chorded.kind === 'action') ports.runSubmission(chorded.binding.submission)
+          ports.tui().requestRender()
           return { consume: true }
         }
-        return surfaceActions[binding.action]() ? { consume: true } : undefined
-      }
-      return undefined
-    }),
+        for (const binding of surfaceBindings(ports.keymap())) {
+          if (!matchesKey(data, binding.key)) continue
+          if (binding.action === 'plugin') {
+            ports.runSubmission({ kind: 'plugin-action', id: binding.id })
+            return { consume: true }
+          }
+          return surfaceActions[binding.action]() ? { consume: true } : undefined
+        }
+        return undefined
+      }),
     attachSubmit: () => {
-      ports.editor().onSubmit = text => {
+      ports.editor().onSubmit = (text) => {
         const submission = classifySubmission(text)
         if (submission.kind === 'empty') return
         // The library's own history feeds the up/down keys; the store below feeds

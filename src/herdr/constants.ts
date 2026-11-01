@@ -38,7 +38,12 @@ export type HerdrState = (typeof HERDR_STATES)[keyof typeof HERDR_STATES]
  * A reason outside this set is dropped server-side, so the surface reports the
  * nearest one it recognizes instead of inventing a label.
  */
-export const SESSION_START_REASONS = { startup: 'startup', resume: 'resume', fork: 'fork', select: 'select' } as const
+export const SESSION_START_REASONS = {
+  startup: 'startup',
+  resume: 'resume',
+  fork: 'fork',
+  select: 'select',
+} as const
 export type SessionStartReason = (typeof SESSION_START_REASONS)[keyof typeof SESSION_START_REASONS]
 
 /**

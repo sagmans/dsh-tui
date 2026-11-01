@@ -1,5 +1,5 @@
-import { SessionId } from '@deepseek-ai/dsh-session'
 import type { LauncherAgentIdentity } from '@deepseek-ai/dsh-agent-loop'
+import { SessionId } from '@deepseek-ai/dsh-session'
 import { escapeTerminalText } from './terminal-text.ts'
 
 const HINT_TEXT_OPTIONS = { tab: 'keep' } as const
@@ -38,7 +38,9 @@ export function resolveLaunchIntent(input: {
   const flagValue = typeof input.resumeFlag === 'string' ? input.resumeFlag.trim() : ''
   const positional = input.session?.trim() ?? ''
   if (flagValue !== '' && positional !== '' && flagValue !== positional) {
-    throw new LaunchUsageError('session id given twice with different values (--resume and positional)')
+    throw new LaunchUsageError(
+      'session id given twice with different values (--resume and positional)',
+    )
   }
   if (positional !== '' && mode === '' && input.resumeFlag === undefined) {
     throw new LaunchUsageError('a session id requires resume mode or --resume')
@@ -72,7 +74,9 @@ export const PROFILE_NAME = 'tui'
 function hintToken(value: string): string {
   // Quoting already protects whitespace; tab expansion would change the identity being resumed.
   const text = escapeTerminalText(value, HINT_TEXT_OPTIONS)
-  return SHELL_WORD.test(text) ? text : `${SHELL_QUOTE}${text.replaceAll(SHELL_QUOTE, SHELL_QUOTE_ESCAPE)}${SHELL_QUOTE}`
+  return SHELL_WORD.test(text)
+    ? text
+    : `${SHELL_QUOTE}${text.replaceAll(SHELL_QUOTE, SHELL_QUOTE_ESCAPE)}${SHELL_QUOTE}`
 }
 
 /** Line printed after the terminal is handed back, so the session is recoverable. */

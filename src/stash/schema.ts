@@ -29,7 +29,8 @@ export function assertSafeEntryId(value: string): void {
 
 /** Keep the per-draft admission limit separate from the serialized bank-size cap. */
 export function assertSafeStashText(text: string): void {
-  if (Buffer.byteLength(text, 'utf8') > MAX_STASH_ENTRY_BYTES) throw new Error(ENTRY_TOO_LARGE_MESSAGE)
+  if (Buffer.byteLength(text, 'utf8') > MAX_STASH_ENTRY_BYTES)
+    throw new Error(ENTRY_TOO_LARGE_MESSAGE)
 }
 
 /** The form of a draft that is safe to hand back to a terminal. */
@@ -69,7 +70,9 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isValidTimestamp(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value) && !Number.isNaN(new Date(value).getTime())
+  return (
+    typeof value === 'number' && Number.isFinite(value) && !Number.isNaN(new Date(value).getTime())
+  )
 }
 
 function normalizeEntry(raw: unknown): StashEntry | undefined {
@@ -131,7 +134,7 @@ export function resolveBySelector(
     return entry === undefined ? undefined : { entry, index: 0 }
   }
   // Numeric ids are valid too; prefer exact identity so position changes cannot retarget an id selector.
-  const index = entries.findIndex(entry => entry.id === trimmed)
+  const index = entries.findIndex((entry) => entry.id === trimmed)
   if (index >= 0) return { entry: entries[index] as StashEntry, index }
   if (!NUMERIC_SELECTOR_PATTERN.test(trimmed)) return undefined
   const numeric = Number(trimmed)

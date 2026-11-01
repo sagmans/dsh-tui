@@ -68,7 +68,11 @@ interface HeldStream {
  * property, an inherited one disappears again — so a host that patched the
  * stream before this ran keeps its own seam.
  */
-function holdStream(target: HostWritable, held: HeldWrites, isSurfaceWrite: () => boolean): HeldStream {
+function holdStream(
+  target: HostWritable,
+  held: HeldWrites,
+  isSurfaceWrite: () => boolean,
+): HeldStream {
   const own = Object.getOwnPropertyDescriptor(target, 'write')
   const original = target.write
   target.write = function (this: unknown, ...args: unknown[]): unknown {
@@ -76,11 +80,12 @@ function holdStream(target: HostWritable, held: HeldWrites, isSurfaceWrite: () =
     const [chunk, encoding, callback] = args
     // Retention and replay share a UTF-8 text budget so held diagnostics have a bounded replay size.
     // This is not byte-preserving: original bytes and write encodings are not preserved.
-    const text = typeof chunk === 'string'
-      ? chunk
-      : chunk instanceof Uint8Array
-        ? Buffer.from(chunk).toString('utf8')
-        : String(chunk)
+    const text =
+      typeof chunk === 'string'
+        ? chunk
+        : chunk instanceof Uint8Array
+          ? Buffer.from(chunk).toString('utf8')
+          : String(chunk)
     const bytes = Buffer.byteLength(text)
     // Cutting a write corrupts diagnostics; an oversized write must be dropped whole, not retained without bound.
     if (bytes > HOST_WRITE_LIMIT) held.dropped += 1
@@ -124,7 +129,11 @@ interface SurfaceCall {
  */
 function markTerminalCalls(terminal: HostWritable, call: SurfaceCall): () => void {
   const keys = new Set<string | symbol>()
-  for (let holder: object | null = terminal; holder !== null && holder !== Object.prototype; holder = Object.getPrototypeOf(holder) as object | null) {
+  for (
+    let holder: object | null = terminal;
+    holder !== null && holder !== Object.prototype;
+    holder = Object.getPrototypeOf(holder) as object | null
+  ) {
     for (const key of Reflect.ownKeys(holder)) {
       if (key === 'constructor') continue
       const descriptor = Object.getOwnPropertyDescriptor(holder, key)
@@ -134,7 +143,11 @@ function markTerminalCalls(terminal: HostWritable, call: SurfaceCall): () => voi
   const own = new Map<string | symbol, PropertyDescriptor | undefined>()
   for (const key of keys) {
     const method = (terminal as unknown as Record<string | symbol, unknown>)[key]
-    if (typeof method !== 'function' || Object.getPrototypeOf(method)?.constructor?.name !== 'Function') continue
+    if (
+      typeof method !== 'function' ||
+      Object.getPrototypeOf(method)?.constructor?.name !== 'Function'
+    )
+      continue
     const before = Object.getOwnPropertyDescriptor(terminal, key)
     if (before !== undefined && !before.configurable && !before.writable) continue
     own.set(key, before)
@@ -155,7 +168,8 @@ function markTerminalCalls(terminal: HostWritable, call: SurfaceCall): () => voi
   }
   return () => {
     for (const [key, before] of own) {
-      if (before === undefined) delete (terminal as unknown as Record<string | symbol, unknown>)[key]
+      if (before === undefined)
+        delete (terminal as unknown as Record<string | symbol, unknown>)[key]
       else Object.defineProperty(terminal, key, before)
     }
     own.clear()
@@ -167,7 +181,9 @@ export function holdHostWrites(options: HostWriteOptions): HostWriteGuard {
   for (const target of options.targets) held.set(target, { chunks: [], bytes: 0, dropped: 0 })
   const surface: SurfaceCall = { depth: 0 }
   const restoreTerminal = markTerminalCalls(options.terminal, surface)
-  const streams = options.targets.map(target => holdStream(target, held.get(target)!, () => surface.depth > 0))
+  const streams = options.targets.map((target) =>
+    holdStream(target, held.get(target)!, () => surface.depth > 0),
+  )
   let active = true
   return {
     release() {
@@ -178,7 +194,8 @@ export function holdHostWrites(options: HostWriteOptions): HostWriteGuard {
       for (const [index, target] of options.targets.entries()) {
         const writes = held.get(target)
         if (writes === undefined || (writes.chunks.length === 0 && writes.dropped === 0)) continue
-        const notice = writes.dropped === 0 ? '' : `${HOST_WRITE_DROPPED} (${writes.dropped} writes)\n`
+        const notice =
+          writes.dropped === 0 ? '' : `${HOST_WRITE_DROPPED} (${writes.dropped} writes)\n`
         streams[index]?.original(notice + writes.chunks.join(''))
         writes.chunks.length = 0
         writes.bytes = 0

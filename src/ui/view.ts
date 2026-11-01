@@ -1,21 +1,27 @@
-import { TranscriptDocument } from './view/document.ts'
-import { type PickerCard } from './picker.ts'
-import { pickerCardLines } from './picker-card.ts'
-import { ANSWER_FACE, type MarkdownRenderer } from './markdown.ts'
-import { type FrameRow } from './frame.ts'
-import { gapRows, pushGap } from './gap.ts'
-import { type TuiTheme } from '../theme.ts'
-import { type TuiToken } from '../theme-tokens.ts'
-import { type ToolDisplaySpec } from '../tool-display.ts'
-import { type Spacing } from '../spacing.ts'
-import { SECOND_MS } from '../transcript/tool-calls.ts'
-import { type TranscriptEntry, type TranscriptModel } from '../transcript.ts'
-import { type GateCard } from '../gates.ts'
+import {
+  type Component,
+  type TuiMouseEvent,
+  type TuiMouseEventResult,
+  visibleWidth,
+  wrapTextWithAnsi,
+} from '@earendil-works/pi-tui'
+import type { GateCard } from '../gates.ts'
 import { hintKeys, type Keymap } from '../input/actions.ts'
-import { type Component, type TuiMouseEvent, type TuiMouseEventResult, visibleWidth, wrapTextWithAnsi } from '@earendil-works/pi-tui'
+import type { Spacing } from '../spacing.ts'
+import type { TuiTheme } from '../theme.ts'
+import type { TuiToken } from '../theme-tokens.ts'
+import type { ToolDisplaySpec } from '../tool-display.ts'
+import { SECOND_MS } from '../transcript/tool-calls.ts'
+import type { TranscriptEntry, TranscriptModel } from '../transcript.ts'
+import type { FrameRow } from './frame.ts'
+import { gapRows, pushGap } from './gap.ts'
+import { ANSWER_FACE, type MarkdownRenderer } from './markdown.ts'
+import type { PickerCard } from './picker.ts'
+import { pickerCardLines } from './picker-card.ts'
+import { TranscriptDocument } from './view/document.ts'
 import { GateCards } from './view/gate-card.ts'
-import { Messages } from './view/transcript-message.ts'
 import { ToolCards } from './view/tool-card.ts'
+import { Messages } from './view/transcript-message.ts'
 
 /** What a hint names when the reader has unbound the key it would advertise. */
 const REASONING_FOLD_FALLBACK = 'shift+tab'
@@ -36,7 +42,11 @@ export interface ViewState {
  * one line per dispatch is a wall of rows over the answer, and those rows answer
  * to a click on the card's own header or to the nested-calls key.
  */
-export const DEFAULT_VIEW_STATE: ViewState = { expandCards: false, expandReasoning: false, expandSubCalls: false }
+export const DEFAULT_VIEW_STATE: ViewState = {
+  expandCards: false,
+  expandReasoning: false,
+  expandSubCalls: false,
+}
 /**
  * Where one clickable message drew, so a click can find what it landed on.
  *
@@ -54,7 +64,8 @@ export interface ClickSpan {
 }
 /** Keys are prefixed because cards, thoughts, and dispatches all share one map. */
 const toolClickKey = (id: string): string | undefined => (id === '' ? undefined : `tool:${id}`)
-const reasoningClickKey = (id: string): string | undefined => (id === '' ? undefined : `reason:${id}`)
+const reasoningClickKey = (id: string): string | undefined =>
+  id === '' ? undefined : `reason:${id}`
 const subCallClickKey = (parentId: string, id: string): string => `sub:${parentId}/${id}`
 /**
  * The key one card's own answer about its dispatched calls is remembered under.
@@ -66,7 +77,8 @@ const subCallClickKey = (parentId: string, id: string): string => `sub:${parentI
  * dispatched.
  */
 const NESTED_CALLS_CLICK_PREFIX = 'subcalls:'
-const nestedCallsClickKey = (id: string): string | undefined => (id === '' ? undefined : `${NESTED_CALLS_CLICK_PREFIX}${id}`)
+const nestedCallsClickKey = (id: string): string | undefined =>
+  id === '' ? undefined : `${NESTED_CALLS_CLICK_PREFIX}${id}`
 /**
  * Renders the transcript rows and any pending gate as terminal lines.
  *
@@ -118,20 +130,46 @@ export class TranscriptView implements Component {
     private readonly markdown: MarkdownRenderer,
     private readonly options: TranscriptViewOptions,
   ) {
-    this.cards = new ToolCards({ theme: this.theme, keymap: () => this.keymap(), toolDisplay: tool => this.toolDisplay(tool), expansionOf: entry => this.expansionOf(entry), subCallsOpen: entry => this.subCallsOpen(entry), liveCall: callId => this.model.liveCall(callId), cardOpenHint: () => hintKeys(this.keymap(), 'surface.toolDetail') || CARD_OPEN_FALLBACK, toolKey: id => toolClickKey(id), subCallsKey: id => nestedCallsClickKey(id), subCallKey: (parentId, id) => subCallClickKey(parentId, id), subCallOpen: (parentId, id) => this.subCallOpen(parentId, id) })
-    this.messages = new Messages({ theme: this.theme, markdown: this.markdown, reasoningOpen: entry => this.reasoningOpen(entry), reasoningFoldHint: () => this.reasoningFoldHint(), reasoningKey: id => reasoningClickKey(id), spacing: () => this.air(), pushWrapped: (lines, text, width, prefix, token) => this.pushWrapped(lines, text, width, prefix, token) })
-    this.gates = new GateCards({ theme: this.theme, pushWrapped: (lines, text, width, prefix, token) => this.pushWrapped(lines, text, width, prefix, token) })
+    this.cards = new ToolCards({
+      theme: this.theme,
+      keymap: () => this.keymap(),
+      toolDisplay: (tool) => this.toolDisplay(tool),
+      expansionOf: (entry) => this.expansionOf(entry),
+      subCallsOpen: (entry) => this.subCallsOpen(entry),
+      liveCall: (callId) => this.model.liveCall(callId),
+      cardOpenHint: () => hintKeys(this.keymap(), 'surface.toolDetail') || CARD_OPEN_FALLBACK,
+      toolKey: (id) => toolClickKey(id),
+      subCallsKey: (id) => nestedCallsClickKey(id),
+      subCallKey: (parentId, id) => subCallClickKey(parentId, id),
+      subCallOpen: (parentId, id) => this.subCallOpen(parentId, id),
+    })
+    this.messages = new Messages({
+      theme: this.theme,
+      markdown: this.markdown,
+      reasoningOpen: (entry) => this.reasoningOpen(entry),
+      reasoningFoldHint: () => this.reasoningFoldHint(),
+      reasoningKey: (id) => reasoningClickKey(id),
+      spacing: () => this.air(),
+      pushWrapped: (lines, text, width, prefix, token) =>
+        this.pushWrapped(lines, text, width, prefix, token),
+    })
+    this.gates = new GateCards({
+      theme: this.theme,
+      pushWrapped: (lines, text, width, prefix, token) =>
+        this.pushWrapped(lines, text, width, prefix, token),
+    })
     this.document = new TranscriptDocument({
       model,
       entryTag: (entry, base) => this.entryTag(entry, base),
-      clocked: entry => this.isLive(entry) || (entry.kind === 'reasoning' && entry.live),
-      renderEntry: (entry, lines, width, live, spans, copy) => this.renderEntry(entry, lines, width, live, spans, copy),
+      clocked: (entry) => this.isLive(entry) || (entry.kind === 'reasoning' && entry.live),
+      renderEntry: (entry, lines, width, live, spans, copy) =>
+        this.renderEntry(entry, lines, width, live, spans, copy),
     })
   }
   private get viewState(): ViewState {
     return this.options.state()
   }
-/** The display the reader configured for a tool, or the shipped one. */
+  /** The display the reader configured for a tool, or the shipped one. */
   private toolDisplay(tool: string): ToolDisplaySpec {
     return this.options.toolDisplay(tool)
   }
@@ -151,13 +189,13 @@ export class TranscriptView implements Component {
     const clicked = key === undefined ? undefined : this.clicked.get(key)
     return clicked ?? (this.viewState.expandCards || !this.toolDisplay(entry.card.tool).collapsed)
   }
-/** Whether one thought draws its body; a click decides for that thought alone. */
+  /** Whether one thought draws its body; a click decides for that thought alone. */
   private reasoningOpen(entry: Extract<TranscriptEntry, { kind: 'reasoning' }>): boolean {
     const key = reasoningClickKey(entry.id)
     const clicked = key === undefined ? undefined : this.clicked.get(key)
     return clicked ?? this.viewState.expandReasoning
   }
-/** Whether one dispatched call draws its argument in full; a click decides for that call. */
+  /** Whether one dispatched call draws its argument in full; a click decides for that call. */
   private subCallOpen(parentId: string, id: string): boolean {
     return this.clicked.get(subCallClickKey(parentId, id)) ?? false
   }
@@ -195,7 +233,8 @@ export class TranscriptView implements Component {
     let span: ClickSpan | undefined
     for (const candidate of this.document.spans) {
       if (event.y < candidate.start || event.y >= candidate.end) continue
-      if (span === undefined || candidate.end - candidate.start < span.end - span.start) span = candidate
+      if (span === undefined || candidate.end - candidate.start < span.end - span.start)
+        span = candidate
     }
     if (span === undefined) return undefined
     this.presentationRevision++
@@ -231,12 +270,15 @@ export class TranscriptView implements Component {
   ): void {
     const lead = visibleWidth(prefix)
     const indent = ' '.repeat(lead)
-    const wrapped = wrapTextWithAnsi(this.theme.rich(text, { token, column: lead }), Math.max(1, width - lead))
+    const wrapped = wrapTextWithAnsi(
+      this.theme.rich(text, { token, column: lead }),
+      Math.max(1, width - lead),
+    )
     wrapped.forEach((line, index) => {
       lines.push(this.theme.cut(`${index === 0 ? prefix : indent}${line}`, width, ''))
     })
   }
-/** The live map, or the shipped one for a caller that did not lend one. */
+  /** The live map, or the shipped one for a caller that did not lend one. */
   private keymap(): Keymap {
     return this.options.keys()
   }
@@ -256,7 +298,10 @@ export class TranscriptView implements Component {
     // flag is put on a copy at draw time, so the entry alone cannot answer this.
     // A dispatched call carries its flag on the fold itself, where a settle
     // clears it.
-    return this.model.liveCall(entry.id).running || (entry.card.subCalls ?? []).some(call => call.running)
+    return (
+      this.model.liveCall(entry.id).running ||
+      (entry.card.subCalls ?? []).some((call) => call.running)
+    )
   }
   private pushPicker(lines: string[], picker: PickerCard, width: number): void {
     // The overlay opens under the transcript on one row of air, unless the row
@@ -267,8 +312,15 @@ export class TranscriptView implements Component {
     // over it, and a field added to a card reaches both at once.
     lines.push(...pickerCardLines(picker, width, this.theme))
   }
-/** The rows one transcript entry becomes; `live` marks the entry the turn is still writing. */
-  private renderEntry(entry: TranscriptEntry, lines: string[], width: number, live: boolean, spans: ClickSpan[], copy: FrameRow[]): void {
+  /** The rows one transcript entry becomes; `live` marks the entry the turn is still writing. */
+  private renderEntry(
+    entry: TranscriptEntry,
+    lines: string[],
+    width: number,
+    live: boolean,
+    spans: ClickSpan[],
+    copy: FrameRow[],
+  ): void {
     switch (entry.kind) {
       case 'tool':
         this.cards.pushCard(lines, entry, width, spans)
@@ -285,31 +337,67 @@ export class TranscriptView implements Component {
       case 'assistant':
         // Matching rails keep both halves of an exchange visually related
         // without enclosing the reader's words or the agent's reply.
-        this.messages.pushFramed(lines, copy, entry.text, width, live, ANSWER_FACE, 'transcript.assistant.border')
+        this.messages.pushFramed(
+          lines,
+          copy,
+          entry.text,
+          width,
+          live,
+          ANSWER_FACE,
+          'transcript.assistant.border',
+        )
         return
       case 'user': {
         if (!this.theme.visible('transcript.user')) return
         // A sent prompt keeps its frame without inheriting changes to the input bar.
-        this.messages.pushFramed(lines, copy, entry.text, width, false, this.messages.userFace(), 'transcript.user.border')
+        this.messages.pushFramed(
+          lines,
+          copy,
+          entry.text,
+          width,
+          false,
+          this.messages.userFace(),
+          'transcript.user.border',
+        )
         return
       }
       case 'notice':
         if (!this.theme.visible('transcript.notice')) return
-        this.pushWrapped(lines, entry.text, width, this.messages.elementLead('transcript.notice'), 'transcript.notice')
+        this.pushWrapped(
+          lines,
+          entry.text,
+          width,
+          this.messages.elementLead('transcript.notice'),
+          'transcript.notice',
+        )
         return
       case 'marker':
         if (!this.theme.visible('transcript.marker')) return
-        this.pushWrapped(lines, entry.text, width, this.messages.elementLead('transcript.marker'), 'transcript.marker')
+        this.pushWrapped(
+          lines,
+          entry.text,
+          width,
+          this.messages.elementLead('transcript.marker'),
+          'transcript.marker',
+        )
         return
     }
   }
   /** Entry folds remain local so a click does not spend every settled row's cache. */
   private entryTag(entry: TranscriptEntry, base: string): string {
-    const open = entry.kind === 'tool' ? this.expansionOf(entry) : entry.kind === 'reasoning' ? this.reasoningOpen(entry) : undefined
+    const open =
+      entry.kind === 'tool'
+        ? this.expansionOf(entry)
+        : entry.kind === 'reasoning'
+          ? this.reasoningOpen(entry)
+          : undefined
     const shape = entry.kind === 'tool' && this.subCallsOpen(entry) ? 'P' : 'p'
-    const marks = entry.kind === 'tool'
-      ? `${open === true ? '+' : '-'}${shape}${(entry.card.subCalls ?? []).map(call => (this.subCallOpen(entry.id, call.id) ? '1' : '0')).join('')}`
-      : open === true ? '+' : '-'
+    const marks =
+      entry.kind === 'tool'
+        ? `${open === true ? '+' : '-'}${shape}${(entry.card.subCalls ?? []).map((call) => (this.subCallOpen(entry.id, call.id) ? '1' : '0')).join('')}`
+        : open === true
+          ? '+'
+          : '-'
     const clock = this.isLive(entry) ? `|${Math.floor(this.model.now() / SECOND_MS)}` : ''
     return `${base}|${marks}${clock}`
   }

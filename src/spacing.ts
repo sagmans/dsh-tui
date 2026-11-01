@@ -39,8 +39,13 @@ const SPACING_FIELDS: ReadonlySet<string> = new Set(['padding', 'messages', 'ste
 
 /** One count as the reader wrote it. */
 function count(value: unknown, field: string): number {
-  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0 || value > MAX_SPACING) {
-    throw new Error('spacing.' + field + ' must be an integer between 0 and ' + MAX_SPACING)
+  if (
+    typeof value !== 'number' ||
+    !Number.isSafeInteger(value) ||
+    value < 0 ||
+    value > MAX_SPACING
+  ) {
+    throw new Error(`spacing.${field} must be an integer between 0 and ${MAX_SPACING}`)
   }
   return value
 }
@@ -53,13 +58,17 @@ function count(value: unknown, field: string): number {
  */
 export function parseSpacing(raw: unknown): Spacing {
   if (raw === undefined) return DEFAULT_SPACING
-  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) throw new Error('spacing must be a mapping of counts')
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw))
+    throw new Error('spacing must be a mapping of counts')
   const block = raw as Record<string, unknown>
-  const stray = Object.keys(block).filter(field => !SPACING_FIELDS.has(field))
-  if (stray.length > 0) throw new Error('unknown spacing field' + (stray.length === 1 ? '' : 's') + ': ' + stray.join(', '))
+  const stray = Object.keys(block).filter((field) => !SPACING_FIELDS.has(field))
+  if (stray.length > 0)
+    throw new Error(`unknown spacing field${stray.length === 1 ? '' : 's'}: ${stray.join(', ')}`)
   return {
-    padding: block.padding === undefined ? DEFAULT_SPACING.padding : count(block.padding, 'padding'),
-    messages: block.messages === undefined ? DEFAULT_SPACING.messages : count(block.messages, 'messages'),
+    padding:
+      block.padding === undefined ? DEFAULT_SPACING.padding : count(block.padding, 'padding'),
+    messages:
+      block.messages === undefined ? DEFAULT_SPACING.messages : count(block.messages, 'messages'),
     steps: block.steps === undefined ? DEFAULT_SPACING.steps : count(block.steps, 'steps'),
   }
 }

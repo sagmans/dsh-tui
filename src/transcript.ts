@@ -4,7 +4,7 @@ import { describeDuration } from './jobs.ts'
 import { sliceGraphemes, tailGraphemes } from './text.ts'
 import { countTokens } from './tokens.ts'
 import { reasoningTextsOf, textOfContent } from './transcript/message-content.ts'
-import { ToolCallFold, type LiveCallState, type ToolCallOutcome } from './transcript/tool-calls.ts'
+import { type LiveCallState, ToolCallFold, type ToolCallOutcome } from './transcript/tool-calls.ts'
 
 /** One renderable transcript row. */
 export type TranscriptEntry =
@@ -13,7 +13,13 @@ export type TranscriptEntry =
   | { readonly kind: 'notice'; readonly text: string }
   | { readonly kind: 'marker'; readonly text: string }
   | { readonly kind: 'tool'; readonly card: ToolCard; readonly id: string }
-  | { readonly kind: 'reasoning'; readonly id: string; readonly summary: string; readonly body: string; readonly live: boolean }
+  | {
+      readonly kind: 'reasoning'
+      readonly id: string
+      readonly summary: string
+      readonly body: string
+      readonly live: boolean
+    }
   | { readonly kind: 'step' }
 
 /** Reasoning kept per settled block, so one runaway thought cannot grow the transcript without bound. */
@@ -54,7 +60,9 @@ const TOOL_RESULT_EVENT = 'tool/result'
 const SURFACE_REPLACEMENT = 'replace'
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined
+  return typeof value === 'object' && value !== null
+    ? (value as Record<string, unknown>)
+    : undefined
 }
 
 /** Keep injected or unknown-source context from being attributed to the reader as a prompt. */
@@ -107,7 +115,11 @@ export class TranscriptModel {
 
   constructor(presenter: ToolPresenter) {
     // Tool calls and renderer cache keys share the model's duration owner.
-    this.calls = new ToolCallFold(presenter, () => this.now(), index => this.cardAt(index))
+    this.calls = new ToolCallFold(
+      presenter,
+      () => this.now(),
+      (index) => this.cardAt(index),
+    )
   }
 
   /**
@@ -130,7 +142,8 @@ export class TranscriptModel {
   entries(): readonly TranscriptEntry[] {
     const entries = [...this.settled]
     if (this.liveReasoning !== '') {
-      const ranFor = this.reasoningStartedAt === undefined ? undefined : this.now() - this.reasoningStartedAt
+      const ranFor =
+        this.reasoningStartedAt === undefined ? undefined : this.now() - this.reasoningStartedAt
       entries.push({
         kind: 'reasoning',
         // The live row and the row it settles into share an id, so a click made
@@ -240,7 +253,10 @@ export class TranscriptModel {
     if (kind === 'completed') return
     if (kind === 'error') {
       const failure = messageOf(reason.error)
-      this.append({ kind: 'notice', text: `turn failed: ${failure === '' ? 'model request failed' : failure}` })
+      this.append({
+        kind: 'notice',
+        text: `turn failed: ${failure === '' ? 'model request failed' : failure}`,
+      })
       return
     }
     if (kind === 'aborted') {
@@ -288,7 +304,8 @@ export class TranscriptModel {
   private settleReasoning(): void {
     if (this.liveReasoning === '') return
     const text = this.liveReasoning
-    const ranFor = this.reasoningStartedAt === undefined ? undefined : this.now() - this.reasoningStartedAt
+    const ranFor =
+      this.reasoningStartedAt === undefined ? undefined : this.now() - this.reasoningStartedAt
     this.liveReasoning = ''
     this.reasoningStartedAt = undefined
     this.paintReasoning(text, ranFor)
@@ -312,9 +329,11 @@ export class TranscriptModel {
       case 'user/message': {
         const text = textOfContent(data.content)
         if (text === '') return
-        this.append(sourceKind(data) === 'user'
-          ? { kind: 'user', text }
-          : { kind: 'notice', text: injectionSummary(data, text) })
+        this.append(
+          sourceKind(data) === 'user'
+            ? { kind: 'user', text }
+            : { kind: 'notice', text: injectionSummary(data, text) },
+        )
         return
       }
       case 'turn/end': {
@@ -346,7 +365,8 @@ export class TranscriptModel {
       }
       case 'compaction/summary': {
         const events = Array.isArray(data.shadowedSeqs) ? data.shadowedSeqs.length : 0
-        const tokens = typeof data.shadowedTokenCount === 'number' ? data.shadowedTokenCount : undefined
+        const tokens =
+          typeof data.shadowedTokenCount === 'number' ? data.shadowedTokenCount : undefined
         const size = tokens === undefined ? '' : ` (≈${tokens} tokens)`
         // The summary itself arrives as the user/message that follows, so this
         // row only has to explain where the older history went.
@@ -380,12 +400,19 @@ export class TranscriptModel {
       case 'tool/ptc-dispatch':
       case TOOL_RESULT_EVENT: {
         // Pruning replaces model-facing history after its calls settled; rendering those rewrites creates orphan cards.
-        if (event.type === TOOL_RESULT_EVENT && asRecord(event.surfaceOp)?.op === SURFACE_REPLACEMENT) return
+        if (
+          event.type === TOOL_RESULT_EVENT &&
+          asRecord(event.surfaceOp)?.op === SURFACE_REPLACEMENT
+        )
+          return
         // Tool events are the only rows drawn before they are finished, so they
         // are folded where that bookkeeping lives and the rows come back here,
         // where reading order and row indices are owned.
         // Replayed results must measure logged execution, not the speed of this fold.
-        const at = typeof event.time === 'number' && Number.isFinite(event.time) && event.time >= 0 ? event.time : undefined
+        const at =
+          typeof event.time === 'number' && Number.isFinite(event.time) && event.time >= 0
+            ? event.time
+            : undefined
         this.commit(this.calls.apply(event.type, data, this.settled.length, at))
         return
       }

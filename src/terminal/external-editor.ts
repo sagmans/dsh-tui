@@ -53,7 +53,8 @@ const MINUTE_MS = 60 * SECOND_MS
 const EDITOR_TIMEOUT_MS = 30 * MINUTE_MS
 
 const NO_EDITOR_MESSAGE = 'no editor configured: set $VISUAL or $EDITOR to open the draft in one'
-const launchFailureMessage = (command: string, error: Error): string => `could not start ${command}: ${error.message}`
+const launchFailureMessage = (command: string, error: Error): string =>
+  `could not start ${command}: ${error.message}`
 const useFailureMessage = (error: unknown): string =>
   `could not use the edited draft: ${error instanceof Error ? error.message : 'unknown error'}`
 const tooLargeMessage = (file: string): string =>
@@ -215,7 +216,9 @@ export class ExternalEditor {
         // so only promise a recovery path when that plain file still exists.
         await rm(scratch, { recursive: true, force: true }).catch(async () => {
           const file = join(scratch, DRAFT_FILE_NAME)
-          const retained = await lstat(file).then(info => info.isFile()).catch(() => false)
+          const retained = await lstat(file)
+            .then((info) => info.isFile())
+            .catch(() => false)
           this.host.notice(retained ? retainedMessage(file) : uncertainCleanupMessage(scratch))
         })
       }
@@ -242,7 +245,10 @@ export class ExternalEditor {
    * memory.
    */
   private async readDraft(file: string): Promise<DraftRead> {
-    const handle = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
+    const handle = await open(
+      file,
+      constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+    )
     try {
       if (!(await handle.stat()).isFile()) return { kind: 'not-a-file' }
       const buffer = Buffer.allocUnsafe(MAX_DRAFT_BYTES + 1)
@@ -254,7 +260,10 @@ export class ExternalEditor {
       }
       if (filled > MAX_DRAFT_BYTES) return { kind: 'too-large' }
       // Prevent edited file content from injecting terminal controls or disguising text in the live prompt.
-      return { kind: 'text', text: stripControlCharacters(buffer.subarray(0, filled).toString('utf8')) }
+      return {
+        kind: 'text',
+        text: stripControlCharacters(buffer.subarray(0, filled).toString('utf8')),
+      }
     } finally {
       // Closing must not replace the accepted draft or mask the original read failure.
       await handle.close().catch(() => undefined)
@@ -275,7 +284,7 @@ export class ExternalEditor {
    * exit is — a stuck editor must not become a way to lose the draft.
    */
   private run(command: string, args: readonly string[], file: string): Promise<Error | undefined> {
-    return new Promise(resolve => {
+    return new Promise((resolve) => {
       // Keep the session's project context and editor environment, not the scratch directory's context.
       const child = spawn(command, [...args, file], {
         stdio: 'inherit',
@@ -299,7 +308,7 @@ export class ExternalEditor {
         clearTimeout(expiry)
         resolve(error)
       }
-      child.on('error', error => settle(error))
+      child.on('error', (error) => settle(error))
       child.on('exit', () => settle(undefined))
     })
   }

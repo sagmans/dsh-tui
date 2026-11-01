@@ -2,21 +2,22 @@
  * Keep harness registration and strict reads together so schema fills do not become appearance overrides.
  * Rejected reads retain the last-good appearance and salvage readable privacy opt-outs before resolving theme layers.
  */
-import type { KeyId } from '@earendil-works/pi-tui'
-import z from '@deepseek-ai/schemastery'
+
 import type {} from '@deepseek-ai/dsh-settings'
+import z from '@deepseek-ai/schemastery'
+import type { KeyId } from '@earendil-works/pi-tui'
 import { DEFAULT_MAX_ENTRIES, MAX_ENTRIES_LIMIT } from './agent/prompt-history.ts'
-import { defaultKeymap, keysFor, resolveKeymap, type KeyListValue, type Keymap } from './input/actions.ts'
-import { KeymapSectionSchema, isActionId } from './input/keymap-settings.ts'
-import { DEFAULT_PREFIX_KEYS, DEFAULT_PREFIX_WINDOW_S } from './input/keymap.ts'
 import {
-  TOOL_DISPLAY_LIMITS,
-  TOOL_OUTPUT_DISPLAYS,
-  toolDisplayTable,
-  type ToolDisplayTable,
-  type ToolOutputDisplay,
-  type WrittenToolDisplay,
-} from './tool-display.ts'
+  defaultKeymap,
+  type KeyListValue,
+  type Keymap,
+  keysFor,
+  resolveKeymap,
+} from './input/actions.ts'
+import { DEFAULT_PREFIX_KEYS, DEFAULT_PREFIX_WINDOW_S } from './input/keymap.ts'
+import { isActionId, KeymapSectionSchema } from './input/keymap-settings.ts'
+import { DEFAULT_SPACING, parseSpacing, type Spacing } from './spacing.ts'
+import { DEFAULT_PALETTE } from './theme-defaults.ts'
 import { DEFAULT_THEME, type LoadedTheme, type ThemeLibrary } from './theme-files.ts'
 import {
   asRecord,
@@ -25,9 +26,15 @@ import {
   TOKEN_NAME_SET,
   TokensSchema,
 } from './theme-schema.ts'
-import { DEFAULT_SPACING, parseSpacing, type Spacing } from './spacing.ts'
-import { DEFAULT_PALETTE } from './theme-defaults.ts'
 import type { PaletteName, StyleSpec, ThemedSpecs, TuiToken } from './theme-tokens.ts'
+import {
+  TOOL_DISPLAY_LIMITS,
+  TOOL_OUTPUT_DISPLAYS,
+  type ToolDisplayTable,
+  type ToolOutputDisplay,
+  toolDisplayTable,
+  type WrittenToolDisplay,
+} from './tool-display.ts'
 
 /** Settings namespace owned by the terminal surface. */
 export const TUI_SETTINGS_NAMESPACE = 'dsh-tui'
@@ -103,7 +110,11 @@ const SECTION = z.object({
   prefix: z.string(),
   prefixWindow: z.number().min(0).max(MAX_PREFIX_WINDOW_S).default(DEFAULT_PREFIX_WINDOW_S),
   keys: KeymapSectionSchema.default({}),
-  history: HistorySchema.default({ enabled: DEFAULT_HISTORY_ENABLED, ghost: DEFAULT_HISTORY_GHOST, maxEntries: DEFAULT_MAX_ENTRIES }),
+  history: HistorySchema.default({
+    enabled: DEFAULT_HISTORY_ENABLED,
+    ghost: DEFAULT_HISTORY_GHOST,
+    maxEntries: DEFAULT_MAX_ENTRIES,
+  }),
   // Declared so a registered scope keeps the block when the document is saved,
   // but validated by hand below: its keys are tool names, which no closed shape
   // can enumerate, and schemastery's `dict` accepts every one of them.
@@ -123,7 +134,19 @@ const SECTION = z.object({
 export const TuiSettingsSchema = SECTION
 
 /** The section's own keys: schemastery keeps what it does not declare, so a misspelling has to be refused here. */
-const SECTION_KEYS = new Set(['theme', 'palette', 'tokens', 'subcalls', 'mermaid', 'prefix', 'prefixWindow', 'keys', 'history', 'tools', 'spacing'])
+const SECTION_KEYS = new Set([
+  'theme',
+  'palette',
+  'tokens',
+  'subcalls',
+  'mermaid',
+  'prefix',
+  'prefixWindow',
+  'keys',
+  'history',
+  'tools',
+  'spacing',
+])
 
 /** The fields one tool's row may carry, for the same reason the section's own keys are spelled out. */
 const TOOL_FIELDS = new Set(['collapsed', 'output', 'tail'])
@@ -139,32 +162,63 @@ const TOOL_FIELDS = new Set(['collapsed', 'output', 'tail'])
 function rejectUnknownKeys(raw: unknown): void {
   const section = asRecord(raw)
   if (section === undefined) return
-  const unknownKeys = Object.keys(section).filter(name => !SECTION_KEYS.has(name))
+  const unknownKeys = Object.keys(section).filter((name) => !SECTION_KEYS.has(name))
   if (unknownKeys.length > 0) {
-    throw new Error(`unknown ${TUI_SETTINGS_NAMESPACE} key${unknownKeys.length === 1 ? '' : 's'}: ${unknownKeys.join(', ')}`)
+    throw new Error(
+      `unknown ${TUI_SETTINGS_NAMESPACE} key${unknownKeys.length === 1 ? '' : 's'}: ${unknownKeys.join(', ')}`,
+    )
   }
-  const unknownTokens = Object.keys(asRecord(section.tokens) ?? {}).filter(name => !TOKEN_NAME_SET.has(name))
+  const unknownTokens = Object.keys(asRecord(section.tokens) ?? {}).filter(
+    (name) => !TOKEN_NAME_SET.has(name),
+  )
   if (unknownTokens.length > 0) {
-    throw new Error(`unknown ${TUI_SETTINGS_NAMESPACE} token${unknownTokens.length === 1 ? '' : 's'}: ${unknownTokens.join(', ')}`)
+    throw new Error(
+      `unknown ${TUI_SETTINGS_NAMESPACE} token${unknownTokens.length === 1 ? '' : 's'}: ${unknownTokens.join(', ')}`,
+    )
   }
-  const unknownPalette = Object.keys(asRecord(section.palette) ?? {}).filter(name => !PALETTE_NAME_SET.has(name))
+  const unknownPalette = Object.keys(asRecord(section.palette) ?? {}).filter(
+    (name) => !PALETTE_NAME_SET.has(name),
+  )
   if (unknownPalette.length > 0) {
-    throw new Error(`unknown ${TUI_SETTINGS_NAMESPACE} palette entr${unknownPalette.length === 1 ? 'y' : 'ies'}: ${unknownPalette.join(', ')}`)
+    throw new Error(
+      `unknown ${TUI_SETTINGS_NAMESPACE} palette entr${unknownPalette.length === 1 ? 'y' : 'ies'}: ${unknownPalette.join(', ')}`,
+    )
   }
-  const unknownActions = Object.keys(asRecord(section.keys) ?? {}).filter(name => !isActionId(name))
+  const unknownActions = Object.keys(asRecord(section.keys) ?? {}).filter(
+    (name) => !isActionId(name),
+  )
   if (unknownActions.length > 0) {
-    throw new Error(`unknown ${TUI_SETTINGS_NAMESPACE} key action${unknownActions.length === 1 ? '' : 's'}: ${unknownActions.join(', ')}`)
+    throw new Error(
+      `unknown ${TUI_SETTINGS_NAMESPACE} key action${unknownActions.length === 1 ? '' : 's'}: ${unknownActions.join(', ')}`,
+    )
   }
-  const unknownHistory = Object.keys(asRecord(section.history) ?? {}).filter(name => !HISTORY_KEYS.has(name))
+  const unknownHistory = Object.keys(asRecord(section.history) ?? {}).filter(
+    (name) => !HISTORY_KEYS.has(name),
+  )
   if (unknownHistory.length > 0) {
-    throw new Error('unknown ' + TUI_SETTINGS_NAMESPACE + ' history key' + (unknownHistory.length === 1 ? '' : 's') + ': ' + unknownHistory.join(', '))
+    throw new Error(
+      'unknown ' +
+        TUI_SETTINGS_NAMESPACE +
+        ' history key' +
+        (unknownHistory.length === 1 ? '' : 's') +
+        ': ' +
+        unknownHistory.join(', '),
+    )
   }
-  const unknownToolFields = Object.entries(asRecord(section.tools) ?? {})
-    .flatMap(([tool, spec]) => Object.keys(asRecord(spec) ?? {})
-      .filter(field => !TOOL_FIELDS.has(field))
-      .map(field => `${tool}.${field}`))
+  const unknownToolFields = Object.entries(asRecord(section.tools) ?? {}).flatMap(([tool, spec]) =>
+    Object.keys(asRecord(spec) ?? {})
+      .filter((field) => !TOOL_FIELDS.has(field))
+      .map((field) => `${tool}.${field}`),
+  )
   if (unknownToolFields.length > 0) {
-    throw new Error('unknown ' + TUI_SETTINGS_NAMESPACE + ' tool field' + (unknownToolFields.length === 1 ? '' : 's') + ': ' + unknownToolFields.join(', '))
+    throw new Error(
+      'unknown ' +
+        TUI_SETTINGS_NAMESPACE +
+        ' tool field' +
+        (unknownToolFields.length === 1 ? '' : 's') +
+        ': ' +
+        unknownToolFields.join(', '),
+    )
   }
 }
 
@@ -177,8 +231,17 @@ function toolFlag(value: unknown, field: string): boolean {
   return value
 }
 
-function toolInteger(value: unknown, field: string, bounds: { readonly min: number; readonly max: number }): number {
-  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < bounds.min || value > bounds.max) {
+function toolInteger(
+  value: unknown,
+  field: string,
+  bounds: { readonly min: number; readonly max: number },
+): number {
+  if (
+    typeof value !== 'number' ||
+    !Number.isSafeInteger(value) ||
+    value < bounds.min ||
+    value > bounds.max
+  ) {
     throw new Error(`${field} must be an integer between ${bounds.min} and ${bounds.max}`)
   }
   return value
@@ -199,16 +262,19 @@ function toolOutput(value: unknown, field: string): ToolOutputDisplay {
  * error, because the surface cannot know which tools a profile mounts.
  */
 function parseTools(raw: unknown): Record<string, WrittenToolDisplay> {
-  if (raw !== undefined && asRecord(raw) === undefined) throw new Error('tools must be a mapping of display fields')
+  if (raw !== undefined && asRecord(raw) === undefined)
+    throw new Error('tools must be a mapping of display fields')
   const block = asRecord(raw) ?? {}
   const specs: Record<string, WrittenToolDisplay> = {}
   for (const [tool, value] of Object.entries(block)) {
     const spec = asRecord(value)
     if (spec === undefined) throw new Error(`tools.${tool} must be a mapping of display fields`)
     const written: WrittenToolDisplay = {}
-    if (spec.collapsed !== undefined) written.collapsed = toolFlag(spec.collapsed, `tools.${tool}.collapsed`)
+    if (spec.collapsed !== undefined)
+      written.collapsed = toolFlag(spec.collapsed, `tools.${tool}.collapsed`)
     if (spec.output !== undefined) written.output = toolOutput(spec.output, `tools.${tool}.output`)
-    if (spec.tail !== undefined) written.tail = toolInteger(spec.tail, `tools.${tool}.tail`, TOOL_DISPLAY_LIMITS.tail)
+    if (spec.tail !== undefined)
+      written.tail = toolInteger(spec.tail, `tools.${tool}.tail`, TOOL_DISPLAY_LIMITS.tail)
     specs[tool] = written
   }
   return specs
@@ -220,7 +286,8 @@ function parseSettings(raw: unknown): TuiSettings {
   rejectUnknownKeys(raw)
   // Schema normalization must not mutate the immutable section borrowed from SettingsForms.
   const section = structuredClone(asRecord(raw)!)
-  if (section.history !== undefined && asRecord(section.history) === undefined) throw new Error('history must be a mapping')
+  if (section.history !== undefined && asRecord(section.history) === undefined)
+    throw new Error('history must be a mapping')
   const parsed = SECTION(section) as unknown as {
     theme: string | undefined
     palette: Record<PaletteName, string>
@@ -289,7 +356,7 @@ function parseSettings(raw: unknown): TuiSettings {
 /** Whether a resolved spec actually asks for anything. */
 function hasAnyField(spec: StyleSpec | undefined): boolean {
   if (spec === undefined) return false
-  return Object.values(spec).some(value => value !== undefined)
+  return Object.values(spec).some((value) => value !== undefined)
 }
 
 /** The prompt-history affordances and the size the reader allows. */
@@ -343,7 +410,11 @@ export function defaultSettings(): TuiSettings {
     prefixes: [...DEFAULT_PREFIX_KEYS],
     prefixWindow: DEFAULT_PREFIX_WINDOW_S,
     keymap: defaultKeymap(),
-    history: { enabled: DEFAULT_HISTORY_ENABLED, ghost: DEFAULT_HISTORY_GHOST, maxEntries: DEFAULT_MAX_ENTRIES },
+    history: {
+      enabled: DEFAULT_HISTORY_ENABLED,
+      ghost: DEFAULT_HISTORY_GHOST,
+      maxEntries: DEFAULT_MAX_ENTRIES,
+    },
   }
 }
 
@@ -392,8 +463,12 @@ export function settingsProblemMessage(error: unknown): string {
  * opt-out. Startup has no previous appearance, so only then do shipped defaults
  * supply the fallback. Notices stay visible above the alternate screen.
  */
-export function readScope(scope: { get(): unknown }, onProblem: (message: string) => void, previous?: TuiSettings): TuiSettings {
-  let raw: unknown = undefined
+export function readScope(
+  scope: { get(): unknown },
+  onProblem: (message: string) => void,
+  previous?: TuiSettings,
+): TuiSettings {
+  let raw: unknown
   try {
     raw = scope.get()
     return parseSettings(raw)
@@ -405,11 +480,14 @@ export function readScope(scope: { get(): unknown }, onProblem: (message: string
     const fallback = previous ?? defaultSettings()
     const history = salvageHistory(raw)
     // A rejected candidate cannot revoke an already applied opt-out.
-    return { ...fallback, history: {
-      ...history,
-      enabled: previous?.history.enabled === false ? false : history.enabled,
-      ghost: previous?.history.ghost === false ? false : history.ghost,
-    } }
+    return {
+      ...fallback,
+      history: {
+        ...history,
+        enabled: previous?.history.enabled === false ? false : history.enabled,
+        ghost: previous?.history.ghost === false ? false : history.ghost,
+      },
+    }
   }
 }
 
@@ -423,19 +501,29 @@ export function readScope(scope: { get(): unknown }, onProblem: (message: string
 function salvageHistory(raw: unknown): HistorySettings {
   const fallback = defaultSettings().history
   const history = asRecord(asRecord(raw)?.history)
-  if (history === undefined) return asRecord(raw) !== undefined && asRecord(raw)!.history === undefined
-    ? fallback
-    : { ...fallback, enabled: false, ghost: false }
-  const enabled = history.enabled === undefined
-    ? fallback.enabled
-    : typeof history.enabled === 'boolean' ? history.enabled : false
-  const ghost = history.ghost === undefined ? fallback.ghost : typeof history.ghost === 'boolean' ? history.ghost : false
-  const maxEntries = typeof history.maxEntries === 'number'
-    && Number.isSafeInteger(history.maxEntries)
-    && history.maxEntries >= 1
-    && history.maxEntries <= MAX_ENTRIES_LIMIT
-    ? history.maxEntries
-    : fallback.maxEntries
+  if (history === undefined)
+    return asRecord(raw) !== undefined && asRecord(raw)!.history === undefined
+      ? fallback
+      : { ...fallback, enabled: false, ghost: false }
+  const enabled =
+    history.enabled === undefined
+      ? fallback.enabled
+      : typeof history.enabled === 'boolean'
+        ? history.enabled
+        : false
+  const ghost =
+    history.ghost === undefined
+      ? fallback.ghost
+      : typeof history.ghost === 'boolean'
+        ? history.ghost
+        : false
+  const maxEntries =
+    typeof history.maxEntries === 'number' &&
+    Number.isSafeInteger(history.maxEntries) &&
+    history.maxEntries >= 1 &&
+    history.maxEntries <= MAX_ENTRIES_LIMIT
+      ? history.maxEntries
+      : fallback.maxEntries
   return { enabled, ghost, maxEntries }
 }
 

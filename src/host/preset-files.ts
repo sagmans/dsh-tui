@@ -40,7 +40,9 @@ export function loadPresetDefinitions(): readonly PresetDefinition[] {
     // These package-owned declarations supply the roster, not user patch input.
     // Require one row per file so missing or extra rows fail before modes mount;
     // Cordis validates the extracted configs when the roster mounts the preset plugin.
-    const document = parseYaml(readFileSync(file, 'utf8')) as readonly { insert?: readonly { config?: unknown }[] }[]
+    const document = parseYaml(readFileSync(file, 'utf8')) as readonly {
+      insert?: readonly { config?: unknown }[]
+    }[]
     const rows = document.flatMap((entry) => entry?.insert ?? [])
     if (rows.length !== 1) throw new Error(`${file}: expected one preset row, found ${rows.length}`)
     return rows[0]?.config as PresetDefinition

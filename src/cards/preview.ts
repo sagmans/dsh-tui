@@ -1,4 +1,4 @@
-import { type CardRow, type ToolCard, CARD_DETAIL_MAX } from '../cards.ts'
+import { CARD_DETAIL_MAX, type CardRow, type ToolCard } from '../cards.ts'
 
 /**
  * Output rows a folded card keeps on screen when a tool configures a tail.
@@ -47,7 +47,10 @@ export type CardPreview =
  * Expansion is a view decision rather than a card field so one key press can
  * change every card at once without rebuilding the transcript.
  */
-export function cardDetailRows(card: ToolCard, preview: CardPreview): { lines: readonly CardRow[]; hidden: number } {
+export function cardDetailRows(
+  card: ToolCard,
+  preview: CardPreview,
+): { lines: readonly CardRow[]; hidden: number } {
   // Expansion shares the retention budget so opening cards stays bounded in the transcript.
   // Tail counts budget screen rows: nonpositive counts spend none, and oversized
   // counts must not hide retained output through negative slice offsets.

@@ -1,8 +1,8 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { SessionLogOffset, type SessionEvent, type SessionId } from '@deepseek-ai/dsh-session'
-import { ReasoningEffortId, createUserMessage } from '@deepseek-ai/dsh-llm'
-import { TUI_PROFILING_SERVICE, PROFILE_PHASE, profileAsync } from '../profiling.ts'
+import { createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import { type SessionEvent, type SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
+import { PROFILE_PHASE, profileAsync, TUI_PROFILING_SERVICE } from '../profiling.ts'
 
 /** Everything the terminal surface needs to own one interactive agent. */
 export interface TuiAgent {
@@ -119,18 +119,26 @@ export async function startAgent(ctx: Context, options: StartAgentOptions): Prom
   const setup = options.setup === undefined ? {} : { setup: options.setup }
   // A branch inherits a prefix of its parent's log, so the child is marked as
   // seeded and carries the exact cut the host validates against.
-  const branch = options.fork === undefined
-    ? {}
-    : {
-        seed: options.fork.events as readonly SessionEvent[],
-        inheritedEventCount: SessionLogOffset(options.fork.events.length),
-      }
+  const branch =
+    options.fork === undefined
+      ? {}
+      : {
+          seed: options.fork.events as readonly SessionEvent[],
+          inheritedEventCount: SessionLogOffset(options.fork.events.length),
+        }
   const preset = options.preset === undefined ? {} : { agentPreset: options.preset }
-  const identity = options.fork === undefined
-    ? { ...meta, ...preset }
-    : { ...meta, parentSession: options.fork.from, isSeeded: true, ...preset }
+  const identity =
+    options.fork === undefined
+      ? { ...meta, ...preset }
+      : { ...meta, parentSession: options.fork.from, isSeeded: true, ...preset }
   const create = () =>
-    ctx.agents.create({ sessionId: options.sessionId, meta: identity, agentOptions, ...branch, ...setup })
+    ctx.agents.create({
+      sessionId: options.sessionId,
+      meta: identity,
+      agentOptions,
+      ...branch,
+      ...setup,
+    })
   const handle = options.resume
     ? await ctx.agents
         .resume({ resumeSessionId: options.sessionId, agentOptions, ...setup })
@@ -140,8 +148,8 @@ export async function startAgent(ctx: Context, options: StartAgentOptions): Prom
   return {
     sessionId: options.sessionId,
     agent: handle.agent,
-    submit: text => handle.agent.followup(userMessage(text)),
-    steer: text => handle.agent.steer(userMessage(text)),
+    submit: (text) => handle.agent.followup(userMessage(text)),
+    steer: (text) => handle.agent.steer(userMessage(text)),
     interrupt: () => handle.agent.cancel({ kind: 'user' }),
     // Replacement and surface cleanup share a handle, so claim its teardown attempt
     // before awaiting it to prevent overlapping calls from starting disposal twice.

@@ -23,9 +23,9 @@
  */
 
 import { visibleWidth } from '@earendil-works/pi-tui'
+import { NEEDS_READING, type Piece, scan, spellControls } from './terminal-text/scan.ts'
+import { applySgr, encoder, GROUND, type TextStyle } from './terminal-text/sgr.ts'
 import type { ColourMode } from './theme-capability.ts'
-import { NEEDS_READING, scan, spellControls, type Piece } from './terminal-text/scan.ts'
-import { GROUND, applySgr, encoder, type TextStyle } from './terminal-text/sgr.ts'
 
 /** Keep tab widths predictable for wrapping; this surface uses eight-column stops. */
 const TAB_STOP = 8
@@ -58,13 +58,17 @@ function visibleLength(piece: Piece): number {
       return count
     }
     // A visible escape is four or six characters, not the one control that produced it.
-    case 'control': return spellControls(piece.raw).length
+    case 'control':
+      return spellControls(piece.raw).length
     // The eventual insertion column is unknown here, so a tab may need a full stop of visible spaces.
-    case 'tab': return TAB_STOP
+    case 'tab':
+      return TAB_STOP
     case 'sgr':
     case 'consumed':
-    case 'incomplete': return 0
-    default: return 1
+    case 'incomplete':
+      return 0
+    default:
+      return 1
   }
 }
 
@@ -151,14 +155,16 @@ export function renderTerminalText(raw: string, options: RenderTextOptions): str
     if (width === 0) {
       // Cursor adjacency, not repaint insertion order, decides which retained glyph owns a combining mark.
       const preceding = cells.get(cursor - 1)
-      if (preceding !== undefined && preceding.col + preceding.width === cursor) preceding.text += text
+      if (preceding !== undefined && preceding.col + preceding.width === cursor)
+        preceding.text += text
       return
     }
     // Column ownership bounds overwrite work to the graphemes it actually replaces.
     for (let col = cursor; col < cursor + width; col++) {
       const replaced = cells.get(col)
       if (replaced === undefined) continue
-      for (let occupied = replaced.col; occupied < replaced.col + replaced.width; occupied++) cells.delete(occupied)
+      for (let occupied = replaced.col; occupied < replaced.col + replaced.width; occupied++)
+        cells.delete(occupied)
     }
     const cell: Cell = { col: cursor, width, text, style }
     for (let col = cursor; col < cursor + width; col++) cells.set(col, cell)
@@ -169,7 +175,10 @@ export function renderTerminalText(raw: string, options: RenderTextOptions): str
     if (cells.size > 0) {
       let drawn = column
       // Repaint insertion order differs from screen order; sort once per completed row.
-      const ordered = [...cells].filter(([col, cell]) => col === cell.col).map(([, cell]) => cell).sort((left, right) => left.col - right.col)
+      const ordered = [...cells]
+        .filter(([col, cell]) => col === cell.col)
+        .map(([, cell]) => cell)
+        .sort((left, right) => left.col - right.col)
       for (const cell of ordered) {
         if (cell.col > drawn) {
           out += codes.between(previous, GROUND)
@@ -189,7 +198,8 @@ export function renderTerminalText(raw: string, options: RenderTextOptions): str
   for (const piece of scan(raw)) {
     switch (piece.token.kind) {
       case 'text':
-        for (const { segment } of GRAPHEMES.segment(piece.raw)) write(segment, visibleWidth(segment))
+        for (const { segment } of GRAPHEMES.segment(piece.raw))
+          write(segment, visibleWidth(segment))
         break
       case 'lineFeed':
         flush()

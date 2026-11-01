@@ -1,12 +1,18 @@
-import { stripTerminalSequences, truncateToWidth, type EditorTheme, type MarkdownTheme, type SelectListTheme } from '@earendil-works/pi-tui'
-import { codeBlockLines, plainCodeLines } from './ui/diff.ts'
-import { oneRow } from './text.ts'
+import {
+  type EditorTheme,
+  type MarkdownTheme,
+  type SelectListTheme,
+  stripTerminalSequences,
+  truncateToWidth,
+} from '@earendil-works/pi-tui'
 import { renderTerminalText } from './terminal-text.ts'
-import { type ColourMode } from './theme-capability.ts'
+import { oneRow } from './text.ts'
+import type { ColourMode } from './theme-capability.ts'
 import { DEFAULT_PALETTE } from './theme-defaults.ts'
-import { resolveToken, type ResolvedStyle } from './theme-resolver.ts'
+import { type ResolvedStyle, resolveToken } from './theme-resolver.ts'
+import { type ThemeOverrides, themeLayer } from './theme-settings.ts'
 import type { TuiToken } from './theme-tokens.ts'
-import { themeLayer, type ThemeOverrides } from './theme-settings.ts'
+import { codeBlockLines, plainCodeLines } from './ui/diff.ts'
 
 /** What a caller gets when it has written no settings at all. */
 const NO_OVERRIDES: ThemeOverrides = { palette: DEFAULT_PALETTE, tokens: new Map() }
@@ -66,23 +72,31 @@ export interface TuiTheme {
  * to answer for every language, so the ones it does not draw come back through
  * the same plain shade the library would have used.
  */
-function markdownTheme(style: (token: TuiToken, text: string) => string, visible: (token: TuiToken) => boolean): MarkdownTheme {
+function markdownTheme(
+  style: (token: TuiToken, text: string) => string,
+  visible: (token: TuiToken) => boolean,
+): MarkdownTheme {
   return {
-    highlightCode: (code, lang) => codeBlockLines(code, lang, { style, visible, plain: line => style('markdown.codeBlock', line) }),
-    heading: text => style('markdown.heading', text),
-    link: text => style('markdown.link', text),
-    linkUrl: text => style('markdown.linkUrl', text),
-    code: text => style('markdown.code', text),
-    codeBlock: text => style('markdown.codeBlock', text),
-    codeBlockBorder: text => style('markdown.codeBlockBorder', text),
-    quote: text => style('markdown.quote', text),
-    quoteBorder: text => style('markdown.quoteBorder', text),
-    hr: text => style('markdown.hr', text),
-    listBullet: text => style('markdown.listBullet', text),
-    bold: text => style('markdown.bold', text),
-    italic: text => style('markdown.italic', text),
-    strikethrough: text => style('markdown.strikethrough', text),
-    underline: text => style('markdown.underline', text),
+    highlightCode: (code, lang) =>
+      codeBlockLines(code, lang, {
+        style,
+        visible,
+        plain: (line) => style('markdown.codeBlock', line),
+      }),
+    heading: (text) => style('markdown.heading', text),
+    link: (text) => style('markdown.link', text),
+    linkUrl: (text) => style('markdown.linkUrl', text),
+    code: (text) => style('markdown.code', text),
+    codeBlock: (text) => style('markdown.codeBlock', text),
+    codeBlockBorder: (text) => style('markdown.codeBlockBorder', text),
+    quote: (text) => style('markdown.quote', text),
+    quoteBorder: (text) => style('markdown.quoteBorder', text),
+    hr: (text) => style('markdown.hr', text),
+    listBullet: (text) => style('markdown.listBullet', text),
+    bold: (text) => style('markdown.bold', text),
+    italic: (text) => style('markdown.italic', text),
+    strikethrough: (text) => style('markdown.strikethrough', text),
+    underline: (text) => style('markdown.underline', text),
   }
 }
 
@@ -94,15 +108,15 @@ function editorTheme(
   return {
     // Hiding the border has to remove it: returning the text unstyled would draw
     // it louder than the muted default the reader was trying to remove.
-    borderColor: text => (visible('editor.border') ? style('editor.border', text) : ''),
+    borderColor: (text) => (visible('editor.border') ? style('editor.border', text) : ''),
     // A select-list row is framework-owned text, so a hidden entry can only be
     // unstyled rather than absent; the README records that limit.
     selectList: {
-      selectedPrefix: text => style('editor.selectList.selectedPrefix', text),
-      selectedText: text => style('editor.selectList.selectedText', text),
-      description: text => style('editor.selectList.description', text),
-      scrollInfo: text => style('editor.selectList.scrollInfo', text),
-      noMatch: text => style('editor.selectList.noMatch', text),
+      selectedPrefix: (text) => style('editor.selectList.selectedPrefix', text),
+      selectedText: (text) => style('editor.selectList.selectedText', text),
+      description: (text) => style('editor.selectList.description', text),
+      scrollInfo: (text) => style('editor.selectList.scrollInfo', text),
+      noMatch: (text) => style('editor.selectList.noMatch', text),
     } satisfies SelectListTheme,
   }
 }
@@ -160,7 +174,7 @@ export function createTheme(mode: ColourMode, overrides: ThemeOverrides = NO_OVE
     style,
     rich,
     cut,
-    glyph: token => resolve(token).glyph,
+    glyph: (token) => resolve(token).glyph,
     visible,
     editor: editorTheme(style, visible),
     markdown: markdownTheme(style, visible),
@@ -176,13 +190,13 @@ export function createTheme(mode: ColourMode, overrides: ThemeOverrides = NO_OVE
  */
 export function forwardEditorTheme(source: () => EditorTheme): EditorTheme {
   return {
-    borderColor: text => source().borderColor(text),
+    borderColor: (text) => source().borderColor(text),
     selectList: {
-      selectedPrefix: text => source().selectList.selectedPrefix(text),
-      selectedText: text => source().selectList.selectedText(text),
-      description: text => source().selectList.description(text),
-      scrollInfo: text => source().selectList.scrollInfo(text),
-      noMatch: text => source().selectList.noMatch(text),
+      selectedPrefix: (text) => source().selectList.selectedPrefix(text),
+      selectedText: (text) => source().selectList.selectedText(text),
+      description: (text) => source().selectList.description(text),
+      scrollInfo: (text) => source().selectList.scrollInfo(text),
+      noMatch: (text) => source().selectList.noMatch(text),
     } satisfies SelectListTheme,
   }
 }
@@ -196,20 +210,22 @@ export function forwardEditorTheme(source: () => EditorTheme): EditorTheme {
  */
 export function forwardMarkdownTheme(source: () => MarkdownTheme): MarkdownTheme {
   return {
-    highlightCode: (code, lang) => source().highlightCode?.(code, lang) ?? plainCodeLines(code, line => source().codeBlock(line)),
-    heading: text => source().heading(text),
-    link: text => source().link(text),
-    linkUrl: text => source().linkUrl(text),
-    code: text => source().code(text),
-    codeBlock: text => source().codeBlock(text),
-    codeBlockBorder: text => source().codeBlockBorder(text),
-    quote: text => source().quote(text),
-    quoteBorder: text => source().quoteBorder(text),
-    hr: text => source().hr(text),
-    listBullet: text => source().listBullet(text),
-    bold: text => source().bold(text),
-    italic: text => source().italic(text),
-    strikethrough: text => source().strikethrough(text),
-    underline: text => source().underline(text),
+    highlightCode: (code, lang) =>
+      source().highlightCode?.(code, lang) ??
+      plainCodeLines(code, (line) => source().codeBlock(line)),
+    heading: (text) => source().heading(text),
+    link: (text) => source().link(text),
+    linkUrl: (text) => source().linkUrl(text),
+    code: (text) => source().code(text),
+    codeBlock: (text) => source().codeBlock(text),
+    codeBlockBorder: (text) => source().codeBlockBorder(text),
+    quote: (text) => source().quote(text),
+    quoteBorder: (text) => source().quoteBorder(text),
+    hr: (text) => source().hr(text),
+    listBullet: (text) => source().listBullet(text),
+    bold: (text) => source().bold(text),
+    italic: (text) => source().italic(text),
+    strikethrough: (text) => source().strikethrough(text),
+    underline: (text) => source().underline(text),
   }
 }

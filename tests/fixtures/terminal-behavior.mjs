@@ -1,22 +1,22 @@
 /** Real widgets expose decoder and terminal-owner regressions without a model or profile credentials. */
 import { performance } from 'node:perf_hooks'
-import { ProcessTerminal, ScrollView, matchesKey } from '@earendil-works/pi-tui'
+import { matchesKey, ProcessTerminal, ScrollView } from '@earendil-works/pi-tui'
+import { cardOfResult } from '../../lib/cards/presenter.js'
+import { contentLines } from '../../lib/cards.js'
+import { defaultKeymap } from '../../lib/input/actions.js'
+import { DEFAULT_SPACING } from '../../lib/spacing.js'
 import { SOFTWARE_CURSOR_MODE } from '../../lib/terminal/cursor.js'
 import { WarningSafeTui } from '../../lib/terminal/warning-screen.js'
-import { TranscriptModel } from '../../lib/transcript.js'
-import { contentLines } from '../../lib/cards.js'
-import { cardOfResult } from '../../lib/cards/presenter.js'
-import { DEFAULT_VIEW_STATE, TranscriptView } from '../../lib/ui/view.js'
-import { DEFAULT_SPACING } from '../../lib/spacing.js'
+import { createTheme } from '../../lib/theme.js'
 import { toolDisplayTable } from '../../lib/tool-display.js'
+import { TranscriptModel } from '../../lib/transcript.js'
+import { BoxedEditor } from '../../lib/ui/editor.js'
+import { surfaceLayout } from '../../lib/ui/layout.js'
 import { MarkdownRenderer } from '../../lib/ui/markdown.js'
 import { createMermaidTransform } from '../../lib/ui/mermaid.js'
-import { BoxedEditor } from '../../lib/ui/editor.js'
-import { PromptBar } from '../../lib/ui/prompt.js'
 import { ListPicker } from '../../lib/ui/picker.js'
-import { surfaceLayout } from '../../lib/ui/layout.js'
-import { createTheme } from '../../lib/theme.js'
-import { defaultKeymap } from '../../lib/input/actions.js'
+import { PromptBar } from '../../lib/ui/prompt.js'
+import { DEFAULT_VIEW_STATE, TranscriptView } from '../../lib/ui/view.js'
 
 // Native fixture rows use the same explicit layout and view ports as the mounted surface.
 const FIXTURE_MERMAID_MODE = 'off'
@@ -83,7 +83,12 @@ const theme = createTheme(COLOR_MODE)
 // Missing tool views must still preserve result counts through the production generic-card fallback.
 const model = new TranscriptModel({
   call: () => undefined,
-  result: (name, input) => cardOfResult(undefined, { name, failed: input.isError, contentLines: contentLines(input.content) }),
+  result: (name, input) =>
+    cardOfResult(undefined, {
+      name,
+      failed: input.isError,
+      contentLines: contentLines(input.content),
+    }),
 })
 const pending = []
 const latency = []
@@ -97,50 +102,94 @@ let enteredRawMode = false
 let stream
 const write = terminal.write.bind(terminal)
 // Native writes, not a render request or an AX value, establish the measured boundary.
-terminal.write = data => {
+terminal.write = (data) => {
   write(data)
   const now = performance.now()
   for (const start of pending.splice(0)) latency.push(now - start)
 }
 // Deep recorded results must remain readable independently of their retained preview size.
-let foldContent = [{ type: TEXT_CONTENT, text: Array(FOLD_LINE_COUNT).fill(FOLD_LINE).join(FOLD_SEPARATOR) }]
-for (let depth = 0; depth < FOLD_DEPTH; depth++) foldContent = [{ type: FOLD_NESTED_TYPE, content: foldContent }]
+let foldContent = [
+  { type: TEXT_CONTENT, text: Array(FOLD_LINE_COUNT).fill(FOLD_LINE).join(FOLD_SEPARATOR) },
+]
+for (let depth = 0; depth < FOLD_DEPTH; depth++)
+  foldContent = [{ type: FOLD_NESTED_TYPE, content: foldContent }]
 // A summarized injection exercises the durable fold without letting rendering costs obscure ingestion failures.
-model.apply({ type: FOLD_EVENT, data: { content: foldContent, source: { kind: FOLD_SOURCE, plugin: FOLD_PLUGIN } } })
-const foldedNotice = model.entries().some(entry => entry.kind === 'notice' && entry.text.startsWith(FOLD_PREFIX))
+model.apply({
+  type: FOLD_EVENT,
+  data: { content: foldContent, source: { kind: FOLD_SOURCE, plugin: FOLD_PLUGIN } },
+})
+const foldedNotice = model
+  .entries()
+  .some((entry) => entry.kind === 'notice' && entry.text.startsWith(FOLD_PREFIX))
 // The card presenter must ingest the whole result before its normal retained-row budget takes effect.
-model.apply({ type: TOOL_CALL_EVENT, data: { name: TOOL_FOLD_NAME, arguments: EMPTY_ARGUMENTS, callId: TOOL_FOLD_ID } })
-model.apply({ type: TOOL_RESULT_EVENT, data: { message: { toolCallId: TOOL_FOLD_ID, content: foldContent, isError: false } } })
-const toolFold = model.entries().find(entry => entry.kind === 'tool' && entry.id === TOOL_FOLD_ID)
+model.apply({
+  type: TOOL_CALL_EVENT,
+  data: { name: TOOL_FOLD_NAME, arguments: EMPTY_ARGUMENTS, callId: TOOL_FOLD_ID },
+})
+model.apply({
+  type: TOOL_RESULT_EVENT,
+  data: { message: { toolCallId: TOOL_FOLD_ID, content: foldContent, isError: false } },
+})
+const toolFold = model.entries().find((entry) => entry.kind === 'tool' && entry.id === TOOL_FOLD_ID)
 // Settled assistant messages exercise redraws with conversation history, not only synthetic tool results.
 // The count is a workload size, not an asserted retention threshold.
 for (let index = 0; index < SETTLED_MESSAGES; index++) {
-  model.apply({ type: MESSAGE_EVENT, data: { message: { content: [{ type: TEXT_CONTENT, text: `settled ${index}` }] } } })
+  model.apply({
+    type: MESSAGE_EVENT,
+    data: { message: { content: [{ type: TEXT_CONTENT, text: `settled ${index}` }] } },
+  })
 }
 // A retained message exercises the argument-safe row and copy paths when the driver narrows the terminal.
-model.apply({ type: MESSAGE_EVENT, data: { message: { content: [{ type: TEXT_CONTENT, text: LARGE_MESSAGE_PREFIX + LARGE_MESSAGE_TEXT.repeat(LARGE_MESSAGE_CHARACTERS) }] } } })
+model.apply({
+  type: MESSAGE_EVENT,
+  data: {
+    message: {
+      content: [
+        {
+          type: TEXT_CONTENT,
+          text: LARGE_MESSAGE_PREFIX + LARGE_MESSAGE_TEXT.repeat(LARGE_MESSAGE_CHARACTERS),
+        },
+      ],
+    },
+  },
+})
 // Long styled and carriage-return content must remain renderable through the driver's one-column resize.
 // This is a wrapping workload, not a claim that the PTY displays the source escape sequences unchanged.
-model.applyStreamChunk({ type: TEXT_DELTA, text: `${SGR_START}${STYLED_TEXT.repeat(STYLED_CHARACTERS)}${CARRIAGE_RETURN}${REPAINT_TEXT.repeat(STYLED_CHARACTERS)}${SGR_END}` })
-const picker = new ListPicker(
-  () => PICKER_ROWS, () => PICKER_TITLE, row => row.label,
-  row => ({ label: row.label, description: undefined, current: false }), row => row.label,
-  { empty: () => PICKER_TITLE, listed: () => PICKER_TITLE }, defaultKeymap,
-)
-const view = new TranscriptView(model, theme, new MarkdownRenderer(theme.markdown, createMermaidTransform({ theme, mode: () => FIXTURE_MERMAID_MODE })), {
-  state: () => DEFAULT_VIEW_STATE,
-  gate: () => undefined,
-  picker: () => pickerOpen ? picker.card() : undefined,
-  keys: defaultKeymap,
-  toolDisplay: () => FIXTURE_TOOL_DISPLAY,
-  spacing: () => DEFAULT_SPACING,
+model.applyStreamChunk({
+  type: TEXT_DELTA,
+  text: `${SGR_START}${STYLED_TEXT.repeat(STYLED_CHARACTERS)}${CARRIAGE_RETURN}${REPAINT_TEXT.repeat(STYLED_CHARACTERS)}${SGR_END}`,
 })
+const picker = new ListPicker(
+  () => PICKER_ROWS,
+  () => PICKER_TITLE,
+  (row) => row.label,
+  (row) => ({ label: row.label, description: undefined, current: false }),
+  (row) => row.label,
+  { empty: () => PICKER_TITLE, listed: () => PICKER_TITLE },
+  defaultKeymap,
+)
+const view = new TranscriptView(
+  model,
+  theme,
+  new MarkdownRenderer(
+    theme.markdown,
+    createMermaidTransform({ theme, mode: () => FIXTURE_MERMAID_MODE }),
+  ),
+  {
+    state: () => DEFAULT_VIEW_STATE,
+    gate: () => undefined,
+    picker: () => (pickerOpen ? picker.card() : undefined),
+    keys: defaultKeymap,
+    toolDisplay: () => FIXTURE_TOOL_DISPLAY,
+    spacing: () => DEFAULT_SPACING,
+  },
+)
 const editor = new BoxedEditor(tui, theme.editor, defaultKeymap, undefined, tui.cursor)
 const empty = { render: () => [], invalidate: () => {} }
 // Readiness belongs in frame output so the driver waits for native writes, not process startup.
 // Width receipts record render calls; they do not independently prove that every frame reached the terminal.
 const status = {
-  render: width => {
+  render: (width) => {
     renderedWidths.add(width)
     return [READY]
   },
@@ -176,16 +225,18 @@ function finish() {
     process.exit(failures.length === 0 ? EXIT_SUCCESS : EXIT_FAILURE)
   })
 }
-tui.onFrameError = error => {
-  failures.push(error instanceof Error ? error.stack ?? String(error) : String(error))
+tui.onFrameError = (error) => {
+  failures.push(error instanceof Error ? (error.stack ?? String(error)) : String(error))
   finish()
 }
 // Picker bytes must not also edit the draft: the driver checks both decoders independently
 // with Kitty events, Unicode, and paste, leaving ordinary input to the focused editor.
-tui.addInputListener(data => {
+tui.addInputListener((data) => {
   if (matchesKey(data, CRASH_KEY)) {
     // A real uncaught failure must restore the native tty before Node reports it.
-    setImmediate(() => { throw new Error(CRASH_MESSAGE) })
+    setImmediate(() => {
+      throw new Error(CRASH_MESSAGE)
+    })
     return { consume: true }
   }
   if (matchesKey(data, QUIT_KEY)) {
@@ -220,10 +271,10 @@ tui.addInputListener(data => {
   if (matchesKey(data, HANDOFF_KEY)) {
     clearInterval(stream)
     tui.stop({ preserveScreen: true })
-    process.stdout.write(SUSPENDED + '\n')
+    process.stdout.write(`${SUSPENDED}\n`)
     // Leave more than one caret phase for the driver to observe a silent borrowed terminal.
     resumeTimer = setTimeout(() => {
-      process.stdout.write(RESUMED + '\n')
+      process.stdout.write(`${RESUMED}\n`)
       tui.start()
       startStreaming()
     }, HANDOFF_MS)
@@ -241,10 +292,18 @@ tui.addInputListener(data => {
   }
   return undefined
 })
-tui.setLayoutRoot(surfaceLayout({
-  transcript: new ScrollView(view, SCROLL_POLICY),
-  dock: empty, queue: empty, prompt: new PromptBar(editor), status,
-}, () => FIXTURE_MARGIN_COLUMNS))
+tui.setLayoutRoot(
+  surfaceLayout(
+    {
+      transcript: new ScrollView(view, SCROLL_POLICY),
+      dock: empty,
+      queue: empty,
+      prompt: new PromptBar(editor),
+      status,
+    },
+    () => FIXTURE_MARGIN_COLUMNS,
+  ),
+)
 tui.setFocus(editor)
 tui.start()
 enteredRawMode = process.stdin.isRaw

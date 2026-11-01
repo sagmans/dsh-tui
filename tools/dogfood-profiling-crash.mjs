@@ -13,6 +13,8 @@ export function apply(ctx) {
     if (requested || event.type !== TITLE_EVENT || event.data.title !== CRASH_TITLE) return
     requested = true
     // Throw after publication finishes so this exercises process-fatal cleanup, not command error reporting.
-    queueMicrotask(() => { throw new Error(PRIVATE_ERROR) })
+    queueMicrotask(() => {
+      throw new Error(PRIVATE_ERROR)
+    })
   })
 }

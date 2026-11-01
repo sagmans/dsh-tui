@@ -13,8 +13,7 @@
  * and the terminal would act on it. `stripControlCharacters` is that boundary.
  */
 
-import { escapeTerminalText, type EscapeTextOptions } from './terminal-text.ts'
-
+import { type EscapeTextOptions, escapeTerminalText } from './terminal-text.ts'
 
 /**
  * Keep controls visible in literal labels and questions rather than allowing

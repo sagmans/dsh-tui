@@ -8,7 +8,7 @@
 
 import z from '@deepseek-ai/schemastery'
 import { DEFAULT_PALETTE } from './theme-defaults.ts'
-import { PALETTE_NAMES, TUI_TOKENS, type PaletteName, type StyleSpec } from './theme-tokens.ts'
+import { PALETTE_NAMES, type PaletteName, type StyleSpec, TUI_TOKENS } from './theme-tokens.ts'
 
 /**
  * A colour a writer may name.
@@ -39,14 +39,16 @@ const StyleSpecSchema = z.object({
 })
 
 /** Shipped shades let partial palettes validate; layer readers must retain only written keys. */
-export const PaletteSchema = z.object(Object.fromEntries(
-  PALETTE_NAMES.map(name => [name, ColourSchema.default(DEFAULT_PALETTE[name])]),
-))
+export const PaletteSchema = z.object(
+  Object.fromEntries(
+    PALETTE_NAMES.map((name) => [name, ColourSchema.default(DEFAULT_PALETTE[name])]),
+  ),
+)
 
 /** Share field validation between settings and theme files; unknownNames owns name rejection. */
-export const TokensSchema = z.object(Object.fromEntries(
-  TUI_TOKENS.map(token => [token, StyleSpecSchema]),
-))
+export const TokensSchema = z.object(
+  Object.fromEntries(TUI_TOKENS.map((token) => [token, StyleSpecSchema])),
+)
 
 /** Every element the surface draws, for refusing a name it does not know. */
 export const TOKEN_NAME_SET: ReadonlySet<string> = new Set(TUI_TOKENS)
@@ -56,7 +58,9 @@ export const PALETTE_NAME_SET: ReadonlySet<string> = new Set(PALETTE_NAMES)
 
 /** Exclude null and arrays so both readers apply mapping validation only to configuration objects. */
 export function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined
 }
 
 /**
@@ -67,7 +71,7 @@ export function asRecord(value: unknown): Record<string, unknown> | undefined {
  * outcome a writer could not debug from the screen.
  */
 export function unknownNames(block: unknown, known: ReadonlySet<string>): string[] {
-  return Object.keys(asRecord(block) ?? {}).filter(name => !known.has(name))
+  return Object.keys(asRecord(block) ?? {}).filter((name) => !known.has(name))
 }
 
 /**
@@ -78,7 +82,8 @@ export function writtenPalette(raw: unknown): Readonly<Partial<Record<PaletteNam
   const written: Record<string, string> = (asRecord(raw) ?? {}) as Record<string, string>
   const validated = PaletteSchema(written) as Record<PaletteName, string>
   const palette: Partial<Record<PaletteName, string>> = {}
-  for (const name of Object.keys(written)) palette[name as PaletteName] = validated[name as PaletteName]
+  for (const name of Object.keys(written))
+    palette[name as PaletteName] = validated[name as PaletteName]
   return palette
 }
 

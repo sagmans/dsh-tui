@@ -98,7 +98,10 @@ interface LockOwner {
 }
 
 /** Serialize reads that may quarantine the bank with mutations, so recovery cannot race a writer. */
-export function withStashFileLock<Result>(filePath: string, operation: () => Promise<Result>): Promise<Result> {
+export function withStashFileLock<Result>(
+  filePath: string,
+  operation: () => Promise<Result>,
+): Promise<Result> {
   return withStashLock(filePath, operation, false)
 }
 
@@ -142,7 +145,10 @@ async function withStashLock<Result>(
           error: releaseError,
         })
       }
-      throw new AggregateError([operationError, releaseError], 'stash operation and lock release both failed')
+      throw new AggregateError(
+        [operationError, releaseError],
+        'stash operation and lock release both failed',
+      )
     }
     throw operationError
   }
@@ -219,7 +225,10 @@ function lockTimeout(lockDir: string): Error {
  */
 function reclaimMutexPath(lockDir: string): string {
   const digest = createHash('sha256').update(path.basename(lockDir), 'utf8').digest('hex')
-  return path.join(path.dirname(lockDir), `${RECLAIM_PREFIX}${digest.slice(0, RECLAIM_DIGEST_LENGTH)}`)
+  return path.join(
+    path.dirname(lockDir),
+    `${RECLAIM_PREFIX}${digest.slice(0, RECLAIM_DIGEST_LENGTH)}`,
+  )
 }
 
 async function writeLockOwner(lockDir: string): Promise<LockOwner> {
@@ -289,7 +298,11 @@ async function takeLockDirectory(lockDir: string): Promise<string | undefined> {
   try {
     await rename(lockDir, taken)
   } catch (error) {
-    if (hasErrorCode(error, 'ENOENT') || hasErrorCode(error, 'ENOTEMPTY') || hasErrorCode(error, 'EEXIST')) {
+    if (
+      hasErrorCode(error, 'ENOENT') ||
+      hasErrorCode(error, 'ENOTEMPTY') ||
+      hasErrorCode(error, 'EEXIST')
+    ) {
       return undefined
     }
     throw error
@@ -416,7 +429,10 @@ function isAbandonedLock(observed: LockObservation): boolean {
  */
 async function claimReclaim(mutex: string): Promise<string | undefined> {
   const claim = `${mutex}.${createNewId()}`
-  await writePrivateFileExclusive(claim, `${JSON.stringify({ pid: process.pid, host: hostname() })}\n`)
+  await writePrivateFileExclusive(
+    claim,
+    `${JSON.stringify({ pid: process.pid, host: hostname() })}\n`,
+  )
   try {
     await link(claim, mutex)
     return claim

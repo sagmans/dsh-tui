@@ -1,6 +1,6 @@
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { ForkInheritance, TuiAgent } from '../agent/host.ts'
-import { parsePresetArgument, type PresetRoster, type PresetSummary } from '../agent/presets.ts'
+import { type PresetRoster, type PresetSummary, parsePresetArgument } from '../agent/presets.ts'
 import type { Keymap } from '../input/actions.ts'
 import { PresetPicker } from '../ui/picker.ts'
 import type { Picker } from './modal-input.ts'
@@ -60,7 +60,11 @@ export interface PresetLaunch {
 /** The reads and operations the composing surface routes to the mode owner. */
 export interface PresetChoice {
   /** The mode one agent joins. */
-  readonly presetFor: (id: SessionId, resume: boolean, fork: ForkInheritance | undefined) => Promise<string | undefined>
+  readonly presetFor: (
+    id: SessionId,
+    resume: boolean,
+    fork: ForkInheritance | undefined,
+  ) => Promise<string | undefined>
   /** Resolve the named mode and refuse a launch that cannot run it. */
   readonly validateLaunch: (launch: PresetLaunch) => Promise<void>
   /** Show or choose the mode this session runs. */
@@ -102,7 +106,7 @@ export function createPresetChoice(ports: PresetChoicePorts): PresetChoice {
   const whenRosterHasModes = async (roster: PresetRoster): Promise<void> => {
     const deadline = Date.now() + MODE_ARRIVAL_MS
     while ((await roster.list()).length === 0 && Date.now() < deadline) {
-      await new Promise(resolve => setTimeout(resolve, MODE_ARRIVAL_STEP_MS))
+      await new Promise((resolve) => setTimeout(resolve, MODE_ARRIVAL_STEP_MS))
     }
   }
 
@@ -130,9 +134,18 @@ export function createPresetChoice(ports: PresetChoicePorts): PresetChoice {
   let presetRows: readonly PresetSummary[] = []
 
   /** Choose the mode a session that has not started yet will run. */
-  const askForPreset = async (roster: PresetRoster, currentId: string | undefined): Promise<string | undefined> => {
+  const askForPreset = async (
+    roster: PresetRoster,
+    currentId: string | undefined,
+  ): Promise<string | undefined> => {
     presetRows = await roster.list()
-    return await ports.openPicker(new PresetPicker(() => presetRows, () => currentId, ports.keymap))
+    return await ports.openPicker(
+      new PresetPicker(
+        () => presetRows,
+        () => currentId,
+        ports.keymap,
+      ),
+    )
   }
 
   /** Allow explicit recovery of an unresolvable stored mode without assuming failure proves removal. */
@@ -153,7 +166,11 @@ export function createPresetChoice(ports: PresetChoicePorts): PresetChoice {
    * that recorded none, which is every session written before modes existed,
    * takes the seat; a branch inherits the mode its parent is running.
    */
-  const presetFor = async (id: SessionId, resume: boolean, fork: ForkInheritance | undefined): Promise<string | undefined> => {
+  const presetFor = async (
+    id: SessionId,
+    resume: boolean,
+    fork: ForkInheritance | undefined,
+  ): Promise<string | undefined> => {
     const roster = ports.agentPresets
     if (roster === undefined) return undefined
     if (fork !== undefined) return ports.livePreset(fork.from) ?? seatMode()
@@ -189,7 +206,9 @@ export function createPresetChoice(ports: PresetChoicePorts): PresetChoice {
     try {
       chosen = await roster.select(agent.agent, id)
     } catch (error) {
-      ports.notice(`could not switch the mode: ${error instanceof Error ? error.message : String(error)}`)
+      ports.notice(
+        `could not switch the mode: ${error instanceof Error ? error.message : String(error)}`,
+      )
       ports.render()
       return
     }
@@ -236,11 +255,15 @@ export function createPresetChoice(ports: PresetChoicePorts): PresetChoice {
     const command = parsePresetArgument(argument)
     if (command.kind === 'pick') {
       if (roster.started(session)) {
-        ports.notice(`this session runs ${current === undefined ? 'a mode' : `"${current}"`} and has already started, so its mode is fixed — /new starts a fresh session`)
+        ports.notice(
+          `this session runs ${current === undefined ? 'a mode' : `"${current}"`} and has already started, so its mode is fixed — /new starts a fresh session`,
+        )
         ports.render()
         return
       }
-      void askForPreset(roster, current).then(picked => picked === undefined ? undefined : applyPreset(picked))
+      void askForPreset(roster, current).then((picked) =>
+        picked === undefined ? undefined : applyPreset(picked),
+      )
       return
     }
     void applyPreset(command.id)
@@ -265,7 +288,7 @@ export function createPresetChoice(ports: PresetChoicePorts): PresetChoice {
       try {
         seat = (await roster.resolve(requestedPreset)).id
       } catch {
-        const offered = (await roster.list()).map(row => row.id)
+        const offered = (await roster.list()).map((row) => row.id)
         throw new Error(
           `mode "${requestedPreset}" is not one this profile offers · modes: ${offered.length === 0 ? 'none' : offered.join(' · ')}`,
         )

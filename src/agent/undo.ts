@@ -45,7 +45,9 @@ export function resetUndo(sessionId: SessionId): UndoState {
 
 /** Durable event payloads are unknown; absent fields must not prevent undoing other closed turns. */
 function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined
+  return typeof value === 'object' && value !== null
+    ? (value as Record<string, unknown>)
+    : undefined
 }
 
 /**
@@ -126,14 +128,22 @@ export function turnsOf(events: readonly ForkEvent[]): readonly TurnPoint[] {
 export function undoStep(state: UndoState, turns: readonly TurnPoint[]): UndoState | undefined {
   if (state.hidden >= turns.length) return undefined
   const hidden = state.hidden + 1
-  return { ...state, hidden, lastRestored: turns[turns.length - hidden]?.promptText ?? state.lastRestored }
+  return {
+    ...state,
+    hidden,
+    lastRestored: turns[turns.length - hidden]?.promptText ?? state.lastRestored,
+  }
 }
 
 /** Step the cursor one turn forward, or undefined when it is already at the tip. */
 export function redoStep(state: UndoState, turns: readonly TurnPoint[]): UndoState | undefined {
   if (state.hidden === 0) return undefined
   const hidden = state.hidden - 1
-  return { ...state, hidden, lastRestored: hidden === 0 ? '' : turns[turns.length - hidden]?.promptText ?? '' }
+  return {
+    ...state,
+    hidden,
+    lastRestored: hidden === 0 ? '' : (turns[turns.length - hidden]?.promptText ?? ''),
+  }
 }
 
 /** The oldest hidden turn: where a divergence forks, or undefined at the tip. */

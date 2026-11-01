@@ -74,21 +74,22 @@ export interface ProbeReport {
 /** Ask which capabilities a composition provides. */
 export function probeComposition(has: (service: string) => boolean): ProbeReport {
   return {
-    missingRequired: REQUIRED_CAPABILITIES.filter(capability => !has(capability.service)),
-    missingOptional: OPTIONAL_CAPABILITIES.filter(capability => !has(capability.service)),
+    missingRequired: REQUIRED_CAPABILITIES.filter((capability) => !has(capability.service)),
+    missingOptional: OPTIONAL_CAPABILITIES.filter((capability) => !has(capability.service)),
   }
 }
 
 /** The failure that stops activation, naming every missing requirement at once. */
 export function describeMissingRequired(report: ProbeReport): string {
-  const lines = report.missingRequired.map(capability =>
-    `  ${capability.service}: needed for ${capability.use} — ${capability.fix}`)
+  const lines = report.missingRequired.map(
+    (capability) => `  ${capability.service}: needed for ${capability.use} — ${capability.fix}`,
+  )
   return `dsh-tui: this profile is missing what the terminal surface needs\n${lines.join('\n')}`
 }
 
 /** One line for the reader when the surface runs with something switched off. */
 export function describeMissingOptional(report: ProbeReport): string | undefined {
   if (report.missingOptional.length === 0) return undefined
-  const names = report.missingOptional.map(capability => capability.service)
+  const names = report.missingOptional.map((capability) => capability.service)
   return `running without ${names.join(', ')}; run /status after adding the rows this profile lacks`
 }

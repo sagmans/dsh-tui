@@ -1,16 +1,30 @@
-import type { KeyId } from '@earendil-works/pi-tui'
 import type { Context } from '@deepseek-ai/cordis'
-import { defaultKeymap, resolveKeymap, type Keymap } from '../input/actions.ts'
+import type { KeyId } from '@earendil-works/pi-tui'
 import type { Action } from '../input/action-catalog.ts'
-import type { KeymapRegistry } from '../keymaps.ts'
+import { defaultKeymap, type Keymap, resolveKeymap } from '../input/actions.ts'
 import { DEFAULT_PREFIX_KEYS, DEFAULT_PREFIX_WINDOW_S } from '../input/keymap.ts'
-import { DEFAULT_SPACING, type Spacing } from '../spacing.ts'
+import type { KeymapRegistry } from '../keymaps.ts'
 import { createDeferredNotice, type NoticeSink } from '../settings-notice.ts'
+import { DEFAULT_SPACING, type Spacing } from '../spacing.ts'
 import { createTheme, forwardEditorTheme, forwardMarkdownTheme, type TuiTheme } from '../theme.ts'
-import { detectColourMode, type ColourMode } from '../theme-capability.ts'
+import { type ColourMode, detectColourMode } from '../theme-capability.ts'
 import { renderThemeTable } from '../theme-command.ts'
-import { DEFAULT_THEME, builtinNames, builtinThemesDir, ensureThemesHome, exportTheme, loadThemes, themesHomeDir, watchThemes } from '../theme-files.ts'
-import { defaultSettings, toOverrides, type MermaidMode, type TuiSettings } from '../theme-settings.ts'
+import {
+  builtinNames,
+  builtinThemesDir,
+  DEFAULT_THEME,
+  ensureThemesHome,
+  exportTheme,
+  loadThemes,
+  themesHomeDir,
+  watchThemes,
+} from '../theme-files.ts'
+import {
+  defaultSettings,
+  type MermaidMode,
+  type TuiSettings,
+  toOverrides,
+} from '../theme-settings.ts'
 import type { ToolDisplayTable } from '../tool-display.ts'
 import { ThemePicker } from '../ui/theme-picker.ts'
 import { DEFAULT_VIEW_STATE, type ViewState } from '../ui/view.ts'
@@ -147,11 +161,15 @@ export function createAppearance(ctx: Context, ports: AppearancePorts): Appearan
    * to hold a name — which is why the row is read here, below the section and
    * above the default, rather than as the only answer.
    */
-  const themeName = (section: TuiSettings): string | undefined => section.theme ?? (preferences.configBacked() ? undefined : ports.rowTheme)
+  const themeName = (section: TuiSettings): string | undefined =>
+    section.theme ?? (preferences.configBacked() ? undefined : ports.rowTheme)
   const applyTheme = (section: TuiSettings): void => {
     // The row under the cursor outranks both while a list is open, so a theme is
     // judged on the reader's own transcript before it is taken.
-    current = createTheme(themeMode(), toOverrides({ ...section, theme: previewTheme ?? themeName(section) }, themeLibrary))
+    current = createTheme(
+      themeMode(),
+      toOverrides({ ...section, theme: previewTheme ?? themeName(section) }, themeLibrary),
+    )
   }
   /** Repaint the surface: both caches hold rows drawn under the table this replaced. */
   const restyle = (): void => {
@@ -175,13 +193,17 @@ export function createAppearance(ctx: Context, ports: AppearancePorts): Appearan
     restyle()
   }
   const theme: TuiTheme = {
-    get revision() { return current.revision },
-    get color() { return current.color },
+    get revision() {
+      return current.revision
+    },
+    get color() {
+      return current.color
+    },
     style: (token, text) => current.style(token, text),
     rich: (raw, options) => current.rich(raw, options),
     cut: (text, width, ellipsis) => current.cut(text, width, ellipsis),
-    glyph: token => current.glyph(token),
-    visible: token => current.visible(token),
+    glyph: (token) => current.glyph(token),
+    visible: (token) => current.visible(token),
     // Forwarded rather than read, because the editor and the markdown view keep
     // the theme object they were built with: a settings change has to reach them
     // through a stable delegate or they would keep the boot appearance.
@@ -227,7 +249,10 @@ export function createAppearance(ctx: Context, ports: AppearancePorts): Appearan
   const registry = ports.pluginKeymaps
   // Only explicit overrides survive catalog changes; inherited keys must follow the current plugin defaults.
   const resolvePlugins = (map: Keymap, catalog: readonly Action[]): Keymap =>
-    resolveKeymap(Object.fromEntries([...map.written].map(id => [id, map.effective[id]])), catalog)
+    resolveKeymap(
+      Object.fromEntries([...map.written].map((id) => [id, map.effective[id]])),
+      catalog,
+    )
   /**
    * Start history off until a supported preference source authorizes it; attachment failures must leave it off.
    * Getters recheck exposed raw user layers so rejected edits cannot hide an opt-out behind cached settings.
@@ -251,7 +276,8 @@ export function createAppearance(ctx: Context, ports: AppearancePorts): Appearan
     spacing = section.spacing
     prefixKeys = section.prefixes
     prefixWindowMs = section.prefixWindow * MS_PER_SECOND
-    keymap = registry === undefined ? section.keymap : resolvePlugins(section.keymap, registry.catalog())
+    keymap =
+      registry === undefined ? section.keymap : resolvePlugins(section.keymap, registry.catalog())
     ports.keybindings().installBindings()
     historyEnabled = section.history.enabled
     historyGhost = section.history.ghost
@@ -293,7 +319,9 @@ export function createAppearance(ctx: Context, ports: AppearancePorts): Appearan
   const reportMissingTheme = (section: TuiSettings): void => {
     const name = themeName(section)
     if (name === undefined || themeLibrary.get(name) !== undefined) return
-    settingsNotice.post(`dsh-tui theme "${name}" is not a theme · themes: ${themeLibrary.names().join(' · ')} · the default, ${DEFAULT_THEME}, is drawn instead`)
+    settingsNotice.post(
+      `dsh-tui theme "${name}" is not a theme · themes: ${themeLibrary.names().join(' · ')} · the default, ${DEFAULT_THEME}, is drawn instead`,
+    )
   }
   /**
    * Choose a theme from a list the screen follows.
@@ -304,14 +332,16 @@ export function createAppearance(ctx: Context, ports: AppearancePorts): Appearan
    * looked.
    */
   const openThemePicker = async (): Promise<void> => {
-    const picked = await ports.openPicker(new ThemePicker(
-      () => themeLibrary,
-      // What the surface draws right now, so a name pinned in the row is the
-      // row the list opens on instead of reading as no choice at all.
-      () => appliedSection === undefined ? ports.rowTheme : themeName(appliedSection),
-      () => keymap,
-      theme => showTheme(theme?.name),
-    ))
+    const picked = await ports.openPicker(
+      new ThemePicker(
+        () => themeLibrary,
+        // What the surface draws right now, so a name pinned in the row is the
+        // row the list opens on instead of reading as no choice at all.
+        () => (appliedSection === undefined ? ports.rowTheme : themeName(appliedSection)),
+        () => keymap,
+        (theme) => showTheme(theme?.name),
+      ),
+    )
     if (picked === undefined) {
       showTheme(undefined)
       return
@@ -338,7 +368,11 @@ export function createAppearance(ctx: Context, ports: AppearancePorts): Appearan
       // document: a row-pinned theme would otherwise read as every shade
       // untouched, which is the opposite of the question this command answers.
       const section = appliedSection ?? preferences.read()
-      const table = renderThemeTable(toOverrides({ ...section, theme: previewTheme ?? themeName(section) }, themeLibrary), themeLibrary, preferences.home())
+      const table = renderThemeTable(
+        toOverrides({ ...section, theme: previewTheme ?? themeName(section) }, themeLibrary),
+        themeLibrary,
+        preferences.home(),
+      )
       for (const line of table) ports.notice(line)
       ports.render()
       return
@@ -357,7 +391,9 @@ export function createAppearance(ctx: Context, ports: AppearancePorts): Appearan
       const outcome = exportTheme(themeLibrary, chosen)
       if (outcome.ok) {
         themeLibrary = loadThemes(themesHome, builtinThemesDir())
-        ports.notice(`theme · exported ${chosen} to ${outcome.path} · /theme ${outcome.select} applies it`)
+        ports.notice(
+          `theme · exported ${chosen} to ${outcome.path} · /theme ${outcome.select} applies it`,
+        )
       } else {
         ports.notice(outcome.problem)
       }
@@ -380,9 +416,12 @@ export function createAppearance(ctx: Context, ports: AppearancePorts): Appearan
     apply: applySettings,
     restyle,
     restorePreview: () => showTheme(undefined),
-    disableHistory: () => { historyEnabled = false; historyGhost = false },
+    disableHistory: () => {
+      historyEnabled = false
+      historyGhost = false
+    },
     notice: ports.notice,
-    problem: message => settingsNotice.post(message),
+    problem: (message) => settingsNotice.post(message),
   })
   let reportedThemes = new Set<string>()
   const reportThemes = (): void => {
@@ -410,14 +449,19 @@ export function createAppearance(ctx: Context, ports: AppearancePorts): Appearan
     for (const problem of ensureThemesHome(themesHome)) settingsNotice.post(problem)
     reportThemes()
   }
-  const watchThemeFiles = (): (() => void) => watchThemes(themesHome, () => {
-    themeLibrary = loadThemes(themesHome, builtinThemesDir())
-    reportThemes()
-    // The file that was just saved may be the theme already in force, so the
-    // table is rebuilt rather than only repainted.
-    applySettings()
-    restyle()
-  }, text => settingsNotice.post(text))
+  const watchThemeFiles = (): (() => void) =>
+    watchThemes(
+      themesHome,
+      () => {
+        themeLibrary = loadThemes(themesHome, builtinThemesDir())
+        reportThemes()
+        // The file that was just saved may be the theme already in force, so the
+        // table is rebuilt rather than only repainted.
+        applySettings()
+        restyle()
+      },
+      (text) => settingsNotice.post(text),
+    )
   return {
     theme,
     viewState: () => viewState,
@@ -433,19 +477,27 @@ export function createAppearance(ctx: Context, ports: AppearancePorts): Appearan
     historyEnabled: () => preferences.allowsHistory('enabled', historyEnabled),
     historyGhost: () => preferences.allowsHistory('ghost', historyGhost),
     historyMaxEntries: () => historyMaxEntries,
-    openNotices: sink => settingsNotice.open(sink),
+    openNotices: (sink) => settingsNotice.open(sink),
     registerSection: preferences.register,
     createThemesHome,
     settingsListener: () => {
       // Validate against reader overrides before publication so conflicting plugin keys never reach the active map.
-      const stopRegistry = registry?.observe(catalog => { resolvePlugins(keymap, catalog) }, () => {
-        applySettings()
-        ports.render()
-      })
+      const stopRegistry = registry?.observe(
+        (catalog) => {
+          resolvePlugins(keymap, catalog)
+        },
+        () => {
+          applySettings()
+          ports.render()
+        },
+      )
       // Startup can publish a plugin between the first preference read and this subscription.
       if (registry !== undefined) applySettings()
       const stopSettings = preferences.listen()
-      return () => { stopRegistry?.(); stopSettings() }
+      return () => {
+        stopRegistry?.()
+        stopSettings()
+      }
     },
     watchThemes: watchThemeFiles,
     runThemeCommand,

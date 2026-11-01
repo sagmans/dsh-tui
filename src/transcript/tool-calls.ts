@@ -1,5 +1,11 @@
+import {
+  carriedFields,
+  mergeCards,
+  SUBCALL_MAX,
+  subCallRow,
+  subCallRows,
+} from '../cards/composition.ts'
 import { cardFromLines, type ToolCard, type ToolPresenter } from '../cards.ts'
-import { carriedFields, mergeCards, subCallRow, subCallRows, SUBCALL_MAX } from '../cards/composition.ts'
 import type { TranscriptEntry } from '../transcript.ts'
 import { contentLinesOf } from './message-content.ts'
 
@@ -68,7 +74,10 @@ export class ToolCallFold {
    * A dispatch logs a start and then a settle, so the second event has to find
    * the row the first one drew instead of adding a second line for one call.
    */
-  private readonly pendingSub = new Map<string, { readonly rootIndex: number; readonly childIndex: number }>()
+  private readonly pendingSub = new Map<
+    string,
+    { readonly rootIndex: number; readonly childIndex: number }
+  >()
 
   constructor(
     private readonly presenter: ToolPresenter,
@@ -78,7 +87,12 @@ export class ToolCallFold {
   ) {}
 
   /** Fold one tool event, which is the only family of events that owns cross-event state. */
-  apply(type: string, data: Record<string, unknown>, landingIndex: number, at = this.clock()): ToolCallOutcome {
+  apply(
+    type: string,
+    data: Record<string, unknown>,
+    landingIndex: number,
+    at = this.clock(),
+  ): ToolCallOutcome {
     switch (type) {
       case 'tool/call':
         return this.rootCall(data, landingIndex, at)
@@ -134,7 +148,11 @@ export class ToolCallFold {
   }
 
   /** The row a requested call draws, which is the row its result later replaces. */
-  private rootCall(data: Record<string, unknown>, landingIndex: number, at: number): ToolCallOutcome {
+  private rootCall(
+    data: Record<string, unknown>,
+    landingIndex: number,
+    at: number,
+  ): ToolCallOutcome {
     const name = typeof data.name === 'string' ? data.name : 'tool'
     const argumentsJson = typeof data.arguments === 'string' ? data.arguments : ''
     const callId = typeof data.callId === 'string' ? data.callId : ''
@@ -145,9 +163,24 @@ export class ToolCallFold {
       // result replaces the card: the entry object does not survive, the id does.
       id: callId,
       // Without a presenter the row still has to say what ran and with what.
-      card: card ?? cardFromLines('generic', name, name, argumentsJson === '' ? [] : argumentsJson.split('\n'), false),
+      card:
+        card ??
+        cardFromLines(
+          'generic',
+          name,
+          name,
+          argumentsJson === '' ? [] : argumentsJson.split('\n'),
+          false,
+        ),
     }
-    if (callId !== '') this.pending.set(callId, { name, argumentsJson, index: landingIndex, startedAt: at, subs: [] })
+    if (callId !== '')
+      this.pending.set(callId, {
+        name,
+        argumentsJson,
+        index: landingIndex,
+        startedAt: at,
+        subs: [],
+      })
     return { appends: [entry], replacements: [] }
   }
 
@@ -190,15 +223,37 @@ export class ToolCallFold {
       // A settle that reports nothing to open leaves the row's own outcome in
       // place; only a failure takes it back, because the rows it drew as applied
       // never happened.
-      const settledOutput = isError ? output : output ?? drawn?.output
-      const subCalls = (card.subCalls ?? []).map((call, at) => at === known.childIndex
-        ? subCallRow(subCallId, name, argumentsJson, { view, output: settledOutput, status: result?.status, running: false, failed }, call)
-        : call)
-      return { appends: [], replacements: [{ index: root.index, entry: { kind: 'tool', id: rootCallId, card: { ...card, subCalls } } }] }
+      const settledOutput = isError ? output : (output ?? drawn?.output)
+      const subCalls = (card.subCalls ?? []).map((call, at) =>
+        at === known.childIndex
+          ? subCallRow(
+              subCallId,
+              name,
+              argumentsJson,
+              { view, output: settledOutput, status: result?.status, running: false, failed },
+              call,
+            )
+          : call,
+      )
+      return {
+        appends: [],
+        replacements: [
+          {
+            index: root.index,
+            entry: { kind: 'tool', id: rootCallId, card: { ...card, subCalls } },
+          },
+        ],
+      }
     }
     // A dispatch log arrives only once the call has settled, so a row that no
     // settle has restated yet is the one still running.
-    const call = subCallRow(subCallId, name, argumentsJson, { view, output, status: result?.status, running: !settled, failed })
+    const call = subCallRow(subCallId, name, argumentsJson, {
+      view,
+      output,
+      status: result?.status,
+      running: !settled,
+      failed,
+    })
     const kept = card.subCalls ?? []
     const total = (card.subCallsTotal ?? 0) + 1
     if (kept.length >= SUBCALL_MAX) {
@@ -208,11 +263,31 @@ export class ToolCallFold {
       // own cleanup forgets it — an overflow row has no row to clean up after.
       this.pendingSub.set(subCallId, { rootIndex: root.index, childIndex: -1 })
       root.subs.push(subCallId)
-      return { appends: [], replacements: [{ index: root.index, entry: { kind: 'tool', id: rootCallId, card: { ...card, subCallsTotal: total } } }] }
+      return {
+        appends: [],
+        replacements: [
+          {
+            index: root.index,
+            entry: { kind: 'tool', id: rootCallId, card: { ...card, subCallsTotal: total } },
+          },
+        ],
+      }
     }
     root.subs.push(subCallId)
     this.pendingSub.set(subCallId, { rootIndex: root.index, childIndex: kept.length })
-    return { appends: [], replacements: [{ index: root.index, entry: { kind: 'tool', id: rootCallId, card: { ...card, subCalls: [...kept, call], subCallsTotal: total } } }] }
+    return {
+      appends: [],
+      replacements: [
+        {
+          index: root.index,
+          entry: {
+            kind: 'tool',
+            id: rootCallId,
+            card: { ...card, subCalls: [...kept, call], subCallsTotal: total },
+          },
+        },
+      ],
+    }
   }
 
   /**
@@ -231,8 +306,21 @@ export class ToolCallFold {
     view: ToolCard | undefined,
   ): ToolCard {
     const failed = data.isError === true
-    return this.presenter.result(name, { argumentsJson, content: data.content, isError: failed, meta: data.meta })
-      ?? cardFromLines(view?.kind ?? 'generic', name, view?.title ?? name, contentLinesOf(data.content), failed)
+    return (
+      this.presenter.result(name, {
+        argumentsJson,
+        content: data.content,
+        isError: failed,
+        meta: data.meta,
+      }) ??
+      cardFromLines(
+        view?.kind ?? 'generic',
+        name,
+        view?.title ?? name,
+        contentLinesOf(data.content),
+        failed,
+      )
+    )
   }
 
   /** The row a call's result settles into: the card it drew, restated with what answered it. */
@@ -246,7 +334,8 @@ export class ToolCallFold {
     // fold holds both readings of the clock.
     const ranFor = pending === undefined ? undefined : this.secondsSince(pending.startedAt, at)
     /** The card that reports this result, carrying the seconds the call took. */
-    const finished = (card: ToolCard): ToolCard => (ranFor === undefined ? card : { ...card, elapsed: ranFor })
+    const finished = (card: ToolCard): ToolCard =>
+      ranFor === undefined ? card : { ...card, elapsed: ranFor }
     // The root is done dispatching, so its bookkeeping goes with it; the rows it
     // already drew stay on the card.
     if (pending !== undefined) for (const sub of pending.subs) this.pendingSub.delete(sub)
@@ -261,11 +350,15 @@ export class ToolCallFold {
     if (pending === undefined) {
       // No matching call in this fold: a resumed transcript may start mid-call.
       return {
-        appends: [{
-          kind: 'tool',
-          id: callId,
-          card: result ?? cardFromLines('generic', name, name, contentLinesOf(message?.content), isError),
-        }],
+        appends: [
+          {
+            kind: 'tool',
+            id: callId,
+            card:
+              result ??
+              cardFromLines('generic', name, name, contentLinesOf(message?.content), isError),
+          },
+        ],
         replacements: [],
       }
     }
@@ -275,16 +368,30 @@ export class ToolCallFold {
       // and a reader without it would see a tool row that never reported back.
       const reported = contentLinesOf(message?.content)
       const base = call ?? cardFromLines('generic', name, name, [], false)
-      const rebuilt = reported.length === 0
-        ? { ...base, failed: isError }
-        : { ...cardFromLines(base.kind, base.tool, base.title, reported, isError), ...carriedFields(base) }
-      return { appends: [], replacements: [{ index: pending.index, entry: { kind: 'tool', id: callId, card: finished(rebuilt) } }] }
+      const rebuilt =
+        reported.length === 0
+          ? { ...base, failed: isError }
+          : {
+              ...cardFromLines(base.kind, base.tool, base.title, reported, isError),
+              ...carriedFields(base),
+            }
+      return {
+        appends: [],
+        replacements: [
+          { index: pending.index, entry: { kind: 'tool', id: callId, card: finished(rebuilt) } },
+        ],
+      }
     }
     // Two readings decide this, and either is enough: the log says whether the tool
     // raised, and the card the presenter built says how the call itself ended — a
     // shell's non-zero exit is a failure the log's flag never carries.
     const settledCard = mergeCards(call, { ...result, failed: result.failed || isError })
-    return { appends: [], replacements: [{ index: pending.index, entry: { kind: 'tool', id: callId, card: finished(settledCard) } }] }
+    return {
+      appends: [],
+      replacements: [
+        { index: pending.index, entry: { kind: 'tool', id: callId, card: finished(settledCard) } },
+      ],
+    }
   }
 }
 
@@ -318,5 +425,7 @@ function argumentsJsonOf(value: unknown): string {
 
 /** Non-object result envelopes must not interrupt result folding; object fields still need their own checks. */
 function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined
+  return typeof value === 'object' && value !== null
+    ? (value as Record<string, unknown>)
+    : undefined
 }

@@ -13,7 +13,7 @@ const TODO_EMPTY_DESCRIPTIONS = {
   [TODO_STATES.turnCleared]: 'the todo list was cleared when this turn started',
 } as const
 
-type TodoState = typeof TODO_STATES[keyof typeof TODO_STATES]
+type TodoState = (typeof TODO_STATES)[keyof typeof TODO_STATES]
 
 /** Share the surface's content/status contract between the durable fold, dock, and guard without importing the agent-owned tool. */
 export interface TodoEntry {
@@ -45,10 +45,17 @@ export interface WorkState {
   readonly goal: GoalState | undefined
 }
 
-const EMPTY: WorkState = { planMode: false, todos: undefined, todoState: TODO_STATES.neverWritten, goal: undefined }
+const EMPTY: WorkState = {
+  planMode: false,
+  todos: undefined,
+  todoState: TODO_STATES.neverWritten,
+  goal: undefined,
+}
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined
+  return typeof value === 'object' && value !== null
+    ? (value as Record<string, unknown>)
+    : undefined
 }
 
 const TODO_STATUSES = new Set<TodoEntry['status']>(['pending', 'in_progress', 'completed'])
@@ -81,12 +88,15 @@ function orderTodos(todos: readonly TodoEntry[]): readonly TodoEntry[] {
 }
 
 /** The todo list as plain lines, for a reader who asked for it by name. */
-export function describeTodos(todos: readonly TodoEntry[] | undefined, todoState: TodoState): string {
+export function describeTodos(
+  todos: readonly TodoEntry[] | undefined,
+  todoState: TodoState,
+): string {
   if (todos === undefined || todos.length === 0) {
     return TODO_EMPTY_DESCRIPTIONS[todoState]
   }
-  const done = todos.filter(todo => todo.status === 'completed').length
-  const rows = orderTodos(todos).map(todo => `  ${TODO_GLYPHS[todo.status]} ${todo.content}`)
+  const done = todos.filter((todo) => todo.status === 'completed').length
+  const rows = orderTodos(todos).map((todo) => `  ${TODO_GLYPHS[todo.status]} ${todo.content}`)
   return [`todos · ${done}/${todos.length} done`, ...rows].join('\n')
 }
 
@@ -141,7 +151,9 @@ function asPlanState(value: unknown): PlanModeState | undefined {
 
 /** The plan state of one agent, read from whichever scope of the composition holds it. */
 export function readPlanState(lookup: ServiceLookup, agent: unknown): PlanModeState | undefined {
-  const controller = asController(lookup.forAgent(agent, PLAN_SERVICE) ?? lookup.direct(PLAN_SERVICE))
+  const controller = asController(
+    lookup.forAgent(agent, PLAN_SERVICE) ?? lookup.direct(PLAN_SERVICE),
+  )
   if (controller === undefined) return undefined
   return asPlanState(controller.get(agent))
 }
@@ -234,9 +246,12 @@ export class WorkFold {
           return
         }
         const maxRounds = goal?.maxGoalRounds
-        const roundsStarted = typeof data.roundsStarted === 'number'
-          ? data.roundsStarted
-          : typeof goal?.roundsStarted === 'number' ? goal.roundsStarted : 0
+        const roundsStarted =
+          typeof data.roundsStarted === 'number'
+            ? data.roundsStarted
+            : typeof goal?.roundsStarted === 'number'
+              ? goal.roundsStarted
+              : 0
         const phase = goal?.phase
         this.goal = {
           objective,

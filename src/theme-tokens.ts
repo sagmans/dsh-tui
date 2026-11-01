@@ -1,5 +1,16 @@
 /** Palette names let related elements share a reader-defined shade; literals allow independent overrides. */
-export const PALETTE_NAMES = ['default', 'muted', 'faint', 'accent', 'arg', 'warn', 'added', 'removed', 'user', 'assistant'] as const
+export const PALETTE_NAMES = [
+  'default',
+  'muted',
+  'faint',
+  'accent',
+  'arg',
+  'warn',
+  'added',
+  'removed',
+  'user',
+  'assistant',
+] as const
 
 /** A named palette entry. */
 export type PaletteName = (typeof PALETTE_NAMES)[number]
@@ -26,7 +37,21 @@ export interface StyleSpec {
 
 /** A row class a tool card can carry, so styling follows what the row means. */
 const CARD_ROW_CLASSES = [
-  'header', 'hunk', 'added', 'removed', 'line', 'lineNumber', 'path', 'match', 'truncated', 'output', 'cwd', 'status', 'source', 'url', 'detail',
+  'header',
+  'hunk',
+  'added',
+  'removed',
+  'line',
+  'lineNumber',
+  'path',
+  'match',
+  'truncated',
+  'output',
+  'cwd',
+  'status',
+  'source',
+  'url',
+  'detail',
 ] as const
 
 /** What a tool card row is, which is what decides how it is drawn. */
@@ -209,8 +234,15 @@ export type TuiToken = (typeof TUI_TOKENS)[number]
  * Two lookups rather than one because `header` means a different element on a
  * diff than on a read: the kind is half of what a row is.
  */
-export const CARD_ROW_TOKEN: Readonly<Record<string, Readonly<Partial<Record<CardRowClass, TuiToken>>>>> = {
-  diff: { header: 'tool.diff.header', hunk: 'tool.diff.hunk', added: 'tool.diff.added', removed: 'tool.diff.removed' },
+export const CARD_ROW_TOKEN: Readonly<
+  Record<string, Readonly<Partial<Record<CardRowClass, TuiToken>>>>
+> = {
+  diff: {
+    header: 'tool.diff.header',
+    hunk: 'tool.diff.hunk',
+    added: 'tool.diff.added',
+    removed: 'tool.diff.removed',
+  },
   read: { header: 'tool.read.header', lineNumber: 'tool.read.lineNumber', line: 'tool.read.line' },
   search: {
     path: 'tool.search.path',
@@ -218,7 +250,11 @@ export const CARD_ROW_TOKEN: Readonly<Record<string, Readonly<Partial<Record<Car
     match: 'tool.search.match',
     truncated: 'tool.search.truncated',
   },
-  terminal: { cwd: 'tool.terminal.cwd', status: 'tool.terminal.status', output: 'tool.terminal.output' },
+  terminal: {
+    cwd: 'tool.terminal.cwd',
+    status: 'tool.terminal.status',
+    output: 'tool.terminal.output',
+  },
   web: { url: 'tool.web.url', source: 'tool.web.source', truncated: 'tool.web.truncated' },
   generic: { detail: 'tool.generic.detail' },
 }

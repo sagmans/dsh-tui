@@ -67,7 +67,11 @@ export function createToolPresenter(ctx: Context, scope: () => Agent | undefined
       try {
         const view = definition(name)?.presentResult?.(
           parseArguments(input.argumentsJson) as never,
-          { content: toolResultContent(input.content), isError: input.isError, meta: input.meta } as never,
+          {
+            content: toolResultContent(input.content),
+            isError: input.isError,
+            meta: input.meta,
+          } as never,
         )
         return cardOfResult(view, {
           name,

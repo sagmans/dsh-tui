@@ -18,7 +18,7 @@ const KeyListSchema = z.union([z.string(), z.array(z.string())])
  */
 export const KeymapSectionSchema: z = z.dict(KeyListSchema)
 
-const ACTION_IDS: ReadonlySet<string> = new Set(ACTION_CATALOG.map(action => action.id))
+const ACTION_IDS: ReadonlySet<string> = new Set(ACTION_CATALOG.map((action) => action.id))
 
 /**
  * Whether a name is an action the surface has.

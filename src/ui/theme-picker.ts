@@ -1,4 +1,4 @@
-import { hintKeys, moveHint, type Keymap } from '../input/actions.ts'
+import { hintKeys, type Keymap, moveHint } from '../input/actions.ts'
 import { DEFAULT_THEME, type LoadedTheme, type ThemeLibrary } from '../theme-files.ts'
 import { ListPicker, type PickerHints, type PickerRow } from './picker.ts'
 
@@ -13,8 +13,8 @@ import { ListPicker, type PickerHints, type PickerRow } from './picker.ts'
 function orderedThemes(library: ThemeLibrary, inUse: string): readonly LoadedTheme[] {
   const themes = library.list()
   return [
-    ...themes.filter(theme => theme.name === inUse),
-    ...themes.filter(theme => theme.name !== inUse),
+    ...themes.filter((theme) => theme.name === inUse),
+    ...themes.filter((theme) => theme.name !== inUse),
   ]
 }
 
@@ -34,7 +34,9 @@ function describeTheme(theme: LoadedTheme, inUse: string): PickerRow {
       theme.builtin ? 'built into the package' : 'yours',
       `${elements} element${elements === 1 ? '' : 's'}`,
       theme.name === inUse ? 'in use' : undefined,
-    ].filter(part => part !== undefined).join(' · '),
+    ]
+      .filter((part) => part !== undefined)
+      .join(' · '),
     // The card marks the row under the cursor, which the list decides.
     current: false,
   }
@@ -43,8 +45,10 @@ function describeTheme(theme: LoadedTheme, inUse: string): PickerRow {
 /** What the list says about its own keys, read per paint so a rebind lands. */
 function themeHints(keys: () => Keymap): PickerHints {
   return {
-    empty: () => `nothing matches · backspace to widen · ${hintKeys(keys(), 'picker.cancel')} cancel`,
-    listed: () => `${moveHint(keys(), 'picker.up', 'picker.down')} preview · ${hintKeys(keys(), 'picker.confirm')} apply · ${hintKeys(keys(), 'picker.cancel')} cancel · type to filter`,
+    empty: () =>
+      `nothing matches · backspace to widen · ${hintKeys(keys(), 'picker.cancel')} cancel`,
+    listed: () =>
+      `${moveHint(keys(), 'picker.up', 'picker.down')} preview · ${hintKeys(keys(), 'picker.confirm')} apply · ${hintKeys(keys(), 'picker.cancel')} cancel · type to filter`,
   }
 }
 
@@ -71,9 +75,9 @@ export class ThemePicker extends ListPicker<LoadedTheme> {
     super(
       () => orderedThemes(library(), inUse()),
       () => `theme · ${library().list().length} available`,
-      theme => theme.name,
-      theme => describeTheme(theme, inUse()),
-      theme => [theme.name, theme.builtin ? 'built into the package' : 'yours'].join(' '),
+      (theme) => theme.name,
+      (theme) => describeTheme(theme, inUse()),
+      (theme) => [theme.name, theme.builtin ? 'built into the package' : 'yours'].join(' '),
       themeHints(keys),
       keys,
       // Opened unfiltered: the reader asked for the list, not for a search.

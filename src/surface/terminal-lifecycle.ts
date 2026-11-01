@@ -1,20 +1,27 @@
-import type { ProcessTerminal } from '@earendil-works/pi-tui'
-import { SOFTWARE_CURSOR_MODE, type CursorMode } from '../terminal/cursor.ts'
-import { EventSafeTerminal } from '../terminal/input.ts'
 import type { Context } from '@deepseek-ai/cordis'
 import type { SessionId } from '@deepseek-ai/dsh-session'
+import type { ProcessTerminal } from '@earendil-works/pi-tui'
 import { createHerdrReporter, type HerdrReporter } from '../herdr/reporter.ts'
 import { PROFILE_NAME, resumeHint } from '../identity.ts'
+import {
+  PROFILE_CATEGORY,
+  PROFILE_EXIT_REASON,
+  PROFILE_MILESTONE,
+  PROFILE_PHASE,
+  profileAsync,
+  TUI_PROFILING_SERVICE,
+} from '../profiling.ts'
 import { clipboardSequence } from '../terminal/clipboard.ts'
+import { type CursorMode, SOFTWARE_CURSOR_MODE } from '../terminal/cursor.ts'
 import { ExternalEditor } from '../terminal/external-editor.ts'
+import { EventSafeTerminal } from '../terminal/input.ts'
 import { createRestoreRegistry } from '../terminal/restore.ts'
 import { installSignalRestore } from '../terminal/signals.ts'
 import { CLEAR_TITLE, windowTitle } from '../terminal/title.ts'
 import { WarningSafeTui } from '../terminal/warning-screen.ts'
-import { cleanCopied } from '../ui/copy.ts'
 import { escapeTerminalText } from '../terminal-text.ts'
+import { cleanCopied } from '../ui/copy.ts'
 import type { FrameRow } from '../ui/frame.ts'
-import { TUI_PROFILING_SERVICE, PROFILE_CATEGORY, PROFILE_EXIT_REASON, profileAsync, PROFILE_PHASE, PROFILE_MILESTONE } from '../profiling.ts'
 
 /**
  * What the terminal's owner needs from the surface that composes it.
@@ -86,7 +93,11 @@ export interface TerminalLifecycle {
  * know that the reader's own editor holds the tty. The composer keeps the
  * widgets; this owner keeps every byte written to the terminal.
  */
-export function createTerminalLifecycle(ctx: Context, ports: TerminalLifecyclePorts, cursorMode: CursorMode = SOFTWARE_CURSOR_MODE): TerminalLifecycle {
+export function createTerminalLifecycle(
+  ctx: Context,
+  ports: TerminalLifecyclePorts,
+  cursorMode: CursorMode = SOFTWARE_CURSOR_MODE,
+): TerminalLifecycle {
   const profiling = ctx.get(TUI_PROFILING_SERVICE)
   const restore = createRestoreRegistry()
   const terminal = new EventSafeTerminal(profiling)
@@ -94,7 +105,7 @@ export function createTerminalLifecycle(ctx: Context, ports: TerminalLifecyclePo
   // A frame that cannot be drawn leaves the last good screen up, so the failure
   // has to reach the transcript: otherwise the surface looks frozen and nothing
   // on screen can say why.
-  tui.onFrameError = error => ports.reportFrameError(error)
+  tui.onFrameError = (error) => ports.reportFrameError(error)
   /** Whether a child process owns the terminal, which is when nothing here may write to it. */
   let handedOver = false
   /** Whether the host has unloaded this surface, after which nothing may start it again. */
@@ -155,7 +166,12 @@ export function createTerminalLifecycle(ctx: Context, ports: TerminalLifecyclePo
     // would otherwise claim the row back. The promise is returned so a host that
     // waits for teardown waits for the row too, and the exit listener outlives
     // the wait, so one that does not still hands the row back synchronously.
-    const released = profileAsync(profiling, PROFILE_PHASE.herdr, () => herdr.release(), PROFILE_CATEGORY.shutdown).catch(() => undefined)
+    const released = profileAsync(
+      profiling,
+      PROFILE_PHASE.herdr,
+      () => herdr.release(),
+      PROFILE_CATEGORY.shutdown,
+    ).catch(() => undefined)
     restore.restore()
     for (const dispose of disposers.reverse()) dispose()
     return released.finally(() => {
@@ -167,7 +183,13 @@ export function createTerminalLifecycle(ctx: Context, ports: TerminalLifecyclePo
 
   const requestExit = (code: number, reason?: string): void => {
     if (exited) return
-    profiling?.shutdown(reason === undefined ? PROFILE_EXIT_REASON.quit : code === 1 ? PROFILE_EXIT_REASON.startupFailure : PROFILE_EXIT_REASON.interrupted)
+    profiling?.shutdown(
+      reason === undefined
+        ? PROFILE_EXIT_REASON.quit
+        : code === 1
+          ? PROFILE_EXIT_REASON.startupFailure
+          : PROFILE_EXIT_REASON.interrupted,
+    )
     // A child owns the terminal: restoring it here would leave the reader a
     // shell behind an editor that is still running, and would put its tty back
     // into cooked mode under it. The exit waits for the screen to come back.
@@ -177,7 +199,10 @@ export function createTerminalLifecycle(ctx: Context, ports: TerminalLifecyclePo
       return
     }
     exited = true
-    const finishPreparation = profiling?.begin(PROFILE_PHASE.exitPreparation, PROFILE_CATEGORY.shutdown)
+    const finishPreparation = profiling?.begin(
+      PROFILE_PHASE.exitPreparation,
+      PROFILE_CATEGORY.shutdown,
+    )
     ports.stopClock()
     // The screen goes back at once, so leaving feels like leaving; the row goes
     // back behind it. Reports already on the wire are settled first, because
@@ -186,7 +211,12 @@ export function createTerminalLifecycle(ctx: Context, ports: TerminalLifecyclePo
     terminal.write(CLEAR_TITLE)
     finishPreparation?.()
     restore.restore()
-    void profileAsync(profiling, PROFILE_PHASE.herdr, () => herdr.release(), PROFILE_CATEGORY.shutdown)
+    void profileAsync(
+      profiling,
+      PROFILE_PHASE.herdr,
+      () => herdr.release(),
+      PROFILE_CATEGORY.shutdown,
+    )
       // Nobody is left to report a release that failed on the way out, and a
       // row that could not be cleared is not a reason to keep the process.
       .catch(() => undefined)
@@ -200,7 +230,8 @@ export function createTerminalLifecycle(ctx: Context, ports: TerminalLifecyclePo
         // switch moves it. A run that opened nothing has nothing to offer back:
         // the identity it was launched with names no log, so pointing at it
         // would send the reader to a conversation that does not exist.
-        if (ports.sessionOpened()) terminal.write(`\n${resumeHint(String(ports.activeSession()), PROFILE_NAME)}\n`)
+        if (ports.sessionOpened())
+          terminal.write(`\n${resumeHint(String(ports.activeSession()), PROFILE_NAME)}\n`)
         profiling?.mark(PROFILE_MILESTONE.launcherExit)
         ports.exit(code)
       })
@@ -215,7 +246,7 @@ export function createTerminalLifecycle(ctx: Context, ports: TerminalLifecyclePo
    * this registration keeps the position that list already gave it.
    */
   const signalShutdown = (): (() => void) =>
-    installSignalRestore({ shutdown: code => requestExit(code, 'interrupted') })
+    installSignalRestore({ shutdown: (code) => requestExit(code, 'interrupted') })
 
   /**
    * The reader's own editor, opened over the draft the bar holds.
@@ -259,7 +290,7 @@ export function createTerminalLifecycle(ctx: Context, ports: TerminalLifecyclePo
       // "working" up until the next turn.
       writeTerminal(windowTitle(process.cwd(), ports.turnRunning() ? 'working' : 'ready'))
     },
-    notice: message => ports.notice(message),
+    notice: (message) => ports.notice(message),
   })
 
   /**
@@ -274,7 +305,7 @@ export function createTerminalLifecycle(ctx: Context, ports: TerminalLifecyclePo
    * into a question the reader never answered.
    */
   const editDraft = (): void => {
-    void externalEditor.edit(ports.draftText()).then(text => {
+    void externalEditor.edit(ports.draftText()).then((text) => {
       if (text !== undefined) {
         if (ports.draftBorrowed()) ports.holdDraft(text)
         else ports.writeDraft(text)

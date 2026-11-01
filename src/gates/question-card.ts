@@ -1,5 +1,11 @@
-import { CUSTOM_ROW_NUMBER, lines, type GateCard, type GateInput, type GateQuestion } from '../gates.ts'
-import { keyName, keysFor, type Keymap } from '../input/actions.ts'
+import {
+  CUSTOM_ROW_NUMBER,
+  type GateCard,
+  type GateInput,
+  type GateQuestion,
+  lines,
+} from '../gates.ts'
+import { type Keymap, keyName, keysFor } from '../input/actions.ts'
 import type { PositionedOption } from './questions.ts'
 
 /** Keep an alternative to the listed choices so the reader can answer in their own words. */
@@ -105,10 +111,19 @@ export function questionCard(view: QuestionCardView): GateCard {
   const question = view.question
   if (question === undefined) {
     // A post-decision snapshot must not offer stale choices; this fallback does not keep the modal open.
-    return { kind: 'question', title: 'question', detail: [], optionOffset: 0, options: [], custom: undefined, answerInput: undefined, hint: 'finishing' }
+    return {
+      kind: 'question',
+      title: 'question',
+      detail: [],
+      optionOffset: 0,
+      options: [],
+      custom: undefined,
+      answerInput: undefined,
+      hint: 'finishing',
+    }
   }
   const detail = question.detail === undefined ? [] : lines(question.detail)
-  const heading = question.header === undefined ? '' : question.header + ' · '
+  const heading = question.header === undefined ? '' : `${question.header} · `
   const title = `${heading}${question.question}${view.total > 1 ? `  (${view.position}/${view.total})` : ''}`
   if (question.options.length === 0) {
     return {
@@ -127,7 +142,10 @@ export function questionCard(view: QuestionCardView): GateCard {
   // Filter and range context keep a partial list from appearing to exhaust the available choices.
   if (view.typed !== '') detail.push(`filter: ${view.typed}`)
   const secret = declaresSecret(question.id)
-  if (view.rows.length < view.matched.length) detail.push(`showing ${view.start + 1}–${view.start + view.rows.length} of ${view.matched.length}`)
+  if (view.rows.length < view.matched.length)
+    detail.push(
+      `showing ${view.start + 1}–${view.start + view.rows.length} of ${view.matched.length}`,
+    )
   return {
     kind: 'question',
     title,

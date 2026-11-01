@@ -30,7 +30,10 @@ export interface SessionHistory {
   /** Newest sessions first, at most `limit` of them. */
   list(limit: number): Promise<readonly StoredSession[]>
   /** Read a slice of a session's log; `limit` bounds a title read. */
-  read(id: string, options?: { readonly offset?: number; readonly limit?: number }): Promise<readonly StoredEvent[]>
+  read(
+    id: string,
+    options?: { readonly offset?: number; readonly limit?: number },
+  ): Promise<readonly StoredEvent[]>
   /** One session's stored header, or undefined when nothing is stored under that id. */
   header(id: string): Promise<StoredHeader | undefined>
 }
@@ -48,7 +51,9 @@ const TITLE_CHAR_LIMIT = 72
 const PRESET_EVENT_LIMIT = 40
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined
+  return typeof value === 'object' && value !== null
+    ? (value as Record<string, unknown>)
+    : undefined
 }
 
 /** One stored header, or undefined when the snapshot carries no usable identity. */
@@ -112,10 +117,16 @@ function sessionTitle(events: readonly StoredEvent[]): string | undefined {
  * A human prompt in that slice also supplies a name; the head is read only when
  * the tail supplies neither, so an untitled long log need not use its first prompt.
  */
-export async function readSessionTitle(history: SessionHistory, session: StoredSession): Promise<string | undefined> {
+export async function readSessionTitle(
+  history: SessionHistory,
+  session: StoredSession,
+): Promise<string | undefined> {
   const end = session.eventCount ?? 0
   if (end > TITLE_EVENT_LIMIT) {
-    const tail = await history.read(session.id, { offset: end - TITLE_EVENT_LIMIT, limit: TITLE_EVENT_LIMIT })
+    const tail = await history.read(session.id, {
+      offset: end - TITLE_EVENT_LIMIT,
+      limit: TITLE_EVENT_LIMIT,
+    })
     const declared = sessionTitle(tail)
     if (declared !== undefined) return declared
   }
@@ -133,7 +144,10 @@ export async function readSessionTitle(history: SessionHistory, session: StoredS
  * both slices. Unrestricted switching would need a different latest-selection
  * lookup rather than relying on this picker shortcut.
  */
-export async function presetOfStoredSession(history: SessionHistory, id: string): Promise<string | undefined> {
+export async function presetOfStoredSession(
+  history: SessionHistory,
+  id: string,
+): Promise<string | undefined> {
   const header = await history.header(id)
   if (header === undefined) return undefined
   const end = header.eventCount ?? 0
@@ -141,7 +155,7 @@ export async function presetOfStoredSession(history: SessionHistory, id: string)
     const tail = await lastSelection(history, id, end - PRESET_EVENT_LIMIT, PRESET_EVENT_LIMIT)
     if (tail !== undefined) return tail
   }
-  return await lastSelection(history, id, 0, PRESET_EVENT_LIMIT) ?? header.agentPreset
+  return (await lastSelection(history, id, 0, PRESET_EVENT_LIMIT)) ?? header.agentPreset
 }
 
 /** The last recorded selection inside one slice of a session's log. */
@@ -196,7 +210,9 @@ export function createSessionHistory(ctx: Context): SessionHistory | undefined {
           type: record.type,
           data: record.data,
           surfaceOp: record.surfaceOp,
-          ...(typeof record.time === 'number' && Number.isFinite(record.time) ? { time: record.time } : {}),
+          ...(typeof record.time === 'number' && Number.isFinite(record.time)
+            ? { time: record.time }
+            : {}),
         })
       }
       return events
@@ -206,11 +222,11 @@ export function createSessionHistory(ctx: Context): SessionHistory | undefined {
   }
   return {
     read,
-    header: async id => {
+    header: async (id) => {
       const stat = service.stat
       return typeof stat === 'function' ? headerOf(await stat.call(service, id)) : undefined
     },
-    list: async limit => {
+    list: async (limit) => {
       const snapshots = await service.list()
       const sessions: StoredSession[] = []
       for (const entry of Array.isArray(snapshots) ? snapshots : []) {

@@ -2,19 +2,27 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { TuiAgent } from '../agent/host.ts'
 import {
-  JOB_READ_LINES,
   createJobDirectory,
   describeJobs,
   isLive,
-  parseJobsArgument,
+  JOB_READ_LINES,
   type JobDirectory,
   type JobSummary,
+  parseJobsArgument,
 } from '../jobs.ts'
-import { SubagentRoster, createSubagentControl, describeSubagents, parseSubagentsArgument, resolveRun } from '../subagents.ts'
+import {
+  createSubagentControl,
+  describeSubagents,
+  parseSubagentsArgument,
+  resolveRun,
+  SubagentRoster,
+} from '../subagents.ts'
 
 /** Guard optional lifecycle metadata reads against non-object payloads; the roster validates identifiers separately. */
 function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined
+  return typeof value === 'object' && value !== null
+    ? (value as Record<string, unknown>)
+    : undefined
 }
 
 /**
@@ -72,7 +80,8 @@ export function createBackgroundWork(ctx: Context, ports: BackgroundWorkPorts): 
   const subagentControl = createSubagentControl(ctx)
   let pendingIdle: ReturnType<typeof setImmediate> | undefined
 
-  const running = (): boolean => roster.running().length > 0 || jobs.some(job => isLive(job.status))
+  const running = (): boolean =>
+    roster.running().length > 0 || jobs.some((job) => isLive(job.status))
 
   const reportBackground = (): void => {
     const live = running()
@@ -106,7 +115,9 @@ export function createBackgroundWork(ctx: Context, ports: BackgroundWorkPorts): 
       // Keep list failures visible without aborting the command or job watch.
       // Clearing this projection removes job-derived liveness; it does not prove jobs stopped.
       jobs = []
-      ports.notice(`could not list background jobs: ${error instanceof Error ? error.message : String(error)}`)
+      ports.notice(
+        `could not list background jobs: ${error instanceof Error ? error.message : String(error)}`,
+      )
     }
     reportBackground()
     ports.render()
@@ -138,9 +149,9 @@ export function createBackgroundWork(ctx: Context, ports: BackgroundWorkPorts): 
       }
       case 'kill': {
         const stopped = subagentControl?.stop(command.id) ?? false
-        ports.notice(stopped
-          ? `${command.id}: stop requested`
-          : `${command.id}: no live child with that id`)
+        ports.notice(
+          stopped ? `${command.id}: stop requested` : `${command.id}: no live child with that id`,
+        )
         ports.render()
         return
       }
@@ -176,17 +187,23 @@ export function createBackgroundWork(ctx: Context, ports: BackgroundWorkPorts): 
         case 'read': {
           const result = jobDirectory.read(ports.activeSession(), command.id)
           const text = result?.text.trim() ?? ''
-          ports.notice(text === ''
-            ? `${command.id}: no output yet`
-            : `${command.id} output\n${text.split('\n').slice(-JOB_READ_LINES).join('\n')}`)
+          ports.notice(
+            text === ''
+              ? `${command.id}: no output yet`
+              : `${command.id} output\n${text.split('\n').slice(-JOB_READ_LINES).join('\n')}`,
+          )
           refresh()
           return
         }
         case 'kill': {
           const outcome = jobDirectory.kill(ports.activeSession(), command.id)
-          ports.notice(outcome === undefined
-            ? `${command.id}: no such job`
-            : outcome === 'requested' ? `${command.id}: stop requested` : `${command.id} had already finished`)
+          ports.notice(
+            outcome === undefined
+              ? `${command.id}: no such job`
+              : outcome === 'requested'
+                ? `${command.id}: stop requested`
+                : `${command.id} had already finished`,
+          )
           refresh()
           return
         }
@@ -208,14 +225,19 @@ export function createBackgroundWork(ctx: Context, ports: BackgroundWorkPorts): 
    * harness cannot break compilation of this surface.
    */
   const listenFor = (name: string, handler: (...args: readonly unknown[]) => void): (() => void) =>
-    (ctx.on as unknown as (event: string, listener: (...args: readonly unknown[]) => void) => () => void)(name, handler)
+    (
+      ctx.on as unknown as (
+        event: string,
+        listener: (...args: readonly unknown[]) => void,
+      ) => () => void
+    )(name, handler)
 
   return {
     roster,
     jobs: () => jobs,
     refresh,
     running,
-    acceptCatalog: info => roster.catalog(info),
+    acceptCatalog: (info) => roster.catalog(info),
     // Both projections belong to the outgoing agent; do not carry its work into the next session.
     resetRoster: () => {
       roster.reset()
@@ -225,7 +247,7 @@ export function createBackgroundWork(ctx: Context, ports: BackgroundWorkPorts): 
     runSubagentsCommand,
     runJobsCommand,
     subagentListeners: () => [
-      listenFor('subagent/start', info => {
+      listenFor('subagent/start', (info) => {
         roster.start(info)
         reportBackground()
         const record = asRecord(info)
@@ -234,7 +256,7 @@ export function createBackgroundWork(ctx: Context, ports: BackgroundWorkPorts): 
         ports.marker(`subagent ${provider} started${id === '' ? '' : ` · ${id}`}`)
         ports.render()
       }),
-      listenFor('subagent/end', info => {
+      listenFor('subagent/end', (info) => {
         roster.end(info)
         reportBackground()
         const record = asRecord(info)
@@ -245,9 +267,10 @@ export function createBackgroundWork(ctx: Context, ports: BackgroundWorkPorts): 
       }),
     ],
     // The board is live state: watch it directly rather than folding events.
-    watchJobs: () => jobDirectory?.watch(owner => {
-      if (owner !== undefined && owner !== ports.activeSession()) return
-      refresh()
-    }) ?? (() => {}),
+    watchJobs: () =>
+      jobDirectory?.watch((owner) => {
+        if (owner !== undefined && owner !== ports.activeSession()) return
+        refresh()
+      }) ?? (() => {}),
   }
 }

@@ -1,5 +1,5 @@
-import { CARD_DETAIL_MAX } from './cards.ts'
 import { CARD_SHELL_PREVIEW } from './cards/preview.ts'
+import { CARD_DETAIL_MAX } from './cards.ts'
 
 /**
  * How one tool's cards draw.
@@ -75,7 +75,9 @@ function resolveToolDisplay(
  * card per frame, and re-merging there would repeat the same answer for every
  * row on screen.
  */
-export function toolDisplayTable(specs: Readonly<Record<string, Partial<ToolDisplaySpec>>> = {}): ToolDisplayTable {
+export function toolDisplayTable(
+  specs: Readonly<Record<string, Partial<ToolDisplaySpec>>> = {},
+): ToolDisplayTable {
   const base = resolveToolDisplay(specs[DEFAULT_TOOL_ENTRY])
   const tools: Record<string, ToolDisplaySpec> = {}
   for (const [tool, partial] of Object.entries(specs)) {

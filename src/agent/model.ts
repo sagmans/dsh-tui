@@ -1,6 +1,6 @@
+import type { Context } from '@deepseek-ai/cordis'
 import { installModelSelection, type ModelSelectionRef } from '@deepseek-ai/dsh-agent'
 import { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
-import type { Context } from '@deepseek-ai/cordis'
 import type { PickerRow } from '../ui/picker.ts'
 
 /** The route a reader chose for the next step. */
@@ -58,14 +58,19 @@ export function parseModelArgument(
     if (effortSlash > 0 && effortSlash < rest.length - 1) {
       return {
         kind: 'switch',
-        choice: { provider, model: rest.slice(0, effortSlash), reasoningEffort: rest.slice(effortSlash + 1) },
+        choice: {
+          provider,
+          model: rest.slice(0, effortSlash),
+          reasoningEffort: rest.slice(effortSlash + 1),
+        },
       }
     }
     return { kind: 'switch', choice: { provider, model: rest } }
   }
-  if (providers.some(provider => provider.id === trimmed)) return { kind: 'list-models', provider: trimmed }
+  if (providers.some((provider) => provider.id === trimmed))
+    return { kind: 'list-models', provider: trimmed }
   if (current === undefined) {
-    const names = providers.map(provider => provider.id).join(', ')
+    const names = providers.map((provider) => provider.id).join(', ')
     return {
       kind: 'invalid',
       reason: `no route in use; say /model <provider>/${trimmed}${names === '' ? '' : ` — providers: ${names}`}`,
@@ -85,7 +90,10 @@ export function parseModelArgument(
 const ROUTE_KEY_SEPARATOR = '\u0000'
 
 /** The picker's stable id for one route. */
-export function modelRouteKey(route: { readonly provider: string; readonly model: string }): string {
+export function modelRouteKey(route: {
+  readonly provider: string
+  readonly model: string
+}): string {
   return route.provider + ROUTE_KEY_SEPARATOR + route.model
 }
 
@@ -107,13 +115,18 @@ export function readModelRouteKey(key: string): { provider: string; model: strin
  * its effort, since that is the other half of the choice on screen.
  */
 export function describeModelRoute(route: ModelRoute, current: ModelChoice | undefined): PickerRow {
-  const chosen = current !== undefined && current.provider === route.provider && current.model === route.model
+  const chosen =
+    current !== undefined && current.provider === route.provider && current.model === route.model
   const description = [
     route.provider,
     route.model === route.name ? undefined : route.model,
     chosen ? 'current' : undefined,
-    chosen && current.reasoningEffort !== undefined ? `effort ${current.reasoningEffort}` : undefined,
-  ].filter(part => part !== undefined && part !== '').join(' · ')
+    chosen && current.reasoningEffort !== undefined
+      ? `effort ${current.reasoningEffort}`
+      : undefined,
+  ]
+    .filter((part) => part !== undefined && part !== '')
+    .join(' · ')
   return {
     label: route.name,
     description: description === '' ? undefined : description,
@@ -142,9 +155,9 @@ export class ModelSwitch {
     this.selection.current = {
       provider: choice.provider,
       model: choice.model,
-      ...choice.reasoningEffort === undefined
+      ...(choice.reasoningEffort === undefined
         ? {}
-        : { reasoningEffort: ReasoningEffortId(choice.reasoningEffort) },
+        : { reasoningEffort: ReasoningEffortId(choice.reasoningEffort) }),
     }
   }
 
@@ -154,7 +167,9 @@ export class ModelSwitch {
     return {
       provider: current.provider,
       model: current.model,
-      ...current.reasoningEffort === undefined ? {} : { reasoningEffort: String(current.reasoningEffort) },
+      ...(current.reasoningEffort === undefined
+        ? {}
+        : { reasoningEffort: String(current.reasoningEffort) }),
     }
   }
 
@@ -175,7 +190,11 @@ export class ModelSwitch {
 
 /** The reasoning levels one exact route offers, described structurally. */
 interface ModelEfforts {
-  readonly efforts: readonly { readonly id: string; readonly name: string; readonly description?: string }[]
+  readonly efforts: readonly {
+    readonly id: string
+    readonly name: string
+    readonly description?: string
+  }[]
   readonly defaultEffort?: string
 }
 
@@ -185,10 +204,19 @@ interface ModelEfforts {
  */
 interface LlmDirectory {
   listProviders?(): readonly { readonly id?: string; readonly name?: string }[]
-  listModels?(provider: string): Promise<readonly { readonly id?: string; readonly name?: string }[]>
-  resolveModelInfo?(provider: string, model: string): Promise<{
+  listModels?(
+    provider: string,
+  ): Promise<readonly { readonly id?: string; readonly name?: string }[]>
+  resolveModelInfo?(
+    provider: string,
+    model: string,
+  ): Promise<{
     readonly reasoning?: {
-      readonly efforts?: readonly { readonly id?: string; readonly name?: string; readonly description?: string }[]
+      readonly efforts?: readonly {
+        readonly id?: string
+        readonly name?: string
+        readonly description?: string
+      }[]
       readonly defaultEffort?: unknown
     }
   }>
@@ -230,13 +258,16 @@ export type ModelCatalogReading =
   | { readonly kind: 'gap'; readonly gap: ModelCatalogGap }
 
 /** The one read of the llm service, which is the only place the two causes differ. */
-function readLlmService(ctx: Context): { readonly kind: 'ready'; readonly llm: LlmDirectory } | {
-  readonly kind: 'gap'
-  readonly gap: ModelCatalogGap
-} {
+function readLlmService(ctx: Context):
+  | { readonly kind: 'ready'; readonly llm: LlmDirectory }
+  | {
+      readonly kind: 'gap'
+      readonly gap: ModelCatalogGap
+    } {
   const llm = ctx.get('llm') as LlmDirectory | null | undefined
   if (llm === undefined || llm === null) return { kind: 'gap', gap: 'no_llm_service' }
-  if (typeof llm.listProviders !== 'function') return { kind: 'gap', gap: 'llm_without_provider_listing' }
+  if (typeof llm.listProviders !== 'function')
+    return { kind: 'gap', gap: 'llm_without_provider_listing' }
   return { kind: 'ready', llm }
 }
 
@@ -254,31 +285,45 @@ export function readModelCatalog(ctx: Context): ModelCatalogReading {
   // enrich the pickers, so absent methods leave those choices empty or unknown.
   // Rows need string ids to be selectable; a missing display name can use that
   // same id without inventing a different request value.
-  const providers = (): readonly ProviderEntry[] => (llm.listProviders?.() ?? []).flatMap(entry =>
-    typeof entry.id === 'string' ? [{ id: entry.id, name: typeof entry.name === 'string' ? entry.name : entry.id }] : [])
+  const providers = (): readonly ProviderEntry[] =>
+    (llm.listProviders?.() ?? []).flatMap((entry) =>
+      typeof entry.id === 'string'
+        ? [{ id: entry.id, name: typeof entry.name === 'string' ? entry.name : entry.id }]
+        : [],
+    )
   const catalog: ModelCatalog = {
     providers,
-    models: async provider => {
+    models: async (provider) => {
       if (typeof llm.listModels !== 'function') return []
       const models = await llm.listModels(provider)
-      return models.flatMap(entry => typeof entry.id === 'string'
-        ? [{ id: entry.id, name: typeof entry.name === 'string' ? entry.name : entry.id }]
-        : [])
+      return models.flatMap((entry) =>
+        typeof entry.id === 'string'
+          ? [{ id: entry.id, name: typeof entry.name === 'string' ? entry.name : entry.id }]
+          : [],
+      )
     },
     efforts: async (provider, model) => {
       if (typeof llm.resolveModelInfo !== 'function') return undefined
       const reasoning = (await llm.resolveModelInfo(provider, model)).reasoning
       if (reasoning === undefined) return undefined
-      const efforts = (reasoning.efforts ?? []).flatMap(entry => typeof entry.id === 'string'
-        ? [{
-            id: entry.id,
-            name: typeof entry.name === 'string' ? entry.name : entry.id,
-            ...(typeof entry.description === 'string' ? { description: entry.description } : {}),
-          }]
-        : [])
+      const efforts = (reasoning.efforts ?? []).flatMap((entry) =>
+        typeof entry.id === 'string'
+          ? [
+              {
+                id: entry.id,
+                name: typeof entry.name === 'string' ? entry.name : entry.id,
+                ...(typeof entry.description === 'string'
+                  ? { description: entry.description }
+                  : {}),
+              },
+            ]
+          : [],
+      )
       return {
         efforts,
-        ...(typeof reasoning.defaultEffort === 'string' ? { defaultEffort: reasoning.defaultEffort } : {}),
+        ...(typeof reasoning.defaultEffort === 'string'
+          ? { defaultEffort: reasoning.defaultEffort }
+          : {}),
       }
     },
   }

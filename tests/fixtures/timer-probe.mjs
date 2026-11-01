@@ -37,46 +37,108 @@ export function apply(ctx) {
   const timers = new Set()
   const deadline = Date.now() + READY_TIMEOUT_MS
   const later = (work, ms) => {
-    const timer = setTimeout(() => { timers.delete(timer); work() }, ms)
+    const timer = setTimeout(() => {
+      timers.delete(timer)
+      work()
+    }, ms)
     timers.add(timer)
   }
-  ctx.on('dispose', () => { for (const timer of timers) clearTimeout(timer) })
+  ctx.on('dispose', () => {
+    for (const timer of timers) clearTimeout(timer)
+  })
   const begin = () => {
     const sessionId = ctx.get('tuiStartup')?.sessionId
     const session = ctx.get('sessions')?.get(sessionId)
     const agent = ctx.get('agents')?.get(sessionId)
     const registry = ctx.get('jobs')
     if (!session || !agent || !registry) {
-      if (Date.now() >= deadline) throw new Error('timer-probe: session services did not become ready')
+      if (Date.now() >= deadline)
+        throw new Error('timer-probe: session services did not become ready')
       later(begin, POLL_MS)
       return
     }
-    const append = (type, data, surface) => session.append(type, data, surface ? { surfaceOp: 'append' } : undefined)
+    const append = (type, data, surface) =>
+      session.append(type, data, surface ? { surfaceOp: 'append' } : undefined)
     append('turn/start', { turn: TURN })
     append('step/start', { turn: TURN, step: STEP })
-    const argumentsText = JSON.stringify({ code: 'return await tools.bash({ command: "timer-probe" })', description: TOOL_LABEL })
-    append('assistant/message', { turn: TURN, step: STEP, stream: SOURCE_STREAM, message: { id: CALL_ID, role: 'assistant', source: { kind: SOURCE_KIND, provider: SOURCE_PROVIDER, model: SOURCE_MODEL }, content: [{ type: 'tool-call', id: CALL_ID, name: 'run_code', arguments: argumentsText }] } }, true)
-    append('tool/call', { turn: TURN, step: STEP, callId: CALL_ID, name: 'run_code', arguments: argumentsText })
-    append('tool/ptc-dispatch-start', { rootCallId: CALL_ID, parentCallId: CALL_ID, subCallId: SUB_CALL_ID, name: 'bash', arguments: { command: 'timer-probe' } })
+    const argumentsText = JSON.stringify({
+      code: 'return await tools.bash({ command: "timer-probe" })',
+      description: TOOL_LABEL,
+    })
+    append(
+      'assistant/message',
+      {
+        turn: TURN,
+        step: STEP,
+        stream: SOURCE_STREAM,
+        message: {
+          id: CALL_ID,
+          role: 'assistant',
+          source: { kind: SOURCE_KIND, provider: SOURCE_PROVIDER, model: SOURCE_MODEL },
+          content: [{ type: 'tool-call', id: CALL_ID, name: 'run_code', arguments: argumentsText }],
+        },
+      },
+      true,
+    )
+    append('tool/call', {
+      turn: TURN,
+      step: STEP,
+      callId: CALL_ID,
+      name: 'run_code',
+      arguments: argumentsText,
+    })
+    append('tool/ptc-dispatch-start', {
+      rootCallId: CALL_ID,
+      parentCallId: CALL_ID,
+      subCallId: SUB_CALL_ID,
+      name: 'bash',
+      arguments: { command: 'timer-probe' },
+    })
     // A stored child supplies real view-switch replay without requesting inference.
     const child = ctx.get('sessions').create(CHILD_ID, { meta: { cwd: process.cwd() } })
     child.append('turn/start', { turn: TURN })
     child.append('step/start', { turn: TURN, step: STEP })
     const childArguments = JSON.stringify({ code: 'return null', description: CHILD_TOOL_LABEL })
-    child.append('assistant/message', { turn: TURN, step: STEP, stream: SOURCE_STREAM, message: { id: CHILD_CALL, role: 'assistant', source: { kind: SOURCE_KIND, provider: SOURCE_PROVIDER, model: SOURCE_MODEL }, content: [{ type: 'tool-call', id: CHILD_CALL, name: 'run_code', arguments: childArguments }] } }, { surfaceOp: 'append' })
-    child.append('tool/call', { turn: TURN, step: STEP, callId: CHILD_CALL, name: 'run_code', arguments: childArguments })
+    child.append(
+      'assistant/message',
+      {
+        turn: TURN,
+        step: STEP,
+        stream: SOURCE_STREAM,
+        message: {
+          id: CHILD_CALL,
+          role: 'assistant',
+          source: { kind: SOURCE_KIND, provider: SOURCE_PROVIDER, model: SOURCE_MODEL },
+          content: [
+            { type: 'tool-call', id: CHILD_CALL, name: 'run_code', arguments: childArguments },
+          ],
+        },
+      },
+      { surfaceOp: 'append' },
+    )
+    child.append('tool/call', {
+      turn: TURN,
+      step: STEP,
+      callId: CHILD_CALL,
+      name: 'run_code',
+      arguments: childArguments,
+    })
     ctx.emit('subagent/start', { runId: CHILD_RUN, id: CHILD_ID, provider: 'timer-probe' })
     const done = Promise.withResolvers()
     const jobId = registry.start({
-      kind: 'bash', label: JOB_LABEL, owner: sessionId,
-      run: job => {
+      kind: 'bash',
+      label: JOB_LABEL,
+      owner: sessionId,
+      run: (job) => {
         job.append(OUTPUT)
         return {
           cancel: () => {
             // Awaited fixture completion must not wake a credential-free model.
-            void registry.wait(job.id, CANCEL_WAIT_TIMEOUT_MS, sessionId).catch(error => {
+            void registry.wait(job.id, CANCEL_WAIT_TIMEOUT_MS, sessionId).catch((error) => {
               // A broken waiter must fail the gate instead of hiding an inference attempt.
-              setImmediate(() => { throw error })
+              setImmediate(() => {
+                throw error
+              })
             })
             done.resolve({ status: 'killed' })
           },
@@ -87,23 +149,84 @@ export function apply(ctx) {
     later(() => {
       // Duplicate service delivery must not replace the start time of an existing run.
       ctx.emit('subagent/start', { runId: CHILD_RUN, id: CHILD_ID, provider: 'timer-probe' })
-      append('tool/ptc-dispatch', { rootCallId: CALL_ID, parentCallId: CALL_ID, subCallId: SUB_CALL_ID, name: 'bash', arguments: { command: 'timer-probe' }, content: [{ type: 'text', text: OUTPUT }], isError: false })
-      append('tool/result', { turn: TURN, step: STEP, message: { id: RESULT_ID, role: 'tool', source: { kind: 'tool', callId: CALL_ID }, toolCallId: CALL_ID, content: [{ type: 'text', text: OUTPUT }], isError: false } }, true)
+      append('tool/ptc-dispatch', {
+        rootCallId: CALL_ID,
+        parentCallId: CALL_ID,
+        subCallId: SUB_CALL_ID,
+        name: 'bash',
+        arguments: { command: 'timer-probe' },
+        content: [{ type: 'text', text: OUTPUT }],
+        isError: false,
+      })
+      append(
+        'tool/result',
+        {
+          turn: TURN,
+          step: STEP,
+          message: {
+            id: RESULT_ID,
+            role: 'tool',
+            source: { kind: 'tool', callId: CALL_ID },
+            toolCallId: CALL_ID,
+            content: [{ type: 'text', text: OUTPUT }],
+            isError: false,
+          },
+        },
+        true,
+      )
       append('step/end', { turn: TURN, step: STEP })
       append('turn/end', { turn: TURN, reason: { type: 'completed' } })
     }, TOOL_MS)
     later(() => {
-      child.append('tool/result', { turn: TURN, step: STEP, message: { id: CHILD_RESULT, role: 'tool', source: { kind: 'tool', callId: CHILD_CALL }, toolCallId: CHILD_CALL, content: [{ type: 'text', text: OUTPUT }], isError: false } }, { surfaceOp: 'append' })
+      child.append(
+        'tool/result',
+        {
+          turn: TURN,
+          step: STEP,
+          message: {
+            id: CHILD_RESULT,
+            role: 'tool',
+            source: { kind: 'tool', callId: CHILD_CALL },
+            toolCallId: CHILD_CALL,
+            content: [{ type: 'text', text: OUTPUT }],
+            isError: false,
+          },
+        },
+        { surfaceOp: 'append' },
+      )
       child.append('step/end', { turn: TURN, step: STEP })
       child.append('turn/end', { turn: TURN, reason: { type: 'completed' } })
       // UI reads cannot consume the model's independent output cursor.
       const read = registry.read(jobId, sessionId)
-      const retainedOutput = read.chunks.map(chunk => chunk.text).join('')
+      const retainedOutput = read.chunks.map((chunk) => chunk.text).join('')
       let rejectsOtherOwner = false
-      try { registry.get(jobId, 'timer-probe-other-session') } catch { rejectsOtherOwner = true }
-      writeFileSync(join(process.cwd(), RECEIPT_FILE), JSON.stringify({ jobId, retainedOutput, rejectsOtherOwner, durations: BOUNDARIES.map(ms => describeDuration(ms)) }), { mode: PRIVATE_MODE })
-      ctx.emit('subagent/end', { runId: CHILD_RUN, id: CHILD_ID, provider: 'timer-probe', stopReason: 'completed' })
-      ctx.emit('subagent/end', { runId: RECEIPT, id: RECEIPT, provider: RECEIPT, stopReason: 'completed' })
+      try {
+        registry.get(jobId, 'timer-probe-other-session')
+      } catch {
+        rejectsOtherOwner = true
+      }
+      writeFileSync(
+        join(process.cwd(), RECEIPT_FILE),
+        JSON.stringify({
+          jobId,
+          retainedOutput,
+          rejectsOtherOwner,
+          durations: BOUNDARIES.map((ms) => describeDuration(ms)),
+        }),
+        { mode: PRIVATE_MODE },
+      )
+      ctx.emit('subagent/end', {
+        runId: CHILD_RUN,
+        id: CHILD_ID,
+        provider: 'timer-probe',
+        stopReason: 'completed',
+      })
+      ctx.emit('subagent/end', {
+        runId: RECEIPT,
+        id: RECEIPT,
+        provider: RECEIPT,
+        stopReason: 'completed',
+      })
     }, RECEIPT_MS)
   }
   later(begin, START_DELAY_MS)

@@ -1,27 +1,35 @@
 import type { Context } from '@deepseek-ai/cordis'
 import {
-  ModelSwitch,
+  type ModelChoice as ChosenRoute,
   MODEL_CATALOG_GAP_CAUSE,
-  parseModelArgument,
-  readModelCatalog,
-  readModelRouteKey,
   // agent/model.ts names the reader's choice `ModelChoice`, which is this
   // module's own owner; the type arrives here as the route it describes.
   type ModelCatalog,
-  type ModelChoice as ChosenRoute,
   type ModelRoute,
+  ModelSwitch,
   type ProviderEntry,
+  parseModelArgument,
+  readModelCatalog,
+  readModelRouteKey,
 } from '../agent/model.ts'
 import type { Keymap } from '../input/actions.ts'
 import { stripControlCharacters } from '../text.ts'
-import { EffortPicker, ModelPicker, PROVIDER_DEFAULT_EFFORT_ID, effortChoices } from '../ui/picker.ts'
+import {
+  EffortPicker,
+  effortChoices,
+  ModelPicker,
+  PROVIDER_DEFAULT_EFFORT_ID,
+} from '../ui/picker.ts'
 import type { StatusFacts } from '../ui/status.ts'
 import type { Picker } from './modal-input.ts'
 
 // Adapter errors may contain credentials or request bodies, even in their messages.
-const MODEL_DISCOVERY_FAILURE = 'could not list models; check provider configuration and credentials, then retry /model'
-const PROVIDER_DISCOVERY_FAILURE = 'could not list providers; check provider configuration, then retry /model'
-const EFFORT_DISCOVERY_FAILURE = 'could not read reasoning efforts; check provider configuration, then retry'
+const MODEL_DISCOVERY_FAILURE =
+  'could not list models; check provider configuration and credentials, then retry /model'
+const PROVIDER_DISCOVERY_FAILURE =
+  'could not list providers; check provider configuration, then retry /model'
+const EFFORT_DISCOVERY_FAILURE =
+  'could not read reasoning efforts; check provider configuration, then retry'
 const MODEL_EFFORT_DISCOVERY_FAILURE = `/model: ${EFFORT_DISCOVERY_FAILURE}`
 
 /**
@@ -84,7 +92,9 @@ export function createModelChoice(ctx: Context, ports: ModelChoicePorts): ModelC
 
   const runModelCommand = (argument: string): void => {
     if (reading.kind === 'gap') {
-      ports.notice(`${MODEL_CATALOG_GAP_CAUSE[reading.gap]}, so models cannot be listed or switched`)
+      ports.notice(
+        `${MODEL_CATALOG_GAP_CAUSE[reading.gap]}, so models cannot be listed or switched`,
+      )
       ports.render()
       return
     }
@@ -105,15 +115,20 @@ export function createModelChoice(ctx: Context, ports: ModelChoicePorts): ModelC
         void openModelPicker(catalog, providers)
         return
       case 'list-models':
-        void catalog.models(command.provider).then(entries => {
-          ports.notice(entries.length === 0
-            ? `${command.provider} advertises no models; an id may still work`
-            : `${command.provider}: ${entries.map(entry => entry.id).join(' ')}`)
-          ports.render()
-        }).catch(() => {
-          ports.notice(`${stripControlCharacters(command.provider)}: ${MODEL_DISCOVERY_FAILURE}`)
-          ports.render()
-        })
+        void catalog
+          .models(command.provider)
+          .then((entries) => {
+            ports.notice(
+              entries.length === 0
+                ? `${command.provider} advertises no models; an id may still work`
+                : `${command.provider}: ${entries.map((entry) => entry.id).join(' ')}`,
+            )
+            ports.render()
+          })
+          .catch(() => {
+            ports.notice(`${stripControlCharacters(command.provider)}: ${MODEL_DISCOVERY_FAILURE}`)
+            ports.render()
+          })
         return
       case 'switch': {
         const choice = command.choice
@@ -128,7 +143,9 @@ export function createModelChoice(ctx: Context, ports: ModelChoicePorts): ModelC
               model: choice.model,
               ...(carried.effort === undefined ? {} : { reasoningEffort: carried.effort }),
             })
-            ports.notice(`model set to ${choice.provider}/${choice.model} for the next step${droppedClause(carried.dropped)}`)
+            ports.notice(
+              `model set to ${choice.provider}/${choice.model} for the next step${droppedClause(carried.dropped)}`,
+            )
             ports.render()
           })()
           return
@@ -140,15 +157,19 @@ export function createModelChoice(ctx: Context, ports: ModelChoicePorts): ModelC
           try {
             const info = await catalog.efforts(choice.provider, choice.model)
             const efforts = info?.efforts ?? []
-            if (!efforts.some(effort => effort.id === choice.reasoningEffort)) {
-              ports.notice(efforts.length === 0
-                ? `/model: ${choice.provider}/${choice.model} advertises no reasoning efforts`
-                : `/model: ${choice.provider}/${choice.model} does not offer reasoning effort "${choice.reasoningEffort}" — offers: ${efforts.map(effort => effort.id).join(' ')}`)
+            if (!efforts.some((effort) => effort.id === choice.reasoningEffort)) {
+              ports.notice(
+                efforts.length === 0
+                  ? `/model: ${choice.provider}/${choice.model} advertises no reasoning efforts`
+                  : `/model: ${choice.provider}/${choice.model} does not offer reasoning effort "${choice.reasoningEffort}" — offers: ${efforts.map((effort) => effort.id).join(' ')}`,
+              )
               ports.render()
               return
             }
             modelSwitch.choose(choice)
-            ports.notice(`model set to ${choice.provider}/${choice.model} (${choice.reasoningEffort}) for the next step`)
+            ports.notice(
+              `model set to ${choice.provider}/${choice.model} (${choice.reasoningEffort}) for the next step`,
+            )
           } catch {
             ports.notice(MODEL_EFFORT_DISCOVERY_FAILURE)
           }
@@ -168,10 +189,14 @@ export function createModelChoice(ctx: Context, ports: ModelChoicePorts): ModelC
 
   /** Put the reader's effort choice in force for the next step. */
   const applyEffort = (provider: string, modelId: string, effortId: string): void => {
-    modelSwitch.choose(effortId === PROVIDER_DEFAULT_EFFORT_ID
-      ? { provider, model: modelId }
-      : { provider, model: modelId, reasoningEffort: effortId })
-    ports.notice(`reasoning effort for ${provider}/${modelId} set to ${effortId === PROVIDER_DEFAULT_EFFORT_ID ? 'provider default' : effortId} for the next step`)
+    modelSwitch.choose(
+      effortId === PROVIDER_DEFAULT_EFFORT_ID
+        ? { provider, model: modelId }
+        : { provider, model: modelId, reasoningEffort: effortId },
+    )
+    ports.notice(
+      `reasoning effort for ${provider}/${modelId} set to ${effortId === PROVIDER_DEFAULT_EFFORT_ID ? 'provider default' : effortId} for the next step`,
+    )
     ports.render()
   }
 
@@ -196,7 +221,7 @@ export function createModelChoice(ctx: Context, ports: ModelChoicePorts): ModelC
     return {
       provider: facts.provider,
       model: facts.model,
-      ...facts.effort === undefined ? {} : { reasoningEffort: facts.effort },
+      ...(facts.effort === undefined ? {} : { reasoningEffort: facts.effort }),
     }
   }
 
@@ -211,12 +236,17 @@ export function createModelChoice(ctx: Context, ports: ModelChoicePorts): ModelC
    * named because silence would leave the reader reading a level that is no
    * longer in force.
    */
-  const carriedEffort = async (provider: string, modelId: string): Promise<{ effort?: string; dropped?: string }> => {
+  const carriedEffort = async (
+    provider: string,
+    modelId: string,
+  ): Promise<{ effort?: string; dropped?: string }> => {
     const inForce = effectiveRoute()?.reasoningEffort
     if (inForce === undefined || reading.kind === 'gap') return {}
     try {
       const efforts = (await reading.catalog.efforts(provider, modelId))?.efforts ?? []
-      return efforts.some(effort => effort.id === inForce) ? { effort: inForce } : { dropped: inForce }
+      return efforts.some((effort) => effort.id === inForce)
+        ? { effort: inForce }
+        : { dropped: inForce }
     } catch {
       // The directory is advisory here: a switch the reader asked for must not
       // fail on it, and a route's default is the one state every model accepts.
@@ -225,9 +255,10 @@ export function createModelChoice(ctx: Context, ports: ModelChoicePorts): ModelC
   }
 
   /** The clause a switch adds when the effort in force could not travel with it. */
-  const droppedClause = (dropped: string | undefined): string => dropped === undefined
-    ? ''
-    : ` — dropped reasoning effort "${dropped}" because this model does not offer it`
+  const droppedClause = (dropped: string | undefined): string =>
+    dropped === undefined
+      ? ''
+      : ` — dropped reasoning effort "${dropped}" because this model does not offer it`
 
   /** Put the reader's route choice in force for the next step. */
   const applyRoute = async (route: PickedRoute): Promise<void> => {
@@ -237,7 +268,9 @@ export function createModelChoice(ctx: Context, ports: ModelChoicePorts): ModelC
       model: route.model,
       ...(carried.effort === undefined ? {} : { reasoningEffort: carried.effort }),
     })
-    ports.notice(`model set to ${route.provider}/${route.model} for the next step${droppedClause(carried.dropped)}`)
+    ports.notice(
+      `model set to ${route.provider}/${route.model} for the next step${droppedClause(carried.dropped)}`,
+    )
     ports.render()
   }
 
@@ -257,14 +290,19 @@ export function createModelChoice(ctx: Context, ports: ModelChoicePorts): ModelC
       const efforts = info?.efforts ?? []
       if (efforts.length === 0) return
       const current = effectiveRoute()
-      const effective = current !== undefined && current.provider === route.provider && current.model === route.model
-        ? current.reasoningEffort
-        : undefined
-      const picked = await ports.openPicker(new EffortPicker(
-        () => effortChoices(efforts, effective),
-        `reasoning effort · ${route.provider}/${route.model}`,
-        ports.keymap,
-      ))
+      const effective =
+        current !== undefined &&
+        current.provider === route.provider &&
+        current.model === route.model
+          ? current.reasoningEffort
+          : undefined
+      const picked = await ports.openPicker(
+        new EffortPicker(
+          () => effortChoices(efforts, effective),
+          `reasoning effort · ${route.provider}/${route.model}`,
+          ports.keymap,
+        ),
+      )
       if (picked !== undefined) {
         applyEffort(route.provider, route.model, picked)
         await ports.afterEffort?.(route)
@@ -284,7 +322,10 @@ export function createModelChoice(ctx: Context, ports: ModelChoicePorts): ModelC
    * adapter answers. A route whose catalog cannot be read stays reachable by
    * name through the text form; a notice explains why its rows are missing.
    */
-  const openModelPicker = async (directory: ModelCatalog, providers: readonly ProviderEntry[]): Promise<void> => {
+  const openModelPicker = async (
+    directory: ModelCatalog,
+    providers: readonly ProviderEntry[],
+  ): Promise<void> => {
     if (providers.length === 0) {
       ports.notice('no provider is configured; add one before choosing a model')
       ports.render()
@@ -295,16 +336,27 @@ export function createModelChoice(ctx: Context, ports: ModelChoicePorts): ModelC
     try {
       const routes: ModelRoute[] = []
       for (const provider of providers) {
-        void directory.models(provider.id).then(entries => {
-          if (entries.length === 0) return
-          routes.push(...entries.map(entry => ({ provider: provider.id, model: entry.id, name: entry.name })))
-          ports.render()
-        }).catch(() => {
-          ports.notice(`${stripControlCharacters(provider.id)}: ${MODEL_DISCOVERY_FAILURE}`)
-          ports.render()
-        })
+        void directory
+          .models(provider.id)
+          .then((entries) => {
+            if (entries.length === 0) return
+            routes.push(
+              ...entries.map((entry) => ({
+                provider: provider.id,
+                model: entry.id,
+                name: entry.name,
+              })),
+            )
+            ports.render()
+          })
+          .catch(() => {
+            ports.notice(`${stripControlCharacters(provider.id)}: ${MODEL_DISCOVERY_FAILURE}`)
+            ports.render()
+          })
       }
-      const picked = await ports.openPicker(new ModelPicker(() => routes, effectiveRoute, ports.keymap))
+      const picked = await ports.openPicker(
+        new ModelPicker(() => routes, effectiveRoute, ports.keymap),
+      )
       if (picked === undefined) return
       const route = readModelRouteKey(picked)
       if (route === undefined) return
@@ -345,11 +397,13 @@ export function createModelChoice(ctx: Context, ports: ModelChoicePorts): ModelC
         ports.notice(`${facts.provider}/${facts.model} advertises no reasoning efforts`)
         return
       }
-      const picked = await ports.openPicker(new EffortPicker(
-        () => effortChoices(efforts, facts.effort),
-        `reasoning effort · ${facts.provider}/${facts.model}`,
-        ports.keymap,
-      ))
+      const picked = await ports.openPicker(
+        new EffortPicker(
+          () => effortChoices(efforts, facts.effort),
+          `reasoning effort · ${facts.provider}/${facts.model}`,
+          ports.keymap,
+        ),
+      )
       if (picked !== undefined) {
         applyEffort(facts.provider, facts.model, picked)
         await ports.afterEffort?.({ provider: facts.provider, model: facts.model })
@@ -383,7 +437,7 @@ export function createModelChoice(ctx: Context, ports: ModelChoicePorts): ModelC
 
   return {
     current: () => modelSwitch.current(),
-    setup: agentCtx => modelSwitch.install(agentCtx),
+    setup: (agentCtx) => modelSwitch.install(agentCtx),
     adoptDefault,
     runModelCommand,
     openEffortPicker: () => {

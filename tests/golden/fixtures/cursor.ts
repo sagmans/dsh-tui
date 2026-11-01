@@ -1,7 +1,11 @@
 /** Fixed phases pin grapheme, ghost, and masked cursor output without timer-dependent snapshots. */
-import { type TUI } from '@earendil-works/pi-tui'
+import type { TUI } from '@earendil-works/pi-tui'
 import { defaultKeymap } from '@/input/actions.ts'
-import { SOFTWARE_CURSOR_MODE, NATIVE_CURSOR_MODE, type CursorPresentation } from '@/terminal/cursor.ts'
+import {
+  type CursorPresentation,
+  NATIVE_CURSOR_MODE,
+  SOFTWARE_CURSOR_MODE,
+} from '@/terminal/cursor.ts'
 import { createTheme } from '@/theme.ts'
 import { BoxedEditor, type GhostBrush } from '@/ui/editor.ts'
 import { GateInputBar } from '@/ui/gate-input.ts'
@@ -51,24 +55,37 @@ export function cursorFrames(): Record<string, string[]> {
   for (const spec of CASES) {
     const settings = spec
     const face = spec.color ? createTheme(STYLED_COLOR_MODE) : theme
-    const ghost: GhostBrush | undefined = settings.suffix === undefined ? undefined : {
-      enabled: () => true,
-      suggestion: () => settings.suffix,
-      paint: (text, cell) => {
-        const styled = face.style(GHOST_TOKEN, text)
-        return cell === CURSOR_CELL ? CURSOR_ON + styled + RESET : styled
-      },
-    }
+    const ghost: GhostBrush | undefined =
+      settings.suffix === undefined
+        ? undefined
+        : {
+            enabled: () => true,
+            suggestion: () => settings.suffix,
+            paint: (text, cell) => {
+              const styled = face.style(GHOST_TOKEN, text)
+              return cell === CURSOR_CELL ? CURSOR_ON + styled + RESET : styled
+            },
+          }
     for (const width of WIDTHS) {
       for (const phase of [true, false]) {
-        const cursor: CursorPresentation = { mode: SOFTWARE_CURSOR_MODE, visible: () => phase, activity: () => {} }
+        const cursor: CursorPresentation = {
+          mode: SOFTWARE_CURSOR_MODE,
+          visible: () => phase,
+          activity: () => {},
+        }
         const editor = new GateInputBar(STUB_TUI, face.editor, defaultKeymap, ghost, cursor)
         editor.focused = true
         editor.disableSubmit = settings.question === true || settings.secret === true
         if (settings.secret) editor.setMode(SECRET_MODE)
         editor.setText(spec.text)
         for (let step = 0; step < (settings.left ?? 0); step++) editor.handleInput(LEFT)
-        frames[spec.name + CASE_SEPARATOR + width + CASE_SEPARATOR + (phase ? VISIBLE_PHASE : HIDDEN_PHASE)] = editor.render(width)
+        frames[
+          spec.name +
+            CASE_SEPARATOR +
+            width +
+            CASE_SEPARATOR +
+            (phase ? VISIBLE_PHASE : HIDDEN_PHASE)
+        ] = editor.render(width)
       }
     }
   }

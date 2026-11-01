@@ -3,8 +3,30 @@
  * to tool definitions. Retention belongs here; registry lookup and exception
  * recovery belong to the agent adapter.
  */
-import { type CardRow, cardRow, type CardStat, type ToolCard, bound, boundTail, contentLines } from '../cards.ts'
-import { type DiffCallView, type DiffResultView, type FileDiff, type GenericCallView, type GenericResultView, type ReadResultView, type SearchResultView, type TerminalCallView, type TerminalResultView, type ToolCallView, type ToolResultView, type WebResultView } from '@deepseek-ai/dsh-tools'
+
+import type {
+  DiffCallView,
+  DiffResultView,
+  FileDiff,
+  GenericCallView,
+  GenericResultView,
+  ReadResultView,
+  SearchResultView,
+  TerminalCallView,
+  TerminalResultView,
+  ToolCallView,
+  ToolResultView,
+  WebResultView,
+} from '@deepseek-ai/dsh-tools'
+import {
+  bound,
+  boundTail,
+  type CardRow,
+  type CardStat,
+  cardRow,
+  contentLines,
+  type ToolCard,
+} from '../cards.ts'
 import { countTokens, formatTokens } from '../tokens.ts'
 
 /**
@@ -77,9 +99,10 @@ function changeStats(diffs: readonly FileDiff[]): readonly CardStat[] {
  * to drawing rather than reporting a size of zero.
  */
 function readStats(read: ReadResultView): readonly CardStat[] {
-  const text = read.lines.length > 0
-    ? read.lines.map(line => line.text).join('\n')
-    : contentLines(read.content).join('\n')
+  const text =
+    read.lines.length > 0
+      ? read.lines.map((line) => line.text).join('\n')
+      : contentLines(read.content).join('\n')
   const count = read.lines.length > 0 ? read.lines.length : lineCount(text)
   const start = read.offset
   const stats: CardStat[] = [
@@ -101,8 +124,8 @@ function readStats(read: ReadResultView): readonly CardStat[] {
  * overwrite as a new file.
  */
 function diffStats(diffs: readonly FileDiff[]): readonly CardStat[] {
-  const withoutPrior = diffs.length > 0 && diffs.every(diff => diff.oldText === null)
-  return withoutPrior ? sizeStats(diffs.map(diff => diff.newText).join('\n')) : changeStats(diffs)
+  const withoutPrior = diffs.length > 0 && diffs.every((diff) => diff.oldText === null)
+  return withoutPrior ? sizeStats(diffs.map((diff) => diff.newText).join('\n')) : changeStats(diffs)
 }
 
 /**
@@ -117,20 +140,23 @@ function renderFileDiff(diff: FileDiff): CardRow[] {
   while (head < before.length && head < after.length && before[head] === after[head]) head += 1
   let tail = 0
   while (
-    tail < before.length - head
-    && tail < after.length - head
-    && before[before.length - 1 - tail] === after[after.length - 1 - tail]
-  ) tail += 1
+    tail < before.length - head &&
+    tail < after.length - head &&
+    before[before.length - 1 - tail] === after[after.length - 1 - tail]
+  )
+    tail += 1
   const removed = before.slice(head, before.length - tail)
   const added = after.slice(head, after.length - tail)
   // "new" keys off the absent prior text, not off an empty hunk: an unchanged
   // file has no removals either and must not read as a creation.
   const header = diff.oldText === null ? 'new' : `-${removed.length} +${added.length}`
   const rows: CardRow[] = [cardRow('header', `${diff.path}  ${header}`)]
-  if (head > 0) rows.push(cardRow('hunk', `@@ ${head} unchanged line${head === 1 ? '' : 's'} before`))
+  if (head > 0)
+    rows.push(cardRow('hunk', `@@ ${head} unchanged line${head === 1 ? '' : 's'} before`))
   for (const line of removed) rows.push(cardRow('removed', `-${line}`))
   for (const line of added) rows.push(cardRow('added', `+${line}`))
-  if (tail > 0) rows.push(cardRow('hunk', `@@ ${tail} unchanged line${tail === 1 ? '' : 's'} after`))
+  if (tail > 0)
+    rows.push(cardRow('hunk', `@@ ${tail} unchanged line${tail === 1 ? '' : 's'} after`))
   return rows
 }
 
@@ -168,22 +194,28 @@ function skillOf(skill: string | undefined): { skill?: string } {
  * cutting a title at its first word would misreport what the tool was asked.
  */
 function skillHead(shown: string, name: string): { label: string; skill?: string } {
-  const skill = name === SKILL_TOOL && shown.startsWith(SKILL_TOOL + ' ')
-    ? shown.slice(SKILL_TOOL.length + 1).trim()
-    : undefined
+  const skill =
+    name === SKILL_TOOL && shown.startsWith(`${SKILL_TOOL} `)
+      ? shown.slice(SKILL_TOOL.length + 1).trim()
+      : undefined
   return skill === undefined || skill === '' ? { label: shown } : { label: SKILL_TOOL, skill }
 }
 
 function title(view: { title?: string }, fallback: string): string {
   const declared = view.title?.trim() ?? ''
-  const lead = REDUNDANT_TITLE_LEADS.find(prefix => declared.startsWith(prefix))
+  const lead = REDUNDANT_TITLE_LEADS.find((prefix) => declared.startsWith(prefix))
   const shown = lead === undefined ? declared : declared.slice(lead.length).trim()
   return shown === '' ? fallback : shown
 }
 
 /** A read line keeps its number apart from its text, because they read differently. */
 function readLine(number: number, text: string): CardRow {
-  return { parts: [{ class: 'lineNumber', text: `${number}:` }, { class: 'line', text: ` ${text}` }] }
+  return {
+    parts: [
+      { class: 'lineNumber', text: `${number}:` },
+      { class: 'line', text: ` ${text}` },
+    ],
+  }
 }
 
 /** Let themes distinguish navigation context from matched content through separate styled parts. */
@@ -210,8 +242,10 @@ export function cardOfCall(view: ToolCallView | undefined, name: string): ToolCa
     case 'terminal': {
       const terminal = view as TerminalCallView
       const rows: CardRow[] = []
-      if (terminal.description !== undefined && terminal.description !== '') rows.push(cardRow('output', terminal.description))
-      if (terminal.cwd !== undefined && terminal.cwd !== '') rows.push(cardRow('cwd', `cwd ${terminal.cwd}`))
+      if (terminal.description !== undefined && terminal.description !== '')
+        rows.push(cardRow('output', terminal.description))
+      if (terminal.cwd !== undefined && terminal.cwd !== '')
+        rows.push(cardRow('cwd', `cwd ${terminal.cwd}`))
       // The header names the tool so the command can sit on its own row: a
       // terminal view's own title IS the command, and a fold must not hide it.
       const command = terminal.title?.trim() ?? ''
@@ -232,7 +266,14 @@ export function cardOfCall(view: ToolCallView | undefined, name: string): ToolCa
       // path outside the fold. Later paths appear only in retained detail.
       const path = diff.diffs[0]?.path
       if (path === undefined || path === '') {
-        return { kind: 'diff', tool: name, title: title(diff, name), detail: bounded.detail, failed: false, totalLines: bounded.totalLines }
+        return {
+          kind: 'diff',
+          tool: name,
+          title: title(diff, name),
+          detail: bounded.detail,
+          failed: false,
+          totalLines: bounded.totalLines,
+        }
       }
       return {
         kind: 'diff',
@@ -250,15 +291,27 @@ export function cardOfCall(view: ToolCallView | undefined, name: string): ToolCa
       // card rather than duplicating content the presenter already supplied.
       const lines = contentLines(generic.content)
       if (generic.rawInput !== undefined && lines.length === 0) {
-        lines.push(typeof generic.rawInput === 'string' ? generic.rawInput : JSON.stringify(generic.rawInput))
+        lines.push(
+          typeof generic.rawInput === 'string'
+            ? generic.rawInput
+            : JSON.stringify(generic.rawInput),
+        )
       }
-      const bounded = bound(lines.map(line => cardRow('detail', line)))
+      const bounded = bound(lines.map((line) => cardRow('detail', line)))
       // A call that names a file has an argument worth its own colour; one that
       // does not keeps its declared title, which is already the label.
       const head = skillHead(title(generic, name), name)
       const location = generic.locations?.[0]?.path
       if (location === undefined || location === '') {
-        return { kind: 'generic', tool: name, title: head.label, ...skillOf(head.skill), detail: bounded.detail, failed: false, totalLines: bounded.totalLines }
+        return {
+          kind: 'generic',
+          tool: name,
+          title: head.label,
+          ...skillOf(head.skill),
+          detail: bounded.detail,
+          failed: false,
+          totalLines: bounded.totalLines,
+        }
       }
       return {
         kind: 'generic',
@@ -277,12 +330,23 @@ export function cardOfCall(view: ToolCallView | undefined, name: string): ToolCa
 /** Preserve result context when no view exists by retaining bounded model-facing text. */
 export function cardOfResult(
   view: ToolResultView | undefined,
-  input: { readonly name: string; readonly failed: boolean; readonly contentLines: readonly string[] },
+  input: {
+    readonly name: string
+    readonly failed: boolean
+    readonly contentLines: readonly string[]
+  },
 ): ToolCard {
   const failed = input.failed
   if (view === undefined) {
-    const bounded = bound(input.contentLines.map(line => cardRow('detail', line)))
-    return { kind: 'generic', tool: input.name, title: input.name, detail: bounded.detail, failed, totalLines: bounded.totalLines }
+    const bounded = bound(input.contentLines.map((line) => cardRow('detail', line)))
+    return {
+      kind: 'generic',
+      tool: input.name,
+      title: input.name,
+      detail: bounded.detail,
+      failed,
+      totalLines: bounded.totalLines,
+    }
   }
   switch (view.card) {
     case 'terminal': {
@@ -290,17 +354,21 @@ export function cardOfResult(
       // Drop trailing newline runs, including blank lines, so a tail preview
       // spends its slots on output rather than trailing whitespace.
       const raw = (terminal.output ?? '').replace(/\n+$/, '')
-      const rows = raw === '' ? [] : raw.split('\n').map(line => cardRow('output', line))
-      const status = terminal.signal !== undefined && terminal.signal !== ''
-        ? `signal ${terminal.signal}`
-        : terminal.exitCode === undefined ? undefined : `exit ${terminal.exitCode}`
+      const rows = raw === '' ? [] : raw.split('\n').map((line) => cardRow('output', line))
+      const status =
+        terminal.signal !== undefined && terminal.signal !== ''
+          ? `signal ${terminal.signal}`
+          : terminal.exitCode === undefined
+            ? undefined
+            : `exit ${terminal.exitCode}`
       // A command that exited non-zero, or died on a signal, is a call that
       // failed, whatever the log's own flag said: the harness reports a shell's
       // exit code as its result rather than as an error, so that flag is silent
       // about how the command actually ended.
-      const endedBadly = terminal.exitCode === undefined
-        ? terminal.signal !== undefined && terminal.signal !== ''
-        : terminal.exitCode !== 0
+      const endedBadly =
+        terminal.exitCode === undefined
+          ? terminal.signal !== undefined && terminal.signal !== ''
+          : terminal.exitCode !== 0
       // The output is bounded from its END: a command that printed far more
       // than retention keeps must still show how it finished, and the folded
       // preview tails what is retained again.
@@ -354,9 +422,12 @@ export function cardOfResult(
       // Honor the declared shape: path listings stay compact, while content
       // hits keep navigation context. The tool's cap marker distinguishes its
       // partial results from the additional retention limit applied below.
-      const rows = search.shape === 'paths'
-        ? search.paths.map(path => cardRow('path', path))
-        : search.files.flatMap(file => file.matches.map(match => searchHit(file.path, match.lineNumber, match.line)))
+      const rows =
+        search.shape === 'paths'
+          ? search.paths.map((path) => cardRow('path', path))
+          : search.files.flatMap((file) =>
+              file.matches.map((match) => searchHit(file.path, match.lineNumber, match.line)),
+            )
       if (search.truncated) rows.push(cardRow('truncated', `… ${search.total} total`))
       const bounded = bound(rows)
       return {
@@ -402,7 +473,12 @@ export function cardOfResult(
           for (const line of web.answer.split('\n')) rows.push(cardRow('detail', line))
         }
         for (const source of web.sources) {
-          rows.push(cardRow('source', source.title === undefined ? source.url : `${source.title} — ${source.url}`))
+          rows.push(
+            cardRow(
+              'source',
+              source.title === undefined ? source.url : `${source.title} — ${source.url}`,
+            ),
+          )
         }
         if (web.truncated) rows.push(cardRow('truncated', '… more sources'))
       } else {
@@ -425,7 +501,7 @@ export function cardOfResult(
       // Tool-supplied UI text may differ from the model payload; use that payload
       // only when the presenter supplies no text, so generic cards retain context.
       const chosen = lines.length > 0 ? lines : input.contentLines
-      const bounded = bound(chosen.map(line => cardRow('detail', line)))
+      const bounded = bound(chosen.map((line) => cardRow('detail', line)))
       const head = skillHead(title(generic, input.name), input.name)
       return {
         kind: 'generic',

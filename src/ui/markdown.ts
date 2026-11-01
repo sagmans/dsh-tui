@@ -1,4 +1,10 @@
-import { Markdown, wrapTextWithAnsi, type DefaultTextStyle, type MarkdownOptions, type MarkdownTheme } from '@earendil-works/pi-tui'
+import {
+  type DefaultTextStyle,
+  Markdown,
+  type MarkdownOptions,
+  type MarkdownTheme,
+  wrapTextWithAnsi,
+} from '@earendil-works/pi-tui'
 import { displayText } from '../text.ts'
 import type { MermaidTransform } from './mermaid.ts'
 
@@ -38,7 +44,10 @@ export const ANSWER_FACE: MarkdownFace = { name: 'answer' }
 export class MarkdownRenderer {
   private readonly parsed = new Map<string, Markdown>()
 
-  constructor(private readonly theme: MarkdownTheme, private readonly mermaid: MermaidTransform) {}
+  constructor(
+    private readonly theme: MarkdownTheme,
+    private readonly mermaid: MermaidTransform,
+  ) {}
 
   render(text: string, width: number, live: boolean, face: MarkdownFace): string[] {
     // A streaming reply can settle on the very text it last streamed, and the
@@ -52,7 +61,14 @@ export class MarkdownRenderer {
         const oldest = this.parsed.keys().next()
         if (oldest.done !== true) this.parsed.delete(oldest.value)
       }
-      message = new Markdown(text, 0, 0, face.theme ?? this.theme, face.base, this.options(face, live))
+      message = new Markdown(
+        text,
+        0,
+        0,
+        face.theme ?? this.theme,
+        face.base,
+        this.options(face, live),
+      )
     } else {
       // Refresh eviction priority on reuse to favor recently rendered parses, not transcript positions.
       this.parsed.delete(key)

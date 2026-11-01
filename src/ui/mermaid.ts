@@ -1,8 +1,8 @@
-import { Marked, visibleWidth, type Token } from '@earendil-works/pi-tui'
-import { render, type MermaidArt, type Role } from 'lovely-mermaid'
+import { Marked, type Token, visibleWidth } from '@earendil-works/pi-tui'
+import { type MermaidArt, type Role, render } from 'lovely-mermaid'
+import type { TuiTheme } from '../theme.ts'
 import type { MermaidMode } from '../theme-settings.ts'
 import type { TuiToken } from '../theme-tokens.ts'
-import type { TuiTheme } from '../theme.ts'
 
 /** The one fence language that asks for a drawing. */
 const MERMAID_FENCE_LANG = 'mermaid'
@@ -63,9 +63,14 @@ export interface MermaidOptions {
  */
 export type MermaidTransform = (markdown: string, availableWidth: number, live: boolean) => string
 
-function isMermaidFence(token: Token): token is Token & { type: 'code'; text: string; lang?: string } {
+function isMermaidFence(
+  token: Token,
+): token is Token & { type: 'code'; text: string; lang?: string } {
   // The info string may carry more than the language, and a fence may shout.
-  return token.type === 'code' && token.lang?.trim().split(/\s+/, 1)[0]?.toLowerCase() === MERMAID_FENCE_LANG
+  return (
+    token.type === 'code' &&
+    token.lang?.trim().split(/\s+/, 1)[0]?.toLowerCase() === MERMAID_FENCE_LANG
+  )
 }
 
 /** One drawing row as the code span that keeps its spacing. */
@@ -181,9 +186,11 @@ export function createMermaidTransform(options: MermaidOptions): MermaidTransfor
       return isolated(`${token.raw}\n${codeSpan(reason)}`, before, after)
     }
     if (art === null || drawnWidth(art) > availableWidth) return token.raw
-    const rows = art.styled.map(row =>
+    const rows = art.styled.map((row) =>
       row
-        .map(span => (span.role === 'none' ? span.text : options.theme.style(ROLE_TOKEN[span.role], span.text)))
+        .map((span) =>
+          span.role === 'none' ? span.text : options.theme.style(ROLE_TOKEN[span.role], span.text),
+        )
         .join(''),
     )
     return isolated(rows.map(codeSpan).join(HARD_BREAK), before, after)
@@ -216,9 +223,17 @@ export function createMermaidTransform(options: MermaidOptions): MermaidTransfor
       // the message is worth more than the drawing: it stays as written.
       if (at < 0) return markdown
       // A reply must not evict its own drawing window on every streaming delta; overflow stays readable source.
-      const body = isMermaidFence(token) && fences++ < MERMAID_CACHE_LIMIT
-        ? fenceBlock(token, out, markdown.slice(at + token.raw.length), availableWidth, live, retained)
-        : token.raw
+      const body =
+        isMermaidFence(token) && fences++ < MERMAID_CACHE_LIMIT
+          ? fenceBlock(
+              token,
+              out,
+              markdown.slice(at + token.raw.length),
+              availableWidth,
+              live,
+              retained,
+            )
+          : token.raw
       out += markdown.slice(cursor, at) + body
       cursor = at + token.raw.length
     }

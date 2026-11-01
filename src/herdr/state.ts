@@ -8,11 +8,11 @@
 
 import {
   HERDR_STATES,
+  type HerdrState,
   MAX_BLOCKED_MESSAGE_CHARS,
   MAX_STATE_LABEL_CHARS,
   SEQ_TIME_SCALE,
   SESSION_START_REASONS,
-  type HerdrState,
   type SessionStartReason,
 } from './constants.ts'
 
@@ -56,9 +56,13 @@ function asDriverStatus(value: unknown): DriverStatus | undefined {
  * at all, which is why a chained turn inside one run cannot flap the row.
  */
 export function driverReportFor(payload: unknown, sessionId: string): DriverStatus | undefined {
-  const record = typeof payload === 'object' && payload !== null ? (payload as Record<string, unknown>) : undefined
+  const record =
+    typeof payload === 'object' && payload !== null
+      ? (payload as Record<string, unknown>)
+      : undefined
   const agent = record?.agent
-  const agentId = typeof agent === 'object' && agent !== null ? (agent as Record<string, unknown>).id : undefined
+  const agentId =
+    typeof agent === 'object' && agent !== null ? (agent as Record<string, unknown>).id : undefined
   // Identity first: a subagent's status is not this pane's work, and only the
   // driven session's own transitions may be reported.
   if (typeof agentId !== 'string' || agentId !== sessionId) return undefined
@@ -89,7 +93,8 @@ export interface LifecycleReport {
  */
 export function lifecycleReport(facts: LifecycleFacts): LifecycleReport {
   if (facts.blockedCount > 0) return { state: HERDR_STATES.blocked, message: facts.blockedMessage }
-  if (facts.driverRunning || facts.backgroundRunning) return { state: HERDR_STATES.working, message: undefined }
+  if (facts.driverRunning || facts.backgroundRunning)
+    return { state: HERDR_STATES.working, message: undefined }
   return { state: HERDR_STATES.idle, message: undefined }
 }
 

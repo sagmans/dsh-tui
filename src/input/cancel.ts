@@ -8,7 +8,12 @@
  */
 
 /** What one cancel press asks the surface to take back, or that it asks for nothing. */
-export type CancelStep = 'clear-editor' | 'reclaim-queued' | 'interrupt-turn' | 'leave-child-view' | 'hand-back'
+export type CancelStep =
+  | 'clear-editor'
+  | 'reclaim-queued'
+  | 'interrupt-turn'
+  | 'leave-child-view'
+  | 'hand-back'
 
 /** The surface states a cancel press chooses between. */
 export interface CancelState {

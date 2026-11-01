@@ -1,8 +1,16 @@
-import { keyName, keysFor, newShadows, catalogOf, type Keymap } from './input/actions.ts'
-import { type ActionLayer } from './input/action-catalog.ts'
+import type { ActionLayer } from './input/action-catalog.ts'
+import { catalogOf, type Keymap, keyName, keysFor, newShadows } from './input/actions.ts'
 
 /** The layers a reader may ask for, in the order the table lists them. */
-export const KEYMAP_LAYERS: readonly ActionLayer[] = ['prompt', 'surface', 'chord', 'gate', 'question', 'picker', 'library']
+export const KEYMAP_LAYERS: readonly ActionLayer[] = [
+  'prompt',
+  'surface',
+  'chord',
+  'gate',
+  'question',
+  'picker',
+  'library',
+]
 
 /** What each layer is for, so a list narrowed to one reads as a surface rather than a dump. */
 const LAYER_NOTES: Readonly<Record<ActionLayer, string>> = {
@@ -23,7 +31,7 @@ const TAKEN_GROUP = 'from the library'
 
 /** The layer a reader named, or nothing when the name is not one of them. */
 export function keymapLayer(name: string): ActionLayer | undefined {
-  return KEYMAP_LAYERS.find(layer => layer === name)
+  return KEYMAP_LAYERS.find((layer) => layer === name)
 }
 
 /** What one layer is for, so a list narrowed to it can say what the reader is looking at. */

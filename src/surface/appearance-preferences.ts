@@ -2,7 +2,13 @@ import type { Context } from '@deepseek-ai/cordis'
 import { openSection, type SectionScope } from '../compat/section.ts'
 import type { PreferenceHome } from '../theme-command.ts'
 import { asRecord } from '../theme-schema.ts'
-import { TUI_SETTINGS_NAMESPACE, TuiSettingsSchema, readScope, settingsProblemMessage, type TuiSettings } from '../theme-settings.ts'
+import {
+  readScope,
+  settingsProblemMessage,
+  TUI_SETTINGS_NAMESPACE,
+  type TuiSettings,
+  TuiSettingsSchema,
+} from '../theme-settings.ts'
 
 const WRITE_UNSUPPORTED = 'the settings service cannot write the section; the patch was not applied'
 
@@ -32,7 +38,10 @@ export interface AppearancePreferences {
 }
 
 /** Keep attachment, persistence, and notifications on the same checked settings source. */
-export function createAppearancePreferences(ctx: Context, ports: AppearancePreferencePorts): AppearancePreferences {
+export function createAppearancePreferences(
+  ctx: Context,
+  ports: AppearancePreferencePorts,
+): AppearancePreferences {
   let configBacked = false
   // Unknown until a supported owner answers: no owner means no file worth naming.
   let home: PreferenceHome = { kind: 'unknown' }
@@ -56,7 +65,10 @@ export function createAppearancePreferences(ctx: Context, ports: AppearancePrefe
       hadUser ||= user.value !== undefined
       const section = asRecord(user.value)
       const history = asRecord(section?.history)
-      if ((user.value !== undefined && section === undefined) || (section?.history !== undefined && history === undefined)) {
+      if (
+        (user.value !== undefined && section === undefined) ||
+        (section?.history !== undefined && history === undefined)
+      ) {
         blocked = { enabled: true, ghost: true }
       } else {
         if (history?.enabled !== undefined && history.enabled !== true) blocked.enabled = true
@@ -82,7 +94,7 @@ export function createAppearancePreferences(ctx: Context, ports: AppearancePrefe
   const register = (): void => {
     // Row appearance must exist before prompt memory, even when Cordis defers attachment.
     ports.apply()
-    ctx.inject(['settings'], settingsCtx => {
+    ctx.inject(['settings'], (settingsCtx) => {
       let scope: SectionScope
       try {
         scope = openSection(settingsCtx.settings, {
@@ -98,34 +110,51 @@ export function createAppearancePreferences(ctx: Context, ports: AppearancePrefe
         })
       } catch (error) {
         ports.disableHistory()
-        ports.problem(settingsProblemMessage(error) + ' · prompt history stays off until the section parses')
+        ports.problem(
+          `${settingsProblemMessage(error)} · prompt history stays off until the section parses`,
+        )
         return
       }
       activeScope = scope
-      home = scope.kind === 'config'
-        ? scope.document === undefined ? { kind: 'unknown' } : { kind: 'document', path: scope.document }
-        : scope.kind === 'unsupported' ? { kind: 'unknown' } : { kind: 'section' }
+      home =
+        scope.kind === 'config'
+          ? scope.document === undefined
+            ? { kind: 'unknown' }
+            : { kind: 'document', path: scope.document }
+          : scope.kind === 'unsupported'
+            ? { kind: 'unknown' }
+            : { kind: 'section' }
       privacyRevision = undefined
       hadUser = false
       blocked = { enabled: false, ghost: false }
       configBacked = scope.kind === 'config'
       // Give rejected candidates the painter’s last valid appearance and applied privacy opt-outs, not fresh defaults.
-      readSection = () => readScope({ get: () => {
-        const raw = scope.get()
-        if (scope.kind !== 'config') return raw
-        const record = asRecord(raw)
-        if (record === undefined) return raw
-        const history = asRecord(record.history)
-        // Legacy import follows Loader activation. Missing switches cannot opt in first.
-        if (record.history !== undefined && history === undefined) return raw
-        return { ...record, history: {
-          ...history,
-          enabled: history?.enabled === undefined ? false : history.enabled,
-          ghost: history?.ghost === undefined ? false : history.ghost,
-        } }
-      } }, ports.problem, ports.applied())
+      readSection = () =>
+        readScope(
+          {
+            get: () => {
+              const raw = scope.get()
+              if (scope.kind !== 'config') return raw
+              const record = asRecord(raw)
+              if (record === undefined) return raw
+              const history = asRecord(record.history)
+              // Legacy import follows Loader activation. Missing switches cannot opt in first.
+              if (record.history !== undefined && history === undefined) return raw
+              return {
+                ...record,
+                history: {
+                  ...history,
+                  enabled: history?.enabled === undefined ? false : history.enabled,
+                  ghost: history?.ghost === undefined ? false : history.ghost,
+                },
+              }
+            },
+          },
+          ports.problem,
+          ports.applied(),
+        )
       // A preview is not a persisted choice: success requires owner acceptance; rejection must restore the applied appearance.
-      chooseTheme = name => {
+      chooseTheme = (name) => {
         void scope.update({ theme: name }).then(
           () => {
             ports.apply()
@@ -150,7 +179,9 @@ export function createAppearancePreferences(ctx: Context, ports: AppearancePrefe
     // The harness folds a section's committed value into its one document event,
     // so a write made by another surface still reaches the reader without a reload.
     const config = ctx.on('settings/document-updated', changed)
-    return () => { config() }
+    return () => {
+      config()
+    }
   }
   return {
     read: () => {
@@ -161,7 +192,7 @@ export function createAppearancePreferences(ctx: Context, ports: AppearancePrefe
     },
     configBacked: () => configBacked,
     home: () => home,
-    chooseTheme: name => chooseTheme(name),
+    chooseTheme: (name) => chooseTheme(name),
     allowsHistory: (field, applied) => {
       // Raw opt-outs may produce no change event, so each history use must consult the veto.
       observePrivacy()

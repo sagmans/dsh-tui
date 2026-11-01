@@ -28,14 +28,18 @@ export const NATIVE_CURSOR_PRESENTATION: CursorPresentation = Object.freeze({
 })
 
 /** A single cancellable timeout belongs to the surface, never the status ticker or transcript. */
-export function createCursorController(mode: CursorMode, requestRender: () => void): CursorController {
+export function createCursorController(
+  mode: CursorMode,
+  requestRender: () => void,
+): CursorController {
   let started = false
   let terminalFocused = true
   let editorFocused = false
   let phase = true
   let timer: ReturnType<typeof setTimeout> | undefined
 
-  const active = (): boolean => mode === SOFTWARE_CURSOR_MODE && started && terminalFocused && editorFocused
+  const active = (): boolean =>
+    mode === SOFTWARE_CURSOR_MODE && started && terminalFocused && editorFocused
   const cancel = (): void => {
     clearTimeout(timer)
     timer = undefined
@@ -62,7 +66,9 @@ export function createCursorController(mode: CursorMode, requestRender: () => vo
   return {
     mode,
     visible: () => active() && phase,
-    activity: () => { if (active()) restart() },
+    activity: () => {
+      if (active()) restart()
+    },
     start: () => {
       if (started) return
       started = true
@@ -74,12 +80,12 @@ export function createCursorController(mode: CursorMode, requestRender: () => vo
       started = false
       cancel()
     },
-    setTerminalFocused: focused => {
+    setTerminalFocused: (focused) => {
       if (terminalFocused === focused) return
       terminalFocused = focused
       restart()
     },
-    setEditorFocused: focused => {
+    setEditorFocused: (focused) => {
       if (editorFocused === focused) return
       editorFocused = focused
       restart()

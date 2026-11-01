@@ -1,18 +1,21 @@
 #!/bin/sh
-# Runs the gates hosted CI ran on every push (signatures, typecheck, golden
-# frames, pack smoke, terminal behavior, harness matrix) on each pushed commit.
+# Runs the gates hosted CI ran on every push (signatures, lint and format,
+# typecheck, golden frames, pack smoke, terminal behavior, harness matrix) and
+# the dependency vulnerability audit on each pushed commit.
 set -eu
 DSH_TELEMETRY_DISABLED=1
 export DSH_TELEMETRY_DISABLED
 
 checks() {
 	npm audit signatures || return 1
+	pnpm run lint || return 1
 	pnpm run check:local || return 1
 	pnpm typecheck || return 1
 	pnpm test:golden || return 1
 	node tools/pack-smoke.mjs || return 1
 	pnpm test:terminal || return 1
 	node tools/harness-matrix.mjs || return 1
+	pnpm audit --audit-level high || return 1
 }
 
 # Helpers (staged_git, pushed_shas, at_sha, darwin_only) from .githooks/lib.

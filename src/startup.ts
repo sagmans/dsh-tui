@@ -1,15 +1,29 @@
 import { randomUUID } from 'node:crypto'
 import { performance } from 'node:perf_hooks'
-import { TUI_PROFILING_SERVICE, createLifecycleProfiler, PROFILE_PHASE, PROFILE_MILESTONE } from './profiling.ts'
-import { dshHomeDir } from './stash/paths.ts'
 import { createInterface } from 'node:readline/promises'
-import { Command } from 'commander'
 import type { Context } from '@deepseek-ai/cordis'
+import {
+  CONFIGURED_AGENT_IDENTITIES_KEY,
+  type LauncherAgentIdentity,
+} from '@deepseek-ai/dsh-agent-loop'
 import { parseCmdline } from '@deepseek-ai/dsh-cmdline'
-import { CONFIGURED_AGENT_IDENTITIES_KEY, type LauncherAgentIdentity } from '@deepseek-ai/dsh-agent-loop'
+import { Command } from 'commander'
 import type { TuiStartup } from './contracts.ts'
-import { LaunchUsageError, PROFILE_NAME, identityOf, resolveLaunchIntent, resumeHint } from './identity.ts'
+import {
+  identityOf,
+  LaunchUsageError,
+  PROFILE_NAME,
+  resolveLaunchIntent,
+  resumeHint,
+} from './identity.ts'
 import { installBundledSkills, SkillAlreadyExistsError } from './install-skills.ts'
+import {
+  createLifecycleProfiler,
+  PROFILE_MILESTONE,
+  PROFILE_PHASE,
+  TUI_PROFILING_SERVICE,
+} from './profiling.ts'
+import { dshHomeDir } from './stash/paths.ts'
 
 export const name = 'tui-startup'
 
@@ -65,7 +79,7 @@ function launchOf(
   session: string | undefined,
   options: LaunchOptions,
 ): { readonly identity: LauncherAgentIdentity; readonly startup: TuiStartup } | undefined {
-  let intent
+  let intent: ReturnType<typeof resolveLaunchIntent>
   try {
     intent = resolveLaunchIntent({
       mode,
@@ -122,14 +136,18 @@ export function apply(ctx: Context): void {
 
   // Installation must also work without a TTY: use launcher exit without publishing
   // tuiStartup, whose consumers would mount the interactive surface.
-  program.command('install-skills')
+  program
+    .command('install-skills')
     .description('install or update the bundled skills in ~/.agents/skills/')
     .option('--update', 'replace an existing skill without asking')
     .action((options: { update?: boolean }) => {
       const exit = ctx.get('appExit')
-      if (exit === undefined) throw new Error('dsh --profile tui: the launcher must provide appExit')
+      if (exit === undefined)
+        throw new Error('dsh --profile tui: the launcher must provide appExit')
       const fail = (error: unknown): void => {
-        process.stderr.write(`dsh --profile tui install-skills: ${error instanceof Error ? error.message : String(error)}\n`)
+        process.stderr.write(
+          `dsh --profile tui install-skills: ${error instanceof Error ? error.message : String(error)}\n`,
+        )
         exit(1)
       }
       const install = (update: boolean): void => {
@@ -142,7 +160,11 @@ export function apply(ctx: Context): void {
       // Replacement discards local skill edits, so require --update or affirmative
       // consent. Both streams must be interactive for the prompt; refusal is the default.
       if (options.update === true) {
-        try { install(true) } catch (error) { fail(error) }
+        try {
+          install(true)
+        } catch (error) {
+          fail(error)
+        }
         return
       }
       try {
@@ -162,7 +184,9 @@ export function apply(ctx: Context): void {
           const readline = createInterface({ input: process.stdin, output: process.stdout })
           let answer: string
           try {
-            answer = await readline.question(`Update existing skill at ${error.destination}? [y/N] `)
+            answer = await readline.question(
+              `Update existing skill at ${error.destination}? [y/N] `,
+            )
           } finally {
             readline.close()
           }
@@ -177,7 +201,8 @@ export function apply(ctx: Context): void {
       }
     })
 
-  program.command('list-models')
+  program
+    .command('list-models')
     .description('print every provider/model the model picker can reach, then exit')
     .action(() => {
       // The flag is published before the startup service, because the surface
@@ -189,32 +214,32 @@ export function apply(ctx: Context): void {
       ctx.provide(TUI_STARTUP_SERVICE, launch.startup)
     })
 
-  program.action((
-    mode: string | undefined,
-    session: string | undefined,
-    options: LaunchOptions,
-  ) => {
-    const launch = launchOf(program, mode, session, options)
-    if (launch === undefined) return
-    if (options.profiling === true) {
-      const profileContext = ctx.get(PROFILE_CONTEXT_SERVICE) as { home?: string } | undefined
-      const profiling = createLifecycleProfiler({
-        home: profileContext?.home ?? dshHomeDir(),
-        sessionId: String(launch.identity.id), cliStartedAtMs, moduleLoadedAtMs: MODULE_LOADED_AT_MS,
-      })
-      // Publish before startup consumers mount so pre-terminal failures still leave a report.
-      ctx.provide(TUI_PROFILING_SERVICE, profiling)
-      ctx.get(APP_READY_SERVICE)?.onReady(() => profiling.mark(PROFILE_MILESTONE.launcherReady))
-    }
-    // Keep an optional configured main agent aligned with the surface's launch identity.
-    // The initial recovery hint must name that same session; it cannot follow later forks
-    // or switches. Terminal shutdown builds its hint from the active session instead.
-    const finishPublication = ctx.get(TUI_PROFILING_SERVICE)?.begin(PROFILE_PHASE.publication)
-    ctx.provide(CONFIGURED_AGENT_IDENTITIES_KEY, { [MAIN_AGENT_ID]: launch.identity })
-    ctx.provide(TUI_STARTUP_SERVICE, launch.startup)
-    ctx.provide('tuiGoodbyeMessage', resumeHint(launch.identity.id, PROFILE_NAME))
-    finishPublication?.()
-  })
+  program.action(
+    (mode: string | undefined, session: string | undefined, options: LaunchOptions) => {
+      const launch = launchOf(program, mode, session, options)
+      if (launch === undefined) return
+      if (options.profiling === true) {
+        const profileContext = ctx.get(PROFILE_CONTEXT_SERVICE) as { home?: string } | undefined
+        const profiling = createLifecycleProfiler({
+          home: profileContext?.home ?? dshHomeDir(),
+          sessionId: String(launch.identity.id),
+          cliStartedAtMs,
+          moduleLoadedAtMs: MODULE_LOADED_AT_MS,
+        })
+        // Publish before startup consumers mount so pre-terminal failures still leave a report.
+        ctx.provide(TUI_PROFILING_SERVICE, profiling)
+        ctx.get(APP_READY_SERVICE)?.onReady(() => profiling.mark(PROFILE_MILESTONE.launcherReady))
+      }
+      // Keep an optional configured main agent aligned with the surface's launch identity.
+      // The initial recovery hint must name that same session; it cannot follow later forks
+      // or switches. Terminal shutdown builds its hint from the active session instead.
+      const finishPublication = ctx.get(TUI_PROFILING_SERVICE)?.begin(PROFILE_PHASE.publication)
+      ctx.provide(CONFIGURED_AGENT_IDENTITIES_KEY, { [MAIN_AGENT_ID]: launch.identity })
+      ctx.provide(TUI_STARTUP_SERVICE, launch.startup)
+      ctx.provide('tuiGoodbyeMessage', resumeHint(launch.identity.id, PROFILE_NAME))
+      finishPublication?.()
+    },
+  )
 
   parseCmdline(ctx, program)
 }

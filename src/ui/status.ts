@@ -1,9 +1,9 @@
 import { type Component, visibleWidth, wrapTextWithAnsi } from '@earendil-works/pi-tui'
-import { oneRow } from '../text.ts'
 import { describeDuration } from '../jobs.ts'
-import { formatTokens } from '../tokens.ts'
-import type { TuiToken } from '../theme-tokens.ts'
+import { oneRow } from '../text.ts'
 import type { TuiTheme } from '../theme.ts'
+import type { TuiToken } from '../theme-tokens.ts'
+import { formatTokens } from '../tokens.ts'
 
 /** Caller-supplied facts keep footer presentation independent of session services and activity tracking. */
 export interface StatusFacts {
@@ -71,7 +71,7 @@ function shortPath(path: string, home: string | undefined): string {
     const rest = path.slice(home.length).replace(/^\//u, '')
     return rest === '' ? '~/' : `~/${rest}`
   }
-  const segments = path.split('/').filter(segment => segment !== '')
+  const segments = path.split('/').filter((segment) => segment !== '')
   if (segments.length <= PATH_SEGMENTS) return path
   return `…/${segments.slice(-PATH_SEGMENTS).join('/')}`
 }
@@ -104,32 +104,44 @@ function formatStatus(facts: StatusFacts, width: number, theme: TuiTheme): strin
     push('status.activity.working', `${WORKING_MARK} working`)
     // Elapsed carries its own token so it can be toned apart from the activity,
     // but it qualifies that activity, so it attaches rather than standing alone.
-    if (facts.elapsedMs !== undefined) push('status.elapsed', ` ${describeDuration(facts.elapsedMs)}`, true)
+    if (facts.elapsedMs !== undefined)
+      push('status.elapsed', ` ${describeDuration(facts.elapsedMs)}`, true)
   } else {
     push('status.activity.ready', `${READY_MARK} ready`)
   }
   // The mode comes first: it decides which tools exist at all, so a reader who
   // saw a tool disappear needs it before the model that ran it.
-  if (facts.agentPreset !== undefined && facts.agentPreset !== '') push('status.agentPreset', facts.agentPreset)
+  if (facts.agentPreset !== undefined && facts.agentPreset !== '')
+    push('status.agentPreset', facts.agentPreset)
   if (facts.model !== undefined && facts.model !== '') {
-    const route = facts.provider === undefined || facts.provider === '' ? facts.model : `${facts.provider}/${facts.model}`
+    const route =
+      facts.provider === undefined || facts.provider === ''
+        ? facts.model
+        : `${facts.provider}/${facts.model}`
     push('status.model', route)
     // Effort and addon hints qualify the same route, so they share one attached group.
-    const qualifiers = [facts.effort, ...(facts.modelHints ?? [])].filter(value => value !== undefined && value !== '')
+    const qualifiers = [facts.effort, ...(facts.modelHints ?? [])].filter(
+      (value) => value !== undefined && value !== '',
+    )
     if (qualifiers.length > 0) push('status.effort', ` (${qualifiers.join(SEPARATOR_TEXT)})`, true)
   }
   if (facts.preset !== undefined && facts.preset !== '') push('status.permission', facts.preset)
   // Parked drafts come before the running numbers: a row cut to width loses its
   // tail, and a reader who cannot see the count cannot know the directory is
   // holding work they meant to come back to.
-  if (facts.stashed !== undefined && facts.stashed > 0) push('status.stash', `${STASH_LABEL} ${facts.stashed}`)
+  if (facts.stashed !== undefined && facts.stashed > 0)
+    push('status.stash', `${STASH_LABEL} ${facts.stashed}`)
   // Compact context counts so the model and directory can share the footer with them.
   if (facts.contextTokens !== undefined) {
-    push('status.context', facts.contextWindow === undefined
-      ? `ctx ${formatTokens(facts.contextTokens)}`
-      : `ctx ${formatTokens(facts.contextTokens)}/${formatTokens(facts.contextWindow)}`)
+    push(
+      'status.context',
+      facts.contextWindow === undefined
+        ? `ctx ${formatTokens(facts.contextTokens)}`
+        : `ctx ${formatTokens(facts.contextTokens)}/${formatTokens(facts.contextWindow)}`,
+    )
   }
-  if (facts.cacheRate !== undefined) push('status.cache', `cache ${Math.round(facts.cacheRate * 100)}%`)
+  if (facts.cacheRate !== undefined)
+    push('status.cache', `cache ${Math.round(facts.cacheRate * 100)}%`)
   push('status.cwd', shortPath(facts.cwd, facts.home))
   // The row is one row whatever a fact carried: a break that survived the cut
   // would be written as a move down, over the row beneath the bar.
@@ -187,6 +199,8 @@ export class StatusBar implements Component {
   }
 
   render(width: number): string[] {
-    return width <= 0 ? [] : wrapTextWithAnsi(formatStatus(this.facts(), WRAPPING_WIDTH, this.theme), width)
+    return width <= 0
+      ? []
+      : wrapTextWithAnsi(formatStatus(this.facts(), WRAPPING_WIDTH, this.theme), width)
   }
 }

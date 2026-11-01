@@ -25,7 +25,9 @@ const MAX_TASK_WORDS = 10
 
 /** Service-event payloads are unknown; field checks must precede trusting lifecycle identifiers. */
 function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined
+  return typeof value === 'object' && value !== null
+    ? (value as Record<string, unknown>)
+    : undefined
 }
 
 /** Use compact IDs for display only; shared prefixes need not identify a unique child. */
@@ -50,7 +52,12 @@ export class SubagentRoster {
     const id = record?.childId
     const raw = record?.label
     if (typeof id !== 'string' || typeof raw !== 'string') return
-    const label = stripControlCharacters(raw).trim().replace(/\s+/gu, ' ').split(' ').slice(0, MAX_TASK_WORDS).join(' ')
+    const label = stripControlCharacters(raw)
+      .trim()
+      .replace(/\s+/gu, ' ')
+      .split(' ')
+      .slice(0, MAX_TASK_WORDS)
+      .join(' ')
     if (label === '') return
     this.labels.set(id, label)
     for (const [runId, run] of this.runs) {
@@ -84,9 +91,10 @@ export class SubagentRoster {
     const stopReason = typeof record?.stopReason === 'string' ? record.stopReason : undefined
     this.runs.set(runId, {
       runId,
-      id: typeof record?.id === 'string' ? record.id : existing?.id ?? runId,
+      id: typeof record?.id === 'string' ? record.id : (existing?.id ?? runId),
       ...(existing?.label === undefined ? {} : { label: existing.label }),
-      provider: typeof record?.provider === 'string' ? record.provider : existing?.provider ?? 'subagent',
+      provider:
+        typeof record?.provider === 'string' ? record.provider : (existing?.provider ?? 'subagent'),
       startedAt: existing?.startedAt,
       // Keep abnormal stops visible in /subagents instead of presenting them as ordinary completion.
       // This display classification does not prove success when the event omits its reason.
@@ -98,12 +106,14 @@ export class SubagentRoster {
 
   /** Keep recent delegations first so collapsed dock rows show the newest work. */
   list(): readonly SubagentRun[] {
-    return [...this.runs.values()].sort((left, right) => (right.startedAt ?? 0) - (left.startedAt ?? 0))
+    return [...this.runs.values()].sort(
+      (left, right) => (right.startedAt ?? 0) - (left.startedAt ?? 0),
+    )
   }
 
   /** Separate work still needing attention from the settled history available through /subagents. */
   running(): readonly SubagentRun[] {
-    return this.list().filter(run => run.status === 'running')
+    return this.list().filter((run) => run.status === 'running')
   }
 
   reset(): void {
@@ -114,18 +124,19 @@ export class SubagentRoster {
 
 /** Expose provider and live age or settled duration without requiring a visit to each child transcript. */
 export function describeSubagent(run: SubagentRun, now: number): string {
-  const age = run.status === 'running'
-    ? `running ${describeDuration(run.startedAt === undefined ? Number.NaN : now - run.startedAt)}`
-    : `${run.status}${run.stopReason === undefined || run.stopReason === 'completed' ? '' : ` (${run.stopReason})`} ${run.startedAt === undefined || run.finishedAt === undefined ? 'duration unknown' : describeDuration(run.finishedAt - run.startedAt)}`
+  const age =
+    run.status === 'running'
+      ? `running ${describeDuration(run.startedAt === undefined ? Number.NaN : now - run.startedAt)}`
+      : `${run.status}${run.stopReason === undefined || run.stopReason === 'completed' ? '' : ` (${run.stopReason})`} ${run.startedAt === undefined || run.finishedAt === undefined ? 'duration unknown' : describeDuration(run.finishedAt - run.startedAt)}`
   return `${shortId(run.id)}${run.label === undefined ? '' : ` · ${run.label}`} · ${run.provider} · ${age}`
 }
 
 /** Keep settled delegations inspectable through /subagents after they leave the live dock. */
 export function describeSubagents(runs: readonly SubagentRun[], now: number): string {
   if (runs.length === 0) return 'no subagents have run in this session'
-  const running = runs.filter(run => run.status === 'running').length
+  const running = runs.filter((run) => run.status === 'running').length
   const header = `subagents · ${runs.length}${running === 0 ? '' : ` (${running} running)`}`
-  return [header, ...runs.map(run => `  ${describeSubagent(run, now)}`)].join('\n')
+  return [header, ...runs.map((run) => `  ${describeSubagent(run, now)}`)].join('\n')
 }
 
 /** Separate reader actions from lifecycle state so parsing does not require a live roster. */
@@ -140,13 +151,20 @@ const ACTIONS = new Set(['open', 'kill'])
 
 /** Read a `/subagents` argument; the id is the only handle, so actions stay explicit. */
 export function parseSubagentsArgument(argument: string): SubagentsCommand {
-  const parts = argument.trim().split(/\s+/u).filter(part => part !== '')
+  const parts = argument
+    .trim()
+    .split(/\s+/u)
+    .filter((part) => part !== '')
   if (parts.length === 0) return { kind: 'list' }
   const [verb = '', id = ''] = parts
   if (!ACTIONS.has(verb)) {
-    return { kind: 'invalid', reason: `unknown action "${verb}" — use /subagents, /subagents open <id>, or /subagents kill <id>` }
+    return {
+      kind: 'invalid',
+      reason: `unknown action "${verb}" — use /subagents, /subagents open <id>, or /subagents kill <id>`,
+    }
   }
-  if (id === '') return { kind: 'invalid', reason: `${verb} needs a child id; /subagents lists them` }
+  if (id === '')
+    return { kind: 'invalid', reason: `${verb} needs a child id; /subagents lists them` }
   return verb === 'open' ? { kind: 'open', id } : { kind: 'kill', id }
 }
 
@@ -160,18 +178,22 @@ const LAST_RUN = 'last'
  * prefix resolves to nothing rather than to the wrong child. \`last\` names the
  * newest run, because copying a uuid out of a terminal is not a workflow.
  */
-export function resolveRun(runs: readonly SubagentRun[], idOrPrefix: string): SubagentRun | undefined {
+export function resolveRun(
+  runs: readonly SubagentRun[],
+  idOrPrefix: string,
+): SubagentRun | undefined {
   // The roster happens to hand these over newest first; picking by time keeps
   // the shortcut honest even if a caller ever hands them over differently.
   if (idOrPrefix === LAST_RUN) {
     return runs.reduce<SubagentRun | undefined>(
-      (newest, run) => newest === undefined || (run.startedAt ?? 0) > (newest.startedAt ?? 0) ? run : newest,
+      (newest, run) =>
+        newest === undefined || (run.startedAt ?? 0) > (newest.startedAt ?? 0) ? run : newest,
       undefined,
     )
   }
-  const exact = runs.find(run => run.id === idOrPrefix)
+  const exact = runs.find((run) => run.id === idOrPrefix)
   if (exact !== undefined) return exact
-  const matches = runs.filter(run => run.id.startsWith(idOrPrefix))
+  const matches = runs.filter((run) => run.id.startsWith(idOrPrefix))
   return matches.length === 1 ? matches[0] : undefined
 }
 
@@ -191,7 +213,7 @@ export function createSubagentControl(ctx: Context): { stop(id: string): boolean
   const agents = ctx.get('agents') as AgentRegistryLike | undefined
   if (typeof agents?.get !== 'function') return undefined
   return {
-    stop: id => {
+    stop: (id) => {
       const child = agents.get?.(id)
       if (child?.cancel === undefined) return false
       child.cancel({ kind: 'user' })

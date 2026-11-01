@@ -10,7 +10,9 @@
 
 /** Non-object recorded blocks must not interrupt transcript reconstruction; object fields still need their own checks. */
 function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined
+  return typeof value === 'object' && value !== null
+    ? (value as Record<string, unknown>)
+    : undefined
 }
 
 /** The visible lines a content block list holds, thoughts excluded. */

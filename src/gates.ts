@@ -1,4 +1,4 @@
-import { actionLabel, keyName, keysFor, matchesAction, type Keymap } from './input/actions.ts'
+import { actionLabel, type Keymap, keyName, keysFor, matchesAction } from './input/actions.ts'
 
 /** The outcome vocabulary the approval seam accepts from an answerer. */
 export type ApprovalOutcome = 'allowed-once' | 'rejected' | 'cancelled'
@@ -70,7 +70,7 @@ interface GateCustomRow {
 
 /** Keep gate detail compact so empty source lines do not spend screen rows above the choices. */
 export function lines(value: string): string[] {
-  return value.split('\n').filter(line => line.trim() !== '')
+  return value.split('\n').filter((line) => line.trim() !== '')
 }
 
 /**
@@ -112,11 +112,16 @@ export class ApprovalGate {
       optionOffset: 0,
       options: [],
       custom: undefined,
-      hint: this.outcome === undefined
-        ? ['gate.allow', 'gate.reject', 'gate.cancel']
-          .map(id => keysFor(this.keys(), id).map(key => `${keyName(key)} ${actionLabel(id)}`).join(' · '))
-          .join(' · ')
-        : 'decided',
+      hint:
+        this.outcome === undefined
+          ? ['gate.allow', 'gate.reject', 'gate.cancel']
+              .map((id) =>
+                keysFor(this.keys(), id)
+                  .map((key) => `${keyName(key)} ${actionLabel(id)}`)
+                  .join(' · '),
+              )
+              .join(' · ')
+          : 'decided',
     }
   }
 }

@@ -1,4 +1,10 @@
-import { Key, isKittyProtocolActive, matchesKey, setKittyProtocolActive, type KeyId } from '@earendil-works/pi-tui'
+import {
+  isKittyProtocolActive,
+  Key,
+  type KeyId,
+  matchesKey,
+  setKittyProtocolActive,
+} from '@earendil-works/pi-tui'
 
 /**
  * How a key press is spelled, matched, and compared across terminals.
@@ -85,7 +91,9 @@ export function normalizeKey(raw: string): KeyId | undefined {
     seen.add(part)
     written.push(part)
   }
-  written.sort((left, right) => MODIFIER_ORDER.indexOf(left as never) - MODIFIER_ORDER.indexOf(right as never))
+  written.sort(
+    (left, right) => MODIFIER_ORDER.indexOf(left as never) - MODIFIER_ORDER.indexOf(right as never),
+  )
   return [...written, base ?? key].join('+') as KeyId
 }
 
@@ -102,7 +110,8 @@ export function isPressable(key: KeyId): boolean {
   const count = parts.length
   if (base === 'escape' && count > 0) return false
   if (/^f([1-9]|1[0-2])$/u.test(base) && count > 0) return false
-  if (base === 'clear' && (count > 1 || parts.includes('alt') || parts.includes('super'))) return false
+  if (base === 'clear' && (count > 1 || parts.includes('alt') || parts.includes('super')))
+    return false
   return true
 }
 
@@ -139,14 +148,13 @@ const PROBE_BYTES = 0x80
  * that one with it keeps apart. The answer is cached: which sequences reach a key
  * is a property of the key rather than of the map.
  */
-const PRESS_PROBES: readonly string[] = Array.from(
-  { length: PROBE_BYTES },
-  (_, code) => String.fromCharCode(code),
-).flatMap(byte => [byte, `\u001b${byte}`])
+const PRESS_PROBES: readonly string[] = Array.from({ length: PROBE_BYTES }, (_, code) =>
+  String.fromCharCode(code),
+).flatMap((byte) => [byte, `\u001b${byte}`])
 
 /** One sequence named so two rows can agree on it without carrying the bytes. */
 function spellingOf(sequence: string): string {
-  return `seq:${[...sequence].map(character => character.charCodeAt(0).toString(16)).join('-')}`
+  return `seq:${[...sequence].map((character) => character.charCodeAt(0).toString(16)).join('-')}`
 }
 
 const pressSpellings = new Map<string, readonly string[]>()
@@ -225,15 +233,20 @@ export function pressOverlaps(rows: readonly PressRow[]): PressOverlap[] {
   })
   const overlaps: PressOverlap[] = []
   for (const found of groups.values()) {
-    const ids = [...new Set(found.map(index => rowAt(index).id))].sort()
+    const ids = [...new Set(found.map((index) => rowAt(index).id))].sort()
     if (ids.length < 2) continue
     // A spelling counts as shared only when two different rows read it: one row
     // may hold two spellings of the same press (Return beside Ctrl+M), which is
     // the reader saying one thing rather than a press two rows fight over.
-    const spellings = [...new Set(found.flatMap(index => matchPresses(rowAt(index).key)))]
-      .filter(spelling => new Set(
-        (reached.get(spelling) ?? []).filter(index => found.includes(index)).map(index => rowAt(index).id),
-      ).size > 1)
+    const spellings = [...new Set(found.flatMap((index) => matchPresses(rowAt(index).key)))]
+      .filter(
+        (spelling) =>
+          new Set(
+            (reached.get(spelling) ?? [])
+              .filter((index) => found.includes(index))
+              .map((index) => rowAt(index).id),
+          ).size > 1,
+      )
       .sort()
     overlaps.push({ ids, key: rowAt(found[0]!).key, spellings })
   }

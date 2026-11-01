@@ -1,5 +1,5 @@
 import type { PromptEntry } from '../agent/prompt-history.ts'
-import { hintKeys, moveHint, type Keymap } from '../input/actions.ts'
+import { hintKeys, type Keymap, moveHint } from '../input/actions.ts'
 import { ListPicker, singleLine } from './picker.ts'
 
 /** A prompt used exactly once reads as ordinary, so the count only starts at a repeat. */
@@ -17,18 +17,20 @@ export class HistoryPicker extends ListPicker<PromptEntry> {
   constructor(entries: () => readonly PromptEntry[], draft: string, keys: () => Keymap) {
     super(
       entries,
-      () => 'prompt history · ' + entries().length + ' recorded',
-      entry => entry.text,
-      entry => ({
+      () => `prompt history · ${entries().length} recorded`,
+      (entry) => entry.text,
+      (entry) => ({
         label: singleLine(entry.text),
-        description: entry.useCount >= REUSED ? entry.useCount + ' uses' : undefined,
+        description: entry.useCount >= REUSED ? `${entry.useCount} uses` : undefined,
         // The card marks the row under the cursor, which the list decides.
         current: false,
       }),
-      entry => entry.text,
+      (entry) => entry.text,
       {
-        empty: () => `nothing matches · backspace to widen · ${hintKeys(keys(), 'picker.cancel')} cancel`,
-        listed: () => `${moveHint(keys(), 'picker.up', 'picker.down')} move · ${hintKeys(keys(), 'picker.confirm')} insert · ${hintKeys(keys(), 'picker.cancel')} cancel · type to filter`,
+        empty: () =>
+          `nothing matches · backspace to widen · ${hintKeys(keys(), 'picker.cancel')} cancel`,
+        listed: () =>
+          `${moveHint(keys(), 'picker.up', 'picker.down')} move · ${hintKeys(keys(), 'picker.confirm')} insert · ${hintKeys(keys(), 'picker.cancel')} cancel · type to filter`,
       },
       keys,
       draft,

@@ -42,6 +42,6 @@ export async function apply(ctx: Context): Promise<void> {
   // A mode registers itself inside its own row's apply: awaiting them here is what
   // makes this row mean "the roster this profile offers" rather than "the rows it
   // asked for", for every reader that comes after it.
-  await Promise.all(loadPresetDefinitions().map(definition => ctx.plugin(preset, definition)))
+  await Promise.all(loadPresetDefinitions().map((definition) => ctx.plugin(preset, definition)))
   await whenRosterIsUp(ctx)
 }

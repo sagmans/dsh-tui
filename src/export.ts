@@ -1,4 +1,16 @@
-import { closeSync, constants, fchmodSync, lstatSync, mkdirSync, mkdtempSync, openSync, renameSync, rmdirSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  closeSync,
+  constants,
+  fchmodSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  openSync,
+  renameSync,
+  rmdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import path from 'node:path'
 import { rowText } from './cards.ts'
 import { dshHomeDir } from './stash/paths.ts'
@@ -7,8 +19,10 @@ import { renderTerminalText } from './terminal-text.ts'
 import type { TranscriptEntry } from './transcript.ts'
 
 /** Permission repair must target the owned directory, never a link into unrelated storage. */
-const EXPORT_DIRECTORY_FLAGS = constants.O_RDONLY | (constants.O_DIRECTORY ?? 0) | (constants.O_NOFOLLOW ?? 0)
-const EXPORT_WRITE_FLAGS = constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | (constants.O_NOFOLLOW ?? 0)
+const EXPORT_DIRECTORY_FLAGS =
+  constants.O_RDONLY | (constants.O_DIRECTORY ?? 0) | (constants.O_NOFOLLOW ?? 0)
+const EXPORT_WRITE_FLAGS =
+  constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | (constants.O_NOFOLLOW ?? 0)
 const EXPORT_STAGING_PREFIX = '.dsh-export-'
 const EXPORT_STAGED_FILE = 'transcript.tmp'
 const EXPORT_ENCODING = 'utf8'
@@ -79,7 +93,7 @@ export function writeTranscriptExport(filePath: string, text: string): void {
 
 /** One sentence out of an error, for a notice that has one line. */
 function message(error: unknown): string {
-  return error instanceof Error ? error.message.split('\n')[0] ?? String(error) : String(error)
+  return error instanceof Error ? (error.message.split('\n')[0] ?? String(error)) : String(error)
 }
 
 /** Make default dumps recognizable as harness sessions when browsing the exports directory. */
@@ -148,7 +162,7 @@ export function transcriptToText(entries: readonly TranscriptEntry[]): string {
       case 'reasoning': {
         // The thought is on screen now, so it belongs in the dump; only the
         // count is metadata, and the body is the part a reader came for.
-        const body = entry.body.split('\n').map(line => documentText(line))
+        const body = entry.body.split('\n').map((line) => documentText(line))
         const fence = fenceFor(body.join('\n'))
         lines.push('', `<!-- ${commentBody(entry.summary)} -->`, `${fence}reasoning`)
         lines.push(...body)
@@ -159,18 +173,23 @@ export function transcriptToText(entries: readonly TranscriptEntry[]): string {
         const mark = entry.card.failed ? 'ERROR' : 'tool'
         // The dump is the words, not the screen: row classes exist so the
         // surface can style a line, and a file has no use for them.
-        const rows = entry.card.detail.map(row => documentText(rowText(row)))
-        const more = entry.card.totalLines > entry.card.detail.length
-          ? `… ${entry.card.totalLines - entry.card.detail.length} more lines`
-          : undefined
-        const head = [entry.card.title, entry.card.skill].filter(part => part !== undefined && part !== '').join(' ')
+        const rows = entry.card.detail.map((row) => documentText(rowText(row)))
+        const more =
+          entry.card.totalLines > entry.card.detail.length
+            ? `… ${entry.card.totalLines - entry.card.detail.length} more lines`
+            : undefined
+        const head = [entry.card.title, entry.card.skill]
+          .filter((part) => part !== undefined && part !== '')
+          .join(' ')
         const fence = fenceFor([documentText(head), ...rows, more ?? ''].join('\n'))
         lines.push('', `### ${mark}: ${documentText(head)}`)
         // The calls are what the reader saw under the card, so a dump that
         // dropped them would lose the only record of what the program reached.
         const subCalls = entry.card.subCalls ?? []
         for (const call of subCalls) {
-          const text = [call.title, call.skill, call.argument].filter(part => part !== undefined && part !== '').join(' ')
+          const text = [call.title, call.skill, call.argument]
+            .filter((part) => part !== undefined && part !== '')
+            .join(' ')
           lines.push(`- ${documentText(text)}${call.failed ? SUBCALL_FAILED_SUFFIX : ''}`)
         }
         const dropped = (entry.card.subCallsTotal ?? subCalls.length) - subCalls.length

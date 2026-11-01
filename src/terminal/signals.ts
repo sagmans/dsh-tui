@@ -14,7 +14,12 @@ const TERMINATING_SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGQUIT'] as const
 export type TerminatingSignal = (typeof TERMINATING_SIGNALS)[number]
 
 /** The status a shell reports for a process ended by one of those signals. */
-const SIGNAL_EXIT: Record<TerminatingSignal, number> = { SIGINT: 130, SIGTERM: 143, SIGHUP: 129, SIGQUIT: 131 }
+const SIGNAL_EXIT: Record<TerminatingSignal, number> = {
+  SIGINT: 130,
+  SIGTERM: 143,
+  SIGHUP: 129,
+  SIGQUIT: 131,
+}
 
 /**
  * Run a shutdown once for the first terminating signal, then leave.

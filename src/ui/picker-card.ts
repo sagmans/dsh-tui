@@ -1,7 +1,12 @@
-import { type Component, type SizeValue, visibleWidth, wrapTextWithAnsi } from '@earendil-works/pi-tui'
-import type { TuiToken } from '../theme-tokens.ts'
+import {
+  type Component,
+  type SizeValue,
+  visibleWidth,
+  wrapTextWithAnsi,
+} from '@earendil-works/pi-tui'
 import type { TuiTheme } from '../theme.ts'
-import { canFrame, frameLines, FRAME_COLUMNS } from './frame.ts'
+import type { TuiToken } from '../theme-tokens.ts'
+import { canFrame, FRAME_COLUMNS, frameLines } from './frame.ts'
 import type { PickerCard } from './picker.ts'
 
 /** Inset list content beneath the heading; a deeper gutter distinguishes notes and filters from cursor-bearing choices. */
@@ -13,10 +18,20 @@ const CURSOR_MARK = '❯'
 const NO_CURSOR = ' '
 
 /** Align continuation lines beneath the prefixed text so wrapped notes and exit instructions remain readable. */
-function pushWrapped(lines: string[], text: string, width: number, prefix: string, token: TuiToken, theme: TuiTheme): void {
+function pushWrapped(
+  lines: string[],
+  text: string,
+  width: number,
+  prefix: string,
+  token: TuiToken,
+  theme: TuiTheme,
+): void {
   const lead = visibleWidth(prefix)
   const indent = ' '.repeat(lead)
-  const wrapped = wrapTextWithAnsi(theme.rich(text, { token, column: lead }), Math.max(1, width - lead))
+  const wrapped = wrapTextWithAnsi(
+    theme.rich(text, { token, column: lead }),
+    Math.max(1, width - lead),
+  )
   wrapped.forEach((line, index) => {
     lines.push(theme.cut(`${index === 0 ? prefix : indent}${line}`, width, ''))
   })
@@ -35,16 +50,36 @@ export function pickerCardLines(picker: PickerCard, width: number, theme: TuiThe
   if (theme.visible('picker.title')) {
     const glyph = theme.glyph('picker.glyph')
     const lead = glyph === '' ? '' : `${glyph} `
-    lines.push(theme.cut(theme.rich(`${lead}${picker.title}`, { token: 'picker.title', column: visibleWidth(lead) }), width, ''))
+    lines.push(
+      theme.cut(
+        theme.rich(`${lead}${picker.title}`, { token: 'picker.title', column: visibleWidth(lead) }),
+        width,
+        '',
+      ),
+    )
   }
   if (picker.note !== undefined && theme.visible('picker.note')) {
     pushWrapped(lines, picker.note, width, TEXT_INDENT, 'picker.note', theme)
   }
   if (picker.filter !== '' && theme.visible('picker.filter')) {
-    lines.push(theme.cut(theme.rich(`${TEXT_INDENT}filter: ${picker.filter}`, { token: 'picker.filter', column: visibleWidth(TEXT_INDENT) }), width, ''))
+    lines.push(
+      theme.cut(
+        theme.rich(`${TEXT_INDENT}filter: ${picker.filter}`, {
+          token: 'picker.filter',
+          column: visibleWidth(TEXT_INDENT),
+        }),
+        width,
+        '',
+      ),
+    )
   }
   if (picker.above > 0 && theme.visible('picker.scrollNewer')) {
-    lines.push(theme.style('picker.scrollNewer', theme.cut(`${ROW_INDENT}… ${picker.above} newer`, width, '')))
+    lines.push(
+      theme.style(
+        'picker.scrollNewer',
+        theme.cut(`${ROW_INDENT}… ${picker.above} newer`, width, ''),
+      ),
+    )
   }
   // Each item spends at most one visual row, matching the logical-item window in Picker.card.
   // Honor the reader's hidden-token choice even for the current row instead of drawing a fallback selection marker.
@@ -52,13 +87,25 @@ export function pickerCardLines(picker: PickerCard, width: number, theme: TuiThe
     const token = row.current ? 'picker.rowCurrent' : 'picker.row'
     if (!theme.visible(token)) continue
     const cursor = row.current ? theme.glyph('picker.cursor') || CURSOR_MARK : NO_CURSOR
-    const text = row.description === undefined
-      ? `${cursor} ${row.label}`
-      : `${cursor} ${row.label} — ${row.description}`
-    lines.push(theme.cut(theme.rich(`${ROW_INDENT}${text}`, { token, column: visibleWidth(ROW_INDENT) }), width, ''))
+    const text =
+      row.description === undefined
+        ? `${cursor} ${row.label}`
+        : `${cursor} ${row.label} — ${row.description}`
+    lines.push(
+      theme.cut(
+        theme.rich(`${ROW_INDENT}${text}`, { token, column: visibleWidth(ROW_INDENT) }),
+        width,
+        '',
+      ),
+    )
   }
   if (picker.below > 0 && theme.visible('picker.scrollOlder')) {
-    lines.push(theme.style('picker.scrollOlder', theme.cut(`${ROW_INDENT}… ${picker.below} older`, width, '')))
+    lines.push(
+      theme.style(
+        'picker.scrollOlder',
+        theme.cut(`${ROW_INDENT}… ${picker.below} older`, width, ''),
+      ),
+    )
   }
   if (theme.visible('picker.hint')) {
     // Wrap exit guidance to avoid truncating away the keys on narrow cards;
@@ -133,8 +180,8 @@ export class PickerPopup implements Component {
     const framed = canFrame(width, this.theme.visible('picker.border'))
     const inside = framed ? width - FRAME_COLUMNS : width
     return frameLines(pickerCardLines(picker, inside, this.theme), width, {
-      text: line => line,
-      border: rule => this.theme.style('picker.border', rule),
+      text: (line) => line,
+      border: (rule) => this.theme.style('picker.border', rule),
       framed,
     })
   }

@@ -3,7 +3,15 @@
 
 import { type ColourMode, sgrBackgroundPrefix, sgrPrefix } from './theme-capability.ts'
 import { DEFAULT_TOKENS } from './theme-defaults.ts'
-import { PALETTE_NAMES, type ColourSpec, type PaletteName, type StyleSpec, type ThemedSpecs, type TuiToken } from './theme-tokens.ts'
+import {
+  type ColourSpec,
+  PALETTE_NAMES,
+  type PaletteName,
+  type StyleSpec,
+  type ThemedSpecs,
+  type TuiToken,
+} from './theme-tokens.ts'
+
 const RESET = '\u001B[0m'
 
 /**
@@ -26,7 +34,10 @@ export interface ResolvedStyle {
 }
 
 /** Palette names let related elements share a shade; literals keep an element independent. */
-function resolveColour(spec: ColourSpec, palette: Readonly<Record<PaletteName, string>>): string | number {
+function resolveColour(
+  spec: ColourSpec,
+  palette: Readonly<Record<PaletteName, string>>,
+): string | number {
   if (typeof spec === 'string' && (PALETTE_NAMES as readonly string[]).includes(spec)) {
     return palette[spec as PaletteName]
   }
@@ -107,7 +118,13 @@ export function resolveToken(
 
   // With no colour capability the whole promise is "emit nothing", which
   // includes attributes: a bold word is still styling a reader turned off.
-  if (mode === 'none') return { prefix: '', suffix: '', glyph: (merged.glyph as string | undefined) ?? '', hidden: false }
+  if (mode === 'none')
+    return {
+      prefix: '',
+      suffix: '',
+      glyph: (merged.glyph as string | undefined) ?? '',
+      hidden: false,
+    }
 
   const fg = merged.fg as ColourSpec | undefined
   const bg = merged.bg as ColourSpec | undefined
@@ -119,7 +136,9 @@ export function resolveToken(
   if (merged.strike === true) codes.push('9')
   for (const params of [
     fg === undefined ? undefined : colourParams(sgrPrefix(resolveColour(fg, palette), mode)),
-    bg === undefined ? undefined : colourParams(sgrBackgroundPrefix(resolveColour(bg, palette), mode)),
+    bg === undefined
+      ? undefined
+      : colourParams(sgrBackgroundPrefix(resolveColour(bg, palette), mode)),
   ]) {
     if (params !== undefined) codes.push(params)
   }
@@ -127,5 +146,10 @@ export function resolveToken(
   // reapply when foreign colours return to the element's ground.
   const prefix = codes.length === 0 ? '' : `\u001B[${codes.join(';')}m`
   // Close emitted styling to avoid bleed into following text; plain tokens need no reset.
-  return { prefix, suffix: prefix === '' ? '' : RESET, glyph: (merged.glyph as string | undefined) ?? '', hidden: false }
+  return {
+    prefix,
+    suffix: prefix === '' ? '' : RESET,
+    glyph: (merged.glyph as string | undefined) ?? '',
+    hidden: false,
+  }
 }

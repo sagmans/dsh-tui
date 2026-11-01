@@ -1,6 +1,12 @@
-import { ENTER_KEY, pressOf, type PressRow, type PressOverlap, pressOverlaps } from './key-press.ts'
-import { ACTION_CATALOG, actionOf, shippedKeys, isPluginActionId, type Action } from './action-catalog.ts'
-import { type KeyId } from '@earendil-works/pi-tui'
+import type { KeyId } from '@earendil-works/pi-tui'
+import {
+  ACTION_CATALOG,
+  type Action,
+  actionOf,
+  isPluginActionId,
+  shippedKeys,
+} from './action-catalog.ts'
+import { ENTER_KEY, type PressOverlap, type PressRow, pressOf, pressOverlaps } from './key-press.ts'
 
 /**
  * Which bindings a keymap must refuse, and why.
@@ -19,7 +25,10 @@ import { type KeyId } from '@earendil-works/pi-tui'
  * action the reader could never reach — and the surface answers these layers
  * itself, first row first, so two rows sharing one byte is one row that loses.
  */
-export function refuseMatcherClashes(effective: Readonly<Record<string, readonly KeyId[]>>, catalog: readonly Action[]): void {
+export function refuseMatcherClashes(
+  effective: Readonly<Record<string, readonly KeyId[]>>,
+  catalog: readonly Action[],
+): void {
   for (const layer of ['surface', 'chord', 'gate', 'question', 'picker'] as const) {
     const rows: PressRow[] = []
     for (const action of catalog) {
@@ -42,7 +51,10 @@ export function refuseMatcherClashes(effective: Readonly<Record<string, readonly
  * press they arrive as rather than by every byte the matcher folds, so moving
  * send onto Ctrl+J stays possible.
  */
-export function refusePromptClashes(effective: Readonly<Record<string, readonly KeyId[]>>, catalog: readonly Action[]): void {
+export function refusePromptClashes(
+  effective: Readonly<Record<string, readonly KeyId[]>>,
+  catalog: readonly Action[],
+): void {
   const owner = new Map<string, string>()
   for (const action of catalog) {
     if (action.layer !== 'prompt') continue
@@ -64,13 +76,16 @@ export function refusePromptClashes(effective: Readonly<Record<string, readonly 
  * that is also a surface key would not shadow that action while a chord is
  * armed: it would remove it for the whole session.
  */
-export function refusePrefixTakingKeys(effective: Readonly<Record<string, readonly KeyId[]>>, catalog: readonly Action[]): void {
-  const owners = catalog.filter(action => action.layer === 'surface' || action.layer === 'prompt')
+export function refusePrefixTakingKeys(
+  effective: Readonly<Record<string, readonly KeyId[]>>,
+  catalog: readonly Action[],
+): void {
+  const owners = catalog.filter((action) => action.layer === 'surface' || action.layer === 'prompt')
   for (const key of effective['chord.prefix'] ?? []) {
     for (const owner of owners) {
       // A prefix is consumed before anything else looks at the press, so it takes
       // the key from a row that reads the same press under another spelling too.
-      if ((effective[owner.id] ?? []).some(owned => pressOf(owned) === pressOf(key))) {
+      if ((effective[owner.id] ?? []).some((owned) => pressOf(owned) === pressOf(key))) {
         throw new Error(`key "${key}" as chord.prefix would take it from ${owner.id}`)
       }
     }
@@ -85,7 +100,9 @@ export function refusePrefixTakingKeys(effective: Readonly<Record<string, readon
  * are here as well: they are installed even when the reader never wrote them, so
  * they share the keyboard with the library's own rows.
  */
-function libraryRows(effective: Readonly<Record<string, readonly KeyId[]>>): Record<string, KeyId[]> {
+function libraryRows(
+  effective: Readonly<Record<string, readonly KeyId[]>>,
+): Record<string, KeyId[]> {
   const rows: Record<string, KeyId[]> = {}
   for (const action of ACTION_CATALOG) {
     if (action.layer === 'library') rows[action.id] = [...(effective[action.id] ?? [])]
@@ -96,13 +113,15 @@ function libraryRows(effective: Readonly<Record<string, readonly KeyId[]>>): Rec
   // for this row, so a library row that took Return would be the row that never
   // runs while the bar still answers it — as a line, or as send.
   const line = effective['prompt.newLine'] ?? []
-  rows['tui.input.newLine'] = line.includes(ENTER_KEY) ? [...line] : line.filter(key => key !== ENTER_KEY)
+  rows['tui.input.newLine'] = line.includes(ENTER_KEY)
+    ? [...line]
+    : line.filter((key) => key !== ENTER_KEY)
   return rows
 }
 
 /** The same rows as they read before the reader wrote anything. */
 function shippedLibraryRows(): Record<string, KeyId[]> {
-  const defaults = new Map(ACTION_CATALOG.map(action => [action.id, action.defaultKeys]))
+  const defaults = new Map(ACTION_CATALOG.map((action) => [action.id, action.defaultKeys]))
   const rows: Record<string, KeyId[]> = {}
   for (const action of ACTION_CATALOG) {
     if (action.layer === 'library') rows[action.id] = [...shippedKeys(action)]
@@ -189,15 +208,23 @@ function overlapIdentity(overlap: PressOverlap): string {
  * while refusing newly introduced conflicts.
  */
 export function refuseLibraryClashes(effective: Readonly<Record<string, readonly KeyId[]>>): void {
-  const shipped = new Set([...sharedPresses(shippedLibraryRows())].map(([press, ids]) => `${press}\u0000${ids.join(',')}`))
+  const shipped = new Set(
+    [...sharedPresses(shippedLibraryRows())].map(
+      ([press, ids]) => `${press}\u0000${ids.join(',')}`,
+    ),
+  )
   for (const [press, ids] of sharedPresses(libraryRows(effective))) {
     if (shipped.has(`${press}\u0000${ids.join(',')}`)) continue
-    throw new Error(`key "${press}" is bound to both ${ids.join(' and ')}; move one of them or pick another key`)
+    throw new Error(
+      `key "${press}" is bound to both ${ids.join(' and ')}; move one of them or pick another key`,
+    )
   }
   const shippedOverlaps = new Set(libraryOverlaps(shippedLibraryRows()).map(overlapIdentity))
   for (const overlap of libraryOverlaps(libraryRows(effective))) {
     if (shippedOverlaps.has(overlapIdentity(overlap))) continue
-    throw new Error(`key "${overlap.key}" is bound to both ${overlap.ids.join(' and ')}; move one of them or pick another key`)
+    throw new Error(
+      `key "${overlap.key}" is bound to both ${overlap.ids.join(' and ')}; move one of them or pick another key`,
+    )
   }
 }
 
@@ -225,11 +252,14 @@ const VIEWPORT_FIRST_ROWS: readonly string[] = [
 ]
 
 /** Every row a press reaches, with the keys in force: the catalog and the bar's own library rows. */
-function dispatchRows(effective: Readonly<Record<string, readonly KeyId[]>>, catalog: readonly Action[]): Record<string, KeyId[]> {
+function dispatchRows(
+  effective: Readonly<Record<string, readonly KeyId[]>>,
+  catalog: readonly Action[],
+): Record<string, KeyId[]> {
   const rows: Record<string, KeyId[]> = {}
   for (const action of catalog) rows[action.id] = [...(effective[action.id] ?? [])]
   rows['tui.input.submit'] = [...(effective['prompt.submit'] ?? [])]
-  rows['tui.input.newLine'] = (effective['prompt.newLine'] ?? []).filter(key => key !== ENTER_KEY)
+  rows['tui.input.newLine'] = (effective['prompt.newLine'] ?? []).filter((key) => key !== ENTER_KEY)
   return rows
 }
 
@@ -238,7 +268,9 @@ function shippedRows(): Record<string, KeyId[]> {
   const rows: Record<string, KeyId[]> = {}
   for (const action of ACTION_CATALOG) rows[action.id] = [...shippedKeys(action)]
   rows['tui.input.submit'] = [...(actionOf('prompt.submit')?.defaultKeys ?? [])]
-  rows['tui.input.newLine'] = [...(actionOf('prompt.newLine')?.defaultKeys ?? [])].filter(key => key !== ENTER_KEY)
+  rows['tui.input.newLine'] = [...(actionOf('prompt.newLine')?.defaultKeys ?? [])].filter(
+    (key) => key !== ENTER_KEY,
+  )
   return rows
 }
 
@@ -257,9 +289,11 @@ function viewportPairs(rows: Readonly<Record<string, readonly KeyId[]>>): Viewpo
   }
   const pairs: ViewportPair[] = []
   for (const overlap of pressOverlaps(table)) {
-    const viewport = overlap.ids.filter(id => VIEWPORT_FIRST_ROWS.includes(id))
+    const viewport = overlap.ids.filter((id) => VIEWPORT_FIRST_ROWS.includes(id))
     for (const row of viewport) {
-      for (const other of overlap.ids.filter(id => id !== row && !VIEWPORT_FIRST_ROWS.includes(id))) {
+      for (const other of overlap.ids.filter(
+        (id) => id !== row && !VIEWPORT_FIRST_ROWS.includes(id),
+      )) {
         pairs.push({ key: overlap.key, spellings: overlap.spellings, viewport: row, other })
       }
     }
@@ -276,8 +310,13 @@ function viewportPairs(rows: Readonly<Record<string, readonly KeyId[]>>): Viewpo
  * reader wrote, and both are a binding that does nothing, so both are refused
  * apart from the overlap the library already ships.
  */
-export function refuseViewportTakingKeys(effective: Readonly<Record<string, readonly KeyId[]>>, written: ReadonlySet<string>, catalog: readonly Action[]): void {
-  const pairKey = (pair: ViewportPair): string => `${pair.viewport}\u0000${pair.other}\u0000${pair.spellings.join('|')}`
+export function refuseViewportTakingKeys(
+  effective: Readonly<Record<string, readonly KeyId[]>>,
+  written: ReadonlySet<string>,
+  catalog: readonly Action[],
+): void {
+  const pairKey = (pair: ViewportPair): string =>
+    `${pair.viewport}\u0000${pair.other}\u0000${pair.spellings.join('|')}`
   const shipped = new Set(viewportPairs(shippedRows()).map(pairKey))
   // A prompt row is read through a library row of the bar's own, so the reader's
   // name for the row is the action they wrote rather than the mirror.
@@ -288,10 +327,14 @@ export function refuseViewportTakingKeys(effective: Readonly<Record<string, read
   for (const pair of viewportPairs(dispatchRows(effective, catalog))) {
     if (shipped.has(pairKey(pair))) continue
     if (isWritten(pair.other) || isPluginActionId(pair.other)) {
-      throw new Error(`key "${pair.key}" on ${pair.other} is read by ${pair.viewport} first; move that row or pick another key`)
+      throw new Error(
+        `key "${pair.key}" on ${pair.other} is read by ${pair.viewport} first; move that row or pick another key`,
+      )
     }
     if (isWritten(pair.viewport)) {
-      throw new Error(`key "${pair.key}" on ${pair.viewport} would take it from ${pair.other}, which never sees the press; pick another key`)
+      throw new Error(
+        `key "${pair.key}" on ${pair.viewport} would take it from ${pair.other}, which never sees the press; pick another key`,
+      )
     }
   }
 }

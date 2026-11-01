@@ -20,7 +20,8 @@ const MASK_TAIL = 4
  * cursor marker is one of them: masking a marker's own text would replace the
  * position the terminal was told to place the cursor at with asterisks.
  */
-const SEQUENCE = /\u001b(?:\[[0-9;?]*[ -/]*[@-~]|[\][P_^X][^\u0007\u001b]*(?:\u0007|\u001b\\)|[@-Z\\-_])/gu
+const SEQUENCE =
+  /\u001b(?:\[[0-9;?]*[ -/]*[@-~]|[\][P_^X][^\u0007\u001b]*(?:\u0007|\u001b\\)|[@-Z\\-_])/gu
 
 const GRAPHEMES = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
 
@@ -62,19 +63,25 @@ function maskCredentialRow(row: string): string {
     last = match.index + match[0].length
   }
   segments.push({ escape: false, text: row.slice(last) })
-  const visible = segments.filter(segment => !segment.escape).flatMap(segment => visibleAt(segment.text))
+  const visible = segments
+    .filter((segment) => !segment.escape)
+    .flatMap((segment) => visibleAt(segment.text))
   const total = visible.reduce((count, entry) => count + (entry.position >= 0 ? 1 : 0), 0)
   if (total <= MASK_HEAD + MASK_TAIL) return row
   let seen = 0
-  return segments.map((segment) => {
-    if (segment.escape) return segment.text
-    return visibleAt(segment.text).map((entry) => {
-      if (entry.position < 0) return entry.segment
-      const readable = seen < MASK_HEAD || seen >= total - MASK_TAIL
-      seen += 1
-      return readable ? entry.segment : MASKED.repeat(Math.max(1, visibleWidth(entry.segment)))
-    }).join('')
-  }).join('')
+  return segments
+    .map((segment) => {
+      if (segment.escape) return segment.text
+      return visibleAt(segment.text)
+        .map((entry) => {
+          if (entry.position < 0) return entry.segment
+          const readable = seen < MASK_HEAD || seen >= total - MASK_TAIL
+          seen += 1
+          return readable ? entry.segment : MASKED.repeat(Math.max(1, visibleWidth(entry.segment)))
+        })
+        .join('')
+    })
+    .join('')
 }
 
 /**

@@ -1,5 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis'
-import { MODEL_CATALOG_GAP_CAUSE, readModelCatalog, type ModelCatalogGap } from './agent/model.ts'
+import { MODEL_CATALOG_GAP_CAUSE, type ModelCatalogGap, readModelCatalog } from './agent/model.ts'
 
 /**
  * Column separator between the route and the display name.
@@ -21,8 +21,9 @@ const FAILURE_PREFIX = 'dsh --profile tui list-models: '
  */
 const CATALOG_GAP_MESSAGES: Record<ModelCatalogGap, string> = {
   no_llm_service: `${MODEL_CATALOG_GAP_CAUSE.no_llm_service}, so models cannot be listed`,
-  llm_without_provider_listing: `${MODEL_CATALOG_GAP_CAUSE.llm_without_provider_listing}, so models cannot be listed; `
-    + 'it predates the model directory this command reads',
+  llm_without_provider_listing:
+    `${MODEL_CATALOG_GAP_CAUSE.llm_without_provider_listing}, so models cannot be listed; ` +
+    'it predates the model directory this command reads',
 }
 
 /**

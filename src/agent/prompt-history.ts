@@ -107,7 +107,7 @@ function isAlreadyExists(error: unknown): boolean {
 }
 
 function delay(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms))
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 /** The holder a lock file names, so a session can tell whom it would displace. */
@@ -117,7 +117,7 @@ interface LockOwner {
 }
 
 function serializeOwner(owner: LockOwner): string {
-  return owner.pid + LOCK_FIELD_SEPARATOR + owner.token + '\n'
+  return `${owner.pid + LOCK_FIELD_SEPARATOR + owner.token}\n`
 }
 
 function parseOwner(text: string): LockOwner | undefined {
@@ -169,7 +169,7 @@ async function acquireLock(lockPath: string, waitMs: number): Promise<LockOwner>
 async function publishLock(lockPath: string, owner: LockOwner): Promise<boolean> {
   // The holder is written before the lock path exists, so a contender can never
   // read a half-published lock and displace a live session.
-  const staged = lockPath + '.' + owner.token + LOCK_TEMP_SUFFIX
+  const staged = `${lockPath}.${owner.token}${LOCK_TEMP_SUFFIX}`
   await writeFile(staged, serializeOwner(owner), { encoding: 'utf8', mode: PRIVATE_FILE_MODE })
   try {
     await link(staged, lockPath)
@@ -204,11 +204,16 @@ async function reclaimLock(lockPath: string, deadContents: string, waitMs: numbe
     }
     const holder = parseOwner(contents)
     if (holder !== undefined && isOwnerAlive(holder.pid)) {
-      if (Date.now() >= deadline) throw new Error('another session is reclaiming the prompt history lock')
+      if (Date.now() >= deadline)
+        throw new Error('another session is reclaiming the prompt history lock')
       await delay(LOCK_RETRY_MS)
       continue
     }
-    throw new Error('prompt history lock at ' + reclaimPath + ' names a session that stopped; remove it to continue')
+    throw new Error(
+      'prompt history lock at ' +
+        reclaimPath +
+        ' names a session that stopped; remove it to continue',
+    )
   }
   try {
     // No other reclaimer runs now, and a path cannot be published over, so the
@@ -230,7 +235,11 @@ async function releaseLock(lockPath: string, owner: LockOwner): Promise<void> {
 }
 
 /** Run one read-modify-replace under the lock, so nothing lands between them. */
-async function withLock<Result>(lockPath: string, waitMs: number, operation: () => Promise<Result>): Promise<Result> {
+async function withLock<Result>(
+  lockPath: string,
+  waitMs: number,
+  operation: () => Promise<Result>,
+): Promise<Result> {
   await mkdir(dirname(lockPath), { recursive: true, mode: PRIVATE_DIR_MODE })
   const owner = await acquireLock(lockPath, waitMs)
   try {
@@ -252,16 +261,21 @@ function parseHistoryFile(text: string): ParsedHistoryFile {
   } catch {
     return { kind: 'blocked', reason: 'corrupt_history' }
   }
-  if (!isRecord(raw) || !isPositiveInteger(raw.version)) return { kind: 'blocked', reason: 'corrupt_history' }
+  if (!isRecord(raw) || !isPositiveInteger(raw.version))
+    return { kind: 'blocked', reason: 'corrupt_history' }
   // Any other positive version may be valid to newer code, so preserve it rather
   // than normalize it away and lose entries this build does not understand.
-  if (raw.version !== HISTORY_SCHEMA_VERSION) return { kind: 'blocked', reason: 'unsupported_schema' }
+  if (raw.version !== HISTORY_SCHEMA_VERSION)
+    return { kind: 'blocked', reason: 'unsupported_schema' }
   if (typeof raw.updatedAt !== 'string' || !Array.isArray(raw.entries)) {
     return { kind: 'blocked', reason: 'corrupt_history' }
   }
   const entries = normalizeEntries(raw.entries)
   if (entries === undefined) return { kind: 'blocked', reason: 'corrupt_history' }
-  return { kind: 'ready', file: { version: HISTORY_SCHEMA_VERSION, updatedAt: raw.updatedAt, entries } }
+  return {
+    kind: 'ready',
+    file: { version: HISTORY_SCHEMA_VERSION, updatedAt: raw.updatedAt, entries },
+  }
 }
 
 function normalizeEntries(rawEntries: readonly unknown[]): PromptEntry[] | undefined {
@@ -284,7 +298,11 @@ function normalizeEntry(raw: unknown): PromptEntry | undefined {
   // consumer crosses, so a control sequence is spelled out before it is kept. A
   // tab is kept as a tab, because the bar it is restored into has stops of its
   // own and expanding it here would change what the reader typed.
-  return { text: displayText(raw.text, { tab: 'keep' }), updatedAt: raw.updatedAt, useCount: raw.useCount }
+  return {
+    text: displayText(raw.text, { tab: 'keep' }),
+    updatedAt: raw.updatedAt,
+    useCount: raw.useCount,
+  }
 }
 
 /**
@@ -299,11 +317,16 @@ function upsertEntry(
   now: string,
   maxEntries: number,
 ): PromptEntry[] {
-  const existing = entries.find(entry => entry.text === text)
-  const next: PromptEntry = existing === undefined
-    ? { text, updatedAt: now, useCount: 1 }
-    : { text, updatedAt: laterTimestamp(existing.updatedAt, now), useCount: existing.useCount + 1 }
-  return [next, ...entries.filter(entry => entry.text !== text)].slice(0, Math.max(0, maxEntries))
+  const existing = entries.find((entry) => entry.text === text)
+  const next: PromptEntry =
+    existing === undefined
+      ? { text, updatedAt: now, useCount: 1 }
+      : {
+          text,
+          updatedAt: laterTimestamp(existing.updatedAt, now),
+          useCount: existing.useCount + 1,
+        }
+  return [next, ...entries.filter((entry) => entry.text !== text)].slice(0, Math.max(0, maxEntries))
 }
 
 /**
@@ -350,13 +373,21 @@ export function createPromptHistory(options: PromptHistoryOptions): PromptHistor
         return
       }
       blocked = 'unreadable_history'
-      warnOnce('load:unreadable', 'prompt history is unreadable; writes are disabled until it can be read')
+      warnOnce(
+        'load:unreadable',
+        'prompt history is unreadable; writes are disabled until it can be read',
+      )
       return
     }
     const parsed = parseHistoryFile(text)
     if (parsed.kind === 'blocked') {
       blocked = parsed.reason
-      warnOnce('load:' + parsed.reason, 'prompt history is ' + BLOCK_DESCRIPTIONS[parsed.reason] + '; writes are disabled and the file is left untouched')
+      warnOnce(
+        `load:${parsed.reason}`,
+        'prompt history is ' +
+          BLOCK_DESCRIPTIONS[parsed.reason] +
+          '; writes are disabled and the file is left untouched',
+      )
       return
     }
     entries = parsed.file.entries
@@ -366,18 +397,28 @@ export function createPromptHistory(options: PromptHistoryOptions): PromptHistor
 
   function enqueue<Result>(operation: () => Promise<Result>): Promise<Result> {
     const run = chain.then(operation)
-    chain = run.then(() => {}, () => {})
+    chain = run.then(
+      () => {},
+      () => {},
+    )
     return run
   }
 
   // Stage a complete, owner-only document before replacement so readers do not
   // observe a partial history. Cleanup attempts to avoid leaving another private copy.
   async function write(): Promise<void> {
-    const file: PromptHistoryFile = { version: HISTORY_SCHEMA_VERSION, updatedAt: new Date().toISOString(), entries }
-    const tempPath = filePath + '.' + process.pid + '.' + Date.now() + '.tmp'
+    const file: PromptHistoryFile = {
+      version: HISTORY_SCHEMA_VERSION,
+      updatedAt: new Date().toISOString(),
+      entries,
+    }
+    const tempPath = `${filePath}.${process.pid}.${Date.now()}.tmp`
     await mkdir(dirname(filePath), { recursive: true, mode: PRIVATE_DIR_MODE })
     try {
-      await writeFile(tempPath, JSON.stringify(file, null, 2) + '\n', { encoding: 'utf8', mode: PRIVATE_FILE_MODE })
+      await writeFile(tempPath, `${JSON.stringify(file, null, 2)}\n`, {
+        encoding: 'utf8',
+        mode: PRIVATE_FILE_MODE,
+      })
       await chmod(tempPath, PRIVATE_FILE_MODE)
       await rename(tempPath, filePath)
     } catch (error) {
@@ -393,39 +434,46 @@ export function createPromptHistory(options: PromptHistoryOptions): PromptHistor
     record(text: string): void {
       if (text.trim() === '') return
       const prompt = displayText(text, { tab: 'keep' })
-      void enqueue(() => withLock(lockPath, LOCK_WAIT_MS, async () => {
-        await load()
-        if (blocked !== undefined) return
-        // Keep this prompt available to suggestion readers even if persistence fails.
-        // A successful reload replaces the snapshot; memory-only prompts are not a retry queue.
-        entries = upsertEntry(entries, prompt, new Date().toISOString(), options.cap())
-        await write()
-      })).catch((error: unknown) => {
+      void enqueue(() =>
+        withLock(lockPath, LOCK_WAIT_MS, async () => {
+          await load()
+          if (blocked !== undefined) return
+          // Keep this prompt available to suggestion readers even if persistence fails.
+          // A successful reload replaces the snapshot; memory-only prompts are not a retry queue.
+          entries = upsertEntry(entries, prompt, new Date().toISOString(), options.cap())
+          await write()
+        }),
+      ).catch((error: unknown) => {
         // The reason can name the lock file that must be removed by hand, so it
         // belongs in the notice rather than behind a single opaque sentence.
-        const reason = error instanceof Error && error.message !== '' ? ': ' + error.message : ''
-        warnOnce('write' + reason, 'prompt history could not be written; this session keeps it in memory only' + reason)
+        const reason = error instanceof Error && error.message !== '' ? `: ${error.message}` : ''
+        warnOnce(
+          `write${reason}`,
+          `prompt history could not be written; this session keeps it in memory only${reason}`,
+        )
       })
     },
     clear(): Promise<number> {
-      return enqueue(() => withLock(lockPath, LOCK_WAIT_MS, async () => {
-        await load()
-        // A file that changed under the reader cannot be cleared safely, and
-        // reporting a successful clear of nothing would be worse than refusing.
-        if (blocked !== undefined) throw new Error('the file is ' + BLOCK_DESCRIPTIONS[blocked])
-        const removed = entries.length
-        const previous = entries
-        entries = []
-        try {
-          await write()
-        } catch (error) {
-          // The file still holds the prompts, so memory follows it back rather
-          // than reporting a clear the reader would meet again on next start.
-          entries = previous
-          throw error
-        }
-        return removed
-      }))
+      return enqueue(() =>
+        withLock(lockPath, LOCK_WAIT_MS, async () => {
+          await load()
+          // A file that changed under the reader cannot be cleared safely, and
+          // reporting a successful clear of nothing would be worse than refusing.
+          if (blocked !== undefined) throw new Error(`the file is ${BLOCK_DESCRIPTIONS[blocked]}`)
+          const removed = entries.length
+          const previous = entries
+          entries = []
+          try {
+            await write()
+          } catch (error) {
+            // The file still holds the prompts, so memory follows it back rather
+            // than reporting a clear the reader would meet again on next start.
+            entries = previous
+            throw error
+          }
+          return removed
+        }),
+      )
     },
     flush: () => chain,
   }

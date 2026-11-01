@@ -29,11 +29,11 @@ import {
 import {
   boundedMessage,
   createReportSequence,
+  type DriverStatus,
   isReportChange,
+  type LifecycleReport,
   lifecycleReport,
   stateLabelFor,
-  type DriverStatus,
-  type LifecycleReport,
 } from './state.ts'
 
 interface HerdrSessionInput {
@@ -171,8 +171,9 @@ export function createHerdrReporter(): HerdrReporter {
     if (wantedSession !== undefined && !sessionSent) {
       const report = wantedSession
       sessionSent = true
-      void client.reportSession({ sessionId: report.sessionId, seq: nextSeq(), reason: report.reason })
-        .then(delivered => {
+      void client
+        .reportSession({ sessionId: report.sessionId, seq: nextSeq(), reason: report.reason })
+        .then((delivered) => {
           if (!delivered) sessionSent = false
           afterDelivery(delivered)
         })
@@ -180,7 +181,7 @@ export function createHerdrReporter(): HerdrReporter {
     if (wantedMetadata !== undefined && !metadataSent) {
       const tokens = wantedMetadata
       metadataSent = true
-      void client.reportMetadata(tokens).then(delivered => {
+      void client.reportMetadata(tokens).then((delivered) => {
         if (!delivered) metadataSent = false
         afterDelivery(delivered)
       })
@@ -190,7 +191,7 @@ export function createHerdrReporter(): HerdrReporter {
       // a reader glancing at the sidebar should not catch it without its title.
       const label = wantedLabel
       labelSent = true
-      void client.reportStateLabel(label).then(delivered => {
+      void client.reportStateLabel(label).then((delivered) => {
         if (!delivered) labelSent = false
         afterDelivery(delivered)
       })
@@ -198,8 +199,9 @@ export function createHerdrReporter(): HerdrReporter {
     if (wantedState !== undefined && !stateSent) {
       const next = wantedState
       stateSent = true
-      void client.reportState({ state: next.state, message: next.message, seq: nextSeq(), sessionId })
-        .then(delivered => {
+      void client
+        .reportState({ state: next.state, message: next.message, seq: nextSeq(), sessionId })
+        .then((delivered) => {
           if (!delivered) stateSent = false
           afterDelivery(delivered)
         })
@@ -285,7 +287,12 @@ export function createHerdrReporter(): HerdrReporter {
       startReclaim()
     },
     publish(force = false) {
-      const next = lifecycleReport({ blockedCount: waits.size, blockedMessage: [...waits.values()].at(-1), driverRunning, backgroundRunning })
+      const next = lifecycleReport({
+        blockedCount: waits.size,
+        blockedMessage: [...waits.values()].at(-1),
+        driverRunning,
+        backgroundRunning,
+      })
       if (force || isReportChange(wantedState, next)) {
         wantedState = next
         stateSent = false
@@ -359,16 +366,36 @@ export function createHerdrReporter(): HerdrReporter {
  */
 function releaseAgentSync(env: HerdrEnvironment, seq: number): void {
   const paneId = env[HERDR_PANE_ID_VAR]
-  if (env[HERDR_ENV_VAR] !== HERDR_ENV_FLAG || paneId === undefined || env[HERDR_SOCKET_PATH_VAR] === undefined) return
-  const argv = ['pane', 'release-agent', paneId, '--source', HERDR_SOURCE, '--agent', HERDR_AGENT, '--seq', String(seq)]
+  if (
+    env[HERDR_ENV_VAR] !== HERDR_ENV_FLAG ||
+    paneId === undefined ||
+    env[HERDR_SOCKET_PATH_VAR] === undefined
+  )
+    return
+  const argv = [
+    'pane',
+    'release-agent',
+    paneId,
+    '--source',
+    HERDR_SOURCE,
+    '--agent',
+    HERDR_AGENT,
+    '--seq',
+    String(seq),
+  ]
   const exported = env[HERDR_BIN_PATH_VAR]
-  for (const bin of exported === undefined || exported === FALLBACK_HERDR_BIN ? [FALLBACK_HERDR_BIN] : [exported, FALLBACK_HERDR_BIN]) {
+  for (const bin of exported === undefined || exported === FALLBACK_HERDR_BIN
+    ? [FALLBACK_HERDR_BIN]
+    : [exported, FALLBACK_HERDR_BIN]) {
     // Only a spawn that could not start the binary at all is worth a second try:
     // a CLI that ran and refused the release would refuse it the same way again.
-    if (spawnSync(bin, argv, {
-      env: { ...process.env, ...env },
-      stdio: 'ignore',
-      timeout: EXIT_RELEASE_TIMEOUT_MS,
-    }).error === undefined) return
+    if (
+      spawnSync(bin, argv, {
+        env: { ...process.env, ...env },
+        stdio: 'ignore',
+        timeout: EXIT_RELEASE_TIMEOUT_MS,
+      }).error === undefined
+    )
+      return
   }
 }

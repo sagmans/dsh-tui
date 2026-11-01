@@ -1,9 +1,9 @@
 import { SessionId } from '@deepseek-ai/dsh-session'
-import { DEFAULT_STASH_SCOPE, STASH_SCOPES } from './stash/paths.ts'
 import z from '@deepseek-ai/schemastery'
-import { TuiSettingsSchema } from './theme-settings.ts'
 import type { TuiRowConfig } from './contracts.ts'
-import { CURSOR_MODES, SOFTWARE_CURSOR_MODE, type CursorMode } from './terminal/cursor.ts'
+import { DEFAULT_STASH_SCOPE, STASH_SCOPES } from './stash/paths.ts'
+import { CURSOR_MODES, type CursorMode, SOFTWARE_CURSOR_MODE } from './terminal/cursor.ts'
+import { TuiSettingsSchema } from './theme-settings.ts'
 
 /** Native references distinguish live Config from ordinary released schema output. */
 const VOLATILE_REFERENCE = Symbol.for('cosmokit.volatile.write')
@@ -28,20 +28,25 @@ export const Config = z.object({
   color: z.boolean().default(true),
   bell: z.boolean().default(true),
   cursorMode: z.union([...CURSOR_MODES]).default(SOFTWARE_CURSOR_MODE),
-  stash: z.object({ scope: z.union([...STASH_SCOPES]).default(DEFAULT_STASH_SCOPE) }).default({ scope: DEFAULT_STASH_SCOPE }),
-  ...Object.fromEntries(Object.entries(PREFERENCE_SCHEMA).map(([key, schema]) => {
-    const field = new z((key === 'history' ? CONFIG_HISTORY : schema).toJSON())
-    // False metadata makes source Loader silently skip ordinary config updates.
-    const native = field as z & { volatile?: () => z }
-    return [key, typeof native.volatile === 'function' ? native.volatile() : field]
-  })),
+  stash: z
+    .object({ scope: z.union([...STASH_SCOPES]).default(DEFAULT_STASH_SCOPE) })
+    .default({ scope: DEFAULT_STASH_SCOPE }),
+  ...Object.fromEntries(
+    Object.entries(PREFERENCE_SCHEMA).map(([key, schema]) => {
+      const field = new z((key === 'history' ? CONFIG_HISTORY : schema).toJSON())
+      // False metadata makes source Loader silently skip ordinary config updates.
+      const native = field as z & { volatile?: () => z }
+      return [key, typeof native.volatile === 'function' ? native.volatile() : field]
+    }),
+  ),
 })
 
 /** Only native Config references may execute a getter; ordinary input remains data. */
 function preferenceValue(value: unknown): unknown {
   if (typeof value !== 'object' || value === null || !(VOLATILE_REFERENCE in value)) return value
   const reference = value as { get?: () => unknown }
-  if (typeof reference.get !== 'function') throw new TuiConfigError('invalid volatile preference reference')
+  if (typeof reference.get !== 'function')
+    throw new TuiConfigError('invalid volatile preference reference')
   return reference.get()
 }
 
@@ -49,10 +54,14 @@ function preferenceValue(value: unknown): unknown {
 export function hasLiveRowSettings(raw: unknown): boolean {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return false
   const record = raw as Record<string, unknown>
-  return PREFERENCE_FIELDS.every(key => {
+  return PREFERENCE_FIELDS.every((key) => {
     const value = record[key]
-    return typeof value === 'object' && value !== null && VOLATILE_REFERENCE in value
-      && typeof Reflect.get(value, 'get') === 'function'
+    return (
+      typeof value === 'object' &&
+      value !== null &&
+      VOLATILE_REFERENCE in value &&
+      typeof Reflect.get(value, 'get') === 'function'
+    )
   })
 }
 
@@ -60,10 +69,12 @@ export function hasLiveRowSettings(raw: unknown): boolean {
 export function readRowSettings(raw: unknown): unknown {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return raw
   const record = raw as Record<string, unknown>
-  return Object.fromEntries(PREFERENCE_FIELDS.flatMap(key => {
-    const value = preferenceValue(record[key])
-    return value === undefined ? [] : [[key, value]]
-  }))
+  return Object.fromEntries(
+    PREFERENCE_FIELDS.flatMap((key) => {
+      const value = preferenceValue(record[key])
+      return value === undefined ? [] : [[key, value]]
+    }),
+  )
 }
 
 /** A composed row whose configuration cannot describe a runnable terminal surface. */
@@ -89,10 +100,11 @@ function optionalString(value: unknown, field: string): string | undefined {
  * Unlike the row's shared appearance fields, stash has only a scope selector.
  * Reject misspelled keys rather than silently choosing the default shared-directory draft bank.
  */
-function stashScope(value: unknown): typeof STASH_SCOPES[number] {
+function stashScope(value: unknown): (typeof STASH_SCOPES)[number] {
   if (value === undefined) return DEFAULT_STASH_SCOPE
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new TuiConfigError('stash must be a mapping')
-  const unknown = Object.keys(value).filter(key => key !== 'scope')
+  if (typeof value !== 'object' || value === null || Array.isArray(value))
+    throw new TuiConfigError('stash must be a mapping')
+  const unknown = Object.keys(value).filter((key) => key !== 'scope')
   if (unknown.length !== 0) throw new TuiConfigError(`unknown stash key: ${unknown.join(', ')}`)
   const scope = Object.hasOwn(value, 'scope') ? (value as Record<string, unknown>).scope : undefined
   if (scope === undefined) return DEFAULT_STASH_SCOPE
@@ -102,14 +114,15 @@ function stashScope(value: unknown): typeof STASH_SCOPES[number] {
 
 function optionalBoolean(value: unknown, field: string, fallback: boolean): boolean {
   if (value === undefined || value === null) return fallback
-  if (typeof value !== 'boolean') throw new TuiConfigError(`${field} must be a boolean when present`)
+  if (typeof value !== 'boolean')
+    throw new TuiConfigError(`${field} must be a boolean when present`)
   return value
 }
 
 /** Manual row configs bypass schema defaults, so their compatibility mode still needs validation. */
 function cursorMode(value: unknown): CursorMode {
   if (value === undefined) return SOFTWARE_CURSOR_MODE
-  if (!CURSOR_MODES.some(mode => mode === value)) throw new TuiConfigError(CURSOR_MODE_ERROR)
+  if (!CURSOR_MODES.some((mode) => mode === value)) throw new TuiConfigError(CURSOR_MODE_ERROR)
   return value as CursorMode
 }
 

@@ -2,15 +2,20 @@ import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import { forkPoint, type ForkEvent } from '../agent/fork.ts'
-import { startAgent, type ForkInheritance, type TuiAgent } from '../agent/host.ts'
+import { type ForkEvent, forkPoint } from '../agent/fork.ts'
+import { type ForkInheritance, startAgent, type TuiAgent } from '../agent/host.ts'
 import type { HerdrReporter } from '../herdr/reporter.ts'
-import type { MoshiReporter } from '../moshi.ts'
 import { driverReportFor, sessionStartReason } from '../herdr/state.ts'
+import type { MoshiReporter } from '../moshi.ts'
+import {
+  PROFILE_MILESTONE,
+  PROFILE_PHASE,
+  profileAsync,
+  TUI_PROFILING_SERVICE,
+} from '../profiling.ts'
 import { pendingPrompts } from '../queue.ts'
 import { BELL, shouldRingBell } from '../terminal/bell.ts'
 import { windowTitle } from '../terminal/title.ts'
-import { TUI_PROFILING_SERVICE, profileAsync, PROFILE_PHASE, PROFILE_MILESTONE } from '../profiling.ts'
 
 /**
  * The agent this terminal drives: its identity, its activity, and every
@@ -44,7 +49,11 @@ export interface SessionLifecyclePorts {
   /** Whether this run rings for a turn that ran long enough. */
   readonly bell: boolean
   /** The mode a session takes, settled before the transcript is touched. */
-  readonly presetFor: (id: SessionId, resume: boolean, fork: ForkInheritance | undefined) => Promise<string | undefined>
+  readonly presetFor: (
+    id: SessionId,
+    resume: boolean,
+    fork: ForkInheritance | undefined,
+  ) => Promise<string | undefined>
   /** Install the session's own route; the world the preset mounts reads it back. */
   readonly installModelChoice: (agentCtx: Context) => void
   /** Mount the mode a new session runs into the agent's own scope. */
@@ -141,7 +150,10 @@ export interface SessionLifecycle {
   readonly driverListeners: () => readonly (() => void)[]
 }
 
-export function createSessionLifecycle(ctx: Context, ports: SessionLifecyclePorts): SessionLifecycle {
+export function createSessionLifecycle(
+  ctx: Context,
+  ports: SessionLifecyclePorts,
+): SessionLifecycle {
   const profiling = ctx.get(TUI_PROFILING_SERVICE)
   /** The session this surface drives: commands, approvals, and the bell belong to it. */
   let activeSession = ports.initialSession
@@ -156,7 +168,8 @@ export function createSessionLifecycle(ctx: Context, ports: SessionLifecyclePort
 
   // The queue is read from the agent this terminal drives rather than from the
   // session on screen, because it sits on the editor that submits to that agent.
-  const queuedPrompts = (): readonly string[] => pendingPrompts(ctx, ports.liveSession(activeSession))
+  const queuedPrompts = (): readonly string[] =>
+    pendingPrompts(ctx, ports.liveSession(activeSession))
 
   // Background jobs and viewed child calls outlive parent turns; every visible clock needs repainting.
   const statusTicker: ReturnType<typeof setInterval> = setInterval(() => {
@@ -192,29 +205,38 @@ export function createSessionLifecycle(ctx: Context, ports: SessionLifecyclePort
     if (previous !== undefined) await previous.dispose()
   }
 
-  const openAgent = async (id: SessionId, resume: boolean, fork?: ForkInheritance): Promise<TuiAgent> => {
+  const openAgent = async (
+    id: SessionId,
+    resume: boolean,
+    fork?: ForkInheritance,
+  ): Promise<TuiAgent> => {
     // Settled before the transcript is touched, so a refusal leaves neither a
     // half-replayed session nor a half-composed agent behind.
-    const preset = await profileAsync(profiling, PROFILE_PHASE.preset, () => ports.presetFor(id, resume, fork))
+    const preset = await profileAsync(profiling, PROFILE_PHASE.preset, () =>
+      ports.presetFor(id, resume, fork),
+    )
     // A session already in service still owns its write handle, and the host refuses
     // a second one: reopening the very session the reader is driving — a reload, or a
     // pick of the session already on screen — has to let that agent go before its
     // replacement is asked for. Every other open settles first, which is what keeps a
     // refusal from taking the reader's agent away with it.
     if (agent !== undefined && agent.sessionId === id) await disposeOutgoing()
-    const handle = await profileAsync(profiling, PROFILE_PHASE.agent, () => startAgent(ctx, {
-      sessionId: id,
-      resume,
-      model: ports.model,
-      provider: ports.provider,
-      cwd: process.cwd(),
-      preset,
-      setup: agentCtx => profileAsync(profiling, PROFILE_PHASE.setup, async () => {
-        ports.installModelChoice(agentCtx)
-        if (preset !== undefined) await ports.mountPreset(agentCtx, preset)
+    const handle = await profileAsync(profiling, PROFILE_PHASE.agent, () =>
+      startAgent(ctx, {
+        sessionId: id,
+        resume,
+        model: ports.model,
+        provider: ports.provider,
+        cwd: process.cwd(),
+        preset,
+        setup: (agentCtx) =>
+          profileAsync(profiling, PROFILE_PHASE.setup, async () => {
+            ports.installModelChoice(agentCtx)
+            if (preset !== undefined) await ports.mountPreset(agentCtx, preset)
+          }),
+        ...(fork === undefined ? {} : { fork }),
       }),
-      ...(fork === undefined ? {} : { fork }),
-    }))
+    )
     // The new session's agent is accepted before the outgoing one is let go:
     // the settled questions above are where an open is refused, and a refusal
     // has to find the reader's own agent still driving an untouched screen.
@@ -297,7 +319,9 @@ export function createSessionLifecycle(ctx: Context, ports: SessionLifecyclePort
       ports.notice('started a new session')
       ports.render()
     })().catch((error: unknown) => {
-      ports.notice(`could not start a session: ${error instanceof Error ? error.message : String(error)}`)
+      ports.notice(
+        `could not start a session: ${error instanceof Error ? error.message : String(error)}`,
+      )
       ports.render()
     })
   }
@@ -365,9 +389,14 @@ export function createSessionLifecycle(ctx: Context, ports: SessionLifecyclePort
       // even a memory-backed log does not reserve that source's outgoing handle.
       const previous = letGoOfOutgoing(false)!
       await previous.dispose()
-      await openAgent(childId, false, { from: source, events: events.slice(0, point.inheritedEvents) })
+      await openAgent(childId, false, {
+        from: source,
+        events: events.slice(0, point.inheritedEvents),
+      })
       if (title !== '') runRenameCommand(title)
-      ports.notice(`forked from ${source} at event ${point.boundarySeq} — ${point.inheritedEvents} inherited`)
+      ports.notice(
+        `forked from ${source} at event ${point.boundarySeq} — ${point.inheritedEvents} inherited`,
+      )
       ports.render()
     })().catch((error: unknown) => {
       ports.notice(`could not fork: ${error instanceof Error ? error.message : String(error)}`)
@@ -385,8 +414,12 @@ export function createSessionLifecycle(ctx: Context, ports: SessionLifecyclePort
       ports.render()
       return
     }
-    const session = (ctx.get('sessions') as { get?: (id: SessionId) => unknown } | undefined)?.get?.(activeSession)
-    const titles = ctx.get('sessionTitle') as { rename?: (session: unknown, title: string) => { readonly title?: string } } | undefined
+    const session = (
+      ctx.get('sessions') as { get?: (id: SessionId) => unknown } | undefined
+    )?.get?.(activeSession)
+    const titles = ctx.get('sessionTitle') as
+      | { rename?: (session: unknown, title: string) => { readonly title?: string } }
+      | undefined
     if (session === undefined || typeof titles?.rename !== 'function') {
       ports.notice('this profile has no session-title service, so this session cannot be renamed')
       ports.render()
@@ -394,7 +427,9 @@ export function createSessionLifecycle(ctx: Context, ports: SessionLifecyclePort
     }
     try {
       const accepted = titles.rename(session, title)
-      ports.notice(`session renamed to "${typeof accepted?.title === 'string' ? accepted.title : title}"`)
+      ports.notice(
+        `session renamed to "${typeof accepted?.title === 'string' ? accepted.title : title}"`,
+      )
     } catch (error) {
       ports.notice(`could not rename: ${error instanceof Error ? error.message : String(error)}`)
     }
@@ -417,7 +452,10 @@ export function createSessionLifecycle(ctx: Context, ports: SessionLifecyclePort
     if (event.type === 'turn/start' && !turnOpen) {
       turnOpen = true
       // A duplicate notification or delayed observation must not restart an already-running turn.
-      turnStartedAt = typeof event.time === 'number' && Number.isFinite(event.time) && event.time >= 0 ? event.time : Date.now()
+      turnStartedAt =
+        typeof event.time === 'number' && Number.isFinite(event.time) && event.time >= 0
+          ? event.time
+          : Date.now()
       ports.writeTerminal(windowTitle(process.cwd(), 'working'))
     }
     if (event.type === 'turn/end') {
@@ -427,7 +465,8 @@ export function createSessionLifecycle(ctx: Context, ports: SessionLifecyclePort
       // An undo may be parked waiting for exactly this boundary.
       ports.turnSettled()
       ports.writeTerminal(windowTitle(process.cwd(), 'ready'))
-      if (shouldRingBell({ bell: ports.bell, ranForMs: ranFor, exiting: ports.exiting() })) ports.writeTerminal(BELL)
+      if (shouldRingBell({ bell: ports.bell, ranForMs: ranFor, exiting: ports.exiting() }))
+        ports.writeTerminal(BELL)
       // A job the turn started may have settled while the reader was watching
       // something else, and nothing else refreshes a live board.
       ports.refreshJobs()
@@ -439,7 +478,12 @@ export function createSessionLifecycle(ctx: Context, ports: SessionLifecyclePort
 
   /** The name is cast so a rename in the harness cannot break this compilation. */
   const listenFor = (name: string, handler: (...args: readonly unknown[]) => void): (() => void) =>
-    (ctx.on as unknown as (event: string, listener: (...args: readonly unknown[]) => void) => () => void)(name, handler)
+    (
+      ctx.on as unknown as (
+        event: string,
+        listener: (...args: readonly unknown[]) => void,
+      ) => () => void
+    )(name, handler)
 
   /**
    * The listeners that follow the driver rather than each turn: a run chaining
@@ -448,7 +492,7 @@ export function createSessionLifecycle(ctx: Context, ports: SessionLifecyclePort
    * events keep the title and the bell, the reader's own conversation.
    */
   const driverListeners = (): readonly (() => void)[] => [
-    listenFor('agent/status', payload => {
+    listenFor('agent/status', (payload) => {
       // Read against the driven session at delivery time: the reader can switch
       // sessions between two transitions, and the row must follow the one this
       // terminal now drives.

@@ -1,16 +1,16 @@
-import type { ProcessTerminal } from '@earendil-works/pi-tui'
 import type { Context } from '@deepseek-ai/cordis'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
 import type { AskUserQuestionAnswer } from '@deepseek-ai/dsh-user-questions'
-import { ApprovalGate, type GateAnswer, type GateCard } from '../gates.ts'
+import type { ProcessTerminal } from '@earendil-works/pi-tui'
 import { QuestionGate, toGateQuestions } from '../gates/questions.ts'
+import { ApprovalGate, type GateAnswer, type GateCard } from '../gates.ts'
 import { GATE_WAIT_KEY } from '../herdr/constants.ts'
 import type { HerdrReporter } from '../herdr/reporter.ts'
-import type { MoshiReporter } from '../moshi.ts'
 import type { Keymap } from '../input/actions.ts'
-import type { TuiTheme } from '../theme.ts'
+import type { MoshiReporter } from '../moshi.ts'
 import type { WarningSafeTui } from '../terminal/warning-screen.ts'
+import type { TuiTheme } from '../theme.ts'
 import type { GateInputBar } from '../ui/gate-input.ts'
 import type { PickerAction, PickerCard } from '../ui/picker.ts'
 import { PickerPopup, POPUP_MAX_HEIGHT, popupWidth } from '../ui/picker-card.ts'
@@ -18,8 +18,16 @@ import type { PromptBar } from '../ui/prompt.ts'
 
 /** The one gate a terminal can present at a time, and how it settles its caller. */
 type PendingGate =
-  | { readonly kind: 'approval'; readonly gate: ApprovalGate; readonly settle: (outcome: ApprovalOutcome) => void }
-  | { readonly kind: 'question'; readonly gate: QuestionGate; readonly settle: (answers: GateAnswer[]) => void }
+  | {
+      readonly kind: 'approval'
+      readonly gate: ApprovalGate
+      readonly settle: (outcome: ApprovalOutcome) => void
+    }
+  | {
+      readonly kind: 'question'
+      readonly gate: QuestionGate
+      readonly settle: (answers: GateAnswer[]) => void
+    }
 
 /** What the surface needs of a list to drive it, wherever that list is drawn. */
 export interface Picker {
@@ -169,22 +177,27 @@ export function createModalInput(ctx: Context, ports: ModalInputPorts): ModalInp
     placement: 'inline' | 'popup' = 'inline',
   ): Promise<string | undefined> => {
     if (occupied()) return Promise.resolve(undefined)
-    return new Promise<string | undefined>(resolve => {
-      const overlay = placement === 'popup'
-        ? ports.tui.showOverlay(
-            new PickerPopup(rows => picker.card(rows), () => ports.terminal.rows, ports.theme),
-            {
-              width: popupWidth(ports.terminal.columns),
-              maxHeight: POPUP_MAX_HEIGHT,
-              anchor: 'center',
-              margin: 1,
-              // The surface's own listener reads every press before a focused
-              // component does, so the box needs no focus to be driven; taking it
-              // would only move focus away from where the reader left it.
-              nonCapturing: true,
-            },
-          )
-        : undefined
+    return new Promise<string | undefined>((resolve) => {
+      const overlay =
+        placement === 'popup'
+          ? ports.tui.showOverlay(
+              new PickerPopup(
+                (rows) => picker.card(rows),
+                () => ports.terminal.rows,
+                ports.theme,
+              ),
+              {
+                width: popupWidth(ports.terminal.columns),
+                maxHeight: POPUP_MAX_HEIGHT,
+                anchor: 'center',
+                margin: 1,
+                // The surface's own listener reads every press before a focused
+                // component does, so the box needs no focus to be driven; taking it
+                // would only move focus away from where the reader left it.
+                nonCapturing: true,
+              },
+            )
+          : undefined
       pendingPicker = {
         picker,
         vetting: false,
@@ -312,8 +325,9 @@ export function createModalInput(ctx: Context, ports: ModalInputPorts): ModalInp
       // questions never reach the human.
       ctx.on('approval/request', (request, next) => {
         if (request.agent.id !== ports.activeSession()) return next()
-        if (occupied() || request.signal?.aborted === true) return Promise.resolve<ApprovalOutcome>('cancelled')
-        return new Promise<ApprovalOutcome>(resolve => {
+        if (occupied() || request.signal?.aborted === true)
+          return Promise.resolve<ApprovalOutcome>('cancelled')
+        return new Promise<ApprovalOutcome>((resolve) => {
           const gate = new ApprovalGate(request.toolName, request.reason, ports.keymap)
           const settle = (outcome: ApprovalOutcome): void => {
             request.signal?.removeEventListener('abort', onAbort)
@@ -336,7 +350,7 @@ export function createModalInput(ctx: Context, ports: ModalInputPorts): ModalInp
         const questions = toGateQuestions(request)
         if (questions.length === 0) return next()
         if (occupied()) return Promise.resolve<AskUserQuestionAnswer>({ answers: [] })
-        return new Promise<AskUserQuestionAnswer>(resolve => {
+        return new Promise<AskUserQuestionAnswer>((resolve) => {
           const gate = ports.promptBar.borrow(() => {
             // The bar is an answer's for as long as the gate holds it, so the menu
             // it once offered commands through is replaced before a key can reach it.
@@ -349,7 +363,7 @@ export function createModalInput(ctx: Context, ports: ModalInputPorts): ModalInp
           const settle = (answers: GateAnswer[]): void => {
             request.signal?.removeEventListener('abort', onAbort)
             resolve({
-              answers: answers.map(answer => ({
+              answers: answers.map((answer) => ({
                 id: answer.id,
                 selected: [...answer.selected],
                 ...(answer.custom === undefined ? {} : { custom: answer.custom }),

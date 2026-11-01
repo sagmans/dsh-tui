@@ -3,7 +3,8 @@ import type { Context } from '@deepseek-ai/cordis'
 
 const READ_UNSUPPORTED = 'the settings service cannot read the section; prompt history stays off'
 const WRITE_UNSUPPORTED = 'the settings service cannot write the section; the patch was not applied'
-const CONFIG_NOT_LIVE = 'the settings service cannot write live Config with this schema runtime; the patch was not applied'
+const CONFIG_NOT_LIVE =
+  'the settings service cannot write live Config with this schema runtime; the patch was not applied'
 
 /** Appearance must not report success until its durable owner accepts the patch. */
 export interface SectionScope {
@@ -46,8 +47,18 @@ interface ConfigDescriptor {
 
 /** Probe behavior, not CLI identity: both host generations can share a version label. */
 interface SettingsSeam {
-  installSection?(owner: Context, ns: string, schema: unknown, entry: unknown, hooks: SectionHooks<unknown>): void
-  register?(ns: string, schema: unknown, options: { base: unknown }): Pick<SectionScope, 'get' | 'update'>
+  installSection?(
+    owner: Context,
+    ns: string,
+    schema: unknown,
+    entry: unknown,
+    hooks: SectionHooks<unknown>,
+  ): void
+  register?(
+    ns: string,
+    schema: unknown,
+    options: { base: unknown },
+  ): Pick<SectionScope, 'get' | 'update'>
   describe?(): ConfigDescriptor[]
   update?(ns: string, patch: object, revision?: number): Promise<void>
   writable?: boolean
@@ -62,7 +73,11 @@ export interface SectionRequest<T> {
   readonly schema: unknown
   readonly entry: T
   readonly onChange: () => void
-  readonly config?: { readonly ns: string | undefined; readonly get: () => unknown; readonly live: boolean }
+  readonly config?: {
+    readonly ns: string | undefined
+    readonly get: () => unknown
+    readonly live: boolean
+  }
 }
 
 /** The path the host itself shows a reader; a guessed path is what sends them to a file nothing writes. */
@@ -77,9 +92,10 @@ export function openSection<T>(service: unknown, request: SectionRequest<T>): Se
   const refuseWrite = (): Promise<never> => Promise.reject(new Error(WRITE_UNSUPPORTED))
   const readUser = (ns: string | undefined): ReturnType<SectionScope['readUser']> => {
     if (typeof settings.describe !== 'function') return undefined
-    const descriptor = settings.describe().find(row => row.ns === ns)
+    const descriptor = settings.describe().find((row) => row.ns === ns)
     if (descriptor === undefined) return undefined
-    if (!Number.isSafeInteger(descriptor.revision) || descriptor.revision < 0) throw new Error(READ_UNSUPPORTED)
+    if (!Number.isSafeInteger(descriptor.revision) || descriptor.revision < 0)
+      throw new Error(READ_UNSUPPORTED)
     return { value: descriptor.user, revision: descriptor.revision }
   }
   // Prefer owner-aware attachment for provider source replacement and appearance-change hooks.
@@ -89,8 +105,12 @@ export function openSection<T>(service: unknown, request: SectionRequest<T>): Se
     // An attach notification precedes the caller receiving its scope.
     let attached = false
     settings.installSection(request.owner, request.ns, request.schema, request.entry, {
-      setSource: current => { source = current },
-      onChange: () => { if (attached) request.onChange() },
+      setSource: (current) => {
+        source = current
+      },
+      onChange: () => {
+        if (attached) request.onChange()
+      },
     })
     attached = true
     return {
@@ -98,8 +118,9 @@ export function openSection<T>(service: unknown, request: SectionRequest<T>): Se
       document: undefined,
       readUser: () => readUser(request.ns),
       get: () => source(),
-      update: async patch => {
-        if (settings.writable === false || typeof settings.update !== 'function') return refuseWrite()
+      update: async (patch) => {
+        if (settings.writable === false || typeof settings.update !== 'function')
+          return refuseWrite()
         await settings.update(request.ns, patch)
       },
     }
@@ -111,7 +132,7 @@ export function openSection<T>(service: unknown, request: SectionRequest<T>): Se
       document: undefined,
       readUser: () => readUser(request.ns),
       get: () => scope.get(),
-      update: async patch => {
+      update: async (patch) => {
         if (settings.writable === false || typeof scope.update !== 'function') return refuseWrite()
         await scope.update(patch)
       },
@@ -119,9 +140,8 @@ export function openSection<T>(service: unknown, request: SectionRequest<T>): Se
   }
   if (typeof settings.describe === 'function' && request.config !== undefined) {
     const config = request.config
-    const descriptor = (): ConfigDescriptor | undefined => config.ns === undefined
-      ? undefined
-      : settings.describe!().find(row => row.ns === config.ns)
+    const descriptor = (): ConfigDescriptor | undefined =>
+      config.ns === undefined ? undefined : settings.describe!().find((row) => row.ns === config.ns)
     return {
       kind: 'config',
       document: documentOf(settings),
@@ -131,13 +151,19 @@ export function openSection<T>(service: unknown, request: SectionRequest<T>): Se
         const current = descriptor()
         return current === undefined ? config.get() : current.value
       },
-      update: async patch => {
+      update: async (patch) => {
         // Metadata alone can suppress remounts; native references must carry edits to the active surface.
         if (!config.live) throw new Error(CONFIG_NOT_LIVE)
         const current = descriptor()
         // Require a usable revision so the host can reject changes made after this descriptor was read.
-        if (current === undefined || settings.writable === false || typeof settings.update !== 'function'
-          || !Number.isSafeInteger(current.revision) || current.revision < 0) return refuseWrite()
+        if (
+          current === undefined ||
+          settings.writable === false ||
+          typeof settings.update !== 'function' ||
+          !Number.isSafeInteger(current.revision) ||
+          current.revision < 0
+        )
+          return refuseWrite()
         await settings.update(current.ns, patch, current.revision)
       },
     }
@@ -145,8 +171,12 @@ export function openSection<T>(service: unknown, request: SectionRequest<T>): Se
   return {
     kind: 'unsupported',
     document: undefined,
-    readUser: () => { throw new Error(READ_UNSUPPORTED) },
-    get: () => { throw new Error(READ_UNSUPPORTED) },
+    readUser: () => {
+      throw new Error(READ_UNSUPPORTED)
+    },
+    get: () => {
+      throw new Error(READ_UNSUPPORTED)
+    },
     update: refuseWrite,
   }
 }

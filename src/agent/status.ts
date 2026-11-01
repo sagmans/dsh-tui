@@ -12,7 +12,11 @@ interface ActivityState {
 
 /** Keep footer reads limited to selection facts; a composition without this optional directory has no default route facts. */
 interface ModelDirectory {
-  currentSelection?(): { readonly provider?: string; readonly model?: string; readonly reasoningEffort?: string }
+  currentSelection?(): {
+    readonly provider?: string
+    readonly model?: string
+    readonly reasoningEffort?: string
+  }
 }
 
 /** Only session lookup belongs here; without it, the footer omits session projections and permission facts. */
@@ -50,7 +54,9 @@ function cacheRate(usage: Record<string, unknown> | undefined): number | undefin
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined
+  return typeof value === 'object' && value !== null
+    ? (value as Record<string, unknown>)
+    : undefined
 }
 
 function numberOr(value: unknown): number | undefined {
@@ -65,14 +71,21 @@ export interface StatusSources {
    * A route the reader chose for this session, which outranks the composition
    * default: the footer must show the model the next step will actually use.
    */
-  readonly override?: (() => {
-    readonly provider?: string
-    readonly model?: string
-    readonly reasoningEffort?: string
-  } | undefined) | undefined
+  readonly override?:
+    | (() =>
+        | {
+            readonly provider?: string
+            readonly model?: string
+            readonly reasoningEffort?: string
+          }
+        | undefined)
+    | undefined
   readonly home?: string | undefined
   /** Addons qualify the active route without putting provider-specific policy in the painter. */
-  readonly routeHints?: (route: { readonly provider: string; readonly model: string }) => readonly string[]
+  readonly routeHints?: (route: {
+    readonly provider: string
+    readonly model: string
+  }) => readonly string[]
   /**
    * The chord waiting for its next key, read per paint so its window lapses on
    * screen rather than only in the reader's head.
@@ -99,7 +112,8 @@ export interface StatusSources {
 export function createStatusFacts(ctx: Context, sources: StatusSources): () => StatusFacts {
   return () => {
     const override = sources.override?.()
-    const selection = override ?? (ctx.get('agentDefaultModel') as ModelDirectory | undefined)?.currentSelection?.()
+    const selection =
+      override ?? (ctx.get('agentDefaultModel') as ModelDirectory | undefined)?.currentSelection?.()
     const session = (ctx.get('sessions') as SessionRegistry | undefined)?.get?.(sources.sessionId())
     let preset: string | undefined
     if (session !== undefined) {
@@ -109,8 +123,10 @@ export function createStatusFacts(ctx: Context, sources: StatusSources): () => S
         preset = undefined
       }
     }
-    const pressure = session === undefined ? undefined : projectionRecord(ctx, session, 'contextPressure')
-    const totals = session === undefined ? undefined : usageTotals(projectionRecord(ctx, session, 'tokenUsage'))
+    const pressure =
+      session === undefined ? undefined : projectionRecord(ctx, session, 'contextPressure')
+    const totals =
+      session === undefined ? undefined : usageTotals(projectionRecord(ctx, session, 'tokenUsage'))
     const state = sources.activity()
     return {
       activity: state.running ? 'working' : 'idle',
@@ -118,9 +134,12 @@ export function createStatusFacts(ctx: Context, sources: StatusSources): () => S
       provider: selection?.provider,
       model: selection?.model,
       effort: selection?.reasoningEffort,
-      modelHints: selection?.provider !== undefined && selection.model !== undefined
-        ? sources.routeHints?.({ provider: selection.provider, model: selection.model }) : undefined,
-      agentPreset: session === undefined ? undefined : projectionString(ctx, session, AGENT_PRESET_KEY),
+      modelHints:
+        selection?.provider !== undefined && selection.model !== undefined
+          ? sources.routeHints?.({ provider: selection.provider, model: selection.model })
+          : undefined,
+      agentPreset:
+        session === undefined ? undefined : projectionString(ctx, session, AGENT_PRESET_KEY),
       preset,
       contextTokens: numberOr(pressure?.pressureTokens),
       contextWindow: numberOr(pressure?.contextWindow),

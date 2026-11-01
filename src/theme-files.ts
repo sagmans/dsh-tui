@@ -11,10 +11,18 @@
 // are re-read, but only the home directory is watched; filesystem and parsing work
 // can block the surface.
 
-import { mkdirSync, readFileSync, readdirSync, statSync, watch, writeFileSync, type FSWatcher } from 'node:fs'
+import {
+  type FSWatcher,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  watch,
+  writeFileSync,
+} from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { CORE_SCHEMA, loadAll as parseYamlDocuments, mergeTag } from 'js-yaml'
+import { CORE_SCHEMA, mergeTag, loadAll as parseYamlDocuments } from 'js-yaml'
 import { dshHomeDir } from './stash/paths.ts'
 import {
   asRecord,
@@ -71,7 +79,8 @@ const WATCH_DEBOUNCE_MS = 150
 /** Missing homes are normal before setup; other failures need an actionable deferred notice. */
 const MISSING_THEME_HOME_CODE = 'ENOENT'
 /** Avoid exposing filesystem exception details through the terminal notice. */
-const WATCH_SETUP_NOTICE = 'theme live reload could not start; restart the surface after checking filesystem access and watcher limits'
+const WATCH_SETUP_NOTICE =
+  'theme live reload could not start; restart the surface after checking filesystem access and watcher limits'
 
 /** Keep provenance with sparse overrides so settings can merge over this layer
  * without replacing unspecified shipped defaults. */
@@ -153,9 +162,10 @@ export function ensureThemesHome(dir: string): readonly string[] {
 
 /** The names the package ships a file for, which are the ones an export can copy. */
 export function builtinNames(library: ThemeLibrary): string[] {
-  return library.list()
-    .filter(theme => theme.builtin && theme.path !== '')
-    .map(theme => theme.name)
+  return library
+    .list()
+    .filter((theme) => theme.builtin && theme.path !== '')
+    .map((theme) => theme.name)
 }
 
 /**
@@ -183,13 +193,22 @@ function exportName(name: string, taken: ReadonlySet<string>): string {
 export function exportTheme(library: ThemeLibrary, name: string): ExportOutcome {
   const theme = library.get(name)
   if (theme === undefined) {
-    return { ok: false, problem: `themes: no theme named "${name}"; the surface ships ${library.names().join(', ')}` }
+    return {
+      ok: false,
+      problem: `themes: no theme named "${name}"; the surface ships ${library.names().join(', ')}`,
+    }
   }
   if (!theme.builtin) {
-    return { ok: false, problem: `themes: "${name}" is already yours (${theme.path}); this command copies a built-in` }
+    return {
+      ok: false,
+      problem: `themes: "${name}" is already yours (${theme.path}); this command copies a built-in`,
+    }
   }
   if (theme.path === '') {
-    return { ok: false, problem: `themes: "${name}" has no file to copy; the package does not ship one` }
+    return {
+      ok: false,
+      problem: `themes: "${name}" has no file to copy; the package does not ship one`,
+    }
   }
   const select = exportName(name, new Set(library.names()))
   const target = path.join(library.home, `${select}.yaml`)
@@ -228,12 +247,12 @@ export function loadThemes(homeDir: string, builtinDir: string): ThemeLibrary {
   // Reserved from the files the package ships, not from the ones that parsed: a
   // broken built-in must not hand its name to a reader's file for the session it
   // takes to fix it.
-  const reserved = new Set(builtinFiles.map(file => file.stem))
+  const reserved = new Set(builtinFiles.map((file) => file.stem))
   for (const file of readThemeFiles(homeDir, problems)) {
     if (reserved.has(file.stem)) {
       problems.push(
-        `themes: ${file.path}: "${file.stem}" is a built-in theme; rename the file and select that name`
-        + ` — for example "${file.stem}_export_1.yaml"`,
+        `themes: ${file.path}: "${file.stem}" is a built-in theme; rename the file and select that name` +
+          ` — for example "${file.stem}_export_1.yaml"`,
       )
       continue
     }
@@ -242,13 +261,16 @@ export function loadThemes(homeDir: string, builtinDir: string): ThemeLibrary {
   }
   // Group copyable package starting points before user layers for easier scanning
   // in pickers and notices. Name ordering serves readers, not cross-locale stability.
-  const list = [...themes.values()].sort((left, right) =>
-    (left.builtin === right.builtin ? 0 : left.builtin ? -1 : 1) || left.name.localeCompare(right.name))
+  const list = [...themes.values()].sort(
+    (left, right) =>
+      (left.builtin === right.builtin ? 0 : left.builtin ? -1 : 1) ||
+      left.name.localeCompare(right.name),
+  )
   return {
     home: homeDir,
     list: () => list,
-    names: () => list.map(theme => theme.name),
-    get: name => (name === undefined ? undefined : themes.get(name)),
+    names: () => list.map((theme) => theme.name),
+    get: (name) => (name === undefined ? undefined : themes.get(name)),
     problems: () => problems,
   }
 }
@@ -260,7 +282,11 @@ export function loadThemes(homeDir: string, builtinDir: string): ThemeLibrary {
  * and cancels pending reloads at teardown. The watcher uses Node's default
  * persistent lifetime, so disposal is needed to release its process handle.
  */
-export function watchThemes(dir: string, onChange: () => void, onNotice: (text: string) => void): () => void {
+export function watchThemes(
+  dir: string,
+  onChange: () => void,
+  onNotice: (text: string) => void,
+): () => void {
   let pending: NodeJS.Timeout | undefined
   let watcher: FSWatcher
   try {
@@ -281,7 +307,9 @@ export function watchThemes(dir: string, onChange: () => void, onNotice: (text: 
   }
   // A directory removed under a running session stops the watcher; reloading once
   // is what lets the library drop the themes that went with it.
-  watcher.on('error', () => { onChange() })
+  watcher.on('error', () => {
+    onChange()
+  })
   return () => {
     if (pending !== undefined) clearTimeout(pending)
     watcher.close()
@@ -294,13 +322,14 @@ function readThemeFiles(dir: string, problems: string[]): ThemeFile[] {
   try {
     // Linked themes can live outside this directory without requiring a local copy.
     names = readdirSync(dir, { withFileTypes: true })
-      .filter(entry => entry.isFile() || entry.isSymbolicLink())
-      .map(entry => entry.name)
+      .filter((entry) => entry.isFile() || entry.isSymbolicLink())
+      .map((entry) => entry.name)
   } catch (error) {
     // The reader's directory is created at start-up and the package's is shipped,
     // so a missing one draws the built-in table and says nothing: reporting it
     // would greet every reader who has never written a theme with a fault.
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') problems.push(`themes: ${dir}: ${message(error)}`)
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
+      problems.push(`themes: ${dir}: ${message(error)}`)
     return []
   }
   // Resolve each name once so lookup and preview cannot disagree over duplicate
@@ -314,7 +343,8 @@ function readThemeFiles(dir: string, problems: string[]): ThemeFile[] {
     const file: ThemeFile = { stem, path: path.join(dir, name), rank: extensionRank(name) }
     const held = byStem.get(stem)
     if (held === undefined || file.rank < held.rank) {
-      if (held !== undefined) problems.push(`themes: ${held.path}: ignored; ${file.path} is the file in use`)
+      if (held !== undefined)
+        problems.push(`themes: ${held.path}: ignored; ${file.path} is the file in use`)
       byStem.set(stem, file)
     } else {
       problems.push(`themes: ${file.path}: ignored; ${held.path} is the file in use`)
@@ -324,7 +354,11 @@ function readThemeFiles(dir: string, problems: string[]): ThemeFile[] {
 }
 
 /** Read and validate one theme file, or say what is wrong with it. */
-function readThemeFile(file: ThemeFile, builtin: boolean, problems: string[]): LoadedTheme | undefined {
+function readThemeFile(
+  file: ThemeFile,
+  builtin: boolean,
+  problems: string[],
+): LoadedTheme | undefined {
   let source: string
   try {
     if (statSync(file.path).size > MAX_THEME_FILE_BYTES) {
@@ -365,19 +399,25 @@ function readThemeFile(file: ThemeFile, builtin: boolean, problems: string[]): L
   // Refuse unknown names before shared value validation: the schema preserves
   // undeclared keys, so typos would otherwise parse without affecting the screen.
   // Shared validators keep drawable styles consistent with settings.
-  const unknownSections = Object.keys(body).filter(key => !THEME_SECTIONS.has(key))
+  const unknownSections = Object.keys(body).filter((key) => !THEME_SECTIONS.has(key))
   if (unknownSections.length > 0) {
-    problems.push(`themes: ${file.path}: unknown ${plural('section', unknownSections)}: ${unknownSections.join(', ')}`)
+    problems.push(
+      `themes: ${file.path}: unknown ${plural('section', unknownSections)}: ${unknownSections.join(', ')}`,
+    )
     return undefined
   }
   const unknownTokens = unknownNames(body.tokens, TOKEN_NAME_SET)
   if (unknownTokens.length > 0) {
-    problems.push(`themes: ${file.path}: unknown ${plural('element', unknownTokens)}: ${unknownTokens.join(', ')}`)
+    problems.push(
+      `themes: ${file.path}: unknown ${plural('element', unknownTokens)}: ${unknownTokens.join(', ')}`,
+    )
     return undefined
   }
   const unknownPalette = unknownNames(body.palette, PALETTE_NAME_SET)
   if (unknownPalette.length > 0) {
-    problems.push(`themes: ${file.path}: unknown ${plural('palette entry', unknownPalette, 'palette entries')}: ${unknownPalette.join(', ')}`)
+    problems.push(
+      `themes: ${file.path}: unknown ${plural('palette entry', unknownPalette, 'palette entries')}: ${unknownPalette.join(', ')}`,
+    )
     return undefined
   }
   try {
@@ -410,7 +450,9 @@ function provenance(name: string): string {
  */
 function packageVersion(): string | undefined {
   try {
-    const manifest = asRecord(JSON.parse(readFileSync(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf8')))
+    const manifest = asRecord(
+      JSON.parse(readFileSync(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf8')),
+    )
     return typeof manifest?.version === 'string' ? manifest.version : undefined
   } catch {
     return undefined
@@ -433,12 +475,12 @@ function stemOf(fileName: string): string | undefined {
 
 /** Where a file name sits among the extensions a theme may carry; -1 when it has none. */
 function extensionRank(fileName: string): number {
-  return THEME_EXTENSIONS.findIndex(extension => fileName.endsWith(extension))
+  return THEME_EXTENSIONS.findIndex((extension) => fileName.endsWith(extension))
 }
 
 /** One sentence out of an error, for a notice that has one line. */
 function message(error: unknown): string {
-  return error instanceof Error ? error.message.split('\n')[0] ?? String(error) : String(error)
+  return error instanceof Error ? (error.message.split('\n')[0] ?? String(error)) : String(error)
 }
 
 /** A count and its noun, so a refusal reads as a sentence either way. */

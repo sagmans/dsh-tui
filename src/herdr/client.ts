@@ -18,10 +18,10 @@ import {
   HERDR_SOCKET_PATH_VAR,
   HERDR_SOURCE,
   HERDR_STATES,
+  type HerdrState,
   MAX_METADATA_VALUE_CHARS,
   MAX_RESPONSE_BYTES,
   RESPONSE_DELIMITER,
-  type HerdrState,
   type SessionStartReason,
 } from './constants.ts'
 
@@ -114,7 +114,8 @@ export function createHerdrClient(env: HerdrEnvironment = process.env): HerdrCli
   const socketPath = env[HERDR_SOCKET_PATH_VAR]
   // Herdr exports all three together; requiring each keeps a half-configured
   // environment from producing reports that name no pane.
-  const enabled = env[HERDR_ENV_VAR] === HERDR_ENV_FLAG && paneId !== undefined && socketPath !== undefined
+  const enabled =
+    env[HERDR_ENV_VAR] === HERDR_ENV_FLAG && paneId !== undefined && socketPath !== undefined
   let requestNumber = 0
   let queued: QueuedReport[] = []
   let pumping = false
@@ -147,8 +148,12 @@ export function createHerdrClient(env: HerdrEnvironment = process.env): HerdrCli
     }
   }
 
-  const enqueue = (method: string, params: Record<string, unknown>, coalescing: boolean): Promise<boolean> =>
-    new Promise<boolean>(resolve => {
+  const enqueue = (
+    method: string,
+    params: Record<string, unknown>,
+    coalescing: boolean,
+  ): Promise<boolean> =>
+    new Promise<boolean>((resolve) => {
       // Inactive reporting is settled, not delivered: optional integration must
       // not make the reporter retry work this client cannot send.
       if (closed || !enabled || paneId === undefined || socketPath === undefined) {
@@ -160,9 +165,9 @@ export function createHerdrClient(env: HerdrEnvironment = process.env): HerdrCli
         method,
         params: { pane_id: paneId, source: HERDR_SOURCE, agent: HERDR_AGENT, ...params },
       }
-      if (coalescing && queued.some(entry => entry.coalescing)) {
-        const superseded = queued.filter(entry => entry.coalescing)
-        queued = queued.filter(entry => !entry.coalescing)
+      if (coalescing && queued.some((entry) => entry.coalescing)) {
+        const superseded = queued.filter((entry) => entry.coalescing)
+        queued = queued.filter((entry) => !entry.coalescing)
         // Superseded, not lost: the report that replaced it says what this one
         // said and more, so nothing is left owed to Herdr.
         for (const entry of superseded) entry.settle(true)
@@ -175,11 +180,17 @@ export function createHerdrClient(env: HerdrEnvironment = process.env): HerdrCli
     enabled,
     async readRow() {
       if (closed || !enabled || paneId === undefined || socketPath === undefined) return 'unknown'
-      const answer = await requestWithRetry(socketPath, {
-        id: `${HERDR_SOURCE}:${String(process.pid)}:${String(++requestNumber)}`,
-        method: 'pane.get',
-        params: { pane_id: paneId },
-      }, DEFAULT_ATTEMPTS, DEFAULT_TIMEOUT_MS, () => closed)
+      const answer = await requestWithRetry(
+        socketPath,
+        {
+          id: `${HERDR_SOURCE}:${String(process.pid)}:${String(++requestNumber)}`,
+          method: 'pane.get',
+          params: { pane_id: paneId },
+        },
+        DEFAULT_ATTEMPTS,
+        DEFAULT_TIMEOUT_MS,
+        () => closed,
+      )
       if (!answer.ok) return 'unknown'
       const agent = paneAgent(answer.result)
       if (agent === undefined) return 'unknown'
@@ -187,37 +198,53 @@ export function createHerdrClient(env: HerdrEnvironment = process.env): HerdrCli
       return agent === HERDR_AGENT ? 'ours' : 'other'
     },
     reportState(report) {
-      return enqueue('pane.report_agent', {
-        state: report.state,
-        seq: report.seq,
-        ...(report.message === undefined ? {} : { message: report.message }),
-        ...(report.sessionId === undefined ? {} : { agent_session_id: report.sessionId }),
-      }, true)
+      return enqueue(
+        'pane.report_agent',
+        {
+          state: report.state,
+          seq: report.seq,
+          ...(report.message === undefined ? {} : { message: report.message }),
+          ...(report.sessionId === undefined ? {} : { agent_session_id: report.sessionId }),
+        },
+        true,
+      )
     },
     reportSession(report) {
-      return enqueue('pane.report_agent_session', {
-        agent_session_id: report.sessionId,
-        seq: report.seq,
-        session_start_source: report.reason,
-      }, false)
+      return enqueue(
+        'pane.report_agent_session',
+        {
+          agent_session_id: report.sessionId,
+          seq: report.seq,
+          session_start_source: report.reason,
+        },
+        false,
+      )
     },
     reportMetadata(tokens) {
-      return enqueue('pane.report_metadata', {
-        applies_to_source: HERDR_SOURCE,
-        tokens: acceptedTokens(tokens),
-      }, false)
+      return enqueue(
+        'pane.report_metadata',
+        {
+          applies_to_source: HERDR_SOURCE,
+          tokens: acceptedTokens(tokens),
+        },
+        false,
+      )
     },
     reportStateLabel(label) {
       // Not coalescing on purpose: a coalescing entry supersedes every coalescing
       // one already queued, so a label riding that channel would silently drop a
       // state report still waiting to be sent. The label is display-only and the
       // queue is serial, so arrival order is all the ordering it needs.
-      return enqueue('pane.report_metadata', {
-        applies_to_source: HERDR_SOURCE,
-        ...(label === undefined
-          ? { clear_state_labels: true }
-          : { state_labels: { [HERDR_STATES.blocked]: label } }),
-      }, false)
+      return enqueue(
+        'pane.report_metadata',
+        {
+          applies_to_source: HERDR_SOURCE,
+          ...(label === undefined
+            ? { clear_state_labels: true }
+            : { state_labels: { [HERDR_STATES.blocked]: label } }),
+        },
+        false,
+      )
     },
     stop() {
       // Nothing still waiting is sent once the pane stops being an agent: Herdr
@@ -237,7 +264,7 @@ export function createHerdrClient(env: HerdrEnvironment = process.env): HerdrCli
       // nothing to clear, leaving the row for that report to claim back. A
       // report's own budget is what bounds this.
       if (!pumping) return
-      await new Promise<void>(resolve => {
+      await new Promise<void>((resolve) => {
         waiters.push(resolve)
       })
     },
@@ -252,7 +279,9 @@ export function createHerdrClient(env: HerdrEnvironment = process.env): HerdrCli
  * is the one value that tells Herdr to forget the token, which is the honest
  * answer for a fact that cannot be represented.
  */
-function acceptedTokens(tokens: Readonly<Record<string, string | undefined>>): Record<string, string | null> {
+function acceptedTokens(
+  tokens: Readonly<Record<string, string | undefined>>,
+): Record<string, string | null> {
   const accepted: Record<string, string | null> = {}
   for (const [key, value] of Object.entries(tokens)) {
     accepted[key] = value === undefined || value.length > MAX_METADATA_VALUE_CHARS ? null : value
@@ -316,8 +345,12 @@ async function requestWithRetry(
   return NO_ANSWER
 }
 
-function requestAttempt(path: string, request: WireRequest, timeoutMs: number): Promise<WireAnswer> {
-  return new Promise<WireAnswer>(resolve => {
+function requestAttempt(
+  path: string,
+  request: WireRequest,
+  timeoutMs: number,
+): Promise<WireAnswer> {
+  return new Promise<WireAnswer>((resolve) => {
     const socket = createConnection(socketEndpoint(path))
     const chunks: Buffer[] = []
     let received = 0

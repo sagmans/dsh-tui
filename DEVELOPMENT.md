@@ -11,6 +11,7 @@ In this order, because CI runs them in this order:
 ```sh
 pnpm install --frozen-lockfile
 npm audit signatures
+pnpm run lint
 pnpm run typecheck
 pnpm test:golden
 node tools/pack-smoke.mjs
@@ -18,6 +19,7 @@ pnpm test:terminal
 pnpm dogfood
 node tools/harness-matrix.mjs
 node tools/install-smoke.mjs  # requires Docker with a running daemon
+pnpm audit --audit-level high
 ```
 
 Unit tests are not maintained. Golden tests remain visual regression checks, not actual-use proof.
@@ -67,10 +69,10 @@ Review class methods and test-only customization separately; framework callbacks
 
 Repository hooks live in `.githooks` and replace the push CI workflow.
 The generic checks run first (sign-off, message format, secret scan, signed push), then `.githooks/<hook>.d/*`.
-`pre-commit` runs `pnpm run check:unused` and a staged whitespace check.
-`pre-push` runs signatures, `check:local`, typecheck, golden frames, pack smoke, terminal behavior, the harness matrix, and the consumer install smoke, each on the pushed commit.
+`pre-commit` runs `pnpm run check:unused`, a staged whitespace check, and Biome on the staged files (`pnpm run lint:fix` repairs most findings).
+`pre-push` runs signatures, the Biome lint and format check, `check:local`, typecheck, golden frames, pack smoke, terminal behavior, the harness matrix, the dependency vulnerability audit (`pnpm audit --audit-level high`), and the consumer install smoke, each on the pushed commit.
 It also reruns typecheck, golden frames and terminal behavior on the newest pi-tui release in the supported range. That run installs from `compat/pi-tui/package.json` and its lockfile in a temporary worktree, names the release it resolved, and warns when a newer release in the range has passed the release-age window; `node tools/pi-tui-compat.mjs lock` refreshes both files.
-The install smoke needs Docker; without it the push fails unless `HOOK_SKIP_INSTALL_SMOKE=1` is set for that push.
+The install smoke needs Docker; without a running Docker daemon the push fails, and there is no switch to skip it.
 A pushed change to `pnpm-workspace.yaml`'s build policy, or a lockfile change to a package allowed to build (`node-pty`), makes `pre-push` print a warning that names each change.
 The push continues, so name those changes to the maintainer and get approval before you push them. Commits carry no trailer other than `Signed-off-by`.
 Run `scripts/setup-hooks` once after cloning; it points this clone's `core.hooksPath` at `.githooks`. Each hook runs the generic checks first (sign-off and commit message format, a gitleaks secret scan, and signed, signed-off commits on push), then this repository's checks in `.githooks/<hook>.d/` in name order. Install [gitleaks](https://github.com/gitleaks/gitleaks) first. Every check must pass before you push; never use `--no-verify`. Pre-push checks test exactly each pushed commit: in place only when it is the clean, unmodified checkout, otherwise in a temporary worktree of that commit. Never bypass hooks with `--no-verify`.

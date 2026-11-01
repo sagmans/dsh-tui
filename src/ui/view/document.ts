@@ -1,16 +1,23 @@
-import { type TranscriptEntry, type TranscriptModel } from '../../transcript.ts'
 import { SECOND_MS } from '../../transcript/tool-calls.ts'
-import { type FrameRow } from '../frame.ts'
+import type { TranscriptEntry, TranscriptModel } from '../../transcript.ts'
+import type { FrameRow } from '../frame.ts'
 import { placeGap } from '../gap.ts'
 import { RowCache } from '../rows.ts'
-import { type ClickSpan } from '../view.ts'
+import type { ClickSpan } from '../view.ts'
 
 /** Entry renderers keep presentation policy; this owner retains rows and their matching hit/copy accounts. */
 export interface DocumentContext {
   readonly model: TranscriptModel
   readonly entryTag: (entry: TranscriptEntry, base: string) => string
   readonly clocked: (entry: TranscriptEntry) => boolean
-  readonly renderEntry: (entry: TranscriptEntry, lines: string[], width: number, live: boolean, spans: ClickSpan[], copy: FrameRow[]) => void
+  readonly renderEntry: (
+    entry: TranscriptEntry,
+    lines: string[],
+    width: number,
+    live: boolean,
+    spans: ClickSpan[],
+    copy: FrameRow[],
+  ) => void
 }
 
 interface DocumentFrame {
@@ -52,8 +59,14 @@ export class TranscriptDocument {
     const revision = this.context.model.revision
     const tick = Math.floor(this.context.model.now() / SECOND_MS)
     const frame = this.frame
-    if (frame !== undefined && frame.tag === tag && frame.revision === revision && frame.presentation === presentation
-      && (frame.tick === undefined || frame.tick === tick)) return frame.lines
+    if (
+      frame !== undefined &&
+      frame.tag === tag &&
+      frame.revision === revision &&
+      frame.presentation === presentation &&
+      (frame.tick === undefined || frame.tick === tick)
+    )
+      return frame.lines
 
     const lines: string[] = []
     const spans: ClickSpan[] = []
@@ -89,7 +102,8 @@ export class TranscriptDocument {
       }
       // Seam air changes row offsets, so hit spans follow placement rather than cached local coordinates.
       const base = start - placeGap(lines, rows)
-      for (const span of local) spans.push({ ...span, start: span.start + base, end: span.end + base })
+      for (const span of local)
+        spans.push({ ...span, start: span.start + base, end: span.end + base })
     }
     this.clickSpans = spans
     this.copied = copied

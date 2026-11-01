@@ -8,7 +8,7 @@
  * rows below it less width is also the one way the margin stays a margin for the
  * mouse, which is handed coordinates the layout already accounts for.
  */
-import { type Component } from '@earendil-works/pi-tui'
+import type { Component } from '@earendil-works/pi-tui'
 
 /** One column of air a reader asked for, drawn blank. */
 const AIR = ' '

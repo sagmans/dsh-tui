@@ -13,5 +13,21 @@
   "ignoreBinaries": ["herdr"],
   // Production mode keeps test references from making test-only production APIs appear live.
   "project": ["src/**/*.ts!", "tools/**/*.mjs!", "*.ts", "tests/**/*.ts"],
-  "include": ["files", "dependencies", "optionalPeerDependencies", "binaries", "unlisted", "unresolved", "exports", "nsExports", "types", "nsTypes", "enumMembers", "namespaceMembers", "duplicates", "catalog", "catalogReferences"]
+  "include": [
+    "files",
+    "dependencies",
+    "optionalPeerDependencies",
+    "binaries",
+    "unlisted",
+    "unresolved",
+    "exports",
+    "nsExports",
+    "types",
+    "nsTypes",
+    "enumMembers",
+    "namespaceMembers",
+    "duplicates",
+    "catalog",
+    "catalogReferences"
+  ]
 }

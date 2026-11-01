@@ -42,7 +42,7 @@ function titleSequence(title: string): string {
 
 /** Keep the directory and its parent as session context; the suffix takes priority when tab space is tight. */
 export function windowTitle(cwd: string, activity: 'ready' | 'working'): string {
-  const segments = cwd.split('/').filter(segment => segment !== '')
+  const segments = cwd.split('/').filter((segment) => segment !== '')
   const tail = segments.slice(-2).join('/')
   const cut = tail.length > TITLE_DIR_LIMIT ? `…${tail.slice(-(TITLE_DIR_LIMIT - 1))}` : tail
   return titleSequence(`dsh-tui · ${cut === '' ? cwd : cut} · ${activity}`)
@@ -50,4 +50,3 @@ export function windowTitle(cwd: string, activity: 'ready' | 'working'): string 
 
 /** Hand the title back: the shell sets its own on the next prompt. */
 export const CLEAR_TITLE = titleSequence('')
-

@@ -1,14 +1,14 @@
 import type { Context } from '@deepseek-ai/cordis'
-import { TUI_PROFILING_SERVICE, profileAsync, PROFILE_PHASE } from '../profiling.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import {
-  PICKER_LIMIT,
   createSessionHistory,
+  PICKER_LIMIT,
   readSessionTitle,
   type SessionHistory,
   type StoredSession,
 } from '../agent/history.ts'
 import type { Keymap } from '../input/actions.ts'
+import { PROFILE_PHASE, profileAsync, TUI_PROFILING_SERVICE } from '../profiling.ts'
 import { SessionPicker } from '../ui/picker.ts'
 
 /**
@@ -92,7 +92,9 @@ export function createSessionPicker(ctx: Context, ports: SessionPickerPorts): Se
    * — there is nothing to pick from — and none of them is worth ending the run
    * over, so each is a notice rather than a failure.
    */
-  const storedSessions = async (): Promise<{ history: SessionHistory; sessions: readonly StoredSession[] } | undefined> => {
+  const storedSessions = async (): Promise<
+    { history: SessionHistory; sessions: readonly StoredSession[] } | undefined
+  > => {
     const history = createSessionHistory(ctx)
     if (history === undefined) {
       ports.notice('this profile has no session storage, so there is nothing to resume')
@@ -100,7 +102,11 @@ export function createSessionPicker(ctx: Context, ports: SessionPickerPorts): Se
       return undefined
     }
     try {
-      const sessions = await profileAsync(ctx.get(TUI_PROFILING_SERVICE), PROFILE_PHASE.historyList, () => history.list(PICKER_LIMIT))
+      const sessions = await profileAsync(
+        ctx.get(TUI_PROFILING_SERVICE),
+        PROFILE_PHASE.historyList,
+        () => history.list(PICKER_LIMIT),
+      )
       if (sessions.length === 0) {
         ports.notice('no stored sessions to resume')
         ports.render()
@@ -108,7 +114,9 @@ export function createSessionPicker(ctx: Context, ports: SessionPickerPorts): Se
       }
       return { history, sessions }
     } catch (error) {
-      ports.notice(`could not list stored sessions: ${error instanceof Error ? error.message : String(error)}`)
+      ports.notice(
+        `could not list stored sessions: ${error instanceof Error ? error.message : String(error)}`,
+      )
       ports.render()
       return undefined
     }
@@ -136,10 +144,16 @@ export function createSessionPicker(ctx: Context, ports: SessionPickerPorts): Se
    * The list is already in hand, so the picker is interactive immediately while
    * the titles that make its rows recognizable stream in behind it.
    */
-  const askForSession = async (history: SessionHistory, sessions: readonly StoredSession[]): Promise<SessionId | undefined> => {
+  const askForSession = async (
+    history: SessionHistory,
+    sessions: readonly StoredSession[],
+  ): Promise<SessionId | undefined> => {
     const titles = new Map<string, string>()
     void loadTitles(history, sessions, titles)
-    const picked = await ports.openPicker(new SessionPicker(sessions, () => titles, ports.keymap), refuseReason)
+    const picked = await ports.openPicker(
+      new SessionPicker(sessions, () => titles, ports.keymap),
+      refuseReason,
+    )
     return picked === undefined ? undefined : SessionId(picked)
   }
 

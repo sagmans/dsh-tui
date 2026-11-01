@@ -22,7 +22,7 @@ const DEFAULT_DSH_HOME_DIR = '.dsh'
 /** A bank follows the current directory by default; session mode keeps drafts private to one session. */
 export const DEFAULT_STASH_SCOPE = 'path' as const
 export const STASH_SCOPES = [DEFAULT_STASH_SCOPE, 'session'] as const
-export type StashScope = typeof STASH_SCOPES[number]
+export type StashScope = (typeof STASH_SCOPES)[number]
 
 /** The character a hand-written `DSH_HOME` leads with when it names the OS home. */
 const HOME_TILDE = '~'
@@ -84,7 +84,10 @@ function truncateToUtf8Bytes(value: string, maxBytes: number): string {
 function sanitizeSessionId(sessionId: string, version: string): string {
   const keyPrefix = `${version}${SEPARATOR}`
   const readable = sessionId.split('/').filter(Boolean).map(escapeSegment).join(SEPARATOR)
-  const digest = createHash(HASH_ALGORITHM).update(sessionId, 'utf8').digest('hex').slice(0, HASH_LENGTH)
+  const digest = createHash(HASH_ALGORITHM)
+    .update(sessionId, 'utf8')
+    .digest('hex')
+    .slice(0, HASH_LENGTH)
   const suffix = `${SEPARATOR}${digest}`
   const budget = SANITIZE_MAX_LENGTH - Buffer.byteLength(keyPrefix) - Buffer.byteLength(suffix)
   return `${keyPrefix}${truncateToUtf8Bytes(readable, Math.max(budget, 0))}${suffix}`
@@ -119,8 +122,12 @@ export function dshHomeDir(): string {
 function expandHome(value: string, home: string): string {
   if (home === '') return value
   if (value === HOME_TILDE) return home
-  const separator = HOME_TILDE_SEPARATORS.find(candidate => value.startsWith(HOME_TILDE + candidate))
-  return separator === undefined ? value : path.join(home, value.slice(HOME_TILDE.length + separator.length))
+  const separator = HOME_TILDE_SEPARATORS.find((candidate) =>
+    value.startsWith(HOME_TILDE + candidate),
+  )
+  return separator === undefined
+    ? value
+    : path.join(home, value.slice(HOME_TILDE.length + separator.length))
 }
 
 /** The root every bank's stash file sits under. */
@@ -132,7 +139,14 @@ export function stashBaseDir(): string {
  * Separate scope namespaces leave drafts in their original banks when the surface changes scope.
  * PromptStash supplies its configured scope so bank ownership stays with the surface.
  */
-export function resolveStashPaths(sessionId: string, baseDir: string, scope: StashScope): StashPaths {
-  const key = sanitizeSessionId(sessionId, scope === 'path' ? PATH_KEY_FORMAT_VERSION : SESSION_KEY_FORMAT_VERSION)
+export function resolveStashPaths(
+  sessionId: string,
+  baseDir: string,
+  scope: StashScope,
+): StashPaths {
+  const key = sanitizeSessionId(
+    sessionId,
+    scope === 'path' ? PATH_KEY_FORMAT_VERSION : SESSION_KEY_FORMAT_VERSION,
+  )
   return { sessionId, key, file: path.join(baseDir, `${key}.json`) }
 }

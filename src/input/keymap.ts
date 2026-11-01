@@ -1,6 +1,12 @@
-import { KeybindingsManager, TUI_KEYBINDINGS, matchesKey, setKeybindings, type KeyId } from '@earendil-works/pi-tui'
-import { defaultKeymap, keysFor, catalogOf, type Keymap } from './actions.ts'
-import { LIBRARY_KEY_ADDITIONS, LIBRARY_KEY_PINS, isPluginActionId } from './action-catalog.ts'
+import {
+  KeybindingsManager,
+  type KeyId,
+  matchesKey,
+  setKeybindings,
+  TUI_KEYBINDINGS,
+} from '@earendil-works/pi-tui'
+import { isPluginActionId, LIBRARY_KEY_ADDITIONS, LIBRARY_KEY_PINS } from './action-catalog.ts'
+import { catalogOf, defaultKeymap, type Keymap, keysFor } from './actions.ts'
 import { ENTER_KEY } from './key-press.ts'
 import type { Submission } from './submission.ts'
 
@@ -49,7 +55,9 @@ export function chordBindings(map: Keymap): readonly ChordBinding[] {
   const found: ChordBinding[] = []
   for (const action of catalogOf(map)) {
     if (action.layer !== 'chord' || action.id === 'chord.prefix') continue
-    const submission: Submission | undefined = isPluginActionId(action.id) ? { kind: 'plugin-action', id: action.id } : CHORD_SUBMISSIONS[action.id]
+    const submission: Submission | undefined = isPluginActionId(action.id)
+      ? { kind: 'plugin-action', id: action.id }
+      : CHORD_SUBMISSIONS[action.id]
     if (submission === undefined) continue
     for (const key of keysFor(map, action.id)) found.push({ key, submission, label: action.label })
   }
@@ -58,7 +66,9 @@ export function chordBindings(map: Keymap): readonly ChordBinding[] {
 
 /** Derive chord help from the active map so remapped and plugin bindings stay discoverable. */
 export function chordKeysLine(map: Keymap): string {
-  return `${keysFor(map, 'chord.prefix').join(', ')} then ${chordBindings(map).map(binding => `${binding.key} ${binding.label}`).join(' · ')}`
+  return `${keysFor(map, 'chord.prefix').join(', ')} then ${chordBindings(map)
+    .map((binding) => `${binding.key} ${binding.label}`)
+    .join(' · ')}`
 }
 
 /** Derive surface help from the active catalog and keys rather than advertising shipped defaults. */
@@ -87,14 +97,19 @@ function libraryOverrides(map: Keymap): Record<string, KeyId[]> {
   const overrides: Record<string, KeyId[]> = {}
   for (const action of catalogOf(map)) {
     if (action.layer !== 'library') continue
-    if (!map.written.has(action.id) && LIBRARY_KEY_ADDITIONS[action.id] === undefined && LIBRARY_KEY_PINS[action.id] === undefined) continue
+    if (
+      !map.written.has(action.id) &&
+      LIBRARY_KEY_ADDITIONS[action.id] === undefined &&
+      LIBRARY_KEY_PINS[action.id] === undefined
+    )
+      continue
     overrides[action.id] = [...keysFor(map, action.id)]
   }
   overrides['tui.input.submit'] = [...keysFor(map, 'prompt.submit')]
   // Enter is served by the bar itself: the library reads that press as a line
   // break before it ever looks for a submit key, so installing it here would
   // only take the completion menu's own Enter away.
-  overrides['tui.input.newLine'] = keysFor(map, 'prompt.newLine').filter(key => key !== ENTER_KEY)
+  overrides['tui.input.newLine'] = keysFor(map, 'prompt.newLine').filter((key) => key !== ENTER_KEY)
   return overrides
 }
 
@@ -175,7 +190,7 @@ export class ChordReader {
     if (this.armed === undefined) {
       // Every configured prefix is a way in, and the footer names the one that
       // was actually pressed: a list is a list of alternatives, not a sequence.
-      const armed = this.prefixes().find(key => matchesKey(data, key))
+      const armed = this.prefixes().find((key) => matchesKey(data, key))
       if (armed === undefined) return undefined
       this.armed = armed
       const windowMs = this.windowMs()
@@ -193,7 +208,7 @@ export class ChordReader {
     this.disarm()
     // Matching the key rather than a typed character keeps a paste from ever
     // counting as the second key of a chord.
-    const binding = this.bindings().find(entry => matchesKey(data, entry.key))
+    const binding = this.bindings().find((entry) => matchesKey(data, entry.key))
     return binding === undefined ? undefined : { kind: 'action', binding }
   }
 }

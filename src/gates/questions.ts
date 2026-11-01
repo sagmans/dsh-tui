@@ -1,13 +1,20 @@
-import { questionCard } from './question-card.ts'
-import { type GateCard, type GateInput, type GateQuestion, type GateAnswer, CUSTOM_ROW_NUMBER } from '../gates.ts'
-import { declaresSecret } from './question-card.ts'
 import { matchesKey } from '@earendil-works/pi-tui'
-import { matchesAction, type Keymap } from '../input/actions.ts'
-import { deleteLastGrapheme, pastedText, releasedKey, typedText } from '../input.ts'
+import {
+  CUSTOM_ROW_NUMBER,
+  type GateAnswer,
+  type GateCard,
+  type GateInput,
+  type GateQuestion,
+} from '../gates.ts'
+import { type Keymap, matchesAction } from '../input/actions.ts'
 import { matchScore } from '../input/match.ts'
+import { deleteLastGrapheme, pastedText, releasedKey, typedText } from '../input.ts'
+import { declaresSecret, questionCard } from './question-card.ts'
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined
+  return typeof value === 'object' && value !== null
+    ? (value as Record<string, unknown>)
+    : undefined
 }
 
 /**
@@ -27,13 +34,16 @@ export function toGateQuestions(request: unknown): GateQuestion[] {
   for (const item of raw) {
     const entry = asRecord(item)
     if (entry === undefined || typeof entry.id !== 'string') continue
-    const options = (Array.isArray(entry.options) ? entry.options : []).flatMap(option => {
+    const options = (Array.isArray(entry.options) ? entry.options : []).flatMap((option) => {
       const candidate = asRecord(option)
       if (candidate === undefined || typeof candidate.label !== 'string') return []
-      return [{
-        label: candidate.label,
-        description: typeof candidate.description === 'string' ? candidate.description : undefined,
-      }]
+      return [
+        {
+          label: candidate.label,
+          description:
+            typeof candidate.description === 'string' ? candidate.description : undefined,
+        },
+      ]
     })
     questions.push({
       id: entry.id,
@@ -58,8 +68,12 @@ const QUESTION_WINDOW = 12
  * the question's own keys follow the map so a rebound alias still works here.
  */
 function leavesCustomRow(map: Keymap, data: string): boolean {
-  return matchesKey(data, 'up') || matchesKey(data, 'down')
-    || matchesAction(map, 'question.up', data) || matchesAction(map, 'question.down', data)
+  return (
+    matchesKey(data, 'up') ||
+    matchesKey(data, 'down') ||
+    matchesAction(map, 'question.up', data) ||
+    matchesAction(map, 'question.down', data)
+  )
 }
 
 /** One option with the position it answers for, so filtering can drop rows and keep the meaning. */
@@ -120,7 +134,9 @@ export class QuestionGate {
    */
   private resetInput(): void {
     this.input.setText('')
-    this.input.setMode?.(this.current !== undefined && declaresSecret(this.current.id) ? 'secret' : 'answer')
+    this.input.setMode?.(
+      this.current !== undefined && declaresSecret(this.current.id) ? 'secret' : 'answer',
+    )
   }
 
   /**
@@ -148,7 +164,10 @@ export class QuestionGate {
     const needle = this.typed.trim()
     return question.options
       .map((option, position) => ({ option, position }))
-      .filter(({ option }) => matchScore(needle, `${option.label} ${option.description ?? ''}`) !== undefined)
+      .filter(
+        ({ option }) =>
+          matchScore(needle, `${option.label} ${option.description ?? ''}`) !== undefined,
+      )
   }
 
   /**
@@ -156,10 +175,17 @@ export class QuestionGate {
    * the cursor, because a list as long as a provider catalog would otherwise
    * push the editor off the screen.
    */
-  private windowed(question: GateQuestion): { rows: PositionedOption[]; start: number; cursor: number } {
+  private windowed(question: GateQuestion): {
+    rows: PositionedOption[]
+    start: number
+    cursor: number
+  } {
     const matched = this.matched(question)
     const cursor = Math.min(this.cursor, Math.max(0, matched.length - 1))
-    const start = Math.max(0, Math.min(cursor - Math.floor(QUESTION_WINDOW / 2), matched.length - QUESTION_WINDOW))
+    const start = Math.max(
+      0,
+      Math.min(cursor - Math.floor(QUESTION_WINDOW / 2), matched.length - QUESTION_WINDOW),
+    )
     return { rows: matched.slice(start, start + QUESTION_WINDOW), start, cursor }
   }
 
@@ -179,8 +205,10 @@ export class QuestionGate {
     if (question === undefined || option === undefined) return
     const chosen = this.chosen[this.index] ?? []
     this.chosen[this.index] = chosen.includes(option.label)
-      ? chosen.filter(label => label !== option.label)
-      : question.multiSelect === true ? [...chosen, option.label] : [option.label]
+      ? chosen.filter((label) => label !== option.label)
+      : question.multiSelect === true
+        ? [...chosen, option.label]
+        : [option.label]
   }
 
   /**

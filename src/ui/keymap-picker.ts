@@ -1,6 +1,6 @@
-import { hintKeys, moveHint, type Keymap } from '../input/actions.ts'
-import { type ActionLayer } from '../input/action-catalog.ts'
-import { keymapRows, layerNote, type KeymapRow } from '../keys-command.ts'
+import type { ActionLayer } from '../input/action-catalog.ts'
+import { hintKeys, type Keymap, moveHint } from '../input/actions.ts'
+import { type KeymapRow, keymapRows, layerNote } from '../keys-command.ts'
 import { ListPicker } from './picker.ts'
 
 /**
@@ -12,8 +12,8 @@ import { ListPicker } from './picker.ts'
  */
 function heading(map: Keymap, layer: ActionLayer | undefined): string {
   const rows = keymapRows(map, layer)
-  const actions = rows.filter(row => row.action).length
-  const written = rows.filter(row => row.written).length
+  const actions = rows.filter((row) => row.action).length
+  const written = rows.filter((row) => row.written).length
   const scope = layer === undefined ? '' : ` · ${layer} · ${layerNote(layer)}`
   return `keys${scope} · ${actions} actions · ${written} of them yours`
 }
@@ -32,16 +32,17 @@ export class KeymapPicker extends ListPicker<KeymapRow> {
     super(
       () => keymapRows(map(), layer),
       () => heading(map(), layer),
-      row => row.id,
-      row => ({ label: row.label, description: row.group, current: false }),
-      row => [row.id, row.group, row.label].join(' '),
+      (row) => row.id,
+      (row) => ({ label: row.label, description: row.group, current: false }),
+      (row) => [row.id, row.group, row.label].join(' '),
       {
-        empty: () => `nothing matches · backspace to widen · ${hintKeys(map(), 'picker.cancel')} close`,
+        empty: () =>
+          `nothing matches · backspace to widen · ${hintKeys(map(), 'picker.cancel')} close`,
         // Nothing here is a pick, so both keys that settle the list close it;
         // naming each one keeps a remapped cancel key visible where it answers.
         listed: () =>
-          `${moveHint(map(), 'picker.up', 'picker.down')} move · ${hintKeys(map(), 'picker.confirm')} close`
-          + ` · ${hintKeys(map(), 'picker.cancel')} close · type to filter`,
+          `${moveHint(map(), 'picker.up', 'picker.down')} move · ${hintKeys(map(), 'picker.confirm')} close` +
+          ` · ${hintKeys(map(), 'picker.cancel')} close · type to filter`,
       },
       // The map the list draws and the map its own keys are read from are the
       // same document, so a reader who moves picker.cancel sees both follow.

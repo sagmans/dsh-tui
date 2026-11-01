@@ -1,5 +1,5 @@
-import type { TuiToken } from '../theme-tokens.ts'
 import { splitGraphemes } from '../text.ts'
+import type { TuiToken } from '../theme-tokens.ts'
 
 /**
  * The fence languages that name a unified diff.
@@ -109,7 +109,7 @@ function isDiffFence(lang: string | undefined): boolean {
  * languages it does not draw have to come out exactly as they did before.
  */
 export function plainCodeLines(code: string, plain: (line: string) => string): string[] {
-  return code.split('\n').map(line => plain(line))
+  return code.split('\n').map((line) => plain(line))
 }
 
 /** Every row of a fence: a diff drawn row by row, or the plain path for any other language. */
@@ -124,12 +124,18 @@ export function codeBlockLines(code: string, lang: string | undefined, look: Fen
  * so the header pair is recognised by its neighbour rather than by its prefix;
  * inside a hunk every row carries a sign, and there the pair rule is off.
  */
-function rowKind(line: string, previous: string | undefined, next: string | undefined, inHunk: boolean): DiffRowKind {
+function rowKind(
+  line: string,
+  previous: string | undefined,
+  next: string | undefined,
+  inHunk: boolean,
+): DiffRowKind {
   if (line.startsWith('@@')) return 'hunk'
-  const pairedHeader = !inHunk
-    && ((line.startsWith('--- ') && next?.startsWith('+++ ') === true)
-      || (line.startsWith('+++ ') && previous?.startsWith('--- ') === true))
-  if (pairedHeader || DIFF_META_PREFIXES.some(prefix => line.startsWith(prefix))) return 'header'
+  const pairedHeader =
+    !inHunk &&
+    ((line.startsWith('--- ') && next?.startsWith('+++ ') === true) ||
+      (line.startsWith('+++ ') && previous?.startsWith('--- ') === true))
+  if (pairedHeader || DIFF_META_PREFIXES.some((prefix) => line.startsWith(prefix))) return 'header'
   if (line.startsWith('+')) return 'added'
   if (line.startsWith('-')) return 'removed'
   return 'context'
@@ -139,15 +145,19 @@ function rowKind(line: string, previous: string | undefined, next: string | unde
  * A single middle band gives paired rows a cheap emphasis preview during streaming.
  * Only matching edges stay unbanded; interior matches are not a full character alignment.
  */
-function sharedEdges(before: readonly string[], after: readonly string[]): { readonly head: number; readonly tail: number } {
+function sharedEdges(
+  before: readonly string[],
+  after: readonly string[],
+): { readonly head: number; readonly tail: number } {
   let head = 0
   while (head < before.length && head < after.length && before[head] === after[head]) head += 1
   let tail = 0
   while (
-    tail < before.length - head
-    && tail < after.length - head
-    && before[before.length - 1 - tail] === after[after.length - 1 - tail]
-  ) tail += 1
+    tail < before.length - head &&
+    tail < after.length - head &&
+    before[before.length - 1 - tail] === after[after.length - 1 - tail]
+  )
+    tail += 1
   return { head, tail }
 }
 
@@ -170,7 +180,10 @@ function runsFor(clusters: readonly string[], head: number, tail: number): reado
  * can never cut a character a reader sees as one — a combining mark or a joined
  * emoji would otherwise take the band on half of itself.
  */
-function pairRuns(removed: string, added: string): { readonly removed: readonly Run[]; readonly added: readonly Run[] } | undefined {
+function pairRuns(
+  removed: string,
+  added: string,
+): { readonly removed: readonly Run[]; readonly added: readonly Run[] } | undefined {
   const before = splitGraphemes(removed, DIFF_EMPHASIS_SCAN_LIMIT)
   if (before.length > DIFF_EMPHASIS_MAX_GRAPHEMES) return undefined
   const after = splitGraphemes(added, DIFF_EMPHASIS_SCAN_LIMIT)
@@ -186,18 +199,26 @@ function pairRuns(removed: string, added: string): { readonly removed: readonly 
  * A hidden emphasis draws the run in the row's colour instead of dropping it: an
  * element the reader removed must not punch an unstyled hole in a coloured row.
  */
-function drawRow(line: string, kind: DiffRowKind, runs: readonly Run[] | undefined, look: DiffLook): string {
+function drawRow(
+  line: string,
+  kind: DiffRowKind,
+  runs: readonly Run[] | undefined,
+  look: DiffLook,
+): string {
   const rowToken = ROW_TOKEN[kind]
   if (runs === undefined) return look.style(rowToken, line)
   const emphasis = EMPHASIS_TOKEN[kind]
   const banded = emphasis !== undefined && look.visible(emphasis) ? emphasis : rowToken
   const sign = look.style(rowToken, line.slice(0, 1))
-  const content = runs.map(run => look.style(run.changed ? banded : rowToken, run.text)).join('')
+  const content = runs.map((run) => look.style(run.changed ? banded : rowToken, run.text)).join('')
   return `${sign}${content}`
 }
 
 /** Where each paired row's changed runs sit, keyed by the row they belong to. */
-function emphasisByRow(lines: readonly string[], kinds: readonly DiffRowKind[]): ReadonlyMap<number, readonly Run[]> {
+function emphasisByRow(
+  lines: readonly string[],
+  kinds: readonly DiffRowKind[],
+): ReadonlyMap<number, readonly Run[]> {
   const runs = new Map<number, readonly Run[]>()
   for (let at = 0; at < lines.length; at += 1) {
     if (kinds[at] !== 'removed') continue

@@ -7,9 +7,9 @@
  */
 import { visibleWidth } from '@earendil-works/pi-tui'
 import { CUSTOM_ROW_NUMBER, type GateCard } from '../../gates.ts'
-import { type TuiToken } from '../../theme-tokens.ts'
-import { type TuiTheme } from '../../theme.ts'
 import { displayText } from '../../text.ts'
+import type { TuiTheme } from '../../theme.ts'
+import type { TuiToken } from '../../theme-tokens.ts'
 import { pushGap } from '../gap.ts'
 
 /** Inset choices, answers, and hints to group them under the question, at the cost of text width. */
@@ -36,7 +36,13 @@ const DETAIL_INDENT = '    '
 /** Borrow the transcript view's theme and wrapper so gates share its styling and width constraints. */
 export interface GateCardsContext {
   readonly theme: TuiTheme
-  readonly pushWrapped: (lines: string[], text: string, width: number, prefix: string, token: TuiToken) => void
+  readonly pushWrapped: (
+    lines: string[],
+    text: string,
+    width: number,
+    prefix: string,
+    token: TuiToken,
+  ) => void
 }
 
 /** Honor the shared theme's visibility preferences, not an always-visible gate policy. */
@@ -44,78 +50,100 @@ export class GateCards {
   constructor(private readonly context: GateCardsContext) {}
 
   pushGate(lines: string[], gate: GateCard, width: number): void {
-      // The question opens under the transcript on one row of air, unless the row
-      // above is already air: the break belongs between the two, not to each.
-      pushGap(lines)
-      if (this.context.theme.visible('gate.title')) {
-        const glyphToken = gate.kind === 'approval' ? 'gate.glyphApproval' : 'gate.glyphQuestion'
-        const glyph = this.context.theme.glyph(glyphToken) || (gate.kind === 'approval' ? APPROVAL_MARK : QUESTION_MARK)
-        // A visible question needs its wording for the decision, so prefer wrapping
-        // within the shared wrapper's width limit; theme visibility can still omit it.
-        this.context.pushWrapped(lines, displayText(gate.title, { column: visibleWidth(`${glyph} `) }), width, `${glyph} `, 'gate.title')
+    // The question opens under the transcript on one row of air, unless the row
+    // above is already air: the break belongs between the two, not to each.
+    pushGap(lines)
+    if (this.context.theme.visible('gate.title')) {
+      const glyphToken = gate.kind === 'approval' ? 'gate.glyphApproval' : 'gate.glyphQuestion'
+      const glyph =
+        this.context.theme.glyph(glyphToken) ||
+        (gate.kind === 'approval' ? APPROVAL_MARK : QUESTION_MARK)
+      // A visible question needs its wording for the decision, so prefer wrapping
+      // within the shared wrapper's width limit; theme visibility can still omit it.
+      this.context.pushWrapped(
+        lines,
+        displayText(gate.title, { column: visibleWidth(`${glyph} `) }),
+        width,
+        `${glyph} `,
+        'gate.title',
+      )
+    }
+    if (this.context.theme.visible('gate.detail')) {
+      for (const detail of gate.detail) {
+        this.context.pushWrapped(
+          lines,
+          displayText(detail, { column: visibleWidth(DETAIL_INDENT) }),
+          width,
+          DETAIL_INDENT,
+          'gate.detail',
+        )
       }
-      if (this.context.theme.visible('gate.detail')) {
-        for (const detail of gate.detail) {
-          this.context.pushWrapped(lines, displayText(detail, { column: visibleWidth(DETAIL_INDENT) }), width, DETAIL_INDENT, 'gate.detail')
-        }
-      }
-      gate.options.forEach((option, position) => {
-        this.pushGateRow(lines, width, {
-          number: gate.optionOffset + position + 1,
-          label: option.label,
-          description: option.description,
-          current: option.current,
-          selected: option.selected,
-        })
+    }
+    gate.options.forEach((option, position) => {
+      this.pushGateRow(lines, width, {
+        number: gate.optionOffset + position + 1,
+        label: option.label,
+        description: option.description,
+        current: option.current,
+        selected: option.selected,
       })
-      // The free-text row is drawn under the window rather than inside it: it is
-      // the one row that must never scroll out of reach, and the window's own
-      // numbering is left running 1..n above it.
-      if (gate.custom !== undefined) {
-        this.pushGateRow(lines, width, {
-          number: CUSTOM_ROW_NUMBER,
-          label: gate.custom.label,
-          description: gate.custom.description,
-          current: gate.custom.current,
-          selected: gate.custom.selected,
-        })
-      }
-      // The answer belongs to the row it fills: the free-text row, or the question
-      // itself when typing is the only way to answer it. The rows come from the
-      // surface's own editor, so they are placed rather than restyled — it draws
-      // its frame, its padding, and its cursor for the width it is given.
-      if (gate.answerInput !== undefined) {
-        const room = Math.max(1, width - visibleWidth(OPTION_INDENT))
-        // A surface narrower than the indent cannot place the answer: that row is cut
-        // here so what is handed out already fits, rather than being trimmed at the
-        // terminal past the point where the view could count it. A row that fits is
-        // left exactly as the editor drew it, cursor styling included.
-        for (const row of gate.answerInput.render(room)) {
-          const placed = `${OPTION_INDENT}${row}`
-          lines.push(visibleWidth(placed) <= width ? placed : this.context.theme.cut(placed, width, ''))
-        }
-      }
-      // Visible key hints help the reader answer, so prefer wrapping within the
-      // shared width limit; hidden hints and widths smaller than the lead can omit text.
-      if (this.context.theme.visible('gate.hint')) {
-        this.context.pushWrapped(lines, gate.hint, width, OPTION_INDENT, 'gate.hint')
+    })
+    // The free-text row is drawn under the window rather than inside it: it is
+    // the one row that must never scroll out of reach, and the window's own
+    // numbering is left running 1..n above it.
+    if (gate.custom !== undefined) {
+      this.pushGateRow(lines, width, {
+        number: CUSTOM_ROW_NUMBER,
+        label: gate.custom.label,
+        description: gate.custom.description,
+        current: gate.custom.current,
+        selected: gate.custom.selected,
+      })
+    }
+    // The answer belongs to the row it fills: the free-text row, or the question
+    // itself when typing is the only way to answer it. The rows come from the
+    // surface's own editor, so they are placed rather than restyled — it draws
+    // its frame, its padding, and its cursor for the width it is given.
+    if (gate.answerInput !== undefined) {
+      const room = Math.max(1, width - visibleWidth(OPTION_INDENT))
+      // A surface narrower than the indent cannot place the answer: that row is cut
+      // here so what is handed out already fits, rather than being trimmed at the
+      // terminal past the point where the view could count it. A row that fits is
+      // left exactly as the editor drew it, cursor styling included.
+      for (const row of gate.answerInput.render(room)) {
+        const placed = `${OPTION_INDENT}${row}`
+        lines.push(
+          visibleWidth(placed) <= width ? placed : this.context.theme.cut(placed, width, ''),
+        )
       }
     }
+    // Visible key hints help the reader answer, so prefer wrapping within the
+    // shared width limit; hidden hints and widths smaller than the lead can omit text.
+    if (this.context.theme.visible('gate.hint')) {
+      this.context.pushWrapped(lines, gate.hint, width, OPTION_INDENT, 'gate.hint')
+    }
+  }
   /**
-     * One row a reader can choose: the cursor, the box, the number, the label.
-     *
-     * The row wraps under the label it belongs to rather than at the screen edge,
-     * because the label and its description together are what tells two rows
-     * apart, and a mark on a continuation line reads as another row.
-     */
-    private pushGateRow(lines: string[], width: number, row: GateRow): void {
-      const token = row.current ? 'gate.optionCurrent' : 'gate.option'
-      if (!this.context.theme.visible(token)) return
-      const cursor = row.current ? this.context.theme.glyph('gate.cursor') || CURSOR_MARK : NO_CURSOR
-      const box = row.selected ? CHECKBOX_ON : CHECKBOX_OFF
-      const lead = `${OPTION_INDENT}${cursor} ${box} ${row.number}. `
-      const text = row.description === undefined ? row.label : `${row.label} — ${row.description}`
-      // Expose controls literally so choice text cannot repaint neighboring rows.
-      this.context.pushWrapped(lines, displayText(text, { column: visibleWidth(lead) }), width, lead, token)
-    }
+   * One row a reader can choose: the cursor, the box, the number, the label.
+   *
+   * The row wraps under the label it belongs to rather than at the screen edge,
+   * because the label and its description together are what tells two rows
+   * apart, and a mark on a continuation line reads as another row.
+   */
+  private pushGateRow(lines: string[], width: number, row: GateRow): void {
+    const token = row.current ? 'gate.optionCurrent' : 'gate.option'
+    if (!this.context.theme.visible(token)) return
+    const cursor = row.current ? this.context.theme.glyph('gate.cursor') || CURSOR_MARK : NO_CURSOR
+    const box = row.selected ? CHECKBOX_ON : CHECKBOX_OFF
+    const lead = `${OPTION_INDENT}${cursor} ${box} ${row.number}. `
+    const text = row.description === undefined ? row.label : `${row.label} — ${row.description}`
+    // Expose controls literally so choice text cannot repaint neighboring rows.
+    this.context.pushWrapped(
+      lines,
+      displayText(text, { column: visibleWidth(lead) }),
+      width,
+      lead,
+      token,
+    )
+  }
 }

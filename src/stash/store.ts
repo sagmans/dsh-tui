@@ -13,10 +13,10 @@ import path from 'node:path'
 
 import {
   StashCommittedError,
-  withStashFileLock,
-  withStashMutationLock,
   type StashFailurePhase,
   type StashMutationResult,
+  withStashFileLock,
+  withStashMutationLock,
 } from './lock.ts'
 import type { StashPaths } from './paths.ts'
 import {
@@ -37,10 +37,10 @@ import {
   parseStashFile,
   type ResolvedEntry,
   resolveBySelector,
-  sanitizeStashText,
   STASH_SCHEMA_VERSION,
   type StashEntry,
   type StashFile,
+  sanitizeStashText,
 } from './schema.ts'
 
 /**
@@ -160,7 +160,8 @@ export class StashStore {
     return withStashMutationLock(this.filePath, async () => {
       await this.reloadFresh()
       // Strict parsing rejects duplicate ids; refuse them before a save makes the bank unreadable.
-      if (this.file.entries.some(entry => entry.id === id)) throw new Error(DUPLICATE_STASH_ID_MESSAGE)
+      if (this.file.entries.some((entry) => entry.id === id))
+        throw new Error(DUPLICATE_STASH_ID_MESSAGE)
       const entry: StashEntry = { id, text, createdAt: Date.now() }
       const next: StashFile = { ...this.file, entries: [entry, ...this.file.entries] }
       return this.persistMutation(next, { entry, index: 0 })
@@ -172,7 +173,7 @@ export class StashStore {
     assertSafeEntryId(id)
     return withStashMutationLock(this.filePath, async () => {
       await this.reloadFresh()
-      return this.removeAt(selector => selector === id)
+      return this.removeAt((selector) => selector === id)
     })
   }
 
@@ -201,7 +202,7 @@ export class StashStore {
     return withStashMutationLock(this.filePath, async () => {
       await this.reloadFresh()
       const confirmed = new Set(ids)
-      const kept = this.file.entries.filter(entry => !confirmed.has(entry.id))
+      const kept = this.file.entries.filter((entry) => !confirmed.has(entry.id))
       const removed = this.file.entries.length - kept.length
       if (removed === 0) return { didPersist: false, result: 0 }
       const next: StashFile = { ...createEmptyStashFile(this.paths.sessionId), entries: kept }
@@ -209,8 +210,10 @@ export class StashStore {
     })
   }
 
-  private async removeAt(match: (id: string) => boolean): Promise<StashMutationResult<ResolvedEntry | undefined>> {
-    const index = this.file.entries.findIndex(entry => match(entry.id))
+  private async removeAt(
+    match: (id: string) => boolean,
+  ): Promise<StashMutationResult<ResolvedEntry | undefined>> {
+    const index = this.file.entries.findIndex((entry) => match(entry.id))
     const found = index < 0 ? undefined : this.file.entries[index]
     if (found === undefined) return { didPersist: false, result: undefined }
     const next: StashFile = {
@@ -220,7 +223,10 @@ export class StashStore {
     return this.persistMutation(next, { entry: found, index })
   }
 
-  private async persistMutation<Result>(next: StashFile, result: Result): Promise<StashMutationResult<Result>> {
+  private async persistMutation<Result>(
+    next: StashFile,
+    result: Result,
+  ): Promise<StashMutationResult<Result>> {
     const outcome = await writeStashFile(this.filePath, next)
     // Replacement precedes the directory-sync warning; keep memory aligned with the landed write before reporting its result.
     this.file = next
@@ -249,7 +255,9 @@ export class StashStore {
 
 export async function loadStashStore(paths: StashPaths): Promise<StashStore> {
   // Initial loading can quarantine a bank too; serialize that move with mutations.
-  const loaded = await withStashFileLock(paths.file, () => readCurrentStashFile(paths.file, paths.sessionId))
+  const loaded = await withStashFileLock(paths.file, () =>
+    readCurrentStashFile(paths.file, paths.sessionId),
+  )
   if (loaded.kind === 'unsupported') throw new UnsupportedStashSchemaError(loaded.version)
   return new StashStore(paths, loaded)
 }
@@ -261,7 +269,8 @@ async function readCurrentStashFile(filePath: string, sessionId: string): Promis
   } catch (error) {
     // A missing bank is an empty one; an oversized or unreadable bank is a real
     // failure the caller must report rather than silently start over from.
-    if (hasErrorCode(error, 'ENOENT')) return { kind: 'ready', file: createEmptyStashFile(sessionId) }
+    if (hasErrorCode(error, 'ENOENT'))
+      return { kind: 'ready', file: createEmptyStashFile(sessionId) }
     throw error
   }
 
@@ -289,14 +298,18 @@ async function quarantineCorrupt(
   identity: PrivateTextFile['identity'],
 ): Promise<LoadResult> {
   const quarantined = await quarantinePrivateFile(filePath, identity, `corrupt-${Date.now()}`)
-  return { kind: 'corrupt', quarantinedTo: quarantined.path, quarantineSyncFailed: quarantined.syncError !== undefined }
+  return {
+    kind: 'corrupt',
+    quarantinedTo: quarantined.path,
+    quarantineSyncFailed: quarantined.syncError !== undefined,
+  }
 }
 
 /** Preserve the replacement boundary with operation overrides: a later directory-sync failure warns about a landed write. */
 async function writeStashFile(
   filePath: string,
   file: StashFile,
-): Promise<void | StashWriteOutcome> {
+): Promise<StashWriteOutcome | undefined> {
   const directory = path.dirname(filePath)
   await ensurePrivateDirectory(directory)
   const tempPath = `${filePath}.${process.pid}.${Date.now()}.tmp`

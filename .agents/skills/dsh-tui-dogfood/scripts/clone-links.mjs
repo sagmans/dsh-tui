@@ -27,11 +27,11 @@ export const INSTRUCTION_ENTRIES = new Set(['AGENTS.md', 'CLAUDE.md'])
  * packages or checkouts, except source-home targets. Other retained links must stay
  * inside the clone to keep home-state writes local.
  */
-export const packageEntry = (parts) => parts[0] === 'profiles' && (
-  parts[1] === 'node_modules' && parts.length > 2 ||
-  parts[2] === 'node_modules' && parts.length > 3 ||
-  parts[2] === '.dsh-module-fallback' && parts[3] === 'node_modules' && parts.length > 4
-)
+export const packageEntry = (parts) =>
+  parts[0] === 'profiles' &&
+  ((parts[1] === 'node_modules' && parts.length > 2) ||
+    (parts[2] === 'node_modules' && parts.length > 3) ||
+    (parts[2] === '.dsh-module-fallback' && parts[3] === 'node_modules' && parts.length > 4))
 
 /**
  * Boundary checks require physical absolute paths; this lexical check cannot resolve aliases.
@@ -55,7 +55,7 @@ export function destination(file) {
   let ancestor = file
   while (!fs.existsSync(ancestor)) {
     const parent = path.dirname(ancestor)
-    if (parent === ancestor) throw Error('cannot resolve cloned link: ' + file)
+    if (parent === ancestor) throw Error(`cannot resolve cloned link: ${file}`)
     ancestor = parent
   }
   return path.resolve(fs.realpathSync(ancestor), path.relative(ancestor, file))
@@ -73,13 +73,14 @@ export function problems(home, source) {
       if (entry.isSymbolicLink()) {
         const target = destination(path.resolve(dir, fs.readlinkSync(file)))
         const allowed = packageEntry(parts) ? !inside(source, target) : inside(home, target)
-        if (!allowed) found.push('unsafe cloned symlink escaping scratch or entering source home: ' + file)
+        if (!allowed)
+          found.push(`unsafe cloned symlink escaping scratch or entering source home: ${file}`)
       } else if (entry.isDirectory()) {
         visit(file)
       } else if (entry.isFile() && !packageEntry(parts) && fs.lstatSync(file).nlink > 1) {
         // Hardlink names share writable contents; the link count cannot prove every name stays inside the clone.
         // Reject non-package hardlinks conservatively rather than risk writes reaching another home.
-        found.push('unsafe cloned hardlink outside package modules: ' + file)
+        found.push(`unsafe cloned hardlink outside package modules: ${file}`)
       }
     }
   }
@@ -102,7 +103,7 @@ export function materialize(home) {
           // No instruction content exists to copy; dropping the external link lets
           // boundary validation proceed without retaining an escape path.
           fs.rmSync(file)
-          console.log('materialize: dropped dangling link ' + path.relative(home, file))
+          console.log(`materialize: dropped dangling link ${path.relative(home, file)}`)
           report.dropped += 1
           continue
         }
@@ -114,7 +115,7 @@ export function materialize(home) {
           fs.copyFileSync(target, file)
           fs.chmodSync(file, stat.mode & 0o777)
         }
-        console.log('materialize: copied ' + path.relative(home, file))
+        console.log(`materialize: copied ${path.relative(home, file)}`)
         report.copied += 1
         continue
       }
@@ -133,7 +134,13 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
     process.exitCode = found.length ? 1 : 0
   } else if (mode === 'materialize') {
     const report = materialize(home)
-    console.log('materialize: ' + report.copied + ' instruction link(s) copied, ' + report.dropped + ' dangling link(s) dropped')
+    console.log(
+      'materialize: ' +
+        report.copied +
+        ' instruction link(s) copied, ' +
+        report.dropped +
+        ' dangling link(s) dropped',
+    )
   } else {
     console.error('usage: clone-links.mjs check|materialize <home> <source>')
     process.exitCode = 2

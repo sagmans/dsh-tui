@@ -1,4 +1,14 @@
-import { chmodSync, cpSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync } from 'node:fs'
+import {
+  chmodSync,
+  cpSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+} from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -35,10 +45,11 @@ export class SkillAlreadyExistsError extends Error {
 function bundledSkillNames(): string[] {
   const bundled = SKILLS_ROOT
   const root = lstatSync(bundled)
-  if (!root.isDirectory() || root.isSymbolicLink()) throw new Error(`invalid bundled skills: ${bundled}`)
+  if (!root.isDirectory() || root.isSymbolicLink())
+    throw new Error(`invalid bundled skills: ${bundled}`)
   const names = readdirSync(bundled, { withFileTypes: true })
-    .filter(entry => entry.isDirectory() && !entry.isSymbolicLink())
-    .map(entry => entry.name)
+    .filter((entry) => entry.isDirectory() && !entry.isSymbolicLink())
+    .map((entry) => entry.name)
     .sort()
   if (names.length === 0) throw new Error(`no bundled skills: ${bundled}`)
   return names
@@ -49,7 +60,7 @@ function skillFiles(root: string): Map<string, Buffer> {
   const files = new Map<string, Buffer>()
   const walk = (directory: string, prefix: string): void => {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
-      const relative = prefix === '' ? entry.name : prefix + '/' + entry.name
+      const relative = prefix === '' ? entry.name : `${prefix}/${entry.name}`
       const path = join(directory, entry.name)
       if (entry.isDirectory()) {
         walk(path, relative)
@@ -75,7 +86,7 @@ function skillFiles(root: string): Map<string, Buffer> {
  */
 function driftedSkillNames(): string[] {
   const skills = installedSkillsRoot(homedir())
-  return bundledSkillNames().filter(name => {
+  return bundledSkillNames().filter((name) => {
     const destination = join(skills, name)
     const entry = lstatSync(destination, { throwIfNoEntry: false })
     // Never installed is not drift - a first install is that command's own
@@ -101,8 +112,10 @@ export function describeSkillDrift(): string | undefined {
   try {
     const drifted = driftedSkillNames()
     if (drifted.length === 0) return undefined
-    return `bundled skills changed since they were installed: ${drifted.join(NOTICE_SEPARATOR)}`
-      + `${NOTICE_SEPARATOR}run ${SKILL_UPDATE_COMMAND}`
+    return (
+      `bundled skills changed since they were installed: ${drifted.join(NOTICE_SEPARATOR)}` +
+      `${NOTICE_SEPARATOR}run ${SKILL_UPDATE_COMMAND}`
+    )
   } catch {
     return undefined
   }
@@ -125,12 +138,14 @@ function restoreHelpers(destination: string): void {
   const scripts = join(destination, 'scripts')
   const entry = lstatSync(scripts, { throwIfNoEntry: false })
   if (entry === undefined) return
-  if (!entry.isDirectory() || entry.isSymbolicLink()) throw new Error(`invalid bundled skill scripts: ${scripts}`)
+  if (!entry.isDirectory() || entry.isSymbolicLink())
+    throw new Error(`invalid bundled skill scripts: ${scripts}`)
   for (const name of readdirSync(scripts)) {
-    if (!HELPER_EXTENSIONS.some(extension => name.endsWith(extension))) continue
+    if (!HELPER_EXTENSIONS.some((extension) => name.endsWith(extension))) continue
     const helper = join(scripts, name)
     const file = lstatSync(helper)
-    if (!file.isFile() || file.isSymbolicLink() || file.nlink !== 1) throw new Error(`invalid bundled skill helper: ${helper}`)
+    if (!file.isFile() || file.isSymbolicLink() || file.nlink !== 1)
+      throw new Error(`invalid bundled skill helper: ${helper}`)
     chmodSync(helper, EXECUTABLE_MODE)
   }
 }
@@ -138,11 +153,16 @@ function restoreHelpers(destination: string): void {
 function copyBundledSkill(name: string, destination: string): void {
   const source = join(SKILLS_ROOT, name)
   const bundled = lstatSync(source)
-  if (!bundled.isDirectory() || bundled.isSymbolicLink()) throw new Error(`invalid bundled skill: ${source}`)
+  if (!bundled.isDirectory() || bundled.isSymbolicLink())
+    throw new Error(`invalid bundled skill: ${source}`)
   mkdirSync(destination)
   try {
     for (const entry of readdirSync(source)) {
-      cpSync(join(source, entry), join(destination, entry), { recursive: true, force: false, errorOnExist: true })
+      cpSync(join(source, entry), join(destination, entry), {
+        recursive: true,
+        force: false,
+        errorOnExist: true,
+      })
     }
     restoreHelpers(destination)
   } catch (error) {
@@ -150,7 +170,10 @@ function copyBundledSkill(name: string, destination: string): void {
     try {
       rmSync(destination, { recursive: true, force: true })
     } catch (cleanupError) {
-      throw new Error(`skill copy failed; partial copy may remain at ${destination}: ${String(cleanupError)}`, { cause: error })
+      throw new Error(
+        `skill copy failed; partial copy may remain at ${destination}: ${String(cleanupError)}`,
+        { cause: error },
+      )
     }
     throw error
   }
@@ -190,14 +213,19 @@ function replaceBundledSkill(name: string, destination: string, skills: string):
         renameSync(backup, destination)
         oldCopyMoved = false
       } catch (restoreError) {
-        throw new Error(`skill update failed; original remains at ${backup}; restore failed: ${String(restoreError)}`, { cause: error })
+        throw new Error(
+          `skill update failed; original remains at ${backup}; restore failed: ${String(restoreError)}`,
+          { cause: error },
+        )
       }
       throw error
     }
     try {
       rmSync(workspace, { recursive: true })
     } catch (error) {
-      throw new Error(`skill updated; backup cleanup failed at ${workspace}: ${String(error)}`, { cause: error })
+      throw new Error(`skill updated; backup cleanup failed at ${workspace}: ${String(error)}`, {
+        cause: error,
+      })
     }
   } catch (error) {
     if (oldCopyMoved) {
@@ -224,12 +252,16 @@ function replaceBundledSkill(name: string, destination: string, skills: string):
  * skills installed. Root directories may already be created; later filesystem
  * failures do not roll back the batch.
  */
-export function installBundledSkills(home: string = homedir(), update = false, names: readonly string[] = bundledSkillNames()): string[] {
+export function installBundledSkills(
+  home: string = homedir(),
+  update = false,
+  names: readonly string[] = bundledSkillNames(),
+): string[] {
   ensureDirectory(home)
   ensureDirectory(join(home, AGENTS_DIRECTORY))
   const skills = installedSkillsRoot(home)
   ensureDirectory(skills)
-  const destinations = names.map(name => join(skills, name))
+  const destinations = names.map((name) => join(skills, name))
   for (const destination of destinations) {
     const existing = lstatSync(destination, { throwIfNoEntry: false })
     if (existing === undefined) continue
@@ -242,7 +274,8 @@ export function installBundledSkills(home: string = homedir(), update = false, n
       try {
         copyBundledSkill(name, destination)
       } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === 'EEXIST') throw new SkillAlreadyExistsError(destination)
+        if ((error as NodeJS.ErrnoException).code === 'EEXIST')
+          throw new SkillAlreadyExistsError(destination)
         throw error
       }
       return destination

@@ -24,7 +24,9 @@ const NO_TEXT = '(no text)'
 const TARGETS = ['next-step', 'next-turn'] as const
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null ? value as Record<string, unknown> : undefined
+  return typeof value === 'object' && value !== null
+    ? (value as Record<string, unknown>)
+    : undefined
 }
 
 /**

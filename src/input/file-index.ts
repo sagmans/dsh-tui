@@ -1,7 +1,7 @@
-import { type Candidate } from './file-search.ts'
-import { listWorkspaceFiles, canonicalOrUndefined } from './workspace-files.ts'
 import { realpath } from 'node:fs/promises'
 import { isAbsolute, join, relative } from 'node:path'
+import type { Candidate } from './file-search.ts'
+import { canonicalOrUndefined, listWorkspaceFiles } from './workspace-files.ts'
 
 /**
  * One file list per root, shared by everything that asks for it at once.
@@ -59,7 +59,7 @@ export function createFileIndex(cwd: string): FileIndex {
     // the readers that follow.
     const scan = new AbortController()
     const run = listWorkspaceFiles(cwd, scan.signal)
-      .then(found => {
+      .then((found) => {
         // An answer that arrives after the deadline is the one the waiting
         // readers were told to stop waiting for; keeping it would serve a
         // listing the scan had already given up on.
@@ -105,7 +105,7 @@ export function createFileIndex(cwd: string): FileIndex {
     async reachable(path: string, signal: AbortSignal): Promise<boolean> {
       if (signal.aborted) return false
       // Share a proven anchor, but let transient filesystem failures recover on later attempts.
-      root ??= canonicalOrUndefined(cwd).then(canonical => {
+      root ??= canonicalOrUndefined(cwd).then((canonical) => {
         if (canonical === undefined) root = undefined
         return canonical
       })
@@ -128,14 +128,18 @@ export function createFileIndex(cwd: string): FileIndex {
 }
 
 /** Wait for one filesystem answer, but only while the caller is still waiting. */
-function withinBound<T>(work: Promise<T>, signal: AbortSignal, timeoutMs: number): Promise<T | undefined> {
+function withinBound<T>(
+  work: Promise<T>,
+  signal: AbortSignal,
+  timeoutMs: number,
+): Promise<T | undefined> {
   if (signal.aborted) {
     // Work that was already started still has to be answered for, or a refusal
     // it reports would reach the process instead of this caller.
     void work.catch(() => undefined)
     return Promise.resolve(undefined)
   }
-  return new Promise<T | undefined>(resolve => {
+  return new Promise<T | undefined>((resolve) => {
     let timer: ReturnType<typeof setTimeout> | undefined
     const finish = (value: T | undefined): void => {
       if (timer !== undefined) clearTimeout(timer)
@@ -145,13 +149,19 @@ function withinBound<T>(work: Promise<T>, signal: AbortSignal, timeoutMs: number
     const stop = (): void => finish(undefined)
     timer = setTimeout(stop, timeoutMs)
     signal.addEventListener('abort', stop, { once: true })
-    work.then(value => finish(value), () => finish(undefined))
+    work.then(
+      (value) => finish(value),
+      () => finish(undefined),
+    )
   })
 }
 
 /** Wait for shared work, but leave as soon as any reason to stop waiting fires. */
-function untilAborted<T>(work: Promise<T>, ...signals: readonly AbortSignal[]): Promise<T | undefined> {
-  if (signals.some(signal => signal.aborted)) {
+function untilAborted<T>(
+  work: Promise<T>,
+  ...signals: readonly AbortSignal[]
+): Promise<T | undefined> {
+  if (signals.some((signal) => signal.aborted)) {
     void work.catch(() => undefined)
     return Promise.resolve(undefined)
   }
@@ -162,11 +172,11 @@ function untilAborted<T>(work: Promise<T>, ...signals: readonly AbortSignal[]): 
     }
     for (const signal of signals) signal.addEventListener('abort', stopWaiting, { once: true })
     work.then(
-      value => {
+      (value) => {
         for (const signal of signals) signal.removeEventListener('abort', stopWaiting)
         resolve(value)
       },
-      error => {
+      (error) => {
         for (const signal of signals) signal.removeEventListener('abort', stopWaiting)
         reject(error instanceof Error ? error : new Error(String(error)))
       },

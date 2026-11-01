@@ -4,13 +4,14 @@ import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { ForkEvent } from '../agent/fork.ts'
 import { createSessionHistory } from '../agent/history.ts'
 import { createToolPresenter } from '../agent/present.ts'
-import { FoldCursor, ViewGeneration, replayIfCurrent } from '../fold-cursor.ts'
+import { FoldCursor, replayIfCurrent, ViewGeneration } from '../fold-cursor.ts'
 import { hintKeys, type Keymap } from '../input/actions.ts'
 import { TranscriptModel } from '../transcript.ts'
 import { WorkFold, type WorkState } from '../work.ts'
 
 /** What the reader presses to leave a view they did not open. */
-export const backHint = (map: Keymap): string => `${hintKeys(map, 'surface.back')} returns to this session`
+export const backHint = (map: Keymap): string =>
+  `${hintKeys(map, 'surface.back')} returns to this session`
 
 /**
  * What the transcript owner needs from the surface that composes it.
@@ -136,7 +137,13 @@ export function createSessionView(ctx: Context, ports: SessionViewPorts): Sessio
    */
   const applyDurable = (session: SessionId, event: ForkEvent): void => {
     const cut = ports.stagedCutoff()
-    if (cut !== undefined && session === ports.drivenSession() && typeof event.seq === 'number' && event.seq >= cut) return
+    if (
+      cut !== undefined &&
+      session === ports.drivenSession() &&
+      typeof event.seq === 'number' &&
+      event.seq >= cut
+    )
+      return
     if (foldCursor.accept(session, event)) applyEvent(event)
   }
 
@@ -151,7 +158,11 @@ export function createSessionView(ctx: Context, ports: SessionViewPorts): Sessio
    * events not yet flushed and the only one that works for a child that has not
    * materialized; a session this process is not running falls back to storage.
    */
-  const foldHistory = async (id: SessionId, through?: number, current: () => boolean = () => true): Promise<number> => {
+  const foldHistory = async (
+    id: SessionId,
+    through?: number,
+    current: () => boolean = () => true,
+  ): Promise<number> => {
     // Resolved before the fold so every card reads its tool through the scope
     // that actually registered it; a stored session nobody runs has none.
     presentScope = ports.agentScope(id)
@@ -168,7 +179,11 @@ export function createSessionView(ctx: Context, ports: SessionViewPorts): Sessio
     // drives, and a stored log has no cursor to hide a suffix from.
     const history = createSessionHistory(ctx)
     if (history === undefined) return 0
-    return replayIfCurrent(() => history.read(id), current, event => applyDurable(id, event))
+    return replayIfCurrent(
+      () => history.read(id),
+      current,
+      (event) => applyDurable(id, event),
+    )
   }
 
   const replayHistory = async (id: SessionId): Promise<void> => {
@@ -176,7 +191,9 @@ export function createSessionView(ctx: Context, ports: SessionViewPorts): Sessio
       const folded = await foldHistory(id)
       if (folded > 0) model.notice(`replayed ${folded} events from the stored log`)
     } catch (error) {
-      model.notice(`could not replay this session: ${error instanceof Error ? error.message : String(error)}`)
+      model.notice(
+        `could not replay this session: ${error instanceof Error ? error.message : String(error)}`,
+      )
     }
   }
 
@@ -195,7 +212,9 @@ export function createSessionView(ctx: Context, ports: SessionViewPorts): Sessio
       await foldHistory(id, undefined, current)
     } catch (error) {
       if (!current()) return
-      model.notice(`could not read that session: ${error instanceof Error ? error.message : String(error)}`)
+      model.notice(
+        `could not read that session: ${error instanceof Error ? error.message : String(error)}`,
+      )
     }
     if (!current()) return
     const driven = ports.drivenSession()
@@ -239,12 +258,12 @@ export function createSessionView(ctx: Context, ports: SessionViewPorts): Sessio
    * another's, and the durable copy that follows would never correct it.
    */
   const agentListeners = (): readonly (() => void)[] => [
-    ctx.on('agent/error', payload => {
+    ctx.on('agent/error', (payload) => {
       if (payload.agent.id !== viewedSession) return
       model.reportError(payload.error)
       ports.render()
     }),
-    ctx.on('agent/assistant-stream', payload => {
+    ctx.on('agent/assistant-stream', (payload) => {
       if (payload.agent.id !== viewedSession) return
       if (payload.frame.type !== 'chunk') return
       model.applyStreamChunk(payload.frame.chunk)
@@ -255,20 +274,20 @@ export function createSessionView(ctx: Context, ports: SessionViewPorts): Sessio
   return {
     viewed: () => viewedSession,
     viewingChild: () => viewedSession !== ports.drivenSession(),
-    notice: message => model.notice(message),
-    marker: text => model.marker(text),
-    reportError: error => model.reportError(error),
+    notice: (message) => model.notice(message),
+    marker: (text) => model.marker(text),
+    reportError: (error) => model.reportError(error),
     model,
     workState: () => work.state(),
     sessionEvents,
-    setPresentScope: scope => {
+    setPresentScope: (scope) => {
       presentScope = scope
     },
     clearPresentScope: () => {
       presentScope = undefined
     },
     reset,
-    setViewed: id => {
+    setViewed: (id) => {
       viewedSession = id
     },
     fold: foldHistory,

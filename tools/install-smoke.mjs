@@ -11,7 +11,7 @@
  * the container half lives in install-smoke.container.sh.
  */
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -24,11 +24,14 @@ const manifest = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
 // is a package the host also installs, so a second copy in a profile is exactly
 // the duplicate the container counts.
 const bundled = Object.entries(manifest.dependencies ?? {}).filter(([name]) =>
-  name.startsWith('@deepseek-ai/dsh-'))
+  name.startsWith('@deepseek-ai/dsh-'),
+)
 const releases = Object.keys(manifest.dsh?.compatibility?.dshReleases ?? {})
 // Use the newest listed baseline for this single-release consumer gate, not
 // coverage of the whole verified list. Numeric collation keeps rc.10 after rc.9.
-const harness = releases.sort((left, right) => left.localeCompare(right, 'en', { numeric: true })).at(-1)
+const harness = releases
+  .sort((left, right) => left.localeCompare(right, 'en', { numeric: true }))
+  .at(-1)
 if (harness === undefined) throw new Error('the manifest declares no verified harness release')
 if (bundled.length === 0) throw new Error('the manifest mounts no harness package')
 
@@ -42,7 +45,7 @@ try {
 const out = mkdtempSync(join(tmpdir(), 'dsh-tui-install-'))
 try {
   execFileSync('pnpm', ['pack', '--pack-destination', out], { cwd: ROOT, stdio: 'inherit' })
-  const tarball = readdirSync(out).find(name => name.endsWith('.tgz'))
+  const tarball = readdirSync(out).find((name) => name.endsWith('.tgz'))
   if (tarball === undefined) throw new Error('pnpm pack produced no tarball')
 
   const template = readFileSync(join(ROOT, 'tools', 'install-smoke.container.sh'), 'utf8')
@@ -54,7 +57,7 @@ try {
     .replaceAll('@TARBALL@', tarball)
 
   // Keep install mutations in a disposable container and expose the candidate read-only.
-  execFileSync('docker', ['run', '--rm', '-i', '-v', out + ':/pkg:ro', IMAGE, 'sh', '-s'], {
+  execFileSync('docker', ['run', '--rm', '-i', '-v', `${out}:/pkg:ro`, IMAGE, 'sh', '-s'], {
     input: script,
     stdio: ['pipe', 'inherit', 'inherit'],
   })

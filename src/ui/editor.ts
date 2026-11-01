@@ -1,22 +1,40 @@
 import {
   Editor,
+  type EditorTheme,
   getKeybindings,
   isKittyProtocolActive,
   matchesKey,
   stripTerminalSequences,
-  visibleWidth,
-  type EditorTheme,
   type TUI,
   type TuiMouseEvent,
   type TuiMouseEventResult,
+  visibleWidth,
 } from '@earendil-works/pi-tui'
-import { NATIVE_CURSOR_PRESENTATION, SOFTWARE_CURSOR_MODE, type CursorPresentation } from '../terminal/cursor.ts'
-import { type Keymap } from '../input/actions.ts'
+import type { Keymap } from '../input/actions.ts'
+import {
+  type EditorCursor,
+  ghostDisplayLine,
+  ghostGraphemes,
+  isCursorAtTextEnd,
+  nextGhostWord,
+} from '../input/ghost.ts'
 import { ENTER_KEY } from '../input/key-press.ts'
-import { ghostDisplayLine, ghostGraphemes, isCursorAtTextEnd, nextGhostWord, type EditorCursor } from '../input/ghost.ts'
 import { promptKeys } from '../input/keymap.ts'
+import {
+  type CursorPresentation,
+  NATIVE_CURSOR_PRESENTATION,
+  SOFTWARE_CURSOR_MODE,
+} from '../terminal/cursor.ts'
 import { renderTerminalText } from '../terminal-text.ts'
-import { FRAME_COLUMNS, RAIL_COLUMNS, FRAME_GLYPHS, MIN_BOX_WIDTH, MIN_RAIL_WIDTH, PADDING_X, textRow } from './frame.ts'
+import {
+  FRAME_COLUMNS,
+  FRAME_GLYPHS,
+  MIN_BOX_WIDTH,
+  MIN_RAIL_WIDTH,
+  PADDING_X,
+  RAIL_COLUMNS,
+  textRow,
+} from './frame.ts'
 
 /**
  * Marks the rule that closes the input while one render is in flight.
@@ -150,7 +168,12 @@ export class BoxedEditor extends Editor {
     const before = this.getCursor()
     super.setText(text)
     const after = this.getCursor()
-    if (previous !== this.getExpandedText() || before.line !== after.line || before.col !== after.col) this.cursor.activity()
+    if (
+      previous !== this.getExpandedText() ||
+      before.line !== after.line ||
+      before.col !== after.col
+    )
+      this.cursor.activity()
   }
 
   /**
@@ -191,7 +214,11 @@ export class BoxedEditor extends Editor {
     // because some other chord contains the same bytes would be submitting a key
     // the reader never bound. A reader who keeps the sequence for a line is
     // answered by the library's own rule.
-    if (data === LEGACY_ALT_ENTER && !isKittyProtocolActive() && keys.submit.includes('alt+enter')) {
+    if (
+      data === LEGACY_ALT_ENTER &&
+      !isKittyProtocolActive() &&
+      keys.submit.includes('alt+enter')
+    ) {
       super.handleInput(KITTY_ALT_ENTER)
       return
     }
@@ -236,7 +263,9 @@ export class BoxedEditor extends Editor {
     // The bar paints this text itself, so it is drawn without colour: a sequence
     // the brush offered must not escape the face the bar is drawing it in.
     // An absent cached match cannot expose history; projecting every plugin's settings here would stall ordinary typing.
-    return suffix === undefined || !brush.enabled() ? undefined : renderTerminalText(suffix, { color: 'none' })
+    return suffix === undefined || !brush.enabled()
+      ? undefined
+      : renderTerminalText(suffix, { color: 'none' })
   }
 
   /**
@@ -269,7 +298,12 @@ export class BoxedEditor extends Editor {
     if (drawn === '') return row
     const [first = '', ...rest] = ghostGraphemes(drawn)
     const spaces = ' '.repeat(Math.max(0, room - used))
-    return before + brush.paint(first, showCursor ? GHOST_CURSOR_CELL : GHOST_REST_CELL) + brush.paint(rest.join(''), GHOST_REST_CELL) + spaces
+    return (
+      before +
+      brush.paint(first, showCursor ? GHOST_CURSOR_CELL : GHOST_REST_CELL) +
+      brush.paint(rest.join(''), GHOST_REST_CELL) +
+      spaces
+    )
   }
 
   /**
@@ -295,7 +329,8 @@ export class BoxedEditor extends Editor {
   }
 
   override render(width: number): string[] {
-    const showCursor = this.focused && this.cursor.mode === SOFTWARE_CURSOR_MODE && this.cursor.visible()
+    const showCursor =
+      this.focused && this.cursor.mode === SOFTWARE_CURSOR_MODE && this.cursor.visible()
     // Borrowed question editors remain dialog furniture, not conversation messages.
     const enclosed = this.disableSubmit
     const minimum = enclosed ? MIN_BOX_WIDTH : MIN_RAIL_WIDTH
@@ -306,12 +341,21 @@ export class BoxedEditor extends Editor {
     const ghost = this.disableSubmit ? undefined : this.currentGhostSuffix()
     // One cursor spelling across the supported pi-tui line, so the ghost, mask,
     // and blink passes below never see a marker they were not written for.
-    const rows = super.render(inside).map(row => row.replace(FAKE_CURSOR_CELL, LEGACY_CURSOR_CELL))
-    const closing = rows.findIndex(row => row.includes(CLOSING_TAG))
+    const rows = super
+      .render(inside)
+      .map((row) => row.replace(FAKE_CURSOR_CELL, LEGACY_CURSOR_CELL))
+    const closing = rows.findIndex((row) => row.includes(CLOSING_TAG))
     // An unfamiliar base layout must not receive guessed pointer offsets.
     if (closing < 0) {
       this.mapped = false
-      return rows.map(row => this.decorateText((showCursor ? row : row.replace(SYNTHETIC_CURSOR, CURSOR_TEXT_REPLACEMENT)).replace(CLOSING_TAG, '')))
+      return rows.map((row) =>
+        this.decorateText(
+          (showCursor ? row : row.replace(SYNTHETIC_CURSOR, CURSOR_TEXT_REPLACEMENT)).replace(
+            CLOSING_TAG,
+            '',
+          ),
+        ),
+      )
     }
     const menu = rows.slice(closing + 1)
     const text = rows.slice(1, closing)
@@ -319,7 +363,7 @@ export class BoxedEditor extends Editor {
     this.textRows = text.length
     this.mapped = true
     this.topIndicatorRows = boxed || this.hiddenAbove > 0 ? 1 : 0
-    const lines = menu.map(row => row + ' '.repeat(this.railColumns))
+    const lines = menu.map((row) => row + ' '.repeat(this.railColumns))
     const indicator = (direction: string, count: number): string =>
       side + textRow(this.borderColor(`${direction} ${count} more`), inside)
     const edge = (open: string, row: string, close: string): string =>
@@ -329,9 +373,22 @@ export class BoxedEditor extends Editor {
     for (const row of text) {
       const painted = this.ghostRow(row, ghost, showCursor)
       // Mask after styling so the visible cursor cannot reveal a protected answer grapheme.
-      lines.push(side + this.decorateText(showCursor ? painted : painted.replace(SYNTHETIC_CURSOR, CURSOR_TEXT_REPLACEMENT)) + (boxed ? side : ''))
+      lines.push(
+        side +
+          this.decorateText(
+            showCursor ? painted : painted.replace(SYNTHETIC_CURSOR, CURSOR_TEXT_REPLACEMENT),
+          ) +
+          (boxed ? side : ''),
+      )
     }
-    if (boxed) lines.push(edge(FRAME_GLYPHS.bottomLeft, rows[closing]!.replace(CLOSING_TAG, ''), FRAME_GLYPHS.bottomRight))
+    if (boxed)
+      lines.push(
+        edge(
+          FRAME_GLYPHS.bottomLeft,
+          rows[closing]!.replace(CLOSING_TAG, ''),
+          FRAME_GLYPHS.bottomRight,
+        ),
+      )
     else if (this.hiddenBelow > 0) lines.push(indicator('↓', this.hiddenBelow))
     return lines
   }
@@ -350,9 +407,15 @@ export class BoxedEditor extends Editor {
     let translated = event
     if (this.mapped) {
       const width = event.width - this.railColumns
-      translated = event.y < this.menuRows
-        ? { ...event, width, y: event.y + this.textRows + 2 }
-        : { ...event, width, x: event.x - (this.railColumns > 0 ? RAIL_COLUMNS : 0), y: event.y - this.menuRows + 1 - this.topIndicatorRows }
+      translated =
+        event.y < this.menuRows
+          ? { ...event, width, y: event.y + this.textRows + 2 }
+          : {
+              ...event,
+              width,
+              x: event.x - (this.railColumns > 0 ? RAIL_COLUMNS : 0),
+              y: event.y - this.menuRows + 1 - this.topIndicatorRows,
+            }
     }
     const result = super.handleMouse(translated)
     const after = this.getCursor()

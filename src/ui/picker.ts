@@ -1,10 +1,15 @@
 import { matchesKey } from '@earendil-works/pi-tui'
-import { hintKeys, matchesAction, moveHint, type Keymap } from '../input/actions.ts'
-import { deleteLastGrapheme, releasedKey, typedText } from '../input.ts'
-import { matchScore } from '../input/match.ts'
 import type { StoredSession } from '../agent/history.ts'
-import { describeModelRoute, modelRouteKey, type ModelChoice, type ModelRoute } from '../agent/model.ts'
+import {
+  describeModelRoute,
+  type ModelChoice,
+  type ModelRoute,
+  modelRouteKey,
+} from '../agent/model.ts'
 import { describePreset, type PresetSummary } from '../agent/presets.ts'
+import { hintKeys, type Keymap, matchesAction, moveHint } from '../input/actions.ts'
+import { matchScore } from '../input/match.ts'
+import { deleteLastGrapheme, releasedKey, typedText } from '../input.ts'
 
 /** Presentation stays independent of domain ids; current marks the cursor, not the active domain choice. */
 export interface PickerRow {
@@ -93,11 +98,13 @@ export class ListPicker<Row> {
   private cursor = 0
   private filter = ''
   private note: string | undefined
-  private ranking: {
-    readonly needle: string
-    readonly haystacks: readonly string[]
-    readonly indices: readonly number[]
-  } | undefined
+  private ranking:
+    | {
+        readonly needle: string
+        readonly haystacks: readonly string[]
+        readonly indices: readonly number[]
+      }
+    | undefined
 
   constructor(
     private readonly source: () => readonly Row[],
@@ -130,22 +137,28 @@ export class ListPicker<Row> {
     const needle = this.filter.trim()
     const rows = this.source()
     if (needle === '') return rows
-    const haystacks = rows.map(row => this.haystackOf(row))
+    const haystacks = rows.map((row) => this.haystackOf(row))
     const retained = this.ranking
     // Late titles can change inside the same source array; only matching text invalidates ranks.
-    if (retained !== undefined && retained.needle === needle
-      && retained.haystacks.length === haystacks.length
-      && retained.haystacks.every((text, index) => text === haystacks[index])) {
-      return retained.indices.map(index => rows[index]!)
+    if (
+      retained !== undefined &&
+      retained.needle === needle &&
+      retained.haystacks.length === haystacks.length &&
+      retained.haystacks.every((text, index) => text === haystacks[index])
+    ) {
+      return retained.indices.map((index) => rows[index]!)
     }
     // Ties preserve source order, and indices read fresh rows even when objects are replaced.
     const indices = haystacks
       .map((text, index) => ({ index, score: matchScore(needle, text) }))
-      .filter((entry): entry is { readonly index: number; readonly score: number } => entry.score !== undefined)
+      .filter(
+        (entry): entry is { readonly index: number; readonly score: number } =>
+          entry.score !== undefined,
+      )
       .sort((left, right) => right.score - left.score)
-      .map(entry => entry.index)
+      .map((entry) => entry.index)
     this.ranking = { needle, haystacks, indices }
-    return indices.map(index => rows[index]!)
+    return indices.map((index) => rows[index]!)
   }
 
   /**
@@ -272,21 +285,23 @@ export class SessionPicker extends ListPicker<StoredSession> {
     super(
       () => sessions,
       () => `resume a session · ${sessions.length} stored`,
-      session => session.id,
-      session => ({
+      (session) => session.id,
+      (session) => ({
         label: labelOf(session),
         description: [
           session.cwd ?? 'unknown directory',
           describeAge(session.createdAt, Date.now()),
-          ...session.eventCount === undefined ? [] : [`${session.eventCount} events`],
+          ...(session.eventCount === undefined ? [] : [`${session.eventCount} events`]),
         ].join(' · '),
         // The card marks the row under the cursor, which the list decides.
         current: false,
       }),
-      session => [labelOf(session), session.id, session.cwd ?? ''].join(' '),
+      (session) => [labelOf(session), session.id, session.cwd ?? ''].join(' '),
       {
-        empty: () => `nothing matches · backspace to widen · ${hintKeys(keys(), 'picker.cancel')} cancel`,
-        listed: () => `${moveHint(keys(), 'picker.up', 'picker.down')} move · ${hintKeys(keys(), 'picker.confirm')} open · ${hintKeys(keys(), 'picker.cancel')} cancel · type to filter`,
+        empty: () =>
+          `nothing matches · backspace to widen · ${hintKeys(keys(), 'picker.cancel')} cancel`,
+        listed: () =>
+          `${moveHint(keys(), 'picker.up', 'picker.down')} move · ${hintKeys(keys(), 'picker.confirm')} open · ${hintKeys(keys(), 'picker.cancel')} cancel · type to filter`,
       },
       keys,
     )
@@ -308,12 +323,14 @@ export class PresetPicker extends ListPicker<PresetSummary> {
     super(
       presets,
       () => `agent preset · ${presets().length} available`,
-      preset => preset.id,
-      preset => describePreset(preset, currentId()),
-      preset => [preset.id, preset.name ?? '', preset.description ?? ''].join(' '),
+      (preset) => preset.id,
+      (preset) => describePreset(preset, currentId()),
+      (preset) => [preset.id, preset.name ?? '', preset.description ?? ''].join(' '),
       {
-        empty: () => `nothing matches · backspace to widen · ${hintKeys(keys(), 'picker.cancel')} cancel`,
-        listed: () => `${moveHint(keys(), 'picker.up', 'picker.down')} move · ${hintKeys(keys(), 'picker.confirm')} switch · ${hintKeys(keys(), 'picker.cancel')} cancel · type to filter`,
+        empty: () =>
+          `nothing matches · backspace to widen · ${hintKeys(keys(), 'picker.cancel')} cancel`,
+        listed: () =>
+          `${moveHint(keys(), 'picker.up', 'picker.down')} move · ${hintKeys(keys(), 'picker.confirm')} switch · ${hintKeys(keys(), 'picker.cancel')} cancel · type to filter`,
       },
       keys,
     )
@@ -329,7 +346,11 @@ export class PresetPicker extends ListPicker<PresetSummary> {
  * rows too.
  */
 export class ModelPicker extends ListPicker<ModelRoute> {
-  constructor(routes: () => readonly ModelRoute[], current: () => ModelChoice | undefined, keys: () => Keymap) {
+  constructor(
+    routes: () => readonly ModelRoute[],
+    current: () => ModelChoice | undefined,
+    keys: () => Keymap,
+  ) {
     super(
       routes,
       () => {
@@ -338,12 +359,14 @@ export class ModelPicker extends ListPicker<ModelRoute> {
         const effort = chosen.reasoningEffort === undefined ? '' : ` (${chosen.reasoningEffort})`
         return `model · current ${chosen.provider}/${chosen.model}${effort}`
       },
-      route => modelRouteKey(route),
-      route => describeModelRoute(route, current()),
-      route => [route.provider, route.model, route.name].join(' '),
+      (route) => modelRouteKey(route),
+      (route) => describeModelRoute(route, current()),
+      (route) => [route.provider, route.model, route.name].join(' '),
       {
-        empty: () => `nothing matched · /model <provider>/<model> takes any id · backspace to widen · ${hintKeys(keys(), 'picker.cancel')} cancel`,
-        listed: () => `${moveHint(keys(), 'picker.up', 'picker.down')} move · ${hintKeys(keys(), 'picker.confirm')} switch · ${hintKeys(keys(), 'picker.cancel')} cancel · type to filter`,
+        empty: () =>
+          `nothing matched · /model <provider>/<model> takes any id · backspace to widen · ${hintKeys(keys(), 'picker.cancel')} cancel`,
+        listed: () =>
+          `${moveHint(keys(), 'picker.up', 'picker.down')} move · ${hintKeys(keys(), 'picker.confirm')} switch · ${hintKeys(keys(), 'picker.cancel')} cancel · type to filter`,
       },
       keys,
     )
@@ -386,7 +409,7 @@ export function effortChoices(
       description: 'clear the explicit effort',
       current: effective === undefined,
     },
-    ...efforts.map(effort => ({
+    ...efforts.map((effort) => ({
       id: effort.id,
       name: effort.name,
       ...(effort.description === undefined ? {} : { description: effort.description }),
@@ -407,20 +430,25 @@ export class EffortPicker extends ListPicker<EffortChoice> {
     super(
       choices,
       () => heading,
-      choice => choice.id,
-      choice => ({
+      (choice) => choice.id,
+      (choice) => ({
         label: choice.name,
-        description: [
-          choice.description,
-          choice.id !== choice.name ? choice.id : undefined,
-          choice.current ? 'current' : undefined,
-        ].filter(part => part !== undefined && part !== '').join(' · ') || undefined,
+        description:
+          [
+            choice.description,
+            choice.id !== choice.name ? choice.id : undefined,
+            choice.current ? 'current' : undefined,
+          ]
+            .filter((part) => part !== undefined && part !== '')
+            .join(' · ') || undefined,
         current: choice.current,
       }),
-      choice => [choice.name, choice.id, choice.description ?? ''].join(' '),
+      (choice) => [choice.name, choice.id, choice.description ?? ''].join(' '),
       {
-        empty: () => `nothing matches · backspace to widen · ${hintKeys(keys(), 'picker.cancel')} cancel`,
-        listed: () => `${moveHint(keys(), 'picker.up', 'picker.down')} move · ${hintKeys(keys(), 'picker.confirm')} apply · ${hintKeys(keys(), 'picker.cancel')} cancel · type to filter`,
+        empty: () =>
+          `nothing matches · backspace to widen · ${hintKeys(keys(), 'picker.cancel')} cancel`,
+        listed: () =>
+          `${moveHint(keys(), 'picker.up', 'picker.down')} move · ${hintKeys(keys(), 'picker.confirm')} apply · ${hintKeys(keys(), 'picker.cancel')} cancel · type to filter`,
       },
       keys,
     )

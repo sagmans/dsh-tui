@@ -50,8 +50,34 @@ export type Submission =
 
 /** Keep local command discovery shared by help and completion, aligned with classifySubmission. */
 export const LOCAL_COMMANDS = [
-  '/help', '/status', '/model', '/preset', '/todo', '/theme', '/keys', '/jobs', '/subagents', '/fork', '/new', '/reload', '/undo', '/redo', '/rename', '/export', '/copy', '/history', '/clear', '/resume', '/quit', '/exit',
-  '/stash', '/stash-pop', '/stash-apply', '/stash-list', '/stash-drop', '/stash-clear',
+  '/help',
+  '/status',
+  '/model',
+  '/preset',
+  '/todo',
+  '/theme',
+  '/keys',
+  '/jobs',
+  '/subagents',
+  '/fork',
+  '/new',
+  '/reload',
+  '/undo',
+  '/redo',
+  '/rename',
+  '/export',
+  '/copy',
+  '/history',
+  '/clear',
+  '/resume',
+  '/quit',
+  '/exit',
+  '/stash',
+  '/stash-pop',
+  '/stash-apply',
+  '/stash-list',
+  '/stash-drop',
+  '/stash-clear',
 ] as const
 
 /** Keep descriptions keyed to LOCAL_COMMANDS so completion can explain every advertised local command. */
@@ -61,9 +87,11 @@ export const LOCAL_COMMAND_DESCRIPTIONS: Readonly<Record<string, string>> = {
   '/model': 'open the model picker (type to filter); /model <provider>/<model> switches directly',
   '/preset': 'choose the agent preset (mode) this session runs',
   '/jobs': 'list background jobs, read one, or kill one',
-  '/subagents': 'list delegations; /subagents open <id|last> reads one, /subagents kill <id> stops one',
+  '/subagents':
+    'list delegations; /subagents open <id|last> reads one, /subagents kill <id> stops one',
   '/todo': 'show the list of tasks the agent is keeping',
-  '/theme': 'open the theme picker, the screen previewing each row; /theme <name> applies one; /theme tokens lists the elements',
+  '/theme':
+    'open the theme picker, the screen previewing each row; /theme <name> applies one; /theme tokens lists the elements',
   '/keys': 'open the key map and filter it by typing; /keys <layer> narrows it',
   '/fork': 'branch this conversation and continue in the branch',
   '/new': 'start a fresh session without leaving the terminal',

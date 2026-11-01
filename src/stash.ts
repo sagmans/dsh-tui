@@ -7,24 +7,28 @@
 // and an empty bar — in exactly one place.
 
 import path from 'node:path'
-import { FileTooLargeError } from './stash/private-fs.ts'
 import { StashCommittedError } from './stash/lock.ts'
-import { DEFAULT_STASH_SCOPE, resolveStashPaths, stashBaseDir, type StashScope } from './stash/paths.ts'
-import type { ResolvedEntry } from './stash/schema.ts'
 import {
-  loadStashStore,
-  UnsupportedStashSchemaError,
-  type StashStore,
-} from './stash/store.ts'
+  DEFAULT_STASH_SCOPE,
+  resolveStashPaths,
+  type StashScope,
+  stashBaseDir,
+} from './stash/paths.ts'
+import { FileTooLargeError } from './stash/private-fs.ts'
+import type { ResolvedEntry } from './stash/schema.ts'
+import { loadStashStore, type StashStore, UnsupportedStashSchemaError } from './stash/store.ts'
 
 const EDITOR_BLOCKED_MESSAGE = 'clear or stash the current draft before applying or popping'
 const EDITOR_BUSY_MESSAGE = 'the prompt bar is answering a question; finish or cancel it first'
 const NOTHING_TO_STASH_MESSAGE = 'nothing to stash'
 const NO_DRAFTS_MESSAGE = 'no stashed drafts'
 const CORRUPT_RECOVERY_MESSAGE = 'corrupt stash data was quarantined to'
-const CORRUPT_RECOVERY_UNSYNCED_MESSAGE = ' (its directory could not be synced, so the copy may not survive a crash)'
-const SESSION_CHANGED_MESSAGE = 'the session changed; the stash stayed with the session it belonged to'
-const PATH_SESSION_CHANGED_MESSAGE = 'the session changed; the stash stayed with the directory it belonged to'
+const CORRUPT_RECOVERY_UNSYNCED_MESSAGE =
+  ' (its directory could not be synced, so the copy may not survive a crash)'
+const SESSION_CHANGED_MESSAGE =
+  'the session changed; the stash stayed with the session it belonged to'
+const PATH_SESSION_CHANGED_MESSAGE =
+  'the session changed; the stash stayed with the directory it belonged to'
 
 const stashedMessage = (index: number): string => `Stashed [${index}]`
 const appliedMessage = (index: number): string => `Applied [${index}]`
@@ -149,7 +153,7 @@ export class PromptStash {
     // switch in between would otherwise park the next session's draft in this
     // bank and clear it from the bar the reader is typing in.
     const captured = available ? (named ? (typed as string) : this.host.getEditorText()) : undefined
-    return this.run(sessionId, async store => {
+    return this.run(sessionId, async (store) => {
       if (captured === undefined) {
         this.host.notice(EDITOR_BUSY_MESSAGE)
         return
@@ -174,15 +178,18 @@ export class PromptStash {
       // the reader's and still this session's: a question can borrow the bar
       // during the write, and a session switch moves the whole surface on.
       const current = this.isCurrentSession(sessionId)
-      if (current && this.host.editorIsAvailable() && this.host.getEditorText() === text) this.host.setEditorText('')
-      this.host.notice(current ? (warning ?? stashedMessage(resolved.index)) : this.sessionChangedMessage())
+      if (current && this.host.editorIsAvailable() && this.host.getEditorText() === text)
+        this.host.setEditorText('')
+      this.host.notice(
+        current ? (warning ?? stashedMessage(resolved.index)) : this.sessionChangedMessage(),
+      )
     })
   }
 
   /** Keep a parked copy available for reuse. */
   apply(selector: string | undefined): Promise<void> {
     const sessionId = this.options.sessionId()
-    return this.run(sessionId, async store => {
+    return this.run(sessionId, async (store) => {
       await store.refresh()
       if (this.abandonIfMoved(sessionId)) return
       if (!this.editorIsReady()) return
@@ -199,7 +206,7 @@ export class PromptStash {
   /** Put a draft in an empty editor and remove it from the bank. */
   pop(selector: string | undefined): Promise<void> {
     const sessionId = this.options.sessionId()
-    return this.run(sessionId, async store => {
+    return this.run(sessionId, async (store) => {
       // Re-read before resolving so "newest" is newest on disk, not newest as of
       // the last command; the removal re-reads again under the lock.
       await store.refresh()
@@ -210,7 +217,7 @@ export class PromptStash {
   /** Picker selection takes a parked draft back for editing; /stash-apply keeps a copy for reuse instead. */
   list(sessionLabel: string): Promise<void> {
     const sessionId = this.options.sessionId()
-    return this.run(sessionId, async store => {
+    return this.run(sessionId, async (store) => {
       await store.refresh()
       if (this.abandonIfMoved(sessionId)) return
       if (store.entryCount === 0) {
@@ -220,7 +227,10 @@ export class PromptStash {
       // The list is handed each entry with the index the bank gives it, so the
       // row a reader picks and the selector they could have typed agree.
       const rows = store.entries.map((entry, index) => ({ entry, index }))
-      const picked = await this.host.pick(rows, this.bankScope === 'path' ? this.directory : sessionLabel)
+      const picked = await this.host.pick(
+        rows,
+        this.bankScope === 'path' ? this.directory : sessionLabel,
+      )
       if (picked === undefined) return
       await this.popFrom(store, sessionId, picked)
     })
@@ -229,7 +239,7 @@ export class PromptStash {
   /** Delete one draft without using it. */
   drop(selector: string | undefined): Promise<void> {
     const sessionId = this.options.sessionId()
-    return this.run(sessionId, async store => {
+    return this.run(sessionId, async (store) => {
       let resolved: ResolvedEntry | undefined
       let warning: string | undefined
       try {
@@ -252,7 +262,7 @@ export class PromptStash {
   /** Confirm, then delete every draft the confirmation named. */
   clear(): Promise<void> {
     const sessionId = this.options.sessionId()
-    return this.run(sessionId, async store => {
+    return this.run(sessionId, async (store) => {
       await store.refresh()
       if (this.abandonIfMoved(sessionId)) return
       const count = store.entryCount
@@ -263,7 +273,7 @@ export class PromptStash {
       // The ids the reader was shown, not the ids on disk afterwards: another
       // surface can stash while the dialog is open, and those drafts were never
       // part of what this confirmation agreed to delete.
-      const confirmedIds = store.entries.map(entry => entry.id)
+      const confirmedIds = store.entries.map((entry) => entry.id)
       if (!(await this.host.confirm(confirmedIds.length))) return
       let removed = confirmedIds.length
       let warning: string | undefined
@@ -285,7 +295,11 @@ export class PromptStash {
    * The editor is filled before the entry is removed, so a crash between the two
    * leaves the draft in the bank rather than only in a terminal that is gone.
    */
-  private async popFrom(store: StashStore, sessionId: string, selector: string | undefined): Promise<void> {
+  private async popFrom(
+    store: StashStore,
+    sessionId: string,
+    selector: string | undefined,
+  ): Promise<void> {
     if (this.abandonIfMoved(sessionId)) return
     if (!this.editorIsReady()) return
     const resolved = store.find(selector)

@@ -30,12 +30,17 @@ export class QueueBar implements Component {
   private box(text: string, width: number, framed: boolean): string[] {
     // A prompt can be longer than the screen; the reader needs to see that it is
     // waiting, not to re-read all of it, so the first rows stand for the whole.
-    return frameText(text, width, {
-      text: line => this.theme.style('editor.queued', line),
-      border: rule => this.theme.editor.borderColor(rule),
-      framed,
-      rail: true,
-    }, QUEUE_TEXT_ROWS)
+    return frameText(
+      text,
+      width,
+      {
+        text: (line) => this.theme.style('editor.queued', line),
+        border: (rule) => this.theme.editor.borderColor(rule),
+        framed,
+        rail: true,
+      },
+      QUEUE_TEXT_ROWS,
+    )
   }
 
   render(width: number): string[] {
@@ -58,7 +63,12 @@ export class QueueBar implements Component {
     // on screen; the ones dropped here are the ones a claim is about to take.
     if (shown.length < prompts.length) {
       pushGap(lines)
-      lines.push(this.theme.style('editor.queued.more', this.theme.cut(`… ${prompts.length - shown.length} queued earlier`, width, '…')))
+      lines.push(
+        this.theme.style(
+          'editor.queued.more',
+          this.theme.cut(`… ${prompts.length - shown.length} queued earlier`, width, '…'),
+        ),
+      )
     }
     for (const prompt of shown) {
       pushGap(lines)

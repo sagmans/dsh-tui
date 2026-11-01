@@ -1,6 +1,5 @@
-
-import { type CardRowClass } from './theme-tokens.ts'
 import { clipVisibleGraphemes } from './terminal-text.ts'
+import type { CardRowClass } from './theme-tokens.ts'
 
 /** Keep call arguments beside the result because the tool's presenter needs both to interpret its output. */
 export interface ToolResultInput {
@@ -48,7 +47,7 @@ export function cardRow(cls: CardRowClass, text: string): CardRow {
 
 /** Export the same words the screen draws without carrying terminal-only row styles. */
 export function rowText(row: CardRow): string {
-  return row.parts.map(part => part.text).join('')
+  return row.parts.map((part) => part.text).join('')
 }
 
 /** Keep statistic meaning separate from text so the renderer supplies its symbol and theme token. */
@@ -254,7 +253,7 @@ export function oneLine(text: string): string {
 }
 
 function clipRow(row: CardRow): CardRow {
-  return { parts: row.parts.map(part => ({ class: part.class, text: clipLine(part.text) })) }
+  return { parts: row.parts.map((part) => ({ class: part.class, text: clipLine(part.text) })) }
 }
 
 /**
@@ -289,7 +288,7 @@ export function cardFromLines(
   lines: readonly string[],
   failed: boolean,
 ): ToolCard {
-  const bounded = bound(lines.map(line => cardRow('detail', line)))
+  const bounded = bound(lines.map((line) => cardRow('detail', line)))
   return { kind, tool, title, detail: bounded.detail, failed, totalLines: bounded.totalLines }
 }
 

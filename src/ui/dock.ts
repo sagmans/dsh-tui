@@ -1,8 +1,13 @@
-import { visibleWidth, type Component, type TuiMouseEvent, type TuiMouseEventResult } from '@earendil-works/pi-tui'
+import {
+  type Component,
+  type TuiMouseEvent,
+  type TuiMouseEventResult,
+  visibleWidth,
+} from '@earendil-works/pi-tui'
 import { DOCK_JOB_LIMIT, describeJob, isLive, type JobSummary } from '../jobs.ts'
 import { DOCK_SUBAGENT_LIMIT, describeSubagent, type SubagentRun } from '../subagents.ts'
-import type { TuiToken } from '../theme-tokens.ts'
 import type { TuiTheme } from '../theme.ts'
+import type { TuiToken } from '../theme-tokens.ts'
 import type { TodoEntry, WorkState } from '../work.ts'
 import { pushGap } from './gap.ts'
 
@@ -109,7 +114,8 @@ export class WorkDock implements Component {
   /** Text opens its child; other cells in a foldable section control that fold. */
   handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
     if (event.type !== 'click' || event.button !== 'left') return undefined
-    if (event.x < 0 || event.x >= event.width || event.y < 0 || event.y >= event.height) return undefined
+    if (event.x < 0 || event.x >= event.width || event.y < 0 || event.y >= event.height)
+      return undefined
     const row = event.y - this.openLeadRows
     const text = this.subagentTexts.get(row)
     if (text !== undefined && event.x >= visibleWidth(SUBAGENT_ROW_INDENT) && event.x < text.endX) {
@@ -117,7 +123,8 @@ export class WorkDock implements Component {
       return { handled: true, render: true }
     }
     const section = this.subagentSection
-    if (section === undefined || !section.toggleable || row < section.start || row >= section.end) return undefined
+    if (section === undefined || !section.toggleable || row < section.start || row >= section.end)
+      return undefined
     this.subagentsExpanded = !this.subagentsExpanded
     return { handled: true, render: true }
   }
@@ -150,7 +157,10 @@ export class WorkDock implements Component {
     // with it, and the rule would lose the hue it is there to carry.
     const lead = this.theme.style(section.borderToken, SECTION_RULE_LEAD)
     const name = this.theme.style(section.headingToken, section.heading)
-    const tail = this.theme.style(section.borderToken, ` ${SECTION_RULE_DASH.repeat(width - visibleWidth(head))}`)
+    const tail = this.theme.style(
+      section.borderToken,
+      ` ${SECTION_RULE_DASH.repeat(width - visibleWidth(head))}`,
+    )
     return `${lead}${name}${tail}`
   }
 
@@ -163,11 +173,18 @@ export class WorkDock implements Component {
    * name leaves the section exactly as it stood before the sections were edged —
    * a rule with no name to carry would be an edge that says nothing.
    */
-  private pushSection(lines: string[], width: number, section: DockSection, rows: readonly string[]): void {
+  private pushSection(
+    lines: string[],
+    width: number,
+    section: DockSection,
+    rows: readonly string[],
+  ): void {
     if (this.theme.visible(section.headingToken)) {
-      lines.push(this.theme.visible(section.borderToken)
-        ? this.sectionRule(width, section)
-        : this.theme.style(section.headingToken, this.theme.cut(section.heading, width, '…')))
+      lines.push(
+        this.theme.visible(section.borderToken)
+          ? this.sectionRule(width, section)
+          : this.theme.style(section.headingToken, this.theme.cut(section.heading, width, '…')),
+      )
     }
     lines.push(...rows)
   }
@@ -185,22 +202,38 @@ export class WorkDock implements Component {
       const token = TODO_TOKENS[todo.status]
       if (!this.theme.visible(token)) continue
       const lead = `  ${TODO_GLYPHS[todo.status]} `
-      rows.push(this.theme.cut(this.theme.rich(`${lead}${todo.content}`, { token, column: visibleWidth(lead) }), width, '…'))
+      rows.push(
+        this.theme.cut(
+          this.theme.rich(`${lead}${todo.content}`, { token, column: visibleWidth(lead) }),
+          width,
+          '…',
+        ),
+      )
     }
     if (ordered.length > DOCK_TODO_LIMIT && this.theme.visible('dock.todos.overflow')) {
-      rows.push(this.theme.style('dock.todos.overflow', this.theme.cut(`  … ${ordered.length - DOCK_TODO_LIMIT} more`, width, '…')))
+      rows.push(
+        this.theme.style(
+          'dock.todos.overflow',
+          this.theme.cut(`  … ${ordered.length - DOCK_TODO_LIMIT} more`, width, '…'),
+        ),
+      )
     }
-    this.pushSection(lines, width, {
-      heading: `${TODOS_MARK} todos · ${open.length} left`,
-      headingToken: 'dock.todos.heading',
-      borderToken: 'dock.todos.border',
-    }, rows)
+    this.pushSection(
+      lines,
+      width,
+      {
+        heading: `${TODOS_MARK} todos · ${open.length} left`,
+        headingToken: 'dock.todos.heading',
+        borderToken: 'dock.todos.border',
+      },
+      rows,
+    )
   }
 
   private pushSubagents(lines: string[], runs: readonly SubagentRun[], width: number): void {
     // A delegation that has reported back is no longer something to watch, for
     // the same reason a settled job leaves: the dock holds work in flight.
-    const running = runs.filter(run => run.status === 'running')
+    const running = runs.filter((run) => run.status === 'running')
     if (running.length <= DOCK_SUBAGENT_LIMIT) this.subagentsExpanded = false
     if (running.length === 0) return
     this.openBoard(lines)
@@ -212,27 +245,54 @@ export class WorkDock implements Component {
     for (const run of running.slice(0, limit)) {
       if (!this.theme.visible('dock.subagents.running')) continue
       const lead = `${SUBAGENT_ROW_INDENT}${RUNNING_MARK} `
-      const row = this.theme.cut(this.theme.rich(`${lead}${describeSubagent(run, now)}`, { token: 'dock.subagents.running', column: visibleWidth(lead) }), width, '…')
-      this.subagentTexts.set(start + headingRows + rows.length, { id: run.id, endX: visibleWidth(row) })
+      const row = this.theme.cut(
+        this.theme.rich(`${lead}${describeSubagent(run, now)}`, {
+          token: 'dock.subagents.running',
+          column: visibleWidth(lead),
+        }),
+        width,
+        '…',
+      )
+      this.subagentTexts.set(start + headingRows + rows.length, {
+        id: run.id,
+        endX: visibleWidth(row),
+      })
       rows.push(row)
     }
     if (running.length > limit && this.theme.visible('dock.subagents.overflow')) {
-      rows.push(this.theme.style('dock.subagents.overflow', this.theme.cut(`  … ${running.length - limit} more`, width, '…')))
+      rows.push(
+        this.theme.style(
+          'dock.subagents.overflow',
+          this.theme.cut(`  … ${running.length - limit} more`, width, '…'),
+        ),
+      )
     }
-    const foldMark = running.length <= DOCK_SUBAGENT_LIMIT ? '' : ` ${this.subagentsExpanded ? SUBAGENTS_EXPANDED_MARK : SUBAGENTS_COLLAPSED_MARK}`
-    this.pushSection(lines, width, {
-      heading: `${SUBAGENTS_MARK} subagents${foldMark} · ${running.length} running`,
-      headingToken: 'dock.subagents.heading',
-      borderToken: 'dock.subagents.border',
-    }, rows)
-    this.subagentSection = { start, end: lines.length, toggleable: running.length > DOCK_SUBAGENT_LIMIT }
+    const foldMark =
+      running.length <= DOCK_SUBAGENT_LIMIT
+        ? ''
+        : ` ${this.subagentsExpanded ? SUBAGENTS_EXPANDED_MARK : SUBAGENTS_COLLAPSED_MARK}`
+    this.pushSection(
+      lines,
+      width,
+      {
+        heading: `${SUBAGENTS_MARK} subagents${foldMark} · ${running.length} running`,
+        headingToken: 'dock.subagents.heading',
+        borderToken: 'dock.subagents.border',
+      },
+      rows,
+    )
+    this.subagentSection = {
+      start,
+      end: lines.length,
+      toggleable: running.length > DOCK_SUBAGENT_LIMIT,
+    }
   }
 
   private pushJobs(lines: string[], jobs: readonly JobSummary[], width: number): void {
     // Only work still holding resources earns a row: a settled job is a fact the
     // reader no longer has to watch, and its row would otherwise linger after
     // the outcome it reported had been read.
-    const live = jobs.filter(job => isLive(job.status))
+    const live = jobs.filter((job) => isLive(job.status))
     if (live.length === 0) return
     this.openBoard(lines)
     // Give recent starts the limited preview slots so new work appears even while older jobs remain live.
@@ -243,16 +303,35 @@ export class WorkDock implements Component {
     for (const job of ordered.slice(0, DOCK_JOB_LIMIT)) {
       if (!this.theme.visible('dock.jobs.running')) continue
       const lead = `  ${RUNNING_MARK} `
-      rows.push(this.theme.cut(this.theme.rich(`${lead}${describeJob(job, now)}`, { token: 'dock.jobs.running', column: visibleWidth(lead) }), width, '…'))
+      rows.push(
+        this.theme.cut(
+          this.theme.rich(`${lead}${describeJob(job, now)}`, {
+            token: 'dock.jobs.running',
+            column: visibleWidth(lead),
+          }),
+          width,
+          '…',
+        ),
+      )
     }
     if (ordered.length > DOCK_JOB_LIMIT && this.theme.visible('dock.jobs.overflow')) {
-      rows.push(this.theme.style('dock.jobs.overflow', this.theme.cut(`  … ${ordered.length - DOCK_JOB_LIMIT} more`, width, '…')))
+      rows.push(
+        this.theme.style(
+          'dock.jobs.overflow',
+          this.theme.cut(`  … ${ordered.length - DOCK_JOB_LIMIT} more`, width, '…'),
+        ),
+      )
     }
-    this.pushSection(lines, width, {
-      heading: `${JOBS_MARK} jobs · ${live.length} running`,
-      headingToken: 'dock.jobs.heading',
-      borderToken: 'dock.jobs.border',
-    }, rows)
+    this.pushSection(
+      lines,
+      width,
+      {
+        heading: `${JOBS_MARK} jobs · ${live.length} running`,
+        headingToken: 'dock.jobs.heading',
+        borderToken: 'dock.jobs.border',
+      },
+      rows,
+    )
   }
 
   render(width: number): string[] {
@@ -262,9 +341,10 @@ export class WorkDock implements Component {
     const state = this.state()
     const lines: string[] = []
     if (state.goal !== undefined && this.theme.visible('dock.goal')) {
-      const rounds = state.goal.maxRounds === undefined
-        ? `round ${state.goal.roundsStarted}`
-        : `round ${state.goal.roundsStarted}/${state.goal.maxRounds}`
+      const rounds =
+        state.goal.maxRounds === undefined
+          ? `round ${state.goal.roundsStarted}`
+          : `round ${state.goal.roundsStarted}/${state.goal.maxRounds}`
       // A stalled goal has to say so on the row: the round counter alone would
       // let a paused or blocked objective read as a loop still making progress.
       const phase = state.goal.phase === 'active' ? '' : `${state.goal.phase} · `
@@ -273,11 +353,29 @@ export class WorkDock implements Component {
       const objective = state.goal.objective.replace(/\s+/gu, ' ')
       const lead = `${GOAL_MARK} goal ${phase}${rounds} · `
       this.openBoard(lines)
-      lines.push(this.theme.cut(this.theme.rich(`${lead}${objective}`, { token: 'dock.goal', column: visibleWidth(lead) }), width, '…'))
+      lines.push(
+        this.theme.cut(
+          this.theme.rich(`${lead}${objective}`, {
+            token: 'dock.goal',
+            column: visibleWidth(lead),
+          }),
+          width,
+          '…',
+        ),
+      )
     }
     if (state.planMode && this.theme.visible('dock.planMode')) {
       this.openBoard(lines)
-      lines.push(this.theme.style('dock.planMode', this.theme.cut(`${PLAN_MODE_MARK} plan mode · answer the plan before edits happen`, width, '…')))
+      lines.push(
+        this.theme.style(
+          'dock.planMode',
+          this.theme.cut(
+            `${PLAN_MODE_MARK} plan mode · answer the plan before edits happen`,
+            width,
+            '…',
+          ),
+        ),
+      )
     }
     const subagents = this.subagents()
     this.pushSubagents(lines, subagents, width)

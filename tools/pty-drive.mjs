@@ -92,7 +92,9 @@ const prompt = option('prompt', '')
  * Reach child modes without shell evaluation; --args accepts only space-separated
  * tokens, so quoting cannot preserve spaces within an argument.
  */
-const extraArgs = option('args', '').split(' ').filter(argument => argument !== '')
+const extraArgs = option('args', '')
+  .split(' ')
+  .filter((argument) => argument !== '')
 const home = option('home', undefined)
 /** An installed dsh binary to reproduce a specific released host. */
 const launcher = option('launcher', '')
@@ -200,8 +202,8 @@ const submit = NAMED_KEYS[submitName] ?? submitName
  */
 const clicks = option('click', '')
   .split(',')
-  .filter(entry => entry !== '')
-  .map(entry => {
+  .filter((entry) => entry !== '')
+  .map((entry) => {
     const [seconds, row, col] = entry.split(':')
     return {
       at: Number.parseInt(seconds, 10),
@@ -211,13 +213,13 @@ const clicks = option('click', '')
   })
 const answers = option('answer', '')
   .split(',')
-  .filter(entry => entry !== '')
-  .map(entry => {
+  .filter((entry) => entry !== '')
+  .map((entry) => {
     const [seconds, ...rest] = entry.split(':')
     const text = rest.join(':')
     const value = text.startsWith(PASTE_PREFIX)
       ? `\u001b[200~${text.slice(PASTE_PREFIX.length)}\u001b[201~`
-      : NAMED_KEYS[text] ?? text
+      : (NAMED_KEYS[text] ?? text)
     return { at: Number.parseInt(seconds, 10), value }
   })
 /**
@@ -232,7 +234,10 @@ const permissionMode = option('permission-mode', 'workspace-write')
  */
 const signalOption = option('signal', '')
 // process.kill takes POSIX names, so accept the short form a reader would type.
-const signal = signalOption === '' || signalOption.startsWith('SIG') ? signalOption : `SIG${signalOption.toUpperCase()}`
+const signal =
+  signalOption === '' || signalOption.startsWith('SIG')
+    ? signalOption
+    : `SIG${signalOption.toUpperCase()}`
 // Keep the full PTY trace for diagnosis beyond the stripped console tail.
 // Output can be sensitive: the chosen path is overwritten with default creation
 // permissions, and this driver does not redact or remove the retained log.
@@ -267,14 +272,15 @@ const child = pty.spawn(launch.command, [...launch.argsPrefix, '--profile', 'tui
 })
 
 let raw = ''
-child.onData(chunk => {
+child.onData((chunk) => {
   raw += chunk
 })
 
-const strip = text => text
-  .replace(/\u001B\][^\u0007\u001B]*(?:\u0007|\u001B\\)/gu, '')
-  .replace(/\u001B\[[0-9;?]*[ -/]*[@-~]/gu, '')
-  .replace(/\u001B[@-Z\\-_]/gu, '')
+const strip = (text) =>
+  text
+    .replace(/\u001B\][^\u0007\u001B]*(?:\u0007|\u001B\\)/gu, '')
+    .replace(/\u001B\[[0-9;?]*[ -/]*[@-~]/gu, '')
+    .replace(/\u001B[@-Z\\-_]/gu, '')
 
 const at = (ms, action) => setTimeout(action, ms)
 // Leave startup time before scripted input; this schedule does not detect readiness.
@@ -337,15 +343,24 @@ function finish() {
   reported = true
   mkdirSync(join(keep, '..'), { recursive: true })
   writeFileSync(keep, raw)
-  const screen = strip(raw).split('\n').map(line => line.trimEnd()).filter((line, index, all) => line !== '' || all[index - 1] !== '')
+  const screen = strip(raw)
+    .split('\n')
+    .map((line) => line.trimEnd())
+    .filter((line, index, all) => line !== '' || all[index - 1] !== '')
   console.log(screen.join('\n').slice(-6000))
-  const missing = Object.entries(RESTORE_SEQUENCES).filter(([, sequence]) => !raw.includes(sequence)).map(([name]) => name)
-  console.log(`\n--- exit: code=${exitInfo?.exitCode ?? 'none'} signal=${exitInfo?.signal ?? 'none'}`)
-  console.log(`--- terminal restored: ${missing.length === 0 ? 'yes' : `no (missing ${missing.join(', ')})`}`)
+  const missing = Object.entries(RESTORE_SEQUENCES)
+    .filter(([, sequence]) => !raw.includes(sequence))
+    .map(([name]) => name)
+  console.log(
+    `\n--- exit: code=${exitInfo?.exitCode ?? 'none'} signal=${exitInfo?.signal ?? 'none'}`,
+  )
+  console.log(
+    `--- terminal restored: ${missing.length === 0 ? 'yes' : `no (missing ${missing.join(', ')})`}`,
+  )
   console.log(`--- raw log: ${keep} (${raw.length} bytes) ---`)
   // A run that fails the application must fail the harness: a screen that looks
   // right is not the contract, a clean exit is part of it.
-  const problems = missing.map(name => `terminal restoration missing: ${name}`)
+  const problems = missing.map((name) => `terminal restoration missing: ${name}`)
   const code = exitInfo?.exitCode
   if (code !== expectExit) {
     problems.push(`expected exit ${expectExit}, got ${code ?? 'no exit before the grace deadline'}`)
@@ -353,10 +368,16 @@ function finish() {
   if (expectLastLinePrefix !== '') {
     // Treat the supplied prefix literally so metacharacters cannot broaden the
     // historical line selected for comparison.
-    const line = strip(raw).split('\n').filter(text => text.trimStart().startsWith(expectLastLinePrefix)).at(-1)
-    const seen = line === undefined ? 'no match' : line.trimStart().slice(expectLastLinePrefix.length).trim()
+    const line = strip(raw)
+      .split('\n')
+      .filter((text) => text.trimStart().startsWith(expectLastLinePrefix))
+      .at(-1)
+    const seen =
+      line === undefined ? 'no match' : line.trimStart().slice(expectLastLinePrefix.length).trim()
     if (seen !== expectLast) {
-      problems.push(`expected the last line starting ${JSON.stringify(expectLastLinePrefix)} on screen to be ${JSON.stringify(expectLast)}, saw ${JSON.stringify(seen)}`)
+      problems.push(
+        `expected the last line starting ${JSON.stringify(expectLastLinePrefix)} on screen to be ${JSON.stringify(expectLast)}, saw ${JSON.stringify(seen)}`,
+      )
     }
   }
   if (problems.length > 0) {
@@ -366,7 +387,7 @@ function finish() {
   process.exit(0)
 }
 
-child.onExit(info => {
+child.onExit((info) => {
   exitInfo = info
   finish()
 })

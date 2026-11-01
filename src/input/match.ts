@@ -60,7 +60,11 @@ export function matchScore(needle: string, haystack: string): number | undefined
   if (text.startsWith(query)) return PREFIX_HIT + fuzzyWithin(trimmed, haystack)
   const at = text.indexOf(query)
   if (at >= 0) {
-    return CONTIGUOUS_HIT - Math.min(at, POSITION_PENALTY_CAP) * POSITION_PENALTY_PER_CHAR + fuzzyWithin(trimmed, haystack)
+    return (
+      CONTIGUOUS_HIT -
+      Math.min(at, POSITION_PENALTY_CAP) * POSITION_PENALTY_PER_CHAR +
+      fuzzyWithin(trimmed, haystack)
+    )
   }
   if (query.length < SCATTERED_MIN_LENGTH) return undefined
   const raw = fuzzyScore(trimmed, haystack)

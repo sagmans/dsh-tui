@@ -1,5 +1,5 @@
+import { hintKeys, type Keymap, moveHint } from '../input/actions.ts'
 import type { ResolvedEntry } from '../stash/schema.ts'
-import { hintKeys, moveHint, type Keymap } from '../input/actions.ts'
 import { describeAge, ListPicker, type PickerHints, type PickerRow } from './picker.ts'
 
 /** Longest draft label a list row shows before it is cut. */
@@ -16,8 +16,10 @@ const ELLIPSIS = '…'
  */
 function stashHints(keys: () => Keymap, verb: string): PickerHints {
   return {
-    empty: () => `nothing matches · backspace to widen · ${hintKeys(keys(), 'picker.cancel')} cancel`,
-    listed: () => `${moveHint(keys(), 'picker.up', 'picker.down')} move · ${hintKeys(keys(), 'picker.confirm')} ${verb} · ${hintKeys(keys(), 'picker.cancel')} cancel · type to filter`,
+    empty: () =>
+      `nothing matches · backspace to widen · ${hintKeys(keys(), 'picker.cancel')} cancel`,
+    listed: () =>
+      `${moveHint(keys(), 'picker.up', 'picker.down')} move · ${hintKeys(keys(), 'picker.confirm')} ${verb} · ${hintKeys(keys(), 'picker.cancel')} cancel · type to filter`,
   }
 }
 
@@ -28,7 +30,11 @@ function stashHints(keys: () => Keymap, verb: string): PickerHints {
  * a draft whose only line is blank still has to name itself.
  */
 function stashLabel(text: string): string {
-  const line = text.split('\n').find(candidate => candidate.trim() !== '')?.trim().replace(/\s+/gu, ' ')
+  const line = text
+    .split('\n')
+    .find((candidate) => candidate.trim() !== '')
+    ?.trim()
+    .replace(/\s+/gu, ' ')
   if (line === undefined || line === '') return EMPTY_LABEL
   return line.length <= LABEL_LENGTH ? line : `${line.slice(0, LABEL_LENGTH - 1)}${ELLIPSIS}`
 }
@@ -43,22 +49,18 @@ function stashLabel(text: string): string {
  * it into something a reader could type and miss.
  */
 export class StashPicker extends ListPicker<ResolvedEntry> {
-  constructor(
-    entries: readonly ResolvedEntry[],
-    bankLabel: string,
-    keys: () => Keymap,
-  ) {
+  constructor(entries: readonly ResolvedEntry[], bankLabel: string, keys: () => Keymap) {
     super(
       () => entries,
       () => `stash · ${bankLabel} · ${entries.length} draft${entries.length === 1 ? '' : 's'}`,
-      row => row.entry.id,
+      (row) => row.entry.id,
       (row): PickerRow => ({
         label: `[${row.index}] ${stashLabel(row.entry.text)}`,
         description: describeAge(row.entry.createdAt, Date.now()),
         // The card marks the row under the cursor, which the list decides.
         current: false,
       }),
-      row => row.entry.text,
+      (row) => row.entry.text,
       stashHints(keys, 'pop'),
       keys,
     )
@@ -100,9 +102,13 @@ export class StashConfirmPicker extends ListPicker<ConfirmChoice> {
     super(
       () => choices,
       () => `clear stash · ${count} draft${count === 1 ? '' : 's'} in this session`,
-      choice => choice.id,
-      (choice): PickerRow => ({ label: choice.label, description: choice.description, current: false }),
-      choice => choice.label,
+      (choice) => choice.id,
+      (choice): PickerRow => ({
+        label: choice.label,
+        description: choice.description,
+        current: false,
+      }),
+      (choice) => choice.label,
       stashHints(keys, 'confirm'),
       keys,
     )

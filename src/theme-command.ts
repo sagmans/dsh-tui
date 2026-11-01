@@ -1,12 +1,12 @@
 import type { ThemeLibrary } from './theme-files.ts'
-import { themeLayer, type ThemeOverrides } from './theme-settings.ts'
 import { mergeTokenSpec } from './theme-resolver.ts'
+import { type ThemeOverrides, themeLayer } from './theme-settings.ts'
 import {
-  PALETTE_NAMES,
-  TUI_TOKENS,
   type ColourSpec,
+  PALETTE_NAMES,
   type PaletteName,
   type ThemedSpecs,
+  TUI_TOKENS,
   type TuiToken,
 } from './theme-tokens.ts'
 
@@ -41,14 +41,20 @@ function describeToken(
   for (const attribute of ['bold', 'dim', 'italic', 'underline', 'strike'] as const) {
     if (spec[attribute] === true) fields.push(attribute)
   }
-  if (spec.glyph !== undefined && spec.glyph !== '') fields.push(`glyph ${JSON.stringify(spec.glyph)}`)
+  if (spec.glyph !== undefined && spec.glyph !== '')
+    fields.push(`glyph ${JSON.stringify(spec.glyph)}`)
   if (spec.hidden === true) fields.push('hidden')
-  const named = typeof spec.fg === 'string' && (PALETTE_NAMES as readonly string[]).includes(spec.fg)
+  const named =
+    typeof spec.fg === 'string' && (PALETTE_NAMES as readonly string[]).includes(spec.fg)
   // A theme is a layer the reader chose, not one they wrote: the file to edit
   // differs, so the two get their own answer even when both set one element.
-  const source: Source = overrides.tokens.has(token) ? 'override'
-    : themed?.[token] !== undefined ? 'theme'
-      : named ? 'palette' : 'default'
+  const source: Source = overrides.tokens.has(token)
+    ? 'override'
+    : themed?.[token] !== undefined
+      ? 'theme'
+      : named
+        ? 'palette'
+        : 'default'
   return { text: fields.length === 0 ? 'plain' : fields.join(' '), source }
 }
 
@@ -73,8 +79,10 @@ export type PreferenceHome =
  * the package nor at the settings path older releases used.
  */
 function settingsHint(home: PreferenceHome | undefined): string {
-  if (home?.kind === 'document') return `edit ${home.path} under this row's config · /theme shows the result`
-  if (home?.kind === 'section') return 'edit $DSH_HOME/settings.yaml (default ~/.dsh/settings.yaml) under "dsh-tui:" · /theme shows the result'
+  if (home?.kind === 'document')
+    return `edit ${home.path} under this row's config · /theme shows the result`
+  if (home?.kind === 'section')
+    return 'edit $DSH_HOME/settings.yaml (default ~/.dsh/settings.yaml) under "dsh-tui:" · /theme shows the result'
   return '/theme <name> writes the choice once the settings service can store it · /theme shows the result'
 }
 
@@ -87,7 +95,11 @@ function settingsHint(home: PreferenceHome | undefined): string {
  * rather than the ones this build was compiled with, because the file a reader
  * saved a second ago is the one they need to hear about.
  */
-export function renderThemeTable(overrides: ThemeOverrides, library: ThemeLibrary, home?: PreferenceHome): string[] {
+export function renderThemeTable(
+  overrides: ThemeOverrides,
+  library: ThemeLibrary,
+  home?: PreferenceHome,
+): string[] {
   const themed = themeLayer(overrides)
   const chosen = overrides.theme
   // The name is in the heading rather than the footer because a reader who opened
@@ -105,10 +117,23 @@ export function renderThemeTable(overrides: ThemeOverrides, library: ThemeLibrar
     const { text, source } = describeToken(token, overrides, themed)
     lines.push(`  ${token} = ${text} (${source})`)
   }
-  lines.push('', `palette: ${Object.entries(overrides.palette).map(([name, value]) => `${name} ${value}`).join(' · ')}`)
-  const own = new Set(library.list().filter(theme => !theme.builtin).map(theme => theme.name))
-  const names = library.names().map(name => (own.has(name) ? `${name}*` : name))
-  lines.push('', `themes: ${names.join(' · ')} — /theme <name> applies one${own.size === 0 ? '' : ' (* yours)'}`)
+  lines.push(
+    '',
+    `palette: ${Object.entries(overrides.palette)
+      .map(([name, value]) => `${name} ${value}`)
+      .join(' · ')}`,
+  )
+  const own = new Set(
+    library
+      .list()
+      .filter((theme) => !theme.builtin)
+      .map((theme) => theme.name),
+  )
+  const names = library.names().map((name) => (own.has(name) ? `${name}*` : name))
+  lines.push(
+    '',
+    `themes: ${names.join(' · ')} — /theme <name> applies one${own.size === 0 ? '' : ' (* yours)'}`,
+  )
   // The hint carries the directory because it is the one fact a reader cannot
   // guess: the package's own file is replaced on update, so the copy is the only
   // editable one and it does not live beside the original.

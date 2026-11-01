@@ -1,5 +1,5 @@
-import { setImmediate } from 'node:timers/promises'
 import { performance } from 'node:perf_hooks'
+import { setImmediate } from 'node:timers/promises'
 import { fuzzyScore } from './fuzzy.ts'
 
 /** Ranking must give a newer keyboard event time to cancel obsolete work. */
@@ -48,8 +48,13 @@ export function atToken(text: string): AtToken | undefined {
   // delimiter scan: otherwise the space inside a quoted path would look like
   // the end of the token.
   const quoteStart = openQuoteStart(text)
-  if (quoteStart !== null && quoteStart > 0 && text[quoteStart - 1] === '@' && isTokenStart(text, quoteStart - 1)) {
-    const raw = unescape(text.slice(quoteStart + 1))
+  if (
+    quoteStart !== null &&
+    quoteStart > 0 &&
+    text[quoteStart - 1] === '@' &&
+    isTokenStart(text, quoteStart - 1)
+  ) {
+    const raw = unescapeRun(text.slice(quoteStart + 1))
     return { prefix: text.slice(quoteStart - 1), query: withoutDotSlash(raw), quoted: true }
   }
   let start = 0
@@ -74,9 +79,9 @@ export function atToken(text: string): AtToken | undefined {
  * the cursor would leave nowhere to keep typing the path below it.
  */
 export function atValue(path: string, quoted: boolean, open: boolean): string {
-  if (!quoted && !needsQuoting(path)) return '@' + path
+  if (!quoted && !needsQuoting(path)) return `@${path}`
   const escaped = path.replaceAll(ESCAPE, ESCAPE + ESCAPE).replaceAll(QUOTE, ESCAPE + QUOTE)
-  return '@' + QUOTE + escaped + (open ? '' : QUOTE)
+  return `@${QUOTE}${escaped}${open ? '' : QUOTE}`
 }
 
 function needsQuoting(path: string): boolean {
@@ -104,7 +109,7 @@ function openQuoteStart(text: string): number | null {
 }
 
 /** Read a quoted run back, so the fragment is the path and not its escapes. */
-function unescape(raw: string): string {
+function unescapeRun(raw: string): string {
   let out = ''
   for (let index = 0; index < raw.length; index += 1) {
     const character = raw[index] ?? ''
@@ -143,7 +148,12 @@ const CONTROL_CHARACTERS = /[\u0000-\u001F\u007F-\u009F]/
  * for what they are.
  */
 export function offerablePath(path: string): boolean {
-  return path !== '' && !path.startsWith('/') && !path.split('/').includes('..') && !CONTROL_CHARACTERS.test(path)
+  return (
+    path !== '' &&
+    !path.startsWith('/') &&
+    !path.split('/').includes('..') &&
+    !CONTROL_CHARACTERS.test(path)
+  )
 }
 
 /** What a token cannot carry without being split, as the editor's own trigger reads it. */
@@ -174,7 +184,12 @@ export function offerableCandidate(candidate: Candidate): boolean {
  * Scoring yields so newer input can cancel it; the final full sort is synchronous
  * and is not bounded by the suggestion limit.
  */
-export async function rankFilesAsync(query: string, candidates: readonly Candidate[], limit: number, signal: AbortSignal): Promise<readonly Candidate[]> {
+export async function rankFilesAsync(
+  query: string,
+  candidates: readonly Candidate[],
+  limit: number,
+  signal: AbortSignal,
+): Promise<readonly Candidate[]> {
   if (signal.aborted) return []
   const needle = query.trim()
   if (needle === '') return topLevel(candidates, limit)
@@ -193,7 +208,10 @@ export async function rankFilesAsync(query: string, candidates: readonly Candida
   }
   // Select from the global ranking, not the listing order, so a late-listed
   // candidate can still displace an earlier one from the limited menu.
-  return scored.sort(compareScored).slice(0, limit).map(entry => entry.candidate)
+  return scored
+    .sort(compareScored)
+    .slice(0, limit)
+    .map((entry) => entry.candidate)
 }
 
 interface Scored {
@@ -203,7 +221,8 @@ interface Scored {
 
 function compareScored(left: Scored, right: Scored): number {
   if (left.score !== right.score) return right.score - left.score
-  if (left.candidate.isDirectory !== right.candidate.isDirectory) return left.candidate.isDirectory ? -1 : 1
+  if (left.candidate.isDirectory !== right.candidate.isDirectory)
+    return left.candidate.isDirectory ? -1 : 1
   const depth = depthOf(left.candidate.path) - depthOf(right.candidate.path)
   if (depth !== 0) return depth
   const length = left.candidate.path.length - right.candidate.path.length
@@ -218,7 +237,7 @@ export function depthOf(path: string): number {
 /** With no fragment to rank, offer root entries as starting points; directories let the reader narrow the path. */
 function topLevel(candidates: readonly Candidate[], limit: number): readonly Candidate[] {
   return candidates
-    .filter(candidate => !candidate.path.includes('/'))
+    .filter((candidate) => !candidate.path.includes('/'))
     .sort((left, right) => {
       if (left.isDirectory !== right.isDirectory) return left.isDirectory ? -1 : 1
       return left.path.localeCompare(right.path)

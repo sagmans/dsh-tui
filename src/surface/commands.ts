@@ -3,20 +3,37 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import type { PresetRoster } from '../agent/presets.ts'
-import { defaultExportFile, ensureExportsHome, exportsHomeDir, transcriptToText, writeTranscriptExport } from '../export.ts'
+import {
+  defaultExportFile,
+  ensureExportsHome,
+  exportsHomeDir,
+  transcriptToText,
+  writeTranscriptExport,
+} from '../export.ts'
 import type { ActionLayer } from '../input/action-catalog.ts'
 import type { RegisteredCommand } from '../input/completion.ts'
 import { chordKeysLine, surfaceKeysLine } from '../input/keymap.ts'
 import { LOCAL_COMMANDS, type Submission } from '../input/submission.ts'
 import { KEYMAP_LAYERS, keymapLayer } from '../keys-command.ts'
+import {
+  PROFILE_CATEGORY,
+  PROFILE_MILESTONE,
+  PROFILE_PHASE,
+  profileAsync,
+  TUI_PROFILING_SERVICE,
+} from '../profiling.ts'
 import type { PromptStash } from '../stash.ts'
 import { clipboardSequence } from '../terminal/clipboard.ts'
-import { createSurfaceStart } from './startup.ts'
-import { TUI_PROFILING_SERVICE, PROFILE_CATEGORY, profileAsync, PROFILE_PHASE, PROFILE_MILESTONE } from '../profiling.ts'
 import { formatTokens } from '../tokens.ts'
 import { KeymapPicker } from '../ui/keymap-picker.ts'
 import type { StatusFacts } from '../ui/status.ts'
-import { describeTodos, planSelectedActive, planToggleLine, readPlanState, type PlanModeState } from '../work.ts'
+import {
+  describeTodos,
+  type PlanModeState,
+  planSelectedActive,
+  planToggleLine,
+  readPlanState,
+} from '../work.ts'
 import type { Appearance } from './appearance.ts'
 import type { BackgroundWork } from './background-work.ts'
 import type { ModalInput } from './modal-input.ts'
@@ -27,6 +44,7 @@ import type { SessionLifecycle } from './session-lifecycle.ts'
 import { createSessionPicker } from './session-picker.ts'
 import type { SessionView } from './session-view.ts'
 import type { StagedTurns } from './staged-turns.ts'
+import { createSurfaceStart } from './startup.ts'
 import type { TerminalLifecycle } from './terminal-lifecycle.ts'
 
 /**
@@ -57,7 +75,12 @@ interface ServiceFor {
 interface CommandRegistry {
   list(agent: Agent): readonly RegisteredCommand[]
   find(agent: Agent, name: string): unknown
-  execute(agent: Agent, line: string, attachments: readonly unknown[], signal: AbortSignal): Promise<
+  execute(
+    agent: Agent,
+    line: string,
+    attachments: readonly unknown[],
+    signal: AbortSignal,
+  ): Promise<
     { readonly result: { readonly kind: 'success' | 'error'; readonly text?: string } } | undefined
   >
 }
@@ -130,7 +153,8 @@ export interface Commands {
  * to follow whichever agent the surface is driving now.
  */
 export function createCommands(ctx: Context, ports: CommandsPorts): Commands {
-  const registry = (): CommandRegistry | undefined => ctx.get('commands') as CommandRegistry | undefined
+  const registry = (): CommandRegistry | undefined =>
+    ctx.get('commands') as CommandRegistry | undefined
   // The copy is the one write that must land even while a child owns the tty:
   // the reader asked for the last answer, not for a title, and a handoff that
   // swallowed it would leave the clipboard silently empty.
@@ -144,7 +168,11 @@ export function createCommands(ctx: Context, ports: CommandsPorts): Commands {
    * list itself, and the filter that narrows it.
    */
   const openKeyMap = (layer: ActionLayer | undefined): void => {
-    void ports.modals.openPicker(new KeymapPicker(ports.appearance.keymap, layer), undefined, 'popup')
+    void ports.modals.openPicker(
+      new KeymapPicker(ports.appearance.keymap, layer),
+      undefined,
+      'popup',
+    )
   }
 
   /**
@@ -178,7 +206,9 @@ export function createCommands(ctx: Context, ports: CommandsPorts): Commands {
       writeTranscriptExport(path, text)
       ports.transcript.notice(`transcript written to ${path}`)
     } catch (error) {
-      ports.transcript.notice(`could not write ${path}: ${error instanceof Error ? error.message : String(error)}`)
+      ports.transcript.notice(
+        `could not write ${path}: ${error instanceof Error ? error.message : String(error)}`,
+      )
     }
     ports.render()
   }
@@ -195,7 +225,9 @@ export function createCommands(ctx: Context, ports: CommandsPorts): Commands {
    * clipboard API on the remote host when the surface runs over SSH.
    */
   const runCopyCommand = (): void => {
-    const last = [...ports.transcript.model.entries()].reverse().find(entry => entry.kind === 'assistant')
+    const last = [...ports.transcript.model.entries()]
+      .reverse()
+      .find((entry) => entry.kind === 'assistant')
     if (last === undefined || last.kind !== 'assistant') {
       ports.transcript.notice('nothing to copy yet')
       ports.render()
@@ -213,7 +245,10 @@ export function createCommands(ctx: Context, ports: CommandsPorts): Commands {
     // Read once: the registry is the surface's own lookup, and asking it twice
     // for one line would let a changing roster answer the two halves differently.
     const roster = registry()
-    const registered = current === undefined || roster === undefined ? [] : roster.list(current).map(command => `/${command.name}`)
+    const registered =
+      current === undefined || roster === undefined
+        ? []
+        : roster.list(current).map((command) => `/${command.name}`)
     const commands = registered.length === 0 ? 'none registered yet' : registered.join(' ')
     return `commands: ${commands} · surface: ${LOCAL_COMMANDS.join(' ')} · keys: ${surfaceKeysLine(ports.appearance.keymap())} · ${chordKeysLine(ports.appearance.keymap())}`
   }
@@ -229,13 +264,17 @@ export function createCommands(ctx: Context, ports: CommandsPorts): Commands {
     const current = ports.session.drivingAgent()?.agent
     if (current === undefined) return undefined
     const presets = ctx.get('agentPresets') as ServiceFor | undefined
-    return readPlanState({
-      direct: name => ctx.get(name),
-      forAgent: (target, name) => presets?.serviceFor(target, name),
-    }, current)
+    return readPlanState(
+      {
+        direct: (name) => ctx.get(name),
+        forAgent: (target, name) => presets?.serviceFor(target, name),
+      },
+      current,
+    )
   }
 
-  const planActive = (): boolean => planSelectedActive(planState(), ports.transcript.workState().planMode)
+  const planActive = (): boolean =>
+    planSelectedActive(planState(), ports.transcript.workState().planMode)
 
   const runCommand = (name: string, line: string): void => {
     const current = ports.session.drivingAgent()
@@ -253,15 +292,24 @@ export function createCommands(ctx: Context, ports: CommandsPorts): Commands {
     // The registry requires a signal; Ctrl+C targets the driven turn, not this command.
     // Dispatch stays off the synchronous input route so further submissions remain available.
     const controller = new AbortController()
-    void commands.execute(current.agent, line, [], controller.signal).then(execution => {
-      const result = execution?.result
-      if (result === undefined) return
-      ports.transcript.notice(result.kind === 'error' ? `/${name} failed: ${result.text ?? 'no detail'}` : `/${name} ${result.text ?? 'done'}`)
-      ports.render()
-    }).catch((error: unknown) => {
-      ports.transcript.notice(`/${name} failed: ${error instanceof Error ? error.message : String(error)}`)
-      ports.render()
-    })
+    void commands
+      .execute(current.agent, line, [], controller.signal)
+      .then((execution) => {
+        const result = execution?.result
+        if (result === undefined) return
+        ports.transcript.notice(
+          result.kind === 'error'
+            ? `/${name} failed: ${result.text ?? 'no detail'}`
+            : `/${name} ${result.text ?? 'done'}`,
+        )
+        ports.render()
+      })
+      .catch((error: unknown) => {
+        ports.transcript.notice(
+          `/${name} failed: ${error instanceof Error ? error.message : String(error)}`,
+        )
+        ports.render()
+      })
   }
 
   /**
@@ -318,7 +366,9 @@ export function createCommands(ctx: Context, ports: CommandsPorts): Commands {
         // A layer that does not exist is not a filter that matches nothing: the
         // reader asked for something by name, so the answer names the names.
         if (submission.argument !== '' && layer === undefined) {
-          ports.transcript.notice(`unknown layer "${submission.argument}" · ${KEYMAP_LAYERS.join(' ')}`)
+          ports.transcript.notice(
+            `unknown layer "${submission.argument}" · ${KEYMAP_LAYERS.join(' ')}`,
+          )
           ports.render()
           return
         }
@@ -335,7 +385,8 @@ export function createCommands(ctx: Context, ports: CommandsPorts): Commands {
         // Submitting a command consumes the line it was typed on, so this path
         // can only carry a draft it was given; parking the bar's own draft is
         // what the chord is for.
-        if (submission.argument.trim() === '') ports.transcript.notice('usage: /stash <draft>, or ctrl+x then s to park the editor')
+        if (submission.argument.trim() === '')
+          ports.transcript.notice('usage: /stash <draft>, or ctrl+x then s to park the editor')
         else void ports.stash()?.stashEditor(submission.argument)
         return
       case 'stash-draft':
@@ -361,25 +412,30 @@ export function createCommands(ctx: Context, ports: CommandsPorts): Commands {
         return
       case 'status': {
         const facts = ports.statusFacts()
-        const context = facts.contextTokens === undefined
-          ? undefined
-          : `context ${formatTokens(facts.contextTokens)}${facts.contextWindow === undefined ? '' : `/${formatTokens(facts.contextWindow)}`}`
-        ports.transcript.notice([
-          `session ${ports.session.activeSession()}`,
-          // Status describes the driven session; a child transcript ID would label another agent
-          // alongside this session's model, permissions, and context.
-          ports.transcript.viewingChild() ? undefined : `viewing ${ports.transcript.viewed()}`,
-          facts.model === undefined
+        const context =
+          facts.contextTokens === undefined
             ? undefined
-            : `model ${facts.provider === undefined ? '' : `${facts.provider}/`}${facts.model}${facts.effort === undefined ? '' : ` (${facts.effort})`}`,
-          facts.agentPreset === undefined ? undefined : `mode ${facts.agentPreset}`,
-          facts.preset === undefined ? undefined : `permissions ${facts.preset}`,
-          context,
-          facts.uncachedInputTokens === undefined && facts.outputTokens === undefined
-            ? undefined
-            : `tokens in ${formatTokens(facts.uncachedInputTokens ?? 0)} out ${formatTokens(facts.outputTokens ?? 0)}`,
-          `cwd ${facts.cwd}`,
-        ].filter(part => part !== undefined).join(' · '))
+            : `context ${formatTokens(facts.contextTokens)}${facts.contextWindow === undefined ? '' : `/${formatTokens(facts.contextWindow)}`}`
+        ports.transcript.notice(
+          [
+            `session ${ports.session.activeSession()}`,
+            // Status describes the driven session; a child transcript ID would label another agent
+            // alongside this session's model, permissions, and context.
+            ports.transcript.viewingChild() ? undefined : `viewing ${ports.transcript.viewed()}`,
+            facts.model === undefined
+              ? undefined
+              : `model ${facts.provider === undefined ? '' : `${facts.provider}/`}${facts.model}${facts.effort === undefined ? '' : ` (${facts.effort})`}`,
+            facts.agentPreset === undefined ? undefined : `mode ${facts.agentPreset}`,
+            facts.preset === undefined ? undefined : `permissions ${facts.preset}`,
+            context,
+            facts.uncachedInputTokens === undefined && facts.outputTokens === undefined
+              ? undefined
+              : `tokens in ${formatTokens(facts.uncachedInputTokens ?? 0)} out ${formatTokens(facts.outputTokens ?? 0)}`,
+            `cwd ${facts.cwd}`,
+          ]
+            .filter((part) => part !== undefined)
+            .join(' · '),
+        )
         ports.render()
         return
       }
@@ -399,10 +455,17 @@ export function createCommands(ctx: Context, ports: CommandsPorts): Commands {
         ports.render()
         return
       case 'resume':
-        void sessionPicker.chooseSession().then(picked => picked === undefined ? undefined : ports.session.switchSession(picked)).catch((error: unknown) => {
-          ports.transcript.notice(`could not resume: ${error instanceof Error ? error.message : String(error)}`)
-          ports.render()
-        })
+        void sessionPicker
+          .chooseSession()
+          .then((picked) =>
+            picked === undefined ? undefined : ports.session.switchSession(picked),
+          )
+          .catch((error: unknown) => {
+            ports.transcript.notice(
+              `could not resume: ${error instanceof Error ? error.message : String(error)}`,
+            )
+            ports.render()
+          })
         return
       // Plan mode is a command the harness owns, so the chord asks the host for
       // the state and names the command for the other one: one key, both ways.
@@ -444,17 +507,26 @@ export function createCommands(ctx: Context, ports: CommandsPorts): Commands {
     render: ports.render,
     // A stored session's own mode can only disagree with one this run named, and
     // only a roster can say whether the name it uses still exists.
-    validateStoredPreset: async id => {
+    validateStoredPreset: async (id) => {
       if (ports.preset === undefined || ports.presetRoster === undefined) return
       await ports.modes.presetFor(SessionId(id), true, undefined)
     },
     openPicker: (picker, vet) => {
       const profiling = ctx.get(TUI_PROFILING_SERVICE)
       const result = ports.modals.openPicker(picker, vet)
-      if (profiling !== undefined && ports.launch.resumePicker && !profiling.has(PROFILE_MILESTONE.inputReady)) {
+      if (
+        profiling !== undefined &&
+        ports.launch.resumePicker &&
+        !profiling.has(PROFILE_MILESTONE.inputReady)
+      ) {
         profiling?.mark(PROFILE_MILESTONE.pickerReady)
         profiling.mark(PROFILE_MILESTONE.inputReady)
-        return profileAsync(profiling, PROFILE_PHASE.picker, () => result, PROFILE_CATEGORY.userWait)
+        return profileAsync(
+          profiling,
+          PROFILE_PHASE.picker,
+          () => result,
+          PROFILE_CATEGORY.userWait,
+        )
       }
       return result
     },
@@ -470,7 +542,9 @@ export function createCommands(ctx: Context, ports: CommandsPorts): Commands {
    */
   const boot = async (): Promise<void> => {
     if (!ports.launch.resumePicker) {
-      await profileAsync(ctx.get(TUI_PROFILING_SERVICE), PROFILE_PHASE.boot, () => ports.session.openAgent(ports.launch.sessionId, ports.launch.resume))
+      await profileAsync(ctx.get(TUI_PROFILING_SERVICE), PROFILE_PHASE.boot, () =>
+        ports.session.openAgent(ports.launch.sessionId, ports.launch.resume),
+      )
       return
     }
     const picked = await sessionPicker.chooseSession()
@@ -478,14 +552,16 @@ export function createCommands(ctx: Context, ports: CommandsPorts): Commands {
       ports.terminal.requestExit(0)
       return
     }
-    await profileAsync(ctx.get(TUI_PROFILING_SERVICE), PROFILE_PHASE.boot, () => ports.session.openAgent(picked, true))
+    await profileAsync(ctx.get(TUI_PROFILING_SERVICE), PROFILE_PHASE.boot, () =>
+      ports.session.openAgent(picked, true),
+    )
   }
 
   const start = createSurfaceStart(ctx, ports, boot)
 
   return {
     runSubmission,
-    registeredCommands: agent => registry()?.list(agent),
+    registeredCommands: (agent) => registry()?.list(agent),
     start,
   }
 }

@@ -1,13 +1,20 @@
 import {
-  CombinedAutocompleteProvider,
   type AutocompleteItem,
   type AutocompleteSuggestions,
+  CombinedAutocompleteProvider,
   type SlashCommand,
 } from '@earendil-works/pi-tui'
-import { atToken, atValue, offerableCandidate, rankFilesAsync, SUGGESTION_LIMIT, type Candidate } from './file-search.ts'
-import { type FileIndex } from './file-index.ts'
-import { LOCAL_COMMANDS, LOCAL_COMMAND_DESCRIPTIONS } from './submission.ts'
 import { renderTerminalText } from '../terminal-text.ts'
+import type { FileIndex } from './file-index.ts'
+import {
+  atToken,
+  atValue,
+  type Candidate,
+  offerableCandidate,
+  rankFilesAsync,
+  SUGGESTION_LIMIT,
+} from './file-search.ts'
+import { LOCAL_COMMAND_DESCRIPTIONS, LOCAL_COMMANDS } from './submission.ts'
 
 /** One command another package registered, as the registry reports it. */
 export interface RegisteredCommand {
@@ -23,12 +30,15 @@ export interface RegisteredCommand {
  * actually run, not what a build happened to ship.
  */
 function commandMenu(registered: readonly RegisteredCommand[]): SlashCommand[] {
-  const local = LOCAL_COMMANDS.map(name => ({
+  const local = LOCAL_COMMANDS.map((name) => ({
     // The menu shows and completes the bare name; the slash is already typed.
     name: name.slice(1),
     description: LOCAL_COMMAND_DESCRIPTIONS[name] ?? '',
   }))
-  return [...local, ...registered.map(command => ({ name: command.name, description: command.description }))]
+  return [
+    ...local,
+    ...registered.map((command) => ({ name: command.name, description: command.description })),
+  ]
 }
 
 /**
@@ -75,7 +85,11 @@ export function createAnswerCompletionProvider(
  * commands, argument completion, and Tab path completion.
  */
 class WorkspaceFileProvider extends CombinedAutocompleteProvider {
-  constructor(commands: readonly SlashCommand[], cwd: string, private readonly index: FileIndex) {
+  constructor(
+    commands: readonly SlashCommand[],
+    cwd: string,
+    private readonly index: FileIndex,
+  ) {
     super([...commands], cwd)
   }
 
@@ -93,7 +107,7 @@ class WorkspaceFileProvider extends CombinedAutocompleteProvider {
       // An index is free to be some other source of rows, so what a pick may
       // insert is checked here as well: a row the menu cannot draw honestly,
       // or cannot follow up on, must not reach the prompt.
-      const offerable = candidates.filter(candidate => offerableCandidate(candidate))
+      const offerable = candidates.filter((candidate) => offerableCandidate(candidate))
       const ranked = await rankFilesAsync(token.query, offerable, SUGGESTION_LIMIT, options.signal)
       if (options.signal.aborted) return null
       // The listing is a snapshot, so every row is proven again as it is
@@ -101,9 +115,13 @@ class WorkspaceFileProvider extends CombinedAutocompleteProvider {
       // points out of it, must not reach the prompt. The proofs run together so
       // the menu waits for the slowest row, and each leaves when this caller
       // looks away rather than when the filesystem answers.
-      const proven = await Promise.all(ranked.map(candidate => this.index.reachable(candidate.path, options.signal)))
+      const proven = await Promise.all(
+        ranked.map((candidate) => this.index.reachable(candidate.path, options.signal)),
+      )
       if (options.signal.aborted) return null
-      const items = ranked.filter((_, at) => proven[at] === true).map(candidate => fileItem(candidate, token.quoted))
+      const items = ranked
+        .filter((_, at) => proven[at] === true)
+        .map((candidate) => fileItem(candidate, token.quoted))
       return items.length === 0 ? null : { items, prefix: token.prefix }
     }
     return await super.getSuggestions(lines, cursorLine, cursorCol, options)
@@ -122,13 +140,13 @@ function isOutsideWorkspace(query: string): boolean {
 
 /** One suggestion as the menu draws it, and the exact text a pick inserts. */
 function fileItem(candidate: Candidate, quoted: boolean): AutocompleteItem {
-  const path = candidate.isDirectory ? candidate.path + '/' : candidate.path
+  const path = candidate.isDirectory ? `${candidate.path}/` : candidate.path
   const name = candidate.path.slice(candidate.path.lastIndexOf('/') + 1)
   // The base class decides where the text goes and adds a space after a file,
   // so the value has to carry the at-sign and any quoting the path needs.
   return {
     value: atValue(path, quoted, candidate.isDirectory),
-    label: rowText(candidate.isDirectory ? name + '/' : name),
+    label: rowText(candidate.isDirectory ? `${name}/` : name),
     description: rowText(candidate.path),
   }
 }

@@ -39,7 +39,7 @@ const MINUTE_MS = 60_000
 
 const readJson = (path) => JSON.parse(readFileSync(path, 'utf8'))
 const fail = (message) => {
-  console.error('pi-tui-compat: ' + message)
+  console.error(`pi-tui-compat: ${message}`)
   process.exit(1)
 }
 
@@ -60,16 +60,18 @@ function compareParts(left, right) {
 function parseRange(spec) {
   const match = RANGE_PATTERN.exec(spec ?? '')
   if (match === null) {
-    fail('compat range must read ">=<root pin> <X.Y.0-0", found ' + String(spec))
+    fail(`compat range must read ">=<root pin> <X.Y.0-0", found ${String(spec)}`)
   }
   return { floor: match[1], ceiling: match[2].split('.').map(Number).concat(0) }
 }
 
 function inRange(version, range) {
   const parts = releaseParts(version)
-  return parts !== null
-    && compareParts(parts, releaseParts(range.floor)) >= 0
-    && compareParts(parts, range.ceiling) < 0
+  return (
+    parts !== null &&
+    compareParts(parts, releaseParts(range.floor)) >= 0 &&
+    compareParts(parts, range.ceiling) < 0
+  )
 }
 
 /** The root manifest with the pi-tui spec replaced, the shape the compat manifest must keep. */
@@ -86,22 +88,29 @@ function check() {
   const range = parseRange(spec)
   // The main gates prove the floor, so the floor must be exactly what ships.
   if (range.floor !== root.dependencies?.[PACKAGE]) {
-    fail('compat range floor ' + range.floor + ' must equal the root pin ' + String(root.dependencies?.[PACKAGE]))
+    fail(
+      'compat range floor ' +
+        range.floor +
+        ' must equal the root pin ' +
+        String(root.dependencies?.[PACKAGE]),
+    )
   }
   if (compareParts(releaseParts(range.floor), range.ceiling) >= 0) {
-    fail('compat range ' + spec + ' is empty')
+    fail(`compat range ${spec} is empty`)
   }
   // Any other drift means the compat lockfile tests a dependency set that no
   // longer ships; `lock` rebuilds both files from the root ones.
   if (JSON.stringify(compat) !== JSON.stringify(expectedCompatManifest(spec))) {
     fail('compat/pi-tui/package.json is stale; run `node tools/pi-tui-compat.mjs lock`')
   }
-  console.log('pi-tui-compat: range ' + spec + ' declared, floor matches the root pin')
+  console.log(`pi-tui-compat: range ${spec} declared, floor matches the root pin`)
 }
 
 /** The workspace release-age window, in minutes, so the notice follows the same policy as install. */
 function minimumReleaseAge() {
-  const match = /^minimumReleaseAge:\s*(\d+)\s*$/mu.exec(readFileSync(join(ROOT, WORKSPACE), 'utf8'))
+  const match = /^minimumReleaseAge:\s*(\d+)\s*$/mu.exec(
+    readFileSync(join(ROOT, WORKSPACE), 'utf8'),
+  )
   return match === null ? 0 : Number(match[1])
 }
 
@@ -109,8 +118,8 @@ async function report() {
   const spec = readJson(join(COMPAT_DIR, MANIFEST)).dependencies[PACKAGE]
   const range = parseRange(spec)
   const resolved = readJson(join(ROOT, 'node_modules', PACKAGE, MANIFEST)).version
-  if (!inRange(resolved, range)) fail('installed ' + PACKAGE + ' ' + resolved + ' lies outside ' + spec)
-  console.log('pi-tui-compat: range ' + spec + ' resolved ' + resolved)
+  if (!inRange(resolved, range)) fail(`installed ${PACKAGE} ${resolved} lies outside ${spec}`)
+  console.log(`pi-tui-compat: range ${spec} resolved ${resolved}`)
 
   // A stale lockfile keeps testing an older release; say so, but do not block a
   // push on a registry read or on a release published after the last `lock`.
@@ -118,28 +127,36 @@ async function report() {
   try {
     // The registry takes a scoped name as one encoded path segment.
     const response = await fetch(REGISTRY + encodeURIComponent(PACKAGE))
-    if (!response.ok) throw new Error('HTTP ' + response.status)
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
     times = (await response.json()).time ?? {}
   } catch (error) {
-    console.warn('pi-tui-compat: registry read failed (' + error.message + '); newest-release check skipped')
+    console.warn(
+      `pi-tui-compat: registry read failed (${error.message}); newest-release check skipped`,
+    )
     return
   }
   const cutoff = Date.now() - minimumReleaseAge() * MINUTE_MS
   const newest = Object.keys(times)
-    .filter(version => inRange(version, range) && Date.parse(times[version]) <= cutoff)
+    .filter((version) => inRange(version, range) && Date.parse(times[version]) <= cutoff)
     .sort((left, right) => compareParts(releaseParts(left), releaseParts(right)))
     .at(-1)
   if (newest !== undefined && newest !== resolved) {
-    console.warn('pi-tui-compat: WARNING: ' + newest + ' is the newest release in ' + spec
-      + ' past the release-age window, but the compat lockfile resolves ' + resolved
-      + '; run `node tools/pi-tui-compat.mjs lock` and commit the result')
+    console.warn(
+      'pi-tui-compat: WARNING: ' +
+        newest +
+        ' is the newest release in ' +
+        spec +
+        ' past the release-age window, but the compat lockfile resolves ' +
+        resolved +
+        '; run `node tools/pi-tui-compat.mjs lock` and commit the result',
+    )
   }
 }
 
 function lock() {
   const spec = readJson(join(COMPAT_DIR, MANIFEST)).dependencies[PACKAGE]
   parseRange(spec)
-  const manifest = JSON.stringify(expectedCompatManifest(spec), null, 2) + '\n'
+  const manifest = `${JSON.stringify(expectedCompatManifest(spec), null, 2)}\n`
   const scratch = mkdtempSync(join(tmpdir(), 'dsh-tui-pi-compat-'))
   try {
     // Start from the root lockfile so every other dependency stays exactly where
@@ -147,7 +164,11 @@ function lock() {
     copyFileSync(join(ROOT, LOCKFILE), join(scratch, LOCKFILE))
     copyFileSync(join(ROOT, WORKSPACE), join(scratch, WORKSPACE))
     writeFileSync(join(scratch, MANIFEST), manifest)
-    const pnpm = (args) => execFileSync('pnpm', [...args, '--lockfile-only', '--ignore-scripts'], { cwd: scratch, stdio: 'inherit' })
+    const pnpm = (args) =>
+      execFileSync('pnpm', [...args, '--lockfile-only', '--ignore-scripts'], {
+        cwd: scratch,
+        stdio: 'inherit',
+      })
     // `update` re-resolves to the newest release the policy allows but rewrites
     // the spec, so the manifest is restored and the lockfile re-synced to it.
     pnpm(['update', PACKAGE])
@@ -158,7 +179,7 @@ function lock() {
   } finally {
     rmSync(scratch, { recursive: true, force: true })
   }
-  console.log('pi-tui-compat: compat/pi-tui rebuilt for ' + spec)
+  console.log(`pi-tui-compat: compat/pi-tui rebuilt for ${spec}`)
 }
 
 const MODES = { check, report, lock }

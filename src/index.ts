@@ -1,43 +1,49 @@
-import { ScrollView } from '@earendil-works/pi-tui'
 import type { Context } from '@deepseek-ai/cordis'
+import { ScrollView } from '@earendil-works/pi-tui'
+import type { ForkEvent } from './agent/fork.ts'
 import { createSessionHistory, presetOfStoredSession } from './agent/history.ts'
 import { createPresetRoster } from './agent/presets.ts'
-import type { ForkEvent } from './agent/fork.ts'
 import { createStatusFacts } from './agent/status.ts'
-import { describeMissingOptional, describeMissingRequired, probeComposition } from './compat/probe.ts'
+import {
+  describeMissingOptional,
+  describeMissingRequired,
+  probeComposition,
+} from './compat/probe.ts'
 import { hasLiveRowSettings, readRowSettings, resolveConfig } from './config.ts'
+
 export { Config } from './config.ts'
+
+import { SessionId } from '@deepseek-ai/dsh-session'
 import { describeSkillDrift } from './install-skills.ts'
-import { toolDisplayFor } from './tool-display.ts'
+import { type KeymapRegistry, TUI_KEYMAP_SERVICE } from './keymaps.ts'
 import { runModelList } from './model-list.ts'
 import { createMoshiReporter } from './moshi.ts'
+import { PROFILE_MILESTONE, PROFILE_PHASE, TUI_PROFILING_SERVICE } from './profiling.ts'
 import { LIST_MODELS_SERVICE } from './startup.ts'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { PromptStash } from './stash.ts'
 import { createAppearance } from './surface/appearance.ts'
 import { createBackgroundWork } from './surface/background-work.ts'
 import { createCommands } from './surface/commands.ts'
 import { createModalInput } from './surface/modal-input.ts'
 import { createModelChoice } from './surface/model-choice.ts'
 import { createPluginActions } from './surface/plugin-actions.ts'
-import { TUI_KEYMAP_SERVICE, type KeymapRegistry } from './keymaps.ts'
+import { createPresetChoice } from './surface/preset-choice.ts'
 import { createPromptInput } from './surface/prompt-input.ts'
 import { createPromptMemory } from './surface/prompt-memory.ts'
-import { createPresetChoice } from './surface/preset-choice.ts'
 import { createSessionLifecycle } from './surface/session-lifecycle.ts'
 import { backHint, createSessionView } from './surface/session-view.ts'
 import { createStagedTurns } from './surface/staged-turns.ts'
 import { createTerminalLifecycle } from './surface/terminal-lifecycle.ts'
+import { toolDisplayFor } from './tool-display.ts'
 import { WorkDock } from './ui/dock.ts'
 import { GateInputBar } from './ui/gate-input.ts'
 import { surfaceLayout } from './ui/layout.ts'
-import { PromptBar } from './ui/prompt.ts'
 import { MarkdownRenderer } from './ui/markdown.ts'
 import { createMermaidTransform } from './ui/mermaid.ts'
+import { PromptBar } from './ui/prompt.ts'
 import { QueueBar } from './ui/queue.ts'
 import { StatusBar } from './ui/status.ts'
 import { TranscriptView } from './ui/view.ts'
-import type { PromptStash } from './stash.ts'
-import { TUI_PROFILING_SERVICE, PROFILE_PHASE, PROFILE_MILESTONE } from './profiling.ts'
 
 export const name = 'tui'
 
@@ -64,7 +70,9 @@ export const inject = ['agents', 'tools', 'agentPresets', TUI_KEYMAP_SERVICE]
  */
 export function assertInteractiveTerminal(): void {
   if (process.stdin.isTTY !== true || process.stdout.isTTY !== true) {
-    throw new Error('dsh-tui: both stdin and stdout must be TTYs; run this profile from a terminal or SSH session')
+    throw new Error(
+      'dsh-tui: both stdin and stdout must be TTYs; run this profile from a terminal or SSH session',
+    )
   }
 }
 
@@ -82,7 +90,9 @@ export function apply(ctx: Context, config: unknown): void {
   // Require that handoff rather than terminating the host from a plugin.
   const appExit = ctx.get('appExit')
   if (appExit === undefined) {
-    throw new Error('dsh-tui: the dsh launcher must provide appExit; start this surface with dsh --profile tui')
+    throw new Error(
+      'dsh-tui: the dsh launcher must provide appExit; start this surface with dsh --profile tui',
+    )
   }
 
   // The listing is a pipeable dump, not a surface: it answers before the
@@ -94,9 +104,13 @@ export function apply(ctx: Context, config: unknown): void {
     // composed adapters exist, and a failed boot must not print a listing.
     const appReady = ctx.get('appReady')
     if (appReady === undefined) {
-      throw new Error('dsh-tui: the dsh launcher must provide appReady; start this surface with dsh --profile tui')
+      throw new Error(
+        'dsh-tui: the dsh launcher must provide appReady; start this surface with dsh --profile tui',
+      )
     }
-    appReady.onReady(() => { void runModelList(ctx, appExit) })
+    appReady.onReady(() => {
+      void runModelList(ctx, appExit)
+    })
     return
   }
 
@@ -105,7 +119,7 @@ export function apply(ctx: Context, config: unknown): void {
 
   // Fail before taking the screen over: a missing row is a composition mistake,
   // and the reader deserves the row name rather than a stack trace mid-turn.
-  const probe = probeComposition(service => ctx.get(service) !== undefined)
+  const probe = probeComposition((service) => ctx.get(service) !== undefined)
   if (probe.missingRequired.length > 0) throw new Error(describeMissingRequired(probe))
 
   /**
@@ -123,14 +137,14 @@ export function apply(ctx: Context, config: unknown): void {
     rowTheme: resolved.theme,
     rowSettings: () => readRowSettings(config),
     rowSettingsLive: hasLiveRowSettings(config),
-    notice: message => sessionView.notice(message),
+    notice: (message) => sessionView.notice(message),
     render: () => tui.requestRender(),
     invalidateMarkdown: () => markdown.invalidate(),
     invalidateView: () => view.invalidate(),
     // The chord a settings edit has to end is armed in the bar's own owner, so it
     // is reached through the thing that holds it rather than copied here.
     keybindings: () => promptInput,
-    openPicker: picker => modalInput.openPicker(picker),
+    openPicker: (picker) => modalInput.openPicker(picker),
   })
   const { theme } = appearance
   /**
@@ -147,7 +161,7 @@ export function apply(ctx: Context, config: unknown): void {
     tui: () => tui,
     editor: () => editor,
     promptBar: () => promptBar,
-    modalHandleKey: data => modalInput.handleKey(data),
+    modalHandleKey: (data) => modalInput.handleKey(data),
     toggleCards: appearance.toggleCards,
     toggleSubCalls: appearance.toggleSubCalls,
     toggleReasoning: appearance.toggleReasoning,
@@ -166,12 +180,12 @@ export function apply(ctx: Context, config: unknown): void {
     interrupt: () => {
       sessionLifecycle.drivingAgent()?.interrupt()
     },
-    notice: message => sessionView.notice(message),
-    requestExit: code => requestExit(code),
-    recordPrompt: text => promptMemory.record(text),
-    runSubmission: submission => commands.runSubmission(submission),
+    notice: (message) => sessionView.notice(message),
+    requestExit: (code) => requestExit(code),
+    recordPrompt: (text) => promptMemory.record(text),
+    runSubmission: (submission) => commands.runSubmission(submission),
     drivenAgent: () => sessionLifecycle.drivingAgent()?.agent,
-    registeredCommands: target => commands.registeredCommands(target),
+    registeredCommands: (target) => commands.registeredCommands(target),
   })
   appearance.registerSection()
 
@@ -187,8 +201,8 @@ export function apply(ctx: Context, config: unknown): void {
     initialSession: resolved.sessionId,
     drivenSession: () => sessionLifecycle.activeSession(),
     stagedCutoff: () => stagedTurns.stagedCutoff(),
-    agentScope: id => ctx.agents?.get(id),
-    liveEvents: id => liveSession(id)?.snapshotEvents?.(),
+    agentScope: (id) => ctx.agents?.get(id),
+    liveEvents: (id) => liveSession(id)?.snapshotEvents?.(),
     render: () => tui.requestRender(),
   })
   /**
@@ -203,10 +217,10 @@ export function apply(ctx: Context, config: unknown): void {
     stashScope: resolved.stashScope,
     theme,
     keymap: appearance.keymap,
-    notice: message => sessionView.notice(message),
+    notice: (message) => sessionView.notice(message),
     render: () => tui.requestRender(),
     editorText: () => editor.getExpandedText(),
-    setEditorText: text => {
+    setEditorText: (text) => {
       editor.setText(text)
       tui.requestRender()
     },
@@ -218,7 +232,7 @@ export function apply(ctx: Context, config: unknown): void {
     activeSession: () => sessionLifecycle.activeSession(),
     // The keyboard's lifetime is the modal owner's, so the list is handed over
     // rather than driven here.
-    openPicker: picker => modalInput.openPicker(picker),
+    openPicker: (picker) => modalInput.openPicker(picker),
   })
   const ghostBrush = promptMemory.ghostBrush
   /**
@@ -228,8 +242,8 @@ export function apply(ctx: Context, config: unknown): void {
   const pluginActions = createPluginActions(ctx, {
     statusFacts: () => statusFacts(),
     keymap: appearance.keymap,
-    openPicker: picker => modalInput.openPicker(picker),
-    notice: message => sessionView.notice(message),
+    openPicker: (picker) => modalInput.openPicker(picker),
+    notice: (message) => sessionView.notice(message),
     render: () => tui.requestRender(),
   })
   // Model choice owns the route that status reports; addon follow-ups receive the confirmed route.
@@ -237,8 +251,8 @@ export function apply(ctx: Context, config: unknown): void {
     afterEffort: pluginActions.afterEffort,
     statusFacts: () => statusFacts(),
     keymap: appearance.keymap,
-    openPicker: picker => modalInput.openPicker(picker),
-    notice: message => sessionView.notice(message),
+    openPicker: (picker) => modalInput.openPicker(picker),
+    notice: (message) => sessionView.notice(message),
     render: () => tui.requestRender(),
   })
   const agentPresets = createPresetRoster(ctx)
@@ -252,15 +266,15 @@ export function apply(ctx: Context, config: unknown): void {
     requestedPreset: resolved.preset,
     // The mode a session ran is a property of its own log, which is the same
     // history this surface lists the stored sessions from.
-    storedPreset: async id => {
+    storedPreset: async (id) => {
       const history = createSessionHistory(ctx)
       return history === undefined ? undefined : await presetOfStoredSession(history, id)
     },
-    livePreset: id => agentPresets?.current(liveSession(id)),
+    livePreset: (id) => agentPresets?.current(liveSession(id)),
     drivingAgent: () => sessionLifecycle.drivingAgent(),
     keymap: appearance.keymap,
-    openPicker: picker => modalInput.openPicker(picker),
-    notice: message => sessionView.notice(message),
+    openPicker: (picker) => modalInput.openPicker(picker),
+    notice: (message) => sessionView.notice(message),
     render: () => tui.requestRender(),
     returnToDrivenSession: async () => {
       if (sessionView.viewingChild()) await sessionView.show(sessionLifecycle.activeSession())
@@ -270,37 +284,44 @@ export function apply(ctx: Context, config: unknown): void {
   const backgroundWork = createBackgroundWork(ctx, {
     drivingAgent: () => sessionLifecycle.drivingAgent(),
     activeSession: () => sessionLifecycle.activeSession(),
-    notice: text => sessionView.notice(text),
-    marker: text => sessionView.marker(text),
+    notice: (text) => sessionView.notice(text),
+    marker: (text) => sessionView.marker(text),
     render: () => tui.requestRender(),
-    navigate: id => {
+    navigate: (id) => {
       void sessionView.show(SessionId(id))
     },
     // Both reporters must include work that outlives the parent driver; driver idle alone is not completion.
-    backgroundChanged: running => {
+    backgroundChanged: (running) => {
       herdr.background(running)
       moshi?.background(running)
     },
   })
-  const markdown = new MarkdownRenderer(theme.markdown, createMermaidTransform({ theme, mode: () => appearance.mermaidMode() }))
-  const terminalLifecycle = createTerminalLifecycle(ctx, {
-    reportFrameError: error => sessionView.reportError(error),
-    notice: message => sessionView.notice(message),
-    copyRows: () => view.copyRows(),
-    activeSession: () => sessionLifecycle.activeSession(),
-    sessionOpened: () => sessionLifecycle.sessionOpened(),
-    turnRunning: () => sessionLifecycle.turnRunning(),
-    stopClock: () => sessionLifecycle.stopClock(),
-    // Explicit exit can precede plugin unload; abort notifications before handing exit to the launcher.
-    exit: code => {
-      moshi?.dispose()
-      appExit(code)
+  const markdown = new MarkdownRenderer(
+    theme.markdown,
+    createMermaidTransform({ theme, mode: () => appearance.mermaidMode() }),
+  )
+  const terminalLifecycle = createTerminalLifecycle(
+    ctx,
+    {
+      reportFrameError: (error) => sessionView.reportError(error),
+      notice: (message) => sessionView.notice(message),
+      copyRows: () => view.copyRows(),
+      activeSession: () => sessionLifecycle.activeSession(),
+      sessionOpened: () => sessionLifecycle.sessionOpened(),
+      turnRunning: () => sessionLifecycle.turnRunning(),
+      stopClock: () => sessionLifecycle.stopClock(),
+      // Explicit exit can precede plugin unload; abort notifications before handing exit to the launcher.
+      exit: (code) => {
+        moshi?.dispose()
+        appExit(code)
+      },
+      draftText: () => editor.getExpandedText(),
+      draftBorrowed: () => promptBar.isBorrowed(),
+      holdDraft: (text) => promptBar.replaceHeld(text),
+      writeDraft: (text) => editor.setText(text),
     },
-    draftText: () => editor.getExpandedText(),
-    draftBorrowed: () => promptBar.isBorrowed(),
-    holdDraft: text => promptBar.replaceHeld(text),
-    writeDraft: text => editor.setText(text),
-  }, resolved.cursorMode)
+    resolved.cursorMode,
+  )
   const { terminal, tui, herdr, disposers, writeTerminal, requestExit, exited } = terminalLifecycle
 
   const view = new TranscriptView(sessionView.model, theme, markdown, {
@@ -308,7 +329,7 @@ export function apply(ctx: Context, config: unknown): void {
     gate: () => modalInput.gateCard(),
     picker: () => modalInput.pickerCard(),
     keys: appearance.keymap,
-    toolDisplay: tool => toolDisplayFor(appearance.toolDisplay(), tool),
+    toolDisplay: (tool) => toolDisplayFor(appearance.toolDisplay(), tool),
     // The gaps the reader tunes in the settings document, read per frame so an
     // edit lands on the session already on screen.
     spacing: appearance.spacing,
@@ -352,7 +373,7 @@ export function apply(ctx: Context, config: unknown): void {
   const stagedTurns = createStagedTurns({
     viewingChild: () => sessionView.viewingChild(),
     activeSession: () => sessionLifecycle.activeSession(),
-    sessionEvents: id => sessionView.sessionEvents(id),
+    sessionEvents: (id) => sessionView.sessionEvents(id),
     resetTranscript: () => sessionView.reset(),
     foldTranscript: (id, cutoff) => sessionView.fold(id, cutoff),
     drivingAgent: () => sessionLifecycle.drivingAgent(),
@@ -360,11 +381,11 @@ export function apply(ctx: Context, config: unknown): void {
     openSession: (id, resume, fork) => sessionLifecycle.openAgent(id, resume, fork),
     queuedPrompts: () => sessionLifecycle.queuedPrompts(),
     canPark: () => stash !== undefined,
-    parkPrompt: text => stash?.stashEditor(text) ?? Promise.resolve(),
+    parkPrompt: (text) => stash?.stashEditor(text) ?? Promise.resolve(),
     turnRunning: () => sessionLifecycle.turnRunning(),
     draft: () => editor.getExpandedText(),
-    writeDraft: text => editor.setText(text),
-    notice: message => sessionView.notice(message),
+    writeDraft: (text) => editor.setText(text),
+    notice: (message) => sessionView.notice(message),
     render: () => tui.requestRender(),
   })
   // The bank is built once the picker exists to answer for it, so the status
@@ -372,7 +393,7 @@ export function apply(ctx: Context, config: unknown): void {
   let stash: PromptStash | undefined
 
   const statusFacts = createStatusFacts(ctx, {
-    routeHints: route => ctx.get(TUI_KEYMAP_SERVICE)?.routeHints(route) ?? [],
+    routeHints: (route) => ctx.get(TUI_KEYMAP_SERVICE)?.routeHints(route) ?? [],
     sessionId: () => sessionLifecycle.activeSession(),
     activity: () => sessionLifecycle.activity(),
     override: () => modelChoice.current(),
@@ -385,9 +406,15 @@ export function apply(ctx: Context, config: unknown): void {
     stash: () => stash?.entryCount,
   })
   const statusBar = new StatusBar(statusFacts, theme)
-  const dock = new WorkDock(() => sessionView.workState(), theme, () => backgroundWork.jobs(), () => backgroundWork.roster.list(), id => {
-    void sessionView.show(SessionId(id))
-  })
+  const dock = new WorkDock(
+    () => sessionView.workState(),
+    theme,
+    () => backgroundWork.jobs(),
+    () => backgroundWork.roster.list(),
+    (id) => {
+      void sessionView.show(SessionId(id))
+    },
+  )
   const queue = new QueueBar(() => sessionLifecycle.queuedPrompts(), theme)
   /**
    * The agent this terminal drives, and the clock that repaints it while a turn
@@ -403,25 +430,25 @@ export function apply(ctx: Context, config: unknown): void {
     provider: resolved.provider,
     bell: resolved.bell,
     presetFor: (id, resume, fork) => presetChoice.presetFor(id, resume, fork),
-    installModelChoice: agentCtx => modelChoice.setup(agentCtx),
+    installModelChoice: (agentCtx) => modelChoice.setup(agentCtx),
     mountPreset: async (agentCtx, preset) => {
       await agentPresets?.mount(agentCtx, preset)
     },
-    liveSession: id => liveSession(id),
+    liveSession: (id) => liveSession(id),
     installCompletion: () => promptInput.installCompletion(),
-    sessionEvents: id => sessionView.sessionEvents(id),
-    setViewed: id => sessionView.setViewed(id),
-    setPresentScope: scope => sessionView.setPresentScope(scope),
+    sessionEvents: (id) => sessionView.sessionEvents(id),
+    setViewed: (id) => sessionView.setViewed(id),
+    setPresentScope: (scope) => sessionView.setPresentScope(scope),
     clearPresentScope: sessionView.clearPresentScope,
     resetTranscript: () => sessionView.reset(),
-    replay: id => sessionView.replay(id),
-    fold: id => sessionView.fold(id),
-    notice: message => sessionView.notice(message),
+    replay: (id) => sessionView.replay(id),
+    fold: (id) => sessionView.fold(id),
+    notice: (message) => sessionView.notice(message),
     render: () => tui.requestRender(),
     promptMemorySessionOpened: () => promptMemory.sessionOpened(),
-    stagedSessionOpened: id => stagedTurns.sessionOpened(id),
+    stagedSessionOpened: (id) => stagedTurns.sessionOpened(id),
     turnSettled: () => stagedTurns.turnSettled(),
-    acceptCatalog: info => backgroundWork.acceptCatalog(info),
+    acceptCatalog: (info) => backgroundWork.acceptCatalog(info),
     resetRoster: () => backgroundWork.resetRoster(),
     refreshJobs: () => backgroundWork.refresh(),
     liveDurations: () => backgroundWork.running() || sessionView.model.hasLiveTiming(),
@@ -440,15 +467,20 @@ export function apply(ctx: Context, config: unknown): void {
   // The whole surface sits inside the reader's margin, so the frames it draws
   // never touch the window's edge; the margin is read per frame, which is why an
   // edit needs no rebuild of the tree it insets.
-  tui.setLayoutRoot(surfaceLayout({
-    // Keep new output visible until the reader scrolls away; make the transcript
-    // the wheel fallback so scrolling over the dock still reaches conversation history.
-    transcript: new ScrollView(view, { follow: 'end', primary: true, overscroll: 'chain' }),
-    dock,
-    queue,
-    prompt: promptBar,
-    status: statusBar,
-  }, () => appearance.spacing().padding))
+  tui.setLayoutRoot(
+    surfaceLayout(
+      {
+        // Keep new output visible until the reader scrolls away; make the transcript
+        // the wheel fallback so scrolling over the dock still reaches conversation history.
+        transcript: new ScrollView(view, { follow: 'end', primary: true, overscroll: 'chain' }),
+        dock,
+        queue,
+        prompt: promptBar,
+        status: statusBar,
+      },
+      () => appearance.spacing().padding,
+    ),
+  )
   tui.setFocus(editor)
 
   disposers.push(promptInput.inputListener())
@@ -491,17 +523,25 @@ export function apply(ctx: Context, config: unknown): void {
   })
 
   /** The live session this process runs, which is the only source holding an unflushed tail. */
-  const liveSession = (id: SessionId): { snapshotEvents?: () => readonly ForkEvent[] } | undefined =>
-    (ctx.get('sessions') as { get?: (id: SessionId) => { snapshotEvents?: () => readonly ForkEvent[] } | undefined } | undefined)?.get?.(id)
+  const liveSession = (
+    id: SessionId,
+  ): { snapshotEvents?: () => readonly ForkEvent[] } | undefined =>
+    (
+      ctx.get('sessions') as
+        | { get?: (id: SessionId) => { snapshotEvents?: () => readonly ForkEvent[] } | undefined }
+        | undefined
+    )?.get?.(id)
 
   promptInput.attachSubmit()
 
   // Child navigation changes the viewed transcript, not the driven agent's activity, bell, or queue.
   // Each owner filters durable events against its own session identity.
-  disposers.push(ctx.on('session/event', (session, event) => {
-    sessionLifecycle.observe(session, event)
-    sessionView.observe(session.id, event)
-  }))
+  disposers.push(
+    ctx.on('session/event', (session, event) => {
+      sessionLifecycle.observe(session, event)
+      sessionView.observe(session.id, event)
+    }),
+  )
 
   disposers.push(...sessionLifecycle.driverListeners())
 

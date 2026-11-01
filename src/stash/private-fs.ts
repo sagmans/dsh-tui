@@ -10,7 +10,17 @@
 // establish current-user ownership.
 
 import { constants, type Stats } from 'node:fs'
-import { type FileHandle, link, lstat, mkdir, open, readlink, rmdir, rm, unlink } from 'node:fs/promises'
+import {
+  type FileHandle,
+  link,
+  lstat,
+  mkdir,
+  open,
+  readlink,
+  rm,
+  rmdir,
+  unlink,
+} from 'node:fs/promises'
 import path from 'node:path'
 
 export const PRIVATE_DIR_MODE = 0o700
@@ -123,7 +133,7 @@ async function createPrivateDirectory(directory: string): Promise<CreatedDirecto
   await mkdir(directory, { recursive: true, mode: PRIVATE_DIR_MODE })
   // The parent of a created directory is where its entry lives; a directory that
   // was itself just created is named by the next step of the walk.
-  return { created, namingParents: created.map(entry => path.dirname(entry)) }
+  return { created, namingParents: created.map((entry) => path.dirname(entry)) }
 }
 
 /**
@@ -193,7 +203,12 @@ function parentsOf(current: string): string[] {
   return parent === current ? [] : [parent]
 }
 
-function assertTrustedStats(stats: Stats, directory: string, label: string, currentUid: number | undefined): void {
+function assertTrustedStats(
+  stats: Stats,
+  directory: string,
+  label: string,
+  currentUid: number | undefined,
+): void {
   if (currentUid !== undefined && stats.uid !== currentUid && stats.uid !== ROOT_UID) {
     throw new Error(`${label} at ${directory} is owned by another user`)
   }
@@ -263,7 +278,11 @@ export async function readPrivateTextFile(
   }
 }
 
-async function readText(handle: FileHandle, maxBytes: number | undefined, label: string): Promise<string> {
+async function readText(
+  handle: FileHandle,
+  maxBytes: number | undefined,
+  label: string,
+): Promise<string> {
   if (maxBytes === undefined) return handle.readFile('utf8')
   // One extra byte detects an over-budget file without loading the rest.
   // Repeat short reads because only a zero-byte read establishes EOF.
@@ -284,7 +303,10 @@ async function readText(handle: FileHandle, maxBytes: number | undefined, label:
  * their responsibility. Failed writes attempt cleanup, but close or removal errors
  * can leave output behind.
  */
-export async function writePrivateFileExclusive(filePath: string, data: string | Uint8Array): Promise<void> {
+export async function writePrivateFileExclusive(
+  filePath: string,
+  data: string | Uint8Array,
+): Promise<void> {
   const flags = constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | NO_FOLLOW_FLAG
   const handle = await open(filePath, flags, PRIVATE_FILE_MODE)
   let succeeded = false
@@ -350,7 +372,10 @@ export async function quarantinePrivateFile(
  * replacement before pathname-based deletion. Flush the owned parent to persist
  * the removal.
  */
-export async function removePrivateDirectory(directory: string, label = 'storage directory'): Promise<void> {
+export async function removePrivateDirectory(
+  directory: string,
+  label = 'storage directory',
+): Promise<void> {
   let stats: Stats
   try {
     stats = await lstat(directory)

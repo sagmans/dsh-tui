@@ -8,8 +8,16 @@
  * so a packaging mistake fails here instead of in a user's profile.
  */
 import { execFileSync } from 'node:child_process'
+import {
+  lstatSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { registerHooks } from 'node:module'
-import { lstatSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -20,7 +28,10 @@ const SKILL_NAME = 'dsh-tui-dogfood'
 const MODEL_SKILL_NAME = 'dsh-tui-update-models'
 const SKILL_HELPER = join('scripts', 'run-plugin-from-worktree.sh')
 const OPTIONAL_PROVIDER_PACKAGE = '@sagmans/dsh-provider-extra'
-const CONFIG_SMOKE_INPUT = { sessionId: 'package-config-smoke', history: { enabled: false, ghost: false } }
+const CONFIG_SMOKE_INPUT = {
+  sessionId: 'package-config-smoke',
+  history: { enabled: false, ghost: false },
+}
 
 /** Entries a loader or a reader needs in the tarball. */
 const REQUIRED = [
@@ -94,7 +105,9 @@ const SHIM_SOURCES = ['src/host/roster.ts', 'src/host/runner.ts']
 const MOUNT_SOURCES = [
   'cordis.patch.yml',
   ...SHIM_SOURCES,
-  ...readdirSync(join(ROOT, 'presets')).filter(name => name.endsWith('.patch.yml')).map(name => join('presets', name)),
+  ...readdirSync(join(ROOT, 'presets'))
+    .filter((name) => name.endsWith('.patch.yml'))
+    .map((name) => join('presets', name)),
 ]
 
 /**
@@ -104,10 +117,7 @@ const MOUNT_SOURCES = [
  * depend on a package that nothing would install unless this manifest declares
  * it — which the check below enforces.
  */
-const NAMED_PACKAGES = [
-  '@deepseek-ai/dsh-agent-preset',
-  '@deepseek-ai/dsh-agent-preset-registry',
-]
+const NAMED_PACKAGES = ['@deepseek-ai/dsh-agent-preset', '@deepseek-ai/dsh-agent-preset-registry']
 
 /**
  * First-party packages the patch names for HOST machinery instead.
@@ -117,9 +127,7 @@ const NAMED_PACKAGES = [
  * base bundle mounts them), so the profile resolves them without this plugin
  * depending on them.
  */
-const HOST_ROWS = [
-  '@deepseek-ai/dsh-tool-subagent/model-selection-settings',
-]
+const HOST_ROWS = ['@deepseek-ai/dsh-tool-subagent/model-selection-settings']
 
 /**
  * First-party dependencies that are libraries rather than cordis plugins.
@@ -128,9 +136,7 @@ const HOST_ROWS = [
  * the declared-against-mounted check below has to know them by name or it would
  * demand a patch row for a package that has no plugin to mount.
  */
-const LIBRARY_PACKAGES = [
-  '@deepseek-ai/schemastery',
-]
+const LIBRARY_PACKAGES = ['@deepseek-ai/schemastery']
 
 /** Traverse built modules for syntax checks: tarball inventory alone cannot prove Node can parse them. */
 function walk(directory) {
@@ -147,17 +153,17 @@ const problems = []
 const out = mkdtempSync(join(tmpdir(), 'dsh-tui-pack-'))
 try {
   execFileSync('pnpm', ['pack', '--pack-destination', out], { cwd: ROOT, stdio: 'inherit' })
-  const tarball = readdirSync(out).find(name => name.endsWith('.tgz'))
+  const tarball = readdirSync(out).find((name) => name.endsWith('.tgz'))
   if (tarball === undefined) throw new Error('pnpm pack produced no tarball')
   const entries = execFileSync('tar', ['-tzf', join(out, tarball)], { encoding: 'utf8' })
     .split('\n')
-    .filter(entry => entry !== '')
+    .filter((entry) => entry !== '')
 
   for (const entry of REQUIRED) {
     if (!entries.includes(entry)) problems.push(`missing from the tarball: ${entry}`)
   }
   for (const entry of entries) {
-    if (FORBIDDEN.some(pattern => pattern.test(entry))) problems.push(`should not ship: ${entry}`)
+    if (FORBIDDEN.some((pattern) => pattern.test(entry))) problems.push(`should not ship: ${entry}`)
   }
 
   // npm normalizes packaged file modes, so test the helper after copying from the tarball.
@@ -167,8 +173,11 @@ try {
   symlinkSync(join(ROOT, 'node_modules'), join(unpacked, 'package', 'node_modules'), 'dir')
   const standalone = registerHooks({
     resolve(specifier, context, nextResolve) {
-      if (specifier === OPTIONAL_PROVIDER_PACKAGE || specifier.startsWith(OPTIONAL_PROVIDER_PACKAGE + '/')) {
-        throw new Error('the standalone TUI package must not load ' + OPTIONAL_PROVIDER_PACKAGE)
+      if (
+        specifier === OPTIONAL_PROVIDER_PACKAGE ||
+        specifier.startsWith(`${OPTIONAL_PROVIDER_PACKAGE}/`)
+      ) {
+        throw new Error(`the standalone TUI package must not load ${OPTIONAL_PROVIDER_PACKAGE}`)
       }
       return nextResolve(specifier, context)
     },
@@ -178,7 +187,9 @@ try {
     // The reader the surface uses, because a live preference travels wrapped in
     // the reference the loaded schema runtime makes: reading the wrapper's own
     // keys would report every field as absent.
-    const { readRowSettings } = await import(pathToFileURL(join(unpacked, 'package', 'lib', 'config.js')).href)
+    const { readRowSettings } = await import(
+      pathToFileURL(join(unpacked, 'package', 'lib', 'config.js')).href
+    )
     const validated = plugin.Config?.['~standard']?.validate(structuredClone(CONFIG_SMOKE_INPUT))
     const history = readRowSettings(validated?.value)?.history
     if (validated?.issues || history?.enabled !== false || history?.ghost !== false) {
@@ -187,7 +198,9 @@ try {
   } finally {
     standalone.deregister()
   }
-  const { installBundledSkills } = await import(pathToFileURL(join(unpacked, 'package', 'lib', 'install-skills.js')).href)
+  const { installBundledSkills } = await import(
+    pathToFileURL(join(unpacked, 'package', 'lib', 'install-skills.js')).href
+  )
   const [destination] = installBundledSkills(join(out, 'home'), undefined, [SKILL_NAME])
   const helper = lstatSync(join(destination, SKILL_HELPER))
   if (!helper.isFile() || helper.isSymbolicLink() || (helper.mode & 0o111) === 0) {
@@ -200,7 +213,7 @@ try {
     problems.push('updating the packaged skill left an old file behind')
   }
   const [modelSkill] = installBundledSkills(join(out, 'home'), undefined, [MODEL_SKILL_NAME])
-  if (!readFileSync(join(modelSkill, 'SKILL.md'), 'utf8').includes('name: ' + MODEL_SKILL_NAME)) {
+  if (!readFileSync(join(modelSkill, 'SKILL.md'), 'utf8').includes(`name: ${MODEL_SKILL_NAME}`)) {
     problems.push('the packaged model skill is not the one install-skills installs')
   }
   if ((lstatSync(join(modelSkill, 'scripts', 'dump-model-catalog.mjs')).mode & 0o111) === 0) {
@@ -214,15 +227,22 @@ try {
   for (const row of PATCH_ROWS) {
     if (!patch.includes(row)) problems.push(`the bundle patch no longer names ${row}`)
   }
-  const mounts = MOUNT_SOURCES.map(source => readFileSync(join(ROOT, source), 'utf8')).join('\n')
+  const mounts = MOUNT_SOURCES.map((source) => readFileSync(join(ROOT, source), 'utf8')).join('\n')
   // A subpath entry point belongs to its package, which is the name a profile
   // has to resolve and the name the manifest declares.
   const mounted = new Set(
-    [...mounts.matchAll(/(?:name: |import\()'(@[^']+)'/gu)].map(match => match[1].split('/').slice(0, 2).join('/')),
+    [...mounts.matchAll(/(?:name: |import\()'(@[^']+)'/gu)].map((match) =>
+      match[1].split('/').slice(0, 2).join('/'),
+    ),
   )
   const allowed = [...NAMED_PACKAGES, ...HOST_ROWS]
-  for (const name of [...patch.matchAll(/name: '(@deepseek-ai\/[^']+)'/gu)].map(match => match[1])) {
-    if (!allowed.includes(name)) problems.push(`the bundle patch mounts ${name}, which this plugin neither provides nor is documented as host machinery`)
+  for (const name of [...patch.matchAll(/name: '(@deepseek-ai\/[^']+)'/gu)].map(
+    (match) => match[1],
+  )) {
+    if (!allowed.includes(name))
+      problems.push(
+        `the bundle patch mounts ${name}, which this plugin neither provides nor is documented as host machinery`,
+      )
   }
   for (const name of NAMED_PACKAGES) {
     if (!mounted.has(name)) problems.push(`no inserted row or shipped mode mounts ${name}`)
@@ -232,15 +252,21 @@ try {
   }
 
   const manifest = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
-  for (const name of Object.keys({ ...manifest.dependencies, ...manifest.peerDependencies, ...manifest.optionalDependencies })) {
-    if (name === OPTIONAL_PROVIDER_PACKAGE) problems.push('the standalone package must not depend on ' + name)
+  for (const name of Object.keys({
+    ...manifest.dependencies,
+    ...manifest.peerDependencies,
+    ...manifest.optionalDependencies,
+  })) {
+    if (name === OPTIONAL_PROVIDER_PACKAGE)
+      problems.push(`the standalone package must not depend on ${name}`)
   }
-  if (patch.includes(OPTIONAL_PROVIDER_PACKAGE)) problems.push('the bundle patch must not require ' + OPTIONAL_PROVIDER_PACKAGE)
+  if (patch.includes(OPTIONAL_PROVIDER_PACKAGE))
+    problems.push(`the bundle patch must not require ${OPTIONAL_PROVIDER_PACKAGE}`)
   // The agent plane belongs to the bundle shipping each of those plugins: a row
   // disabled here is one this bundle never owned, and the presets that used to
   // justify it mount no row at all.
-  for (const [, id] of patch.matchAll(/- id: ([^\n]+)\n  disabled: true/gu)) {
-    problems.push('the bundle must not disable host rows: ' + id)
+  for (const [, id] of patch.matchAll(/- id: ([^\n]+)\n {2}disabled: true/gu)) {
+    problems.push(`the bundle must not disable host rows: ${id}`)
   }
   // Skill installation requires explicit consent; npm installation must not perform it through install hooks.
   for (const script of INSTALL_LIFECYCLE_SCRIPTS) {
@@ -249,7 +275,10 @@ try {
     }
   }
   const declared = manifest.dsh?.bundle?.patch
-  if (typeof declared !== 'string' || !entries.includes(`package/${declared.replace(/^\.\//u, '')}`)) {
+  if (
+    typeof declared !== 'string' ||
+    !entries.includes(`package/${declared.replace(/^\.\//u, '')}`)
+  ) {
     problems.push('the manifest does not point at a patch file that ships')
   }
   for (const name of NAMED_PACKAGES) {
@@ -263,7 +292,8 @@ try {
   for (const name of Object.keys(manifest.dependencies ?? {})) {
     if (!name.startsWith('@deepseek-ai/')) continue
     if (LIBRARY_PACKAGES.includes(name)) continue
-    if (!mounted.has(name)) problems.push(`the manifest depends on ${name}, but no row or mode mounts it`)
+    if (!mounted.has(name))
+      problems.push(`the manifest depends on ${name}, but no row or mode mounts it`)
   }
 
   // Host-provided peers stay optional so npm need not supply missing harness
@@ -273,8 +303,9 @@ try {
   if (typeof compatibility !== 'string') {
     problems.push('the manifest does not declare dsh.compatibility.dsh for its peers to follow')
   }
-  const harnessPeers = Object.entries(manifest.peerDependencies ?? {})
-    .filter(([name]) => name.startsWith('@deepseek-ai/dsh-'))
+  const harnessPeers = Object.entries(manifest.peerDependencies ?? {}).filter(([name]) =>
+    name.startsWith('@deepseek-ai/dsh-'),
+  )
   if (harnessPeers.length === 0) {
     problems.push('the manifest no longer declares the harness packages this bundle consumes')
   }
@@ -282,7 +313,9 @@ try {
     // Accept open or declared-compatible peers for consumer-provided modules;
     // dsh.compatibility, not the peer declaration, owns the supported line.
     if (range !== compatibility && range !== '*') {
-      problems.push(`peer ${name} accepts ${String(range)}, which is neither the harness compatibility range ${String(compatibility)} nor an open range`)
+      problems.push(
+        `peer ${name} accepts ${String(range)}, which is neither the harness compatibility range ${String(compatibility)} nor an open range`,
+      )
     }
     if (manifest.peerDependenciesMeta?.[name]?.optional !== true) {
       problems.push(`peer ${name} is required, which makes npm install a private harness copy`)
@@ -292,20 +325,28 @@ try {
   // Every entry point a consumer or a type checker resolves must be inside the
   // artefact: a missing lib/types file breaks TypeScript consumers only after
   // they have installed the package.
-  const shipped = (target) => typeof target === 'string' && entries.includes(`package/${target.replace(/^\.\//u, '')}`)
+  const shipped = (target) =>
+    typeof target === 'string' && entries.includes(`package/${target.replace(/^\.\//u, '')}`)
   const declaredTargets = [
     ['main', manifest.main],
     ['types', manifest.types],
-    ...Object.entries(manifest.exports ?? {}).flatMap(([key, value]) => typeof value === 'string'
-      ? [[`exports["${key}"]`, value]]
-      : Object.entries(value).map(([condition, path]) => [`exports["${key}"].${condition}`, path])),
+    ...Object.entries(manifest.exports ?? {}).flatMap(([key, value]) =>
+      typeof value === 'string'
+        ? [[`exports["${key}"]`, value]]
+        : Object.entries(value).map(([condition, path]) => [
+            `exports["${key}"].${condition}`,
+            path,
+          ]),
+    ),
   ]
   for (const [label, target] of declaredTargets) {
-    if (!shipped(target)) problems.push(`${label} points at ${String(target)}, which is not in the tarball`)
+    if (!shipped(target))
+      problems.push(`${label} points at ${String(target)}, which is not in the tarball`)
   }
 
-  const modules = walk(join(ROOT, 'lib')).filter(file => file.endsWith('.js'))
-  for (const module of modules) execFileSync(process.execPath, ['--check', module], { stdio: 'inherit' })
+  const modules = walk(join(ROOT, 'lib')).filter((file) => file.endsWith('.js'))
+  for (const module of modules)
+    execFileSync(process.execPath, ['--check', module], { stdio: 'inherit' })
 
   console.log(`\npacked ${entries.length} entries, ${modules.length} modules parse`)
   console.log(`tarball: ${join(out, tarball)}`)

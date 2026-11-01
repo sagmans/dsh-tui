@@ -1,5 +1,5 @@
+import { type KeyId, TUI_KEYBINDINGS } from '@earendil-works/pi-tui'
 import { ENTER_KEY, normalizeKey } from './key-press.ts'
-import { TUI_KEYBINDINGS, type KeyId } from '@earendil-works/pi-tui'
 
 /**
  * Every action a reader may bind, in one table.
@@ -11,7 +11,14 @@ import { TUI_KEYBINDINGS, type KeyId } from '@earendil-works/pi-tui'
  * the layer that reads it uses: a `tui.` id belongs to pi-tui, everything else
  * to this surface.
  */
-export type ActionLayer = 'prompt' | 'surface' | 'chord' | 'gate' | 'question' | 'picker' | 'library'
+export type ActionLayer =
+  | 'prompt'
+  | 'surface'
+  | 'chord'
+  | 'gate'
+  | 'question'
+  | 'picker'
+  | 'library'
 
 /** One bindable action: what it is called, what it ships with, and what a reader may do to it. */
 export interface Action {
@@ -40,7 +47,15 @@ export interface Action {
 }
 
 /** The names the surface's own handler map is keyed by. */
-export type SurfaceActionId = 'toolDetail' | 'subCalls' | 'reasoning' | 'effort' | 'history' | 'back' | 'interrupt' | 'quit'
+export type SurfaceActionId =
+  | 'toolDetail'
+  | 'subCalls'
+  | 'reasoning'
+  | 'effort'
+  | 'history'
+  | 'back'
+  | 'interrupt'
+  | 'quit'
 
 const PROMPT_ACTIONS: readonly Action[] = [
   {
@@ -63,40 +78,203 @@ const PROMPT_ACTIONS: readonly Action[] = [
 
 /** The surface's own actions, each named as the handler map names it. */
 export const SURFACE_ACTIONS: readonly (Action & { readonly name: SurfaceActionId })[] = [
-  { id: 'surface.toolDetail', name: 'toolDetail', layer: 'surface', defaultKeys: ['ctrl+o'], label: 'tool detail', mayUseBare: false, mayUnbind: false },
-  { id: 'surface.subCalls', name: 'subCalls', layer: 'surface', defaultKeys: ['ctrl+y'], label: 'nested calls', mayUseBare: false, mayUnbind: false },
-  { id: 'surface.reasoning', name: 'reasoning', layer: 'surface', defaultKeys: ['shift+tab'], label: 'reasoning', mayUseBare: false, mayUnbind: false },
-  { id: 'surface.effort', name: 'effort', layer: 'surface', defaultKeys: ['ctrl+t'], label: 'reasoning effort', mayUseBare: false, mayUnbind: false },
-  { id: 'surface.history', name: 'history', layer: 'surface', defaultKeys: ['ctrl+r'], label: 'search prompt history', mayUseBare: false, mayUnbind: false },
-  { id: 'surface.back', name: 'back', layer: 'surface', defaultKeys: ['ctrl+b'], label: 'back to this session', mayUseBare: false, mayUnbind: false },
-  { id: 'surface.interrupt', name: 'interrupt', layer: 'surface', defaultKeys: ['ctrl+c'], label: 'cancel', mayUseBare: false, mayUnbind: false },
-  { id: 'surface.quit', name: 'quit', layer: 'surface', defaultKeys: ['ctrl+d'], label: 'quit', mayUseBare: false, mayUnbind: false },
+  {
+    id: 'surface.toolDetail',
+    name: 'toolDetail',
+    layer: 'surface',
+    defaultKeys: ['ctrl+o'],
+    label: 'tool detail',
+    mayUseBare: false,
+    mayUnbind: false,
+  },
+  {
+    id: 'surface.subCalls',
+    name: 'subCalls',
+    layer: 'surface',
+    defaultKeys: ['ctrl+y'],
+    label: 'nested calls',
+    mayUseBare: false,
+    mayUnbind: false,
+  },
+  {
+    id: 'surface.reasoning',
+    name: 'reasoning',
+    layer: 'surface',
+    defaultKeys: ['shift+tab'],
+    label: 'reasoning',
+    mayUseBare: false,
+    mayUnbind: false,
+  },
+  {
+    id: 'surface.effort',
+    name: 'effort',
+    layer: 'surface',
+    defaultKeys: ['ctrl+t'],
+    label: 'reasoning effort',
+    mayUseBare: false,
+    mayUnbind: false,
+  },
+  {
+    id: 'surface.history',
+    name: 'history',
+    layer: 'surface',
+    defaultKeys: ['ctrl+r'],
+    label: 'search prompt history',
+    mayUseBare: false,
+    mayUnbind: false,
+  },
+  {
+    id: 'surface.back',
+    name: 'back',
+    layer: 'surface',
+    defaultKeys: ['ctrl+b'],
+    label: 'back to this session',
+    mayUseBare: false,
+    mayUnbind: false,
+  },
+  {
+    id: 'surface.interrupt',
+    name: 'interrupt',
+    layer: 'surface',
+    defaultKeys: ['ctrl+c'],
+    label: 'cancel',
+    mayUseBare: false,
+    mayUnbind: false,
+  },
+  {
+    id: 'surface.quit',
+    name: 'quit',
+    layer: 'surface',
+    defaultKeys: ['ctrl+d'],
+    label: 'quit',
+    mayUseBare: false,
+    mayUnbind: false,
+  },
 ]
 
 const CHORD_ACTIONS: readonly Action[] = [
-  { id: 'chord.prefix', layer: 'chord', defaultKeys: ['ctrl+x'], label: 'start a chord', mayUseBare: false, mayUnbind: false, keyShape: 'chord' },
-  { id: 'chord.model', layer: 'chord', defaultKeys: ['m'], label: 'model', mayUseBare: true, mayUnbind: false },
-  { id: 'chord.plan', layer: 'chord', defaultKeys: ['p'], label: 'plan mode', mayUseBare: true, mayUnbind: false },
-  { id: 'chord.copy', layer: 'chord', defaultKeys: ['y'], label: 'copy', mayUseBare: true, mayUnbind: false },
-  { id: 'chord.stash', layer: 'chord', defaultKeys: ['s'], label: 'stash the draft', mayUseBare: true, mayUnbind: false },
-  { id: 'chord.stashes', layer: 'chord', defaultKeys: ['l'], label: 'stashed drafts', mayUseBare: true, mayUnbind: false },
-  { id: 'chord.editor', layer: 'chord', defaultKeys: ['e'], label: 'external editor', mayUseBare: true, mayUnbind: false },
+  {
+    id: 'chord.prefix',
+    layer: 'chord',
+    defaultKeys: ['ctrl+x'],
+    label: 'start a chord',
+    mayUseBare: false,
+    mayUnbind: false,
+    keyShape: 'chord',
+  },
+  {
+    id: 'chord.model',
+    layer: 'chord',
+    defaultKeys: ['m'],
+    label: 'model',
+    mayUseBare: true,
+    mayUnbind: false,
+  },
+  {
+    id: 'chord.plan',
+    layer: 'chord',
+    defaultKeys: ['p'],
+    label: 'plan mode',
+    mayUseBare: true,
+    mayUnbind: false,
+  },
+  {
+    id: 'chord.copy',
+    layer: 'chord',
+    defaultKeys: ['y'],
+    label: 'copy',
+    mayUseBare: true,
+    mayUnbind: false,
+  },
+  {
+    id: 'chord.stash',
+    layer: 'chord',
+    defaultKeys: ['s'],
+    label: 'stash the draft',
+    mayUseBare: true,
+    mayUnbind: false,
+  },
+  {
+    id: 'chord.stashes',
+    layer: 'chord',
+    defaultKeys: ['l'],
+    label: 'stashed drafts',
+    mayUseBare: true,
+    mayUnbind: false,
+  },
+  {
+    id: 'chord.editor',
+    layer: 'chord',
+    defaultKeys: ['e'],
+    label: 'external editor',
+    mayUseBare: true,
+    mayUnbind: false,
+  },
   // The map is the one thing a reader needs while their hands are already on the
   // keys, so it earns a chord rather than only a command they have to spell.
-  { id: 'chord.keys', layer: 'chord', defaultKeys: ['?'], label: 'key map', mayUseBare: true, mayUnbind: false },
+  {
+    id: 'chord.keys',
+    layer: 'chord',
+    defaultKeys: ['?'],
+    label: 'key map',
+    mayUseBare: true,
+    mayUnbind: false,
+  },
   // Starting over is asked for while the bar still holds a draft, and a typed
   // `/new` would have taken that draft's place rather than kept it.
-  { id: 'chord.new', layer: 'chord', defaultKeys: ['n'], label: 'new session', mayUseBare: true, mayUnbind: false },
+  {
+    id: 'chord.new',
+    layer: 'chord',
+    defaultKeys: ['n'],
+    label: 'new session',
+    mayUseBare: true,
+    mayUnbind: false,
+  },
   // Stepping back through prompts is a composer verb like stash and model, and
   // a reader asking for it is already at the bar with their hands on the keys.
-  { id: 'chord.undo', layer: 'chord', defaultKeys: ['u'], label: 'undo the last prompt', mayUseBare: true, mayUnbind: false },
-  { id: 'chord.redo', layer: 'chord', defaultKeys: ['r'], label: 'redo the undone prompt', mayUseBare: true, mayUnbind: false },
+  {
+    id: 'chord.undo',
+    layer: 'chord',
+    defaultKeys: ['u'],
+    label: 'undo the last prompt',
+    mayUseBare: true,
+    mayUnbind: false,
+  },
+  {
+    id: 'chord.redo',
+    layer: 'chord',
+    defaultKeys: ['r'],
+    label: 'redo the undone prompt',
+    mayUseBare: true,
+    mayUnbind: false,
+  },
 ]
 
 const GATE_ACTIONS: readonly Action[] = [
-  { id: 'gate.allow', layer: 'gate', defaultKeys: ['y'], label: 'allow once', mayUseBare: true, mayUnbind: false },
-  { id: 'gate.reject', layer: 'gate', defaultKeys: ['n'], label: 'reject', mayUseBare: true, mayUnbind: false },
-  { id: 'gate.cancel', layer: 'gate', defaultKeys: ['escape', 'ctrl+c'], label: 'cancel', mayUseBare: false, mayUnbind: false },
+  {
+    id: 'gate.allow',
+    layer: 'gate',
+    defaultKeys: ['y'],
+    label: 'allow once',
+    mayUseBare: true,
+    mayUnbind: false,
+  },
+  {
+    id: 'gate.reject',
+    layer: 'gate',
+    defaultKeys: ['n'],
+    label: 'reject',
+    mayUseBare: true,
+    mayUnbind: false,
+  },
+  {
+    id: 'gate.cancel',
+    layer: 'gate',
+    defaultKeys: ['escape', 'ctrl+c'],
+    label: 'cancel',
+    mayUseBare: false,
+    mayUnbind: false,
+  },
 ]
 
 // Questions, pickers, and library completion share movement aliases so switching
@@ -104,19 +282,89 @@ const GATE_ACTIONS: readonly Action[] = [
 // Separate toggling from confirmation so a question can collect multiple choices
 // before advancing; Enter commits the choice in both questions and pickers.
 const QUESTION_ACTIONS: readonly Action[] = [
-  { id: 'question.up', layer: 'question', defaultKeys: ['up', 'ctrl+p'], label: 'previous option', mayUseBare: false, mayUnbind: false },
-  { id: 'question.down', layer: 'question', defaultKeys: ['down', 'ctrl+n'], label: 'next option', mayUseBare: false, mayUnbind: false },
-  { id: 'question.toggle', layer: 'question', defaultKeys: ['space'], label: 'toggle an option', mayUseBare: false, mayUnbind: false },
-  { id: 'question.confirm', layer: 'question', defaultKeys: [ENTER_KEY], label: 'answer the question', mayUseBare: false, mayUnbind: false },
-  { id: 'question.skip', layer: 'question', defaultKeys: ['escape'], label: 'skip this question', mayUseBare: false, mayUnbind: false },
-  { id: 'question.cancel', layer: 'question', defaultKeys: ['ctrl+c'], label: 'abandon the questions', mayUseBare: false, mayUnbind: false },
+  {
+    id: 'question.up',
+    layer: 'question',
+    defaultKeys: ['up', 'ctrl+p'],
+    label: 'previous option',
+    mayUseBare: false,
+    mayUnbind: false,
+  },
+  {
+    id: 'question.down',
+    layer: 'question',
+    defaultKeys: ['down', 'ctrl+n'],
+    label: 'next option',
+    mayUseBare: false,
+    mayUnbind: false,
+  },
+  {
+    id: 'question.toggle',
+    layer: 'question',
+    defaultKeys: ['space'],
+    label: 'toggle an option',
+    mayUseBare: false,
+    mayUnbind: false,
+  },
+  {
+    id: 'question.confirm',
+    layer: 'question',
+    defaultKeys: [ENTER_KEY],
+    label: 'answer the question',
+    mayUseBare: false,
+    mayUnbind: false,
+  },
+  {
+    id: 'question.skip',
+    layer: 'question',
+    defaultKeys: ['escape'],
+    label: 'skip this question',
+    mayUseBare: false,
+    mayUnbind: false,
+  },
+  {
+    id: 'question.cancel',
+    layer: 'question',
+    defaultKeys: ['ctrl+c'],
+    label: 'abandon the questions',
+    mayUseBare: false,
+    mayUnbind: false,
+  },
 ]
 
 const PICKER_ACTIONS: readonly Action[] = [
-  { id: 'picker.up', layer: 'picker', defaultKeys: ['up', 'ctrl+p'], label: 'previous row', mayUseBare: false, mayUnbind: false },
-  { id: 'picker.down', layer: 'picker', defaultKeys: ['down', 'ctrl+n'], label: 'next row', mayUseBare: false, mayUnbind: false },
-  { id: 'picker.confirm', layer: 'picker', defaultKeys: [ENTER_KEY], label: 'take the row', mayUseBare: false, mayUnbind: false },
-  { id: 'picker.cancel', layer: 'picker', defaultKeys: ['escape', 'ctrl+c'], label: 'leave the list', mayUseBare: false, mayUnbind: false },
+  {
+    id: 'picker.up',
+    layer: 'picker',
+    defaultKeys: ['up', 'ctrl+p'],
+    label: 'previous row',
+    mayUseBare: false,
+    mayUnbind: false,
+  },
+  {
+    id: 'picker.down',
+    layer: 'picker',
+    defaultKeys: ['down', 'ctrl+n'],
+    label: 'next row',
+    mayUseBare: false,
+    mayUnbind: false,
+  },
+  {
+    id: 'picker.confirm',
+    layer: 'picker',
+    defaultKeys: [ENTER_KEY],
+    label: 'take the row',
+    mayUseBare: false,
+    mayUnbind: false,
+  },
+  {
+    id: 'picker.cancel',
+    layer: 'picker',
+    defaultKeys: ['escape', 'ctrl+c'],
+    label: 'leave the list',
+    mayUseBare: false,
+    mayUnbind: false,
+  },
 ]
 
 /**
@@ -177,11 +425,15 @@ function libraryActions(): readonly Action[] {
   return Object.entries(TUI_KEYBINDINGS)
     .filter(([id]) => KEYMAP_ALIASES[id] === undefined)
     .map(([id, definition]) => {
-      const defaults = LIBRARY_KEY_PINS[id] ?? (Array.isArray(definition.defaultKeys) ? definition.defaultKeys : [definition.defaultKeys])
+      const defaults =
+        LIBRARY_KEY_PINS[id] ??
+        (Array.isArray(definition.defaultKeys) ? definition.defaultKeys : [definition.defaultKeys])
       return {
         id,
         layer: 'library' as const,
-        defaultKeys: defaults.map(key => normalizeKey(key)).filter((key): key is KeyId => key !== undefined),
+        defaultKeys: defaults
+          .map((key) => normalizeKey(key))
+          .filter((key): key is KeyId => key !== undefined),
         label: definition.description,
         mayUseBare: false,
         // Only a key the library ships unbound may be emptied: every other row
@@ -209,8 +461,11 @@ export function isPluginActionId(id: string): boolean {
   return PLUGIN_ACTION_PATTERN.test(id)
 }
 
-export function actionOf(id: string, catalog: readonly Action[] = ACTION_CATALOG): Action | undefined {
-  return catalog.find(entry => entry.id === id)
+export function actionOf(
+  id: string,
+  catalog: readonly Action[] = ACTION_CATALOG,
+): Action | undefined {
+  return catalog.find((entry) => entry.id === id)
 }
 
 /** The keys one action ships with, this surface's own additions to a library row included. */

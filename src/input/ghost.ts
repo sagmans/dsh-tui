@@ -44,7 +44,10 @@ const NEXT_WORD = /^\s*\S+/u
 const GRAPHEMES = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
 
 /** Ghost drawing and acceptance append after the cursor, so neither may run inside existing text. */
-export function isCursorAtTextEnd(input: { lines: readonly string[]; cursor: EditorCursor }): boolean {
+export function isCursorAtTextEnd(input: {
+  lines: readonly string[]
+  cursor: EditorCursor
+}): boolean {
   const lastLineIndex = Math.max(0, input.lines.length - 1)
   const lastLine = input.lines[lastLineIndex] ?? ''
   return input.cursor.line === lastLineIndex && input.cursor.col === lastLine.length
@@ -61,7 +64,9 @@ export function ghostSuffix(input: GhostInput): string | undefined {
   // An empty prefix narrows nothing; require typed text before offering a history continuation.
   if (input.text.length === 0) return undefined
   if (!isCursorAtTextEnd(input)) return undefined
-  const match = input.entries.find(entry => entry.text !== input.text && entry.text.startsWith(input.text))
+  const match = input.entries.find(
+    (entry) => entry.text !== input.text && entry.text.startsWith(input.text),
+  )
   return match === undefined ? undefined : match.text.slice(input.text.length)
 }
 
@@ -79,5 +84,5 @@ export function ghostDisplayLine(text: string): string {
 
 /** One grapheme per entry, so styling never lands inside a character. */
 export function ghostGraphemes(text: string): string[] {
-  return [...GRAPHEMES.segment(text)].map(segment => segment.segment)
+  return [...GRAPHEMES.segment(text)].map((segment) => segment.segment)
 }

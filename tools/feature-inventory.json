@@ -6,10 +6,7 @@
       "id": "profile",
       "description": "Installed Harness, base bundle, linked worktree, fresh home",
       "cost": "free",
-      "scenarios": [
-        "commands",
-        "clone-helper"
-      ],
+      "scenarios": ["commands", "clone-helper"],
       "sources": [
         "src/index.ts",
         "src/host/",
@@ -22,12 +19,8 @@
       "id": "startup",
       "description": "New session, explicit mode, no-color and no-bell flags",
       "cost": "free",
-      "scenarios": [
-        "startup"
-      ],
-      "sources": [
-        "src/startup.ts"
-      ]
+      "scenarios": ["startup"],
+      "sources": ["src/startup.ts"]
     },
     {
       "id": "lifecycle-profiling",
@@ -70,12 +63,7 @@
       "id": "shutdown",
       "description": "Quit, exit, Ctrl+D, SIGTERM, restoration, resume hint",
       "cost": "free",
-      "scenarios": [
-        "commands",
-        "pickers",
-        "editor",
-        "signals"
-      ],
+      "scenarios": ["commands", "pickers", "editor", "signals"],
       "sources": [
         "src/terminal/restore.ts",
         "src/terminal/signals.ts",
@@ -86,38 +74,21 @@
       "id": "commands",
       "description": "Local command help, status, exact never-written todo notice, dispatch and error receipts",
       "cost": "free",
-      "scenarios": [
-        "commands",
-        "guards"
-      ],
-      "sources": [
-        "src/input/submission.ts",
-        "src/surface/commands.ts"
-      ]
+      "scenarios": ["commands", "guards"],
+      "sources": ["src/input/submission.ts", "src/surface/commands.ts"]
     },
     {
       "id": "editing",
       "description": "Unicode, multiline, paste, cursor movement, deletion, undo, yank and paging",
       "cost": "free",
-      "scenarios": [
-        "editor",
-        "editor-actions",
-        "herdr-editor",
-        "herdr-editor-actions"
-      ],
-      "sources": [
-        "src/ui/editor.ts",
-        "src/input/key-press.ts"
-      ]
+      "scenarios": ["editor", "editor-actions", "herdr-editor", "herdr-editor-actions"],
+      "sources": ["src/ui/editor.ts", "src/input/key-press.ts"]
     },
     {
       "id": "completion",
       "description": "Slash and workspace-file search, selection, navigation and completion",
       "cost": "free",
-      "scenarios": [
-        "editor",
-        "completion"
-      ],
+      "scenarios": ["editor", "completion"],
       "sources": [
         "src/input/completion.ts",
         "src/input/workspace-files.ts",
@@ -129,91 +100,49 @@
       "id": "keymap",
       "description": "Every advertised action, custom bindings, conflicts and plugin actions",
       "cost": "free",
-      "scenarios": [
-        "catalog",
-        "bindings"
-      ],
-      "sources": [
-        "src/input/action-catalog.ts",
-        "src/input/keymap-settings.ts",
-        "src/keymaps.ts"
-      ]
+      "scenarios": ["catalog", "bindings"],
+      "sources": ["src/input/action-catalog.ts", "src/input/keymap-settings.ts", "src/keymaps.ts"]
     },
     {
       "id": "chords",
       "description": "Prefix state, keys, model, stash, new, undo, redo, copy and editor",
       "cost": "free",
-      "scenarios": [
-        "chords",
-        "external-editor"
-      ],
-      "sources": [
-        "src/input/keymap.ts",
-        "src/surface/prompt-input.ts"
-      ]
+      "scenarios": ["chords", "external-editor"],
+      "sources": ["src/input/keymap.ts", "src/surface/prompt-input.ts"]
     },
     {
       "id": "pickers",
       "description": "Filter, selection, press/repeat/release, confirmation and cancellation",
       "cost": "free",
-      "scenarios": [
-        "pickers",
-        "bindings"
-      ],
-      "sources": [
-        "src/ui/picker.ts",
-        "src/surface/modal-input.ts"
-      ]
+      "scenarios": ["pickers", "bindings"],
+      "sources": ["src/ui/picker.ts", "src/surface/modal-input.ts"]
     },
     {
       "id": "model-directory",
       "description": "Model/provider selection and reasoning-effort directory",
       "cost": "free",
-      "scenarios": [
-        "pickers",
-        "guards",
-        "appearance"
-      ],
-      "sources": [
-        "src/model-list.ts",
-        "src/surface/model-choice.ts"
-      ]
+      "scenarios": ["pickers", "guards", "appearance"],
+      "sources": ["src/model-list.ts", "src/surface/model-choice.ts"]
     },
     {
       "id": "model-usage",
       "description": "Selected provider/model actually receives a live paid turn",
       "cost": "paid",
-      "scenarios": [
-        "live-reply"
-      ],
-      "sources": [
-        "src/agent/model.ts",
-        "src/surface/model-choice.ts"
-      ]
+      "scenarios": ["live-reply"],
+      "sources": ["src/agent/model.ts", "src/surface/model-choice.ts"]
     },
     {
       "id": "modes",
       "description": "Preset directory, pre-turn selection and fixed-mode refusal",
       "cost": "free",
-      "scenarios": [
-        "pickers",
-        "guards",
-        "startup"
-      ],
-      "sources": [
-        "src/agent/presets.ts",
-        "src/host/roster.ts",
-        "src/surface/preset-choice.ts"
-      ]
+      "scenarios": ["pickers", "guards", "startup"],
+      "sources": ["src/agent/presets.ts", "src/host/roster.ts", "src/surface/preset-choice.ts"]
     },
     {
       "id": "sessions",
       "description": "Rename, new, reload, resume selection, durable replay",
       "cost": "free",
-      "scenarios": [
-        "sessions",
-        "persistence"
-      ],
+      "scenarios": ["sessions", "persistence"],
       "sources": [
         "src/surface/session-lifecycle.ts",
         "src/surface/session-picker.ts",
@@ -224,62 +153,35 @@
       "id": "fork-undo-redo",
       "description": "Branch at a completed turn, hide/restore turns, queue parking",
       "cost": "paid",
-      "scenarios": [
-        "conversation"
-      ],
-      "sources": [
-        "src/agent/fork.ts",
-        "src/agent/undo.ts",
-        "src/surface/staged-turns.ts"
-      ]
+      "scenarios": ["conversation"],
+      "sources": ["src/agent/fork.ts", "src/agent/undo.ts", "src/surface/staged-turns.ts"]
     },
     {
       "id": "history",
       "description": "Native consent refusal and editor up/down recall; public consent config proves default-home persistence across restart and clear without stale search entries; repaired/deleted-file recovery remains unverified",
       "cost": "free",
-      "scenarios": [
-        "history",
-        "history-consent"
-      ],
-      "sources": [
-        "src/agent/prompt-history.ts",
-        "src/surface/prompt-memory.ts"
-      ]
+      "scenarios": ["history", "history-consent"],
+      "sources": ["src/agent/prompt-history.ts", "src/surface/prompt-memory.ts"]
     },
     {
       "id": "ghost",
       "description": "Privacy-gated suggestions, accept suggestion, opt-out and disabled-color refusal",
       "cost": "free",
-      "scenarios": [
-        "history-consent"
-      ],
-      "sources": [
-        "src/input/ghost.ts",
-        "src/surface/appearance-preferences.ts"
-      ]
+      "scenarios": ["history-consent"],
+      "sources": ["src/input/ghost.ts", "src/surface/appearance-preferences.ts"]
     },
     {
       "id": "stash",
       "description": "Native-clock park, editor-scoped apply/pop, list, selector errors, drop, clear confirmation and persisted restart",
       "cost": "free",
-      "scenarios": [
-        "stash",
-        "stash-confirm",
-        "persistence"
-      ],
-      "sources": [
-        "src/stash.ts",
-        "src/stash/"
-      ]
+      "scenarios": ["stash", "stash-confirm", "persistence"],
+      "sources": ["src/stash.ts", "src/stash/"]
     },
     {
       "id": "stash-scope",
       "description": "Path/session isolation, private persistence, quarantine and write refusal",
       "cost": "free",
-      "scenarios": [
-        "stash-security",
-        "persistence"
-      ],
+      "scenarios": ["stash-security", "persistence"],
       "sources": [
         "src/stash/paths.ts",
         "src/stash/private-fs.ts",
@@ -291,23 +193,14 @@
       "id": "export",
       "description": "Actual transcript export, owner-only files, hardlinks and symlink refusal",
       "cost": "free",
-      "scenarios": [
-        "commands",
-        "export-security"
-      ],
-      "sources": [
-        "src/export.ts"
-      ]
+      "scenarios": ["commands", "export-security"],
+      "sources": ["src/export.ts"]
     },
     {
       "id": "appearance",
       "description": "All shipped themes, tokens, preview/apply/cancel, persistent preferences",
       "cost": "free",
-      "scenarios": [
-        "appearance",
-        "persistence",
-        "bindings"
-      ],
+      "scenarios": ["appearance", "persistence", "bindings"],
       "sources": [
         "src/theme-command.ts",
         "src/theme-files.ts",
@@ -341,60 +234,35 @@
       "id": "text-cards",
       "description": "Markdown, fenced code, links, diff emphasis and oversized-text fallback",
       "cost": "paid",
-      "scenarios": [
-        "rich-text"
-      ],
-      "sources": [
-        "src/ui/markdown.ts",
-        "src/ui/diff.ts",
-        "src/text.ts"
-      ]
+      "scenarios": ["rich-text"],
+      "sources": ["src/ui/markdown.ts", "src/ui/diff.ts", "src/text.ts"]
     },
     {
       "id": "diagrams",
       "description": "Streaming/final/off Mermaid, invalid and oversized fallback, retained source export",
       "cost": "paid",
-      "scenarios": [
-        "rich-text"
-      ],
-      "sources": [
-        "src/ui/mermaid.ts"
-      ]
+      "scenarios": ["rich-text"],
+      "sources": ["src/ui/mermaid.ts"]
     },
     {
       "id": "reasoning",
       "description": "Reasoning visibility and live effort selection",
       "cost": "paid",
-      "scenarios": [
-        "live-reply"
-      ],
-      "sources": [
-        "src/surface/model-choice.ts",
-        "src/transcript/message-content.ts"
-      ]
+      "scenarios": ["live-reply"],
+      "sources": ["src/surface/model-choice.ts", "src/transcript/message-content.ts"]
     },
     {
       "id": "tool-cards",
       "description": "Live calls, results, failures, folds, tail policy and per-card mouse overrides",
       "cost": "paid",
-      "scenarios": [
-        "tools"
-      ],
-      "sources": [
-        "src/cards.ts",
-        "src/cards/",
-        "src/ui/view/tool-card.ts",
-        "src/tool-display.ts"
-      ]
+      "scenarios": ["tools"],
+      "sources": ["src/cards.ts", "src/cards/", "src/ui/view/tool-card.ts", "src/tool-display.ts"]
     },
     {
       "id": "ptc",
       "description": "Nested call summary, expansion, dispatch order, failures, program results and context-only pruning",
       "cost": "paid",
-      "scenarios": [
-        "ptc-result-pruning",
-        "ptc"
-      ],
+      "scenarios": ["ptc-result-pruning", "ptc"],
       "sources": [
         "src/transcript.ts",
         "src/agent/history.ts",
@@ -406,147 +274,84 @@
       "id": "approval",
       "description": "Live tool permission gate allow/reject/cancel without unintended work",
       "cost": "paid",
-      "scenarios": [
-        "approval"
-      ],
-      "sources": [
-        "src/gates.ts",
-        "src/ui/gate-input.ts"
-      ]
+      "scenarios": ["approval"],
+      "sources": ["src/gates.ts", "src/ui/gate-input.ts"]
     },
     {
       "id": "questions",
       "description": "Single/multiple choices, free text, edit, skip/cancel and nested questions",
       "cost": "paid",
-      "scenarios": [
-        "questions"
-      ],
-      "sources": [
-        "src/gates/questions.ts",
-        "src/gates/question-card.ts"
-      ]
+      "scenarios": ["questions"],
+      "sources": ["src/gates/questions.ts", "src/gates/question-card.ts"]
     },
     {
       "id": "busy-queue",
       "description": "Type while streaming, queue multiple prompts, cancel draft/inbox/turn in order",
       "cost": "paid",
-      "scenarios": [
-        "queue"
-      ],
-      "sources": [
-        "src/queue.ts",
-        "src/ui/queue.ts",
-        "src/surface/staged-turns.ts"
-      ]
+      "scenarios": ["queue"],
+      "sources": ["src/queue.ts", "src/ui/queue.ts", "src/surface/staged-turns.ts"]
     },
     {
       "id": "work-dock",
       "description": "Todos, goal state, plan mode, stale-plan reminders and dock lifecycle",
       "cost": "paid",
-      "scenarios": [
-        "work"
-      ],
-      "sources": [
-        "src/work.ts",
-        "src/todo-guard.ts",
-        "src/ui/dock.ts"
-      ]
+      "scenarios": ["work"],
+      "sources": ["src/work.ts", "src/todo-guard.ts", "src/ui/dock.ts"]
     },
     {
       "id": "jobs",
       "description": "Authorize jobs, read without consuming model output, observe lifecycle changes, and reject malformed or inaccessible job commands",
       "cost": "free",
-      "scenarios": [
-        "commands",
-        "guards",
-        "timers"
-      ],
-      "sources": [
-        "src/jobs.ts",
-        "src/surface/background-work.ts"
-      ]
+      "scenarios": ["commands", "guards", "timers"],
+      "sources": ["src/jobs.ts", "src/surface/background-work.ts"]
     },
     {
       "id": "live-jobs",
       "description": "Start, read, kill and finish real background work",
       "cost": "paid",
-      "scenarios": [
-        "background",
-        "timers-live"
-      ],
-      "sources": [
-        "src/surface/background-work.ts"
-      ]
+      "scenarios": ["background", "timers-live"],
+      "sources": ["src/surface/background-work.ts"]
     },
     {
       "id": "subagents",
       "description": "Empty roster and missing-child guard",
       "cost": "free",
-      "scenarios": [
-        "commands",
-        "guards"
-      ],
-      "sources": [
-        "src/subagents.ts"
-      ]
+      "scenarios": ["commands", "guards"],
+      "sources": ["src/subagents.ts"]
     },
     {
       "id": "live-subagents",
       "description": "Delegate, view child transcript, return, stop and settle",
       "cost": "paid",
-      "scenarios": [
-        "delegation"
-      ],
-      "sources": [
-        "src/subagents.ts",
-        "src/surface/session-view.ts"
-      ]
+      "scenarios": ["delegation"],
+      "sources": ["src/subagents.ts", "src/surface/session-view.ts"]
     },
     {
       "id": "search-scroll",
       "description": "Viewport paging, semantic jumps, find next/previous and return to bottom",
       "cost": "free",
-      "scenarios": [
-        "search",
-        "herdr-search"
-      ],
-      "sources": [
-        "src/fold-cursor.ts",
-        "src/ui/view.ts"
-      ]
+      "scenarios": ["search", "herdr-search"],
+      "sources": ["src/fold-cursor.ts", "src/ui/view.ts"]
     },
     {
       "id": "copy",
       "description": "Empty-copy receipt and OSC52 transport for a real answer",
       "cost": "paid",
-      "scenarios": [
-        "clipboard"
-      ],
-      "sources": [
-        "src/ui/copy.ts",
-        "src/terminal/clipboard.ts"
-      ]
+      "scenarios": ["clipboard"],
+      "sources": ["src/ui/copy.ts", "src/terminal/clipboard.ts"]
     },
     {
       "id": "external-editor",
       "description": "Suspend terminal, run local editor, recover multiline draft and restore UI",
       "cost": "free",
-      "scenarios": [
-        "external-editor",
-        "external-editor-failure"
-      ],
-      "sources": [
-        "src/terminal/external-editor.ts"
-      ]
+      "scenarios": ["external-editor", "external-editor-failure"],
+      "sources": ["src/terminal/external-editor.ts"]
     },
     {
       "id": "title-bell-warnings",
       "description": "Terminal title, attention bell, intercepted warnings and post-exit output",
       "cost": "free",
-      "scenarios": [
-        "signals",
-        "native-terminal"
-      ],
+      "scenarios": ["signals", "native-terminal"],
       "sources": [
         "src/terminal/title.ts",
         "src/terminal/bell.ts",
@@ -558,81 +363,49 @@
       "id": "skills",
       "description": "Install/update bundled skills only inside a private OS home",
       "cost": "free",
-      "scenarios": [
-        "skills"
-      ],
-      "sources": [
-        "src/install-skills.ts"
-      ]
+      "scenarios": ["skills"],
+      "sources": ["src/install-skills.ts"]
     },
     {
       "id": "compatibility",
       "description": "Actual verified-release boot, capability fallback and installed package composition",
       "cost": "free",
-      "scenarios": [
-        "commands",
-        "native-terminal"
-      ],
-      "sources": [
-        "src/compat/probe.ts",
-        "src/compat/section.ts"
-      ]
+      "scenarios": ["commands", "native-terminal"],
+      "sources": ["src/compat/probe.ts", "src/compat/section.ts"]
     },
     {
       "id": "herdr",
       "description": "Optional pane lifecycle, status publishing, attention and background-work integration",
       "cost": "environment",
-      "scenarios": [
-        "herdr-lifecycle",
-        "herdr-attention",
-        "herdr"
-      ],
-      "sources": [
-        "src/herdr/"
-      ]
+      "scenarios": ["herdr-lifecycle", "herdr-attention", "herdr"],
+      "sources": ["src/herdr/"]
     },
     {
       "id": "moshi",
       "description": "Optional token-backed completion/attention delivery, privacy and bounded failure",
       "cost": "environment",
-      "scenarios": [
-        "moshi"
-      ],
-      "sources": [
-        "src/moshi.ts"
-      ]
+      "scenarios": ["moshi"],
+      "sources": ["src/moshi.ts"]
     },
     {
       "id": "emulators",
       "description": "Physical keys, clipboard acceptance, tmux/SSH and hardware latency",
       "cost": "environment",
-      "scenarios": [
-        "tmux-compatibility",
-        "emulators"
-      ],
-      "sources": [
-        "src/terminal/"
-      ]
+      "scenarios": ["tmux-compatibility", "emulators"],
+      "sources": ["src/terminal/"]
     },
     {
       "id": "release",
       "description": "Real helper read-only operations and dry-run publication guards",
       "cost": "free",
-      "scenarios": [
-        "release-dry-run"
-      ],
-      "sources": [
-        "scripts/npm/"
-      ]
+      "scenarios": ["release-dry-run"],
+      "sources": ["scripts/npm/"]
     },
     {
       "id": "duration-indicators",
       "description": "Keep tool clocks across replay, normalize elapsed labels, and repaint live jobs and children after parent settlement",
       "cost": "free",
-      "scenarios": [
-        "timers",
-        "native-terminal"
-      ],
+      "scenarios": ["timers", "native-terminal"],
       "sources": [
         "src/jobs.ts",
         "src/subagents.ts",
@@ -648,9 +421,7 @@
       "id": "live-duration-indicators",
       "description": "Verify real foreground duration, post-turn job age advancement, and replay with the explicitly selected paid model",
       "cost": "paid",
-      "scenarios": [
-        "timers-live"
-      ],
+      "scenarios": ["timers-live"],
       "sources": [
         "src/transcript/tool-calls.ts",
         "src/surface/session-lifecycle.ts",
@@ -807,11 +578,7 @@
       "id": "prompt.submit",
       "layer": "prompt",
       "description": "submit the prompt",
-      "defaultKeys": [
-        "ctrl+enter",
-        "alt+enter",
-        "ctrl+s"
-      ],
+      "defaultKeys": ["ctrl+enter", "alt+enter", "ctrl+s"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -819,11 +586,7 @@
       "id": "prompt.newLine",
       "layer": "prompt",
       "description": "break the line",
-      "defaultKeys": [
-        "enter",
-        "shift+enter",
-        "ctrl+j"
-      ],
+      "defaultKeys": ["enter", "shift+enter", "ctrl+j"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -831,9 +594,7 @@
       "id": "surface.toolDetail",
       "layer": "surface",
       "description": "tool detail",
-      "defaultKeys": [
-        "ctrl+o"
-      ],
+      "defaultKeys": ["ctrl+o"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -841,9 +602,7 @@
       "id": "surface.subCalls",
       "layer": "surface",
       "description": "nested calls",
-      "defaultKeys": [
-        "ctrl+y"
-      ],
+      "defaultKeys": ["ctrl+y"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -851,9 +610,7 @@
       "id": "surface.reasoning",
       "layer": "surface",
       "description": "reasoning",
-      "defaultKeys": [
-        "shift+tab"
-      ],
+      "defaultKeys": ["shift+tab"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -861,9 +618,7 @@
       "id": "surface.effort",
       "layer": "surface",
       "description": "reasoning effort",
-      "defaultKeys": [
-        "ctrl+t"
-      ],
+      "defaultKeys": ["ctrl+t"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -871,9 +626,7 @@
       "id": "surface.history",
       "layer": "surface",
       "description": "search prompt history",
-      "defaultKeys": [
-        "ctrl+r"
-      ],
+      "defaultKeys": ["ctrl+r"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -881,9 +634,7 @@
       "id": "surface.back",
       "layer": "surface",
       "description": "back to this session",
-      "defaultKeys": [
-        "ctrl+b"
-      ],
+      "defaultKeys": ["ctrl+b"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -891,9 +642,7 @@
       "id": "surface.interrupt",
       "layer": "surface",
       "description": "cancel",
-      "defaultKeys": [
-        "ctrl+c"
-      ],
+      "defaultKeys": ["ctrl+c"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -901,9 +650,7 @@
       "id": "surface.quit",
       "layer": "surface",
       "description": "quit",
-      "defaultKeys": [
-        "ctrl+d"
-      ],
+      "defaultKeys": ["ctrl+d"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -911,9 +658,7 @@
       "id": "chord.prefix",
       "layer": "chord",
       "description": "start a chord",
-      "defaultKeys": [
-        "ctrl+x"
-      ],
+      "defaultKeys": ["ctrl+x"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -921,9 +666,7 @@
       "id": "chord.model",
       "layer": "chord",
       "description": "model",
-      "defaultKeys": [
-        "m"
-      ],
+      "defaultKeys": ["m"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -931,9 +674,7 @@
       "id": "chord.plan",
       "layer": "chord",
       "description": "plan mode",
-      "defaultKeys": [
-        "p"
-      ],
+      "defaultKeys": ["p"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -941,9 +682,7 @@
       "id": "chord.copy",
       "layer": "chord",
       "description": "copy",
-      "defaultKeys": [
-        "y"
-      ],
+      "defaultKeys": ["y"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -951,9 +690,7 @@
       "id": "chord.stash",
       "layer": "chord",
       "description": "stash the draft",
-      "defaultKeys": [
-        "s"
-      ],
+      "defaultKeys": ["s"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -961,9 +698,7 @@
       "id": "chord.stashes",
       "layer": "chord",
       "description": "stashed drafts",
-      "defaultKeys": [
-        "l"
-      ],
+      "defaultKeys": ["l"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -971,9 +706,7 @@
       "id": "chord.editor",
       "layer": "chord",
       "description": "external editor",
-      "defaultKeys": [
-        "e"
-      ],
+      "defaultKeys": ["e"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -981,9 +714,7 @@
       "id": "chord.keys",
       "layer": "chord",
       "description": "key map",
-      "defaultKeys": [
-        "?"
-      ],
+      "defaultKeys": ["?"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -991,9 +722,7 @@
       "id": "chord.new",
       "layer": "chord",
       "description": "new session",
-      "defaultKeys": [
-        "n"
-      ],
+      "defaultKeys": ["n"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -1001,9 +730,7 @@
       "id": "chord.undo",
       "layer": "chord",
       "description": "undo the last prompt",
-      "defaultKeys": [
-        "u"
-      ],
+      "defaultKeys": ["u"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -1011,9 +738,7 @@
       "id": "chord.redo",
       "layer": "chord",
       "description": "redo the undone prompt",
-      "defaultKeys": [
-        "r"
-      ],
+      "defaultKeys": ["r"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -1021,9 +746,7 @@
       "id": "gate.allow",
       "layer": "gate",
       "description": "allow once",
-      "defaultKeys": [
-        "y"
-      ],
+      "defaultKeys": ["y"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "paid"
     },
@@ -1031,9 +754,7 @@
       "id": "gate.reject",
       "layer": "gate",
       "description": "reject",
-      "defaultKeys": [
-        "n"
-      ],
+      "defaultKeys": ["n"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "paid"
     },
@@ -1041,10 +762,7 @@
       "id": "gate.cancel",
       "layer": "gate",
       "description": "cancel",
-      "defaultKeys": [
-        "escape",
-        "ctrl+c"
-      ],
+      "defaultKeys": ["escape", "ctrl+c"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "paid"
     },
@@ -1052,10 +770,7 @@
       "id": "question.up",
       "layer": "question",
       "description": "previous option",
-      "defaultKeys": [
-        "up",
-        "ctrl+p"
-      ],
+      "defaultKeys": ["up", "ctrl+p"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "paid"
     },
@@ -1063,10 +778,7 @@
       "id": "question.down",
       "layer": "question",
       "description": "next option",
-      "defaultKeys": [
-        "down",
-        "ctrl+n"
-      ],
+      "defaultKeys": ["down", "ctrl+n"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "paid"
     },
@@ -1074,9 +786,7 @@
       "id": "question.toggle",
       "layer": "question",
       "description": "toggle an option",
-      "defaultKeys": [
-        "space"
-      ],
+      "defaultKeys": ["space"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "paid"
     },
@@ -1084,9 +794,7 @@
       "id": "question.confirm",
       "layer": "question",
       "description": "answer the question",
-      "defaultKeys": [
-        "enter"
-      ],
+      "defaultKeys": ["enter"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "paid"
     },
@@ -1094,9 +802,7 @@
       "id": "question.skip",
       "layer": "question",
       "description": "skip this question",
-      "defaultKeys": [
-        "escape"
-      ],
+      "defaultKeys": ["escape"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "paid"
     },
@@ -1104,9 +810,7 @@
       "id": "question.cancel",
       "layer": "question",
       "description": "abandon the questions",
-      "defaultKeys": [
-        "ctrl+c"
-      ],
+      "defaultKeys": ["ctrl+c"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "paid"
     },
@@ -1114,10 +818,7 @@
       "id": "picker.up",
       "layer": "picker",
       "description": "previous row",
-      "defaultKeys": [
-        "up",
-        "ctrl+p"
-      ],
+      "defaultKeys": ["up", "ctrl+p"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -1125,10 +826,7 @@
       "id": "picker.down",
       "layer": "picker",
       "description": "next row",
-      "defaultKeys": [
-        "down",
-        "ctrl+n"
-      ],
+      "defaultKeys": ["down", "ctrl+n"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -1136,9 +834,7 @@
       "id": "picker.confirm",
       "layer": "picker",
       "description": "take the row",
-      "defaultKeys": [
-        "enter"
-      ],
+      "defaultKeys": ["enter"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -1146,10 +842,7 @@
       "id": "picker.cancel",
       "layer": "picker",
       "description": "leave the list",
-      "defaultKeys": [
-        "escape",
-        "ctrl+c"
-      ],
+      "defaultKeys": ["escape", "ctrl+c"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -1157,9 +850,7 @@
       "id": "tui.editor.cursorUp",
       "layer": "library",
       "description": "Move cursor up",
-      "defaultKeys": [
-        "up"
-      ],
+      "defaultKeys": ["up"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -1167,9 +858,7 @@
       "id": "tui.editor.cursorDown",
       "layer": "library",
       "description": "Move cursor down",
-      "defaultKeys": [
-        "down"
-      ],
+      "defaultKeys": ["down"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -1193,10 +882,7 @@
       "id": "tui.editor.cursorLeft",
       "layer": "library",
       "description": "Move cursor left",
-      "defaultKeys": [
-        "left",
-        "ctrl+b"
-      ],
+      "defaultKeys": ["left", "ctrl+b"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -1204,10 +890,7 @@
       "id": "tui.editor.cursorRight",
       "layer": "library",
       "description": "Move cursor right",
-      "defaultKeys": [
-        "right",
-        "ctrl+f"
-      ],
+      "defaultKeys": ["right", "ctrl+f"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -1215,11 +898,7 @@
       "id": "tui.editor.cursorWordLeft",
       "layer": "library",
       "description": "Move cursor word left",
-      "defaultKeys": [
-        "alt+left",
-        "ctrl+left",
-        "alt+b"
-      ],
+      "defaultKeys": ["alt+left", "ctrl+left", "alt+b"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -1227,11 +906,7 @@
       "id": "tui.editor.cursorWordRight",
       "layer": "library",
       "description": "Move cursor word right",
-      "defaultKeys": [
-        "alt+right",
-        "ctrl+right",
-        "alt+f"
-      ],
+      "defaultKeys": ["alt+right", "ctrl+right", "alt+f"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -1239,11 +914,7 @@
       "id": "tui.editor.cursorLineStart",
       "layer": "library",
       "description": "Move to line start",
-      "defaultKeys": [
-        "home",
-        "ctrl+home",
-        "ctrl+a"
-      ],
+      "defaultKeys": ["home", "ctrl+home", "ctrl+a"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -1251,11 +922,7 @@
       "id": "tui.editor.cursorLineEnd",
       "layer": "library",
       "description": "Move to line end",
-      "defaultKeys": [
-        "end",
-        "ctrl+end",
-        "ctrl+e"
-      ],
+      "defaultKeys": ["end", "ctrl+end", "ctrl+e"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -1263,9 +930,7 @@
       "id": "tui.editor.jumpForward",
       "layer": "library",
       "description": "Jump forward to character",
-      "defaultKeys": [
-        "ctrl+]"
-      ],
+      "defaultKeys": ["ctrl+]"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -1273,9 +938,7 @@
       "id": "tui.editor.jumpBackward",
       "layer": "library",
       "description": "Jump backward to character",
-      "defaultKeys": [
-        "ctrl+alt+]"
-      ],
+      "defaultKeys": ["ctrl+alt+]"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -1283,10 +946,7 @@
       "id": "tui.editor.pageUp",
       "layer": "library",
       "description": "Page up",
-      "defaultKeys": [
-        "pageUp",
-        "ctrl+pageUp"
-      ],
+      "defaultKeys": ["pageUp", "ctrl+pageUp"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -1294,10 +954,7 @@
       "id": "tui.editor.pageDown",
       "layer": "library",
       "description": "Page down",
-      "defaultKeys": [
-        "pageDown",
-        "ctrl+pageDown"
-      ],
+      "defaultKeys": ["pageDown", "ctrl+pageDown"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -1305,9 +962,7 @@
       "id": "tui.editor.deleteCharBackward",
       "layer": "library",
       "description": "Delete character backward",
-      "defaultKeys": [
-        "backspace"
-      ],
+      "defaultKeys": ["backspace"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -1315,10 +970,7 @@
       "id": "tui.editor.deleteCharForward",
       "layer": "library",
       "description": "Delete character forward",
-      "defaultKeys": [
-        "delete",
-        "ctrl+d"
-      ],
+      "defaultKeys": ["delete", "ctrl+d"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -1326,10 +978,7 @@
       "id": "tui.editor.deleteWordBackward",
       "layer": "library",
       "description": "Delete word backward",
-      "defaultKeys": [
-        "ctrl+w",
-        "alt+backspace"
-      ],
+      "defaultKeys": ["ctrl+w", "alt+backspace"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -1337,10 +986,7 @@
       "id": "tui.editor.deleteWordForward",
       "layer": "library",
       "description": "Delete word forward",
-      "defaultKeys": [
-        "alt+d",
-        "alt+delete"
-      ],
+      "defaultKeys": ["alt+d", "alt+delete"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -1348,9 +994,7 @@
       "id": "tui.editor.deleteToLineStart",
       "layer": "library",
       "description": "Delete to line start",
-      "defaultKeys": [
-        "ctrl+u"
-      ],
+      "defaultKeys": ["ctrl+u"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -1358,9 +1002,7 @@
       "id": "tui.editor.deleteToLineEnd",
       "layer": "library",
       "description": "Delete to line end",
-      "defaultKeys": [
-        "ctrl+k"
-      ],
+      "defaultKeys": ["ctrl+k"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -1368,9 +1010,7 @@
       "id": "tui.editor.yank",
       "layer": "library",
       "description": "Yank",
-      "defaultKeys": [
-        "ctrl+y"
-      ],
+      "defaultKeys": ["ctrl+y"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -1378,9 +1018,7 @@
       "id": "tui.editor.yankPop",
       "layer": "library",
       "description": "Yank pop",
-      "defaultKeys": [
-        "alt+y"
-      ],
+      "defaultKeys": ["alt+y"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -1388,9 +1026,7 @@
       "id": "tui.editor.undo",
       "layer": "library",
       "description": "Undo",
-      "defaultKeys": [
-        "ctrl+-"
-      ],
+      "defaultKeys": ["ctrl+-"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -1398,9 +1034,7 @@
       "id": "tui.input.tab",
       "layer": "library",
       "description": "Tab / autocomplete",
-      "defaultKeys": [
-        "tab"
-      ],
+      "defaultKeys": ["tab"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -1408,9 +1042,7 @@
       "id": "tui.input.copy",
       "layer": "library",
       "description": "Copy selection",
-      "defaultKeys": [
-        "ctrl+c"
-      ],
+      "defaultKeys": ["ctrl+c"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -1418,9 +1050,7 @@
       "id": "tui.select.up",
       "layer": "library",
       "description": "Move selection up",
-      "defaultKeys": [
-        "up"
-      ],
+      "defaultKeys": ["up"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -1428,9 +1058,7 @@
       "id": "tui.select.down",
       "layer": "library",
       "description": "Move selection down",
-      "defaultKeys": [
-        "down"
-      ],
+      "defaultKeys": ["down"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -1438,9 +1066,7 @@
       "id": "tui.select.pageUp",
       "layer": "library",
       "description": "Selection page up",
-      "defaultKeys": [
-        "pageUp"
-      ],
+      "defaultKeys": ["pageUp"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -1448,9 +1074,7 @@
       "id": "tui.select.pageDown",
       "layer": "library",
       "description": "Selection page down",
-      "defaultKeys": [
-        "pageDown"
-      ],
+      "defaultKeys": ["pageDown"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -1458,9 +1082,7 @@
       "id": "tui.select.confirm",
       "layer": "library",
       "description": "Confirm selection",
-      "defaultKeys": [
-        "enter"
-      ],
+      "defaultKeys": ["enter"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -1468,10 +1090,7 @@
       "id": "tui.select.cancel",
       "layer": "library",
       "description": "Cancel selection",
-      "defaultKeys": [
-        "escape",
-        "ctrl+c"
-      ],
+      "defaultKeys": ["escape", "ctrl+c"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -1479,9 +1098,7 @@
       "id": "tui.altScreen.pageUp",
       "layer": "library",
       "description": "Scroll viewport up one page",
-      "defaultKeys": [
-        "pageUp"
-      ],
+      "defaultKeys": ["pageUp"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -1489,9 +1106,7 @@
       "id": "tui.altScreen.pageDown",
       "layer": "library",
       "description": "Scroll viewport down one page",
-      "defaultKeys": [
-        "pageDown"
-      ],
+      "defaultKeys": ["pageDown"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -1531,10 +1146,7 @@
       "id": "tui.altScreen.previousPrompt",
       "layer": "library",
       "description": "Jump to previous semantic prompt",
-      "defaultKeys": [
-        "ctrl+shift+up",
-        "ctrl+up"
-      ],
+      "defaultKeys": ["ctrl+shift+up", "ctrl+up"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -1542,10 +1154,7 @@
       "id": "tui.altScreen.nextPrompt",
       "layer": "library",
       "description": "Jump to next semantic prompt",
-      "defaultKeys": [
-        "ctrl+shift+down",
-        "ctrl+down"
-      ],
+      "defaultKeys": ["ctrl+shift+down", "ctrl+down"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -1553,9 +1162,7 @@
       "id": "tui.altScreen.search",
       "layer": "library",
       "description": "Search the primary scroll view",
-      "defaultKeys": [
-        "ctrl+shift+f"
-      ],
+      "defaultKeys": ["ctrl+shift+f"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -1563,10 +1170,7 @@
       "id": "tui.altScreen.searchNext",
       "layer": "library",
       "description": "Select the next search match",
-      "defaultKeys": [
-        "enter",
-        "ctrl+g"
-      ],
+      "defaultKeys": ["enter", "ctrl+g"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -1574,10 +1178,7 @@
       "id": "tui.altScreen.searchPrevious",
       "layer": "library",
       "description": "Select the previous search match",
-      "defaultKeys": [
-        "shift+enter",
-        "ctrl+shift+g"
-      ],
+      "defaultKeys": ["shift+enter", "ctrl+shift+g"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -1585,9 +1186,7 @@
       "id": "tui.altScreen.searchClose",
       "layer": "library",
       "description": "Close transcript search",
-      "defaultKeys": [
-        "escape"
-      ],
+      "defaultKeys": ["escape"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -1595,9 +1194,7 @@
       "id": "tui.altScreen.top",
       "layer": "library",
       "description": "Scroll viewport to top",
-      "defaultKeys": [
-        "home"
-      ],
+      "defaultKeys": ["home"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     },
@@ -1605,9 +1202,7 @@
       "id": "tui.altScreen.bottom",
       "layer": "library",
       "description": "Scroll viewport to bottom",
-      "defaultKeys": [
-        "end"
-      ],
+      "defaultKeys": ["end"],
       "proof": "Catalog visibility is not dispatch proof.",
       "execution": "free"
     }

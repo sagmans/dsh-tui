@@ -1,4 +1,4 @@
-import { type ToolSubCall, type ToolSubCallRows, type ToolCard, clipLine } from '../cards.ts'
+import { clipLine, type ToolCard, type ToolSubCall, type ToolSubCallRows } from '../cards.ts'
 
 /**
  * Nested calls retained on one PTC card.
@@ -42,7 +42,13 @@ export interface SubCallFacts {
  * because a program's calls are told apart by their outcomes rather than by
  * anything the program itself says about them.
  */
-export function subCallRow(id: string, name: string, argumentsJson: string, facts: SubCallFacts, existing?: ToolSubCall): ToolSubCall {
+export function subCallRow(
+  id: string,
+  name: string,
+  argumentsJson: string,
+  facts: SubCallFacts,
+  existing?: ToolSubCall,
+): ToolSubCall {
   const { view, output, status, running, failed } = facts
   const title = view?.title ?? existing?.title ?? name
   const skill = view?.skill ?? existing?.skill
@@ -51,7 +57,7 @@ export function subCallRow(id: string, name: string, argumentsJson: string, fact
   // Hide the call's declared presentation on failure so a proposed change does
   // not read as confirmed success. Result rows remain available for inspection;
   // failure alone does not establish whether side effects occurred.
-  const presented = failed ? undefined : subCallRows(view) ?? existing?.presented
+  const presented = failed ? undefined : (subCallRows(view) ?? existing?.presented)
   // A settle that reports nothing keeps what the row already said about its own
   // outcome, because a call does not stop having finished a certain way.
   const ended = status ?? existing?.status
@@ -77,7 +83,11 @@ export function subCallRow(id: string, name: string, argumentsJson: string, fact
  */
 export function subCallRows(card: ToolCard | undefined): ToolSubCallRows | undefined {
   if (card === undefined || card.detail.length === 0) return undefined
-  return { kind: card.kind, rows: card.detail, totalLines: Math.max(card.totalLines, card.detail.length) }
+  return {
+    kind: card.kind,
+    rows: card.detail,
+    totalLines: Math.max(card.totalLines, card.detail.length),
+  }
 }
 
 /**
@@ -88,7 +98,9 @@ export function subCallRows(card: ToolCard | undefined): ToolSubCallRows | undef
  * travel with the rebuild: dropping the argument is how a shell card loses its
  * command the moment a presenter declines the result.
  */
-export function carriedFields(card: ToolCard): Pick<ToolCard, 'skill' | 'argument' | 'stats' | 'status' | 'subCalls' | 'subCallsTotal'> {
+export function carriedFields(
+  card: ToolCard,
+): Pick<ToolCard, 'skill' | 'argument' | 'stats' | 'status' | 'subCalls' | 'subCallsTotal'> {
   return {
     ...(card.skill === undefined ? {} : { skill: card.skill }),
     ...(card.argument === undefined ? {} : { argument: card.argument }),

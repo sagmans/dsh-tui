@@ -1,4 +1,4 @@
-import { HStack, Spacer, VStack, type Component } from '@earendil-works/pi-tui'
+import { type Component, HStack, Spacer, VStack } from '@earendil-works/pi-tui'
 import { Gutter } from './gutter.ts'
 
 /**

@@ -32,7 +32,15 @@ import { fileURLToPath } from 'node:url'
 
 const LEVELS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']
 /** Fields a catalog entry may inherit, and the layer each value came from. */
-const INHERITED_FIELDS = ['contextWindow', 'maxTokens', 'cost', 'input', 'reasoning', 'thinkingLevelMap', 'api']
+const INHERITED_FIELDS = [
+  'contextWindow',
+  'maxTokens',
+  'cost',
+  'input',
+  'reasoning',
+  'thinkingLevelMap',
+  'api',
+]
 /** What a model with no installed sibling and no template must state itself. */
 const REQUIRED_METADATA = ['api', 'reasoning', 'input', 'cost', 'contextWindow', 'maxTokens']
 const COST_FIELDS = ['input', 'output', 'cacheRead', 'cacheWrite']
@@ -55,14 +63,19 @@ export function supportedLevels(levelMap) {
 
 /** Defaults target the documented TUI patch; DSH_HOME keeps inspection on the caller-selected home. */
 function parseArgs(argv) {
-  const options = { home: process.env.DSH_HOME ?? join(homedir(), '.dsh'), profile: 'tui', data: undefined, json: false }
+  const options = {
+    home: process.env.DSH_HOME ?? join(homedir(), '.dsh'),
+    profile: 'tui',
+    data: undefined,
+    json: false,
+  }
   for (let index = 0; index < argv.length; index += 1) {
     const flag = argv[index]
     if (flag === '--json') options.json = true
     else if (flag === '--home') options.home = argv[++index]
     else if (flag === '--profile') options.profile = argv[++index]
     else if (flag === '--data') options.data = argv[++index]
-    else throw new Error('unknown argument ' + flag)
+    else throw new Error(`unknown argument ${flag}`)
   }
   return options
 }
@@ -101,7 +114,7 @@ export function catalogConfig(patch) {
 export function providerData(directory, source) {
   if (directory === undefined || source === undefined) return undefined
   try {
-    return JSON.parse(readFileSync(join(directory, source + '.json'), 'utf8'))
+    return JSON.parse(readFileSync(join(directory, `${source}.json`), 'utf8'))
   } catch {
     return undefined
   }
@@ -110,37 +123,41 @@ export function providerData(directory, source) {
 /** Installed models in the order the source publishes them, one api map at a time. */
 function installedModels(data) {
   if (data === undefined) return []
-  return Object.entries(data).flatMap(([api, models]) => Object.entries(models)
-    .map(([id, model]) => ({ ...model, id, api: model.api ?? api })))
+  return Object.entries(data).flatMap(([api, models]) =>
+    Object.entries(models).map(([id, model]) => ({ ...model, id, api: model.api ?? api })),
+  )
 }
 
 /** Mirror the resolver's pattern rule so a filter reads the same here and there. */
 function patternToRegExp(pattern) {
-  const escaped = pattern.split(WILDCARD).map(part => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-  return new RegExp('^' + escaped.join('.*') + '$')
+  const escaped = pattern.split(WILDCARD).map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+  return new RegExp(`^${escaped.join('.*')}$`)
 }
 
 /** A filter keeps installed facts and order, then drops what exclude names. */
 export function expandFilter(data, filter) {
   const include = filter?.include === undefined ? undefined : filter.include.map(patternToRegExp)
   const exclude = filter?.exclude === undefined ? [] : filter.exclude.map(patternToRegExp)
-  return installedModels(data)
-    .filter(model => (include === undefined || include.some(pattern => pattern.test(model.id)))
-      && !exclude.some(pattern => pattern.test(model.id)))
+  return installedModels(data).filter(
+    (model) =>
+      (include === undefined || include.some((pattern) => pattern.test(model.id))) &&
+      !exclude.some((pattern) => pattern.test(model.id)),
+  )
 }
 
 /** Look one id up across a provider's api maps; an api in the spec disambiguates. */
 function lookup(data, id, api) {
   if (data === undefined) return undefined
   for (const [key, models] of Object.entries(data)) {
-    if ((api === undefined || key === api) && models[id] !== undefined) return { ...models[id], api: models[id].api ?? key }
+    if ((api === undefined || key === api) && models[id] !== undefined)
+      return { ...models[id], api: models[id].api ?? key }
   }
   return undefined
 }
 
 function costOf(cost) {
   if (cost === undefined) return undefined
-  return '$' + COST_FIELDS.map(field => cost[field]).join('/') + ' per 1M'
+  return `$${COST_FIELDS.map((field) => cost[field]).join('/')} per 1M`
 }
 
 /** Resolve one catalog entry against the installed data it may inherit from. */
@@ -150,7 +167,7 @@ export function resolve(spec, data, routeApi) {
   const cloneOf = spec.template ?? spec.id
   const base = lookup(data, cloneOf, metadata.api)
   if (base === undefined && !declared) {
-    return { error: 'no source entry for ' + cloneOf + '; declare a template or metadata' }
+    return { error: `no source entry for ${cloneOf}; declare a template or metadata` }
   }
   const merged = { ...base, ...metadata, id: spec.id, name: spec.name ?? base?.name ?? spec.id }
   // A route that names no source states its protocol once, for every model.
@@ -158,19 +175,29 @@ export function resolve(spec, data, routeApi) {
   // Capacity and the request default are different numbers, and the resolver
   // caps one by the other: folding them would hide the mistake it refuses.
   const capacity = metadata.maxTokens ?? base?.maxTokens
-  const missing = base === undefined
-    ? REQUIRED_METADATA.filter(field => field === 'api' ? merged.api === undefined : metadata[field] === undefined)
-    : []
-  if (missing.length > 0) return { error: 'unknown model requires complete metadata: missing ' + missing.join(', ') }
-  if (spec.defaultMaxTokens !== undefined && capacity !== undefined && spec.defaultMaxTokens > capacity) {
-    return { error: 'defaultMaxTokens ' + spec.defaultMaxTokens + ' exceeds model maxTokens ' + capacity }
+  const missing =
+    base === undefined
+      ? REQUIRED_METADATA.filter((field) =>
+          field === 'api' ? merged.api === undefined : metadata[field] === undefined,
+        )
+      : []
+  if (missing.length > 0)
+    return { error: `unknown model requires complete metadata: missing ${missing.join(', ')}` }
+  if (
+    spec.defaultMaxTokens !== undefined &&
+    capacity !== undefined &&
+    spec.defaultMaxTokens > capacity
+  ) {
+    return {
+      error: `defaultMaxTokens ${spec.defaultMaxTokens} exceeds model maxTokens ${capacity}`,
+    }
   }
   const origins = {}
   for (const field of INHERITED_FIELDS) {
     if (metadata[field] !== undefined) origins[field] = METADATA
     else if (field === 'api' && base === undefined && routeApi !== undefined) origins[field] = ROUTE
     else if (base === undefined) origins[field] = ABSENT
-    else origins[field] = spec.template === undefined ? INSTALLED : 'template:' + spec.template
+    else origins[field] = spec.template === undefined ? INSTALLED : `template:${spec.template}`
   }
   return {
     model: { ...merged, maxTokens: capacity },
@@ -178,9 +205,13 @@ export function resolve(spec, data, routeApi) {
     levels: supportedLevels(merged.thinkingLevelMap),
     ...(spec.defaultMaxTokens === undefined ? {} : { requestMax: spec.defaultMaxTokens }),
     ...(spec.aliases === undefined ? {} : { aliases: spec.aliases.join(',') }),
-    ...(metadata.cost?.tiers === undefined ? {} : {
-      tiers: metadata.cost.tiers.map(tier => 'above ' + tier.inputTokensAbove + ': ' + costOf(tier)).join('; '),
-    }),
+    ...(metadata.cost?.tiers === undefined
+      ? {}
+      : {
+          tiers: metadata.cost.tiers
+            .map((tier) => `above ${tier.inputTokensAbove}: ${costOf(tier)}`)
+            .join('; '),
+        }),
   }
 }
 
@@ -199,27 +230,30 @@ function rowsOf(catalog, directory) {
       if (data === undefined) {
         rows.push({
           route: provider.id,
-          error: 'filter expands the installed catalog of source "' + provider.source + '"; no harness install found',
+          error:
+            'filter expands the installed catalog of source "' +
+            provider.source +
+            '"; no harness install found',
         })
         continue
       }
       for (const model of expandFilter(data, provider.filter)) {
         rows.push({
-          route: provider.id + '/' + model.id,
+          route: `${provider.id}/${model.id}`,
           name: model.name ?? model.id,
           api: model.api,
           contextWindow: model.contextWindow,
           maxTokens: model.maxTokens,
           cost: costOf(model.cost),
           levels: supportedLevels(model.thinkingLevelMap).join(','),
-          origins: 'filter:' + (provider.filter.include ?? [WILDCARD]).join(',') + ' all installed',
+          origins: `filter:${(provider.filter.include ?? [WILDCARD]).join(',')} all installed`,
         })
       }
       continue
     }
     for (const spec of provider.models ?? []) {
       const result = resolve(spec, data, provider.api)
-      const route = provider.id + '/' + spec.id
+      const route = `${provider.id}/${spec.id}`
       if (result.error !== undefined) {
         rows.push({ route, error: result.error })
         continue
@@ -237,11 +271,11 @@ function rowsOf(catalog, directory) {
         ...(result.tiers === undefined ? {} : { tiers: result.tiers }),
         // Installed facts are the baseline; name only other origins to expose
         // template inheritance and catalog overrides without repeating that baseline.
-        origins: INHERITED_FIELDS
-          .map(field => [field, result.origins[field]])
-          .filter(([, origin]) => origin !== INSTALLED)
-          .map(([field, origin]) => field + '=' + origin)
-          .join(' ') || 'all installed',
+        origins:
+          INHERITED_FIELDS.map((field) => [field, result.origins[field]])
+            .filter(([, origin]) => origin !== INSTALLED)
+            .map(([field, origin]) => `${field}=${origin}`)
+            .join(' ') || 'all installed',
       })
     }
   }
@@ -254,10 +288,12 @@ function rowsOf(catalog, directory) {
  * broken catalog readable.
  */
 export function checkDefault(catalog, rows) {
-  const served = rows.filter(row => row.error === undefined)
+  const served = rows.filter((row) => row.error === undefined)
   const selection = catalog.default ?? null
   if (served.length === 0) {
-    return selection === null ? [] : [{ route: 'default', error: 'an empty catalog requires default null' }]
+    return selection === null
+      ? []
+      : [{ route: 'default', error: 'an empty catalog requires default null' }]
   }
   if (selection === null || typeof selection !== 'object') {
     return [{ route: 'default', error: 'a served catalog requires a default selection' }]
@@ -265,18 +301,23 @@ export function checkDefault(catalog, rows) {
   const alias = new Map()
   for (const provider of catalog.providers ?? []) {
     for (const model of provider.models ?? []) {
-      for (const name of [model.id, ...(model.aliases ?? [])]) alias.set(provider.id + '/' + name, model.id)
+      for (const name of [model.id, ...(model.aliases ?? [])])
+        alias.set(`${provider.id}/${name}`, model.id)
     }
   }
-  const route = selection.provider + '/' + selection.model
+  const route = `${selection.provider}/${selection.model}`
   const canonical = alias.get(route)
-  const row = served.find(candidate => candidate.route === selection.provider + '/' + (canonical ?? selection.model))
+  const row = served.find(
+    (candidate) => candidate.route === `${selection.provider}/${canonical ?? selection.model}`,
+  )
   if (row === undefined) {
-    return [{ route: 'default', error: 'provider/model is outside the managed selection: ' + route }]
+    return [
+      { route: 'default', error: `provider/model is outside the managed selection: ${route}` },
+    ]
   }
   const effort = selection.reasoningEffort
   if (effort !== undefined && !String(row.levels).split(',').includes(effort)) {
-    return [{ route: 'default', error: 'effort is not supported by the selected model: ' + effort }]
+    return [{ route: 'default', error: `effort is not supported by the selected model: ${effort}` }]
   }
   return []
 }
@@ -286,37 +327,61 @@ function main() {
   const patch = join(options.home, 'profiles', options.profile, 'cordis.patch.yml')
   const catalog = catalogConfig(patch)
   if (catalog === undefined) {
-    process.stderr.write('no owned catalog in ' + patch + '\n'
-      + 'this profile wires models another way; see references/model-wiring.md\n')
+    process.stderr.write(
+      'no owned catalog in ' +
+        patch +
+        '\n' +
+        'this profile wires models another way; see references/model-wiring.md\n',
+    )
     process.exit(1)
   }
   const directory = options.data ?? dataDirectory()
   if (directory === undefined) {
-    process.stderr.write('no harness install found; entries that inherit from it cannot be checked\n')
+    process.stderr.write(
+      'no harness install found; entries that inherit from it cannot be checked\n',
+    )
   }
   const served = rowsOf(catalog, directory)
   const rows = [...served, ...checkDefault(catalog, served)]
-  const unresolved = rows.filter(row => row.error !== undefined).length
+  const unresolved = rows.filter((row) => row.error !== undefined).length
   if (options.json) {
-    process.stdout.write(JSON.stringify({ default: catalog.default ?? null, rows }, null, 2) + '\n')
+    process.stdout.write(`${JSON.stringify({ default: catalog.default ?? null, rows }, null, 2)}\n`)
   } else {
     for (const row of rows) {
       if (row.error !== undefined) {
-        process.stdout.write(row.route + '\n  UNRESOLVED: ' + row.error + '\n')
+        process.stdout.write(`${row.route}\n  UNRESOLVED: ${row.error}\n`)
         continue
       }
-      process.stdout.write(row.route + '\n  ' + row.name + ' | ' + row.api + ' | ctx ' + row.contextWindow
-        + ' | max ' + row.maxTokens
-        + (row.requestMax === undefined ? '' : ' | req ' + row.requestMax)
-        + ' | ' + row.cost
-        + (row.tiers === undefined ? '' : ' | tiers ' + row.tiers)
-        + ' | efforts ' + row.levels
-        + (row.aliases === undefined ? '' : ' | aliases ' + row.aliases) + '\n  inherited: ' + row.origins + '\n')
+      process.stdout.write(
+        row.route +
+          '\n  ' +
+          row.name +
+          ' | ' +
+          row.api +
+          ' | ctx ' +
+          row.contextWindow +
+          ' | max ' +
+          row.maxTokens +
+          (row.requestMax === undefined ? '' : ` | req ${row.requestMax}`) +
+          ' | ' +
+          row.cost +
+          (row.tiers === undefined ? '' : ` | tiers ${row.tiers}`) +
+          ' | efforts ' +
+          row.levels +
+          (row.aliases === undefined ? '' : ` | aliases ${row.aliases}`) +
+          '\n  inherited: ' +
+          row.origins +
+          '\n',
+      )
     }
-    process.stdout.write('default: ' + JSON.stringify(catalog.default ?? null) + '\n')
+    process.stdout.write(`default: ${JSON.stringify(catalog.default ?? null)}\n`)
   }
   process.exit(unresolved === 0 ? 0 : 1)
 }
 
 // Importing the resolver must not run the CLI: the spec reads it that way.
-if (process.argv[1] !== undefined && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) main()
+if (
+  process.argv[1] !== undefined &&
+  realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)
+)
+  main()

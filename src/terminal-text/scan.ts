@@ -40,10 +40,13 @@ const FIRST_SURROGATE = 0xd800
 const LAST_SURROGATE = 0xdfff
 
 /** Keep this trigger aligned with scan: the renderer returns unmatched text unchanged. LF alone needs no rewriting. */
-export const NEEDS_READING = /[\u0000-\u0009\u000B-\u001F\u007F-\u009F\u061C\u200E\u200F\u2028\u2029\u202A-\u202E\u2066-\u2069\uD800-\uDFFF]/u
+export const NEEDS_READING =
+  /[\u0000-\u0009\u000B-\u001F\u007F-\u009F\u061C\u200E\u200F\u2028\u2029\u202A-\u202E\u2066-\u2069\uD800-\uDFFF]/u
 
 /** Directional overrides and isolates, which reorder a row without drawing anything. */
-const BIDI_CONTROLS = new Set([0x202a, 0x202b, 0x202c, 0x202d, 0x202e, 0x2066, 0x2067, 0x2068, 0x2069])
+const BIDI_CONTROLS = new Set([
+  0x202a, 0x202b, 0x202c, 0x202d, 0x202e, 0x2066, 0x2067, 0x2068, 0x2069,
+])
 
 const LINE_SEPARATOR = 0x2028
 
@@ -107,7 +110,14 @@ function escapeCode(prefix: string, code: number, digits: number): string {
 function isSpelledControl(code: number): boolean {
   if (code <= LAST_C0 || code === DELETE) return true
   if (code >= FIRST_C1 && code <= LAST_C1) return true
-  return BIDI_CONTROLS.has(code) || code === LINE_SEPARATOR || code === PARAGRAPH_SEPARATOR || code === ARABIC_LETTER_MARK || code === LEFT_TO_RIGHT_MARK || code === RIGHT_TO_LEFT_MARK
+  return (
+    BIDI_CONTROLS.has(code) ||
+    code === LINE_SEPARATOR ||
+    code === PARAGRAPH_SEPARATOR ||
+    code === ARABIC_LETTER_MARK ||
+    code === LEFT_TO_RIGHT_MARK ||
+    code === RIGHT_TO_LEFT_MARK
+  )
 }
 
 function spelled(code: number): string {
@@ -152,7 +162,10 @@ function readEscape(raw: string, at: number): Piece | undefined {
         }
         return { token: { kind: 'consumed' }, raw: source }
       }
-      if (code > CSI_PARAMETER_LAST && (code < CSI_INTERMEDIATE_FIRST || code > CSI_INTERMEDIATE_LAST)) {
+      if (
+        code > CSI_PARAMETER_LAST &&
+        (code < CSI_INTERMEDIATE_FIRST || code > CSI_INTERMEDIATE_LAST)
+      ) {
         // A byte outside the CSI grammar ends the sequence as malformed; the
         // sequence is consumed so its bytes cannot be drawn as text.
         return { token: { kind: 'consumed' }, raw: raw.slice(at, end) }
@@ -167,7 +180,8 @@ function readEscape(raw: string, at: number): Piece | undefined {
       if (raw[end] === STRING_END || raw[end] === STRING_CANCEL || raw[end] === STRING_SUBSTITUTE) {
         return { token: { kind: 'consumed' }, raw: raw.slice(at, end + 1) }
       }
-      if (raw[end] === ESC && raw[end + 1] === '\\') return { token: { kind: 'consumed' }, raw: raw.slice(at, end + 2) }
+      if (raw[end] === ESC && raw[end + 1] === '\\')
+        return { token: { kind: 'consumed' }, raw: raw.slice(at, end + 2) }
       end += 1
     }
     return { token: { kind: 'incomplete' }, raw: raw.slice(at) }
