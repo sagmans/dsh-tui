@@ -4,8 +4,8 @@
 interactive terminal surface: `dsh --profile tui` runs one agent in the
 alternate screen instead of a browser. ESM TypeScript (strict), Node >= 22.19,
 pnpm. Behaviour and install: [README.md](README.md). Development on a real
-profile: [DEVELOPMENT.md](DEVELOPMENT.md). Publication: [RELEASE.md](RELEASE.md).
-History: [CHANGELOG.md](CHANGELOG.md).
+profile: [DEVELOPMENT.md](DEVELOPMENT.md). Publication:
+[RELEASE.md](RELEASE.md). History: [CHANGELOG.md](CHANGELOG.md).
 
 ## Commands
 
@@ -26,11 +26,13 @@ History: [CHANGELOG.md](CHANGELOG.md).
 
 Run `pnpm verify` after every development change. It runs golden frames, native
 PTY checks, and free real-profile dogfood automatically. Do not add unit tests.
-Golden tests and their fixtures remain supported.
-With `HERDR_ENV=1`, the free gate also verifies real pane workflows in an owned disposable named Herdr session.
-Without Herdr, report `environment-not-run`; never replace native behavior proof with successful key dispatch alone.
-When tmux is installed, the free gate also verifies an independent private server and restoration.
-Keep paid native attention checks demand-only; require the exact model and effort before any prompt.
+Golden tests and their fixtures remain supported. With `HERDR_ENV=1`, the free
+gate also verifies real pane workflows in an owned disposable named Herdr
+session. Without Herdr, report `environment-not-run`; never replace native
+behavior proof with successful key dispatch alone. When tmux is installed, the
+free gate also verifies an independent private server and restoration. Keep paid
+native attention checks demand-only; require the exact model and effort before
+any prompt.
 
 CI also checks dependency signatures and consumer installation; the consumer
 gate needs Docker. Free dogfood starts the installed, verified Harness with the
@@ -49,16 +51,17 @@ emulator-specific checks separately from passed free checks.
 - `src/index.ts` mounts the surface; `src/startup.ts` parses this app's flags;
   `src/todo-guard.ts` is the one advisory agent-plane row, nudging a stale plan
   from the harness's own projections.
-- `src/host/` holds the rows the bundle patch cannot mount itself: the roster shim
-  publishes the mode registry plus one row per mode — a mode names a selection and
-  mounts no plugin of another bundle — and the runner shim mounts the
-  dynamic-plugin host creator mode needs, both after the services they wait on.
+- `src/host/` holds the rows the bundle patch cannot mount itself: the roster
+  shim publishes the mode registry plus one row per mode — a mode names a
+  selection and mounts no plugin of another bundle — and the runner shim mounts
+  the dynamic-plugin host creator mode needs, both after the services they wait
+  on.
 - `src/agent/` composes, projects, and resumes the agent. `src/cards.ts`,
-  `src/transcript.ts`, and `src/work.ts` fold `session/event` into what is drawn;
-  `src/ui/` draws the dock, editor, gates, pickers, markdown, and mermaid;
-  `src/input/` holds keymap, submission, and completion; `src/terminal/` owns the
-  alternate screen, restore, bell, and clipboard; `src/compat/` probes the harness
-  it mounts on.
+  `src/transcript.ts`, and `src/work.ts` fold `session/event` into what is
+  drawn; `src/ui/` draws the dock, editor, gates, pickers, markdown, and
+  mermaid; `src/input/` holds keymap, submission, and completion;
+  `src/terminal/` owns the alternate screen, restore, bell, and clipboard;
+  `src/compat/` probes the harness it mounts on.
 - `src/stash.ts` answers the parked-draft commands and their chord rows;
   `src/stash/` holds the bank's schema, the private path it is written through,
   and the lock one read-modify-write takes.
@@ -89,34 +92,36 @@ history, storages, the stash, and themes. When a run needs the developer's own
 bundles and patch overlay, clone the home with
 `./scripts/dogfood/run-tui-from-worktree.sh` rather than pointing at it.
 
-**A dogfood run uses the active model in the current session.** Declare it in the
-clone's profile patch, in two entries: the adapter under the `llm-pi-ai` row's own
-config, as `providers: { zai: { apiKeyEnv: ZAI_API_KEY } }`, and the route under
-`agent-default-model`, as `provider`, `model`, and `reasoningEffort`. The
-adapter belongs there because a catalog route is only the picker's directory — a
-route declaring `source` with `auth.apiKeyRef` never registers one, and the turn
-then stops at `no adapter registered for provider "zai"`. The route belongs there
-so the clone has an explicit default; check `/status` on resume rather than
-relying on `--provider` and `--model` alone. `$DSH_HOME/settings.yaml` is legacy
-on this line: the settings service
-renames it to `settings.yaml.imported` before attempting a one-time import into matching
-profile entries. Rejected sections stay only in that renamed file; do not rely
-on the legacy file for the clone's route. Naming the route keeps a scratch
-profile from billing a route the developer did not choose; a route with no credit
-stops at `error: Insufficient Balance` once the surface is ready, which says
-nothing about the plugin under test.
+**A dogfood run uses the active model in the current session.** Declare it in
+the clone's profile patch, in two entries: the adapter under the `llm-pi-ai`
+row's own config, as `providers: { zai: { apiKeyEnv: ZAI_API_KEY } }`, and the
+route under `agent-default-model`, as `provider`, `model`, and
+`reasoningEffort`. The adapter belongs there because a catalog route is only the
+picker's directory — a route declaring `source` with `auth.apiKeyRef` never
+registers one, and the turn then stops at
+`no adapter registered for provider "zai"`. The route belongs there so the clone
+has an explicit default; check `/status` on resume rather than relying on
+`--provider` and `--model` alone. `$DSH_HOME/settings.yaml` is legacy on this
+line: the settings service renames it to `settings.yaml.imported` before
+attempting a one-time import into matching profile entries. Rejected sections
+stay only in that renamed file; do not rely on the legacy file for the clone's
+route. Naming the route keeps a scratch profile from billing a route the
+developer did not choose; a route with no credit stops at
+`error: Insufficient Balance` once the surface is ready, which says nothing
+about the plugin under test.
 
 **A rendered-frame change usually changes the golden snapshot.** Read
 `tests/golden/__snapshots__/frames.spec.ts.snap` in the diff before accepting it
 with `pnpm vitest run -u`.
 
-**`cordis.patch.yml` inserts the TUI rows and host model-selection settings, and disables none.** The
-agent plane — tools, prompt sections, skills, commands, and planning — belongs to
-the bundle that ships each of those plugins, and the profile's own layers compose
-it. The shipped modes are selections rather than full compositions; only PTC adds
-a `tool-presentation` plugin. Do not duplicate agent rows the profile already
-registers: duplicate registrations can fail with "already registered". Do not
-disable those profile-owned rows from this surface bundle.
+**`cordis.patch.yml` inserts the TUI rows and host model-selection settings, and
+disables none.** The agent plane — tools, prompt sections, skills, commands, and
+planning — belongs to the bundle that ships each of those plugins, and the
+profile's own layers compose it. The shipped modes are selections rather than
+full compositions; only PTC adds a `tool-presentation` plugin. Do not duplicate
+agent rows the profile already registers: duplicate registrations can fail with
+"already registered". Do not disable those profile-owned rows from this surface
+bundle.
 
 **The declared harness range is not the verified list.** The manifest declares
 `>=0.2.1-rc.2 <0.3.0-0`, but lists only `0.2.1-rc.2` as verified. Mounted and
@@ -136,21 +141,22 @@ non-obvious constraint exists is the part that prevents future drift.
 - **Release and publication:** follow the signed-tag, approval, and readback
   sequence below and the gates in [RELEASE.md](RELEASE.md).
 - **Dependency install scripts and release age are gated in
-  `pnpm-workspace.yaml`** (`allowBuilds`, `minimumReleaseAgeExclude`). Ask before
-  adding a dependency or allowlisting a build.
+  `pnpm-workspace.yaml`** (`allowBuilds`, `minimumReleaseAgeExclude`). Ask
+  before adding a dependency or allowlisting a build.
 - **Commits are Conventional Commits with a scope** (`feat(tui): …`,
   `fix(gates): …`, `docs(readme): …`), signed and DCO-signed. Commit on `main`
   and push `main`; the local hooks are the gate before `origin`.
-- **Every change carries its `CHANGELOG.md` entry** under `## [Unreleased]`, in the
-  section that fits (`Added`, `Changed`, `Fixed`, …). The entry is part of the
-  change, not a follow-up, and its absence makes the change incomplete.
+- **Every change carries its `CHANGELOG.md` entry** under `## [Unreleased]`, in
+  the section that fits (`Added`, `Changed`, `Fixed`, …). The entry is part of
+  the change, not a follow-up, and its absence makes the change incomplete.
 
 ## Release and publication
 
 Read [RELEASE.md](RELEASE.md) before preparing a version, pushing a release tag,
-publishing, or repairing a release record. Pushing a documentation or code change
-is not approval to publish. Require explicit maintainer approval for publication
-and each remote release action; never publish on your own initiative.
+publishing, or repairing a release record. Pushing a documentation or code
+change is not approval to publish. Require explicit maintainer approval for
+publication and each remote release action; never publish on your own
+initiative.
 
 1. Land the candidate on `main`. Match `package.json`
    `version`, the `vX.Y.Z` tag, and the versioned `CHANGELOG.md` entry.
@@ -160,14 +166,15 @@ and each remote release action; never publish on your own initiative.
    Verify it with `git verify-tag "vX.Y.Z"`. Never use a lightweight or unsigned
    release tag; require GitHub to verify the signature after the approved push.
 3. Push only that tag with `git push origin "vX.Y.Z"` after approval.
-   `.github/workflows/release.yml` checks tag/version agreement and publishes through npm
-   OIDC trusted publishing on the `npm-release` environment with no further approval:
-   the admin-only tag push is the release approval. Wait for success; never substitute a local `npm publish`. The documented
+   `.github/workflows/release.yml` checks tag/version agreement and publishes
+   through npm OIDC trusted publishing on the `npm-release` environment with no
+   further approval: the admin-only tag push is the release approval. Wait for
+   success; never substitute a local `npm publish`. The documented
    first-publication bootstrap is a maintainer-only exception, not a retry path.
 4. After publication succeeds, create the GitHub release from the existing tag:
    `gh release create "vX.Y.Z" --verify-tag --title "vX.Y.Z" --notes-file <notes-file>`.
-   Use that version's changelog entry as notes. Set `--latest=false` when filling
-   an older release so it does not replace the current latest release.
+   Use that version's changelog entry as notes. Set `--latest=false` when
+   filling an older release so it does not replace the current latest release.
 5. Read back the npm version, tarball integrity and available provenance, the
    remote tag's verified signature and source commit, and the published GitHub
    release for the same version. A green workflow alone is not completion:
@@ -176,13 +183,18 @@ and each remote release action; never publish on your own initiative.
 Published versions and tags are immutable. Never delete, move, or re-sign an
 existing release tag, and never republish or unpublish an existing npm version.
 For a missing GitHub release, verify the existing signed tag and create only its
-release record with `--verify-tag`; do not push another tag or retry publication.
-If a tag or signature is missing or invalid, stop and ask the maintainer; do not
-invent a source commit from current `main`. Forward-fix broken packages as
-`RELEASE.md` directs. Helper mutations require `CONFIRM=<action>`; preview
-with `DRY_RUN=1`.
+release record with `--verify-tag`; do not push another tag or retry
+publication. If a tag or signature is missing or invalid, stop and ask the
+maintainer; do not invent a source commit from current `main`. Forward-fix
+broken packages as `RELEASE.md` directs. Helper mutations require
+`CONFIRM=<action>`; preview with `DRY_RUN=1`.
 
 ## Git hooks
 
-Checks run in `.githooks/`, not in push CI (see DEVELOPMENT.md). Run `scripts/setup-hooks` after cloning. All checks must pass before you push. Never use `--no-verify`.
-`pre-push` also warns, without blocking, when a push changes the build policy in `pnpm-workspace.yaml` or the lockfile entry of a package allowed to build. Because the push does not wait, name each such change to the maintainer and get approval before you push it. Never add a commit trailer other than `Signed-off-by`.
+Checks run in `.githooks/`, not in push CI (see DEVELOPMENT.md). Run
+`scripts/setup-hooks` after cloning. All checks must pass before you push. Never
+use `--no-verify`. `pre-push` also warns, without blocking, when a push changes
+the build policy in `pnpm-workspace.yaml` or the lockfile entry of a package
+allowed to build. Because the push does not wait, name each such change to the
+maintainer and get approval before you push it. Never add a commit trailer other
+than `Signed-off-by`.
