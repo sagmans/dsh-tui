@@ -198,9 +198,9 @@
     },
     {
       "id": "export",
-      "description": "Actual transcript export, owner-only files, hardlinks and symlink refusal, failure reasons withheld from exports and replayed screens",
+      "description": "Actual transcript export, owner-only files, hardlinks and symlink refusal, failure reasons and outside notice text withheld from exports, failure reasons withheld from replayed screens",
       "cost": "free",
-      "scenarios": ["commands", "export-security", "export-failure-notices"],
+      "scenarios": ["commands", "export-security", "export-failure-notices", "timers"],
       "sources": ["src/export.ts", "src/failure-notice.ts", "tools/dogfood-failure-notices.mjs"]
     },
     {

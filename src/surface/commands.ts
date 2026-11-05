@@ -10,7 +10,7 @@ import {
   transcriptToText,
   writeTranscriptExport,
 } from '../export.ts'
-import { failureNotice } from '../failure-notice.ts'
+import { failureNotice, labelledNotice } from '../failure-notice.ts'
 import type { ActionLayer } from '../input/action-catalog.ts'
 import type { RegisteredCommand } from '../input/completion.ts'
 import { chordKeysLine, surfaceKeysLine } from '../input/keymap.ts'
@@ -299,7 +299,7 @@ export function createCommands(ctx: Context, ports: CommandsPorts): Commands {
         ports.transcript.notice(
           result.kind === 'error'
             ? failureNotice(`/${name} failed`, result.text ?? 'no detail')
-            : `/${name} ${result.text ?? 'done'}`,
+            : labelledNotice(`/${name}`, ` ${result.text ?? 'done'}`),
         )
         ports.render()
       })

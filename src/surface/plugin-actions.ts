@@ -9,6 +9,8 @@ import type { Picker } from './modal-input.ts'
 
 // Keep addon exception text out of terminal notices while returning control to the reader.
 const FAILED = 'plugin action could not complete; check plugin configuration and retry'
+/** The surface cannot tell what a handler's free text quotes, so an export records only that it spoke. */
+const EXPORTED_NOTICE = 'plugin action notice'
 
 /** The modal owner and current route remain authoritative for every plugin invocation. */
 export function createPluginActions(
@@ -18,6 +20,7 @@ export function createPluginActions(
     keymap(): Keymap
     openPicker(picker: Picker): Promise<string | undefined>
     notice(message: string): void
+    screenOnlyNotice(message: string, exportMessage: string): void
     render(): void
   },
 ) {
@@ -31,7 +34,7 @@ export function createPluginActions(
       if (registry === undefined) throw new Error(FAILED)
       const surface: ActionPorts = {
         route,
-        notice: ports.notice,
+        notice: (message) => ports.screenOnlyNotice(message, EXPORTED_NOTICE),
         pick: async (spec) => {
           // Plugin labels cross the terminal boundary; controls must not become terminal instructions.
           const rows = spec.rows.map((row) => ({

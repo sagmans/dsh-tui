@@ -72,6 +72,13 @@ const AGENT_ERROR_LABEL = 'error'
 /** What stands in for a stored failure reason, so the reader knows a reason existed and why it is missing. */
 const REASON_WITHHELD_ON_REPLAY = '(reason not shown on replay)'
 
+/** A caller's own export text outranks the label, so a notice's words cannot widen what it chose. */
+function withChosenExport(entry: { readonly exportText?: string }): {
+  readonly exportText?: string
+} {
+  return entry.exportText === undefined ? {} : { exportText: entry.exportText }
+}
+
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null
     ? (value as Record<string, unknown>)
@@ -216,7 +223,22 @@ export class TranscriptModel {
 
   /** Keep local command feedback visible without recording it as conversation for the agent or a later resume. */
   notice(text: string): void {
-    this.append({ kind: 'notice', ...noticeParts(text) })
+    this.append({ kind: 'notice', text })
+  }
+
+  /**
+   * Surface-local and durable rows share the revision that invalidates retained documents.
+   *
+   * Every notice is split here, because a folded row and a surface row reach the same
+   * screen and export: an `exportText` a caller chose stays, and otherwise the label decides.
+   */
+  private append(entry: TranscriptEntry): void {
+    this.settled.push(
+      entry.kind === 'notice'
+        ? { kind: 'notice', ...noticeParts(entry.text), ...withChosenExport(entry) }
+        : entry,
+    )
+    this.contentRevision++
   }
 
   /** Mark a boundary in the conversation: compaction, or work that ran elsewhere. */
@@ -461,12 +483,6 @@ export class TranscriptModel {
    */
   screenOnlyNotice(text: string, exportText: string): void {
     this.append({ kind: 'notice', text, exportText })
-  }
-
-  /** Surface-local and durable rows share the revision that invalidates retained documents. */
-  private append(entry: TranscriptEntry): void {
-    this.settled.push(entry)
-    this.contentRevision++
   }
 
   /** Commit the rows the call fold drew: appends in order, replacements in place. */

@@ -101,7 +101,12 @@ const FAILURE_NOTICES_PLUGIN = 'dogfood-failure-notices.mjs'
 const FAILURE_NOTICES_PROBE_ID = 'failure-notices-probe'
 const FAILURE_NOTICES_SCENARIO = 'export-failure-notices'
 // Commands of the test-owned row: they fail at once and never reach a model route, so a free run stays free.
-const FAILURE_NOTICES_COMMANDS = ['/failure-throw', '/failure-refuse', '/failure-lock']
+const FAILURE_NOTICES_COMMANDS = [
+  '/failure-throw',
+  '/failure-refuse',
+  '/failure-lock',
+  '/outside-success',
+]
 const PROFILING_PROBE_CONFIGURATION_ERROR =
   'dogfood: profiling probe requires a fresh credential-free profile'
 const INITIAL_SESSION_ID = /tui-session-[a-f0-9-]+/u
@@ -213,6 +218,7 @@ const KEYS = {
   e: 'e',
   u: 'u',
   r: 'r',
+  z: 'z',
 }
 KEYS['ctrl+b'] = '\x02'
 const SUBMIT_KEYS = new Set(['ctrl+s', 'ctrl+enter', 'alt+enter'])

@@ -1,4 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis'
+import { labelledNotice } from './failure-notice.ts'
 import { describeDuration } from './jobs.ts'
 import { stripControlCharacters } from './text.ts'
 
@@ -136,7 +137,7 @@ export function describeSubagents(runs: readonly SubagentRun[], now: number): st
   if (runs.length === 0) return 'no subagents have run in this session'
   const running = runs.filter((run) => run.status === 'running').length
   const header = `subagents · ${runs.length}${running === 0 ? '' : ` (${running} running)`}`
-  return [header, ...runs.map((run) => `  ${describeSubagent(run, now)}`)].join('\n')
+  return labelledNotice(header, runs.map((run) => `\n  ${describeSubagent(run, now)}`).join(''))
 }
 
 /** Separate reader actions from lifecycle state so parsing does not require a live roster. */

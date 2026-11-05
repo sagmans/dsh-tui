@@ -1,3 +1,4 @@
+import { labelledNotice } from './failure-notice.ts'
 import type { FoldableEvent } from './transcript.ts'
 
 /** Keep provenance separate from rendering so empty boards do not claim an unwritten history. */
@@ -97,7 +98,7 @@ export function describeTodos(
   }
   const done = todos.filter((todo) => todo.status === 'completed').length
   const rows = orderTodos(todos).map((todo) => `  ${TODO_GLYPHS[todo.status]} ${todo.content}`)
-  return [`todos · ${done}/${todos.length} done`, ...rows].join('\n')
+  return labelledNotice(`todos · ${done}/${todos.length} done`, `\n${rows.join('\n')}`)
 }
 
 /**

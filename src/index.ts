@@ -245,6 +245,7 @@ export function apply(ctx: Context, config: unknown): void {
     keymap: appearance.keymap,
     openPicker: (picker) => modalInput.openPicker(picker),
     notice: (message) => sessionView.notice(message),
+    screenOnlyNotice: sessionView.screenOnlyNotice,
     render: () => tui.requestRender(),
   })
   // Model choice owns the route that status reports; addon follow-ups receive the confirmed route.

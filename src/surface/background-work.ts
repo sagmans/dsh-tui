@@ -1,7 +1,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { TuiAgent } from '../agent/host.ts'
-import { failureNotice } from '../failure-notice.ts'
+import { failureNotice, labelledNotice } from '../failure-notice.ts'
 import {
   createJobDirectory,
   describeJobs,
@@ -197,7 +197,10 @@ export function createBackgroundWork(ctx: Context, ports: BackgroundWorkPorts): 
           ports.notice(
             text === ''
               ? `${command.id}: no output yet`
-              : `${command.id} output\n${text.split('\n').slice(-JOB_READ_LINES).join('\n')}`,
+              : labelledNotice(
+                  `${command.id} output`,
+                  `\n${text.split('\n').slice(-JOB_READ_LINES).join('\n')}`,
+                ),
           )
           refresh()
           return

@@ -1,3 +1,5 @@
+import { labelledNotice } from './failure-notice.ts'
+
 /** How many names a row shows before it summarizes the rest. */
 const LIST_MAX = 3
 
@@ -122,7 +124,10 @@ function legacyLabel(source: Record<string, unknown>, text: string): string {
       ? source.kind
       : ''
   const preview = previewOf(text)
-  return `injected ${plugin !== '' ? plugin : kind !== '' ? kind : 'plugin'} · ${countLines(text)}${preview === '' ? '' : ` — ${preview}`}`
+  return labelledNotice(
+    `injected ${plugin !== '' ? plugin : kind !== '' ? kind : 'plugin'} · ${countLines(text)}`,
+    preview === '' ? '' : ` — ${preview}`,
+  )
 }
 
 /**

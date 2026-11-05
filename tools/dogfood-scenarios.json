@@ -1869,6 +1869,25 @@
           "expect": "/failure-refuse failed: dogfood-failure-reason"
         },
         {
+          "command": "/outside-success",
+          "expect": "/outside-success dogfood-outside-text-success"
+        },
+        {
+          "command": "/todo",
+          "expect": "dogfood-outside-text-todo"
+        },
+        {
+          "expect": "injected dogfood-legacy-source · 1 lines — dogfood-outside-text-injected"
+        },
+        {
+          "key": "ctrl+x",
+          "expect": "ctrl+x"
+        },
+        {
+          "key": "z",
+          "expect": "dogfood-outside-text-action"
+        },
+        {
           "command": "/export not-a-directory/failures.md",
           "expect": "ENOTDIR"
         },
@@ -1933,6 +1952,23 @@
           "excludes": "names a session that stopped"
         },
         {
+          "file": "failures.md",
+          "contains": "<!-- /outside-success -->",
+          "excludes": "dogfood-outside-text"
+        },
+        {
+          "file": "failures.md",
+          "contains": "<!-- todos · 0/1 done -->"
+        },
+        {
+          "file": "failures.md",
+          "contains": "<!-- injected dogfood-legacy-source · 1 lines -->"
+        },
+        {
+          "file": "failures.md",
+          "contains": "<!-- plugin action notice -->"
+        },
+        {
           "command": "/quit",
           "exit": true
         }
@@ -1952,6 +1988,11 @@
             "file": "resumed-failures.md",
             "contains": "<!-- turn failed -->",
             "excludes": "dogfood-failure-reason"
+          },
+          {
+            "file": "resumed-failures.md",
+            "contains": "<!-- injected dogfood-legacy-source · 1 lines -->",
+            "excludes": "dogfood-outside-text"
           },
           {
             "command": "/quit",
@@ -2470,6 +2511,24 @@
         {
           "command": "/subagents",
           "expect": "duration unknown"
+        },
+        {
+          "command": "/jobs read {jobId}",
+          "expect": "{jobId} output timer-probe-output"
+        },
+        {
+          "command": "/export timers.md",
+          "expect": "transcript written to"
+        },
+        {
+          "file": "timers.md",
+          "contains": "output -->",
+          "excludes": "timer-probe-output -->"
+        },
+        {
+          "file": "timers.md",
+          "contains": "<!-- subagents · ",
+          "excludes": "· timer-probe ·"
         },
         {
           "key": "ctrl+b",

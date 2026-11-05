@@ -16,6 +16,10 @@ breaking change, and a patch carries only fixes.
   `could not send`, `/<name> failed`, or a theme or settings problem. The screen
   keeps the reason. A reason is text from a plugin, a file, or the system, so it
   is not safe to share.
+- `/export` now records only the label of notices that hold outside text: the
+  answer of a plugin command, `/jobs read` output, `/todo` rows, `/subagents`
+  rows, the preview of an unnamed injected block, and a plugin action notice. The
+  screen does not change.
 - A plugin that fails to start, such as a provider with a broken model catalog,
   is now named in the transcript with its error. Before, the screen showed
   `ready` and the error printed only after exit. A plugin that waits for a
