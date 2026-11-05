@@ -1,6 +1,7 @@
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { ForkInheritance, TuiAgent } from '../agent/host.ts'
 import { type PresetRoster, type PresetSummary, parsePresetArgument } from '../agent/presets.ts'
+import { failureNotice } from '../failure-notice.ts'
 import type { Keymap } from '../input/actions.ts'
 import { PresetPicker } from '../ui/picker.ts'
 import type { Picker } from './modal-input.ts'
@@ -206,9 +207,7 @@ export function createPresetChoice(ports: PresetChoicePorts): PresetChoice {
     try {
       chosen = await roster.select(agent.agent, id)
     } catch (error) {
-      ports.notice(
-        `could not switch the mode: ${error instanceof Error ? error.message : String(error)}`,
-      )
+      ports.notice(failureNotice('could not switch the mode', error))
       ports.render()
       return
     }
@@ -222,7 +221,10 @@ export function createPresetChoice(ports: PresetChoicePorts): PresetChoice {
       // would send the reader hunting for a failure their next session already
       // escaped.
       ports.notice(
-        `the mode switched to "${chosen}", but the return to the driven session failed: ${error instanceof Error ? error.message : String(error)}`,
+        failureNotice(
+          `the mode switched to "${chosen}", but the return to the driven session failed`,
+          error,
+        ),
       )
     }
     ports.render()

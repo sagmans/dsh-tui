@@ -1,4 +1,5 @@
 import type { ToolCard, ToolPresenter } from './cards.ts'
+import { noticeParts } from './failure-notice.ts'
 import { injectionSummary } from './injection.ts'
 import { describeDuration } from './jobs.ts'
 import { sliceGraphemes, tailGraphemes } from './text.ts'
@@ -215,7 +216,7 @@ export class TranscriptModel {
 
   /** Keep local command feedback visible without recording it as conversation for the agent or a later resume. */
   notice(text: string): void {
-    this.append({ kind: 'notice', text })
+    this.append({ kind: 'notice', ...noticeParts(text) })
   }
 
   /** Mark a boundary in the conversation: compaction, or work that ran elsewhere. */

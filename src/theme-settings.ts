@@ -7,6 +7,7 @@ import type {} from '@deepseek-ai/dsh-settings'
 import z from '@deepseek-ai/schemastery'
 import type { KeyId } from '@earendil-works/pi-tui'
 import { DEFAULT_MAX_ENTRIES, MAX_ENTRIES_LIMIT } from './agent/prompt-history.ts'
+import { failureNotice } from './failure-notice.ts'
 import {
   defaultKeymap,
   type KeyListValue,
@@ -495,7 +496,7 @@ export function themeLayer(overrides: ThemeOverrides): ThemedSpecs | undefined {
  * schema makes at registration and one the parser makes on a read read alike.
  */
 export function settingsProblemMessage(error: unknown): string {
-  return `ignoring ${TUI_SETTINGS_NAMESPACE} settings: ${error instanceof Error ? error.message : String(error)}`
+  return failureNotice(`ignoring ${TUI_SETTINGS_NAMESPACE} settings`, error)
 }
 
 /**

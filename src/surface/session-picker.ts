@@ -7,6 +7,7 @@ import {
   type SessionHistory,
   type StoredSession,
 } from '../agent/history.ts'
+import { failureNotice } from '../failure-notice.ts'
 import type { Keymap } from '../input/actions.ts'
 import { PROFILE_PHASE, profileAsync, TUI_PROFILING_SERVICE } from '../profiling.ts'
 import { SessionPicker } from '../ui/picker.ts'
@@ -52,6 +53,32 @@ export interface SessionPickerChoice {
   readonly chooseSession: () => Promise<SessionId | undefined>
 }
 
+/** Title the listed sessions without making the reader wait for the slowest log. */
+async function loadTitles(
+  history: SessionHistory,
+  sessions: readonly StoredSession[],
+  titles: Map<string, string>,
+  render: () => void,
+): Promise<void> {
+  const queue = [...sessions]
+  const worker = async (): Promise<void> => {
+    for (;;) {
+      const next = queue.shift()
+      if (next === undefined) return
+      try {
+        const title = await readSessionTitle(history, next)
+        if (title === undefined) continue
+        titles.set(next.id, title)
+        render()
+      } catch {
+        // A log this build cannot read stays listed by id; the picker is not
+        // the place to explain storage, and one bad session is not the list.
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: TITLE_CONCURRENCY }, worker))
+}
+
 /**
  * The stored sessions a bare `--resume` asks the reader to choose between.
  *
@@ -60,31 +87,6 @@ export interface SessionPickerChoice {
  * log this build cannot read is still one the reader may want back.
  */
 export function createSessionPicker(ctx: Context, ports: SessionPickerPorts): SessionPickerChoice {
-  /** Title the listed sessions without making the reader wait for the slowest log. */
-  const loadTitles = async (
-    history: SessionHistory,
-    sessions: readonly StoredSession[],
-    titles: Map<string, string>,
-  ): Promise<void> => {
-    const queue = [...sessions]
-    const worker = async (): Promise<void> => {
-      for (;;) {
-        const next = queue.shift()
-        if (next === undefined) return
-        try {
-          const title = await readSessionTitle(history, next)
-          if (title === undefined) continue
-          titles.set(next.id, title)
-          ports.render()
-        } catch {
-          // A log this build cannot read stays listed by id; the picker is not
-          // the place to explain storage, and one bad session is not the list.
-        }
-      }
-    }
-    await Promise.all(Array.from({ length: TITLE_CONCURRENCY }, worker))
-  }
-
   /**
    * The stored list, or undefined after telling the reader why there is none.
    *
@@ -114,9 +116,7 @@ export function createSessionPicker(ctx: Context, ports: SessionPickerPorts): Se
       }
       return { history, sessions }
     } catch (error) {
-      ports.notice(
-        `could not list stored sessions: ${error instanceof Error ? error.message : String(error)}`,
-      )
+      ports.notice(failureNotice('could not list stored sessions', error))
       ports.render()
       return undefined
     }
@@ -149,7 +149,7 @@ export function createSessionPicker(ctx: Context, ports: SessionPickerPorts): Se
     sessions: readonly StoredSession[],
   ): Promise<SessionId | undefined> => {
     const titles = new Map<string, string>()
-    void loadTitles(history, sessions, titles)
+    void loadTitles(history, sessions, titles, () => ports.render())
     const picked = await ports.openPicker(
       new SessionPicker(sessions, () => titles, ports.keymap),
       refuseReason,

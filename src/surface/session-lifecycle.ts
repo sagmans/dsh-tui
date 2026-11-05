@@ -4,6 +4,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { type ForkEvent, forkPoint } from '../agent/fork.ts'
 import { type ForkInheritance, startAgent, type TuiAgent } from '../agent/host.ts'
+import { failureNotice } from '../failure-notice.ts'
 import type { HerdrReporter } from '../herdr/reporter.ts'
 import { driverReportFor, sessionStartReason } from '../herdr/state.ts'
 import type { MoshiReporter } from '../moshi.ts'
@@ -320,9 +321,7 @@ export function createSessionLifecycle(
       ports.notice('started a new session')
       ports.render()
     })().catch((error: unknown) => {
-      ports.notice(
-        `could not start a session: ${error instanceof Error ? error.message : String(error)}`,
-      )
+      ports.notice(failureNotice('could not start a session', error))
       ports.render()
     })
   }
@@ -364,8 +363,9 @@ export function createSessionLifecycle(
       ports.notice("reloaded this session's composition; the transcript was replayed")
       ports.render()
     })().catch((error: unknown) => {
-      const reason = error instanceof Error ? error.message : String(error)
-      ports.notice(`could not reload: ${reason} — fix the composition and /reload again`)
+      ports.notice(
+        failureNotice('could not reload', error, ' — fix the composition and /reload again'),
+      )
       ports.render()
     })
   }
@@ -403,7 +403,7 @@ export function createSessionLifecycle(
       )
       ports.render()
     })().catch((error: unknown) => {
-      ports.notice(`could not fork: ${error instanceof Error ? error.message : String(error)}`)
+      ports.notice(failureNotice('could not fork', error))
       ports.render()
     })
   }
@@ -435,7 +435,7 @@ export function createSessionLifecycle(
         `session renamed to "${typeof accepted?.title === 'string' ? accepted.title : title}"`,
       )
     } catch (error) {
-      ports.notice(`could not rename: ${error instanceof Error ? error.message : String(error)}`)
+      ports.notice(failureNotice('could not rename', error))
     }
     ports.render()
   }

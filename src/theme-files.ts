@@ -23,6 +23,7 @@ import {
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { CORE_SCHEMA, mergeTag, loadAll as parseYamlDocuments } from 'js-yaml'
+import { failureNotice } from './failure-notice.ts'
 import { dshHomeDir } from './stash/paths.ts'
 import {
   asRecord,
@@ -156,7 +157,7 @@ export function ensureThemesHome(dir: string): readonly string[] {
     mkdirSync(dir, { recursive: true })
     return []
   } catch (error) {
-    return [`themes: cannot create ${dir}: ${message(error)}`]
+    return [failureNotice(`themes: cannot create ${dir}`, message(error))]
   }
 }
 
@@ -216,7 +217,10 @@ export function exportTheme(library: ThemeLibrary, name: string): ExportOutcome 
   try {
     source = readFileSync(theme.path, 'utf8')
   } catch (error) {
-    return { ok: false, problem: `themes: cannot read ${theme.path}: ${message(error)}` }
+    return {
+      ok: false,
+      problem: failureNotice(`themes: cannot read ${theme.path}`, message(error)),
+    }
   }
   try {
     mkdirSync(library.home, { recursive: true })
@@ -224,7 +228,7 @@ export function exportTheme(library: ThemeLibrary, name: string): ExportOutcome 
     // never the one that gets clobbered.
     writeFileSyncExclusive(target, provenance(name) + source)
   } catch (error) {
-    return { ok: false, problem: `themes: cannot write ${target}: ${message(error)}` }
+    return { ok: false, problem: failureNotice(`themes: cannot write ${target}`, message(error)) }
   }
   return { ok: true, path: target, select }
 }
@@ -329,7 +333,7 @@ function readThemeFiles(dir: string, problems: string[]): ThemeFile[] {
     // so a missing one draws the built-in table and says nothing: reporting it
     // would greet every reader who has never written a theme with a fault.
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
-      problems.push(`themes: ${dir}: ${message(error)}`)
+      problems.push(failureNotice(`themes: ${dir}`, message(error)))
     return []
   }
   // Resolve each name once so lookup and preview cannot disagree over duplicate
@@ -367,7 +371,7 @@ function readThemeFile(
     }
     source = readFileSync(file.path, 'utf8')
   } catch (error) {
-    problems.push(`themes: ${file.path}: ${message(error)}`)
+    problems.push(failureNotice(`themes: ${file.path}`, message(error)))
     return undefined
   }
   let documents: unknown[]
@@ -377,7 +381,7 @@ function readThemeFile(
     // must stay the valid empty layer below.
     documents = parseYamlDocuments(source, { schema: THEME_YAML_SCHEMA })
   } catch (error) {
-    problems.push(`themes: ${file.path}: ${message(error)}`)
+    problems.push(failureNotice(`themes: ${file.path}`, message(error)))
     return undefined
   }
   // One file is one theme: a second document would otherwise be dropped unseen.
@@ -429,7 +433,7 @@ function readThemeFile(
       tokens: writtenTokens(body.tokens),
     }
   } catch (error) {
-    problems.push(`themes: ${file.path}: ${message(error)}`)
+    problems.push(failureNotice(`themes: ${file.path}`, message(error)))
     return undefined
   }
 }

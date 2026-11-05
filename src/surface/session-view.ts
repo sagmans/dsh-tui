@@ -4,6 +4,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { ForkEvent } from '../agent/fork.ts'
 import { createSessionHistory } from '../agent/history.ts'
 import { createToolPresenter } from '../agent/present.ts'
+import { failureNotice } from '../failure-notice.ts'
 import { FoldCursor, replayIfCurrent, ViewGeneration } from '../fold-cursor.ts'
 import { hintKeys, type Keymap } from '../input/actions.ts'
 import { TranscriptModel } from '../transcript.ts'
@@ -196,9 +197,7 @@ export function createSessionView(ctx: Context, ports: SessionViewPorts): Sessio
       const folded = await foldHistory(id)
       if (folded > 0) model.notice(`replayed ${folded} events from the stored log`)
     } catch (error) {
-      model.notice(
-        `could not replay this session: ${error instanceof Error ? error.message : String(error)}`,
-      )
+      model.notice(failureNotice('could not replay this session', error))
     }
   }
 
@@ -217,9 +216,7 @@ export function createSessionView(ctx: Context, ports: SessionViewPorts): Sessio
       await foldHistory(id, undefined, current)
     } catch (error) {
       if (!current()) return
-      model.notice(
-        `could not read that session: ${error instanceof Error ? error.message : String(error)}`,
-      )
+      model.notice(failureNotice('could not read that session', error))
     }
     if (!current()) return
     const driven = ports.drivenSession()

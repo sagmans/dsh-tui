@@ -13,6 +13,7 @@ import {
   type UndoState,
   undoStep,
 } from '../agent/undo.ts'
+import { failureNotice } from '../failure-notice.ts'
 
 /**
  * The staged-turn policy: the cursor over the live log, and the prompts parked
@@ -210,7 +211,7 @@ function runUndoCommand(ports: StagedTurnPorts, state: StagedState): void {
   const overtaken = (): boolean => ports.activeSession() !== pressedFor
   void undoOnce(ports, state, overtaken)
     .catch((error: unknown) => {
-      ports.notice(`undo failed: ${error instanceof Error ? error.message : String(error)}`)
+      ports.notice(failureNotice('undo failed', error))
       ports.render()
     })
     .finally(() => {
@@ -309,7 +310,7 @@ function runRedoCommand(ports: StagedTurnPorts, state: StagedState): void {
     )
     ports.render()
   })().catch((error: unknown) => {
-    ports.notice(`redo failed: ${error instanceof Error ? error.message : String(error)}`)
+    ports.notice(failureNotice('redo failed', error))
     ports.render()
   })
 }
@@ -359,7 +360,7 @@ async function commitStagedSend(
     ports.notice(`continuing in a new branch · ${source} keeps the undone turns`)
     opened.submit(text)
   } catch (error) {
-    ports.notice(`could not send: ${error instanceof Error ? error.message : String(error)}`)
+    ports.notice(failureNotice('could not send', error))
     ports.render()
   }
 }

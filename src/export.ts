@@ -13,6 +13,7 @@ import {
 } from 'node:fs'
 import path from 'node:path'
 import { rowText } from './cards.ts'
+import { failureNotice } from './failure-notice.ts'
 import { dshHomeDir } from './stash/paths.ts'
 import { PRIVATE_DIR_MODE, PRIVATE_FILE_MODE } from './stash/private-fs.ts'
 import { renderTerminalText } from './terminal-text.ts'
@@ -65,7 +66,7 @@ export function ensureExportsHome(dir: string): readonly string[] {
     }
     return []
   } catch (error) {
-    return [`exports: cannot create ${dir}: ${message(error)}`]
+    return [failureNotice(`exports: cannot create ${dir}`, message(error))]
   }
 }
 

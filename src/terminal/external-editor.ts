@@ -15,6 +15,7 @@ import { constants } from 'node:fs'
 import { chmod, lstat, mkdtemp, open, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { failureNotice } from '../failure-notice.ts'
 import { stripControlCharacters } from '../text.ts'
 
 /**
@@ -54,9 +55,9 @@ const EDITOR_TIMEOUT_MS = 30 * MINUTE_MS
 
 const NO_EDITOR_MESSAGE = 'no editor configured: set $VISUAL or $EDITOR to open the draft in one'
 const launchFailureMessage = (command: string, error: Error): string =>
-  `could not start ${command}: ${error.message}`
+  failureNotice(`could not start ${command}`, error)
 const useFailureMessage = (error: unknown): string =>
-  `could not use the edited draft: ${error instanceof Error ? error.message : 'unknown error'}`
+  failureNotice('could not use the edited draft', error instanceof Error ? error : 'unknown error')
 const tooLargeMessage = (file: string): string =>
   `the edited draft is larger than ${MAX_DRAFT_LABEL}; it was left at ${file}`
 const NOT_A_FILE_MESSAGE = 'the edited draft is no longer a plain file; nothing was taken back'
@@ -65,7 +66,10 @@ const retainedMessage = (file: string): string =>
 const uncertainCleanupMessage = (directory: string): string =>
   `could not remove the scratch directory; check ${directory} for anything left behind`
 const resumeFailureMessage = (error: unknown): string =>
-  `the screen did not come back cleanly: ${error instanceof Error ? error.message : 'unknown error'}`
+  failureNotice(
+    'the screen did not come back cleanly',
+    error instanceof Error ? error : 'unknown error',
+  )
 const timeoutMessage = (command: string): string =>
   `${command} held the terminal past the editor timeout and was stopped; the draft was taken back`
 

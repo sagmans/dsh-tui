@@ -10,6 +10,7 @@ import {
   transcriptToText,
   writeTranscriptExport,
 } from '../export.ts'
+import { failureNotice } from '../failure-notice.ts'
 import type { ActionLayer } from '../input/action-catalog.ts'
 import type { RegisteredCommand } from '../input/completion.ts'
 import { chordKeysLine, surfaceKeysLine } from '../input/keymap.ts'
@@ -206,9 +207,7 @@ export function createCommands(ctx: Context, ports: CommandsPorts): Commands {
       writeTranscriptExport(path, text)
       ports.transcript.notice(`transcript written to ${path}`)
     } catch (error) {
-      ports.transcript.notice(
-        `could not write ${path}: ${error instanceof Error ? error.message : String(error)}`,
-      )
+      ports.transcript.notice(failureNotice(`could not write ${path}`, error))
     }
     ports.render()
   }
@@ -299,15 +298,13 @@ export function createCommands(ctx: Context, ports: CommandsPorts): Commands {
         if (result === undefined) return
         ports.transcript.notice(
           result.kind === 'error'
-            ? `/${name} failed: ${result.text ?? 'no detail'}`
+            ? failureNotice(`/${name} failed`, result.text ?? 'no detail')
             : `/${name} ${result.text ?? 'done'}`,
         )
         ports.render()
       })
       .catch((error: unknown) => {
-        ports.transcript.notice(
-          `/${name} failed: ${error instanceof Error ? error.message : String(error)}`,
-        )
+        ports.transcript.notice(failureNotice(`/${name} failed`, error))
         ports.render()
       })
   }
@@ -461,9 +458,7 @@ export function createCommands(ctx: Context, ports: CommandsPorts): Commands {
             picked === undefined ? undefined : ports.session.switchSession(picked),
           )
           .catch((error: unknown) => {
-            ports.transcript.notice(
-              `could not resume: ${error instanceof Error ? error.message : String(error)}`,
-            )
+            ports.transcript.notice(failureNotice('could not resume', error))
             ports.render()
           })
         return

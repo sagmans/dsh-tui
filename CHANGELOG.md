@@ -10,6 +10,10 @@ breaking change, and a patch carries only fixes.
 
 ### Fixed
 
+- `/export` now records only the label of more failure notices, such as
+  `could not send`, `/<name> failed`, or a theme or settings problem. The screen
+  keeps the reason. A reason is text from a plugin, a file, or the system, so it
+  is not safe to share.
 - A plugin that fails to start, such as a provider with a broken model catalog,
   is now named in the transcript with its error. Before, the screen showed
   `ready` and the error printed only after exit. A plugin that waits for a

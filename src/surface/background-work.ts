@@ -1,6 +1,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { TuiAgent } from '../agent/host.ts'
+import { failureNotice } from '../failure-notice.ts'
 import {
   createJobDirectory,
   describeJobs,
@@ -67,6 +68,50 @@ export interface BackgroundWork {
 }
 
 /**
+ * List or stop the delegations this session started.
+ *
+ * A child runs in the same process as an ordinary agent, so a stop is the
+ * cancel a reader's Ctrl+C sends to the parent; nothing here reaches into the
+ * child's own session, which keeps its own transcript either way.
+ */
+function subagentsCommand(
+  argument: string,
+  ports: BackgroundWorkPorts,
+  roster: SubagentRoster,
+  subagentControl: ReturnType<typeof createSubagentControl>,
+): void {
+  const command = parseSubagentsArgument(argument)
+  switch (command.kind) {
+    case 'list':
+      ports.notice(describeSubagents(roster.list(), Date.now()))
+      ports.render()
+      return
+    case 'open': {
+      const run = resolveRun(roster.list(), command.id)
+      if (run === undefined) {
+        ports.notice(`${command.id}: no single child matches; /subagents lists them`)
+        ports.render()
+        return
+      }
+      ports.navigate(run.id)
+      return
+    }
+    case 'kill': {
+      const stopped = subagentControl?.stop(command.id) ?? false
+      ports.notice(
+        stopped ? `${command.id}: stop requested` : `${command.id}: no live child with that id`,
+      )
+      ports.render()
+      return
+    }
+    case 'invalid':
+      ports.notice(`/subagents: ${command.reason}`)
+      ports.render()
+      return
+  }
+}
+
+/**
  * The work that runs beside the conversation: background jobs and child agents.
  *
  * Neither is folded from the transcript. A job board is live state owned by a
@@ -115,52 +160,14 @@ export function createBackgroundWork(ctx: Context, ports: BackgroundWorkPorts): 
       // Keep list failures visible without aborting the command or job watch.
       // Clearing this projection removes job-derived liveness; it does not prove jobs stopped.
       jobs = []
-      ports.notice(
-        `could not list background jobs: ${error instanceof Error ? error.message : String(error)}`,
-      )
+      ports.notice(failureNotice('could not list background jobs', error))
     }
     reportBackground()
     ports.render()
   }
 
-  /**
-   * List or stop the delegations this session started.
-   *
-   * A child runs in the same process as an ordinary agent, so a stop is the
-   * cancel a reader's Ctrl+C sends to the parent; nothing here reaches into the
-   * child's own session, which keeps its own transcript either way.
-   */
-  const runSubagentsCommand = (argument: string): void => {
-    const command = parseSubagentsArgument(argument)
-    switch (command.kind) {
-      case 'list':
-        ports.notice(describeSubagents(roster.list(), Date.now()))
-        ports.render()
-        return
-      case 'open': {
-        const run = resolveRun(roster.list(), command.id)
-        if (run === undefined) {
-          ports.notice(`${command.id}: no single child matches; /subagents lists them`)
-          ports.render()
-          return
-        }
-        ports.navigate(run.id)
-        return
-      }
-      case 'kill': {
-        const stopped = subagentControl?.stop(command.id) ?? false
-        ports.notice(
-          stopped ? `${command.id}: stop requested` : `${command.id}: no live child with that id`,
-        )
-        ports.render()
-        return
-      }
-      case 'invalid':
-        ports.notice(`/subagents: ${command.reason}`)
-        ports.render()
-        return
-    }
-  }
+  const runSubagentsCommand = (argument: string): void =>
+    subagentsCommand(argument, ports, roster, subagentControl)
 
   // Read/kill exceptions escape so registry failures do not become empty-output or stop-result notices.
   const runJobsCommand = (argument: string): void => {
@@ -213,7 +220,7 @@ export function createBackgroundWork(ctx: Context, ports: BackgroundWorkPorts): 
           return
       }
     } catch (error) {
-      ports.notice(`/jobs: ${error instanceof Error ? error.message : String(error)}`)
+      ports.notice(failureNotice('/jobs', error))
       ports.render()
     }
   }

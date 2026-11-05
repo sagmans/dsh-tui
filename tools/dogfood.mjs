@@ -100,6 +100,8 @@ const INACTIVE_MISSING_SERVICE = 'dogfoodMissingService'
 const FAILURE_NOTICES_PLUGIN = 'dogfood-failure-notices.mjs'
 const FAILURE_NOTICES_PROBE_ID = 'failure-notices-probe'
 const FAILURE_NOTICES_SCENARIO = 'export-failure-notices'
+// Commands of the test-owned row: they fail at once and never reach a model route, so a free run stays free.
+const FAILURE_NOTICES_COMMANDS = ['/failure-throw', '/failure-refuse']
 const PROFILING_PROBE_CONFIGURATION_ERROR =
   'dogfood: profiling probe requires a fresh credential-free profile'
 const INITIAL_SESSION_ID = /tui-session-[a-f0-9-]+/u
@@ -813,7 +815,10 @@ async function run(scenario, reused) {
       if (step.command !== undefined) {
         if (/[\x00-\x1f\x7f]/u.test(step.command))
           throw new Error('dogfood: command contained terminal control input')
-        if (!LOCAL_COMMANDS.includes(step.command.split(' ')[0]))
+        const commandName = step.command.split(' ')[0]
+        const probeCommand =
+          scenario.id === FAILURE_NOTICES_SCENARIO && FAILURE_NOTICES_COMMANDS.includes(commandName)
+        if (!LOCAL_COMMANDS.includes(commandName) && !probeCommand)
           throw new Error(`dogfood: nonlocal free command ${step.command}`)
         const submit = step.submit ?? 'ctrl+s'
         if (!SUBMIT_KEYS.has(submit)) throw new Error(`dogfood: invalid submit key ${submit}`)

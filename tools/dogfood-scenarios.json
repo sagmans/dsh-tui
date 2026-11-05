@@ -1844,6 +1844,14 @@
     },
     {
       "id": "export-failure-notices",
+      "editor": "missing",
+      "files": [
+        {
+          "path": "not-a-directory",
+          "content": "blocks a child path",
+          "mode": 384
+        }
+      ],
       "steps": [
         {
           "command": "/rename failure-notices-request",
@@ -1851,6 +1859,26 @@
         },
         {
           "expect": "error: dogfood-failure-reason"
+        },
+        {
+          "command": "/failure-throw",
+          "expect": "/failure-throw failed: dogfood-failure-reason"
+        },
+        {
+          "command": "/failure-refuse",
+          "expect": "/failure-refuse failed: dogfood-failure-reason"
+        },
+        {
+          "command": "/export not-a-directory/failures.md",
+          "expect": "ENOTDIR"
+        },
+        {
+          "key": "ctrl+x",
+          "expect": "ctrl+x"
+        },
+        {
+          "key": "e",
+          "expect": "ENOENT"
         },
         {
           "command": "/export failures.md",
@@ -1864,6 +1892,24 @@
         {
           "file": "failures.md",
           "contains": "<!-- error -->"
+        },
+        {
+          "file": "failures.md",
+          "contains": "<!-- /failure-throw failed -->",
+          "excludes": "ENOTDIR"
+        },
+        {
+          "file": "failures.md",
+          "contains": "<!-- /failure-refuse failed -->",
+          "excludes": "ENOENT"
+        },
+        {
+          "file": "failures.md",
+          "contains": "could not write"
+        },
+        {
+          "file": "failures.md",
+          "contains": "could not start"
         },
         {
           "command": "/quit",

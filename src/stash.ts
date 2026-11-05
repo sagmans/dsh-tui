@@ -7,6 +7,7 @@
 // and an empty bar — in exactly one place.
 
 import path from 'node:path'
+import { failureNotice } from './failure-notice.ts'
 import { StashCommittedError } from './stash/lock.ts'
 import {
   DEFAULT_STASH_SCOPE,
@@ -41,7 +42,10 @@ const committedMessage = (error: StashCommittedError, done: string): string =>
     ? `${done}, but the ${error.failure.phase} step failed`
     : `${done}, but the ${error.failure.phase} and ${error.releaseFailure.phase} steps failed`
 const removalFailedMessage = (error: unknown, done: string): string =>
-  `${done}, but removing the entry failed: ${error instanceof Error ? error.message : 'unknown error'}`
+  failureNotice(
+    `${done}, but removing the entry failed`,
+    error instanceof Error ? error : 'unknown error',
+  )
 
 /**
  * Everything the stash needs from the surface.
@@ -84,10 +88,10 @@ export interface PromptStashOptions {
 // Newer-format and oversized banks are refused in place, not treated as corrupt.
 // Mark them unavailable to distinguish an unreadable bank from other command failures.
 function describeFailure(error: unknown): string {
-  const detail = error instanceof Error ? error.message : 'unknown error'
+  const detail = error instanceof Error ? error : 'unknown error'
   return error instanceof UnsupportedStashSchemaError || error instanceof FileTooLargeError
-    ? `stash unavailable: ${detail}`
-    : `stash failed: ${detail}`
+    ? failureNotice('stash unavailable', detail)
+    : failureNotice('stash failed', detail)
 }
 
 export class PromptStash {

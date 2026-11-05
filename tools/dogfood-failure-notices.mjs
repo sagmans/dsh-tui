@@ -9,11 +9,26 @@ const REQUEST_TITLE = 'failure-notices-request'
 const REASON = 'dogfood-failure-reason'
 const TURN = 1
 const STEP = 1
+const THROW_COMMAND = 'failure-throw'
+const REFUSE_COMMAND = 'failure-refuse'
 export const name = 'dogfood-failure-notices'
-export const inject = ['sessions']
+export const inject = ['sessions', 'commands']
 
 /** The runner mounts this fixture only in its own credential-free home and triggers it with a local rename. */
 export function apply(ctx) {
+  // Both ways a plugin command can fail: the surface words them alike, so an export must treat them alike.
+  ctx.commands.register({
+    name: THROW_COMMAND,
+    description: 'Throw a failure that names a fake value',
+    handler: () => {
+      throw new Error(REASON)
+    },
+  })
+  ctx.commands.register({
+    name: REFUSE_COMMAND,
+    description: 'Refuse with a failure that names a fake value',
+    handler: () => ({ kind: 'error', text: REASON }),
+  })
   let requested = false
   ctx.on(SESSION_EVENT, (session, event) => {
     if (requested || event.type !== TITLE_EVENT || event.data.title !== REQUEST_TITLE) return
