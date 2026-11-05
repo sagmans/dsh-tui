@@ -560,7 +560,7 @@
         },
         {
           "command": "/model",
-          "expect": "model"
+          "expect": "model · current"
         },
         {
           "key": "escape",
@@ -592,7 +592,7 @@
         },
         {
           "command": "/resume",
-          "expect": "session"
+          "expect": "resume a session"
         },
         {
           "key": "escape",
