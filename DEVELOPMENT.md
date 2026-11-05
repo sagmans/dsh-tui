@@ -22,17 +22,26 @@ node tools/install-smoke.mjs  # requires Docker with a running daemon
 pnpm audit --audit-level high
 ```
 
-Unit tests are not maintained. Golden tests remain visual regression checks, not actual-use proof.
-Run `pnpm verify` after development: free real-profile dogfood runs automatically.
+Unit tests are not maintained. Golden tests remain visual regression checks, not
+actual-use proof.
+Run `pnpm verify` after development: free real-profile dogfood runs
+automatically.
 [FEATURES.md](FEATURES.md) defines scope and evidence requirements.
-In a Herdr-managed caller, the same gate also runs real native-pane workflows in a disposable named session.
-Without that prerequisite, the report records unavailable Herdr evidence; portable PTY checks still run.
-When tmux is installed, the same gate also verifies a private server, Unicode editing, stash outcomes, and terminal restoration.
-Private native controllers do not start the caller's shell or source its startup files.
+In a Herdr-managed caller, the same gate also runs real native-pane workflows in
+a disposable named session.
+Without that prerequisite, the report records unavailable Herdr evidence;
+portable PTY checks still run.
+When tmux is installed, the same gate also verifies a private server, Unicode
+editing, stash outcomes, and terminal restoration.
+Private native controllers do not start the caller's shell or source its startup
+files.
 
-Golden tests do not prove native terminal behaviour. `pnpm test:terminal` checks native widgets in a credential-free PTY.
-It checks ASCII, Unicode, paste, Kitty press/repeat/release, redraw limits, resize, and terminal restoration during styled streaming.
-Its receipt reports dispatch-to-output-write timing, not hardware-input-to-pixel latency. Shared CI runners do not enforce timing budgets.
+Golden tests do not prove native terminal behaviour. `pnpm test:terminal` checks
+native widgets in a credential-free PTY.
+It checks ASCII, Unicode, paste, Kitty press/repeat/release, redraw limits,
+resize, and terminal restoration during styled streaming.
+Its receipt reports dispatch-to-output-write timing, not hardware-input-to-pixel
+latency. Shared CI runners do not enforce timing budgets.
 
 The native-widget check does not start a full Cordis profile. `pnpm dogfood`
 starts the installed Harness with the base bundle and this checkout in fresh
@@ -42,7 +51,8 @@ postconditions or terminal restoration. It does not call a model.
 
 For explicit paid verification, run `node tools/pty-drive.mjs --home <clone>`
 and follow the manual acceptance table in the README: the driver verifies the
-installed launcher against the releases the manifest lists, rebuilds, allocates a
+installed launcher against the releases the manifest lists, rebuilds, allocates
+a
 PTY, and prints the screen.
 
 A linked profile loads `lib/`, never `src/`, so a run against a stale build
@@ -57,41 +67,82 @@ pnpm run check:deadcode
 pnpm run check:local
 ```
 
-`check:unused` uses TypeScript to reject unused locals and parameters without producing build output.
-`check:deadcode` uses Knip in production mode, so test references cannot hide test-only production APIs.
-Published module roots come from package metadata; Cordis-only rows and standalone native helpers use explicit entries.
+`check:unused` uses TypeScript to reject unused locals and parameters without
+producing build output.
+`check:deadcode` uses Knip in production mode, so test references cannot hide
+test-only production APIs.
+Published module roots come from package metadata; Cordis-only rows and
+standalone native helpers use explicit entries.
 Herdr remains an optional host-native executable, not an npm package dependency.
-The optional default-model peer retains the verified RC development pin because wildcard resolution does not safely select that prerelease.
-`pnpm exec knip --no-progress` also checks supported golden fixtures and development-only code.
-Review findings against published module entry points and dynamic Cordis loading before removing code.
-[Knip 6 omits class-member analysis](https://knip.dev/blog/knip-v6#what-about-classmembers).
-Review class methods and test-only customization separately; framework callbacks remain live even without direct method references.
+The optional default-model peer retains the verified RC development pin because
+wildcard resolution does not safely select that prerelease.
+`pnpm exec knip --no-progress` also checks supported golden fixtures and
+development-only code.
+Review findings against published module entry points and dynamic Cordis loading
+before removing code.
+[Knip 6 omits class-member
+analysis](https://knip.dev/blog/knip-v6#what-about-classmembers).
+Review class methods and test-only customization separately; framework callbacks
+remain live even without direct method references.
 
 Repository hooks live in `.githooks` and replace the push CI workflow.
-The generic checks run first (sign-off, message format, secret scan, signed push), then `.githooks/<hook>.d/*`.
-`pre-commit` runs `pnpm run check:unused`, a staged whitespace check, and Biome on the staged files (`pnpm run lint:fix` repairs most findings).
-`pre-push` runs signatures, the Biome lint and format check, `check:local`, typecheck, golden frames, pack smoke, terminal behavior, the harness matrix, the dependency vulnerability audit (`pnpm audit --audit-level high`), and the consumer install smoke, each on the pushed commit.
-It also reruns typecheck, golden frames and terminal behavior on the newest pi-tui release in the supported range. That run installs from `compat/pi-tui/package.json` and its lockfile in a temporary worktree, names the release it resolved, and warns when a newer release in the range has passed the release-age window; `node tools/pi-tui-compat.mjs lock` refreshes both files.
-The install smoke needs Docker; without a running Docker daemon the push fails, and there is no switch to skip it.
-A pushed change to `pnpm-workspace.yaml`'s build policy, or a lockfile change to a package allowed to build (`node-pty`), makes `pre-push` print a warning that names each change.
-The push continues, so name those changes to the maintainer and get approval before you push them. Commits carry no trailer other than `Signed-off-by`.
-Run `scripts/setup-hooks` once after cloning; it points this clone's `core.hooksPath` at `.githooks`. Each hook runs the generic checks first (sign-off and commit message format, a gitleaks secret scan, and signed, signed-off commits on push), then this repository's checks in `.githooks/<hook>.d/` in name order. Install [gitleaks](https://github.com/gitleaks/gitleaks) first. Every check must pass before you push; never use `--no-verify`. Pre-push checks test exactly each pushed commit: in place only when it is the clean, unmodified checkout, otherwise in a temporary worktree of that commit. Never bypass hooks with `--no-verify`.
+The generic checks run first (sign-off, message format, secret scan, signed
+push), then `.githooks/<hook>.d/*`.
+`pre-commit` runs `pnpm run check:unused`, a staged whitespace check, and Biome
+on the staged files (`pnpm run lint:fix` repairs most findings).
+`pre-push` runs signatures, the Biome lint and format check, `check:local`,
+typecheck, golden frames, pack smoke, terminal behavior, the harness matrix, the
+dependency vulnerability audit (`pnpm audit --audit-level high`), and the
+consumer install smoke, each on the pushed commit.
+It also reruns typecheck, golden frames and terminal behavior on the newest
+pi-tui release in the supported range. That run installs from
+`compat/pi-tui/package.json` and its lockfile in a temporary worktree, names the
+release it resolved, and warns when a newer release in the range has passed the
+release-age window; `node tools/pi-tui-compat.mjs lock` refreshes both files.
+The install smoke needs Docker; without a running Docker daemon the push fails,
+and there is no switch to skip it.
+A pushed change to `pnpm-workspace.yaml`'s build policy, or a lockfile change to
+a package allowed to build (`node-pty`), makes `pre-push` print a warning that
+names each change.
+The push continues, so name those changes to the maintainer and get approval
+before you push them. Commits carry no trailer other than `Signed-off-by`.
+Run `scripts/setup-hooks` once after cloning; it points this clone's
+`core.hooksPath` at `.githooks`. Each hook runs the generic checks first
+(sign-off and commit message format, a gitleaks secret scan, and signed,
+signed-off commits on push), then this repository's checks in
+`.githooks/<hook>.d/` in name order. Install
+[gitleaks](https://github.com/gitleaks/gitleaks) first. Every check must pass
+before you push; never use `--no-verify`. Pre-push checks test exactly each
+pushed commit: in place only when it is the clean, unmodified checkout,
+otherwise in a temporary worktree of that commit. Never bypass hooks with
+`--no-verify`.
 
 ## Performance evidence
 
-Use the same machine, Node version, terminal, dimensions, profile, and workload for baseline and treatment.
-Record input and output timestamps, sample counts, p50/p95, maximum, redraw counts, and terminal restoration.
-Do not treat PTY output or a 60 fps video without input timestamps as hardware latency proof.
-Run timing budgets only on a controlled host; native behavioral invariants remain safe gates on shared CI runners.
+Use the same machine, Node version, terminal, dimensions, profile, and workload
+for baseline and treatment.
+Record input and output timestamps, sample counts, p50/p95, maximum, redraw
+counts, and terminal restoration.
+Do not treat PTY output or a 60 fps video without input timestamps as hardware
+latency proof.
+Run timing budgets only on a controlled host; native behavioral invariants
+remain safe gates on shared CI runners.
 
-Profile matching history suggestions separately from unmatched input. Fresh raw-user consent still gates each actual suggestion.
-The supported SettingsForms API exposes `describe(options)`, but no namespace-scoped raw-user read.
-A scoped optimization needs a supported harness capability. Do not cache consent or substitute applied configuration for raw opt-outs.
+Profile matching history suggestions separately from unmatched input. Fresh
+raw-user consent still gates each actual suggestion.
+The supported SettingsForms API exposes `describe(options)`, but no
+namespace-scoped raw-user read.
+A scoped optimization needs a supported harness capability. Do not cache consent
+or substitute applied configuration for raw opt-outs.
 
-Measure history misses at 2,000 and 20,000 entries, and streaming at 100 and 10,000 settled entries.
-A miss cache or incremental document assembly needs a material measured benefit before it adds invalidation state.
-Keep coverage for 10,000-character drafts, 45,700-character live output, and 8,000-character styled output when testing those workloads.
-Native Linux CI and local macOS PTYs do not replace the supported emulator, tmux, SSH, and hardware-key acceptance checks.
+Measure history misses at 2,000 and 20,000 entries, and streaming at 100 and
+10,000 settled entries.
+A miss cache or incremental document assembly needs a material measured benefit
+before it adds invalidation state.
+Keep coverage for 10,000-character drafts, 45,700-character live output, and
+8,000-character styled output when testing those workloads.
+Native Linux CI and local macOS PTYs do not replace the supported emulator,
+tmux, SSH, and hardware-key acceptance checks.
 
 ## Trying a change in a real profile
 
@@ -116,8 +167,10 @@ present; every write lands in a throwaway directory.
 ```
 
 The target is a worktree name or path; the name matches a worktree directory or
-a branch tail, and no target means the checkout the script lives in. For this TUI,
-the packaged helper rejects host versions outside `dsh.compatibility.dshReleases`
+a branch tail, and no target means the checkout the script lives in. For this
+TUI,
+the packaged helper rejects host versions outside
+`dsh.compatibility.dshReleases`
 before it clones the home. Use installed `dsh`, not a Harness source checkout.
 The script:
 
@@ -129,7 +182,8 @@ The script:
    profile patch alone,
 4. starts the surface.
 
-Later runs reuse the clone and only re-link and rebuild, so they start in about a
+Later runs reuse the clone and only re-link and rebuild, so they start in about
+a
 second. `--status` prints what the clone is pointed at, `--clean` removes it,
 and `--list` prints the repository's worktrees. Nothing outside the clone is
 written; `--clean` refuses any directory that lacks the marker the script wrote.
@@ -150,13 +204,16 @@ variable, and cloning that is never what a developer meant.
 
 ### The model a dogfood run uses
 
-Use the active model in the current session for dogfooding. Configure its adapter
+Use the active model in the current session for dogfooding. Configure its
+adapter
 and `agent-default-model` route in the clone's profile patch. `settings.yaml` is
-legacy input on verified `0.2.1-rc.2`, not a live route overlay. Do not rely on launch flags
+legacy input on verified `0.2.1-rc.2`, not a live route overlay. Do not rely on
+launch flags
 `--model` and `--provider` alone for a resumed session; check `/status` and
 select `/model` before sending a prompt. A route with no credit
 stops at `error: Insufficient Balance`
-after the surface is ready, which proves composition and nothing about the plugin
+after the surface is ready, which proves composition and nothing about the
+plugin
 under test.
 
 ### What the clone carries
@@ -207,7 +264,8 @@ deliberately not discovered, so a `references/` directory is safe. Frontmatter
 requires `name` and `description` and may add `whenToUse`, `metadata`,
 `disable-model-invocation`, and `user-invocable`.
 
-This repository ships [`dsh-tui-dogfood`](.agents/skills/dsh-tui-dogfood/SKILL.md).
+This repository ships
+[`dsh-tui-dogfood`](.agents/skills/dsh-tui-dogfood/SKILL.md).
 Run `dsh --profile tui install-skills` to copy it to `~/.agents/skills/` for use
 from any dsh plugin checkout. An existing copy prompts for confirmation on a
 TTY. Use `dsh --profile tui install-skills --update` to replace it without a
@@ -231,5 +289,6 @@ A broken link is silent: `dsh plugin install` and `dsh plugin add` drop a bundle
 they cannot resolve and still exit 0, so a missing row is worth checking against
 `node -p "require('<home>/profiles/tui/package.json').dsh.profile.bundles"`
 before anything else. The dogfood script rebuilds every local `link:` as an
-absolute symlink for exactly this reason: a profile installs those links relative
+absolute symlink for exactly this reason: a profile installs those links
+relative
 to the home it was made in, so a clone at another depth leaves them dangling.
