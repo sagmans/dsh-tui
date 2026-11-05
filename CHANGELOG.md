@@ -10,6 +10,10 @@ breaking change, and a patch carries only fixes.
 
 ### Changed
 
+- Biome now refuses non-null assertions in the code and the test fixtures. Each
+  one is a real check or a narrower type. A fork or a staged send that loses its
+  session state now stops with a clear notice, before it changes the transcript
+  or disposes the agent.
 - Development checks lint and format the code with Biome `2.6.3`: the pre-commit
   hook checks the staged files, and `pnpm run verify` checks the whole tree on
   every push. The code was reformatted once to the existing style. The published
