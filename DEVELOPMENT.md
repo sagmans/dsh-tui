@@ -91,9 +91,11 @@ push), then `.githooks/<hook>.d/*`.
 `pre-commit` runs `pnpm run check:unused`, a staged whitespace check, and Biome
 on the staged files (`pnpm run lint:fix` repairs most findings).
 `pre-push` runs signatures, the Biome lint and format check, `check:local`,
-typecheck, golden frames, pack smoke, terminal behavior, the harness matrix, the
-dependency vulnerability audit (`pnpm audit --audit-level high`), and the
-consumer install smoke, each on the pushed commit.
+typecheck, golden frames, pack smoke, terminal behavior, the free real-profile
+dogfood, the harness matrix, the dependency vulnerability audit
+(`pnpm audit --audit-level high`), and the consumer install smoke, each on the
+pushed commit. The dogfood needs the installed `dsh` at a verified release;
+without it the push fails.
 It also reruns typecheck, golden frames and terminal behavior on the newest
 pi-tui release in the supported range. That run installs from
 `compat/pi-tui/package.json` and its lockfile in a temporary worktree, names the

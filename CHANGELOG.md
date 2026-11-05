@@ -31,6 +31,9 @@ breaking change, and a patch carries only fixes.
 
 ### Changed
 
+- `pre-push` now runs the free real-profile dogfood on each pushed commit. Before,
+  a commit that failed it could pass the hook, because only `pnpm verify` ran it.
+  The push now needs the installed `dsh` at a verified release.
 - Biome now refuses non-null assertions in the code and the test fixtures. Each
   one is a real check or a narrower type. A fork or a staged send that loses its
   session state now stops with a clear notice, before it changes the transcript

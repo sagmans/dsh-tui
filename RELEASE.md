@@ -39,10 +39,10 @@ to `## [X.Y.Z] - <date>` and repoints the compare links.
 8. A published npm version is immutable. A broken release is forward-fixed,
    never unpublished (see [Rollback](#rollback)).
 
-`pre-push` also runs the native terminal gate, offline harness matrix, and
-consumer install smoke; free actual-profile dogfood runs in `pnpm verify` (gate
-3). The tag workflow reruns native terminal and free dogfood checks, but not the
-matrix or consumer install gates. Both workflows install before `npm audit
+`pre-push` also runs the native terminal gate, free actual-profile dogfood,
+offline harness matrix, and consumer install smoke. The tag workflow reruns
+native terminal and free dogfood checks, but not the matrix or consumer install
+gates. Both workflows install before `npm audit
 signatures`; that audit does not prove lifecycle scripts were disabled. The
 consumer smoke disables scripts for its direct npm installs, not explicitly for
 `dsh plugin add`. Keep real-session dogfooding separate from these automated

@@ -1,7 +1,10 @@
 #!/bin/sh
 # Runs the gates hosted CI ran on every push (signatures, lint and format,
-# typecheck, golden frames, pack smoke, terminal behavior, harness matrix) and
-# the dependency vulnerability audit on each pushed commit.
+# typecheck, golden frames, pack smoke, terminal behavior, harness matrix), the
+# free real-profile dogfood and the dependency vulnerability audit on each
+# pushed commit. The dogfood is here because golden frames and terminal
+# behavior do not prove actual use, and nothing else stops a commit that fails
+# it. It needs the installed verified Harness: without it, the push fails.
 set -eu
 DSH_TELEMETRY_DISABLED=1
 export DSH_TELEMETRY_DISABLED
@@ -20,6 +23,7 @@ checks() {
 	run_step 'pnpm test:golden' "$GATE_TIMEOUT_SECONDS" pnpm test:golden || return 1
 	run_step 'pack smoke' "$GATE_TIMEOUT_SECONDS" node tools/pack-smoke.mjs || return 1
 	run_step 'pnpm test:terminal' "$GATE_TIMEOUT_SECONDS" pnpm test:terminal || return 1
+	run_step 'pnpm dogfood' "$GATE_TIMEOUT_SECONDS" pnpm dogfood || return 1
 	run_step 'harness matrix' "$GATE_TIMEOUT_SECONDS" node tools/harness-matrix.mjs || return 1
 	run_step 'pnpm audit' "$NETWORK_TIMEOUT_SECONDS" pnpm audit --audit-level high || return 1
 }
