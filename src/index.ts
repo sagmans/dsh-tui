@@ -252,6 +252,9 @@ export function apply(ctx: Context, config: unknown): void {
   const modelChoice = createModelChoice(ctx, {
     afterEffort: pluginActions.afterEffort,
     statusFacts: () => statusFacts(),
+    // A route choice appends to the driven session's own log, so the owner
+    // needs the live handle; before an agent opens there is nothing to record.
+    drivingAgent: () => sessionLifecycle.drivingAgent(),
     keymap: appearance.keymap,
     openPicker: (picker) => modalInput.openPicker(picker),
     notice: (message) => sessionView.notice(message),

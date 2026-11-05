@@ -1,16 +1,22 @@
 ---
 name: dsh-tui-dogfood
-description: "Use when a dsh plugin checkout must be tested against a real profile without writing to the developer's live home: clone the home, relink only that plugin, and run or hand off the profile."
+description: "Use when a dsh plugin checkout must be tested against a real
+profile without writing to the developer's live home: clone the home, relink
+only that plugin, and run or hand off the profile."
 ---
 # Dogfood a dsh plugin checkout
 
 For a dsh-tui checkout, run `pnpm verify` after development. It runs golden
 frames and all free dogfood scenarios automatically. `pnpm dogfood` starts the
 installed Harness with the base bundle and worktree in credential-free scratch
-homes. In a Herdr-managed caller, the same free gate also runs real native-pane workflows in an owned disposable named session.
-Without that prerequisite, Herdr evidence remains `environment-not-run`; portable PTY checks still run.
-When tmux is installed, the free gate also verifies its private server and actual restoration.
-Native controllers do not launch the caller's configured shell or source its startup files.
+homes. In a Herdr-managed caller, the same free gate also runs real native-pane
+workflows in an owned disposable named session.
+Without that prerequisite, Herdr evidence remains `environment-not-run`;
+portable PTY checks still run.
+When tmux is installed, the free gate also verifies its private server and
+actual restoration.
+Native controllers do not launch the caller's configured shell or source its
+startup files.
 Read `FEATURES.md` in the checkout for scope and evidence rules.
 
 Paid live-model use requires an explicit human request. List scenarios with
@@ -18,8 +24,8 @@ Paid live-model use requires an explicit human request. List scenarios with
 `--provider`, and `--model`. Use a cloned profile for its credentials and model
 adapter. Never submit a model prompt automatically, even a short smoke prompt.
 
-
-A fresh `DSH_HOME` misses the installed bundles, profile patch, settings, and themes.
+A fresh `DSH_HOME` misses the installed bundles, profile patch, settings, and
+themes.
 A run against the real home writes real sessions and state. Clone the source
 home and relink only the plugin under test inside the clone.
 
@@ -32,7 +38,8 @@ From **any dsh plugin checkout root**, run the packaged helper:
 ```
 
 No target means the current checkout. A name matches its repository's worktree
-directory or branch tail. A path selects that checkout directly. The helper reads
+directory or branch tail. A path selects that checkout directly. The helper
+reads
 `package.json` for the plugin name; it never assumes `@sagmans/dsh-tui`. It
 runs `pnpm run build` only when the checkout declares a build script. It adds
 the bundle once if absent from the cloned profile, updates only its dependency,
@@ -40,7 +47,7 @@ restores local links from `link:` specifications, and launches
 `dsh --profile tui` by default. For this TUI, the packaged helper checks
 the launcher against `dsh.compatibility.dshReleases` in the checkout’s
 `package.json` before cloning, not against the declared version range. This
-checkout lists only installed `dsh 0.2.1-rc.2` as verified for PTY tests. Never
+checkout lists only installed `dsh 0.2.2-rc.1` as verified for PTY tests. Never
 substitute `pnpm dsh` or a `--dsh` path from a Harness source checkout: that
 host may migrate the cloned `settings.yaml`. The legacy
 `scripts/dogfood/run-tui-from-worktree.sh` remains available in dsh-tui and
@@ -72,7 +79,8 @@ These package links can point to global packages or external checkouts, but
 never into the source home. Every other cloned link must stay inside the clone.
 An instruction file linked into a shared prompt tree (`AGENTS.md`, `CLAUDE.md`)
 is read only, so seeding copies it in as a regular file; a link to state the run
-may write — credentials, settings, storages, sessions, profiles — still stops the
+may write — credentials, settings, storages, sessions, profiles — still stops
+the
 run. Mutable cloned files with multiple hardlinks are rejected. Never write test
 state through a package link.
 
@@ -105,4 +113,5 @@ still requires its marker to match. Orphan cleanup requires a private marker
 owned by the current user. It validates home, source, profile, and absent
 target, but cannot recheck a removed checkout.
 
-For home contents, storage, and cleanup details, read [references/home-state.md](references/home-state.md).
+For home contents, storage, and cleanup details, read
+[references/home-state.md](references/home-state.md).

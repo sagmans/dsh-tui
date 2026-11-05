@@ -6,7 +6,8 @@ table live in [README.md](README.md); publication lives in
 
 ## Gates
 
-In this order, because CI runs them in this order:
+Run them in this order. `pre-push` runs all of them except `pnpm dogfood` (see
+[Local static checks](#local-static-checks)):
 
 ```sh
 pnpm install --frozen-lockfile
@@ -18,6 +19,7 @@ node tools/pack-smoke.mjs
 pnpm test:terminal
 pnpm dogfood
 node tools/harness-matrix.mjs
+node tools/harness-matrix.mjs --check-registry  # reads the npm registry
 node tools/install-smoke.mjs  # requires Docker with a running daemon
 pnpm audit --audit-level high
 ```
@@ -85,19 +87,21 @@ analysis](https://knip.dev/blog/knip-v6#what-about-classmembers).
 Review class methods and test-only customization separately; framework callbacks
 remain live even without direct method references.
 
-Repository hooks live in `.githooks` and replace the push CI workflow.
-The generic checks run first (sign-off, message format, secret scan, signed
-push), then `.githooks/<hook>.d/*`.
-`pre-commit` runs `pnpm run check:unused`, a staged whitespace check, and Biome
-on the staged files (`pnpm run lint:fix` repairs most findings).
-`pre-push` runs signatures, the Biome lint and format check, `check:local`,
-typecheck, golden frames, pack smoke, terminal behavior, the free real-profile
-dogfood, the harness matrix, the dependency vulnerability audit
-(`pnpm audit --audit-level high`), and the consumer install smoke, each on the
-pushed commit. The dogfood needs the installed `dsh` at a verified release;
-without it the push fails.
-It also reruns typecheck, golden frames and terminal behavior on the newest
-pi-tui release in the supported range. That run installs from
+Repository hooks live in `.githooks` and replace every hosted check workflow;
+only the tag `release.yml` runs on GitHub. The generic checks run first
+(sign-off, message format, secret scan, signed push), then
+`.githooks/<hook>.d/*`. `pre-commit` runs `pnpm run check:unused`, a staged
+whitespace check, and Biome on the staged files (`pnpm run lint:fix` repairs
+most findings). `pre-push` runs signatures, the Biome lint and format check,
+`check:local`, typecheck, golden frames, pack smoke, terminal behavior, the
+free real-profile dogfood, the harness matrix, the dependency vulnerability
+audit (`pnpm audit --audit-level high`), and the consumer install smoke, each
+on the pushed commit. The dogfood needs the installed `dsh` at a verified
+release; without it the push fails. On each pushed ref's tip it also reads the
+harness `latest` dist-tag and fails when that release is not in
+`dsh.compatibility.dshReleases`, or when the registry cannot be read. It also
+reruns typecheck, golden frames and terminal behavior on the newest pi-tui
+release in the supported range. That run installs from
 `compat/pi-tui/package.json` and its lockfile in a temporary worktree, names the
 release it resolved, and warns when a newer release in the range has passed the
 release-age window; `node tools/pi-tui-compat.mjs lock` refreshes both files.
@@ -209,7 +213,7 @@ variable, and cloning that is never what a developer meant.
 Use the active model in the current session for dogfooding. Configure its
 adapter
 and `agent-default-model` route in the clone's profile patch. `settings.yaml` is
-legacy input on verified `0.2.1-rc.2`, not a live route overlay. Do not rely on
+legacy input on verified `0.2.2-rc.1`, not a live route overlay. Do not rely on
 launch flags
 `--model` and `--provider` alone for a resumed session; check `/status` and
 select `/model` before sending a prompt. A route with no credit
@@ -223,7 +227,7 @@ under test.
 | Entry | Why it decides what you see |
 | --- | --- |
 | `.credentials.yaml` | the run cannot answer without it |
-| `settings.yaml` (+ `.imported`) | legacy migration input; live Config-backed settings belong to profile entries on verified `0.2.1-rc.2` |
+| `settings.yaml` (+ `.imported`) | legacy migration input; live Config-backed settings belong to profile entries on verified `0.2.2-rc.1` |
 | `themes/` | the surface writes and watches this directory at start-up |
 | `prompt-history.json` | history recall in the editor |
 | `tui-stash/` | the parked-draft bank and its lock |

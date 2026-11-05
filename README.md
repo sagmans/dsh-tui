@@ -1,16 +1,32 @@
 # @sagmans/dsh-tui
 
-Interactive terminal (TUI) surface for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): use `dsh` in a terminal instead of a browser.
+Interactive terminal (TUI) surface for
+[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): use `dsh`
+in a terminal instead of a browser.
 
-Status: **v1 feature-complete; published on npm as `@sagmans/dsh-tui`.** The surface owns the alternate screen, renders every message as markdown, renders every tool's own card, answers approvals and questions, restores and names stored conversations, switches model mid-session, runs any of the four shipped agent modes and switches between them before a session's first turn, reads a child agent's conversation in place, keeps the goal, plan mode, todo list, delegations, and background jobs above the editor with a status line below it, nudges an agent whose plan has aged without an update, parks and restores prompt drafts per session, and hands the terminal back on every graceful exit. Publication is tag-driven with GitHub OIDC provenance and no stored npm token; see [RELEASE.md](RELEASE.md).
+Status: **v1 feature-complete; published on npm as `@sagmans/dsh-tui`.** The
+surface owns the alternate screen, renders every message as markdown, renders
+every tool's own card, answers approvals and questions, restores and names
+stored conversations, switches model mid-session, runs any of the four shipped
+agent modes and switches between them before a session's first turn, reads a
+child agent's conversation in place, keeps the goal, plan mode, todo list,
+delegations, and background jobs above the editor with a status line below it,
+nudges an agent whose plan has aged without an update, parks and restores prompt
+drafts per session, and hands the terminal back on every graceful exit.
+Publication is tag-driven with GitHub OIDC provenance and no stored npm token;
+see [RELEASE.md](RELEASE.md).
 
 ## Install
 
-A profile keeps this plugin as one bundle layer. Install it from a checkout of this repository, or from the registry (`0.1.0` or later). Both paths need Node.js >= 22.19 and `pnpm` on `PATH`. Interactive sessions need a real terminal: stdin and stdout must be TTYs.
+A profile keeps this plugin as one bundle layer. Install it from a checkout of
+this repository, or from the registry (`0.1.0` or later). Both paths need
+Node.js >= 22.19 and `pnpm` on `PATH`. Interactive sessions need a real
+terminal: stdin and stdout must be TTYs.
 
 ### From a plugin checkout
 
-A linked profile loads the package's built entry point. Build the checkout before you add it:
+A linked profile loads the package's built entry point. Build the checkout
+before you add it:
 
 ```sh
 cd "$PLUGIN_CHECKOUT"
@@ -19,7 +35,10 @@ dsh plugin --profile tui add "$PWD"
 dsh --profile tui
 ```
 
-The `add` command creates the `tui` profile on first use and records a link to the directory. Keep the checkout in place. If you move or delete it, the link breaks, and a later `plugin install` removes the bundle from the layer list (see Troubleshooting).
+The `add` command creates the `tui` profile on first use and records a link to
+the directory. Keep the checkout in place. If you move or delete it, the link
+breaks, and a later `plugin install` removes the bundle from the layer list (see
+Troubleshooting).
 
 ### From the registry
 
@@ -28,7 +47,8 @@ dsh plugin --profile tui add @sagmans/dsh-tui@latest
 dsh --profile tui
 ```
 
-Releases are published, so this path works today. A checkout stays the path for unreleased work.
+Releases are published, so this path works today. A checkout stays the path for
+unreleased work.
 
 ### Install the dogfood skill (optional)
 
@@ -73,7 +93,8 @@ install is the prompt above — and a run that never opens the screen, like
 
 ### Confirm the plugin mounted
 
-The profile records its layers in `$DSH_HOME/profiles/tui/package.json` (`~/.dsh` by default). `@sagmans/dsh-tui` must appear in `dsh.profile.bundles`:
+The profile records its layers in `$DSH_HOME/profiles/tui/package.json`
+(`~/.dsh` by default). `@sagmans/dsh-tui` must appear in `dsh.profile.bundles`:
 
 ```sh
 node -p "require((process.env.DSH_HOME ?? require('node:os').homedir() + '/.dsh') + '/profiles/tui/package.json').dsh.profile.bundles.join('\n')"
@@ -81,7 +102,8 @@ node -p "require((process.env.DSH_HOME ?? require('node:os').homedir() + '/.dsh'
 # @sagmans/dsh-tui
 ```
 
-Then check that the surface is mounted. A pipe is not a terminal, so this command must refuse before it takes the screen over:
+Then check that the surface is mounted. A pipe is not a terminal, so this
+command must refuse before it takes the screen over:
 
 ```sh
 echo hi | dsh --profile tui
@@ -90,13 +112,15 @@ echo hi | dsh --profile tui
 
 ### Update
 
-Rebuild a linked checkout, then start the next session. The link itself does not change:
+Rebuild a linked checkout, then start the next session. The link itself does not
+change:
 
 ```sh
 cd "$PLUGIN_CHECKOUT" && git pull && CI=true pnpm install && pnpm run build
 ```
 
-A registry install updates with `dsh plugin --profile tui update @sagmans/dsh-tui`.
+A registry install updates with
+`dsh plugin --profile tui update @sagmans/dsh-tui`.
 
 ### Remove
 
@@ -104,26 +128,47 @@ A registry install updates with `dsh plugin --profile tui update @sagmans/dsh-tu
 dsh plugin --profile tui remove @sagmans/dsh-tui
 ```
 
-The profile then keeps `@deepseek-ai/dsh-base` and no application, so `dsh --profile tui` waits with no output. Add the plugin again to use the profile.
+The profile then keeps `@deepseek-ai/dsh-base` and no application, so
+`dsh --profile tui` waits with no output. Add the plugin again to use the
+profile.
 
 ### Use the installed Harness launcher
 
-The manifest declares `>=0.2.1-rc.2 <0.3.0-0`, but lists only `0.2.1-rc.2` as a verified release. Range membership alone does not prove compatibility. Run `dsh --version` and use that installed release for dogfooding. `pnpm dsh` from a Harness source checkout runs a development host, not the verified installed release. It can migrate `settings.yaml`; do not use it for TUI dogfooding.
+The manifest declares `>=0.2.2-rc.1 <0.3.0-0`, but lists only `0.2.2-rc.1` as a
+verified release. Range membership alone does not prove compatibility. Run
+`dsh --version` and use that installed release for dogfooding. `pnpm dsh` from a
+Harness source checkout runs a development host, not the verified installed
+release. It can migrate `settings.yaml`; do not use it for TUI dogfooding.
 
-The surface probes required and optional services at startup, and selects settings APIs by capability. These checks do not validate the host version or prove full-profile behavior. The dogfood helper and PTY driver separately check the launcher against the manifest's verified releases.
+The surface probes required and optional services at startup, and selects
+settings APIs by capability. These checks do not validate the host version or
+prove full-profile behavior. The dogfood helper and PTY driver separately check
+the launcher against the manifest's verified releases.
 
 ## Troubleshooting
 
 Two facts explain most failures.
 
-**A linked profile is a link, not a copy.** The profile points at a directory, so a checkout that moves or disappears breaks it.
+**A linked profile is a link, not a copy.** The profile points at a directory,
+so a checkout that moves or disappears breaks it.
 
-**`dsh plugin install` removes a bundle it cannot resolve, and says nothing.** The command reconciles `dsh.profile.bundles` against the installed dependencies. A bundle whose path does not resolve leaves the list, and the command still exits 0. The next launch composes `@deepseek-ai/dsh-base` alone. No application plugin mounts, so nothing reads the command line: `dsh --profile tui` then prints nothing and never exits, and `--help` waits with it.
+**`dsh plugin install` removes a bundle it cannot resolve, and says nothing.**
+The command reconciles `dsh.profile.bundles` against the installed dependencies.
+A bundle whose path does not resolve leaves the list, and the command still
+exits 0. The next launch composes `@deepseek-ai/dsh-base` alone. No application
+plugin mounts, so nothing reads the command line: `dsh --profile tui` then
+prints nothing and never exits, and `--help` waits with it.
 
-**npm can report `overriding peer dependency` while a harness tree resolves.** A warning alone does not mean the install failed; check its exit status. This plugin pins its mounted harness dependencies to `0.2.1-rc.2` and declares optional harness peers as `*`. Optional peers avoid automatic installation when absent; neither open peers nor exact dependencies guarantee consumer deduplication. The consumer install smoke checks package-copy counts for its selected release and install paths, not every host in the declared range.
+**npm can report `overriding peer dependency` while a harness tree resolves.** A
+warning alone does not mean the install failed; check its exit status. This
+plugin pins its mounted harness dependencies to `0.2.2-rc.1` and declares
+optional harness peers as `*`. Optional peers avoid automatic installation when
+absent; neither open peers nor exact dependencies guarantee consumer
+deduplication. The consumer install smoke checks package-copy counts for its
+selected release and install paths, not every host in the declared range.
 
 | Symptom | Cause | Fix |
-|---|---|---|
+| --- | --- | --- |
 | `dsh: cannot resolve profile bundle "@sagmans/dsh-tui" ...` | the linked checkout moved or was deleted | `dsh plugin --profile tui add "$PLUGIN_CHECKOUT"` |
 | `dsh --profile tui` prints nothing and never exits | the bundle left `dsh.profile.bundles`, usually after a broken link and a `plugin install` | confirm the layer list, then run the `add` command again |
 | `dsh-tui: both stdin and stdout must be TTYs` | stdin or stdout is a pipe, a file, or a CI runner | run the command from a terminal |
@@ -169,43 +214,67 @@ exits 1.
 
 ### Lifecycle profiling
 
-`dsh tui --profiling` measures one TUI invocation. `dsh --profile tui --profiling` is equivalent.
+`dsh tui --profiling` measures one TUI invocation.
+`dsh --profile tui --profiling` is equivalent.
 After shutdown, it saves a private JSON report and prints its path on stderr:
 
 ```text
 $DSH_HOME/profiles/tui/profiling/<session-id>_<timestamp>.json
 ```
 
-`DSH_HOME` defaults to `~/.dsh`. The UTC timestamp replaces colons with hyphens for filesystem compatibility.
-The filename names the first session opened, including a session chosen in the history picker.
-A failed startup uses its launch identity. Session switches do not rename the report; `finalSessionId` identifies the last session opened.
+`DSH_HOME` defaults to `~/.dsh`. The UTC timestamp replaces colons with hyphens
+for filesystem compatibility.
+The filename names the first session opened, including a session chosen in the
+history picker.
+A failed startup uses its launch identity. Session switches do not rename the
+report; `finalSessionId` identifies the last session opened.
 
 The report contains:
 
-- `timing`: process lifetime, first-frame time, input-ready time, startup time, and shutdown time, in milliseconds.
-- `milestones`: independent launcher, screen, picker, agent, restoration, and exit observations. Missing observations are `null`.
-- `phases`: start, end, duration, category, and completion status for each measured operation. Interrupted operations remain `incomplete`.
+- `timing`: process lifetime, first-frame time, input-ready time, startup time,
+  and shutdown time, in milliseconds.
+- `milestones`: independent launcher, screen, picker, agent, restoration, and
+  exit observations. Missing observations are `null`.
+- `phases`: start, end, duration, category, and completion status for each
+  measured operation. Interrupted operations remain `incomplete`.
 - `exit`: the observed exit code and the shutdown path.
 
-Startup includes aggregate time before this plugin loads, CLI parsing, surface construction, launch validation, terminal activation, agent setup, and history replay.
-`startupMs` ends when launcher readiness, input readiness, and the first successful frame have all occurred.
-History-picker input readiness does not wait for a human selection. Picker waiting has its own `user-wait` category.
-Shutdown separates terminal cleanup, raw-mode restoration, transcript export, warning replay, pane release, surface disposal, and agent disposal.
-The profiler records agent disposal once per handle, when its first disposal attempt starts.
-Session replacement records disposal in the `session` category. Later cleanup calls do not create duplicate spans.
+Startup includes aggregate time before this plugin loads, CLI parsing, surface
+construction, launch validation, terminal activation, agent setup, and history
+replay.
+`startupMs` ends when launcher readiness, input readiness, and the first
+successful frame have all occurred.
+History-picker input readiness does not wait for a human selection. Picker
+waiting has its own `user-wait` category.
+Shutdown separates terminal cleanup, raw-mode restoration, transcript export,
+warning replay, pane release, surface disposal, and agent disposal.
+The profiler records agent disposal once per handle, when its first disposal
+attempt starts.
+Session replacement records disposal in the `session` category. Later cleanup
+calls do not create duplicate spans.
 Editor handoffs appear separately and do not finalize the report.
 
-Phase spans can overlap or nest; do not add their durations to calculate total startup or shutdown time.
-The report retains at most 512 phase spans and counts omitted spans in `droppedPhases`.
-It stores no prompts, drafts, transcript text, credentials, or error messages. Files use mode `0600`; new profiling directories use `0700`.
+Phase spans can overlap or nest; do not add their durations to calculate total
+startup or shutdown time.
+The report retains at most 512 phase spans and counts omitted spans in
+`droppedPhases`.
+It stores no prompts, drafts, transcript text, credentials, or error messages.
+Files use mode `0600`; new profiling directories use `0700`.
 
-The final measurement ends at Node's `exit` callback, before JSON serialization and the final disk write.
-It does not measure shell command dispatch, OS process reaping, or terminal-emulator painting.
-Early Harness failures before flag parsing and uncatchable termination, such as `SIGKILL`, cannot produce a completed report.
-Report-write failure does not change the app's exit status. Help and CLI usage errors do not create reports.
-This includes conflicting arguments, such as `--new --resume`. The CLI rejects these arguments before a launch identity exists.
-Path and failure diagnostics print only when the TUI observed safe terminal ownership.
-A forced unload during an editor handoff can save a report without printing into the child editor.
+The final measurement ends at Node's `exit` callback, before JSON serialization
+and the final disk write.
+It does not measure shell command dispatch, OS process reaping, or
+terminal-emulator painting.
+Early Harness failures before flag parsing and uncatchable termination, such as
+`SIGKILL`, cannot produce a completed report.
+Report-write failure does not change the app's exit status. Help and CLI usage
+errors do not create reports.
+This includes conflicting arguments, such as `--new --resume`. The CLI rejects
+these arguments before a launch identity exists.
+Path and failure diagnostics print only when the TUI observed safe terminal
+ownership.
+A forced unload during an editor handoff can save a report without printing into
+the child editor.
 
 ### Keyboard and commands
 
@@ -214,7 +283,7 @@ and its library can perform as a list you filter as you type, with the keys in
 force, and the `keys:` section moves any of them — see [Keys](#keys).
 
 | Key | Action |
-|---|---|
+| --- | --- |
 | Enter / Shift+Enter | break the line: a prompt is written before it is sent |
 | Ctrl+Enter / Alt+Enter / Ctrl+S | submit the prompt |
 | Ctrl+C | take back one thing at a time: the draft in the bar, the prompts waiting in the agent's inbox, the running turn, or a child's conversation; with a picker, an approval, a question, or the transcript search open it closes that instead. With nothing left to cancel it does nothing — it never leaves |
@@ -281,14 +350,27 @@ force, and the `keys:` section moves any of them — see [Keys](#keys).
 | `/stash-clear` | delete every draft in the current stash bank, after a confirmation |
 | `/quit` | leave and print the resume command |
 
-Typing `@` opens this workspace's files above the editor, ranked as the fragment is typed the way a fuzzy finder ranks a path list: `@edtr` reaches `src/ui/editor.ts` without spelling the separators, a directory offers itself with a trailing slash so typing continues into it, and a path holding a space is quoted. A directory whose own name holds a space offers no row, because the menu stops following the token once one is in it; the files under it are still listed, each quoted whole. The rows are what git tracks or would add, with ignored paths left out, so a suggestion never names build output or a secret the repository deliberately ignores; a tree git does not own is walked instead, skipping `node_modules`, `.git`, and the rest of the build litter. A path typed from the working directory still completes on Tab as before.
+Typing `@` opens this workspace's files above the editor, ranked as the fragment
+is typed the way a fuzzy finder ranks a path list: `@edtr` reaches
+`src/ui/editor.ts` without spelling the separators, a directory offers itself
+with a trailing slash so typing continues into it, and a path holding a space is
+quoted. A directory whose own name holds a space offers no row, because the menu
+stops following the token once one is in it; the files under it are still
+listed, each quoted whole. The rows are what git tracks or would add, with
+ignored paths left out, so a suggestion never names build output or a secret the
+repository deliberately ignores; a tree git does not own is walked instead,
+skipping `node_modules`, `.git`, and the rest of the build litter. A path typed
+from the working directory still completes on Tab as before.
 
 ### Plugin keymaps
 
 The bundle publishes `tuiKeymaps` before the surface starts.
-Optional plugins register their own actions; the terminal does not assign their meaning.
-Actions use namespaced `plugin.<owner>.<action>` IDs and either the `chord` or `surface` layer.
-Approval gates, questions, and library-owned editor bindings are not plugin registration layers.
+Optional plugins register their own actions; the terminal does not assign their
+meaning.
+Actions use namespaced `plugin.<owner>.<action>` IDs and either the `chord` or
+`surface` layer.
+Approval gates, questions, and library-owned editor bindings are not plugin
+registration layers.
 
 ```ts
 import type { Context } from '@deepseek-ai/cordis'
@@ -318,18 +400,25 @@ export function apply(ctx: Context): void {
 ```
 
 Handlers receive the current route, generic row-picker ports, and a notice sink.
-The registering Context owns the action; disposal removes its bindings, help rows, and handler.
+The registering Context owns the action; disposal removes its bindings, help
+rows, and handler.
 Duplicate IDs and conflicting effective bindings are refused before publication.
 Registration and removal update the open surface and disarm any pending chord.
 
-Users can rebind plugin IDs through the same `keys` preference mapping as builtin actions.
-On Config-backed profiles, add `keys` directly to the existing TUI row's `config`, preserving its launch fields.
+Users can rebind plugin IDs through the same `keys` preference mapping as
+builtin actions.
+On Config-backed profiles, add `keys` directly to the existing TUI row's
+`config`, preserving its launch fields.
 Older settings-backed hosts use the `tui.keys` section.
-Preferences for absent plugins remain stored but inactive; registration validates them before activation.
-A plugin can register `afterEffort(owner, handler)` to offer a follow-up after confirmed effort selection.
+Preferences for absent plugins remain stored but inactive; registration
+validates them before activation.
+A plugin can register `afterEffort(owner, handler)` to offer a follow-up after
+confirmed effort selection.
 Cancelling the effort picker invokes no follow-up.
-An action may supply `routeHint(route)`, a synchronous optional model qualifier owned by the same Context.
-The footer reads live qualifiers beside effort; failed or control-bearing hints stay hidden.
+An action may supply `routeHint(route)`, a synchronous optional model qualifier
+owned by the same Context.
+The footer reads live qualifiers beside effort; failed or control-bearing hints
+stay hidden.
 
 `Ctrl+X` starts a chord. For the next two seconds the footer leads with the
 prefix alone — enough to say that a key is waiting, without reciting the map —
@@ -343,7 +432,8 @@ the key map.
 them, as so many ways in — and `prefixWindow: 0` waits for the next key instead
 of lapsing; every second key is a row of its own (`chord.model`, `chord.plan`,
 `chord.new`, `chord.copy`, `chord.stash`, `chord.stashes`, `chord.editor`,
-`chord.keys`, `chord.undo`, `chord.redo`), so a chord can be respelled whole. A prefix that is not a modifier
+`chord.keys`, `chord.undo`, `chord.redo`), so a chord can be respelled whole. A
+prefix that is not a modifier
 chord, that the surface or the prompt bar already answers (`ctrl+c`, `ctrl+s`),
 or that the terminal keeps (`ctrl+q`) is refused with the reason, and the
 shipped keymap stays in force. The chords themselves are the commands they stand
@@ -355,33 +445,77 @@ enters, so the chord names `/plan off` instead when the agent is in plan mode �
 or is waiting for the turn boundary to become so — and reads that state from the
 plan package rather than from the dock.
 
-An approval or a question draws inline above the editor and takes the keyboard. A question that lists options always adds row `0. other — type your own answer`: type or paste an answer the model did not offer, and the seam receives it as that question's free text — replacing a single-select choice, or supplementing a multi-select one. `0`, or `↓` past the last option, reaches the row; `↑` walks back to the list with the text kept, and `esc` does the same from that row, because a question skipped by accident is a question answered twice — an escape from the list skips it. Free text is written in the prompt bar's own editor, drawn under that row: movement, word and line deletion, undo, completion, and multi-line paste are all the editor the reader already uses, and the prompt bar steps aside while a question is open, so a prompt written but not sent comes back untouched once the question is answered. No question hides its answer — the reader is the one who has to check what they are about to send. Every gate row wraps at the screen edge under its own label, so a long option or question is readable rather than cut.
+An approval or a question draws inline above the editor and takes the keyboard.
+A question that lists options always adds row `0. other — type your own answer`:
+type or paste an answer the model did not offer, and the seam receives it as
+that question's free text — replacing a single-select choice, or supplementing a
+multi-select one. `0`, or `↓` past the last option, reaches the row; `↑` walks
+back to the list with the text kept, and `esc` does the same from that row,
+because a question skipped by accident is a question answered twice — an escape
+from the list skips it. Free text is written in the prompt bar's own editor,
+drawn under that row: movement, word and line deletion, undo, completion, and
+multi-line paste are all the editor the reader already uses, and the prompt bar
+steps aside while a question is open, so a prompt written but not sent comes
+back untouched once the question is answered. No question hides its answer — the
+reader is the one who has to check what they are about to send. Every gate row
+wraps at the screen edge under its own label, so a long option or question is
+readable rather than cut.
 
-While a turn runs, a prompt submitted into the editor waits in the agent's own inbox instead of disappearing: it is drawn above the editor in the input bar's own frame, faint and italic, and moves into the transcript when the agent takes it — where a separate prompt frame keeps what the reader typed distinct from what the agent said. Its markdown lays out inside that frame, so a list or a fence reads in the same box it was typed into. `editor.queued` and `editor.queued.more` restyle or hide the waiting rows; `transcript.user` restyles the submitted text, `transcript.user.border` its frame, and `editor.border` the input bar. A reply is drawn in a frame of its own, so one exchange reads as two objects rather than as a box followed by a stream of rows: `transcript.assistant.border` restyles that frame, and hiding it draws the reply bare. `ctrl+c` takes them back: an interrupt drops whatever the agent has not started, so the waiting prompts are read first and put into the bar before the turn is stopped.
+While a turn runs, a prompt submitted into the editor waits in the agent's own
+inbox instead of disappearing: it is drawn above the editor in the input bar's
+own frame, faint and italic, and moves into the transcript when the agent takes
+it — where a separate prompt frame keeps what the reader typed distinct from
+what the agent said. Its markdown lays out inside that frame, so a list or a
+fence reads in the same box it was typed into. `editor.queued` and
+`editor.queued.more` restyle or hide the waiting rows; `transcript.user`
+restyles the submitted text, `transcript.user.border` its frame, and
+`editor.border` the input bar. A reply is drawn in a frame of its own, so one
+exchange reads as two objects rather than as a box followed by a stream of rows:
+`transcript.assistant.border` restyles that frame, and hiding it draws the reply
+bare. `ctrl+c` takes them back: an interrupt drops whatever the agent has not
+started, so the waiting prompts are read first and put into the bar before the
+turn is stopped.
 
-Copying is read back through what the surface drew rather than through the screen, so a selection is the words alone: dragging across a message takes its box with it on screen, and the surface takes its own frame back out before the text reaches the clipboard — the sides, the padding beside them, and the rules above and below. A selection that covers a whole message, two of them, or a part of one is read the same way, and a row the transcript did not draw — the editor's own bar, a picker's card — is copied exactly as it read, and a selection that was nothing but frame is handed back as the reader made it, because a copy is never emptied. The frame still comes back in a copy taken with the terminal's own selection — Shift held while dragging, or a terminal that keeps selection to itself — which is the one path no program can filter.
+Copying is read back through what the surface drew rather than through the
+screen, so a selection is the words alone: dragging across a message takes its
+box with it on screen, and the surface takes its own frame back out before the
+text reaches the clipboard — the sides, the padding beside them, and the rules
+above and below. A selection that covers a whole message, two of them, or a part
+of one is read the same way, and a row the transcript did not draw — the
+editor's own bar, a picker's card — is copied exactly as it read, and a
+selection that was nothing but frame is handed back as the reader made it,
+because a copy is never emptied. The frame still comes back in a copy taken with
+the terminal's own selection — Shift held while dragging, or a terminal that
+keeps selection to itself — which is the one path no program can filter.
 
 ### Editing cursor
 
 The default software cursor is a reverse-video block over the current grapheme.
-Its visible and hidden phases each last 500 ms, independent of reasoning, status updates, and streamed output.
+Its visible and hidden phases each last 500 ms, independent of reasoning, status
+updates, and streamed output.
 Editor input and cursor movement restart the visible phase.
-Terminal focus loss, modal input ownership, and external-editor handoff suspend it.
+Terminal focus loss, modal input ownership, and external-editor handoff suspend
+it.
 Reverse video remains available with color disabled.
 
 Software mode replaces the terminal's selected cursor shape and blink settings.
-To retain previous native cursor behavior and IME compatibility, merge this field into the existing TUI row's config:
+To retain previous native cursor behavior and IME compatibility, merge this
+field into the existing TUI row's config:
 
-~~~yaml
+```yaml
 cursorMode: native
-~~~
+```
 
-Preserve the row's startup mappings; a profile override replaces its whole config.
+Preserve the row's startup mappings; a profile override replaces its whole
+config.
 Restart the surface after changing the mode.
-Native mode retains the previous blink request to the terminal; continuous output can still prevent blinking.
-The software cursor retains the terminal position marker; IME behavior must still be checked with your emulator.
+Native mode retains the previous blink request to the terminal; continuous
+output can still prevent blinking.
+The software cursor retains the terminal position marker; IME behavior must
+still be checked with your emulator.
 
-When prompt history is enabled, each submitted line is kept in a global history at
+When prompt history is enabled, each submitted line is kept in a global history
+at
 `$DSH_HOME/prompt-history.json`. Typing the start of a prompt that was sent
 before draws the rest of the newest match after the cursor in a faint shade.
 `Ctrl+E` takes the whole suggestion and the word-movement key takes the next
@@ -395,18 +529,21 @@ build cannot parse is left untouched and writes are refused, so a newer format
 is never overwritten; `/history` names it and the count, and `/history clear`
 forgets everything.
 
-Any other `/command` goes to the command registry, so `/plan`, `/compact`, `/goal`, and `/feedback` behave as they do on the other surfaces.
+Any other `/command` goes to the command registry, so `/plan`, `/compact`,
+`/goal`, and `/feedback` behave as they do on the other surfaces.
 
 ## Prompt stash
 
 `ctrl+x` then `s` parks the draft the editor is holding and clears it;
 `/stash <draft>` parks a draft typed on the command line. A bare `/stash` only
-says so, because submitting a command consumes the line it was typed on and there
+says so, because submitting a command consumes the line it was typed on and
+there
 is nothing left of the draft to park. `/stash-pop` puts a parked draft back and
 removes it, so a prompt written for the wrong moment survives a restart instead
 of being retyped or sent; `l` opens the list of them. By default, a stash
 belongs to the absolute working directory where the TUI started: new or resumed
-sessions in the same worktree share drafts. Set `stash.scope: session` on the TUI
+sessions in the same worktree share drafts. Set `stash.scope: session` on the
+TUI
 row in the profile's `cordis.patch.yml` to keep each session's drafts separate:
 
 ```yaml
@@ -425,7 +562,8 @@ row in the profile's `cordis.patch.yml` to keep each session's drafts separate:
 ```
 
 A profile override replaces the row's config, so keep its startup mappings as
-shown. Editing the bundle's `tui` row config instead needs only the `stash` block.
+shown. Editing the bundle's `tui` row config instead needs only the `stash`
+block.
 
 Use `scope: path` (the default) to share drafts by directory. Changing the
 scope does not move existing drafts; switch back to the old scope to read them.
@@ -436,27 +574,33 @@ A selector is the number the list shows in brackets — `0` is the newest — or
 entry's own id; leaving it out takes the newest. `apply` and `pop` refuse to
 overwrite a draft already in the editor, because losing an unsent prompt to a
 restore is the one outcome the feature exists to prevent. They refuse while a
-question is borrowing the bar for the same reason: a draft written into an answer
-would be sent as one. `pop` writes the editor first and removes the entry second,
+question is borrowing the bar for the same reason: a draft written into an
+answer
+would be sent as one. `pop` writes the editor first and removes the entry
+second,
 so a crash between the two leaves the draft in the bank rather than only in a
 terminal that is gone.
 
 Nothing is cleared until the write has landed. A refusal — no room left, a bank
 past its cap, another writer holding the lock — leaves the draft in the bar,
-including a draft typed after `/stash`, which is written back into the bar before
+including a draft typed after `/stash`, which is written back into the bar
+before
 the write is attempted. The bar is only cleared while it still holds that same
 draft and no question has borrowed it, so an answer typed during the write is
 never wiped by a stash finishing.
 
-Each path or session bank is one JSON file under `$DSH_HOME/tui-stash`, written with
+Each path or session bank is one JSON file under `$DSH_HOME/tui-stash`, written
+with
 owner-only permissions (`0700` directory, `0600` file) through a no-follow open,
 and every directory the path passes through must be owned by the reader (or by
 root) and not writable by anyone else — the sticky bit is the only exception,
 since it keeps renaming to an entry's owner. Links are walked one hop at a time,
-with `..` left for the filesystem to resolve against what the link points at, and
+with `..` left for the filesystem to resolve against what the link points at,
+and
 a link this user does not own ends the walk: a chain that jumps through a shared
 directory is refused at the directory it jumped through. A directory
-that another user or a group member could redirect the storage through is refused
+that another user or a group member could redirect the storage through is
+refused
 rather than trusted, which is also why a group-writable home directory fails the
 stash with the offending path named. Every update is a locked read-modify-write
 and an atomic temp-and-rename, so two surfaces using one bank cannot lose each
@@ -467,16 +611,20 @@ contender never deletes a lock it did not publish, so losing the name to a
 successor costs a retry rather than the successor's turn.
 
 A bank whose session id is not this one, or whose bytes do not parse, is
-moved aside as `<name>.corrupt-<time>` and reported with its path — including when
+moved aside as `<name>.corrupt-<time>` and reported with its path — including
+when
 the directory holding the copy could not be synced. A bank written by a newer
 format, or one past the size cap, is refused in place rather than moved, because
 neither is corruption. A storage directory a save had to create is flushed
 through the directory that names it before the save reports anything. If that
 flush fails, the empty directories are taken back so the retry starts clean; a
-directory another surface has already saved into is left exactly as it is, because
-an entry left unflushed costs durability while a removed bank costs the draft. Drafts are never written to a session log, and control and
+directory another surface has already saved into is left exactly as it is,
+because
+an entry left unflushed costs durability while a removed bank costs the draft.
+Drafts are never written to a session log, and control and
 Unicode bidi controls are stripped when a draft is stored and again when it is
-read, so a hand-edited bank cannot park a terminal escape or a reordering trick in
+read, so a hand-edited bank cannot park a terminal escape or a reordering trick
+in
 the bar.
 
 ## External editor
@@ -495,10 +643,12 @@ No shell is involved: the configured line is split here and the program is
 spawned directly, because an environment value is data and a typo in it must not
 become a command. The scratch file is a fresh directory per handoff, mode `0700`
 with a `0600` file, removed when the editor leaves; the text read back is read
-through one handle that follows no link and accepts only a plain file, so a draft
+through one handle that follows no link and accepts only a plain file, so a
+draft
 swapped for a link, a fifo, or a device is refused rather than followed, and it
 is stripped of control and bidi characters, because it is going into a live
-editor rather than being drawn as text. A child that exits non-zero is not a failure —
+editor rather than being drawn as text. A child that exits non-zero is not a
+failure —
 an editor that refused to save has already said so, and what it did save is what
 the reader meant to keep. Nothing configured, a program that could not start, a
 save that cannot be read, and a draft past 1 MiB are notices that leave the bar
@@ -509,11 +659,15 @@ must not also be a way to lose the work.
 
 Every styled element is a named token with a shipped default, and every key is
 an action with one, so the surface can be restyled and rebound without touching
-code. On the supported line a preference lives in the active profile's own patch,
+code. On the supported line a preference lives in the active profile's own
+patch,
 under the TUI entry's `config`; `/theme <name>` writes a chosen theme there for
-you. Use the actual entry ID, normally `tui`, not the legacy `dsh-tui` namespace.
-Merge preferences into the existing `config`; preserve its startup `!!js` fields.
-The verified host replaces `config` wholesale, so a partial replacement loses the launch identity.
+you. Use the actual entry ID, normally `tui`, not the legacy `dsh-tui`
+namespace.
+Merge preferences into the existing `config`; preserve its startup `!!js`
+fields.
+The verified host replaces `config` wholesale, so a partial replacement loses
+the launch identity.
 
 ```yaml
 - id: tui
@@ -567,27 +721,36 @@ dsh-tui:
 The plugin exports a Config schema for all preferences shown above, including
 `prefix`, `prefixWindow`, and `keys`. Launch fields such as `sessionId`,
 `model`, and `provider` remain separate from live preference edits.
-The settings service owns persistence. TUI does not create another preference store.
-It uses legacy section-style `installSection` or `register` APIs, or Config-backed
+The settings service owns persistence. TUI does not create another preference
+store.
+It uses legacy section-style `installSection` or `register` APIs, or
+Config-backed
 `describe` and revision-checked `update` APIs. Unsupported or read-only writes
 show a notice instead of reporting success. A rejected theme selection restores
 the applied theme, and `/theme tokens` reports that same appearance.
 
 On Config-backed hosts, absent `history.enabled` and `history.ghost` stay off.
 Set each switch to `true` explicitly to enable it. This prevents recording while
-the host's asynchronous legacy import is pending or has failed. Legacy section-style
-settings providers retain their existing defaults. If the host reports unreadable preferences,
+the host's asynchronous legacy import is pending or has failed. Legacy
+section-style
+settings providers retain their existing defaults. If the host reports
+unreadable preferences,
 history stays off. Readable `false` switches survive errors in other fields.
-Malformed updates retain the last valid appearance and do not overwrite their source.
+Malformed updates retain the last valid appearance and do not overwrite their
+source.
 
-When public descriptors expose raw user layers, history checks those layers at use
+When public descriptors expose raw user layers, history checks those layers at
+use
 time. A readable opt-out survives rejected siblings even without a change event.
-Another rejected opt-in cannot clear this protection; a valid committed update can.
+Another rejected opt-in cannot clear this protection; a valid committed update
+can.
 A section-provider limit remains: after an absent user section, rejected scalar
-sections can produce identical public descriptors. TUI cannot detect that transition
+sections can produce identical public descriptors. TUI cannot detect that
+transition
 without host validity metadata, so section-provider defaults remain active.
 
-The verified `0.2.1-rc.2` settings service has no legacy import alias from `dsh-tui` to `tui`.
+The verified `0.2.2-rc.1` settings service has no legacy import alias from
+`dsh-tui` to `tui`.
 Exporting Config does not resolve that namespace mismatch. The service renames
 `settings.yaml` to `settings.yaml.imported` before import completes.
 TUI does not retry or restore that file automatically. Preserve current privacy
@@ -605,14 +768,14 @@ older copy gets the refusal instead of an import that silently does nothing.
 If the loaded schema runtime lacks native support, TUI exports ordinary fields
 rather than unsupported live metadata. TUI then rejects Config-backed writes,
 and the host cannot import preferences through its volatile-field settings API.
-Reading row preferences still works, and an ordinary profile change - the entry's
+Reading row preferences still works, and an ordinary profile change - the
+entry's
 own `config` in a profile patch - is applied by the host's reload lifecycle.
 
 Every field is optional, so a section that changes one shade is enough. The
 document is hot-reloaded: an edit restyles a running session and re-arms the
 keymap on the next press, and `/theme` shows each element's effective value and
 whether it came from an override, the palette, or the default.
-
 
 The section is not only shades. By default a PTC program's card arrives alone,
 and `subcalls: inline` draws one row per call it dispatched under that card
@@ -629,7 +792,8 @@ the argument is what gives up that room: a wide terminal shows more of the call,
 a narrow one still shows the tool, how it ended, and how much waits behind the
 fold. The reserved `default` row applies to every tool without its own, and a
 tool name nothing declares is inert: the surface cannot know which tools a
-profile mounts. Clicking a card opens or folds that one message, and a dispatched
+profile mounts. Clicking a card opens or folds that one message, and a
+dispatched
 call's row opens on the same click to what the tool itself drew for it — an
 edit's diff in the diff colours, a read's numbered lines, a command and its
 output — followed by the outcome it produced; a call that failed opens to the
@@ -650,7 +814,8 @@ A reply whose fenced block names `mermaid` is drawn as terminal box art instead
 of source, laid out at the width the transcript has. `mermaid: streaming` (the
 default) draws a diagram while the reply is still arriving, `final` waits for
 the turn to end, and `off` leaves every fence exactly as written. A diagram
-wider than the terminal, one the renderer cannot draw at all, or one whose source
+wider than the terminal, one the renderer cannot draw at all, or one whose
+source
 is larger than a frame can lay out stays as the source fence rather than being
 truncated; a settled diagram whose source was only partly readable keeps the
 fence and names what was dropped. The drawing is
@@ -678,43 +843,59 @@ session file still keep the fence exactly as the model wrote it.
 A theme restyles the whole surface by name, and a theme is a file. The package
 ships six: `violet-orbit`, a port of pi's theme of that name — its palette,
 plus the elements it draws its own way — `deepseek-blue`, the table written out
-in full in the colours the project answers to, `polar-drift`, that table anchored
+in full in the colours the project answers to, `polar-drift`, that table
+anchored
 on the cyan `#27CFF5`, `pine-slope`, the same table around the pine `#173802`,
 `wine-thicket`, the same table around the plum `#240413`, and `marine-static`,
 the same table around the deep teal `#041F21`. The pine, the plum, and the teal
 are dark enough that they mark the band under a selected row by hue alone, while
-the accent is lifted out of their own hue to where text reads. Each of them tints
+the accent is lifted out of their own hue to where text reads. Each of them
+tints
 its neutrals through that hue, holds the same relative ladder of shades, and
 leaves the semantic shades where a reader already reads them. `violet-orbit` is
 also what a
-document naming no theme draws, so the default look is a file you can read, list,
+document naming no theme draws, so the default look is a file you can read,
+list,
 and copy rather than a table compiled in. Your own themes live in
-`$DSH_HOME/themes/`, which the surface creates at start-up and watches, so saving
+`$DSH_HOME/themes/`, which the surface creates at start-up and watches, so
+saving
 a file there is how you change the surface you are looking at. A bare `/theme`
-opens the list of them, narrowing as you type, and the screen paints the row under
-the cursor as it moves: two themes are compared on your own transcript, and nothing
-is written until one is taken, so leaving the list puts back the theme that was in
+opens the list of them, narrowing as you type, and the screen paints the row
+under
+the cursor as it moves: two themes are compared on your own transcript, and
+nothing
+is written until one is taken, so leaving the list puts back the theme that was
+in
 force. `theme: violet-orbit` applies one from the document, and a name nothing
-answers to is reported with the names that do, drawing the default while you fix it.
+answers to is reported with the names that do, drawing the default while you fix
+it.
 
 Every shipped file names every element and every palette entry, so a copy of one
 is a complete theme rather than a diff against something you cannot see. Copying
 `deepseek-blue` is how to move a single shade, because every element follows one
-of its ten palette entries, each taken from DeepSeek's own design tokens with the
+of its ten palette entries, each taken from DeepSeek's own design tokens with
+the
 token named beside it — and the accent is one line. `polar-drift` reads the same
 way, with the anchor as its own one line.
 `/theme export <built-in>` writes that copy into your own directory as
-`<built-in>_export_<n>.yaml`, adding one comment naming the release it came from:
-the package's own file is replaced whenever the package updates, so the copy is the
-only one worth editing. A file whose name is a built-in's is ignored, and reported
+`<built-in>_export_<n>.yaml`, adding one comment naming the release it came
+from:
+the package's own file is replaced whenever the package updates, so the copy is
+the
+only one worth editing. A file whose name is a built-in's is ignored, and
+reported
 at start-up with the rename that fixes it.
 
 A theme is a layer and not a replacement: everything it says nothing about keeps
 its shipped appearance, and a `tokens:` entry of your own still wins over it one
-field at a time, so naming a single attribute does not discard the shade the theme
-gave that same element. `/theme tokens` names the theme in force in its heading and
-reports each element as `override`, `theme`, `palette`, or `default`, marking the
-themes in your own directory and printing the export hint, so a screen that looks
+field at a time, so naming a single attribute does not discard the shade the
+theme
+gave that same element. `/theme tokens` names the theme in force in its heading
+and
+reports each element as `override`, `theme`, `palette`, or `default`, marking
+the
+themes in your own directory and printing the export hint, so a screen that
+looks
 wrong can be traced to the layer that drew it. Submitted prompts, assistant
 replies, and the editor have separate border tokens: `transcript.user.border`,
 `transcript.assistant.border`, and `editor.border`. In `violet-orbit`, their
@@ -738,15 +919,18 @@ fence as plain text. `/export` and the session file still keep the fence exactly
 as the model wrote it.
 
 `fg` and `bg` accept `#rrggbb`, a palette name (`default`, `muted`, `faint`,
-`accent`, `arg`, `warn`, `added`, `removed`, `user`, `assistant`), or an index. A colour is
+`accent`, `arg`, `warn`, `added`, `removed`, `user`, `assistant`), or an index.
+A colour is
 emitted as 24-bit when the terminal advertises it (`COLORTERM`) and degraded to
 the nearest 256-colour entry or 16-colour slot otherwise; a hue keeps its family
 there, so an addition stays green instead of collapsing to black. Muted elements
 name the palette rather than a terminal slot, so on anything but a 16-colour
 terminal their contrast does not depend on what the reader's colour scheme maps
-slot 8 to. `faint` is the shade below `muted`: a thought and the row naming it both take
+slot 8 to. `faint` is the shade below `muted`: a thought and the row naming it
+both take
 it, and only the row is italic, so the signpost does not compete with the text
-it introduces. `arg` is the pale blue a card gives the argument it was called with,
+it introduces. `arg` is the pale blue a card gives the argument it was called
+with,
 so `tool.args` is restyled on its own and stays distinct from the tool's own
 label and from its output. `user` is the mint a submitted prompt takes, so a
 reader's own turns stand apart from the reply without reading either.
@@ -771,9 +955,11 @@ the last state of a progress bar is the only one drawn.
 Everything else a terminal would act on — cursor movement, screen clearing,
 private modes, window titles, clipboard writes, hyperlinks — is consumed rather
 than shown, and a control byte that is not a sequence is spelled out (`\x07`)
-rather than silently dropped. A full reset inside tool output restores the colour
+rather than silently dropped. A full reset inside tool output restores the
+colour
 of the element holding the text, not the terminal default, and the surface never
-writes a reset of its own inside a row; a carriage return cannot repaint past the
+writes a reset of its own inside a row; a carriage return cannot repaint past
+the
 column the text started at, so indented output cannot reach the frame around it.
 
 Text the surface draws itself — a ghost suggestion, a completion row, a queued
@@ -784,10 +970,12 @@ painting it and a second style would fight the first.
 
 Every press the surface answers is an action with an id and a shipped key.
 `/keys`, or `Ctrl+X` then `?`, opens the whole map in a box over the
-transcript: one row per action with the keys in force, one row for every key your
+transcript: one row per action with the keys in force, one row for every key
+your
 map took from the library, and a filter over all of it — `gate` for a layer,
 `ctrl+o` for a key, `stash` for what a row does. The heading counts the actions
-shown and how many of them you wrote, the box gives up rows rather than grow past
+shown and how many of them you wrote, the box gives up rows rather than grow
+past
 four fifths of the screen, and `enter` or `esc` closes it with the transcript
 exactly as it was. `/keys prompt`, `surface`, `chord`, `gate`, `question`,
 `picker`, and `library` open it already narrowed to one part of the surface, and
@@ -819,15 +1007,19 @@ your keys. To use the newer layout, write it in `keys`:
 Refused, with the reason in a notice and the shipped map left in force: an
 action the surface does not have, a key no terminal reports, `ctrl+q` (the
 terminal keeps it), a bare character outside the chord and gate layers, two
-actions of one layer on one press, a key the library already answers on a row you
-never wrote, a key the viewport reads before the surface sees it, whichever of the
+actions of one layer on one press, a key the library already answers on a row
+you
+never wrote, a key the viewport reads before the surface sees it, whichever of
+the
 two the map moved onto it (`pageUp`, or `tui.altScreen.search` moved onto a
 surface key), a `chord.prefix` that is not a modifier chord or that takes a key
 the surface or the prompt bar answers, and `prefix:` beside
 `keys.chord.prefix:`, which are the same row under two names.
 
-Two rows count as one press when some sequence reaches both, not merely when they
-are spelled alike, because one press can arrive as several bytes and one byte can
+Two rows count as one press when some sequence reaches both, not merely when
+they
+are spelled alike, because one press can arrive as several bytes and one byte
+can
 spell several keys. A bare terminal reports Return for `enter` and `ctrl+m`, a
 line feed for `ctrl+j` and, without the keyboard protocol, Return as well, one
 control byte carries both `ctrl+-` and `ctrl+_`, and an escape with a letter
@@ -854,65 +1046,202 @@ alone.
 
 ## Modes
 
-A mode is an **agent preset**: the seat an agent's own scope takes in this profile's roster. The rows that make up that agent — its tools, prompt sections, skills, and planning — belong to the bundle shipping each of them, and the profile's own layers compose them, so a mode names a composition rather than assembling one. A mode is fixed once a session has produced a turn, because the log records the seat the agent that answered ran in.
+A mode is an **agent preset**: the seat an agent's own scope takes in this
+profile's roster. The rows that make up that agent — its tools, prompt sections,
+skills, and planning — belong to the bundle shipping each of them, and the
+profile's own layers compose them, so a mode names a composition rather than
+assembling one. A mode is fixed once a session has produced a turn, because the
+log records the seat the agent that answered ran in.
 
 Four ship, under the ids a session log records:
 
 | `--preset` | Mode | What this bundle makes of the id |
-|---|---|---|
+| --- | --- | --- |
 | `ptc` | PTC (default) | the agent this profile composes, with its tools reached through one TypeScript program |
 | `standard` | standard | the same agent, its tools called directly |
 | `minimal` | minimal | the same agent, as this profile composes it |
 | `cordis` | creator | the same agent, for authoring the composition itself |
 
-Only PTC declares anything of its own: the presentation its tools take. The other three ids are the harness's own mode names, kept so a session log reads the same here as in the browser profile, and what each of them runs is the profile's composition — a profile that wants a smaller `minimal` declares that composition in its own layers.
+Only PTC declares anything of its own: the presentation its tools take. The
+other three ids are the harness's own mode names, kept so a session log reads
+the same here as in the browser profile, and what each of them runs is the
+profile's composition — a profile that wants a smaller `minimal` declares that
+composition in its own layers.
 
 A session takes its mode from the first of these that applies:
 
-1. `--preset <id>`, refused before the terminal is taken over when the roster does not ship that id.
-2. `/preset` while the session is still blank: a bare command opens the picker, `/preset <id>` switches directly, and the choice is written to the log.
+1. `--preset <id>`, refused before the terminal is taken over when the roster
+   does not ship that id.
+2. `/preset` while the session is still blank: a bare command opens the picker,
+   `/preset <id>` switches directly, and the choice is written to the log.
 3. The roster's default, `ptc`, when nobody names one.
 
-The mode is re-read rather than remembered: resuming mounts what that session's own log recorded, resuming with a `--preset` that disagrees with it is refused instead of silently ignored, and forking inherits the mode of the conversation being branched. The status line names the mode, and `/status` lists it with the rest.
+The mode is re-read rather than remembered: resuming mounts what that session's
+own log recorded, resuming with a `--preset` that disagrees with it is refused
+instead of silently ignored, and forking inherits the mode of the conversation
+being branched. The status line names the mode, and `/status` lists it with the
+rest.
 
 ## How it works
 
 The package is a Cordis plugin bundle that stacks over `@deepseek-ai/dsh-base`:
 
-- `@sagmans/dsh-tui/startup` parses this app's own flags and publishes the launch identity.
-- The roster of modes holds the id a session starts in when nobody names one: `@deepseek-ai/dsh-agent-preset-registry` owns that service on the supported line, and each mode arrives as a row of `@deepseek-ai/dsh-agent-preset`, so this bundle declares the four modes itself. Both are mounted through this bundle's own `host/roster` entry point, because a patch row is applied before any service exists and the registry and the modes arrive with the harness's own agent services — after the surface that needs the roster. A mode names a selection rather than a composition: the plugins an agent runs on belong to the bundle shipping each of them, and the profile's own layers compose them, so the other shipped modes declare no plugin row and the patch disables none. The one row a mode does own is its presentation: `ptc` mounts `@deepseek-ai/dsh-agent-tool-presentation` with `mode: ptc`, because the form an agent's tools take is declared per agent — a session's own row cannot say it, and a mode without the row presents natively whatever its id says.
-- `@deepseek-ai/dsh-cordis-host-runner` is the host machinery creator mode needs, and the base mounts no such row, so a terminal profile mounts it through this bundle's own `host/runner` entry point. The code runtime PTC mode runs programs against is a base row of its own (`ptc-runtime`) on the supported line, so this bundle mounts none of its own. The registry, preset, and runner packages are plain dependencies pinned to `0.2.1-rc.2`; these pins do not guarantee one copy in every consumer tree.
-- `@sagmans/dsh-tui` owns the terminal: it creates or resumes one agent through `ctx.agents`, folds `session/event` into transcript rows and work state, renders them with `@earendil-works/pi-tui`, and releases the terminal on exit, on a boot failure, and on a signal.
-- `@sagmans/dsh-tui/todo-guard` is the one advisory row this bundle adds to the agent plane: it watches the harness's own `todos` and `plan` projections and rides the next tool result with a reminder when a plan ages. See [Todo discipline](#todo-discipline).
+- `@sagmans/dsh-tui/startup` parses this app's own flags and publishes the
+  launch identity.
+- The roster of modes holds the id a session starts in when nobody names one:
+  `@deepseek-ai/dsh-agent-preset-registry` owns that service on the supported
+  line, and each mode arrives as a row of `@deepseek-ai/dsh-agent-preset`, so
+  this bundle declares the four modes itself. Both are mounted through this
+  bundle's own `host/roster` entry point, because a patch row is applied before
+  any service exists and the registry and the modes arrive with the harness's
+  own agent services — after the surface that needs the roster. A mode names a
+  selection rather than a composition: the plugins an agent runs on belong to
+  the bundle shipping each of them, and the profile's own layers compose them,
+  so the other shipped modes declare no plugin row and the patch disables none.
+  The one row a mode does own is its presentation: `ptc` mounts
+  `@deepseek-ai/dsh-agent-tool-presentation` with `mode: ptc`, because the form
+  an agent's tools take is declared per agent — a session's own row cannot say
+  it, and a mode without the row presents natively whatever its id says.
+- `@deepseek-ai/dsh-cordis-host-runner` is the host machinery creator mode
+  needs, and the base mounts no such row, so a terminal profile mounts it
+  through this bundle's own `host/runner` entry point. The code runtime PTC mode
+  runs programs against is a base row of its own (`ptc-runtime`) on the
+  supported line, so this bundle mounts none of its own. The registry, preset,
+  and runner packages are plain dependencies pinned to `0.2.2-rc.1`; these pins
+  do not guarantee one copy in every consumer tree.
+- `@sagmans/dsh-tui` owns the terminal: it creates or resumes one agent through
+  `ctx.agents`, folds `session/event` into transcript rows and work state,
+  renders them with `@earendil-works/pi-tui`, and releases the terminal on exit,
+  on a boot failure, and on a signal.
+- `@sagmans/dsh-tui/todo-guard` is the one advisory row this bundle adds to the
+  agent plane: it watches the harness's own `todos` and `plan` projections and
+  rides the next tool result with a reminder when a plan ages. See
+  [Todo discipline](#todo-discipline).
 
-A question whose id ends in `:secret` declares its typed answer a credential: the bar hides everything but its first and last four characters, and the free-text row a question with options offers is labelled `API KEY`. Wording is not a declaration, because hiding every question that mentions a key would hide answers their authors meant to be read.
+A question whose id ends in `:secret` declares its typed answer a credential:
+the bar hides everything but its first and last four characters, and the
+free-text row a question with options offers is labelled `API KEY`. Wording is
+not a declaration, because hiding every question that mentions a key would hide
+answers their authors meant to be read.
 
-Air follows the log's own boundaries rather than every row. A prompt and a reply are objects of the transcript, so each frame opens and closes on blank rows — `spacing.messages`, one by default — and two boundaries that meet keep the wider ask instead of the sum, so one break never reads as two. A step is the other boundary: the loop's `step/start` opens it, which is what keeps a thought and the calls it made in one group and puts the next step's work underneath it, `spacing.steps` rows down. Nothing else is spaced — a reply after a reply, a folded thought's signpost, and the cards under the message that asked for them all stay flush — and every count accepts 0, which draws the rows exactly as the surface drew them before the air existed. `spacing.padding` insets the conversation and the work board under it instead of sitting at a seam, while the bar the reader types in, the prompts queued behind it, and the footer keep the window's full width; all three counts are read per frame, so an edit in the row's settings document lands on the session already on screen.
+Air follows the log's own boundaries rather than every row. A prompt and a reply
+are objects of the transcript, so each frame opens and closes on blank rows —
+`spacing.messages`, one by default — and two boundaries that meet keep the wider
+ask instead of the sum, so one break never reads as two. A step is the other
+boundary: the loop's `step/start` opens it, which is what keeps a thought and
+the calls it made in one group and puts the next step's work underneath it,
+`spacing.steps` rows down. Nothing else is spaced — a reply after a reply, a
+folded thought's signpost, and the cards under the message that asked for them
+all stay flush — and every count accepts 0, which draws the rows exactly as the
+surface drew them before the air existed. `spacing.padding` insets the
+conversation and the work board under it instead of sitting at a seam, while the
+bar the reader types in, the prompts queued behind it, and the footer keep the
+window's full width; all three counts are read per frame, so an edit in the
+row's settings document lands on the session already on screen.
 
-The work board opens on a blank row of its own, so the conversation above it and the todos, jobs, and delegations below it are two regions rather than one stream. The blank row takes no row when the board has nothing to report: with no work on the board nothing is drawn and the bar sits directly under the transcript.
+The work board opens on a blank row of its own, so the conversation above it and
+the todos, jobs, and delegations below it are two regions rather than one
+stream. The blank row takes no row when the board has nothing to report: with no
+work on the board nothing is drawn and the bar sits directly under the
+transcript.
 
-The fold is durable-only: the live stream decorates the row that is still being written, and everything else — cards, reasoning, work state, compaction markers — comes from the log, so a resumed session renders what the live one did. Subagent start and finish are the exception: they arrive as service events, and the transcript shows them as decoration because the durable record of a delegation is the tool call that asked for it.
+The fold is durable-only: the live stream decorates the row that is still being
+written, and everything else — cards, reasoning, work state, compaction markers
+— comes from the log, so a resumed session renders what the live one did.
+Subagent start and finish are the exception: they arrive as service events, and
+the transcript shows them as decoration because the durable record of a
+delegation is the tool call that asked for it.
 
-Tool cards are folded by default: a card draws one header row — the tool, its argument clipped to the configured budget, and the facts the result measured — so a long read, diff, or search cannot bury the conversation. A call that has not answered yet names itself in the running colour, `tool.running.title`, and ends that row with the whole seconds it has been waiting, in `tool.running.elapsed`, once it has waited one, so a reader can tell the call they are watching from the one below it that already finished; both give way to the measured facts the moment the result lands. A call that failed names itself in the failed colour, `tool.failed.title` — including a shell whose command exited non-zero or died on a signal, which is a failure whether or not the tool that ran it said so. A shell card's row also carries the exit status and the count of output rows waiting behind the fold, because its output is the answer the reader asked for and a fold that left no trace of it would read as a call that produced nothing. Clicking a card opens or folds that one message; `Ctrl+O` opens or folds every card at once, and `tools:` in the [settings](#settings) decides how each tool starts and whether a fold hides its rows or keeps a `tail` of them.
+Tool cards are folded by default: a card draws one header row — the tool, its
+argument clipped to the configured budget, and the facts the result measured —
+so a long read, diff, or search cannot bury the conversation. A call that has
+not answered yet names itself in the running colour, `tool.running.title`, and
+ends that row with the whole seconds it has been waiting, in
+`tool.running.elapsed`, once it has waited one, so a reader can tell the call
+they are watching from the one below it that already finished; both give way to
+the measured facts the moment the result lands. A call that failed names itself
+in the failed colour, `tool.failed.title` — including a shell whose command
+exited non-zero or died on a signal, which is a failure whether or not the tool
+that ran it said so. A shell card's row also carries the exit status and the
+count of output rows waiting behind the fold, because its output is the answer
+the reader asked for and a fold that left no trace of it would read as a call
+that produced nothing. Clicking a card opens or folds that one message; `Ctrl+O`
+opens or folds every card at once, and `tools:` in the [settings](#settings)
+decides how each tool starts and whether a fold hides its rows or keeps a `tail`
+of them.
 
-A PTC card is the one card with children: every call the `run_code` program dispatched hangs off the card that made it, and once shown, each draws under the header as the tool's own name and argument, on one row cut at the screen edge whether the card itself is open or folded — a program's work must stay legible without opening its card. Those rows start folded, because a program can dispatch hundreds of calls and what a reader came for is the answer they produced: one click on the card's own header draws them for that card and for that card alone, `Ctrl+Y` draws them for every card at once, and `subcalls:` decides what a session starts with. Nothing else arrives with that click: the program's own rows are the level below, and `Ctrl+O` is what opens them. Each of those rows names its own call in the colour of what that call is doing — `tool.subcall.running` while the program is waiting on it, `tool.failed.title` when it failed, and `tool.subcall.title` once it is back — and a settled row keeps the one line the tool itself drew about its outcome, in `tool.terminal.status` where that tool declares one. A shell call therefore reads `bash pnpm test · exit 0` when it worked and the same row in red, with `exit 1`, when it did not, so a program's work reads row by row without opening the card. The program's own row is the one card that shows no mark: its timer is what says it is still running, and it is also what the card keeps when the program answers — the total it ran for, drawn in `tool.elapsed.done`, dimmed and italic, because the work it measured is over. Clicking one of those rows opens that call's argument in full and leaves its neighbours and the card as they were; a shell call also brings back the rows it printed, because the program's return value is all the card itself keeps. `Ctrl+Y` hides or shows them all, and `subcalls: collapsed`, the shipped default, starts every session with them hidden; see [Settings](#settings).
+A PTC card is the one card with children: every call the `run_code` program
+dispatched hangs off the card that made it, and once shown, each draws under the
+header as the tool's own name and argument, on one row cut at the screen edge
+whether the card itself is open or folded — a program's work must stay legible
+without opening its card. Those rows start folded, because a program can
+dispatch hundreds of calls and what a reader came for is the answer they
+produced: one click on the card's own header draws them for that card and for
+that card alone, `Ctrl+Y` draws them for every card at once, and `subcalls:`
+decides what a session starts with. Nothing else arrives with that click: the
+program's own rows are the level below, and `Ctrl+O` is what opens them. Each of
+those rows names its own call in the colour of what that call is doing —
+`tool.subcall.running` while the program is waiting on it, `tool.failed.title`
+when it failed, and `tool.subcall.title` once it is back — and a settled row
+keeps the one line the tool itself drew about its outcome, in
+`tool.terminal.status` where that tool declares one. A shell call therefore
+reads `bash pnpm test · exit 0` when it worked and the same row in red, with
+`exit 1`, when it did not, so a program's work reads row by row without opening
+the card. The program's own row is the one card that shows no mark: its timer is
+what says it is still running, and it is also what the card keeps when the
+program answers — the total it ran for, drawn in `tool.elapsed.done`, dimmed and
+italic, because the work it measured is over. Clicking one of those rows opens
+that call's argument in full and leaves its neighbours and the card as they
+were; a shell call also brings back the rows it printed, because the program's
+return value is all the card itself keeps. `Ctrl+Y` hides or shows them all, and
+`subcalls: collapsed`, the shipped default, starts every session with them
+hidden; see [Settings](#settings).
 
-A card's header names the tool, then, on a skill card, the skill it loaded in the `tool.skill` colour, then the argument the call was made with — a path or a command — in the `tool.args` colour, then the facts the result measured: a read reports its line range, line count, and token size; a file change that carried no prior content to compare against reports its lines and tokens; one that did reports added, changed, and removed lines as `+n ~n -n` in green, yellow, and red. Each stat is its own token, so any of them can be recoloured or hidden independently, and so are the elements a call in flight is drawn with — hiding `tool.running.elapsed` leaves the name in its running colour, hiding `tool.running.title` leaves the seconds counting, hiding `tool.elapsed.done` takes the total off a program's settled row, and a dispatched row is toned the same way per state with `tool.subcall.running` and `tool.subcall.title`. A state is only how a name is painted, so hiding one of those colours leaves the name in the colour a call with no state is read in rather than taking the name away. Hiding `tool.skill` is the same promise for a subject: the skill keeps its name in the label's colour. `/export` and a dispatched row spell the name too, so the words survive where no colour is.
+A card's header names the tool, then, on a skill card, the skill it loaded in
+the `tool.skill` colour, then the argument the call was made with — a path or a
+command — in the `tool.args` colour, then the facts the result measured: a read
+reports its line range, line count, and token size; a file change that carried
+no prior content to compare against reports its lines and tokens; one that did
+reports added, changed, and removed lines as `+n ~n -n` in green, yellow, and
+red. Each stat is its own token, so any of them can be recoloured or hidden
+independently, and so are the elements a call in flight is drawn with — hiding
+`tool.running.elapsed` leaves the name in its running colour, hiding
+`tool.running.title` leaves the seconds counting, hiding `tool.elapsed.done`
+takes the total off a program's settled row, and a dispatched row is toned the
+same way per state with `tool.subcall.running` and `tool.subcall.title`. A state
+is only how a name is painted, so hiding one of those colours leaves the name in
+the colour a call with no state is read in rather than taking the name away.
+Hiding `tool.skill` is the same promise for a subject: the skill keeps its name
+in the label's colour. `/export` and a dispatched row spell the name too, so the
+words survive where no colour is.
 
-The bundle disables no base row. The profile's layers supply the agent tools, prompt sections, skills, and planning. The shipped modes do not duplicate those rows; PTC adds only its tool-presentation row.
+The bundle disables no base row. The profile's layers supply the agent tools,
+prompt sections, skills, and planning. The shipped modes do not duplicate those
+rows; PTC adds only its tool-presentation row.
 
 ### Todo discipline
 
-The todo tool and its list belong to the agent; this bundle owns the surface and one advisory guard. `@sagmans/dsh-tui/todo-guard` mounts host-plane, reads the harness's own `todos` and `plan` projections, and — when a non-empty list has gone a threshold of model steps without a `todo_write`, or a long turn has produced no list at all — rides the next tool result with a model-visible reminder. It never vetoes a call, never steers a stopped turn, and never adds a prompt section, so its request prefix stays stable across deployments. A reminder costs the loop one extra model step to consume; the per-turn cap bounds that. It stays silent in plan mode, in a mode whose catalog has no `todo_write`, and when the projections are absent.
+The todo tool and its list belong to the agent; this bundle owns the surface and
+one advisory guard. `@sagmans/dsh-tui/todo-guard` mounts host-plane, reads the
+harness's own `todos` and `plan` projections, and — when a non-empty list has
+gone a threshold of model steps without a `todo_write`, or a long turn has
+produced no list at all — rides the next tool result with a model-visible
+reminder. It never vetoes a call, never steers a stopped turn, and never adds a
+prompt section, so its request prefix stays stable across deployments. A
+reminder costs the loop one extra model step to consume; the per-turn cap bounds
+that. It stays silent in plan mode, in a mode whose catalog has no `todo_write`,
+and when the projections are absent.
 
 | Option | Default | Effect |
-|---|---|---|
+| --- | --- | --- |
 | `staleSteps` | `6` | model steps a non-empty open list may age before the guard speaks |
 | `missingListSteps` | `12` | steps in a turn before the guard suggests a first list |
 | `maxRemindersPerTurn` | `3` | hard cap on reminders, and on the extra steps they cost, per turn |
 | `previewItems` | `5` | open items quoted in a reminder; the rest become a count |
 
-Override them from the home-level patch, which outranks the profile's own layers. An id-targeted patch replaces the whole config, so restate every field you keep:
+Override them from the home-level patch, which outranks the profile's own
+layers. An id-targeted patch replaces the whole config, so restate every field
+you keep:
 
 ```yaml
 # $DSH_HOME/cordis.patch.yml
@@ -924,14 +1253,21 @@ Override them from the home-level patch, which outranks the profile's own layers
     previewItems: 5
 ```
 
-The list the dock and `/todo` draw follows the same lifetime every other surface shows: it is cleared when the next turn opens, because a fresh task must not inherit the previous turn's checklist.
+The list the dock and `/todo` draw follows the same lifetime every other surface
+shows: it is cleared when the next turn opens, because a fresh task must not
+inherit the previous turn's checklist.
 
 ## Herdr
 
-[Herdr](https://github.com/herdrdev/herdr) is a terminal multiplexer for coding agents. When it starts this surface in one of its panes it exports `HERDR_ENV=1`, `HERDR_PANE_ID`, and `HERDR_SOCKET_PATH`, and the pane reports what it is doing over that socket — as the agent `dsh`, under the source `custom:dsh-tui`. Away from Herdr (an ordinary terminal, SSH, tmux) the reporter is inert: no socket is opened, and nothing reaches the screen the reader owns.
+[Herdr](https://github.com/herdrdev/herdr) is a terminal multiplexer for coding
+agents. When it starts this surface in one of its panes it exports
+`HERDR_ENV=1`, `HERDR_PANE_ID`, and `HERDR_SOCKET_PATH`, and the pane reports
+what it is doing over that socket — as the agent `dsh`, under the source
+`custom:dsh-tui`. Away from Herdr (an ordinary terminal, SSH, tmux) the reporter
+is inert: no socket is opened, and nothing reaches the screen the reader owns.
 
 | This surface | Herdr |
-|---|---|
+| --- | --- |
 | the screen is taken, before any session opens | `idle`, claiming the pane's agent row |
 | the agent's driver starts, including a run of turns chained through pending work | `working` |
 | a subagent or background job remains live after the driver stops | `working` until the last one settles |
@@ -941,11 +1277,56 @@ The list the dock and `/todo` draw follows the same lifetime every other surface
 | a session opens, resumes, forks, or is switched to | its id and reason, plus the `dsh_session` / `dsh_cwd` pane tokens |
 | exit, signal, or boot failure | `herdr pane release-agent`, so no row is left waiting on a process that is gone |
 
-A picker is deliberately absent from that table. Herdr answers a transition into `blocked` with a needs-attention notification and its sound, and 0.9.1 plays it for the focused pane of the active tab as well as for a background one, so a menu the reader opened themselves would ring for their own navigation — once per menu, on the model picker and the reasoning picker behind it — and the row would read as an agent stuck on a decision it never asked for. A gate is the opposite case: the agent asked, and may have asked somebody who walked away.
+A picker is deliberately absent from that table. Herdr answers a transition into
+`blocked` with a needs-attention notification and its sound, and 0.9.1 plays it
+for the focused pane of the active tab as well as for a background one, so a
+menu the reader opened themselves would ring for their own navigation — once per
+menu, on the model picker and the reasoning picker behind it — and the row would
+read as an agent stuck on a decision it never asked for. A gate is the opposite
+case: the agent asked, and may have asked somebody who walked away.
 
-A wait outranks running work: an agent waiting on a human is not making progress, and the wait is the only thing worth acting on from a wall of panes. The pane follows the agent's driver and the live subagents and jobs it owns. The harness chains turns through a pending inbox inside one driver run, and reporting each turn's end would read as done between two turns of an agent that is still working. A parent driver can also stop while a delegated child or job continues, so its idle transition alone does not make the pane done. The job registry announces settlement before its completion notice wakes the parent, so the pane checks for idle after that handoff instead of briefly announcing done in the middle. Reports are sequenced per source, so a delivery that arrives late cannot undo the state the surface already moved past, and a state Herdr is already showing is not sent again. A report is only counted as made when Herdr acknowledges it: one that failed is tried again — soon after, then with a growing wait — and a session identity Herdr never confirmed travels with the next report of any kind. The retry cannot wait for another state change, because the pane may have nothing left to say: a driver that stopped while the socket was down produces no further event. States still waiting to be sent are collapsed into the newest one, so a socket that was down for a minute is told where the pane is rather than where it has been. The release carries the next number in that same sequence for the same reason: Herdr reads one that cannot beat the pane's last report as stale, and a stale release leaves the row waiting on a process that is gone. It also stops reporting first — a claim landing after the release would take the row back for a process that is leaving — and the report already on the wire is waited for before the row goes back, because Herdr ignores the release of a pane nothing has claimed yet and that late report would then claim it. What is still waiting behind it is dropped rather than sent.
+A wait outranks running work: an agent waiting on a human is not making
+progress, and the wait is the only thing worth acting on from a wall of panes.
+The pane follows the agent's driver and the live subagents and jobs it owns. The
+harness chains turns through a pending inbox inside one driver run, and
+reporting each turn's end would read as done between two turns of an agent that
+is still working. A parent driver can also stop while a delegated child or job
+continues, so its idle transition alone does not make the pane done. The job
+registry announces settlement before its completion notice wakes the parent, so
+the pane checks for idle after that handoff instead of briefly announcing done
+in the middle. Reports are sequenced per source, so a delivery that arrives late
+cannot undo the state the surface already moved past, and a state Herdr is
+already showing is not sent again. A report is only counted as made when Herdr
+acknowledges it: one that failed is tried again — soon after, then with a
+growing wait — and a session identity Herdr never confirmed travels with the
+next report of any kind. The retry cannot wait for another state change, because
+the pane may have nothing left to say: a driver that stopped while the socket
+was down produces no further event. States still waiting to be sent are
+collapsed into the newest one, so a socket that was down for a minute is told
+where the pane is rather than where it has been. The release carries the next
+number in that same sequence for the same reason: Herdr reads one that cannot
+beat the pane's last report as stale, and a stale release leaves the row waiting
+on a process that is gone. It also stops reporting first — a claim landing after
+the release would take the row back for a process that is leaving — and the
+report already on the wire is waited for before the row goes back, because Herdr
+ignores the release of a pane nothing has claimed yet and that late report would
+then claim it. What is still waiting behind it is dropped rather than sent.
 
-Herdr persists a session reference only for its own built-in integrations, so this pane's session identity travels as metadata tokens instead: a script or a companion plugin reads them back with `herdr pane get <id>` and resumes that exact conversation with `dsh --profile tui --resume=<id>`. Herdr holds a token value up to 80 characters and shortens anything longer, so a session id or directory that cannot be sent whole has its token cleared instead: a shortened path would read as a different directory, and a pane must not claim one. What Herdr cannot do is identify the process itself — its detection table and its screen rules both name built-in agents only — so a pane that has not reported yet reads as an ordinary pane, and is not yet a target: `herdr agent wait` on it fails with `agent_not_found` until the first report lands. Herdr 0.9.1 keeps the title that accompanies a `blocked` state without drawing it anywhere, so the same title is sent again as that state's display label — the one Herdr's sidebar renders through its `state_text` token. The complete default agent rows do not include it:
+Herdr persists a session reference only for its own built-in integrations, so
+this pane's session identity travels as metadata tokens instead: a script or a
+companion plugin reads them back with `herdr pane get <id>` and resumes that
+exact conversation with `dsh --profile tui --resume=<id>`. Herdr holds a token
+value up to 80 characters and shortens anything longer, so a session id or
+directory that cannot be sent whole has its token cleared instead: a shortened
+path would read as a different directory, and a pane must not claim one. What
+Herdr cannot do is identify the process itself — its detection table and its
+screen rules both name built-in agents only — so a pane that has not reported
+yet reads as an ordinary pane, and is not yet a target: `herdr agent wait` on it
+fails with `agent_not_found` until the first report lands. Herdr 0.9.1 keeps the
+title that accompanies a `blocked` state without drawing it anywhere, so the
+same title is sent again as that state's display label — the one Herdr's sidebar
+renders through its `state_text` token. The complete default agent rows do not
+include it:
 
 ```toml
 [ui.sidebar.agents]
@@ -956,36 +1337,53 @@ rows = [
 ]
 ```
 
-With that row present, a pane waiting on a decision names the tool that asked instead of showing a colour alone. A label longer than the 80 characters Herdr holds whole is cut here rather than server-side, so the ellipsis lands where this surface put it; the message that rides the state report keeps its own, longer bound.
+With that row present, a pane waiting on a decision names the tool that asked
+instead of showing a colour alone. A label longer than the 80 characters Herdr
+holds whole is cut here rather than server-side, so the ellipsis lands where
+this surface put it; the message that rides the state report keeps its own,
+longer bound.
 
 ## Moshi notifications
 
-[Moshi](https://getmoshi.app/docs/notifications) can send optional notifications for the session this terminal drives.
-Set `DSH_TUI_MOSHI_TOKEN` in the process environment before you start `dsh --profile tui`.
+[Moshi](https://getmoshi.app/docs/notifications) can send optional notifications
+for the session this terminal drives.
+Set `DSH_TUI_MOSHI_TOKEN` in the process environment before you start
+`dsh --profile tui`.
 Use a Moshi API token, not the host secret used by `moshi-hook`.
 The reporter is disabled when this variable is absent or empty.
 It works without Herdr or the Moshi daemon.
 
-Load the token through your secret manager. Do not put it in profile YAML, shell history, or a conversation.
+Load the token through your secret manager. Do not put it in profile YAML, shell
+history, or a conversation.
 Unset `DSH_TUI_MOSHI_TOKEN` and restart the surface to disable notifications.
 
 The reporter sends these fixed messages:
 
-- **DSH needs attention:** “Return to the terminal to continue.” An agent approval or question triggers this notification.
-- **DSH finished:** “The current session is ready for input.” The driven agent and its background work must both stop.
+- **DSH needs attention:** “Return to the terminal to continue.” An agent
+  approval or question triggers this notification.
+- **DSH finished:** “The current session is ready for input.” The driven agent
+  and its background work must both stop.
 
-Reader navigation does not trigger attention notifications. Duplicate status events do not produce duplicate notifications.
-A finished run can include cancellation or failure; the message does not report task success.
-Switching sessions discards queued notifications and aborts outstanding delivery.
+Reader navigation does not trigger attention notifications. Duplicate status
+events do not produce duplicate notifications.
+A finished run can include cancellation or failure; the message does not report
+task success.
+Switching sessions discards queued notifications and aborts outstanding
+delivery.
 Notifications already delivered cannot be recalled.
 
-The only JSON fields sent to `https://api.getmoshi.app/api/webhook` are `token`, `title`, and `message`.
-The message contains no transcript, prompt, tool arguments, approval text, working directory, or session/pane identifiers.
-The token selects its owning Moshi device; the reporter does not request multi-device delivery.
-Requests abort after three seconds. Network and HTTP failures remain silent, with no retries.
+The only JSON fields sent to `https://api.getmoshi.app/api/webhook` are `token`,
+`title`, and `message`.
+The message contains no transcript, prompt, tool arguments, approval text,
+working directory, or session/pane identifiers.
+The token selects its owning Moshi device; the reporter does not request
+multi-device delivery.
+Requests abort after three seconds. Network and HTTP failures remain silent,
+with no retries.
 Notification delivery never blocks agent work or terminal teardown.
 
-This integration does not provide native Chat View, Live Activity, remote approval controls, or automatic pane navigation.
+This integration does not provide native Chat View, Live Activity, remote
+approval controls, or automatic pane navigation.
 Use the existing Moshi SSH connection to return to the terminal.
 
 ## Development
@@ -995,14 +1393,19 @@ pnpm install --frozen-lockfile
 pnpm verify
 ```
 
-**A linked profile loads the built entry point**, so edits under `src/` are invisible to `dsh --profile tui` until `pnpm run build` runs. The PTY driver rebuilds, checks nested links in the isolated `--home`, and rejects a launcher whose version `dsh.compatibility.dshReleases` does not list.
+**A linked profile loads the built entry point**, so edits under `src/` are
+invisible to `dsh --profile tui` until `pnpm run build` runs. The PTY driver
+rebuilds, checks nested links in the isolated `--home`, and rejects a launcher
+whose version `dsh.compatibility.dshReleases` does not list.
 
-`pnpm verify` preserves golden snapshots and automatically drives free real-profile
+`pnpm verify` preserves golden snapshots and automatically drives free
+real-profile
 scenarios without credentials. [FEATURES.md](FEATURES.md) owns feature inventory
 and evidence rules. Unit suites are not maintained.
 
 Paid model use runs only on explicit demand. For those checks, clone your
-configured home with the dogfood helper. These commands include paid model calls:
+configured home with the dogfood helper. These commands include paid model
+calls:
 
 ```sh
 S=$(mktemp -d)
@@ -1014,33 +1417,43 @@ node tools/pty-drive.mjs --home "$S" --seconds 20 --prompt ''
 node tools/pty-drive.mjs --home "$S" --prompt 'Run: echo hi' --click 20:12
 ```
 
-A minimal home starts on the shipped defaults. On verified `0.2.1-rc.2`, the
+A minimal home starts on the shipped defaults. On verified `0.2.2-rc.1`, the
 settings service renames legacy `settings.yaml` before attempting a one-time
 import into matching profile entries. Rejected sections remain only in
 `settings.yaml.imported`. Use the active profile patch for current preferences,
 or the dogfood clone above when a run needs your own composition.
 
-**Supported pi-tui range.** The package pins `@earendil-works/pi-tui` to `0.85.1`
+**Supported pi-tui range.** The package pins `@earendil-works/pi-tui` to
+`0.85.1`
 and supports `>=0.85.1 <1.4.0-0`, declared in
 [`compat/pi-tui/package.json`](compat/pi-tui/package.json). That manifest's
 committed lockfile resolves the newest release in the range that has passed the
 one-week release-age window, and `pre-push` reruns typecheck, golden frames and
 terminal behavior on it. When `pre-push` warns that a newer release in the range
 has matured, refresh both files with `node tools/pi-tui-compat.mjs lock` and
-commit them. To widen the range, change the ceiling in that manifest, run `lock`,
+commit them. To widen the range, change the ceiling in that manifest, run
+`lock`,
 and move the Dependabot `@earendil-works/*` ignore to the same line.
 
-Test specs import plugin sources through the `@/` alias. Under this test runner the spec file is resolved with a root-relative id, so parent-relative imports (`../src/...`) do not resolve; the alias and its matching `tsconfig.test.json` path mapping avoid that.
+Test specs import plugin sources through the `@/` alias. Under this test runner
+the spec file is resolved with a root-relative id, so parent-relative imports
+(`../src/...`) do not resolve; the alias and its matching `tsconfig.test.json`
+path mapping avoid that.
 
 The development guide — the gate, the dogfood script, and the difference between
-a fresh home, a cloned home, and the real one — is [DEVELOPMENT.md](DEVELOPMENT.md).
+a fresh home, a cloned home, and the real one — is
+[DEVELOPMENT.md](DEVELOPMENT.md).
 
 ## Manual acceptance
 
-The automated checks drive a real PTY, but they run on this machine's terminal. These are the checks only a terminal on your desk can answer; each line is what to do and what it should look like. A row that writes a preference names the `dsh-tui:` section; on the supported line the same fields go under the TUI entry's `config` in the profile patch.
+The automated checks drive a real PTY, but they run on this machine's terminal.
+These are the checks only a terminal on your desk can answer; each line is what
+to do and what it should look like. A row that writes a preference names the
+`dsh-tui:` section; on the supported line the same fields go under the TUI
+entry's `config` in the profile patch.
 
 | Check | Expected |
-|---|---|
+| --- | --- |
 | `DSH_HOME=$(mktemp -d) dsh plugin --profile tui add "$PWD"` from a built checkout | the profile is created, `dsh.profile.bundles` lists the plugin, and `dsh --profile tui` reaches a prompt |
 | the same over SSH | the interface arrives intact; keys and mouse work on the host, with no local echo doubling |
 | inside tmux or screen | wheel scroll and `ctrl+shift+f` search work; dragging selects text |
@@ -1107,35 +1520,126 @@ The automated checks drive a real PTY, but they run on this machine's terminal. 
 
 ## Releasing
 
-Published artefacts carry a provenance attestation, which only a CI provider can issue, so releases ship from the tag workflow rather than a laptop.
+Published artefacts carry a provenance attestation, which only a CI provider can
+issue, so releases ship from the tag workflow rather than a laptop.
 
-1. Bump `version` in `package.json` and move `CHANGELOG.md`'s `Unreleased` section to that version, and push both to `main` once `pre-push` passes on that commit.
-2. Tag that SHA with a signed tag and push it. The tag ruleset admits repository admins only.
-3. `.github/workflows/release.yml` re-runs typecheck, tests, and the package smoke; the publish job then publishes with OIDC trusted publishing and automatic provenance. No reviewer waits on the `npm-release` environment: the admin-only tag push is the release approval.
+1. Bump `version` in `package.json` and move `CHANGELOG.md`'s `Unreleased`
+   section to that version, and push both to `main` once `pre-push` passes on
+   that commit.
+2. Tag that SHA with a signed tag and push it. The tag ruleset admits repository
+   admins only.
+3. `.github/workflows/release.yml` re-runs typecheck, tests, and the package
+   smoke; the publish job then publishes with OIDC trusted publishing and
+   automatic provenance. No reviewer waits on the `npm-release` environment: the
+   admin-only tag push is the release approval.
 
-The workflow stores no npm token: the registry trusts `release.yml` on the `npm-release` environment, and [`scripts/npm/release.py`](scripts/npm/release.py) creates both the environment and that trust. The full runbook is [RELEASE.md](RELEASE.md); the user-visible history is [CHANGELOG.md](CHANGELOG.md).
+The workflow stores no npm token: the registry trusts `release.yml` on the
+`npm-release` environment, and
+[`scripts/npm/release.py`](scripts/npm/release.py) creates both the environment
+and that trust. The full runbook is [RELEASE.md](RELEASE.md); the user-visible
+history is [CHANGELOG.md](CHANGELOG.md).
 
 ## Limitations
 
-- Two different things are called a preset. The agent mode (`--preset`, `/preset`) is fixed once a session has produced a turn; the permission preset (`/permission <preset>`, named in the status line) can change at any time.
-- `/model` changes the route and reasoning effort for the running session only. Catalog membership is advisory — an adapter may accept an id it does not advertise, while an explicit effort is checked against the route's own levels before it is applied. The picker offers the routes this deployment configured, not the ones it can prove credentialed: a provider whose key or sign-in is still missing appears like any other, and its first request names the missing credential.
-- Model discovery failures show a safe notice. Healthy provider catalogs remain selectable. Check provider configuration and credentials before retrying `/model`.
-- Scrolling is the mouse wheel, or the terminal's own scrollback keys where it offers them.
-- A turn that ran longer than ten seconds rings the terminal bell when it ends, because the reader may have walked away; `--no-bell` turns that off.
-- The dock shows the goal, plan mode, the todo items still to do, and any background job or delegation still running; a settled item leaves rather than turns into a completed row, and the list clears when the next turn opens so a fresh task never inherits the previous one's checklist. The transcript marks where older history was compacted away. `/plan` toggles plan mode; `/plan <message>` also steers that message, which is the base command's own behaviour.
-- The dock shows three running subagents by default. When more than three run, click the heading, overflow row, or blank cells in that section to show all. Click again to show three. Click a child’s text to view its transcript. Press `ctrl+b` to return.
-- Background jobs and subagent runs are live process state, not durable events: they disappear when the run ends, and a resumed session starts with an empty board and roster.
-- A card reads its tool's own render intent through the agent whose session is on screen, so a stored session with no live agent — one this process is not running, or a child that has already finished — folds to the generic card instead of the tool's own.
-- Reading a child's conversation does not move the terminal: commands, approvals, and the status line stay with the session you launched, and the transcript is the only thing that switches. The status line carries the way back, read from the map in force, so a remap shows up without reopening the view.
-- Delete is unimplemented: the session store exposes no delete, and the surface does not reach around that seam into its files. `/fork` covers the case that needs it — it branches into a new session and leaves the original alone.
-- The prompt stash holds text only. It does not read Pi's `pi-stash` data, does not migrate an older key format (the directory-scoped banks written by 0.4.0 are left where they are and are never read), and keeps no pasted images: a draft larger than 1 MiB, or a bank larger than 16 MiB, is refused rather than stored — the cap is measured on the bytes the file will hold, escapes included, before anything is written, so a refusal cannot leave a bank that saves and then refuses to load. A corrupt bank is quarantined and reported, never repaired in place; a bank from a newer format is refused where it lies, so an older build cannot swallow a newer build's drafts.
-- Approvals and questions render inline and take the keyboard; a question batch is answered in order, and a question that lists options can always be answered with free text on row `0`.
-- Inside Herdr the pane reports its own state, and that report is the only thing that makes it an agent there: Herdr cannot start, resume, or prompt this surface, so launching and resuming stay with `dsh` itself (or a Herdr plugin that runs it).
-- Styling is per element and overridable; see [Settings](#settings). Shipped defaults are emitted as 24-bit colour where the terminal advertises it and degraded to 256 or 16 colours otherwise, so a light or dark terminal still follows its own palette where it has one.
-- Tool text, model text, and file content are drawn the way the terminal that produced them would have drawn them — see [Terminal text](#terminal-text) — so a tab lands where its writer saw it and a colour is a colour. A hostile result still cannot reach the terminal: everything a terminal would act on is consumed before the row is measured. A stashed draft and a stored prompt are stripped of control and bidi characters instead, because they are restored into a live editor rather than drawn as text.
-- Mermaid fences draw in assistant replies and submitted prompts, and only at the top level of one: a fence nested in a list, quoted inside another fence, or carried by a thought or a tool card stays source. A thought never draws one, because a diagram there would carry the answer's weight. A fenced diff is the exception: it is the change itself rather than a drawing of it, so replies, prompts, and thoughts all draw it in the diff elements. Author `:::class` styling and diagram links are ignored — the renderer reports what each run is, and the theme decides how it looks.
-- Prompt history is global to this machine, not per project: `$DSH_HOME/prompt-history.json` holds every submitted line, deduplicated exactly, and a file this build cannot parse is left untouched with writes refused so a newer format is never overwritten. Every write re-reads the file under a lock shared by sessions, so a second session's prompts are folded in rather than overwritten, and a lock whose holder stopped is reclaimed or reported instead of guessed at; control characters are spelled out before a prompt is stored. A multiline suggestion draws its first line with `↵` marking the fold. `history.ghost: false` keeps reverse search without the suggestion, `history.enabled: false` stops recording and offering it, and `NO_COLOR`/`--no-color` suppresses the ghost because text the reader cannot see but could still accept is worse than none.
-- The editor handoff gives the whole terminal to `$VISUAL` (or `$EDITOR`) and waits for it: while the child owns the screen this surface draws nothing: a title from a turn in flight is written again when the screen comes back, a bell that falls in the gap is dropped rather than rung late, and a second `ctrl+x` then `e` is ignored until the first editor leaves. A host that unloads the surface during the handoff gives the terminal back while the child is still running, because only the child's own exit can end the wait. What the editor saved is read back only up to 1 MiB; a larger draft is left on disk with its path in the notice rather than loaded into the bar.
+- Two different things are called a preset. The agent mode (`--preset`,
+  `/preset`) is fixed once a session has produced a turn; the permission preset
+  (`/permission <preset>`, named in the status line) can change at any time.
+- `/model` changes the route and reasoning effort for the running session only.
+  Catalog membership is advisory — an adapter may accept an id it does not
+  advertise, while an explicit effort is checked against the route's own levels
+  before it is applied. The picker offers the routes this deployment configured,
+  not the ones it can prove credentialed: a provider whose key or sign-in is
+  still missing appears like any other, and its first request names the missing
+  credential.
+- Model discovery failures show a safe notice. Healthy provider catalogs remain
+  selectable. Check provider configuration and credentials before retrying
+  `/model`.
+- Scrolling is the mouse wheel, or the terminal's own scrollback keys where it
+  offers them.
+- A turn that ran longer than ten seconds rings the terminal bell when it ends,
+  because the reader may have walked away; `--no-bell` turns that off.
+- The dock shows the goal, plan mode, the todo items still to do, and any
+  background job or delegation still running; a settled item leaves rather than
+  turns into a completed row, and the list clears when the next turn opens so a
+  fresh task never inherits the previous one's checklist. The transcript marks
+  where older history was compacted away. `/plan` toggles plan mode;
+  `/plan <message>` also steers that message, which is the base command's own
+  behaviour.
+- The dock shows three running subagents by default. When more than three run,
+  click the heading, overflow row, or blank cells in that section to show all.
+  Click again to show three. Click a child’s text to view its transcript. Press
+  `ctrl+b` to return.
+- Background jobs and subagent runs are live process state, not durable events:
+  they disappear when the run ends, and a resumed session starts with an empty
+  board and roster.
+- A card reads its tool's own render intent through the agent whose session is
+  on screen, so a stored session with no live agent — one this process is not
+  running, or a child that has already finished — folds to the generic card
+  instead of the tool's own.
+- Reading a child's conversation does not move the terminal: commands,
+  approvals, and the status line stay with the session you launched, and the
+  transcript is the only thing that switches. The status line carries the way
+  back, read from the map in force, so a remap shows up without reopening the
+  view.
+- Delete is unimplemented: the session store exposes no delete, and the surface
+  does not reach around that seam into its files. `/fork` covers the case that
+  needs it — it branches into a new session and leaves the original alone.
+- The prompt stash holds text only. It does not read Pi's `pi-stash` data, does
+  not migrate an older key format (the directory-scoped banks written by 0.4.0
+  are left where they are and are never read), and keeps no pasted images: a
+  draft larger than 1 MiB, or a bank larger than 16 MiB, is refused rather than
+  stored — the cap is measured on the bytes the file will hold, escapes
+  included, before anything is written, so a refusal cannot leave a bank that
+  saves and then refuses to load. A corrupt bank is quarantined and reported,
+  never repaired in place; a bank from a newer format is refused where it lies,
+  so an older build cannot swallow a newer build's drafts.
+- Approvals and questions render inline and take the keyboard; a question batch
+  is answered in order, and a question that lists options can always be answered
+  with free text on row `0`.
+- Inside Herdr the pane reports its own state, and that report is the only thing
+  that makes it an agent there: Herdr cannot start, resume, or prompt this
+  surface, so launching and resuming stay with `dsh` itself (or a Herdr plugin
+  that runs it).
+- Styling is per element and overridable; see [Settings](#settings). Shipped
+  defaults are emitted as 24-bit colour where the terminal advertises it and
+  degraded to 256 or 16 colours otherwise, so a light or dark terminal still
+  follows its own palette where it has one.
+- Tool text, model text, and file content are drawn the way the terminal that
+  produced them would have drawn them — see [Terminal text](#terminal-text) — so
+  a tab lands where its writer saw it and a colour is a colour. A hostile result
+  still cannot reach the terminal: everything a terminal would act on is
+  consumed before the row is measured. A stashed draft and a stored prompt are
+  stripped of control and bidi characters instead, because they are restored
+  into a live editor rather than drawn as text.
+- Mermaid fences draw in assistant replies and submitted prompts, and only at
+  the top level of one: a fence nested in a list, quoted inside another fence,
+  or carried by a thought or a tool card stays source. A thought never draws
+  one, because a diagram there would carry the answer's weight. A fenced diff is
+  the exception: it is the change itself rather than a drawing of it, so
+  replies, prompts, and thoughts all draw it in the diff elements. Author
+  `:::class` styling and diagram links are ignored — the renderer reports what
+  each run is, and the theme decides how it looks.
+- Prompt history is global to this machine, not per project:
+  `$DSH_HOME/prompt-history.json` holds every submitted line, deduplicated
+  exactly, and a file this build cannot parse is left untouched with writes
+  refused so a newer format is never overwritten. Every write re-reads the file
+  under a lock shared by sessions, so a second session's prompts are folded in
+  rather than overwritten, and a lock whose holder stopped is reclaimed or
+  reported instead of guessed at; control characters are spelled out before a
+  prompt is stored. A multiline suggestion draws its first line with `↵` marking
+  the fold. `history.ghost: false` keeps reverse search without the suggestion,
+  `history.enabled: false` stops recording and offering it, and
+  `NO_COLOR`/`--no-color` suppresses the ghost because text the reader cannot
+  see but could still accept is worse than none.
+- The editor handoff gives the whole terminal to `$VISUAL` (or `$EDITOR`) and
+  waits for it: while the child owns the screen this surface draws nothing: a
+  title from a turn in flight is written again when the screen comes back, a
+  bell that falls in the gap is dropped rather than rung late, and a second
+  `ctrl+x` then `e` is ignored until the first editor leaves. A host that
+  unloads the surface during the handoff gives the terminal back while the child
+  is still running, because only the child's own exit can end the wait. What the
+  editor saved is read back only up to 1 MiB; a larger draft is left on disk
+  with its path in the notice rather than loaded into the bar.
 
 ## Related plugins
 
@@ -1145,7 +1649,7 @@ publishes to npm under the same tag-driven, provenance-carrying release
 discipline as this one.
 
 | Plugin | What it adds |
-|---|---|
+| --- | --- |
 | [`@sagmans/dsh-auto-compact`](https://github.com/sagmans/dsh-auto-compact) | An absolute token trigger for automatic compaction: the conversation condenses at `min(thresholdTokens, contextWindow × thresholdRatio)` instead of the window ratio alone, so a large-window model pays a fixed price, with per-route overrides. Its patch swaps the shipped `compaction-basic` backend — a row this bundle does not disable — so the profile still keeps exactly one compaction service, and this surface needs no setting for it. |
 | [`@sagmans/dsh-provider-extra`](https://github.com/sagmans/dsh-provider-extra) | Extra provider routes: OpenCode Go, which sends the live conversation id in `x-opencode-session` for routing and prompt caching, and OpenAI Codex over a ChatGPT subscription's OAuth flow with the harness credential store. Its routes join the `/model` picker like every configured provider. TUI also works without this package, using the core `llm` and `agentDefaultModel` services. |
 

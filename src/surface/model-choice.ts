@@ -1,4 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis'
+import type { TuiAgent } from '../agent/host.ts'
 import {
   type ModelChoice as ChosenRoute,
   MODEL_CATALOG_GAP_CAUSE,
@@ -44,6 +45,11 @@ const MODEL_EFFORT_DISCOVERY_FAILURE = `/model: ${EFFORT_DISCOVERY_FAILURE}`
 export interface ModelChoicePorts {
   readonly statusFacts: () => StatusFacts
   readonly keymap: () => Keymap
+  /**
+   * The session a route choice records into: a choice is durable, so it takes
+   * effect only while an agent is open and its log can carry it.
+   */
+  readonly drivingAgent: () => TuiAgent | undefined
   /** Take the keyboard for a list and answer with the pick id it settled on. */
   readonly openPicker: (picker: Picker) => Promise<string | undefined>
   readonly notice: (message: string) => void
@@ -84,11 +90,25 @@ export interface ModelChoice {
  * settings-backed default the footer states.
  */
 export function createModelChoice(ctx: Context, ports: ModelChoicePorts): ModelChoice {
-  const modelSwitch = new ModelSwitch()
+  const modelSwitch = new ModelSwitch(() => ports.drivingAgent()?.agent.model)
   // One read per composition, kept whole: both gaps leave no catalog and ask for
   // opposite fixes, so a refusal names the cause it met rather than reading the
   // absence as a service that was never mounted.
   const reading = readModelCatalog(ctx)
+
+  /**
+   * Record the reader's route in the driven session's log.
+   *
+   * The choice takes effect only on a live session: with no agent open there
+   * is no log to append to, so the surface says so instead of confirming a
+   * route that never took.
+   */
+  const chooseRoute = (choice: ChosenRoute): boolean => {
+    if (modelSwitch.choose(choice)) return true
+    ports.notice('the agent is still starting; try again in a moment')
+    ports.render()
+    return false
+  }
 
   const runModelCommand = (argument: string): void => {
     if (reading.kind === 'gap') {
@@ -138,11 +158,12 @@ export function createModelChoice(ctx: Context, ports: ModelChoicePorts): ModelC
           // path would refuse makes an otherwise usable model look broken.
           void (async () => {
             const carried = await carriedEffort(choice.provider, choice.model)
-            modelSwitch.choose({
+            const recorded = chooseRoute({
               provider: choice.provider,
               model: choice.model,
               ...(carried.effort === undefined ? {} : { reasoningEffort: carried.effort }),
             })
+            if (!recorded) return
             ports.notice(
               `model set to ${choice.provider}/${choice.model} for the next step${droppedClause(carried.dropped)}`,
             )
@@ -166,7 +187,7 @@ export function createModelChoice(ctx: Context, ports: ModelChoicePorts): ModelC
               ports.render()
               return
             }
-            modelSwitch.choose(choice)
+            if (!chooseRoute(choice)) return
             ports.notice(
               `model set to ${choice.provider}/${choice.model} (${choice.reasoningEffort}) for the next step`,
             )
@@ -189,11 +210,12 @@ export function createModelChoice(ctx: Context, ports: ModelChoicePorts): ModelC
 
   /** Put the reader's effort choice in force for the next step. */
   const applyEffort = (provider: string, modelId: string, effortId: string): void => {
-    modelSwitch.choose(
+    const recorded = chooseRoute(
       effortId === PROVIDER_DEFAULT_EFFORT_ID
         ? { provider, model: modelId }
         : { provider, model: modelId, reasoningEffort: effortId },
     )
+    if (!recorded) return
     ports.notice(
       `reasoning effort for ${provider}/${modelId} set to ${effortId === PROVIDER_DEFAULT_EFFORT_ID ? 'provider default' : effortId} for the next step`,
     )
@@ -263,11 +285,12 @@ export function createModelChoice(ctx: Context, ports: ModelChoicePorts): ModelC
   /** Put the reader's route choice in force for the next step. */
   const applyRoute = async (route: PickedRoute): Promise<void> => {
     const carried = await carriedEffort(route.provider, route.model)
-    modelSwitch.choose({
+    const recorded = chooseRoute({
       provider: route.provider,
       model: route.model,
       ...(carried.effort === undefined ? {} : { reasoningEffort: carried.effort }),
     })
+    if (!recorded) return
     ports.notice(
       `model set to ${route.provider}/${route.model} for the next step${droppedClause(carried.dropped)}`,
     )

@@ -5,16 +5,20 @@ Companion to [SKILL.md](../SKILL.md): exact fields, files, and checks.
 ## Resolution order
 
 1. Bundle layers in `cordis.yml`, in order.
-2. The profile patch `~/.dsh/profiles/<profile>/cordis.patch.yml`, entry by entry:
+2. The profile patch `~/.dsh/profiles/<profile>/cordis.patch.yml`, entry by
+   entry:
    `id` targeted config, `disabled`, `insert`.
-3. A patch `config` **replaces** that row's base config; fields it omits fall back
+3. A patch `config` **replaces** that row's base config; fields it omits fall
+   back
    to the schema default, not to the bundle's value.
 4. The model directory a profile sees is owned by whichever row is enabled:
    `llm-pi-ai` (additive provider config), `dsh-provider-extra` (owned catalog),
    or both, if the profile is not using exclusive ownership.
-5. On verified `0.2.1-rc.2`, settings forms read and update Config-backed
-   profile entries. `$DSH_HOME/settings.yaml` is legacy input, not a live adapter
-   overlay. Migration renames it to `.imported` before a one-time import; rejected
+5. On verified `0.2.2-rc.1`, settings forms read and update Config-backed
+   profile entries. `$DSH_HOME/settings.yaml` is legacy input, not a live
+   adapter
+   overlay. Migration renames it to `.imported` before a one-time import;
+   rejected
    sections remain only in that renamed file. Edit adapter and catalog config in
    the active profile patch. Do not assume legacy per-request settings behavior
    on a host that exposes only Config-backed forms.
@@ -29,7 +33,8 @@ Exclusive ownership is a set of disable rows plus the catalog itself:
   config: { catalog: { version: 1, ... } }
 ```
 
-Disable every competing row in the **whole** profile, not only the rows that come
+Disable every competing row in the **whole** profile, not only the rows that
+come
 before provider-extra: on `dsh-base` those are `llm-pi-ai`, `llm-deepseek`, and
 `agent-default-model`, and another bundle may add `llm-openai` or
 `llm-anthropic`. Inspect the composed profile rather than trusting this list.
@@ -68,10 +73,12 @@ service without a reload of the catalog itself.
               thinkingFormat: qwen
 ```
 
-An id that the installed catalog already describes needs no restatement. An id it
+An id that the installed catalog already describes needs no restatement. An id
+it
 does not describe needs the metadata (or a `template` sibling to clone).
 
-Route fields (`providers` is a dict keyed by the route id; the key is the route):
+Route fields (`providers` is a dict keyed by the route id; the key is the
+route):
 `apiKeyEnv`, `displayName`, `api`, `baseURL`, `models`, `modelOverrides` (per-id
 reshaping of an installed catalog, refused beside a `models` list), `compat`,
 `defaultContextWindow` (262144), `defaultMaxTokens` (32768), `defaultInput`
@@ -148,7 +155,8 @@ catalog:
 ```
 
 `filter` needs an installed `source`: an absent `include` starts from every
-installed model, matches keep installed order and every installed fact (id, name,
+installed model, matches keep installed order and every installed fact (id,
+name,
 cost, capacity, protocol, endpoint), and the route serves them minus `exclude`.
 A matched model that publishes no endpoint needs a route `baseURL`.
 
@@ -157,7 +165,8 @@ declares `api`), `reasoning`, `input`, `cost`, `contextWindow`, and
 `maxTokens`. `metadata.api` cannot change a template-backed protocol, must equal
 a route's declared `api`, and must be an api the `source` describes.
 
-`compat` accepts only the flags the model's protocol honors: completions takes the
+`compat` accepts only the flags the model's protocol honors: completions takes
+the
 `supports*`/`requires*` booleans plus `maxTokensField`, `thinkingFormat`,
 `thinkingTokenBudgetField`, `cacheControlFormat`, `deferredToolsMode`, and
 `sessionAffinityFormat`; responses takes its own flag set plus
@@ -188,7 +197,8 @@ host ignores its `reasoningEffort`, so effort is chosen in the surface.
 `saveSelection(next)` validates first, then writes through the host's
 `configEditor.edit(entry, updater)` so only `catalog.default` changes and
 membership is re-checked inside the editor's lock. A host with no addressable
-entry or no such editor rejects with `CONFIG_PERSISTENCE_UNAVAILABLE` - a host older
+entry or no such editor rejects with `CONFIG_PERSISTENCE_UNAVAILABLE` - a host
+older
 than the supported line does - and nothing falls back to legacy
 `agent-default-model` settings. Edit the profile patch there.
 
@@ -213,7 +223,8 @@ whole truth for a `source`: `id`, `name`, `cost`, `contextWindow`,
 A model declared without `template` and without `metadata` is served exactly as
 this file describes it, so an id the vendor renamed or repriced shows stale
 numbers until the catalog declares them. An entry that carries its own complete
-`metadata` needs no installed entry at all, which is how a route the harness does
+`metadata` needs no installed entry at all, which is how a route the harness
+does
 not describe is wired.
 
 ## Credentials
@@ -226,7 +237,8 @@ not describe is wired.
 | no `auth` | catalog: the route carries no key of its own, as a local endpoint does |
 
 Keys never belong in a patch, a settings file, or a repository. Put launch-time
-values in `$DSH_HOME/.env` or the environment. A provider row whose credential is
+values in `$DSH_HOME/.env` or the environment. A provider row whose credential
+is
 missing fails its route only; other routes still serve.
 
 ## Verify
@@ -240,10 +252,13 @@ dsh --profile tui list-models        # provider/model<TAB>display name, one per 
 The dump reads the catalog row written as a single JSON flow map
 (`- {"id":"dsh-provider-extra","config":{"catalog":…}}`), which is the shape
 `pnpm catalog:setup` appends and the shape a hand-written patch keeps when one
-line must stay machine-readable. A catalog spread over block YAML is invisible to
-it; `list-models` still reads the composed result either way. `--data` points the
+line must stay machine-readable. A catalog spread over block YAML is invisible
+to
+it; `list-models` still reads the composed result either way. `--data` points
+the
 dump at a provider-data directory instead of the installed harness, which is how
-a template clone or a `filter` route is read on a machine with no `dsh`. The dump
+a template clone or a `filter` route is read on a machine with no `dsh`. The
+dump
 also reports what the resolver would refuse, and exits 1, because a catalog that
 cannot compose serves nothing: incomplete metadata for an unknown model, a
 `defaultMaxTokens` above capacity, both or neither of `models`/`filter`, a
@@ -274,17 +289,20 @@ For every model you touched, confirm against the vendor's own page:
 1. price per 1M tokens for input, output, cached input, cache write;
 2. context window and maximum output tokens (a "272K" beside "above 272K input
    is priced 2x" is a billing threshold, not the window);
-3. the accepted reasoning effort values, and how the vendor spells "no reasoning"
+3. the accepted reasoning effort values, and how the vendor spells "no
+   reasoning"
    (OpenAI: `none`; codex: omit the parameter);
 4. whether the route bills per token at all - a metered API wants its published
    rates, and a credit or token plan writes `0`, which reads as unknown pricing
    rather than free inference;
 5. that an `xhigh` or `max` mapping exists when the vendor documents one;
-6. that the same model id served on two routes carries the same facts: each route
+6. that the same model id served on two routes carries the same facts: each
+   route
    inherits its own `source` entry, so one declared `contextWindow` and one
    inherited is two different ctx gauges for one model.
 
-A model with no vendor page (stealth releases, previews) is documented only by the
+A model with no vendor page (stealth releases, previews) is documented only by
+the
 routing catalog: its pi.dev model page and `models.dev/api.json`.
 
 Then run the profile against a cloned home before the real one - see the

@@ -8,8 +8,23 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+### Compatibility
+
+- Verified harness release moves to dsh `0.2.2-rc.1`. Mounted and development
+  harness packages follow it, `@deepseek-ai/schemastery` moves to 3.19.0, and
+  the declared range becomes `>=0.2.2-rc.1 <0.3.0-0`. A build mounted against
+  one harness release disables the other release's tool presentation, so the
+  bundle and its host move together. The 32 harness packages and the 5
+  framework releases they pin are still inside the one-week release-age
+  window, so `pnpm-workspace.yaml` excludes exactly those 37 versions until
+  2026-11-11 09:15 UTC; remove the block after that time.
+
 ### Fixed
 
+- A PTC `run_code` call now shows its recorded description as the card title
+  and its program as the card input. dsh `0.2.2` moved the reserved tool's
+  definition into a private tool executor, so the registry lookup no longer
+  resolved it and every PTC card degraded to a bare `run_code` label.
 - `/export` now records only the count from the `/history` answer. The screen
   keeps the file path, which names the home directory.
 - `/export` now records only the label when prompt history cannot be written or
@@ -31,6 +46,10 @@ breaking change, and a patch carries only fixes.
 
 ### Changed
 
+- Model and effort choices are recorded in the driven session's log through the
+  harness's durable selection API, and the surface reads back the route the next
+  step will use. A choice made before an agent opens is refused with a notice
+  instead of confirming a route that never took.
 - `pre-push` now runs the free real-profile dogfood on each pushed commit. Before,
   a commit that failed it could pass the hook, because only `pnpm verify` ran it.
   The push now needs the installed `dsh` at a verified release.
@@ -42,6 +61,10 @@ breaking change, and a patch carries only fixes.
   suites, builds and daemon calls each run under a limit. At the limit, the push
   fails and names the step and the elapsed time. The limits are constants at the
   top of each check.
+- The harness registry check runs in the `pre-push` hook instead of a daily
+  hosted workflow. A push fails when the harness serves a `latest` release that
+  the manifest does not list as verified, or when the registry read fails or
+  stalls. Only the tag release workflow still runs on GitHub.
 - Development checks lint and format the code with Biome `2.6.3`: the pre-commit
   hook checks the staged files, and `pnpm run verify` checks the whole tree on
   every push. The code was reformatted once to the existing style. The published

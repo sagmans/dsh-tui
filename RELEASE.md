@@ -40,21 +40,21 @@ to `## [X.Y.Z] - <date>` and repoints the compare links.
    never unpublished (see [Rollback](#rollback)).
 
 `pre-push` also runs the native terminal gate, free actual-profile dogfood,
-offline harness matrix, and consumer install smoke. The tag workflow reruns
-native terminal and free dogfood checks, but not the matrix or consumer install
-gates. Both workflows install before `npm audit
-signatures`; that audit does not prove lifecycle scripts were disabled. The
-consumer smoke disables scripts for its direct npm installs, not explicitly for
-`dsh plugin add`. Keep real-session dogfooding separate from these automated
-checks.
+offline harness matrix, registry `latest` check, and consumer install smoke.
+The tag workflow reruns native terminal and free dogfood checks, but not the
+matrix or consumer install gates. The tag workflow and `pre-push` install
+before `npm audit signatures`; that audit does not prove lifecycle scripts were
+disabled. The consumer smoke disables scripts for its direct npm installs, not
+explicitly for `dsh plugin add`. Keep real-session dogfooding separate from
+these automated checks.
 
 ## Harness matrix
 
-The manifest declares `dsh.compatibility.dsh` as `>=0.2.1-rc.2 <0.3.0-0`. The
+The manifest declares `dsh.compatibility.dsh` as `>=0.2.2-rc.1 <0.3.0-0`. The
 upper bound stops below the next line's first prerelease: dsh judges plugin
 version ranges with prereleases included, and read that way `<0.3.0` admits
 `0.3.0` release candidates. `node tools/harness-matrix.mjs` requires that
-ceiling. Its `dsh.compatibility.dshReleases` lists only `0.2.1-rc.2` as
+ceiling. Its `dsh.compatibility.dshReleases` lists only `0.2.2-rc.1` as
 verified. Do not treat the rest of the declared range as tested. Mounted harness
 dependencies and harness development dependencies name that exact release;
 harness peers are open (`*`) and optional. These declarations do not guarantee
@@ -75,10 +75,11 @@ an interactive profile or call a model, and it does not test every release in
 the declared range. These checks do not prove general consumer deduplication or
 all lifecycle-script behavior.
 
-[`.github/workflows/harness-matrix.yml`](.github/workflows/harness-matrix.yml)
-runs the tool with `--check-registry` daily. That mode checks only
-`@deepseek-ai/dsh`'s `latest` dist-tag against the listed releases. It does not
-monitor `rc` or other tags, or discover every newly published prerelease.
+`pre-push` runs the tool with `--check-registry` on each pushed ref's tip, so a
+new harness `latest` blocks the next push until the matrix lists it. That mode
+checks only `@deepseek-ai/dsh`'s `latest` dist-tag against the listed releases.
+It does not monitor `rc` or other tags, or discover every newly published
+prerelease.
 
 An unlisted `latest` requires investigation, not automatic verification. A
 verified-release change requires the following steps:

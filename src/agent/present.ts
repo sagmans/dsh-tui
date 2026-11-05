@@ -1,5 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
+import { RUN_CODE_NAME, type ToolCallView } from '@deepseek-ai/dsh-tools'
 import { cardOfCall, cardOfResult } from '../cards/presenter.ts'
 import { contentLines, type ToolPresenter, type ToolResultInput } from '../cards.ts'
 
@@ -30,6 +31,25 @@ function toolResultContent(content: unknown): unknown {
 }
 
 /**
+ * The reserved PTC transport's call view, synthesized from recorded arguments.
+ *
+ * Since harness 0.2.2 the `run_code` definition lives inside the mounted tool
+ * executor and the registry refuses to resolve it, so the scoped lookup misses
+ * on exactly the calls PTC mode shows the reader. The presentation contract is
+ * unchanged and client-safe: the model-authored description is the card's
+ * always-visible label and the program rides rawInput, the same facts the
+ * harness's own trajectory client reads from the log. Invalid arguments leave
+ * the row to the transcript's raw-argument fallback rather than guessing.
+ */
+function runCodeCallView(name: string, args: unknown): ToolCallView | undefined {
+  if (name !== RUN_CODE_NAME) return undefined
+  if (typeof args !== 'object' || args === null) return undefined
+  const { code, description } = args as { code?: unknown; description?: unknown }
+  if (typeof code !== 'string' || typeof description !== 'string') return undefined
+  return { card: 'generic', title: description, kind: 'execute', rawInput: code }
+}
+
+/**
  * Present tool calls and results through each tool's own render intent.
  *
  * The surface must not know tool names: a tool package declares how its call
@@ -53,7 +73,8 @@ export function createToolPresenter(ctx: Context, scope: () => Agent | undefined
   return {
     call(name, argumentsJson) {
       try {
-        const view = definition(name)?.presentCall?.(parseArguments(argumentsJson) as never)
+        const args = parseArguments(argumentsJson)
+        const view = definition(name)?.presentCall?.(args as never) ?? runCodeCallView(name, args)
         // No definition, or a tool that declares no call view: leave the row to
         // the transcript's own fallback, which at least shows the raw arguments
         // the call was made with. `cardOfCall(undefined, ...)` would return a

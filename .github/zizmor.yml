@@ -1,0 +1,16 @@
+# Repository zizmor config for the generic pre-push workflow scan.
+# A repository config replaces the hook's base config, so the hash-pin rule
+# stays below with its reason.
+rules:
+  # The release job installs the verified harness release for the free dogfood.
+  # The version comes from the manifest's verified list, the install is exact
+  # with scripts disabled, and the next step checks registry signatures.
+  adhoc-packages:
+    ignore:
+      - release.yml:65
+  # A tag or branch can be moved to new code after review; only a full commit
+  # SHA pins what runs.
+  unpinned-uses:
+    config:
+      policies:
+        "*": hash-pin

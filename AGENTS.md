@@ -34,11 +34,11 @@ free gate also verifies an independent private server and restoration. Keep paid
 native attention checks demand-only; require the exact model and effort before
 any prompt.
 
-CI also checks dependency signatures and consumer installation; the consumer
-gate needs Docker. Free dogfood starts the installed, verified Harness with the
-base bundle and this worktree in credential-free scratch homes. Paid live-model
-scenarios require explicit demand and a cloned profile. Never run them from
-`pnpm test`, CI, or a build hook.
+`pre-push` also checks dependency signatures and consumer installation; the
+consumer gate needs Docker. Free dogfood starts the installed, verified Harness
+with the base bundle and this worktree in credential-free scratch homes. Paid
+live-model scenarios require explicit demand and a cloned profile. Never run
+them from `pnpm test`, a git hook, or a build hook.
 
 [FEATURES.md](FEATURES.md) and `tools/feature-inventory.json` own feature scope.
 Update inventory and actual-use scenarios together when behavior changes. Read
@@ -124,7 +124,7 @@ agent rows the profile already registers: duplicate registrations can fail with
 bundle.
 
 **The declared harness range is not the verified list.** The manifest declares
-`>=0.2.1-rc.2 <0.3.0-0`, but lists only `0.2.1-rc.2` as verified. Mounted and
+`>=0.2.2-rc.1 <0.3.0-0`, but lists only `0.2.2-rc.1` as verified. Mounted and
 development harness dependencies pin that release; harness peers are open (`*`)
 and optional. These declarations do not guarantee consumer deduplication.
 `node tools/harness-matrix.mjs` checks manifest consistency, not installed

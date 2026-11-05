@@ -1,5 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis'
-import { installModelSelection, type ModelSelectionRef } from '@deepseek-ai/dsh-agent'
+import { installModelSelection, type Model } from '@deepseek-ai/dsh-agent'
 import { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { PickerRow } from '../ui/picker.ts'
 
@@ -71,9 +71,12 @@ export function parseModelArgument(
     return { kind: 'list-models', provider: trimmed }
   if (current === undefined) {
     const names = providers.map((provider) => provider.id).join(', ')
+    // The scanner's parser loses the function bounds at a nested template
+    // literal, so the message is built in two steps. The text is unchanged.
+    const providersHint = names === '' ? '' : ` — providers: ${names}`
     return {
       kind: 'invalid',
-      reason: `no route in use; say /model <provider>/${trimmed}${names === '' ? '' : ` — providers: ${names}`}`,
+      reason: 'no route in use; say /model <provider>/' + trimmed + providersHint,
     }
   }
   return { kind: 'switch', choice: { provider: current.provider, model: trimmed } }
@@ -137,32 +140,58 @@ export function describeModelRoute(route: ModelRoute, current: ModelChoice | und
 /**
  * Own the reader's model choice for one session.
  *
- * The choice is applied through the agent's own scoped waterfalls, so it takes
- * effect on the next step rather than splitting an in-flight request, and the
- * loop logs its own durable notice when the route actually changes.
+ * A choice is durable: it appends to the driven session's own log, which the
+ * loop's projection folds into the route its next step uses, so an in-flight
+ * request is never split. The switch notice still belongs to the agent's own
+ * scope, because only steps dispatched inside it may carry the notice. The
+ * model handle is read per call rather than held: it belongs to whichever
+ * agent is driving now, and a choice made while no session is open has no log
+ * to append to.
  */
 export class ModelSwitch {
-  private readonly selection: ModelSelectionRef = { current: undefined, assembled: undefined }
   private installed: (() => void) | undefined
 
-  /** Compose the switch into the agent's scope, where the waterfalls are dispatched. */
+  /**
+   * @param modelOf - The driven agent's durable-selection handle, or
+   * `undefined` until an agent is open or after it is disposed.
+   */
+  constructor(private readonly modelOf: () => Model | undefined) {}
+
+  /** Attach the loop's switch notice to the agent's scope, where its steps dispatch. */
   install(agentCtx: Context): void {
     this.installed?.()
-    this.installed = installModelSelection(agentCtx, this.selection)
+    this.installed = installModelSelection(agentCtx)
   }
 
-  choose(choice: ModelChoice): void {
-    this.selection.current = {
+  /**
+   * Record the reader's route in the driven session's log.
+   *
+   * @returns whether a live session took the record. A route with no log to
+   * append to is dropped, because the session — not this surface — is what the
+   * loop reads.
+   */
+  choose(choice: ModelChoice): boolean {
+    const model = this.modelOf()
+    if (model === undefined) return false
+    model.select({
       provider: choice.provider,
       model: choice.model,
       ...(choice.reasoningEffort === undefined
         ? {}
         : { reasoningEffort: ReasoningEffortId(choice.reasoningEffort) }),
-    }
+    })
+    return true
   }
 
+  /**
+   * The route the next step uses.
+   *
+   * Resolved as the loop resolves it — the reader's record, then the last
+   * request, then the launch options — so the picker's heading and the status
+   * line state the request that will actually go out, not a private copy.
+   */
   current(): ModelChoice | undefined {
-    const current = this.selection.current
+    const current = this.modelOf()?.current()
     if (current === undefined) return undefined
     return {
       provider: current.provider,
@@ -174,8 +203,8 @@ export class ModelSwitch {
   }
 
   /**
-   * Take the deployment default as this session's route, unless the reader
-   * already named one.
+   * Take the deployment default as this session's route, unless a route
+   * already resolves.
    *
    * The default is settings-backed and only trustworthy once it is read, which
    * is after the agent was created; adopting it here is what makes the effort
@@ -183,7 +212,7 @@ export class ModelSwitch {
    * picker choice must never be overwritten by it.
    */
   adopt(choice: ModelChoice): void {
-    if (this.selection.current !== undefined) return
+    if (this.current() !== undefined) return
     this.choose(choice)
   }
 }

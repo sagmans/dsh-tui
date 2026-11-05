@@ -1,6 +1,9 @@
 ---
 name: dsh-tui-update-models
-description: "Use when providers, models, prices, context windows, or reasoning effort levels must be added, changed, subset, or removed in a dsh profile: the llm-pi-ai provider config, the dsh-provider-extra owned catalog, settings.yaml, and a profile's cordis.patch.yml."
+description: "Use when providers, models, prices, context windows, or reasoning
+effort levels must be added, changed, subset, or removed in a dsh profile: the
+llm-pi-ai provider config, the dsh-provider-extra owned catalog, settings.yaml,
+and a profile's cordis.patch.yml."
 ---
 # Update dsh providers and models
 
@@ -13,7 +16,7 @@ the ctx gauge. Find the owner first; then edit exactly one place.
 | Where the wiring is | What it owns |
 | --- | --- |
 | `~/.dsh/profiles/<profile>/cordis.patch.yml` | The patch layer: applied after every bundle layer, last entry wins. Holds the catalog or `llm-pi-ai` config a developer actually edits. |
-| `~/.dsh/settings.yaml`, `settings.yaml.imported` | Legacy input, not a live overlay on verified `0.2.1-rc.2`. Settings migration renames the file before attempting a one-time import into matching profile entries. Configure adapter rows in the active profile patch. Keep catalog edits in that patch and consult the installed catalog documentation. |
+| `~/.dsh/settings.yaml`, `settings.yaml.imported` | Legacy input, not a live overlay on verified `0.2.2-rc.1`. Settings migration renames the file before attempting a one-time import into matching profile entries. Configure adapter rows in the active profile patch. Keep catalog edits in that patch and consult the installed catalog documentation. |
 | `~/.dsh/profiles/<profile>/package.json` | Bundles and their dependency specs (`link:` for a checkout, a range for a release). |
 | `node_modules/<bundle>/cordis.patch.yml` | The bundle's own defaults: disabled base rows, inserted rows, default config. |
 | `node_modules/@earendil-works/pi-ai/dist/providers/data/<source>.json` | Installed per-provider catalog: ids, and the cost/context/effort data a template clone or a `filter` match inherits. |
@@ -30,7 +33,8 @@ Entry shapes in the patch layer:
       name: '@deepseek-ai/dsh-web-search-exa'
 ```
 
-A config in a patch **replaces** the base config; it never merges field by field.
+A config in a patch **replaces** the base config; it never merges field by
+field.
 
 ## 2. Pick the approach
 
@@ -90,7 +94,8 @@ entry needs as soon as a vendor number differs from the inherited one:
           filter: { include: ['glm-*'], exclude: ['glm-4*'] }   # '*' is the only wildcard
 ```
 
-Rules the resolver enforces, each rejecting the **whole** candidate: `version` is
+Rules the resolver enforces, each rejecting the **whole** candidate: `version`
+is
 exactly `1`; an unknown field anywhere; duplicate provider ids, model ids, or
 aliases; a `source` no installed pi-ai provider ships; `api` beside `source`, or
 absent when `source` is absent; `baseURL` absent, non-HTTP(S), or carrying
@@ -99,7 +104,8 @@ credentials; a `transport` on a route whose source is not `openai-codex`; a
 both modes, or `apiKeyRef` on `openai-codex`, or a `credentialProvider` that is
 not the `source`; both or neither of `models`/`filter`; an unknown `template`; a
 model with no resolvable template and incomplete `metadata`; a
-`defaultMaxTokens` above the model's `maxTokens`; a `metadata.api` that changes a
+`defaultMaxTokens` above the model's `maxTokens`; a `metadata.api` that changes
+a
 template-backed protocol; an empty catalog whose `default` is not `null`; a
 `default` outside the served selection; a `reasoningEffort` the model does not
 support. Omitting `catalog` is not `providers: []`: the first keeps the plugin's
@@ -107,7 +113,8 @@ legacy additive routes, the second serves nothing.
 
 Ownership is exclusive and checked at boot. Disable **every** competing row in
 the whole profile - on `dsh-base` those are `llm-pi-ai`, `llm-deepseek`, and
-`agent-default-model` - and mount provider-extra after them. A surviving adapter,
+`agent-default-model` - and mount provider-extra after them. A surviving
+adapter,
 provider directory, or default owner logs `CATALOG_OWNER_COLLISION` and fails
 listing, selection, dispatch, and sign-in closed until it is gone.
 
@@ -127,7 +134,8 @@ pi-ai levels are `off, minimal, low, medium, high, xhigh, max`. In
 | absent | offered, sent to the vendor under this same name |
 | a string | offered, sent as that vendor value (OpenAI's `none`, codex's `low` for `minimal`) |
 
-`xhigh` and `max` are offered **only** when explicitly mapped. `off` means "send no
+`xhigh` and `max` are offered **only** when explicitly mapped. `off` means "send
+no
 reasoning parameter" on the OpenAI and codex adapters. Vendors name the same
 concept differently - map it, never rename the vendor value.
 
@@ -149,7 +157,8 @@ dsh --profile tui list-models        # every reachable route, id<TAB>name
   [--home "$DSH_HOME"] [--profile tui] [--data <pi-ai data dir>] [--json]
 ```
 
-The dump marks each value `installed`, `template:<id>`, `route`, or `metadata`, so
+The dump marks each value `installed`, `template:<id>`, `route`, or `metadata`,
+so
 an inherited number is visible instead of trusted, expands a `filter` route
 against the installed data the same way the resolver does, and exits 1 on the
 declarations the resolver refuses - incomplete metadata, a request default above

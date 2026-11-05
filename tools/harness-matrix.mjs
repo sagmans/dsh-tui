@@ -23,6 +23,10 @@ const problems = []
 // prereleases included; read that way, an upper bound of "<0.3.0" still admits
 // 0.3.0-rc builds of the next line, and "<0.3.0-0" stops before the first of them.
 const LOWEST_PRERELEASE = '0'
+// The pre-push hook runs the registry read, so a stalled registry must fail
+// the push in bounded time instead of hanging it.
+const REGISTRY_URL = 'https://registry.npmjs.org/@deepseek-ai%2Fdsh'
+const REGISTRY_TIMEOUT_MS = 15_000
 
 /** Numeric prerelease-aware bounds keep verified RCs inside the declared compatibility range. */
 function compareVersions(left, right) {
@@ -173,23 +177,38 @@ for (const version of compiledVersions) {
   }
 }
 
-if (process.argv.includes('--check-registry')) {
-  const response = await fetch('https://registry.npmjs.org/@deepseek-ai%2Fdsh')
-  if (!response.ok) {
-    problems.push(`the registry read failed with HTTP ${response.status}`)
-  } else {
-    const metadata = await response.json()
-    const latest = metadata['dist-tags']?.latest
-    if (typeof latest !== 'string') {
-      problems.push('the registry answered no latest dist-tag')
-    } else if (!releases.includes(latest)) {
-      problems.push(`the harness publishes ${latest} as latest, which is not a verified release`)
-      console.error(
-        'harness-matrix: add it to dsh.compatibility.dshReleases, raise the harness devDependencies and mounted packages, then dogfood; RELEASE.md owns the procedure',
-      )
-    } else {
-      console.log(`harness-matrix: registry latest ${latest} is verified`)
+/**
+ * Reads the harness `latest` dist-tag, or records why it could not. The signal
+ * also bounds the body read, so a registry that stalls mid-response still
+ * fails the pre-push hook in bounded time.
+ */
+async function readRegistryLatest() {
+  try {
+    const response = await fetch(REGISTRY_URL, { signal: AbortSignal.timeout(REGISTRY_TIMEOUT_MS) })
+    if (!response.ok) {
+      problems.push(`the registry read failed with HTTP ${response.status}`)
+      return undefined
     }
+    const latest = (await response.json())['dist-tags']?.latest
+    if (typeof latest !== 'string') problems.push('the registry answered no latest dist-tag')
+    return typeof latest === 'string' ? latest : undefined
+  } catch (error) {
+    problems.push(
+      `the registry read failed: ${error instanceof Error ? error.message : String(error)}`,
+    )
+    return undefined
+  }
+}
+
+if (process.argv.includes('--check-registry')) {
+  const latest = await readRegistryLatest()
+  if (latest !== undefined && !releases.includes(latest)) {
+    problems.push(`the harness publishes ${latest} as latest, which is not a verified release`)
+    console.error(
+      'harness-matrix: add it to dsh.compatibility.dshReleases, raise the harness devDependencies and mounted packages, then dogfood; RELEASE.md owns the procedure',
+    )
+  } else if (latest !== undefined) {
+    console.log(`harness-matrix: registry latest ${latest} is verified`)
   }
 }
 

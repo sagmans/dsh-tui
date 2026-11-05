@@ -1,0 +1,30 @@
+#!/bin/sh
+# Fails the push when the harness serves a `latest` release that the pushed
+# manifest does not list as verified. This replaces the daily hosted registry
+# workflow: checks run only behind the local hooks, so drift surfaces on the
+# next push instead of in a red scheduled job. Only each pushed ref's tip is
+# judged, because that manifest is the one users get; 20-verify already proves
+# the offline matrix on every pushed commit. The tool imports only Node
+# built-ins, so a temporary worktree needs no dependency install. A failed
+# registry read blocks the push too: nothing was checked then.
+set -eu
+
+# Helpers (is_null_oid, at_sha) from .githooks/lib.
+# shellcheck source=/dev/null
+. "${HOOK_HELPERS:?run from .githooks (scripts/setup-hooks)}"
+
+registry_check() {
+	node tools/harness-matrix.mjs --check-registry || return 1
+}
+
+# A for loop over the stored ref lines, never `| while`, so a failure blocks
+# the push. Deletions push no manifest and are skipped.
+tips=$(awk '{ print $2 }' "$HOOK_STDIN_FILE") || exit 1
+for tip in $tips; do
+	is_null_oid "$tip" && continue
+	echo "pre-push: $(basename -- "$0"): checking $tip" >&2
+	if ! at_sha "$tip" registry_check; then
+		echo "pre-push: $(basename -- "$0"): harness registry drift at $tip (RELEASE.md#harness-matrix)" >&2
+		exit 1
+	fi
+done

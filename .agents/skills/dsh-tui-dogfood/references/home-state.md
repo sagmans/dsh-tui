@@ -8,7 +8,7 @@ profile. It gives the operational detail behind [../SKILL.md](../SKILL.md).
 | Entry | Kind | What reads or writes it |
 | --- | --- | --- |
 | `.credentials.yaml` | secret | the provider layer, at start-up; read-only |
-| `settings.yaml`, `settings.yaml.imported` | legacy config | On verified `0.2.1-rc.2`, settings migration renames the file before attempting a one-time import into profile entries. Rejected sections remain in `.imported`; neither file is the live TUI configuration. |
+| `settings.yaml`, `settings.yaml.imported` | legacy config | On verified `0.2.2-rc.1`, settings migration renames the file before attempting a one-time import into profile entries. Rejected sections remain in `.imported`; neither file is the live TUI configuration. |
 | `themes/` | data | created and watched at start-up; saving a file changes the live surface |
 | `prompt-history.json` | data | the editor's history recall; appended as prompts are sent |
 | `tui-stash/` | data | the parked-draft bank, one file per session, behind a lock |
@@ -21,10 +21,13 @@ profile. It gives the operational detail behind [../SKILL.md](../SKILL.md).
 ## Home state versus profile state
 
 Credentials, themes, history, the stash, storages, and sessions belong to the
-**home**: every profile in it shares them. On verified `0.2.1-rc.2`, live settings,
-the bundle list, and the patch overlay belong to the **profile**: a new profile name starts from the base plus
+**home**: every profile in it shares them. On verified `0.2.2-rc.1`, live
+settings,
+the bundle list, and the patch overlay belong to the **profile**: a new profile
+name starts from the base plus
 whatever is added to it, and inherits none of another profile's bundles or
-patches. That is the trap behind "test it in a profile named after the feature" —
+patches. That is the trap behind "test it in a profile named after the feature"
+—
 the run is compositionally thinner than the developer's own while still writing
 their real state.
 
@@ -45,16 +48,20 @@ copies it when present, which makes `--resume` reach the developer's history.
 ## Failure modes worth knowing
 
 - **A missing row is silent.** `dsh plugin install` drops a bundle whose path
-  does not resolve and still exits 0; the profile then composes the base alone and
+  does not resolve and still exits 0; the profile then composes the base alone
+  and
   the surface waits with no output. Check
   `node -p "require('<home>/profiles/<name>/package.json').dsh.profile.bundles"`.
 - **Mutable home state must remain inside the clone.** External symlinks in
-  settings, storages, or sessions and multiply linked mutable files stop the run.
+  settings, storages, or sessions and multiply linked mutable files stop the
+  run.
   Package links in `profiles/node_modules`, `profiles/*/node_modules`, and
   `profiles/*/.dsh-module-fallback/node_modules` can point to global installs or
   external checkouts, but not into the source home. An instruction file linked
-  into a shared prompt tree (`AGENTS.md`, `CLAUDE.md`) is read only and is copied
-  in while seeding, so the clone stays self-contained; a link to state the run may
+  into a shared prompt tree (`AGENTS.md`, `CLAUDE.md`) is read only and is
+  copied
+  in while seeding, so the clone stays self-contained; a link to state the run
+  may
   write still stops the run. Writes through permitted package links are not
   isolated. Re-seed with `--reseed` when the source changes.
 - **The clone keeps a copy of the credentials.** Create it in a scratch
@@ -73,6 +80,7 @@ copies it when present, which makes `--resume` reach the developer's history.
 ~/.agents/skills/dsh-tui-dogfood/scripts/run-plugin-from-worktree.sh --clean       # removes it (marker-guarded)
 ```
 
-The default clone lives at `${TMPDIR:-/tmp}/dsh-dogfood/<worktree>-<checkout-id>`
+The default clone lives at
+`${TMPDIR:-/tmp}/dsh-dogfood/<worktree>-<checkout-id>`
 and survives until `--clean` removes it. Cleanup validates the scratch-home
 marker against its canonical home, source, checkout, and profile.
