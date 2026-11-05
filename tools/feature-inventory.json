@@ -198,10 +198,10 @@
     },
     {
       "id": "export",
-      "description": "Actual transcript export, owner-only files, hardlinks and symlink refusal",
+      "description": "Actual transcript export, owner-only files, hardlinks and symlink refusal, failure reasons withheld",
       "cost": "free",
-      "scenarios": ["commands", "export-security"],
-      "sources": ["src/export.ts"]
+      "scenarios": ["commands", "export-security", "export-failure-notices"],
+      "sources": ["src/export.ts", "tools/dogfood-failure-notices.mjs"]
     },
     {
       "id": "appearance",

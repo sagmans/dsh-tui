@@ -97,6 +97,9 @@ const INACTIVE_PLUGIN = 'dogfood-inactive-plugin.mjs'
 const INACTIVE_FAILED_ID = 'inactive-failed-probe'
 const INACTIVE_PENDING_ID = 'inactive-pending-probe'
 const INACTIVE_MISSING_SERVICE = 'dogfoodMissingService'
+const FAILURE_NOTICES_PLUGIN = 'dogfood-failure-notices.mjs'
+const FAILURE_NOTICES_PROBE_ID = 'failure-notices-probe'
+const FAILURE_NOTICES_SCENARIO = 'export-failure-notices'
 const PROFILING_PROBE_CONFIGURATION_ERROR =
   'dogfood: profiling probe requires a fresh credential-free profile'
 const INITIAL_SESSION_ID = /tui-session-[a-f0-9-]+/u
@@ -379,6 +382,16 @@ function mountInactivePluginProbe(profile) {
   writeFileSync(join(profile, 'cordis.patch.yml'), patch, { mode: PRIVATE_FILE_MODE })
 }
 
+/** Failure events from a test-owned row, because a free run must not reach a model route to produce them. */
+function mountFailureNoticesProbe(profile) {
+  const insert = [
+    { id: FAILURE_NOTICES_PROBE_ID, name: join(ROOT, 'tools', FAILURE_NOTICES_PLUGIN) },
+  ]
+  writeFileSync(join(profile, 'cordis.patch.yml'), dumpYaml([{ insert }]), {
+    mode: PRIVATE_FILE_MODE,
+  })
+}
+
 /** A fresh base-backed profile avoids copying live credentials, sessions, or configuration. */
 function prepareHome(id) {
   const home = join(evidence, id, 'home')
@@ -398,6 +411,7 @@ function prepareHome(id) {
   symlinkSync(ROOT, join(profile, 'node_modules', '@sagmans', 'dsh-tui'), 'dir')
   // Mounted here because only a fresh credential-free run allocates a home, so a probe can never reach a paid profile.
   if (id === INACTIVE_PLUGIN_SCENARIO) mountInactivePluginProbe(profile)
+  if (id === FAILURE_NOTICES_SCENARIO) mountFailureNoticesProbe(profile)
   return home
 }
 

@@ -64,6 +64,10 @@ export interface FoldableEvent {
 const TOOL_RESULT_EVENT = 'tool/result'
 const SURFACE_REPLACEMENT = 'replace'
 
+/** What a failure notice is called in `/export`, where its reason is withheld. */
+const TURN_FAILED_LABEL = 'turn failed'
+const AGENT_ERROR_LABEL = 'error'
+
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null
     ? (value as Record<string, unknown>)
@@ -149,12 +153,13 @@ export class TranscriptModel {
     if (this.liveReasoning !== '') {
       const ranFor =
         this.reasoningStartedAt === undefined ? undefined : this.now() - this.reasoningStartedAt
+      const timing = ranFor === undefined ? '' : ` · ${describeDuration(ranFor)}`
       entries.push({
         kind: 'reasoning',
         // The live row and the row it settles into share an id, so a click made
         // while the model is still thinking survives the thought landing.
         id: this.liveReasoningId ?? '',
-        summary: `reasoning · ${describeTokens(this.liveReasoning)}${ranFor === undefined ? '' : ` · ${describeDuration(ranFor)}`} · streaming`,
+        summary: `reasoning · ${describeTokens(this.liveReasoning)}${timing} · streaming`,
         body: this.liveReasoning,
         live: true,
       })
@@ -213,6 +218,42 @@ export class TranscriptModel {
     this.append({ kind: 'marker', text })
   }
 
+  /**
+   * Show a failure with its reason on screen, and only its label in an export.
+   *
+   * The reason is text from a provider or a plugin, so the surface cannot know
+   * what it quotes. The reader needs it to act, but an export is made to be
+   * pasted elsewhere. A filter is not used, because a pattern can only remove the
+   * shapes it already knows.
+   */
+  private failureNotice(label: string, reason: string): void {
+    this.screenOnlyNotice(`${label}: ${reason}`, label)
+  }
+
+  /** Report why a turn ended, except for the ordinary completion the reader already sees. */
+  private reportTurnEnd(reason: Record<string, unknown>): void {
+    const kind = typeof reason.kind === 'string' ? reason.kind : 'completed'
+    if (kind === 'completed') return
+    if (kind === 'error') {
+      const failure = messageOf(reason.error)
+      this.failureNotice(TURN_FAILED_LABEL, failure === '' ? 'model request failed' : failure)
+      return
+    }
+    if (kind === 'aborted') {
+      const cause = asRecord(reason.reason)
+      const by = typeof cause?.kind === 'string' ? cause.kind : 'user'
+      this.append({ kind: 'notice', text: `turn aborted (${by})` })
+      return
+    }
+    this.append({ kind: 'notice', text: `turn ended: ${kind}` })
+  }
+
+  /** Report a live agent failure the durable log never carries as a message. */
+  reportError(error: unknown): void {
+    const text = error instanceof Error ? error.message : messageOf(error)
+    this.failureNotice(AGENT_ERROR_LABEL, text === '' ? 'agent failed' : text)
+  }
+
   /** Apply one transient assistant-stream chunk. */
   applyStreamChunk(chunk: unknown): void {
     const record = asRecord(chunk)
@@ -250,33 +291,6 @@ export class TranscriptModel {
       default:
         return
     }
-  }
-
-  /** Report why a turn ended, except for the ordinary completion the reader already sees. */
-  private reportTurnEnd(reason: Record<string, unknown>): void {
-    const kind = typeof reason.kind === 'string' ? reason.kind : 'completed'
-    if (kind === 'completed') return
-    if (kind === 'error') {
-      const failure = messageOf(reason.error)
-      this.append({
-        kind: 'notice',
-        text: `turn failed: ${failure === '' ? 'model request failed' : failure}`,
-      })
-      return
-    }
-    if (kind === 'aborted') {
-      const cause = asRecord(reason.reason)
-      const by = typeof cause?.kind === 'string' ? cause.kind : 'user'
-      this.append({ kind: 'notice', text: `turn aborted (${by})` })
-      return
-    }
-    this.append({ kind: 'notice', text: `turn ended: ${kind}` })
-  }
-
-  /** Report a live agent failure the durable log never carries as a message. */
-  reportError(error: unknown): void {
-    const text = error instanceof Error ? error.message : messageOf(error)
-    this.append({ kind: 'notice', text: `error: ${text === '' ? 'agent failed' : text}` })
   }
 
   /**
@@ -376,12 +390,6 @@ export class TranscriptModel {
         // The summary itself arrives as the user/message that follows, so this
         // row only has to explain where the older history went.
         this.marker(`compacted ${events} events${size}`)
-        return
-      }
-      case 'assistant/attempt': {
-        // An attempt that settled without a message still has to explain itself.
-        const failure = data.error === undefined ? '' : messageOf(data.error)
-        if (failure !== '') this.append({ kind: 'notice', text: `request failed: ${failure}` })
         return
       }
       case 'assistant/message': {

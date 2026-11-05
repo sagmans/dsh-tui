@@ -1843,6 +1843,35 @@
       ]
     },
     {
+      "id": "export-failure-notices",
+      "steps": [
+        {
+          "command": "/rename failure-notices-request",
+          "expect": "turn failed: dogfood-failure-reason"
+        },
+        {
+          "expect": "error: dogfood-failure-reason"
+        },
+        {
+          "command": "/export failures.md",
+          "expect": "transcript written to"
+        },
+        {
+          "file": "failures.md",
+          "contains": "<!-- turn failed -->",
+          "excludes": "dogfood-failure-reason"
+        },
+        {
+          "file": "failures.md",
+          "contains": "<!-- error -->"
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ]
+    },
+    {
       "id": "skills",
       "invocation": ["install-skills", "--update"],
       "expect": "dsh-tui-dogfood"
