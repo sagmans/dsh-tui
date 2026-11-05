@@ -1869,7 +1869,29 @@
           "command": "/quit",
           "exit": true
         }
-      ]
+      ],
+      "continuation": {
+        "steps": [
+          {
+            "expect": "turn failed (reason not shown on replay)",
+            "absent": "dogfood-failure-reason"
+          },
+          {
+            "command": "/export resumed-failures.md",
+            "expect": "transcript written to",
+            "absent": "dogfood-failure-reason"
+          },
+          {
+            "file": "resumed-failures.md",
+            "contains": "<!-- turn failed -->",
+            "excludes": "dogfood-failure-reason"
+          },
+          {
+            "command": "/quit",
+            "exit": true
+          }
+        ]
+      }
     },
     {
       "id": "skills",

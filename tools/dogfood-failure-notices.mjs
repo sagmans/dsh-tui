@@ -26,6 +26,8 @@ export function apply(ctx) {
         step: STEP,
         error: new Error(REASON),
       })
+      // A resume refuses a log whose turn was never opened, so the fixture writes the whole bracket.
+      session.append('turn/start', { turn: TURN })
       session.append('turn/end', {
         turn: TURN,
         reason: { kind: 'error', error: { message: REASON } },

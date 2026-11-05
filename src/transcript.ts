@@ -68,6 +68,9 @@ const SURFACE_REPLACEMENT = 'replace'
 const TURN_FAILED_LABEL = 'turn failed'
 const AGENT_ERROR_LABEL = 'error'
 
+/** What stands in for a stored failure reason, so the reader knows a reason existed and why it is missing. */
+const REASON_WITHHELD_ON_REPLAY = '(reason not shown on replay)'
+
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null
     ? (value as Record<string, unknown>)
@@ -118,6 +121,8 @@ export class TranscriptModel {
    * a reused id would hand that choice to a later session's thought.
    */
   private thoughtSeq = 0
+  /** Set only while a stored event folds, so a failure notice can tell history from the present. */
+  private foldingPast = false
   private liveReasoningId: string | undefined
   /** The call-to-row bookkeeping tool events share, told the clock and the rows this model holds. */
   private readonly calls: ToolCallFold
@@ -225,9 +230,24 @@ export class TranscriptModel {
    * what it quotes. The reader needs it to act, but an export is made to be
    * pasted elsewhere. A filter is not used, because a pattern can only remove the
    * shapes it already knows.
+   *
+   * A transcript rebuilt from the log gets the label too. The reader could act on
+   * the reason when it happened, and a later screen must not repeat a value that
+   * the original request may have quoted.
    */
   private failureNotice(label: string, reason: string): void {
-    this.screenOnlyNotice(`${label}: ${reason}`, label)
+    const shown = this.foldingPast ? `${label} ${REASON_WITHHELD_ON_REPLAY}` : `${label}: ${reason}`
+    this.screenOnlyNotice(shown, label)
+  }
+
+  /** Fold an event read back from the log, as opposed to one that is happening now. */
+  applyPast(event: FoldableEvent): void {
+    this.foldingPast = true
+    try {
+      this.apply(event)
+    } finally {
+      this.foldingPast = false
+    }
   }
 
   /** Report why a turn ended, except for the ordinary completion the reader already sees. */

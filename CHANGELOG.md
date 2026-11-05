@@ -68,6 +68,9 @@ breaking change, and a patch carries only fixes.
   screen keeps the reason. Failure text comes from providers and plugins, so it
   is not safe to share. The `request failed` notice is removed, because the
   harness does not send a failure on the event that the notice read.
+- A transcript rebuilt from the session log, such as after `--resume`, shows only
+  the label of a `turn failed` notice. The reason appears only when the failure
+  happens, because failure text can quote a request value.
 - Development installs, and the pi-tui compatibility run, resolve `zod` `4.6.7`
   and `fast-uri` `3.1.9`, clearing GHSA-mrhx-c7xc-m3w5 (oversized constrained
   collections exhaust memory during validation) and GHSA-333x-w4r6-6crp,

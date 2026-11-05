@@ -125,8 +125,12 @@ export function createSessionView(ctx: Context, ports: SessionViewPorts): Sessio
   }
 
   /** Feed one durable event to everything that folds it. */
-  const applyEvent = (event: { readonly type: string; readonly data?: unknown }): void => {
-    model.apply(event)
+  const applyEvent = (
+    event: { readonly type: string; readonly data?: unknown },
+    past: boolean,
+  ): void => {
+    if (past) model.applyPast(event)
+    else model.apply(event)
     work.apply(event)
   }
 
@@ -136,7 +140,7 @@ export function createSessionView(ctx: Context, ports: SessionViewPorts): Sessio
    * Undo never deletes, so the log keeps the hidden suffix; this filter is the
    * one place the transcript and the log disagree about where the session ends.
    */
-  const applyDurable = (session: SessionId, event: ForkEvent): void => {
+  const applyDurable = (session: SessionId, event: ForkEvent, past: boolean): void => {
     const cut = ports.stagedCutoff()
     if (
       cut !== undefined &&
@@ -145,7 +149,7 @@ export function createSessionView(ctx: Context, ports: SessionViewPorts): Sessio
       event.seq >= cut
     )
       return
-    if (foldCursor.accept(session, event)) applyEvent(event)
+    if (foldCursor.accept(session, event)) applyEvent(event, past)
   }
 
   /**
@@ -173,7 +177,7 @@ export function createSessionView(ctx: Context, ports: SessionViewPorts): Sessio
     const inMemory = ports.liveEvents(id)
     if (inMemory !== undefined) {
       const events = through === undefined ? inMemory : inMemory.slice(0, through)
-      for (const event of events) applyDurable(id, event)
+      for (const event of events) applyDurable(id, event, true)
       return events.length
     }
     // Only a live session can be staged: undo acts on the agent this terminal
@@ -183,7 +187,7 @@ export function createSessionView(ctx: Context, ports: SessionViewPorts): Sessio
     return replayIfCurrent(
       () => history.read(id),
       current,
-      (event) => applyDurable(id, event),
+      (event) => applyDurable(id, event, true),
     )
   }
 
@@ -246,7 +250,7 @@ export function createSessionView(ctx: Context, ports: SessionViewPorts): Sessio
   const observe = (id: SessionId, event: ForkEvent): void => {
     if (id !== viewedSession) return
     presentScope = ports.agentScope(id)
-    applyDurable(id, event)
+    applyDurable(id, event, false)
     ports.render()
   }
 
