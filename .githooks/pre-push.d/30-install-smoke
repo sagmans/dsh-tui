@@ -6,13 +6,26 @@ set -eu
 DSH_TELEMETRY_DISABLED=1
 export DSH_TELEMETRY_DISABLED
 
+# Limits for run_step. Each one catches a hang, not a slow run. `docker info`
+# only asks the local daemon; the smoke pulls an image and installs packages.
+DOCKER_INFO_TIMEOUT_SECONDS=30
+INSTALL_TIMEOUT_SECONDS=300
+SMOKE_TIMEOUT_SECONDS=600
+
+# Its output stays quiet here and not on the run_step line, so the timeout text
+# of run_step still reaches the reader.
+docker_info_quiet() {
+	docker info >/dev/null 2>&1
+}
+
 checks() {
-	if ! command -v docker >/dev/null 2>&1 || ! docker info >/dev/null 2>&1; then
+	if ! command -v docker >/dev/null 2>&1 ||
+		! run_step 'docker info' "$DOCKER_INFO_TIMEOUT_SECONDS" docker_info_quiet; then
 		echo "pre-push: Docker is unavailable, so the consumer install smoke cannot run." >&2
 		echo "Install Docker and start its daemon, then push again." >&2
 		return 1
 	fi
-	node tools/install-smoke.mjs || return 1
+	run_step 'install smoke' "$SMOKE_TIMEOUT_SECONDS" node tools/install-smoke.mjs || return 1
 }
 
 # Helpers (staged_git, pushed_shas, at_sha, darwin_only) from .githooks/lib.
@@ -26,9 +39,9 @@ top=$(git rev-parse --show-toplevel)
 install_deps() {
 	[ "$(pwd -P)" != "$(CDPATH='' cd -- "$top" && pwd -P)" ] || return 0
 	if [ -f pnpm-lock.yaml ]; then
-		pnpm install --frozen-lockfile >/dev/null || return 1
+		run_step 'pnpm install' "$INSTALL_TIMEOUT_SECONDS" pnpm install --frozen-lockfile >/dev/null || return 1
 	elif [ -f package-lock.json ]; then
-		npm ci --ignore-scripts --no-audit --no-fund >/dev/null || return 1
+		run_step 'npm ci' "$INSTALL_TIMEOUT_SECONDS" npm ci --ignore-scripts --no-audit --no-fund >/dev/null || return 1
 	fi
 }
 

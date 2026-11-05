@@ -10,24 +10,30 @@ set -eu
 DSH_TELEMETRY_DISABLED=1
 export DSH_TELEMETRY_DISABLED
 
+# Limits for run_step. Each one catches a hang, not a slow run, so it stays far
+# above a normal run on a loaded machine.
+NETWORK_TIMEOUT_SECONDS=120
+INSTALL_TIMEOUT_SECONDS=300
+GATE_TIMEOUT_SECONDS=600
+
 # Same gates as 20-verify minus the ones that do not read pi-tui: signatures and
 # local checks cover the root lockfile, pack smoke the shipped pin, and the
 # harness matrix only harness packages.
 checks() {
-	pnpm typecheck || return 1
-	pnpm test:golden || return 1
-	pnpm test:terminal || return 1
+	run_step 'pnpm typecheck' "$GATE_TIMEOUT_SECONDS" pnpm typecheck || return 1
+	run_step 'pnpm test:golden' "$GATE_TIMEOUT_SECONDS" pnpm test:golden || return 1
+	run_step 'pnpm test:terminal' "$GATE_TIMEOUT_SECONDS" pnpm test:terminal || return 1
 }
 
 # The compat run overwrites the manifest and lockfile, so it runs in its own
 # throwaway worktree and never in the clone or its node_modules. pnpm still
 # installs only from the committed lockfile and runs only the allowed builds.
 run_compat() {
-	node tools/pi-tui-compat.mjs check || return 1
+	run_step 'pi-tui compat check' "$NETWORK_TIMEOUT_SECONDS" node tools/pi-tui-compat.mjs check || return 1
 	cp compat/pi-tui/package.json package.json || return 1
 	cp compat/pi-tui/pnpm-lock.yaml pnpm-lock.yaml || return 1
-	pnpm install --frozen-lockfile >/dev/null || return 1
-	node tools/pi-tui-compat.mjs report || return 1
+	run_step 'pnpm install' "$INSTALL_TIMEOUT_SECONDS" pnpm install --frozen-lockfile >/dev/null || return 1
+	run_step 'pi-tui compat report' "$NETWORK_TIMEOUT_SECONDS" node tools/pi-tui-compat.mjs report || return 1
 	checks || return 1
 }
 
