@@ -213,7 +213,7 @@ candidate SHA before tagging. Tag creation for `v*` is restricted to repository
 admins by the ruleset above.
 
 ```sh
-git tag -s -a "v${PKG_VERSION}" -m "v${PKG_VERSION}" <merged-sha>
+git tag -s -a "v${PKG_VERSION}" -m "v${PKG_VERSION}" <candidate-sha>
 git push origin "v${PKG_VERSION}"
 ```
 

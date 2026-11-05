@@ -46,6 +46,8 @@ breaking change, and a patch carries only fixes.
 - Every release now waits out the one-week release-age window. The temporary
   exemptions for the 0.2.1-rc.2 harness set and `fast-uri` `3.1.9` are removed,
   because each entry has aged past the window.
+- `RELEASE.md` states the trunk-based delivery flow: the release tag goes on the
+  candidate commit.
 
 ### Security
 
