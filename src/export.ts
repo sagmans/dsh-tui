@@ -154,7 +154,7 @@ export function transcriptToText(entries: readonly TranscriptEntry[]): string {
         lines.push('', documentText(entry.text))
         break
       case 'notice':
-        lines.push('', `<!-- ${commentBody(entry.text)} -->`)
+        lines.push('', `<!-- ${commentBody(entry.exportText ?? entry.text)} -->`)
         break
       case 'marker':
         lines.push('', `--- ${documentText(entry.text)} ---`)

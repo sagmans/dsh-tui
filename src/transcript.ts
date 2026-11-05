@@ -10,7 +10,12 @@ import { type LiveCallState, ToolCallFold, type ToolCallOutcome } from './transc
 export type TranscriptEntry =
   | { readonly kind: 'user'; readonly text: string }
   | { readonly kind: 'assistant'; readonly text: string }
-  | { readonly kind: 'notice'; readonly text: string }
+  | {
+      readonly kind: 'notice'
+      readonly text: string
+      /** Replaces `text` in `/export`, for a notice whose text must not leave the screen. */
+      readonly exportText?: string
+    }
   | { readonly kind: 'marker'; readonly text: string }
   | { readonly kind: 'tool'; readonly card: ToolCard; readonly id: string }
   | {
@@ -419,6 +424,14 @@ export class TranscriptModel {
       default:
         return
     }
+  }
+
+  /**
+   * A notice whose text can quote configuration: the reader needs it on screen
+   * to act, but an export is made to be pasted elsewhere, so it gets `exportText`.
+   */
+  screenOnlyNotice(text: string, exportText: string): void {
+    this.append({ kind: 'notice', text, exportText })
   }
 
   /** Surface-local and durable rows share the revision that invalidates retained documents. */

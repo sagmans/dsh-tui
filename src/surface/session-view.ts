@@ -40,6 +40,7 @@ export interface SessionView {
   readonly viewed: () => SessionId
   readonly viewingChild: () => boolean
   readonly notice: (message: string) => void
+  readonly screenOnlyNotice: (message: string, exportMessage: string) => void
   readonly marker: (text: string) => void
   readonly reportError: (error: unknown) => void
   /** The model the transcript is drawn from, and what an export writes out. */
@@ -275,6 +276,7 @@ export function createSessionView(ctx: Context, ports: SessionViewPorts): Sessio
     viewed: () => viewedSession,
     viewingChild: () => viewedSession !== ports.drivenSession(),
     notice: (message) => model.notice(message),
+    screenOnlyNotice: (message, exportMessage) => model.screenOnlyNotice(message, exportMessage),
     marker: (text) => model.marker(text),
     reportError: (error) => model.reportError(error),
     model,

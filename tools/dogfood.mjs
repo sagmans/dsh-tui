@@ -92,6 +92,11 @@ const TIMER_PROBE_PACKAGE = 'dsh-tui-timer-probe'
 const PROFILING_CRASH_PLUGIN = 'dogfood-profiling-crash.mjs'
 const PROFILING_EXIT_PLUGIN = 'dogfood-profiling-exit.mjs'
 const PROFILING_PROBE_ID = 'profiling-probe'
+const INACTIVE_PLUGIN_SCENARIO = 'inactive-plugin'
+const INACTIVE_PLUGIN = 'dogfood-inactive-plugin.mjs'
+const INACTIVE_FAILED_ID = 'inactive-failed-probe'
+const INACTIVE_PENDING_ID = 'inactive-pending-probe'
+const INACTIVE_MISSING_SERVICE = 'dogfoodMissingService'
 const PROFILING_PROBE_CONFIGURATION_ERROR =
   'dogfood: profiling probe requires a fresh credential-free profile'
 const INITIAL_SESSION_ID = /tui-session-[a-f0-9-]+/u
@@ -360,6 +365,20 @@ function clean(home) {
   rmSync(canonical, { recursive: true, force: true })
 }
 
+/** One failing row and one row waiting on a service nothing provides: the two ways a plugin stays inactive. */
+function mountInactivePluginProbe(profile) {
+  const probe = join(ROOT, 'tools', INACTIVE_PLUGIN)
+  const patch = dumpYaml([
+    {
+      insert: [
+        { id: INACTIVE_FAILED_ID, name: probe },
+        { id: INACTIVE_PENDING_ID, name: probe, inject: [INACTIVE_MISSING_SERVICE] },
+      ],
+    },
+  ])
+  writeFileSync(join(profile, 'cordis.patch.yml'), patch, { mode: PRIVATE_FILE_MODE })
+}
+
 /** A fresh base-backed profile avoids copying live credentials, sessions, or configuration. */
 function prepareHome(id) {
   const home = join(evidence, id, 'home')
@@ -377,6 +396,8 @@ function prepareHome(id) {
     { mode: PRIVATE_FILE_MODE },
   )
   symlinkSync(ROOT, join(profile, 'node_modules', '@sagmans', 'dsh-tui'), 'dir')
+  // Mounted here because only a fresh credential-free run allocates a home, so a probe can never reach a paid profile.
+  if (id === INACTIVE_PLUGIN_SCENARIO) mountInactivePluginProbe(profile)
   return home
 }
 

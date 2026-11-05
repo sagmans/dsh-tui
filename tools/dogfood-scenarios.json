@@ -1594,11 +1594,41 @@
       "steps": [
         {
           "command": "/status",
-          "expect": "mode standard"
+          "expect": "mode standard",
+          "absent": "did not activate"
         },
         {
           "command": "/theme tokens",
           "expect": "editor.ghost"
+        },
+        {
+          "command": "/quit",
+          "exit": true
+        }
+      ]
+    },
+    {
+      "id": "inactive-plugin",
+      "steps": [
+        {
+          "expect": "plugin inactive-failed-probe did not activate: dogfood-inactive-plugin-failure"
+        },
+        {
+          "expect": "plugin inactive-pending-probe did not activate: waiting for: dogfoodMissingService"
+        },
+        {
+          "command": "/export inactive.md",
+          "expect": "transcript written to"
+        },
+        {
+          "file": "inactive.md",
+          "contains": "<!-- plugin inactive-failed-probe did not activate -->",
+          "excludes": "dogfood-inactive-plugin-failure"
+        },
+        {
+          "file": "inactive.md",
+          "contains": "<!-- plugin inactive-pending-probe did not activate -->",
+          "excludes": "dogfoodMissingService"
         },
         {
           "command": "/quit",

@@ -23,6 +23,13 @@
       "sources": ["src/startup.ts"]
     },
     {
+      "id": "inactive-plugin",
+      "description": "A plugin that failed to start or waits for a missing service is named in the transcript",
+      "cost": "free",
+      "scenarios": ["inactive-plugin"],
+      "sources": ["src/surface/inactive-plugins.ts", "tools/dogfood-inactive-plugin.mjs"]
+    },
+    {
       "id": "lifecycle-profiling",
       "description": "Opt-in invocation startup and shutdown phase reports, private files, observed exit and restoration boundaries",
       "cost": "free",

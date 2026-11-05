@@ -8,6 +8,15 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+### Fixed
+
+- A plugin that fails to start, such as a provider with a broken model catalog,
+  is now named in the transcript with its error. Before, the screen showed
+  `ready` and the error printed only after exit. A plugin that waits for a
+  missing service is named the same way. The full report still prints on exit.
+  `/export` records only the plugin name, because plugin error text is not safe
+  to share.
+
 ### Changed
 
 - Biome now refuses non-null assertions in the code and the test fixtures. Each

@@ -24,6 +24,7 @@ import type { PromptStash } from './stash.ts'
 import { createAppearance } from './surface/appearance.ts'
 import { createBackgroundWork } from './surface/background-work.ts'
 import { createCommands } from './surface/commands.ts'
+import { reportInactivePlugins } from './surface/inactive-plugins.ts'
 import { createModalInput } from './surface/modal-input.ts'
 import { createModelChoice } from './surface/model-choice.ts'
 import { createPluginActions } from './surface/plugin-actions.ts'
@@ -567,6 +568,9 @@ export function apply(ctx: Context, config: unknown): void {
   // Unload may happen without explicit exit; abort notifications before gates release their waits.
   // Teardown reverses registration order, and repeated reporter disposal is harmless.
   disposers.push(() => moshi?.dispose())
+
+  // Stderr waits behind the screen, so a plugin that failed to start must also be named in the transcript.
+  disposers.push(reportInactivePlugins(ctx, sessionView.screenOnlyNotice))
 
   finishSurface?.()
   profiling?.mark(PROFILE_MILESTONE.surfaceMounted)
