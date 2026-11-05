@@ -10,6 +10,8 @@ breaking change, and a patch carries only fixes.
 
 ### Fixed
 
+- `/export` now records only the count from the `/history` answer. The screen
+  keeps the file path, which names the home directory.
 - `/export` now records only the label when prompt history cannot be written or
   cleared. The screen keeps the reason, which can name a file path.
 - `/export` now records only the label of more failure notices, such as

@@ -1911,6 +1911,10 @@
           "expect": "memory only: prompt history lock at"
         },
         {
+          "command": "/history",
+          "expect": "prompt-history.json"
+        },
+        {
           "command": "/export failures.md",
           "expect": "transcript written to"
         },
@@ -1940,6 +1944,11 @@
         {
           "file": "failures.md",
           "contains": "could not start"
+        },
+        {
+          "file": "failures.md",
+          "contains": "recorded -->",
+          "excludes": "prompt-history.json"
         },
         {
           "file": "failures.md",

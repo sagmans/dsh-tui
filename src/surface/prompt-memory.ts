@@ -4,7 +4,7 @@ import {
   createPromptHistory,
   type PromptHistory,
 } from '../agent/prompt-history.ts'
-import { failureNotice } from '../failure-notice.ts'
+import { failureNotice, labelledNotice } from '../failure-notice.ts'
 import type { Keymap } from '../input/actions.ts'
 import { ghostSuffix } from '../input/ghost.ts'
 import type { StashScope } from '../stash/paths.ts'
@@ -140,14 +140,17 @@ function runHistoryCommand(
       if (argument === '') {
         const count = promptHistory.entries().length
         const blocked = promptHistory.blockedReason()
+        const details = [
+          promptHistory.path(),
+          blocked === undefined ? undefined : `writes disabled: ${BLOCK_DESCRIPTIONS[blocked]}`,
+        ].filter((part) => part !== undefined)
+        // The reader asked where the file is, but the path names their home
+        // directory, and an export is made to be pasted elsewhere.
         ports.notice(
-          [
+          labelledNotice(
             count + (count === 1 ? ' prompt recorded' : ' prompts recorded'),
-            promptHistory.path(),
-            blocked === undefined ? undefined : `writes disabled: ${BLOCK_DESCRIPTIONS[blocked]}`,
-          ]
-            .filter((part) => part !== undefined)
-            .join(' · '),
+            ` · ${details.join(' · ')}`,
+          ),
         )
         ports.render()
         return
