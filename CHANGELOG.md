@@ -21,6 +21,8 @@ breaking change, and a patch carries only fixes.
 
 ### Fixed
 
+- The limitations section now says `/model` records its choice in the session
+  log, so `--resume` keeps it; it said the running session only.
 - A PTC `run_code` call now shows its recorded description as the card title
   and its program as the card input. dsh `0.2.2` moved the reserved tool's
   definition into a private tool executor, so the registry lookup no longer

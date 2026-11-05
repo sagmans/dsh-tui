@@ -1544,7 +1544,8 @@ history is [CHANGELOG.md](CHANGELOG.md).
 - Two different things are called a preset. The agent mode (`--preset`,
   `/preset`) is fixed once a session has produced a turn; the permission preset
   (`/permission <preset>`, named in the status line) can change at any time.
-- `/model` changes the route and reasoning effort for the running session only.
+- `/model` changes the route and reasoning effort from the next step on, and
+  records the choice in the session log, so a later `--resume` keeps it.
   Catalog membership is advisory — an adapter may accept an id it does not
   advertise, while an explicit effort is checked against the route's own levels
   before it is applied. The picker offers the routes this deployment configured,

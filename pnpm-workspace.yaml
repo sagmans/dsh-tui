@@ -1,6 +1,7 @@
 # Supply-chain policy for this repository.
-# Newly resolved releases stay out for their first week (minutes), with no
-# exceptions, so every resolved release has had time for compromise reports.
+# Newly resolved releases stay out for their first week (minutes), except the
+# exact-version waiver below, so every resolved release has had time for
+# compromise reports.
 minimumReleaseAge: 10080
 minimumReleaseAgeExclude:
   # Approved waiver, dsh-tui only: exact versions of harness 0.2.2-rc.1, the

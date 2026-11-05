@@ -442,10 +442,10 @@ export function createModelChoice(ctx: Context, ports: ModelChoicePorts): ModelC
   /**
    * Put the deployment default in force before the first turn.
    *
-   * The agent is created before the settings file has been read, so the route
-   * its loop captured is the composition placeholder; the reader's default —
-   * effort included — only exists by the time they can type. Adopting it here
-   * is what makes the status line's route the one the request actually uses.
+   * The agent opens before the settings that own the default are read, so its
+   * launch route can be empty; the reader's default — effort included — exists
+   * by the time they can type. Recording it in the session log here is what
+   * makes the status line's route the one the first request uses.
    */
   const adoptDefault = (): void => {
     if (modelSwitch.current() !== undefined) return

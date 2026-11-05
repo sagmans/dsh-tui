@@ -480,8 +480,8 @@ export function createCommands(ctx: Context, ports: CommandsPorts): Commands {
         // While a turn is running the human is steering it, not opening another.
         if (ports.session.turnRunning()) driven.steer(submission.text)
         else {
-          // Before sending, let an unset route adopt the late-loaded default
-          // so the composition placeholder does not override the available settings.
+          // Before sending, record the settings default read after the agent
+          // opened, so the first request uses the route the status line shows.
           ports.route.adoptDefault()
           void ports.staged.send(submission.text)
         }
