@@ -26,6 +26,7 @@ import { windowTitle } from '../terminal/title.ts'
 
 /** Keep elapsed-time facts fresh at their displayed whole-second precision. */
 const STATUS_TICK_MS = 1000
+const OUTGOING_HANDLE_TAKEN = 'another session change is in progress'
 
 /** The session this process runs, as much of it as a driven read needs. */
 interface LiveSession {
@@ -312,8 +313,8 @@ export function createSessionLifecycle(
     void (async () => {
       // The `agent === undefined` return above is the only way in without a
       // handle, so the one this transition lets go of is always there to stop.
-      const previous = letGoOfOutgoing(false)!
-      await previous.dispose()
+      const previous = letGoOfOutgoing(false)
+      await previous?.dispose()
       await openAgent(SessionId(`tui-session-${randomUUID()}`), false)
       if (title !== '') runRenameCommand(title)
       ports.notice('started a new session')
@@ -387,8 +388,11 @@ export function createSessionLifecycle(
       const childId = SessionId(`tui-session-${randomUUID()}`)
       // Inheritance belongs to the source captured before the read; awaiting
       // even a memory-backed log does not reserve that source's outgoing handle.
-      const previous = letGoOfOutgoing(false)!
-      await previous.dispose()
+      // Refusing before the reset keeps the other transition's state, and no second
+      // agent opens beside it.
+      if (agent === undefined) throw new Error(OUTGOING_HANDLE_TAKEN)
+      const previous = letGoOfOutgoing(false)
+      await previous?.dispose()
       await openAgent(childId, false, {
         from: source,
         events: events.slice(0, point.inheritedEvents),

@@ -25,6 +25,8 @@ import {
  * so it branches from the visible prefix instead.
  */
 
+const UNDO_CURSOR_STALE = 'the undone turns are no longer in this session log'
+
 /**
  * What the staged-turn owner needs from the surface that composes it.
  *
@@ -95,248 +97,269 @@ export interface StagedTurns {
 }
 
 export function createStagedTurns(ports: StagedTurnPorts): StagedTurns {
-  /** The staged cursor for the session this terminal drives. */
-  let cursor: UndoState = NO_UNDO
-  /** Event index the transcript must not fold past while turns are hidden. */
-  let cut: number | undefined
-  /** Whether an undo is settling an interrupt, so a second press cannot race it. */
-  let pending = false
-  /** Resolver for the turn/end an undo is waiting on, set only while waiting. */
-  let settled: (() => void) | undefined
-
-  /** The closed turns of the session this terminal drives, newest last. */
-  const currentTurns = async (): Promise<readonly TurnPoint[]> =>
-    turnsOf(await ports.sessionEvents(ports.activeSession()))
-
-  /** Fold the transcript through the staged cut, or the whole log at the tip. */
-  const redrawStaged = async (): Promise<void> => {
-    ports.resetTranscript()
-    await ports.foldTranscript(ports.activeSession(), cut)
-  }
-
-  /** Park queued prompts one per bank entry, newest first so popping replays queue order. */
-  const parkQueued = async (queued: readonly string[]): Promise<void> => {
-    for (const text of [...queued].reverse()) await ports.parkPrompt(text)
-  }
-
-  /** Wait for the interrupted turn to close, bounded so undo can give up honestly. */
-  const waitForTurnEnd = (timeoutMs: number): Promise<boolean> =>
-    new Promise((resolve) => {
-      const timer = setTimeout(() => {
-        settled = undefined
-        resolve(false)
-      }, timeoutMs)
-      settled = () => {
-        clearTimeout(timer)
-        settled = undefined
-        resolve(true)
-      }
-    })
-
-  /**
-   * Stop the running turn and empty the inbox so the cut lands on a closed
-   * turn/end; queued prompts are parked first because cancelling drops them.
-   *
-   * Returns undefined when the reader's words cannot be kept: a queue with no
-   * bank to park it in, a park that fails, or a turn that will not close. All
-   * leave the cursor untouched, so the transcript keeps showing what the model
-   * actually saw; a
-   * number is how many queued prompts were parked before the turn was stopped.
-   */
-  const settleForUndo = async (): Promise<number | undefined> => {
-    const queued = ports.queuedPrompts()
-    if (!ports.turnRunning() && queued.length === 0) return 0
-    if (queued.length > 0 && !ports.canPark()) {
-      ports.notice('queued prompts have no stash to park in; undo cancelled')
-      ports.render()
-      return undefined
-    }
-    // Park before the interrupt: cancelling the turn drops the queue. A rejected
-    // park must leave unsaved words queued; stash notices alone do not reject.
-    if (queued.length > 0) {
-      try {
-        await parkQueued(queued)
-      } catch {
-        // Earlier entries may already be stored, but that does not prove every
-        // prompt has a saved copy. Preserve the queue rather than risk losing words.
-        ports.notice('could not park the queued prompts; undo cancelled')
-        ports.render()
-        return undefined
-      }
-    }
-    ports.drivingAgent()?.interrupt()
-    if (ports.turnRunning() && !(await waitForTurnEnd(UNDO_TURN_SETTLE_MS))) {
-      ports.notice('could not stop the turn; undo cancelled')
-      ports.render()
-      return undefined
-    }
-    return queued.length
-  }
-
-  const runUndoCommand = (): void => {
-    if (pending) return
-    pending = true
-    // A cursor counts one session's turns, so an undo that outlives a session
-    // switch must not write the old session's step into the new session's bar.
-    const pressedFor = ports.activeSession()
-    const overtaken = (): boolean => ports.activeSession() !== pressedFor
-    void (async () => {
-      if (ports.viewingChild()) {
-        ports.notice('undo works on the session this terminal drives · ctrl+b comes back')
-        ports.render()
-        return
-      }
-      const turns = await currentTurns()
-      if (overtaken()) return
-      if (cursor.hidden >= turns.length && !ports.turnRunning()) {
-        ports.notice('nothing to undo')
-        ports.render()
-        return
-      }
-      const draft = ports.draft()
-      // Text this state itself restored is not the reader's draft, so undoing
-      // again must not park it and end up with two copies.
-      const holdsDraft = draft !== '' && draft !== cursor.lastRestored
-      if (holdsDraft && !ports.canPark()) {
-        ports.notice('the bar holds a draft and there is no stash to park it in; undo cancelled')
-        ports.render()
-        return
-      }
-      const parked = await settleForUndo()
-      if (parked === undefined) return
-      if (overtaken()) return
-      const settledTurns = await currentTurns()
-      if (overtaken()) return
-      const next = undoStep(cursor, settledTurns)
-      if (next === undefined) {
-        ports.notice('nothing to undo')
-        ports.render()
-        return
-      }
-      if (holdsDraft) {
-        await ports.parkPrompt(draft)
-        if (overtaken()) return
-        ports.notice('the draft in the bar was parked in the stash')
-      }
-      cursor = next
-      cut = hiddenTail(next, settledTurns)?.seedCount
-      await redrawStaged()
-      if (overtaken()) return
-      ports.writeDraft(next.lastRestored)
-      // The parking count rides the undo notice: a notice of its own would be
-      // replaced before the frame could show it.
-      const parkedNote =
-        parked === 0
-          ? ''
-          : ` · ${parked} queued prompt${parked === 1 ? '' : 's'} parked in the stash`
-      ports.notice(
-        `undo · ${next.hidden} prompt${next.hidden === 1 ? '' : 's'} hidden${parkedNote} · prefix r redo`,
-      )
-      ports.render()
-    })()
-      .catch((error: unknown) => {
-        ports.notice(`undo failed: ${error instanceof Error ? error.message : String(error)}`)
-        ports.render()
-      })
-      .finally(() => {
-        pending = false
-      })
-  }
-
-  const runRedoCommand = (): void => {
-    // An undo that is still settling owns the cursor; a redo now would step
-    // the state that undo is about to replace, so it is dropped like a second
-    // undo press.
-    if (pending) return
-    void (async () => {
-      if (ports.viewingChild()) {
-        ports.notice('redo works on the session this terminal drives · ctrl+b comes back')
-        ports.render()
-        return
-      }
-      const turns = await currentTurns()
-      const before = ports.draft()
-      const restored = cursor.lastRestored
-      const next = redoStep(cursor, turns)
-      if (next === undefined) {
-        ports.notice('nothing to redo')
-        ports.render()
-        return
-      }
-      cursor = next
-      cut = hiddenTail(next, turns)?.seedCount
-      await redrawStaged()
-      // A composer the reader edited is theirs; only text this state wrote is replaced.
-      if (before === restored) ports.writeDraft(next.lastRestored)
-      ports.notice(
-        next.hidden === 0
-          ? 'redo · back at the newest prompt'
-          : `redo · ${next.hidden} prompt${next.hidden === 1 ? '' : 's'} hidden`,
-      )
-      ports.render()
-    })().catch((error: unknown) => {
-      ports.notice(`redo failed: ${error instanceof Error ? error.message : String(error)}`)
-      ports.render()
-    })
-  }
-
-  /**
-   * Send the reader's prompt, branching first when the transcript is staged.
-   *
-   * Context is derived from the log, so a send while turns are hidden has to
-   * continue in a child seeded with the visible prefix; submitting in place would
-   * show the model the prompts the reader undid. Every send passes through here so
-   * the branch has one commit point, not one per caller.
-   */
-  const commitStagedSend = async (text: string): Promise<void> => {
-    try {
-      const previous = ports.drivingAgent()
-      if (previous === undefined) {
-        ports.notice('the agent is still starting; try again in a moment')
-        ports.render()
-        return
-      }
-      if (cursor.hidden === 0) {
-        previous.submit(text)
-        return
-      }
-      const source = ports.activeSession()
-      const events = await ports.sessionEvents(source)
-      const turns = turnsOf(events)
-      // Branch from the oldest hidden turn to exclude the whole undone suffix.
-      // This assumes the cursor still matches the source log after the await.
-      const tail = hiddenTail(cursor, turns)!
-      const seed = events.slice(0, tail.seedCount)
-      const childId = SessionId(`tui-session-${randomUUID()}`)
-      // The source log preserves the undone turns, not this agent; disposal is
-      // not rolled back if the child cannot open, so a send failure can leave no driver.
-      await ports.disposeOutgoing()
-      const opened = await ports.openSession(
-        childId,
-        false,
-        seed.length === 0 ? undefined : { from: source, events: seed },
-      )
-      ports.notice(`continuing in a new branch · ${source} keeps the undone turns`)
-      opened.submit(text)
-    } catch (error) {
-      ports.notice(`could not send: ${error instanceof Error ? error.message : String(error)}`)
-      ports.render()
-    }
-  }
-
+  const state: StagedState = { cursor: NO_UNDO, cut: undefined, pending: false, settled: undefined }
   return {
-    stagedCutoff: () => cut,
-    cursor: () => cursor,
+    stagedCutoff: () => state.cut,
+    cursor: () => state.cursor,
     sessionOpened: (id) => {
-      cursor = resetUndo(id)
-      cut = undefined
+      state.cursor = resetUndo(id)
+      state.cut = undefined
     },
-    undo: runUndoCommand,
-    redo: runRedoCommand,
-    send: commitStagedSend,
+    undo: () => runUndoCommand(ports, state),
+    redo: () => runRedoCommand(ports, state),
+    send: (text) => commitStagedSend(ports, state, text),
     // The turn/end the cursor may be waiting on, which only the composer hears.
     turnSettled: () => {
-      settled?.()
+      state.settled?.()
     },
+  }
+}
+
+/** What undo, redo, and send share: one record, so each step stands alone and sees the others' writes. */
+interface StagedState {
+  /** The staged cursor for the session this terminal drives. */
+  cursor: UndoState
+  /** Event index the transcript must not fold past while turns are hidden. */
+  cut: number | undefined
+  /** Whether an undo is settling an interrupt, so a second press cannot race it. */
+  pending: boolean
+  /** Resolver for the turn/end an undo is waiting on, set only while waiting. */
+  settled: (() => void) | undefined
+}
+
+/** The closed turns of the session this terminal drives, newest last. */
+async function currentTurns(ports: StagedTurnPorts): Promise<readonly TurnPoint[]> {
+  return turnsOf(await ports.sessionEvents(ports.activeSession()))
+}
+
+/** Fold the transcript through the staged cut, or the whole log at the tip. */
+async function redrawStaged(ports: StagedTurnPorts, state: StagedState): Promise<void> {
+  ports.resetTranscript()
+  await ports.foldTranscript(ports.activeSession(), state.cut)
+}
+
+/** Park queued prompts one per bank entry, newest first so popping replays queue order. */
+async function parkQueued(ports: StagedTurnPorts, queued: readonly string[]): Promise<void> {
+  for (const text of [...queued].reverse()) await ports.parkPrompt(text)
+}
+
+/** Wait for the interrupted turn to close, bounded so undo can give up honestly. */
+function waitForTurnEnd(state: StagedState, timeoutMs: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      state.settled = undefined
+      resolve(false)
+    }, timeoutMs)
+    state.settled = () => {
+      clearTimeout(timer)
+      state.settled = undefined
+      resolve(true)
+    }
+  })
+}
+
+/**
+ * Stop the running turn and empty the inbox so the cut lands on a closed
+ * turn/end; queued prompts are parked first because cancelling drops them.
+ *
+ * Returns undefined when the reader's words cannot be kept: a queue with no
+ * bank to park it in, a park that fails, or a turn that will not close. All
+ * leave the cursor untouched, so the transcript keeps showing what the model
+ * actually saw; a
+ * number is how many queued prompts were parked before the turn was stopped.
+ */
+async function settleForUndo(
+  ports: StagedTurnPorts,
+  state: StagedState,
+): Promise<number | undefined> {
+  const queued = ports.queuedPrompts()
+  if (!ports.turnRunning() && queued.length === 0) return 0
+  if (queued.length > 0 && !ports.canPark()) {
+    ports.notice('queued prompts have no stash to park in; undo cancelled')
+    ports.render()
+    return undefined
+  }
+  // Park before the interrupt: cancelling the turn drops the queue. A rejected
+  // park must leave unsaved words queued; stash notices alone do not reject.
+  if (queued.length > 0) {
+    try {
+      await parkQueued(ports, queued)
+    } catch {
+      // Earlier entries may already be stored, but that does not prove every
+      // prompt has a saved copy. Preserve the queue rather than risk losing words.
+      ports.notice('could not park the queued prompts; undo cancelled')
+      ports.render()
+      return undefined
+    }
+  }
+  ports.drivingAgent()?.interrupt()
+  if (ports.turnRunning() && !(await waitForTurnEnd(state, UNDO_TURN_SETTLE_MS))) {
+    ports.notice('could not stop the turn; undo cancelled')
+    ports.render()
+    return undefined
+  }
+  return queued.length
+}
+
+function runUndoCommand(ports: StagedTurnPorts, state: StagedState): void {
+  if (state.pending) return
+  state.pending = true
+  // A cursor counts one session's turns, so an undo that outlives a session
+  // switch must not write the old session's step into the new session's bar.
+  const pressedFor = ports.activeSession()
+  const overtaken = (): boolean => ports.activeSession() !== pressedFor
+  void undoOnce(ports, state, overtaken)
+    .catch((error: unknown) => {
+      ports.notice(`undo failed: ${error instanceof Error ? error.message : String(error)}`)
+      ports.render()
+    })
+    .finally(() => {
+      state.pending = false
+    })
+}
+
+/** One undo, from the press to the redraw; `overtaken` says the reader has left that session. */
+async function undoOnce(
+  ports: StagedTurnPorts,
+  state: StagedState,
+  overtaken: () => boolean,
+): Promise<void> {
+  if (ports.viewingChild()) {
+    ports.notice('undo works on the session this terminal drives · ctrl+b comes back')
+    ports.render()
+    return
+  }
+  const turns = await currentTurns(ports)
+  if (overtaken()) return
+  if (state.cursor.hidden >= turns.length && !ports.turnRunning()) {
+    ports.notice('nothing to undo')
+    ports.render()
+    return
+  }
+  const draft = ports.draft()
+  // Text this state itself restored is not the reader's draft, so undoing
+  // again must not park it and end up with two copies.
+  const holdsDraft = draft !== '' && draft !== state.cursor.lastRestored
+  if (holdsDraft && !ports.canPark()) {
+    ports.notice('the bar holds a draft and there is no stash to park it in; undo cancelled')
+    ports.render()
+    return
+  }
+  const parked = await settleForUndo(ports, state)
+  if (parked === undefined) return
+  if (overtaken()) return
+  const settledTurns = await currentTurns(ports)
+  if (overtaken()) return
+  const next = undoStep(state.cursor, settledTurns)
+  if (next === undefined) {
+    ports.notice('nothing to undo')
+    ports.render()
+    return
+  }
+  if (holdsDraft) {
+    await ports.parkPrompt(draft)
+    if (overtaken()) return
+    ports.notice('the draft in the bar was parked in the stash')
+  }
+  state.cursor = next
+  state.cut = hiddenTail(next, settledTurns)?.seedCount
+  await redrawStaged(ports, state)
+  if (overtaken()) return
+  ports.writeDraft(next.lastRestored)
+  ports.notice(undoNotice(next.hidden, parked))
+  ports.render()
+}
+
+/** The parking count rides the undo notice: a notice of its own would be replaced before the frame could show it. */
+function undoNotice(hidden: number, parked: number): string {
+  const parkedNote =
+    parked === 0 ? '' : ` · ${parked} queued prompt${parked === 1 ? '' : 's'} parked in the stash`
+  return `undo · ${hidden} prompt${hidden === 1 ? '' : 's'} hidden${parkedNote} · prefix r redo`
+}
+
+function runRedoCommand(ports: StagedTurnPorts, state: StagedState): void {
+  // An undo that is still settling owns the cursor; a redo now would step
+  // the state that undo is about to replace, so it is dropped like a second
+  // undo press.
+  if (state.pending) return
+  void (async () => {
+    if (ports.viewingChild()) {
+      ports.notice('redo works on the session this terminal drives · ctrl+b comes back')
+      ports.render()
+      return
+    }
+    const turns = await currentTurns(ports)
+    const before = ports.draft()
+    const restored = state.cursor.lastRestored
+    const next = redoStep(state.cursor, turns)
+    if (next === undefined) {
+      ports.notice('nothing to redo')
+      ports.render()
+      return
+    }
+    state.cursor = next
+    state.cut = hiddenTail(next, turns)?.seedCount
+    await redrawStaged(ports, state)
+    // A composer the reader edited is theirs; only text this state wrote is replaced.
+    if (before === restored) ports.writeDraft(next.lastRestored)
+    ports.notice(
+      next.hidden === 0
+        ? 'redo · back at the newest prompt'
+        : `redo · ${next.hidden} prompt${next.hidden === 1 ? '' : 's'} hidden`,
+    )
+    ports.render()
+  })().catch((error: unknown) => {
+    ports.notice(`redo failed: ${error instanceof Error ? error.message : String(error)}`)
+    ports.render()
+  })
+}
+
+/**
+ * Send the reader's prompt, branching first when the transcript is staged.
+ *
+ * Context is derived from the log, so a send while turns are hidden has to
+ * continue in a child seeded with the visible prefix; submitting in place would
+ * show the model the prompts the reader undid. Every send passes through here so
+ * the branch has one commit point, not one per caller.
+ */
+async function commitStagedSend(
+  ports: StagedTurnPorts,
+  state: StagedState,
+  text: string,
+): Promise<void> {
+  try {
+    const previous = ports.drivingAgent()
+    if (previous === undefined) {
+      ports.notice('the agent is still starting; try again in a moment')
+      ports.render()
+      return
+    }
+    if (state.cursor.hidden === 0) {
+      previous.submit(text)
+      return
+    }
+    const source = ports.activeSession()
+    const events = await ports.sessionEvents(source)
+    const turns = turnsOf(events)
+    // Branch from the oldest hidden turn to exclude the whole undone suffix.
+    // This assumes the cursor still matches the source log after the await.
+    const tail = hiddenTail(state.cursor, turns)
+    // Refuse before the outgoing agent is disposed, so the reader keeps a driver.
+    if (tail === undefined) throw new Error(UNDO_CURSOR_STALE)
+    const seed = events.slice(0, tail.seedCount)
+    const childId = SessionId(`tui-session-${randomUUID()}`)
+    // The source log preserves the undone turns, not this agent; disposal is
+    // not rolled back if the child cannot open, so a send failure can leave no driver.
+    await ports.disposeOutgoing()
+    const opened = await ports.openSession(
+      childId,
+      false,
+      seed.length === 0 ? undefined : { from: source, events: seed },
+    )
+    ports.notice(`continuing in a new branch · ${source} keeps the undone turns`)
+    opened.submit(text)
+  } catch (error) {
+    ports.notice(`could not send: ${error instanceof Error ? error.message : String(error)}`)
+    ports.render()
   }
 }
