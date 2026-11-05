@@ -1881,6 +1881,17 @@
           "expect": "ENOENT"
         },
         {
+          "command": "/failure-lock",
+          "expect": "stale lock placed"
+        },
+        {
+          "command": "/history clear",
+          "expect": "could not clear prompt history: prompt history lock at"
+        },
+        {
+          "expect": "memory only: prompt history lock at"
+        },
+        {
           "command": "/export failures.md",
           "expect": "transcript written to"
         },
@@ -1910,6 +1921,16 @@
         {
           "file": "failures.md",
           "contains": "could not start"
+        },
+        {
+          "file": "failures.md",
+          "contains": "<!-- could not clear prompt history -->",
+          "excludes": "prompt history lock at"
+        },
+        {
+          "file": "failures.md",
+          "contains": "<!-- prompt history could not be written; this session keeps it in memory only -->",
+          "excludes": "names a session that stopped"
         },
         {
           "command": "/quit",

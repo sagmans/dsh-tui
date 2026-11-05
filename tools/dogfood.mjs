@@ -101,7 +101,7 @@ const FAILURE_NOTICES_PLUGIN = 'dogfood-failure-notices.mjs'
 const FAILURE_NOTICES_PROBE_ID = 'failure-notices-probe'
 const FAILURE_NOTICES_SCENARIO = 'export-failure-notices'
 // Commands of the test-owned row: they fail at once and never reach a model route, so a free run stays free.
-const FAILURE_NOTICES_COMMANDS = ['/failure-throw', '/failure-refuse']
+const FAILURE_NOTICES_COMMANDS = ['/failure-throw', '/failure-refuse', '/failure-lock']
 const PROFILING_PROBE_CONFIGURATION_ERROR =
   'dogfood: profiling probe requires a fresh credential-free profile'
 const INITIAL_SESSION_ID = /tui-session-[a-f0-9-]+/u
@@ -389,7 +389,11 @@ function mountFailureNoticesProbe(profile) {
   const insert = [
     { id: FAILURE_NOTICES_PROBE_ID, name: join(ROOT, 'tools', FAILURE_NOTICES_PLUGIN) },
   ]
-  writeFileSync(join(profile, 'cordis.patch.yml'), dumpYaml([{ insert }]), {
+  // History is off by default, and the probe needs a store that writes. The released patch replaces
+  // config wholesale, so the row keeps the live launch identity, as a scenario config does.
+  const startup = STARTUP_FIELDS.map((key) => `    ${key}: !!js ctx.tuiStartup.${key}`).join('\n')
+  const history = `- id: tui\n  config:\n${startup}\n    history:\n      enabled: true\n`
+  writeFileSync(join(profile, 'cordis.patch.yml'), dumpYaml([{ insert }]) + history, {
     mode: PRIVATE_FILE_MODE,
   })
 }

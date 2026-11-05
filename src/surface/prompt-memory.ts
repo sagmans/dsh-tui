@@ -1,5 +1,10 @@
 import type { SessionId } from '@deepseek-ai/dsh-session'
-import { BLOCK_DESCRIPTIONS, createPromptHistory } from '../agent/prompt-history.ts'
+import {
+  BLOCK_DESCRIPTIONS,
+  createPromptHistory,
+  type PromptHistory,
+} from '../agent/prompt-history.ts'
+import { failureNotice } from '../failure-notice.ts'
 import type { Keymap } from '../input/actions.ts'
 import { ghostSuffix } from '../input/ghost.ts'
 import type { StashScope } from '../stash/paths.ts'
@@ -14,6 +19,8 @@ import { confirmedClear, StashConfirmPicker, StashPicker } from '../ui/stash-pic
 
 /** Reverse video for the cell the cursor occupies, so a ghost keeps the cursor visible. */
 const GHOST_CURSOR_PREFIX = '\u001b[7m'
+/** Reaches an export, so it holds only words this surface wrote. */
+const CLEAR_FAILURE_LABEL = 'could not clear prompt history'
 
 /**
  * What a list has to answer to be driven by whoever owns the keyboard.
@@ -80,6 +87,100 @@ export interface PromptMemory {
 }
 
 /**
+ * Reverse search over recorded prompts, seeded with whatever is in the bar.
+ *
+ * A pick replaces the draft; a cancel leaves it exactly as it was, because the
+ * list was opened to look rather than to lose what is already typed.
+ */
+async function openHistoryPicker(
+  ports: PromptMemoryPorts,
+  promptHistory: PromptHistory,
+): Promise<void> {
+  if (!ports.historyEnabled()) {
+    ports.notice(`prompt history is disabled in ${TUI_SETTINGS_NAMESPACE} settings`)
+    ports.render()
+    return
+  }
+  if (promptHistory.entries().length === 0) {
+    const blocked = promptHistory.blockedReason()
+    ports.notice(
+      blocked === undefined
+        ? 'no prompt history yet'
+        : `prompt history is unavailable: ${BLOCK_DESCRIPTIONS[blocked]}`,
+    )
+    ports.render()
+    return
+  }
+  // The expanded text is what the reader wrote; a large paste sits in the bar
+  // as a marker, and seeding with it would filter out the prompt it came from.
+  const picked = await ports.openPicker(
+    new HistoryPicker(
+      () => promptHistory.entries(),
+      ports.editorText(),
+      () => ports.keymap(),
+    ),
+  )
+  if (picked === undefined) return
+  ports.setEditorText(picked)
+  ports.render()
+}
+
+/** Show where history is kept, or forget it; the file is global to this machine. */
+function runHistoryCommand(
+  ports: PromptMemoryPorts,
+  promptHistory: PromptHistory,
+  argument: string,
+): void {
+  // The line that asked for this is recorded before the command runs, but that
+  // write rides the store's queue; waiting for it lets the count describe the
+  // file the reader has, not the state before their own line landed.
+  void promptHistory
+    .flush()
+    .then(() => {
+      if (argument === '') {
+        const count = promptHistory.entries().length
+        const blocked = promptHistory.blockedReason()
+        ports.notice(
+          [
+            count + (count === 1 ? ' prompt recorded' : ' prompts recorded'),
+            promptHistory.path(),
+            blocked === undefined ? undefined : `writes disabled: ${BLOCK_DESCRIPTIONS[blocked]}`,
+          ]
+            .filter((part) => part !== undefined)
+            .join(' · '),
+        )
+        ports.render()
+        return
+      }
+      if (argument !== 'clear') {
+        ports.notice(
+          'usage: /history shows where history is kept · /history clear forgets every prompt',
+        )
+        ports.render()
+        return
+      }
+      // A refused write cannot remove anything, so saying "forgot 0 prompts"
+      // would describe a successful clear the file never had.
+      const blocked = promptHistory.blockedReason()
+      if (blocked !== undefined) {
+        ports.notice(`prompt history is unavailable: ${BLOCK_DESCRIPTIONS[blocked]}`)
+        ports.render()
+        return
+      }
+      return promptHistory.clear().then((removed) => {
+        ports.notice(`forgot ${removed}${removed === 1 ? ' prompt' : ' prompts'}`)
+        ports.render()
+      })
+    })
+    .catch((error) => {
+      // The store keeps what the file still holds, so the reader is told the
+      // clear failed rather than being shown a count that never landed.
+      ports.notice(failureNotice(CLEAR_FAILURE_LABEL, error))
+      ports.render()
+    })
+}
+
+/**
  * The memory the prompt keeps of what was typed, and what it offers back.
  *
  * Two stores, one subject: the prompt history is global and written from every
@@ -129,96 +230,6 @@ export function createPromptMemory(ports: PromptMemoryPorts): PromptMemory {
   let stash: PromptStash | undefined
 
   /**
-   * Reverse search over recorded prompts, seeded with whatever is in the bar.
-   *
-   * A pick replaces the draft; a cancel leaves it exactly as it was, because the
-   * list was opened to look rather than to lose what is already typed.
-   */
-  const openHistoryPicker = async (): Promise<void> => {
-    if (!ports.historyEnabled()) {
-      ports.notice(`prompt history is disabled in ${TUI_SETTINGS_NAMESPACE} settings`)
-      ports.render()
-      return
-    }
-    if (promptHistory.entries().length === 0) {
-      const blocked = promptHistory.blockedReason()
-      ports.notice(
-        blocked === undefined
-          ? 'no prompt history yet'
-          : `prompt history is unavailable: ${BLOCK_DESCRIPTIONS[blocked]}`,
-      )
-      ports.render()
-      return
-    }
-    // The expanded text is what the reader wrote; a large paste sits in the bar
-    // as a marker, and seeding with it would filter out the prompt it came from.
-    const picked = await ports.openPicker(
-      new HistoryPicker(
-        () => promptHistory.entries(),
-        ports.editorText(),
-        () => ports.keymap(),
-      ),
-    )
-    if (picked === undefined) return
-    ports.setEditorText(picked)
-    ports.render()
-  }
-
-  /** Show where history is kept, or forget it; the file is global to this machine. */
-  const runHistoryCommand = (argument: string): void => {
-    // The line that asked for this is recorded before the command runs, but that
-    // write rides the store's queue; waiting for it lets the count describe the
-    // file the reader has, not the state before their own line landed.
-    void promptHistory
-      .flush()
-      .then(() => {
-        if (argument === '') {
-          const count = promptHistory.entries().length
-          const blocked = promptHistory.blockedReason()
-          ports.notice(
-            [
-              count + (count === 1 ? ' prompt recorded' : ' prompts recorded'),
-              promptHistory.path(),
-              blocked === undefined ? undefined : `writes disabled: ${BLOCK_DESCRIPTIONS[blocked]}`,
-            ]
-              .filter((part) => part !== undefined)
-              .join(' · '),
-          )
-          ports.render()
-          return
-        }
-        if (argument !== 'clear') {
-          ports.notice(
-            'usage: /history shows where history is kept · /history clear forgets every prompt',
-          )
-          ports.render()
-          return
-        }
-        // A refused write cannot remove anything, so saying "forgot 0 prompts"
-        // would describe a successful clear the file never had.
-        const blocked = promptHistory.blockedReason()
-        if (blocked !== undefined) {
-          ports.notice(`prompt history is unavailable: ${BLOCK_DESCRIPTIONS[blocked]}`)
-          ports.render()
-          return
-        }
-        return promptHistory.clear().then((removed) => {
-          ports.notice(`forgot ${removed}${removed === 1 ? ' prompt' : ' prompts'}`)
-          ports.render()
-        })
-      })
-      .catch((error) => {
-        // The store keeps what the file still holds, so the reader is told the
-        // clear failed rather than being shown a count that never landed.
-        ports.notice(
-          'could not clear prompt history: ' +
-            (error instanceof Error ? error.message : String(error)),
-        )
-        ports.render()
-      })
-  }
-
-  /**
    * The prompt bank for the session this surface drives.
    *
    * The surface owns the editor, the picker, and the notices, so the bank is
@@ -264,9 +275,9 @@ export function createPromptMemory(ports: PromptMemoryPorts): PromptMemory {
 
   return {
     ghostBrush,
-    openHistoryPicker,
+    openHistoryPicker: () => openHistoryPicker(ports, promptHistory),
     record,
-    runHistoryCommand,
+    runHistoryCommand: (argument) => runHistoryCommand(ports, promptHistory, argument),
     buildStash,
     sessionOpened,
   }

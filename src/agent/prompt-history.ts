@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { chmod, link, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
+import { failureNotice } from '../failure-notice.ts'
 import { dshHomeDir } from '../stash/paths.ts'
 import { displayText } from '../text.ts'
 
@@ -16,6 +17,9 @@ import { displayText } from '../text.ts'
 
 /** File name the history is stored under, inside the harness home. */
 const HISTORY_FILE_NAME = 'prompt-history.json'
+/** Reaches an export, so it holds only words this store wrote. */
+const WRITE_FAILURE_LABEL =
+  'prompt history could not be written; this session keeps it in memory only'
 /** Schema this build writes; a file that names another positive version is left alone. */
 const HISTORY_SCHEMA_VERSION = 1
 /** Bound retained prompts on mutation, trading older suggestions for smaller snapshots and full-file rewrites. */
@@ -337,6 +341,66 @@ function laterTimestamp(left: string, right: string): string {
   return left >= right ? left : right
 }
 
+/** What a read of the file allows: its entries, or a refusal the reader must be told about once. */
+type HistoryRead =
+  | { kind: 'entries'; entries: readonly PromptEntry[] }
+  | { kind: 'blocked'; reason: HistoryBlockReason; warningKey: string; warning: string }
+
+/** Read the file without judging what this session holds, which only the store can change. */
+async function readHistory(filePath: string): Promise<HistoryRead> {
+  let text: string
+  try {
+    text = await readFile(filePath, 'utf8')
+  } catch (error) {
+    // Deletion is a fresh history, not permission to resurrect the cached prompts.
+    if (isMissingFile(error)) return { kind: 'entries', entries: [] }
+    return {
+      kind: 'blocked',
+      reason: 'unreadable_history',
+      warningKey: 'load:unreadable',
+      warning: 'prompt history is unreadable; writes are disabled until it can be read',
+    }
+  }
+  const parsed = parseHistoryFile(text)
+  if (parsed.kind === 'blocked') {
+    return {
+      kind: 'blocked',
+      reason: parsed.reason,
+      warningKey: `load:${parsed.reason}`,
+      warning:
+        'prompt history is ' +
+        BLOCK_DESCRIPTIONS[parsed.reason] +
+        '; writes are disabled and the file is left untouched',
+    }
+  }
+  return { kind: 'entries', entries: parsed.file.entries }
+}
+
+/**
+ * Stage a complete, owner-only document before replacement so readers do not
+ * observe a partial history. Cleanup attempts to avoid leaving another private copy.
+ */
+async function writeHistory(filePath: string, entries: readonly PromptEntry[]): Promise<void> {
+  const file: PromptHistoryFile = {
+    version: HISTORY_SCHEMA_VERSION,
+    updatedAt: new Date().toISOString(),
+    entries,
+  }
+  const tempPath = `${filePath}.${process.pid}.${Date.now()}.tmp`
+  await mkdir(dirname(filePath), { recursive: true, mode: PRIVATE_DIR_MODE })
+  try {
+    await writeFile(tempPath, `${JSON.stringify(file, null, 2)}\n`, {
+      encoding: 'utf8',
+      mode: PRIVATE_FILE_MODE,
+    })
+    await chmod(tempPath, PRIVATE_FILE_MODE)
+    await rename(tempPath, filePath)
+  } catch (error) {
+    await rm(tempPath, { force: true })
+    throw error
+  }
+}
+
 /** Build the store the surface records into and completes from. */
 export function createPromptHistory(options: PromptHistoryOptions): PromptHistory {
   const warn = options.warn ?? (() => {})
@@ -362,35 +426,13 @@ export function createPromptHistory(options: PromptHistoryOptions): PromptHistor
   let chain: Promise<void> = load()
 
   async function load(): Promise<void> {
-    let text: string
-    try {
-      text = await readFile(filePath, 'utf8')
-    } catch (error) {
-      if (isMissingFile(error)) {
-        // Deletion is a fresh history, not permission to resurrect the cached prompts.
-        entries = []
-        blocked = undefined
-        return
-      }
-      blocked = 'unreadable_history'
-      warnOnce(
-        'load:unreadable',
-        'prompt history is unreadable; writes are disabled until it can be read',
-      )
+    const read = await readHistory(filePath)
+    if (read.kind === 'blocked') {
+      blocked = read.reason
+      warnOnce(read.warningKey, read.warning)
       return
     }
-    const parsed = parseHistoryFile(text)
-    if (parsed.kind === 'blocked') {
-      blocked = parsed.reason
-      warnOnce(
-        `load:${parsed.reason}`,
-        'prompt history is ' +
-          BLOCK_DESCRIPTIONS[parsed.reason] +
-          '; writes are disabled and the file is left untouched',
-      )
-      return
-    }
-    entries = parsed.file.entries
+    entries = read.entries
     // A repaired file authorizes queued mutations again without restarting the surface.
     blocked = undefined
   }
@@ -404,28 +446,7 @@ export function createPromptHistory(options: PromptHistoryOptions): PromptHistor
     return run
   }
 
-  // Stage a complete, owner-only document before replacement so readers do not
-  // observe a partial history. Cleanup attempts to avoid leaving another private copy.
-  async function write(): Promise<void> {
-    const file: PromptHistoryFile = {
-      version: HISTORY_SCHEMA_VERSION,
-      updatedAt: new Date().toISOString(),
-      entries,
-    }
-    const tempPath = `${filePath}.${process.pid}.${Date.now()}.tmp`
-    await mkdir(dirname(filePath), { recursive: true, mode: PRIVATE_DIR_MODE })
-    try {
-      await writeFile(tempPath, `${JSON.stringify(file, null, 2)}\n`, {
-        encoding: 'utf8',
-        mode: PRIVATE_FILE_MODE,
-      })
-      await chmod(tempPath, PRIVATE_FILE_MODE)
-      await rename(tempPath, filePath)
-    } catch (error) {
-      await rm(tempPath, { force: true })
-      throw error
-    }
-  }
+  const write = (): Promise<void> => writeHistory(filePath, entries)
 
   return {
     entries: () => entries,
@@ -444,12 +465,12 @@ export function createPromptHistory(options: PromptHistoryOptions): PromptHistor
           await write()
         }),
       ).catch((error: unknown) => {
-        // The reason can name the lock file that must be removed by hand, so it
-        // belongs in the notice rather than behind a single opaque sentence.
-        const reason = error instanceof Error && error.message !== '' ? `: ${error.message}` : ''
+        // The reason can name the lock file that must be removed by hand, so the
+        // screen keeps it rather than a single opaque sentence; an export does not.
+        const reason = error instanceof Error ? error.message : ''
         warnOnce(
-          `write${reason}`,
-          `prompt history could not be written; this session keeps it in memory only${reason}`,
+          `write:${reason}`,
+          reason === '' ? WRITE_FAILURE_LABEL : failureNotice(WRITE_FAILURE_LABEL, reason),
         )
       })
     },

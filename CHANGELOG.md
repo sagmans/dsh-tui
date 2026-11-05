@@ -10,6 +10,8 @@ breaking change, and a patch carries only fixes.
 
 ### Fixed
 
+- `/export` now records only the label when prompt history cannot be written or
+  cleared. The screen keeps the reason, which can name a file path.
 - `/export` now records only the label of more failure notices, such as
   `could not send`, `/<name> failed`, or a theme or settings problem. The screen
   keeps the reason. A reason is text from a plugin, a file, or the system, so it
