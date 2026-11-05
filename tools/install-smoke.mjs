@@ -57,10 +57,16 @@ try {
     .replaceAll('@TARBALL@', tarball)
 
   // Keep install mutations in a disposable container and expose the candidate read-only.
-  execFileSync('docker', ['run', '--rm', '-i', '-v', `${out}:/pkg:ro`, IMAGE, 'sh', '-s'], {
-    input: script,
-    stdio: ['pipe', 'inherit', 'inherit'],
-  })
+  // --init: a shell as PID 1 ignores the TERM that Docker forwards, so a hung run
+  // would stay after the pre-push limit stops this client.
+  execFileSync(
+    'docker',
+    ['run', '--rm', '--init', '-i', '-v', `${out}:/pkg:ro`, IMAGE, 'sh', '-s'],
+    {
+      input: script,
+      stdio: ['pipe', 'inherit', 'inherit'],
+    },
+  )
 } finally {
   rmSync(out, { recursive: true, force: true })
 }
