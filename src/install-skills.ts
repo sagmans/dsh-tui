@@ -261,15 +261,14 @@ export function installBundledSkills(
   ensureDirectory(join(home, AGENTS_DIRECTORY))
   const skills = installedSkillsRoot(home)
   ensureDirectory(skills)
-  const destinations = names.map((name) => join(skills, name))
-  for (const destination of destinations) {
+  const destinations = names.map((name) => ({ name, destination: join(skills, name) }))
+  for (const { destination } of destinations) {
     const existing = lstatSync(destination, { throwIfNoEntry: false })
     if (existing === undefined) continue
     if (!update) throw new SkillAlreadyExistsError(destination)
     requireReplaceable(destination)
   }
-  return names.map((name, index) => {
-    const destination = destinations[index]!
+  return destinations.map(({ name, destination }) => {
     if (lstatSync(destination, { throwIfNoEntry: false }) === undefined) {
       try {
         copyBundledSkill(name, destination)

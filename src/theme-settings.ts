@@ -74,6 +74,13 @@ const DEFAULT_HISTORY_GHOST = true
 /** The history keys, declared once so a typo is refused by name. */
 const HISTORY_KEYS = new Set(['enabled', 'ghost', 'maxEntries'])
 
+/** Live Config reuses this limit, so both surfaces refuse the same history sizes. */
+export const HistoryMaxEntriesSchema = z
+  .number()
+  .min(1)
+  .max(MAX_ENTRIES_LIMIT)
+  .default(DEFAULT_MAX_ENTRIES)
+
 /**
  * The prompt-history affordances.
  *
@@ -83,10 +90,10 @@ const HISTORY_KEYS = new Set(['enabled', 'ghost', 'maxEntries'])
 const HistorySchema = z.object({
   enabled: z.boolean().default(DEFAULT_HISTORY_ENABLED),
   ghost: z.boolean().default(DEFAULT_HISTORY_GHOST),
-  maxEntries: z.number().min(1).max(MAX_ENTRIES_LIMIT).default(DEFAULT_MAX_ENTRIES),
+  maxEntries: HistoryMaxEntriesSchema,
 })
 
-const SECTION = z.object({
+const SECTION_FIELDS = {
   // No default even though the surface draws one, for the same reason `prefix`
   // has none: a registration fills every declared field, and a fill-in here would
   // hand back a choice the reader never made, which the next save would then write
@@ -122,7 +129,9 @@ const SECTION = z.object({
   // Declared for the same reason `tools` is, and validated by hand below: the block
   // is a mapping of counts whose fields are spelled out where the refusal is.
   spacing: z.any(),
-})
+}
+
+const SECTION = z.object(SECTION_FIELDS)
 
 /**
  * The schema the harness registers.
@@ -132,6 +141,9 @@ const SECTION = z.object({
  * cannot express.
  */
 export const TuiSettingsSchema = SECTION
+
+/** Live Config mirrors these fields; sharing the record keeps the two field lists identical. */
+export const TuiSettingsFields = SECTION_FIELDS
 
 /** The section's own keys: schemastery keeps what it does not declare, so a misspelling has to be refused here. */
 const SECTION_KEYS = new Set([
@@ -280,47 +292,61 @@ function parseTools(raw: unknown): Record<string, WrittenToolDisplay> {
   return specs
 }
 
-/** The reader-facing shape of the `dsh-tui:` section. */
-function parseSettings(raw: unknown): TuiSettings {
-  if (asRecord(raw) === undefined) throw new Error('dsh-tui settings must be a mapping')
-  rejectUnknownKeys(raw)
-  // Schema normalization must not mutate the immutable section borrowed from SettingsForms.
-  const section = structuredClone(asRecord(raw)!)
-  if (section.history !== undefined && asRecord(section.history) === undefined)
-    throw new Error('history must be a mapping')
-  const parsed = SECTION(section) as unknown as {
-    theme: string | undefined
-    palette: Record<PaletteName, string>
-    tokens: Record<string, StyleSpec>
-    subcalls: SubCallDisplay
-    mermaid: MermaidMode
-    prefix: string
-    prefixWindow: number
-    keys: Record<string, KeyListValue>
-    history: HistorySettings
-  }
-  // Only what the reader actually wrote is an override: the schema fills every
-  // field so validation can see a whole section, but returning those fills
-  // would turn a one-line override into a table of empty entries.
-  const writtenPalette = asRecord(section.palette) ?? {}
+/** What the schema hands back: every field filled, so validation can see a whole section. */
+interface ParsedSection {
+  theme: string | undefined
+  palette: Record<PaletteName, string>
+  tokens: Record<string, StyleSpec>
+  subcalls: SubCallDisplay
+  mermaid: MermaidMode
+  prefix: string
+  prefixWindow: number
+  keys: Record<string, KeyListValue>
+  history: HistorySettings
+}
+
+/**
+ * Only what the reader actually wrote is an override: the schema fills every
+ * field so validation can see a whole section, but returning those fills would
+ * turn a one-line override into a table of empty entries.
+ */
+function writtenPaletteOf(
+  section: Record<string, unknown>,
+  parsed: Record<PaletteName, string>,
+): Record<string, string> {
   const palette: Record<string, string> = {}
-  for (const [name, value] of Object.entries(writtenPalette)) {
+  for (const [name, value] of Object.entries(asRecord(section.palette) ?? {})) {
     // Omit shipped palette values so schema fills do not shadow a named theme.
     // This also omits an explicit value equal to the shipped one; this filter
     // cannot distinguish that choice from a registration fill.
     if (value === undefined || value === DEFAULT_PALETTE[name as PaletteName]) continue
-    palette[name] = parsed.palette[name as PaletteName]
+    palette[name] = parsed[name as PaletteName]
   }
-  const writtenTokens = asRecord(section.tokens) ?? {}
+  return palette
+}
+
+/** The tokens the reader wrote, without the empty specs the schema fills in. */
+function writtenTokensOf(
+  section: Record<string, unknown>,
+  parsed: Record<string, StyleSpec>,
+): Record<string, StyleSpec> {
   const tokens: Record<string, StyleSpec> = {}
-  for (const [name, value] of Object.entries(writtenTokens)) {
+  for (const [name, value] of Object.entries(asRecord(section.tokens) ?? {})) {
     // A registered scope hands back every key the schema declares, with an
     // empty spec for the ones nobody wrote. An empty spec cannot change an
     // appearance, so keeping it would let the schema's own fill-in shadow the
     // shipped default and report every element as overridden.
-    if (value === undefined || !hasAnyField(parsed.tokens[name])) continue
-    tokens[name] = parsed.tokens[name] ?? {}
+    if (value === undefined || !hasAnyField(parsed[name])) continue
+    tokens[name] = parsed[name] ?? {}
   }
+  return tokens
+}
+
+/** The key overrides the reader wrote, with the old prefix spelling folded in. */
+function writtenKeysOf(
+  section: Record<string, unknown>,
+  parsed: ParsedSection,
+): Record<string, KeyListValue> {
   const writtenKeys = asRecord(section.keys) ?? {}
   // The old spelling and the map set the same key; accepting both would make
   // the document mean two things at once.
@@ -335,6 +361,22 @@ function parseSettings(raw: unknown): TuiSettings {
     if (value !== undefined) overrides[id] = value
   }
   if (parsed.prefix !== undefined) overrides['chord.prefix'] = parsed.prefix
+  return overrides
+}
+
+/** The reader-facing shape of the `dsh-tui:` section. */
+function parseSettings(raw: unknown): TuiSettings {
+  const record = asRecord(raw)
+  if (record === undefined) throw new Error('dsh-tui settings must be a mapping')
+  rejectUnknownKeys(raw)
+  // Schema normalization must not mutate the immutable section borrowed from SettingsForms.
+  const section = structuredClone(record)
+  if (section.history !== undefined && asRecord(section.history) === undefined)
+    throw new Error('history must be a mapping')
+  const parsed = SECTION(section) as unknown as ParsedSection
+  const palette = writtenPaletteOf(section, parsed.palette)
+  const tokens = writtenTokensOf(section, parsed.tokens)
+  const overrides = writtenKeysOf(section, parsed)
   // Validated here rather than in the schema because every refusal depends on
   // the catalog and on the layers the map already claims, which a schema cannot see.
   const keymap = resolveKeymap(overrides)
@@ -500,9 +542,10 @@ export function readScope(
  */
 function salvageHistory(raw: unknown): HistorySettings {
   const fallback = defaultSettings().history
-  const history = asRecord(asRecord(raw)?.history)
+  const record = asRecord(raw)
+  const history = asRecord(record?.history)
   if (history === undefined)
-    return asRecord(raw) !== undefined && asRecord(raw)!.history === undefined
+    return record !== undefined && record.history === undefined
       ? fallback
       : { ...fallback, enabled: false, ghost: false }
   const enabled =

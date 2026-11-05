@@ -21,8 +21,8 @@ export function contentLinesOf(content: unknown): string[] {
   const lines: string[] = []
   // Heap-backed iterators retain depth-first order without consuming the JavaScript call stack.
   const pending: Array<Iterator<unknown>> = [content.values()]
-  while (pending.length > 0) {
-    const item = pending[pending.length - 1]!.next()
+  for (let top = pending.at(-1); top !== undefined; top = pending.at(-1)) {
+    const item = top.next()
     if (item.done) {
       pending.pop()
       continue
@@ -62,8 +62,8 @@ export function reasoningTextsOf(content: unknown): string[] {
   const thoughts: string[] = []
   // Heap-backed iterators retain depth-first order without consuming the JavaScript call stack.
   const pending: Array<Iterator<unknown>> = [content.values()]
-  while (pending.length > 0) {
-    const item = pending[pending.length - 1]!.next()
+  for (let top = pending.at(-1); top !== undefined; top = pending.at(-1)) {
+    const item = top.next()
     if (item.done) {
       pending.pop()
       continue

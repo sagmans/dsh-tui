@@ -200,7 +200,12 @@ export interface PressOverlap {
  * in a group necessarily matches the same sequence.
  */
 export function pressOverlaps(rows: readonly PressRow[]): PressOverlap[] {
-  const rowAt = (index: number): PressRow => rows[index]!
+  const rowAt = (index: number): PressRow => {
+    const row = rows[index]
+    // Every index comes from this list, so a miss means the grouping below is wrong.
+    if (row === undefined) throw new RangeError(`press row ${index} is outside ${rows.length} rows`)
+    return row
+  }
   const reached = new Map<string, number[]>()
   rows.forEach((row, index) => {
     for (const spelling of matchPresses(row.key)) {
@@ -218,8 +223,10 @@ export function pressOverlaps(rows: readonly PressRow[]): PressOverlap[] {
     return root
   }
   for (const indexes of reached.values()) {
-    for (const index of indexes.slice(1)) {
-      const left = find(indexes[0]!)
+    const [first, ...others] = indexes
+    if (first === undefined) continue
+    for (const index of others) {
+      const left = find(first)
       const right = find(index)
       if (left !== right) parent[right] = left
     }
@@ -234,7 +241,8 @@ export function pressOverlaps(rows: readonly PressRow[]): PressOverlap[] {
   const overlaps: PressOverlap[] = []
   for (const found of groups.values()) {
     const ids = [...new Set(found.map((index) => rowAt(index).id))].sort()
-    if (ids.length < 2) continue
+    const [first] = found
+    if (first === undefined || ids.length < 2) continue
     // A spelling counts as shared only when two different rows read it: one row
     // may hold two spellings of the same press (Return beside Ctrl+M), which is
     // the reader saying one thing rather than a press two rows fight over.
@@ -248,7 +256,7 @@ export function pressOverlaps(rows: readonly PressRow[]): PressOverlap[] {
           ).size > 1,
       )
       .sort()
-    overlaps.push({ ids, key: rowAt(found[0]!).key, spellings })
+    overlaps.push({ ids, key: rowAt(first).key, spellings })
   }
   return overlaps
 }

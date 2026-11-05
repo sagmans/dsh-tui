@@ -345,8 +345,9 @@ export class BoxedEditor extends Editor {
       .render(inside)
       .map((row) => row.replace(FAKE_CURSOR_CELL, LEGACY_CURSOR_CELL))
     const closing = rows.findIndex((row) => row.includes(CLOSING_TAG))
+    const closingRow = rows[closing]
     // An unfamiliar base layout must not receive guessed pointer offsets.
-    if (closing < 0) {
+    if (closingRow === undefined) {
       this.mapped = false
       return rows.map((row) =>
         this.decorateText(
@@ -385,7 +386,7 @@ export class BoxedEditor extends Editor {
       lines.push(
         edge(
           FRAME_GLYPHS.bottomLeft,
-          rows[closing]!.replace(CLOSING_TAG, ''),
+          closingRow.replace(CLOSING_TAG, ''),
           FRAME_GLYPHS.bottomRight,
         ),
       )

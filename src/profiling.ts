@@ -214,6 +214,133 @@ function diagnostic(text: string): void {
   }
 }
 
+/** Milestone times in milliseconds; null means the run never reached that point. */
+type MilestoneTimes = Record<Milestone, number | null>
+/** The categories a phase can carry. */
+type PhaseCategory = Phase['category']
+/** Ends an open phase, once. */
+type PhaseEnd = (failed?: boolean) => void
+
+/** Every milestone starts unmarked, so a report can tell a skipped step from a fast one. */
+function unmarkedMilestones(): MilestoneTimes {
+  return Object.fromEntries(
+    Object.values(PROFILE_MILESTONE).map((name) => [name, null]),
+  ) as MilestoneTimes
+}
+
+/** A phase belongs to the part of the run its first mark falls in. */
+function categoryAt(milestones: MilestoneTimes): PhaseCategory {
+  if (milestones.exitRequested !== null) return PROFILE_CATEGORY.shutdown
+  if (milestones.inputReady === null) return PROFILE_CATEGORY.startup
+  return PROFILE_CATEGORY.session
+}
+
+/** Close one phase: a late or second call must not rewrite a recorded row. */
+function closePhase(phase: Phase, finalized: boolean, failed: boolean): void {
+  if (finalized || phase.endMs !== null) return
+  phase.status = failed ? FAILED : COMPLETE
+  phase.endMs = performance.now()
+  phase.durationMs = phase.endMs - phase.startMs
+}
+
+/** Record a phase as incomplete until it ends, so a crash leaves an honest row. */
+function openPhase(
+  phases: Phase[],
+  name: Phase['name'],
+  category: PhaseCategory,
+  startMs: number,
+  finalized: () => boolean,
+): PhaseEnd {
+  const phase: Phase = {
+    name,
+    category,
+    startMs,
+    endMs: null,
+    durationMs: null,
+    status: INCOMPLETE,
+  }
+  phases.push(phase)
+  const end: PhaseEnd = (failed) => closePhase(phase, finalized(), failed === true)
+  return end
+}
+
+/** What the run knows when it ends: the report is built from this and nothing else. */
+interface FinishedRun {
+  readonly options: { readonly sessionId: string }
+  readonly startedAt: string
+  readonly code: number
+  readonly reason: ExitReason
+  readonly endMs: number
+  readonly firstSessionId: string | undefined
+  readonly finalSessionId: string | undefined
+  readonly milestones: Readonly<MilestoneTimes>
+  readonly phases: readonly Phase[]
+  readonly droppedPhases: number
+}
+
+/** The report as a JSON document; only the session id matters past this point, to name the file. */
+type ProfileReport = Readonly<Record<string, unknown>> & { readonly sessionId: string }
+
+/** The report's document shape, assembled apart so the factory holds only the run's state. */
+function reportOf(run: FinishedRun): ProfileReport {
+  const { milestones, endMs } = run
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    sessionId: run.firstSessionId ?? run.options.sessionId,
+    launchSessionId: run.options.sessionId,
+    finalSessionId: run.finalSessionId ?? null,
+    startedAt: run.startedAt,
+    processStartedAt: new Date(performance.timeOrigin).toISOString(),
+    finishedAt: new Date(performance.timeOrigin + endMs).toISOString(),
+    exit: { code: run.code, reason: run.reason },
+    runtime: { node: process.version, platform: process.platform },
+    timing: {
+      unit: TIME_UNIT,
+      origin: CLOCK_ORIGIN,
+      processLifetimeMs: endMs,
+      firstFrameMs: milestones.firstFrame,
+      inputReadyMs: milestones.inputReady,
+      startupMs:
+        milestones.firstFrame === null ||
+        milestones.inputReady === null ||
+        milestones.launcherReady === null
+          ? null
+          : Math.max(milestones.firstFrame, milestones.inputReady, milestones.launcherReady),
+      shutdownMs: milestones.exitRequested === null ? null : endMs - milestones.exitRequested,
+      persistenceExcluded: PERSISTENCE_EXCLUSION,
+    },
+    milestones,
+    phases: run.phases,
+    droppedPhases: run.droppedPhases,
+  }
+}
+
+/** Write the report, saying where it went only when the terminal is still this process's to print on. */
+function writeReport(
+  home: string,
+  report: ProfileReport,
+  timestamp: string,
+  terminalOutputSafe: boolean,
+): void {
+  try {
+    const directory = reportDirectory(home)
+    const file = join(
+      directory,
+      filenameIdentity(report.sessionId) + FILE_SEPARATOR + timestamp + FILE_SUFFIX,
+    )
+    writeFileSync(file, `${JSON.stringify(report, null, JSON_INDENT)}\n`, {
+      mode: FILE_MODE,
+      flag: FILE_FLAG,
+      encoding: ENCODING,
+    })
+    if (terminalOutputSafe) diagnostic(REPORT_PREFIX + file)
+  } catch (error) {
+    // Error messages can include private paths or contents; a stable errno is sufficient for persistence failures.
+    const code = (error as NodeJS.ErrnoException).code
+    if (terminalOutputSafe) diagnostic(REPORT_FAILURE + (code === undefined ? '' : ` (${code})`))
+  }
+}
+
 /** One recorder survives plugin unload so the host's remaining shutdown time stays observable. */
 export function createLifecycleProfiler(options: {
   readonly home: string
@@ -224,9 +351,7 @@ export function createLifecycleProfiler(options: {
   const startedAt = new Date().toISOString()
   const timestamp = startedAt.replace(TIMESTAMP_UNSAFE, TIMESTAMP_SEPARATOR)
   const phases: Phase[] = []
-  const milestones = Object.fromEntries(
-    Object.values(PROFILE_MILESTONE).map((name) => [name, null]),
-  ) as Record<Milestone, number | null>
+  const milestones = unmarkedMilestones()
   let droppedPhases = 0
   let firstSessionId: string | undefined
   let finalSessionId: string | undefined
@@ -239,21 +364,7 @@ export function createLifecycleProfiler(options: {
         droppedPhases++
         return () => undefined
       }
-      const phase: Phase = {
-        name,
-        category,
-        startMs,
-        endMs: null,
-        durationMs: null,
-        status: INCOMPLETE,
-      }
-      phases.push(phase)
-      return (failed = false) => {
-        if (finalized || phase.endMs !== null) return
-        phase.endMs = performance.now()
-        phase.durationMs = phase.endMs - phase.startMs
-        phase.status = failed ? FAILED : COMPLETE
-      }
+      return openPhase(phases, name, category, startMs, () => finalized)
     },
     mark(name) {
       if (!finalized && milestones[name] === null) milestones[name] = performance.now()
@@ -268,11 +379,7 @@ export function createLifecycleProfiler(options: {
       finalSessionId = sessionId
     },
     get category() {
-      return milestones.exitRequested !== null
-        ? PROFILE_CATEGORY.shutdown
-        : milestones.inputReady === null
-          ? PROFILE_CATEGORY.startup
-          : PROFILE_CATEGORY.session
+      return categoryAt(milestones)
     },
     afterExitRestoration() {
       process.off(EXIT_EVENT, finalize)
@@ -285,56 +392,24 @@ export function createLifecycleProfiler(options: {
     if (finalized) return
     profiler.mark(PROFILE_MILESTONE.processExit)
     finalized = true
-    const endMs = milestones.processExit!
+    // The mark above records the time unless an earlier exit already did.
+    const endMs = milestones.processExit ?? performance.now()
     // A forced unload during an editor handoff must not print into the child that still owns the terminal.
     const terminalOutputSafe =
       milestones.terminalActive === null || milestones.terminalRestored !== null
-    const report = {
-      schemaVersion: SCHEMA_VERSION,
-      sessionId: firstSessionId ?? options.sessionId,
-      launchSessionId: options.sessionId,
-      finalSessionId: finalSessionId ?? null,
+    const report = reportOf({
+      options,
       startedAt,
-      processStartedAt: new Date(performance.timeOrigin).toISOString(),
-      finishedAt: new Date(performance.timeOrigin + endMs).toISOString(),
-      exit: { code, reason },
-      runtime: { node: process.version, platform: process.platform },
-      timing: {
-        unit: TIME_UNIT,
-        origin: CLOCK_ORIGIN,
-        processLifetimeMs: endMs,
-        firstFrameMs: milestones.firstFrame,
-        inputReadyMs: milestones.inputReady,
-        startupMs:
-          milestones.firstFrame === null ||
-          milestones.inputReady === null ||
-          milestones.launcherReady === null
-            ? null
-            : Math.max(milestones.firstFrame, milestones.inputReady, milestones.launcherReady),
-        shutdownMs: milestones.exitRequested === null ? null : endMs - milestones.exitRequested,
-        persistenceExcluded: PERSISTENCE_EXCLUSION,
-      },
+      code,
+      reason,
+      endMs,
+      firstSessionId,
+      finalSessionId,
       milestones,
       phases,
       droppedPhases,
-    }
-    try {
-      const directory = reportDirectory(options.home)
-      const file = join(
-        directory,
-        filenameIdentity(report.sessionId) + FILE_SEPARATOR + timestamp + FILE_SUFFIX,
-      )
-      writeFileSync(file, `${JSON.stringify(report, null, JSON_INDENT)}\n`, {
-        mode: FILE_MODE,
-        flag: FILE_FLAG,
-        encoding: ENCODING,
-      })
-      if (terminalOutputSafe) diagnostic(REPORT_PREFIX + file)
-    } catch (error) {
-      // Error messages can include private paths or contents; a stable errno is sufficient for persistence failure.
-      const code = (error as NodeJS.ErrnoException).code
-      if (terminalOutputSafe) diagnostic(REPORT_FAILURE + (code === undefined ? '' : ` (${code})`))
-    }
+    })
+    writeReport(options.home, report, timestamp, terminalOutputSafe)
   }
 
   const fatal = (): void => profiler.shutdown(PROFILE_EXIT_REASON.fatal)

@@ -10,7 +10,7 @@ import { createTheme } from '@/theme.ts'
 import { BoxedEditor, type GhostBrush } from '@/ui/editor.ts'
 import { GateInputBar } from '@/ui/gate-input.ts'
 
-const WIDTHS = [24, 10]
+const WIDTHS = [24, 10] as const
 const CURSOR_ON = '\u001b[7m'
 const RESET = '\u001b[0m'
 const LEFT = '\u001b[D'
@@ -94,7 +94,7 @@ export function cursorFrames(): Record<string, string[]> {
     const editor = new BoxedEditor(STUB_TUI, theme.editor, defaultKeymap, undefined, cursor)
     editor.focused = false
     editor.setText(UNFOCUSED_TEXT)
-    frames[mode + CASE_SEPARATOR + UNFOCUSED_TEXT] = editor.render(WIDTHS[0]!)
+    frames[mode + CASE_SEPARATOR + UNFOCUSED_TEXT] = editor.render(WIDTHS[0])
   }
   return frames
 }

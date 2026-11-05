@@ -33,7 +33,7 @@ function trailingBlanks(rows: readonly string[]): number {
  */
 export function placeGap(lines: string[], rows: readonly string[]): number {
   const dropped = Math.min(leadingBlanks(rows), trailingBlanks(lines))
-  for (let index = dropped; index < rows.length; index++) lines.push(rows[index]!)
+  for (const row of rows.slice(dropped)) lines.push(row)
   return dropped
 }
 

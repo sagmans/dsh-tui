@@ -80,6 +80,15 @@ export interface SectionRequest<T> {
   }
 }
 
+/** A fiber with no namespace has no row, and a throwing describe() must not break its reads. */
+function describedRow(
+  settings: SettingsSeam,
+  ns: string | undefined,
+): ConfigDescriptor | undefined {
+  if (ns === undefined) return undefined
+  return settings.describe?.().find((row) => row.ns === ns)
+}
+
 /** The path the host itself shows a reader; a guessed path is what sends them to a file nothing writes. */
 function documentOf(settings: SettingsSeam): string | undefined {
   const path = settings.documentPath
@@ -140,8 +149,7 @@ export function openSection<T>(service: unknown, request: SectionRequest<T>): Se
   }
   if (typeof settings.describe === 'function' && request.config !== undefined) {
     const config = request.config
-    const descriptor = (): ConfigDescriptor | undefined =>
-      config.ns === undefined ? undefined : settings.describe!().find((row) => row.ns === config.ns)
+    const descriptor = (): ConfigDescriptor | undefined => describedRow(settings, config.ns)
     return {
       kind: 'config',
       document: documentOf(settings),

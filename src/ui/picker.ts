@@ -85,6 +85,14 @@ export function describeAge(createdAt: number, now: number): string {
   return `${Math.floor(elapsed / DAY_MS)}d ago`
 }
 
+/** A rank that names a row the list no longer has drops it, because an absent row cannot be drawn. */
+function rowsAt<Row>(rows: readonly Row[], indices: readonly number[]): Row[] {
+  return indices.flatMap((index) => {
+    const row = rows[index]
+    return row === undefined ? [] : [row]
+  })
+}
+
 /**
  * A filtered list the reader moves through by key.
  *
@@ -146,7 +154,7 @@ export class ListPicker<Row> {
       retained.haystacks.length === haystacks.length &&
       retained.haystacks.every((text, index) => text === haystacks[index])
     ) {
-      return retained.indices.map((index) => rows[index]!)
+      return rowsAt(rows, retained.indices)
     }
     // Ties preserve source order, and indices read fresh rows even when objects are replaced.
     const indices = haystacks
@@ -158,7 +166,7 @@ export class ListPicker<Row> {
       .sort((left, right) => right.score - left.score)
       .map((entry) => entry.index)
     this.ranking = { needle, haystacks, indices }
-    return indices.map((index) => rows[index]!)
+    return rowsAt(rows, indices)
   }
 
   /**

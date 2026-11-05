@@ -3,18 +3,18 @@ import z from '@deepseek-ai/schemastery'
 import type { TuiRowConfig } from './contracts.ts'
 import { DEFAULT_STASH_SCOPE, STASH_SCOPES } from './stash/paths.ts'
 import { CURSOR_MODES, type CursorMode, SOFTWARE_CURSOR_MODE } from './terminal/cursor.ts'
-import { TuiSettingsSchema } from './theme-settings.ts'
+import { HistoryMaxEntriesSchema, TuiSettingsFields } from './theme-settings.ts'
 
 /** Native references distinguish live Config from ordinary released schema output. */
 const VOLATILE_REFERENCE = Symbol.for('cosmokit.volatile.write')
-const PREFERENCE_SCHEMA = TuiSettingsSchema.dict!
+const PREFERENCE_SCHEMA: Readonly<Record<string, z>> = TuiSettingsFields
 const PREFERENCE_FIELDS = Object.keys(PREFERENCE_SCHEMA)
 const CURSOR_MODE_ERROR = 'cursorMode must be software or native'
 const CONFIG_HISTORY = z.object({
   // A source host imports legacy settings after activation; absence is not consent.
   enabled: z.boolean(),
   ghost: z.boolean(),
-  maxEntries: PREFERENCE_SCHEMA.history!.dict!.maxEntries!,
+  maxEntries: HistoryMaxEntriesSchema,
 })
 
 /** Keep launch identity fixed while source hosts expose preferences as live Config fields. */

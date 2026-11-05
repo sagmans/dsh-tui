@@ -178,12 +178,14 @@ function markTerminalCalls(terminal: HostWritable, call: SurfaceCall): () => voi
 
 export function holdHostWrites(options: HostWriteOptions): HostWriteGuard {
   const held = new Map<HostWritable, HeldWrites>()
-  for (const target of options.targets) held.set(target, { chunks: [], bytes: 0, dropped: 0 })
   const surface: SurfaceCall = { depth: 0 }
   const restoreTerminal = markTerminalCalls(options.terminal, surface)
-  const streams = options.targets.map((target) =>
-    holdStream(target, held.get(target)!, () => surface.depth > 0),
-  )
+  const streams = options.targets.map((target) => {
+    // A target listed twice shares one buffer, so release replays its writes once.
+    const writes = held.get(target) ?? { chunks: [], bytes: 0, dropped: 0 }
+    held.set(target, writes)
+    return holdStream(target, writes, () => surface.depth > 0)
+  })
   let active = true
   return {
     release() {

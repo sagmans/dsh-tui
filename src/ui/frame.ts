@@ -167,13 +167,11 @@ export function frameBlock(
     }
     return { drawn, copy }
   }
-  const drawn = [
-    faces.border(`${FRAME_GLYPHS.topLeft}${frameRule(inside, 0)}${FRAME_GLYPHS.topRight}`),
-    ...rows.map((row) => `${side}${row}${side}`),
-    faces.border(
-      `${FRAME_GLYPHS.bottomLeft}${frameRule(inside, lines.length - body.length)}${FRAME_GLYPHS.bottomRight}`,
-    ),
-  ]
+  const top = faces.border(`${FRAME_GLYPHS.topLeft}${frameRule(inside, 0)}${FRAME_GLYPHS.topRight}`)
+  const bottom = faces.border(
+    `${FRAME_GLYPHS.bottomLeft}${frameRule(inside, lines.length - body.length)}${FRAME_GLYPHS.bottomRight}`,
+  )
+  const drawn = [top, ...rows.map((row) => `${side}${row}${side}`), bottom]
   // The side and the padding beside it are the frame's; the rest of the row is
   // the text, which is the part a copy of this row is entitled to keep.
   const held: FrameRow = {
@@ -183,9 +181,9 @@ export function frameBlock(
   return {
     drawn,
     copy: [
-      read(drawn[0]!),
+      read(top),
       ...drawn.slice(1, -1).map((row) => ({ ...held, drawn: read(row).drawn })),
-      read(drawn[drawn.length - 1]!),
+      read(bottom),
     ],
   }
 }
