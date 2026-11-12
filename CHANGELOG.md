@@ -14,10 +14,7 @@ breaking change, and a patch carries only fixes.
   harness packages follow it, `@deepseek-ai/schemastery` moves to 3.19.0, and
   the declared range becomes `>=0.2.2-rc.1 <0.3.0-0`. A build mounted against
   one harness release disables the other release's tool presentation, so the
-  bundle and its host move together. The 32 harness packages and the 5
-  framework releases they pin are still inside the one-week release-age
-  window, so `pnpm-workspace.yaml` excludes exactly those 37 versions until
-  2026-11-11 09:15 UTC; remove the block after that time.
+  bundle and its host move together.
 
 ### Fixed
 
@@ -107,6 +104,9 @@ breaking change, and a patch carries only fixes.
   candidate commit.
 
 ### Security
+
+- Retired the temporary release-age waiver for `0.2.2-rc.1` and its
+  dependencies after every exempt version cleared the seven-day window.
 
 - `/export` records only the label of a `turn failed` or `error` notice. The
   screen keeps the reason. Failure text comes from providers and plugins, so it
