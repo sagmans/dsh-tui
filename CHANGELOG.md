@@ -102,6 +102,8 @@ breaking change, and a patch carries only fixes.
   because each entry has aged past the window.
 - `RELEASE.md` states the trunk-based delivery flow: the release tag goes on the
   candidate commit.
+- Dependency updates are maintained by hand on `main`; the automated update PR
+  configuration is retired. Security alerts stay enabled for manual triage.
 
 ### Security
 

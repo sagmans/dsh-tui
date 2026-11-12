@@ -1431,9 +1431,8 @@ committed lockfile resolves the newest release in the range that has passed the
 one-week release-age window, and `pre-push` reruns typecheck, golden frames and
 terminal behavior on it. When `pre-push` warns that a newer release in the range
 has matured, refresh both files with `node tools/pi-tui-compat.mjs lock` and
-commit them. To widen the range, change the ceiling in that manifest, run
-`lock`,
-and move the Dependabot `@earendil-works/*` ignore to the same line.
+commit them. To widen the range, change the ceiling in that manifest and run
+`lock`.
 
 Test specs import plugin sources through the `@/` alias. Under this test runner
 the spec file is resolved with a root-relative id, so parent-relative imports
