@@ -8,6 +8,13 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+### Fixed
+
+- The tag release workflow's free dogfood passes again. The clone-helper
+  scenario lost pnpm's home directory, so its nested build saw a different
+  package store and stopped without a terminal. `0.17.0` was tagged but never
+  published because of this; `0.17.1` carries the same changes.
+
 ## [0.17.0] - 2026-11-20
 
 ### Compatibility

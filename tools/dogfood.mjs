@@ -169,6 +169,9 @@ const READY = 'ready'
 const STARTUP_PICKER = 'resume a session'
 const RESTORE = ['\x1b[?1049l', '\x1b[?25h', '\x1b[?1006l']
 const FREE_ENV = ['PATH', 'TMPDIR', 'TMP', 'TEMP', 'LANG', 'LC_ALL', 'SystemRoot']
+// pnpm derives its store from PNPM_HOME; a helper build that loses it sees a different store
+// than the install used and, with no TTY, aborts instead of purging node_modules.
+const PNPM_ENV = ['PNPM_HOME', 'XDG_DATA_HOME']
 const KEYS = {
   'ctrl+c': '\x03',
   'ctrl+d': '\x04',
@@ -583,6 +586,11 @@ async function run(scenario, reused) {
         cwd: workspace,
         env: {
           ...childEnv,
+          ...Object.fromEntries(
+            PNPM_ENV.flatMap((key) =>
+              process.env[key] === undefined ? [] : [[key, process.env[key]]],
+            ),
+          ),
           DSH_DOGFOOD_DEFAULT_REPO: ROOT,
           DSH_DOGFOOD_REQUIRE_LISTED: ENABLED_ENV_VALUE,
           DSH_TUI_MOSHI_TOKEN: ISOLATION_SENTINEL,
