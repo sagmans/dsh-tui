@@ -50,11 +50,11 @@ these automated checks.
 
 ## Harness matrix
 
-The manifest declares `dsh.compatibility.dsh` as `>=0.2.2-rc.1 <0.3.0-0`. The
+The manifest declares `dsh.compatibility.dsh` as `>=0.2.2-rc.5 <0.3.0-0`. The
 upper bound stops below the next line's first prerelease: dsh judges plugin
 version ranges with prereleases included, and read that way `<0.3.0` admits
 `0.3.0` release candidates. `node tools/harness-matrix.mjs` requires that
-ceiling. Its `dsh.compatibility.dshReleases` lists only `0.2.2-rc.1` as
+ceiling. Its `dsh.compatibility.dshReleases` lists only `0.2.2-rc.5` as
 verified. Do not treat the rest of the declared range as tested. Mounted harness
 dependencies and harness development dependencies name that exact release;
 harness peers are open (`*`) and optional. These declarations do not guarantee

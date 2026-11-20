@@ -134,7 +134,7 @@ profile.
 
 ### Use the installed Harness launcher
 
-The manifest declares `>=0.2.2-rc.1 <0.3.0-0`, but lists only `0.2.2-rc.1` as a
+The manifest declares `>=0.2.2-rc.5 <0.3.0-0`, but lists only `0.2.2-rc.5` as a
 verified release. Range membership alone does not prove compatibility. Run
 `dsh --version` and use that installed release for dogfooding. `pnpm dsh` from a
 Harness source checkout runs a development host, not the verified installed
@@ -161,7 +161,7 @@ prints nothing and never exits, and `--help` waits with it.
 
 **npm can report `overriding peer dependency` while a harness tree resolves.** A
 warning alone does not mean the install failed; check its exit status. This
-plugin pins its mounted harness dependencies to `0.2.2-rc.1` and declares
+plugin pins its mounted harness dependencies to `0.2.2-rc.5` and declares
 optional harness peers as `*`. Optional peers avoid automatic installation when
 absent; neither open peers nor exact dependencies guarantee consumer
 deduplication. The consumer install smoke checks package-copy counts for its
@@ -749,7 +749,7 @@ sections can produce identical public descriptors. TUI cannot detect that
 transition
 without host validity metadata, so section-provider defaults remain active.
 
-The verified `0.2.2-rc.1` settings service has no legacy import alias from
+The verified `0.2.2-rc.5` settings service has no legacy import alias from
 `dsh-tui` to `tui`.
 Exporting Config does not resolve that namespace mismatch. The service renames
 `settings.yaml` to `settings.yaml.imported` before import completes.
@@ -1107,7 +1107,7 @@ The package is a Cordis plugin bundle that stacks over `@deepseek-ai/dsh-base`:
   through this bundle's own `host/runner` entry point. The code runtime PTC mode
   runs programs against is a base row of its own (`ptc-runtime`) on the
   supported line, so this bundle mounts none of its own. The registry, preset,
-  and runner packages are plain dependencies pinned to `0.2.2-rc.1`; these pins
+  and runner packages are plain dependencies pinned to `0.2.2-rc.5`; these pins
   do not guarantee one copy in every consumer tree.
 - `@sagmans/dsh-tui` owns the terminal: it creates or resumes one agent through
   `ctx.agents`, folds `session/event` into transcript rows and work state,
@@ -1417,7 +1417,7 @@ node tools/pty-drive.mjs --home "$S" --seconds 20 --prompt ''
 node tools/pty-drive.mjs --home "$S" --prompt 'Run: echo hi' --click 20:12
 ```
 
-A minimal home starts on the shipped defaults. On verified `0.2.2-rc.1`, the
+A minimal home starts on the shipped defaults. On verified `0.2.2-rc.5`, the
 settings service renames legacy `settings.yaml` before attempting a one-time
 import into matching profile entries. Rejected sections remain only in
 `settings.yaml.imported`. Use the active profile patch for current preferences,

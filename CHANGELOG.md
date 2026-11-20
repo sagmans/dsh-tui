@@ -10,9 +10,9 @@ breaking change, and a patch carries only fixes.
 
 ### Compatibility
 
-- Verified harness release moves to dsh `0.2.2-rc.1`. Mounted and development
+- Verified harness release moves to dsh `0.2.2-rc.5`. Mounted and development
   harness packages follow it, `@deepseek-ai/schemastery` moves to 3.19.0, and
-  the declared range becomes `>=0.2.2-rc.1 <0.3.0-0`. A build mounted against
+  the declared range becomes `>=0.2.2-rc.5 <0.3.0-0`. A build mounted against
   one harness release disables the other release's tool presentation, so the
   bundle and its host move together.
 
@@ -109,6 +109,9 @@ breaking change, and a patch carries only fixes.
 
 - Retired the temporary release-age waiver for `0.2.2-rc.1` and its
   dependencies after every exempt version cleared the seven-day window.
+- Temporary, owner-approved release-age waiver for the exact `0.2.2-rc.5`
+  harness versions the lockfiles pin. Remove it on or after 2026-11-25 13:09
+  UTC, when the youngest entry clears the seven-day window.
 
 - `/export` records only the label of a `turn failed` or `error` notice. The
   screen keeps the reason. Failure text comes from providers and plugins, so it

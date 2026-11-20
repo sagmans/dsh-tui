@@ -1,6 +1,45 @@
 # Supply-chain policy for this repository.
 # Newly resolved releases wait a week so compromise reports can surface.
 minimumReleaseAge: 10080
+minimumReleaseAgeExclude:
+  # Approved waiver, dsh-tui only: exact versions of harness 0.2.2-rc.5, the
+  # registry's latest. Remove on or after
+  # 2026-11-25 13:09 UTC, when the youngest entry
+  # (@deepseek-ai/dsh-cordis-host-runner@0.2.2-rc.5, published 2026-11-18 13:08 UTC) leaves the window.
+  - '@deepseek-ai/dsh-agent-default-model@0.2.2-rc.5'
+  - '@deepseek-ai/dsh-agent-loop@0.2.2-rc.5'
+  - '@deepseek-ai/dsh-agent-preset-registry@0.2.2-rc.5'
+  - '@deepseek-ai/dsh-agent-preset@0.2.2-rc.5'
+  - '@deepseek-ai/dsh-agent@0.2.2-rc.5'
+  - '@deepseek-ai/dsh-app-boot@0.2.2-rc.5'
+  - '@deepseek-ai/dsh-atomic-write@0.2.2-rc.5'
+  - '@deepseek-ai/dsh-attachment@0.2.2-rc.5'
+  - '@deepseek-ai/dsh-brand@0.2.2-rc.5'
+  - '@deepseek-ai/dsh-cmdline@0.2.2-rc.5'
+  - '@deepseek-ai/dsh-commands@0.2.2-rc.5'
+  - '@deepseek-ai/dsh-config-editor@0.2.2-rc.5'
+  - '@deepseek-ai/dsh-cordis-host-runner@0.2.2-rc.5'
+  - '@deepseek-ai/dsh-error@0.2.2-rc.5'
+  - '@deepseek-ai/dsh-home-paths@0.2.2-rc.5'
+  - '@deepseek-ai/dsh-launch-environment@0.2.2-rc.5'
+  - '@deepseek-ai/dsh-llm@0.2.2-rc.5'
+  - '@deepseek-ai/dsh-native-command@0.2.2-rc.5'
+  - '@deepseek-ai/dsh-official-bundles@0.2.2-rc.5'
+  - '@deepseek-ai/dsh-package-manifest@0.2.2-rc.5'
+  - '@deepseek-ai/dsh-sandbox@0.2.2-rc.5'
+  - '@deepseek-ai/dsh-scope@0.2.2-rc.5'
+  - '@deepseek-ai/dsh-session-persistence@0.2.2-rc.5'
+  - '@deepseek-ai/dsh-session-projection@0.2.2-rc.5'
+  - '@deepseek-ai/dsh-session@0.2.2-rc.5'
+  - '@deepseek-ai/dsh-settings@0.2.2-rc.5'
+  - '@deepseek-ai/dsh-system-prompt@0.2.2-rc.5'
+  - '@deepseek-ai/dsh-timeout@0.2.2-rc.5'
+  - '@deepseek-ai/dsh-tools@0.2.2-rc.5'
+  - '@deepseek-ai/dsh-typert-protocol@0.2.2-rc.5'
+  - '@deepseek-ai/dsh-user-approval@0.2.2-rc.5'
+  - '@deepseek-ai/dsh-user-questions@0.2.2-rc.5'
+  - '@deepseek-ai/dsh-util-crypto@0.2.2-rc.5'
+  - '@deepseek-ai/dsh-util-values@0.2.2-rc.5'
 #
 # Only reviewed packages may run install or build scripts: exact names, no
 # globs. Any other package with a build script fails the install instead of
@@ -16,6 +55,7 @@ strictDepBuilds: true
 # fix resolves untouched and the entry can be dropped then. These floors reach
 # this repository's installs only: a consumer of the published bundle resolves
 # the harness's own pins.
-#   GHSA-mrhx-c7xc-m3w5  zod (the harness pins 4.4.3 exactly)
+#   GHSA-mrhx-c7xc-m3w5  zod (harness 0.2.2-rc.5 pins the fixed 4.6.6; the floor
+#   still guards other zod consumers)
 overrides:
   'zod@>=4.0.0 <4.6.6': ^4.6.7

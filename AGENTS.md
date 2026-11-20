@@ -124,7 +124,7 @@ agent rows the profile already registers: duplicate registrations can fail with
 bundle.
 
 **The declared harness range is not the verified list.** The manifest declares
-`>=0.2.2-rc.1 <0.3.0-0`, but lists only `0.2.2-rc.1` as verified. Mounted and
+`>=0.2.2-rc.5 <0.3.0-0`, but lists only `0.2.2-rc.5` as verified. Mounted and
 development harness dependencies pin that release; harness peers are open (`*`)
 and optional. These declarations do not guarantee consumer deduplication.
 `node tools/harness-matrix.mjs` checks manifest consistency, not installed
