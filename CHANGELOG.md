@@ -8,6 +8,8 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-11-20
+
 ### Compatibility
 
 - Verified harness release moves to dsh `0.2.2-rc.5`. Mounted and development
@@ -1641,7 +1643,8 @@ Not published: release signature verification failed. Its changes ship in
 - Publication through npm OIDC trusted publishing, with the first version
   bootstrapped by hand ([#5](https://github.com/sagmans/dsh-tui/pull/5)).
 
-[Unreleased]: https://github.com/sagmans/dsh-tui/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/sagmans/dsh-tui/compare/v0.17.0...HEAD
+[0.17.0]: https://github.com/sagmans/dsh-tui/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/sagmans/dsh-tui/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/sagmans/dsh-tui/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/sagmans/dsh-tui/compare/v0.13.0...v0.14.0
