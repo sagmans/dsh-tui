@@ -1,3 +1,4 @@
+# shellcheck shell=sh
 # Exercise npm resolution and dsh profile installation: a valid local package can
 # still fail either consumer path. install-smoke.mjs replaces the
 # @HARNESS@, @VERSION@, @BUNDLED@ and @TARBALL@ placeholders before piping this
@@ -13,9 +14,9 @@ npm init -y >/dev/null 2>&1
 # funding output add no evidence to these tree checks. dsh plugin add remains
 # a separate installer path, not a lifecycle-script suppression guarantee.
 if ! npm install --ignore-scripts --no-audit --no-fund "@deepseek-ai/dsh@@HARNESS@" /pkg/@TARBALL@ >npm.log 2>&1; then
-  echo "install-smoke: npm could not resolve the packed tree"
-  tail -40 npm.log
-  exit 1
+	echo "install-smoke: npm could not resolve the packed tree"
+	tail -40 npm.log
+	exit 1
 fi
 test "$(node -p "require('@sagmans/dsh-tui/package.json').version")" = "@VERSION@"
 # A package the host also installs must resolve to one copy; a second copy is the
@@ -29,17 +30,21 @@ corepack enable >/dev/null 2>&1
 # Keep profile creation and install state in the disposable container, away from developer state.
 export DSH_HOME=/dsh-home
 if ! dsh plugin --profile tui add /pkg/@TARBALL@ >plugin.log 2>&1; then
-  echo "install-smoke: the plugin profile install failed"
-  tail -40 plugin.log
-  exit 1
+	echo "install-smoke: the plugin profile install failed"
+	tail -40 plugin.log
+	exit 1
 fi
 PROFILE="$DSH_HOME/profiles/tui/node_modules"
 test "$(node -p "require('$PROFILE/@sagmans/dsh-tui/package.json').version")" = "@VERSION@"
 node -e "const bundles = require('$DSH_HOME/profiles/tui/package.json').dsh.profile.bundles; if (!bundles.includes('@sagmans/dsh-tui')) { console.error('install-smoke: the bundle left dsh.profile.bundles'); process.exit(1) }"
 # Bound traversal of the installed tree; deeper copies are outside this smoke
 # check, so a count of one is not a general deduplication guarantee.
+# shellcheck disable=SC2043  # @BUNDLED@ expands to a space-separated list of package names before piping to sh
 for pkg in @BUNDLED@; do
-  copies=$(find "$PROFILE" -maxdepth 4 -path "*/$pkg/package.json" | wc -l | tr -d ' ')
-  test "$copies" = "1" || { echo "install-smoke: $pkg resolved $copies copies"; exit 1; }
+	copies=$(find "$PROFILE" -maxdepth 4 -path "*/$pkg/package.json" | wc -l | tr -d ' ')
+	test "$copies" = "1" || {
+		echo "install-smoke: $pkg resolved $copies copies"
+		exit 1
+	}
 done
 echo "install-smoke: profile ok, one copy of every mounted harness package"

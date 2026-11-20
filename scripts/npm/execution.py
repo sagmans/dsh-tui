@@ -2,13 +2,13 @@
 
 import json
 import os
-from pathlib import Path
 import pty
 import re
 import shlex
 import subprocess
 import sys
 import time
+from pathlib import Path
 
 # Limit each read buffer allocation; total captured output is not capped.
 PTY_CHUNK_BYTES = 65536
@@ -64,7 +64,8 @@ def run(command, *, data=None, check=True, tty=False):
         require(data is None, "interactive capture does not accept standard input")
         result = _run_in_pty(command)
     else:
-        result = subprocess.run(command, input=data, text=True, capture_output=True, check=False)
+        # Fixed argument list without a shell; callers pass explicit binaries and validated flags.
+        result = subprocess.run(command, input=data, text=True, capture_output=True, check=False)  # noqa: S603
     if check and result.returncode != 0:
         raise ReadFailure(f"{Path(command[0]).name} read failed; inspect authentication and service status privately")
     return result
@@ -78,7 +79,8 @@ def _run_in_pty(command):
     try:
         try:
             # Keep npm outside the caller's terminal session while supplying its authentication terminal explicitly.
-            process = subprocess.Popen(command, stdin=slave, stdout=slave, stderr=slave, start_new_session=True)
+            # Fixed argument list without a shell; callers pass explicit binaries and validated flags.
+            process = subprocess.Popen(command, stdin=slave, stdout=slave, stderr=slave, start_new_session=True)  # noqa: S603
         finally:
             # A parent-held slave would keep the master open after npm exits.
             os.close(slave)
@@ -151,5 +153,6 @@ def mutate(action, command, *, data=None):
     if dry_run:
         return
     # Inherited streams keep npm's interactive 2FA usable; callers must not record secrets.
-    result = subprocess.run(command, input=data, text=True, check=False)
+    # Fixed argument list without a shell; callers pass explicit binaries and validated flags.
+    result = subprocess.run(command, input=data, text=True, check=False)  # noqa: S603
     require(result.returncode == 0, "mutation failed or outcome unknown; inspect remote state before any retry")

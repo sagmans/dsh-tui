@@ -11,6 +11,7 @@ export DSH_TELEMETRY_DISABLED
 
 # Limits for run_step. Each one catches a hang, not a slow run, so it stays far
 # above a normal run on a loaded machine.
+TOOL_CHECK_TIMEOUT_SECONDS=30
 NETWORK_TIMEOUT_SECONDS=120
 INSTALL_TIMEOUT_SECONDS=300
 GATE_TIMEOUT_SECONDS=600
@@ -18,6 +19,9 @@ GATE_TIMEOUT_SECONDS=600
 checks() {
 	run_step 'npm audit signatures' "$NETWORK_TIMEOUT_SECONDS" npm audit signatures || return 1
 	run_step 'pnpm run lint' "$GATE_TIMEOUT_SECONDS" pnpm run lint || return 1
+	run_step 'python lint' "$GATE_TIMEOUT_SECONDS" pnpm run lint:py || return 1
+	run_step 'python typecheck' "$GATE_TIMEOUT_SECONDS" pnpm run typecheck:py || return 1
+	run_step 'shell lint' "$GATE_TIMEOUT_SECONDS" pnpm run lint:sh || return 1
 	run_step 'pnpm run check:local' "$GATE_TIMEOUT_SECONDS" pnpm run check:local || return 1
 	run_step 'pnpm typecheck' "$GATE_TIMEOUT_SECONDS" pnpm typecheck || return 1
 	run_step 'pnpm test:golden' "$GATE_TIMEOUT_SECONDS" pnpm test:golden || return 1
@@ -25,7 +29,7 @@ checks() {
 	run_step 'pnpm test:terminal' "$GATE_TIMEOUT_SECONDS" pnpm test:terminal || return 1
 	run_step 'pnpm dogfood' "$GATE_TIMEOUT_SECONDS" pnpm dogfood || return 1
 	run_step 'harness matrix' "$GATE_TIMEOUT_SECONDS" node tools/harness-matrix.mjs || return 1
-	run_step 'pnpm audit' "$NETWORK_TIMEOUT_SECONDS" pnpm audit --audit-level high || return 1
+	run_step 'pnpm audit' "$NETWORK_TIMEOUT_SECONDS" pnpm audit --audit-level high --config.offline=false --config.audit=true || return 1
 }
 
 # Helpers (staged_git, pushed_shas, at_sha, darwin_only) from .githooks/lib.
@@ -47,6 +51,7 @@ install_deps() {
 
 # at_sha runs this with set -e off, so every step returns on failure.
 run_at() {
+	run_step 'tool floors' "$TOOL_CHECK_TIMEOUT_SECONDS" bash scripts/stack-checks.sh tools || return 1
 	install_deps || return 1
 	checks || return 1
 }

@@ -41,7 +41,10 @@ compat_at() {
 	local sha tmp rc
 	sha=$1
 	tmp=$(mktemp -d "${TMPDIR:-/tmp}/pi-tui-compat.XXXXXX") || return 1
-	git worktree add -q --detach "$tmp/wt" "$sha" || { rmdir "$tmp"; return 1; }
+	git worktree add -q --detach "$tmp/wt" "$sha" || {
+		rmdir "$tmp"
+		return 1
+	}
 	rc=0
 	# git's per-repo variables would point the run back at the pushing worktree.
 	(cd "$tmp/wt" && unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE && run_compat) || rc=$?

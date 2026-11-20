@@ -48,7 +48,7 @@ ba_lines=$(grep -v -e '^refs/tags/' -- "$HOOK_STDIN_FILE") || [ $? -eq 1 ] || {
 	echo "pre-push: $(basename -- "$0"): cannot read the pushed refs" >&2
 	exit 1
 }
-while read -r ba_ref ba_local ba_remote_ref ba_remote; do
+while read -r ba_ref ba_local _ba_remote_ref ba_remote; do
 	[ -n "$ba_ref" ] || continue
 	[ "$ba_local" != "$Z40" ] || continue
 	if [ "$ba_remote" != "$Z40" ] && git cat-file -e "$ba_remote^{commit}" 2>/dev/null; then
@@ -65,7 +65,10 @@ while read -r ba_ref ba_local ba_remote_ref ba_remote; do
 	if [ "$(policy_at "$base")" != "$(policy_at "$ba_local")" ]; then
 		need=$POLICY_ITEM
 	fi
-	for pkg in $( (allowed_at "$base"; allowed_at "$ba_local") | sort -u); do
+	for pkg in $( (
+		allowed_at "$base"
+		allowed_at "$ba_local"
+	) | sort -u); do
 		[ "$(blocks_at "$base" "$pkg")" != "$(blocks_at "$ba_local" "$pkg")" ] || continue
 		ver=$(blocks_at "$ba_local" "$pkg" | awk -v p="$pkg" 'index($0, "  " p "@") == 1 || index($0, "  \x27" p "@") == 1 { sub(/^  \x27?[^@]*@/, ""); sub(/[:(\x27].*/, ""); print; exit }')
 		need="$need $pkg@${ver:-removed}"

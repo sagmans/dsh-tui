@@ -12,7 +12,10 @@ profile: [DEVELOPMENT.md](DEVELOPMENT.md). Publication:
 | Task | Command |
 | --- | --- |
 | Install | `pnpm install --frozen-lockfile` |
+| Tool floor check (`mise.toml`, `packageManager`) | `pnpm run check:tools` |
 | Lint and format check (Biome) | `pnpm run lint` (`pnpm run lint:fix` repairs) |
+| Python format, lint, and typecheck (`uv.lock`) | `pnpm run lint:py` and `pnpm run typecheck:py` |
+| Shell lint and format check (`shellcheck`, `shfmt`) | `pnpm run lint:sh` |
 | Typecheck sources and golden fixtures | `pnpm run typecheck` |
 | Golden frames only | `pnpm test:golden` |
 | Golden frames, native PTY, and free real-profile dogfood | `pnpm test` |
@@ -202,5 +205,6 @@ than `Signed-off-by`.
 Commit messages follow `.githooks/GIT_CONVENTION.md`, which `commit-msg` and
 `pre-push` enforce. The generic checks need gitleaks, osv-scanner, semgrep,
 lizard and markdownlint-cli2, plus actionlint and zizmor when a push changes
-workflow files. The free dogfood in `pre-push` needs the installed `dsh` at a
-verified release. A missing tool blocks the hook.
+workflow files. Stack checks also require `uv`, `shellcheck`, and `shfmt`
+(pinned in `mise.toml`). The free dogfood in `pre-push` needs the installed
+`dsh` at a verified release. A missing tool blocks the hook.

@@ -151,3 +151,8 @@ vite.config.ts.timestamp-*
 # Python bytecode cache (never commit interpreter output)
 __pycache__/
 *.pyc
+
+# Python dev tool environment and caches (never commit)
+.venv/
+.mypy_cache/
+.ruff_cache/

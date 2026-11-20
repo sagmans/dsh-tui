@@ -45,6 +45,13 @@ breaking change, and a patch carries only fixes.
 
 ### Changed
 
+- Local hooks and `pnpm run verify` now pin tool version floors in `mise.toml`
+  (`node`, `shellcheck`, `shfmt`, `uv`), `packageManager` (`pnpm@11.21.0`), and
+  `pyproject.toml`/`uv.lock` (`ruff`, `mypy`), run staged Ruff and
+  `shellcheck`/`shfmt` checks at `pre-commit` (`35-stack`), enforce tool floors
+  before `pre-push` dependency install plus Python lint/typecheck and shell
+  lint/format via `scripts/stack-checks.sh`, and force online vulnerability
+  auditing in `pre-push`.
 - Model and effort choices are recorded in the driven session's log through the
   harness's durable selection API, and the surface reads back the route the next
   step will use. A choice made before an agent opens is refused with a notice

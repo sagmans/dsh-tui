@@ -58,6 +58,7 @@
   },
   "homepage": "https://github.com/sagmans/dsh-tui#readme",
   "bugs": "https://github.com/sagmans/dsh-tui/issues",
+  "packageManager": "pnpm@11.21.0",
   "engines": {
     "node": ">=22.19.0"
   },
@@ -88,7 +89,11 @@
     "dogfood:paid": "pnpm run build && node tools/dogfood.mjs --paid",
     "lint": "biome ci --error-on-warnings .",
     "lint:fix": "biome check --write .",
-    "verify": "pnpm run lint && pnpm typecheck && pnpm test && node tools/pack-smoke.mjs && node tools/harness-matrix.mjs",
+    "check:tools": "bash scripts/stack-checks.sh tools",
+    "lint:py": "bash scripts/stack-checks.sh py-lint",
+    "typecheck:py": "bash scripts/stack-checks.sh py-typecheck",
+    "lint:sh": "bash scripts/stack-checks.sh sh",
+    "verify": "pnpm run check:tools && pnpm run lint && pnpm run lint:py && pnpm run typecheck:py && pnpm run lint:sh && pnpm typecheck && pnpm test && node tools/pack-smoke.mjs && node tools/harness-matrix.mjs",
     "check:unused": "tsc -p tsconfig.json --noEmit --noUnusedLocals --noUnusedParameters",
     "check:deadcode": "knip --production --no-progress",
     "check:local": "pnpm run check:unused && pnpm run check:deadcode",

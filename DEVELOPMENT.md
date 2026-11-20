@@ -6,13 +6,18 @@ table live in [README.md](README.md); publication lives in
 
 ## Gates
 
-Run them in this order. `pre-push` runs all of them except `pnpm dogfood` (see
+Run them in this order. `pre-push` runs all of them (see
 [Local static checks](#local-static-checks)):
 
 ```sh
+pnpm run check:tools
 pnpm install --frozen-lockfile
 npm audit signatures
 pnpm run lint
+pnpm run lint:py
+pnpm run typecheck:py
+pnpm run lint:sh
+pnpm run check:local
 pnpm run typecheck
 pnpm test:golden
 node tools/pack-smoke.mjs
@@ -21,7 +26,7 @@ pnpm dogfood
 node tools/harness-matrix.mjs
 node tools/harness-matrix.mjs --check-registry  # reads the npm registry
 node tools/install-smoke.mjs  # requires Docker with a running daemon
-pnpm audit --audit-level high
+pnpm audit --audit-level high --config.offline=false --config.audit=true
 ```
 
 Unit tests are not maintained. Golden tests remain visual regression checks, not
@@ -91,12 +96,18 @@ Repository hooks live in `.githooks` and replace every hosted check workflow;
 only the tag `release.yml` runs on GitHub. The generic checks run first
 (sign-off, message format, secret scan, signed push), then
 `.githooks/<hook>.d/*`. `pre-commit` runs `pnpm run check:unused`, a staged
-whitespace check, and Biome on the staged files (`pnpm run lint:fix` repairs
-most findings). `pre-push` runs signatures, the Biome lint and format check,
-`check:local`, typecheck, golden frames, pack smoke, terminal behavior, the
-free real-profile dogfood, the harness matrix, the dependency vulnerability
-audit (`pnpm audit --audit-level high`), and the consumer install smoke, each
-on the pushed commit. The dogfood needs the installed `dsh` at a verified
+whitespace check, Biome on the staged files (`pnpm run lint:fix` repairs
+most findings), pinned Ruff formatting and linting on staged Python changes
+and pinned `shellcheck`/`shfmt` on staged shell scripts (`35-stack` via
+`uv.lock` and `mise.toml`). `pre-push` enforces the tool version floors in
+`mise.toml` and `packageManager` before dependency installation, then runs
+signatures, the Biome lint and format check, Python Ruff/mypy (`lint:py`,
+`typecheck:py`), shell `shellcheck`/`shfmt` (`lint:sh`), `check:local`,
+typecheck, golden frames, pack smoke, terminal behavior, the free real-profile
+dogfood, the harness matrix, the dependency vulnerability audit
+(`pnpm audit --audit-level high` with `--config.offline=false` and
+`--config.audit=true`), and the consumer install smoke, each on the pushed
+commit. The dogfood needs the installed `dsh` at a verified
 release; without it the push fails. On each pushed ref's tip it also reads the
 harness `latest` dist-tag and fails when that release is not in
 `dsh.compatibility.dshReleases`, or when the registry cannot be read. It also
@@ -117,7 +128,8 @@ Run `scripts/setup-hooks` once after cloning; it points this clone's
 (sign-off and commit message format, a gitleaks secret scan, and signed,
 signed-off commits on push), then this repository's checks in
 `.githooks/<hook>.d/` in name order. Install
-[gitleaks](https://github.com/gitleaks/gitleaks) first. Every check must pass
+[gitleaks](https://github.com/gitleaks/gitleaks), `uv`, `shellcheck`, and
+`shfmt` (pinned in `mise.toml`) first. Every check must pass
 before you push; never use `--no-verify`. Pre-push checks test exactly each
 pushed commit: in place only when it is the clean, unmodified checkout,
 otherwise in a temporary worktree of that commit. Never bypass hooks with
