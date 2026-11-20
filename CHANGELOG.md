@@ -8,14 +8,18 @@ breaking change, and a patch carries only fixes.
 
 ## [Unreleased]
 
+## [0.17.1] - 2026-11-20
+
 ### Fixed
 
 - The tag release workflow's free dogfood passes again. The clone-helper
   scenario lost pnpm's home directory, so its nested build saw a different
-  package store and stopped without a terminal. `0.17.0` was tagged but never
-  published because of this; `0.17.1` carries the same changes.
+  package store and stopped without a terminal.
 
 ## [0.17.0] - 2026-11-20
+
+Not published: the release workflow free dogfood failed. Its changes ship in
+0.17.1; the signed tag remains unchanged.
 
 ### Compatibility
 
@@ -1650,7 +1654,8 @@ Not published: release signature verification failed. Its changes ship in
 - Publication through npm OIDC trusted publishing, with the first version
   bootstrapped by hand ([#5](https://github.com/sagmans/dsh-tui/pull/5)).
 
-[Unreleased]: https://github.com/sagmans/dsh-tui/compare/v0.17.0...HEAD
+[Unreleased]: https://github.com/sagmans/dsh-tui/compare/v0.17.1...HEAD
+[0.17.1]: https://github.com/sagmans/dsh-tui/compare/v0.17.0...v0.17.1
 [0.17.0]: https://github.com/sagmans/dsh-tui/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/sagmans/dsh-tui/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/sagmans/dsh-tui/compare/v0.14.0...v0.15.0
